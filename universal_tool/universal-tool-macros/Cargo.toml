@@ -1,8 +1,7 @@
 [package]
 name = "universal-tool-macros"
 version = "0.1.0"
-# TODO(1): Upgrade to 2024
-edition = "2021"
+edition = "2024"
 authors = ["Allison Durham"]
 description = "Procedural macros for Universal Tool Framework - generate CLI, REST, and MCP interfaces"
 license = "MIT"
