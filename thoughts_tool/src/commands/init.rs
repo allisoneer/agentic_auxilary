@@ -1,8 +1,8 @@
 use crate::config::{RepoConfigManager, RepoConfig, MountDirs};
-use crate::git::utils::get_current_repo;
+use crate::git::utils::{get_current_repo, is_worktree, get_main_repo_for_worktree};
 use crate::utils::paths::ensure_dir;
 use crate::utils::git::ensure_gitignore_entry;
-use anyhow::{Result, Context};
+use anyhow::{Result, Context, anyhow};
 use std::path::{Path, PathBuf};
 use std::fs;
 use colored::Colorize;
@@ -12,6 +12,52 @@ pub async fn execute(force: bool) -> Result<()> {
     let repo_root = get_current_repo()
         .context("Not in a git repository. Run 'git init' first.")?;
     
+    // Check if we're in a worktree
+    if is_worktree(&repo_root)? {
+        eprintln!("{}: Detected git worktree", "Info".cyan());
+        
+        // Get the main repository path
+        let main_repo = get_main_repo_for_worktree(&repo_root)?;
+        eprintln!("Main repository: {}", main_repo.display());
+        
+        let main_thoughts_data = main_repo.join(".thoughts-data");
+        let worktree_thoughts_data = repo_root.join(".thoughts-data");
+        
+        // Ensure main repository is initialized first
+        if !main_thoughts_data.exists() {
+            eprintln!("{}: Main repository is not initialized", "Error".red());
+            eprintln!("Please run 'thoughts init' in the main repository first:");
+            eprintln!("  cd {}", main_repo.display());
+            eprintln!("  thoughts init");
+            return Err(anyhow!("Main repository must be initialized first"));
+        }
+        
+        // Check if already initialized
+        if worktree_thoughts_data.exists() && !force {
+            if worktree_thoughts_data.is_symlink() {
+                eprintln!("{}: Worktree already initialized", "Info".cyan());
+                let target = fs::read_link(&worktree_thoughts_data).unwrap_or_else(|_| PathBuf::from("<invalid>"));
+                eprintln!("  .thoughts-data -> {}", target.display());
+                return Ok(());
+            }
+        }
+        
+        // Clean up if forcing
+        if force && worktree_thoughts_data.exists() {
+            fs::remove_file(&worktree_thoughts_data)
+                .with_context(|| format!("Failed to remove existing symlink: {:?}", worktree_thoughts_data))?;
+        }
+        
+        // Create the symlink: .thoughts-data -> main repo's .thoughts-data
+        create_symlink(&main_thoughts_data.to_string_lossy(), &worktree_thoughts_data)?;
+        eprintln!("{}: Created .thoughts-data symlink to main repository", "Success".green());
+        eprintln!("{}: Worktree initialization complete!", "Success".green());
+        eprintln!("The worktree now shares mounts with the main repository.");
+        
+        return Ok(());
+    }
+    
+    // Continue with normal initialization for main repository...
     println!("Initializing thoughts for repository at: {}", repo_root.display());
     
     // Load or create repository configuration
