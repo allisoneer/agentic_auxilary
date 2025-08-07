@@ -78,6 +78,13 @@
       "description": "Repository mount for references/ripgrep",
       "optional": true,
       "sync": "none"
+    },
+    {
+      "remote": "git@github.com:anthropics/claude-code-action.git",
+      "mount_path": "references/claude-code-action",
+      "description": "Repository mount for references/claude-code-action",
+      "optional": true,
+      "sync": "none"
     }
   ],
   "rules": []

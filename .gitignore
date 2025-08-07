@@ -22,3 +22,6 @@ debug_output.txt
 # OS files
 .DS_Store
 Thumbs.db
+
+# temporary git ignore for a directory I don't need in git
+/thoughts
