@@ -16,6 +16,13 @@ Write tool logic once, deploy as CLI/REST/MCP without code changes.
 - Type-safe interfaces
 - Framework agnostic
 
+### 🤖 [ClaudeCode-RS](claudecode_rs/)
+Rust SDK for programmatically interacting with Claude Code CLI.
+- Type-safe event streaming
+- Async-first API design
+- MCP (Model Context Protocol) support
+- Builder pattern configuration
+
 ## Quick Start
 
 ```bash
@@ -28,6 +35,9 @@ cd thoughts_tool && make build
 
 # Build universal_tool
 cd universal_tool && cargo build --workspace
+
+# Build claudecode_rs
+cd claudecode_rs && make build
 ```
 
 ## Installation
