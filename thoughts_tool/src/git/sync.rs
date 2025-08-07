@@ -242,8 +242,74 @@ impl GitSync {
         
         // Try to use credential helper
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, _username_from_url, _allowed_types| {
-            git2::Cred::default()
+        callbacks.credentials(|_url, username_from_url, allowed_types| {
+            // Only handle SSH key authentication
+            if allowed_types.contains(git2::CredentialType::SSH_KEY) {
+                let username = username_from_url.unwrap_or("git");
+                
+                // CRITICAL FIX: Only try SSH agent if SSH_AUTH_SOCK is set
+                // This avoids the libssh2 bug where ssh_key_from_agent returns Ok
+                // with invalid credentials when no agent is present
+                // Bug ref: https://github.com/libssh2/libssh2/issues/659
+                if std::env::var("SSH_AUTH_SOCK").is_ok() {
+                    // Try SSH agent (might still fail due to libssh2 RSA-SHA2 bug)
+                    if let Ok(cred) = git2::Cred::ssh_key_from_agent(username) {
+                        return Ok(cred);
+                    }
+                    // If agent fails, fall through to key files
+                }
+                
+                // Try SSH keys from disk (this is what actually works)
+                let home = dirs::home_dir()
+                    .ok_or_else(|| git2::Error::from_str("Cannot find home directory"))?;
+                let ssh_dir = home.join(".ssh");
+                
+                // Try keys in order of preference
+                let key_files = [
+                    "id_ed25519",  // Modern default (Ed25519)
+                    "id_rsa",      // Legacy default (RSA)
+                    "id_ecdsa",    // Less common (ECDSA)
+                ];
+                
+                for key_name in &key_files {
+                    let private_key = ssh_dir.join(key_name);
+                    if private_key.exists() {
+                        // Try without public key path first (often sufficient)
+                        if let Ok(cred) = git2::Cred::ssh_key(
+                            username,
+                            None,  // No public key path
+                            private_key.as_path(),
+                            None,  // No passphrase support
+                        ) {
+                            return Ok(cred);
+                        }
+                        
+                        // If that fails, try with public key
+                        let public_key = ssh_dir.join(format!("{}.pub", key_name));
+                        if public_key.exists() {
+                            if let Ok(cred) = git2::Cred::ssh_key(
+                                username,
+                                Some(public_key.as_path()),
+                                private_key.as_path(),
+                                None,
+                            ) {
+                                return Ok(cred);
+                            }
+                        }
+                    }
+                }
+                
+                Err(git2::Error::from_str(
+                    "SSH authentication failed. No valid SSH keys found in ~/.ssh/\n\
+                     Checked for: id_ed25519, id_rsa, id_ecdsa\n\
+                     Note: Passphrase-protected keys are not currently supported"
+                ))
+            } else if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+                // Fall back to git credential helper for HTTPS
+                git2::Cred::default()
+            } else {
+                git2::Cred::default()
+            }
         });
         push_options.remote_callbacks(callbacks);
         
