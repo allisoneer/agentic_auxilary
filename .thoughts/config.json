@@ -1,0 +1,35 @@
+{
+	"version": "1.0",
+	"mount_dirs": {
+		"repository": "context",
+		"personal": "personal"
+	},
+	"requires": [
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"mount_path": "universal_tool",
+			"subpath": "projects/universal_tool",
+			"description": "Repository mount for universal_tool",
+			"optional": false,
+			"sync": "auto"
+		},
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"mount_path": "thoughts_tool",
+			"subpath": "projects/thoughts_tool",
+			"description": "Repository mount for thoughts_tool",
+			"optional": false,
+			"sync": "auto"
+		},
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"mount_path": "general",
+			"subpath": "projects/agentic_auxilary",
+			"description": "Repository mount for agentic_auxilary",
+			"optional": false,
+			"sync": "auto"
+		}
+	],
+	"rules": []
+}
+

@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+    "universal-tool-core",
+    "universal-tool-macros",
+    "examples/01-cli-simple",
+    "examples/02-cli-advanced-params",
+    "examples/03-rest-simple",
+    "examples/04-rest-idiomatic",
+    "examples/05-mcp-basic",
+    "examples/06-kitchen-sink",
+    "examples/test-simple",
+]

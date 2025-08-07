@@ -1,0 +1,5 @@
+/target
+.claude/settings.local.json
+
+# Thoughts data directory (created by thoughts init)
+/.thoughts-data

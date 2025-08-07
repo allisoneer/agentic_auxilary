@@ -1,2 +1,48 @@
-# agentic_auxilary
-A collection of software tools to aid myself (and optionally others) in improved agentic ai development
+# Agentic Auxiliary Tools
+
+Development tools for enhanced AI agent workflows.
+
+## Tools
+
+### 🔀 [Thoughts Tool](thoughts_tool/)
+Unified filesystem for organizing documentation across git repositories using mergerfs/fuse-t.
+- Merge multiple repositories into single mountpoint
+- Automatic git synchronization
+- Cross-platform (Linux/macOS)
+
+### 🛠️ [Universal Tool Framework](universal_tool/)
+Write tool logic once, deploy as CLI/REST/MCP without code changes.
+- Zero-overhead code generation
+- Type-safe interfaces
+- Framework agnostic
+
+## Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/allisoneer/agentic_auxilary
+cd agentic_auxilary
+
+# Build thoughts_tool
+cd thoughts_tool && make build
+
+# Build universal_tool
+cd universal_tool && cargo build --workspace
+```
+
+## Installation
+
+### Install thoughts_tool from crates.io
+```bash
+cargo install thoughts-tool
+```
+
+### Use universal_tool in your project
+```toml
+[dependencies]
+universal-tool-core = "0.1"
+universal-tool-macros = "0.1"
+```
+
+## License
+MIT - See [LICENSE](LICENSE)
