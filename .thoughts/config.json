@@ -36,6 +36,48 @@
       "description": "Repository mount for claudecode_rs",
       "optional": false,
       "sync": "auto"
+    },
+    {
+      "remote": "git@github.com:seanmonstar/reqwest.git",
+      "mount_path": "references/reqwest",
+      "description": "Repository mount for references/reqwest",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "git@github.com:XAMPPRocky/octocrab.git",
+      "mount_path": "references/octocrab",
+      "description": "Repository mount for references/octocrab",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "git@github.com:obmarg/cynic.git",
+      "mount_path": "references/cynic",
+      "description": "Repository mount for references/cynic",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "git@github.com:letmutex/htmd.git",
+      "mount_path": "references/htmd",
+      "description": "Repository mount for references/htmd",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "git@github.com:zurawiki/tiktoken-rs.git",
+      "mount_path": "references/tiktoken-rs",
+      "description": "Repository mount for references/tiktoken-rs",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "git@github.com:BurntSushi/ripgrep.git",
+      "mount_path": "references/ripgrep",
+      "description": "Repository mount for references/ripgrep",
+      "optional": true,
+      "sync": "none"
     }
   ],
   "rules": []
