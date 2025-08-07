@@ -1,0 +1,13 @@
+[package]
+name = "example-02-cli-advanced-params"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+universal-tool-core = { path = "../../universal-tool-core", features = ["cli"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Only need chrono for the timestamp example - everything else comes from universal-tool-core
+chrono = { version = "0.4", features = ["serde"] }

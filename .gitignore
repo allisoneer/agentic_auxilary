@@ -1,0 +1,24 @@
+.claude/
+
+# Thoughts data directory (created by thoughts init)
+/.thoughts-data
+
+# Rust build artifacts
+target/
+**/*.pdb
+**/*.d
+
+# Debug and temporary files
+debug_output.txt
+**/*debug*.txt
+**/*.tmp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

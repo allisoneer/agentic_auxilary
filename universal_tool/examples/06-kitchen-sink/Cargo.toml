@@ -1,0 +1,22 @@
+[package]
+name = "example-06-kitchen-sink"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+universal-tool-core = { path = "../../universal-tool-core", features = ["cli", "rest", "mcp"] }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+axum = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+schemars = "0.8"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["serde", "v4"] }
+walkdir = "2"
+home = "0.5"

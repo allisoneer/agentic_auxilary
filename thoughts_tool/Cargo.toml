@@ -1,0 +1,57 @@
+[package]
+name = "thoughts-tool"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Flexible thought management using filesystem mounts for git repositories"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary/tree/main/thoughts_tool"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+keywords = ["filesystem", "mount", "git", "documentation", "mergerfs"]
+categories = ["command-line-utilities", "development-tools", "filesystem"]
+
+[features]
+default = []
+linux = []
+macos = []
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "1"
+dirs = "5"
+git2 = "0.18"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+chrono = { version = "0.4", features = ["serde"] }
+glob = "0.3"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+which = "6"
+atomicwrites = "0.4"
+colored = "2"
+regex = "1"
+
+# Platform-specific dependencies
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.27", features = ["fs", "mount"] }
+
+[build-dependencies]
+rustc_version = "0.4"
+
+[[bin]]
+name = "thoughts"
+path = "src/main.rs"
+
+# Configure platform-specific compilation
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"]
+
+[dev-dependencies]
+tempfile = "3"
+pretty_assertions = "1"
+serial_test = "3"
