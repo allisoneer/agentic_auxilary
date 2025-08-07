@@ -11,6 +11,8 @@ mod mount;
 mod platform;
 mod utils;
 
+use crate::config::SyncStrategy;
+
 #[derive(Parser)]
 #[command(name = "thoughts")]
 #[command(about = "A flexible thought management tool with filesystem merging")]
@@ -73,18 +75,33 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum MountCommands {
-    /// Add a new mount
+    /// Add an existing local repository as a mount
     Add {
-        /// Path to the git repository to mount
+        /// Path to the local git repository
         path: std::path::PathBuf,
-
-        /// Custom name for the mount (defaults to repository name)
-        #[arg(short = 'n', long)]
-        name: Option<String>,
-
-        /// Add as a personal mount instead of repository mount
+        
+        /// Mount name (optional positional)
+        mount_path: Option<String>,
+        
+        /// Sync strategy
+        #[arg(long, value_parser = clap::value_parser!(SyncStrategy), default_value = "auto")]
+        sync: SyncStrategy,
+        
+        /// Mark as optional (repo-level only)
+        #[arg(long)]
+        optional: bool,
+        
+        /// Override global rules (repo-level only)
+        #[arg(long)]
+        override_rules: Option<bool>,
+        
+        /// Add as personal mount
         #[arg(short, long)]
         personal: bool,
+        
+        /// Description
+        #[arg(short, long)]
+        description: Option<String>,
     },
 
     /// Remove a mount
@@ -178,9 +195,13 @@ async fn main() -> Result<()> {
         Commands::Mount { command } => match command {
             MountCommands::Add {
                 path,
-                name,
+                mount_path,
+                sync,
+                optional,
+                override_rules,
                 personal,
-            } => commands::mount::add::execute(path, name, personal).await,
+                description,
+            } => commands::mount::add::execute(path, mount_path, sync, optional, override_rules, personal, description).await,
             MountCommands::Remove { mount_name } => {
                 commands::mount::remove::execute(mount_name).await
             }
