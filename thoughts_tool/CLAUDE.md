@@ -109,9 +109,13 @@ The application supports both Linux (mergerfs) and macOS (fuse-t) through:
 ## Advanced Features
 
 ### Git Worktree Support
-- Full support for git worktrees through `is_worktree()` and `get_main_repo_for_worktree()` functions
-- Handles worktree configurations properly
-- Ensures mount configurations work across worktrees
+
+The tool now fully supports git worktrees through automatic detection and smart initialization:
+
+- `is_worktree()` - Detects if current directory is a worktree (src/git/utils.rs:25)
+- `get_main_repo_for_worktree()` - Finds the main repository for a worktree (src/git/utils.rs:40)
+- Worktree init creates symlinks to main repository's `.thoughts-data` (src/commands/init.rs:16-57)
+- No duplicate FUSE mounts or manual cleanup required
 
 ### Auto-Mount System
 - Automatic mount management via `AutoMountManager`

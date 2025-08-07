@@ -156,10 +156,45 @@ The tool automatically detects your platform and uses the appropriate mount tech
 4. Merges configurations based on rules
 
 ### Git Integration
-- Full support for worktrees
+- Full support for worktrees (see Git Worktree Support section)
 - Automatic detection of repository boundaries
 - Smart sync strategies (auto, manual, on-demand)
 - Conflict resolution helpers
+
+## Git Worktree Support
+
+thoughts_tool automatically detects and handles git worktrees. When you run `thoughts init` in a worktree:
+
+1. It detects you're in a worktree
+2. Verifies the main repository is initialized
+3. Creates a symlink to share the main repository's mounts
+4. No duplicate FUSE mounts are created
+
+### Usage
+
+```bash
+# Initialize main repository first
+cd /path/to/main/repo
+thoughts init
+
+# Create a worktree
+git worktree add ../my-feature-branch
+
+# Initialize the worktree (shares main repo's mounts)
+cd ../my-feature-branch
+thoughts init
+```
+
+### How It Works
+
+Worktrees use a simple symlink approach:
+- `.thoughts-data` -> Points to main repository's `.thoughts-data`
+- The `context` and `personal` symlinks are already tracked in git
+
+This ensures:
+- No duplicate mounts
+- Consistent access to thoughts across worktrees
+- Automatic cleanup when worktree is removed
 
 ## Development
 

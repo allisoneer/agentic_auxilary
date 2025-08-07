@@ -55,3 +55,5 @@ targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-dar
 tempfile = "3"
 pretty_assertions = "1"
 serial_test = "3"
+assert_cmd = "2.0"
+predicates = "3.1"
