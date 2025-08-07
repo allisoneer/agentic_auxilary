@@ -8,9 +8,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client
     let client = Client::new().await?;
 
-    // Simple text query
+    // Simple text query using the new Haiku model
     let config = SessionConfig::builder("What is the capital of France?")
-        .model(Model::Sonnet)
+        .model(Model::Haiku)
         .build()?;
 
     println!("Asking Claude...");

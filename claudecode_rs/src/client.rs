@@ -1,6 +1,6 @@
 use crate::config::{MCPConfig, SessionConfig};
 use crate::error::{ClaudeError, Result};
-use crate::process::{expand_tilde, find_claude_in_path, ProcessHandle};
+use crate::process::{ProcessHandle, expand_tilde, find_claude_in_path};
 use crate::session::Session;
 use crate::types::Result as ClaudeResult;
 use std::path::{Path, PathBuf};

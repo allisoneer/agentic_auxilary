@@ -97,7 +97,7 @@ cargo run --example streaming_debug
    - Supports resume sessions, max turns, custom prompts, tool filtering
 
 4. **Type System** (`src/types.rs`):
-   - `Model` enum: Sonnet, Opus
+   - `Model` enum: Sonnet, Opus, Haiku
    - `OutputFormat` enum: Text, Json, StreamingJson
    - Event types for streaming: Assistant, System, Result, Error
    - Strongly-typed message and content structures

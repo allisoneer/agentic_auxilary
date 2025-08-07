@@ -9,6 +9,8 @@ pub enum Model {
     Sonnet,
     #[serde(rename = "opus")]
     Opus,
+    #[serde(rename = "haiku")]
+    Haiku,
 }
 
 impl fmt::Display for Model {
@@ -16,6 +18,7 @@ impl fmt::Display for Model {
         match self {
             Model::Sonnet => write!(f, "sonnet"),
             Model::Opus => write!(f, "opus"),
+            Model::Haiku => write!(f, "haiku"),
         }
     }
 }
@@ -37,7 +40,6 @@ impl fmt::Display for OutputFormat {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -148,7 +150,6 @@ pub struct Result {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
 }
-
 
 // Type-safe event system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -265,6 +266,20 @@ mod tests {
 
         let json = serde_json::to_string(&model).unwrap();
         assert_eq!(json, "\"sonnet\"");
+
+        let deserialized: Model = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, model);
+
+        // Test Opus
+        let model = Model::Opus;
+        assert_eq!(model.to_string(), "opus");
+
+        // Test Haiku
+        let model = Model::Haiku;
+        assert_eq!(model.to_string(), "haiku");
+
+        let json = serde_json::to_string(&model).unwrap();
+        assert_eq!(json, "\"haiku\"");
 
         let deserialized: Model = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, model);
