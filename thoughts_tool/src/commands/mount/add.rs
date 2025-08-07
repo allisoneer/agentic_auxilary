@@ -19,27 +19,39 @@ pub async fn execute(
     
     let mut repo_mapping = RepoMappingManager::new()?;
     
-    // Detect if user accidentally provided a Git URL
+    // Detect if user provided a Git URL and check if it's been cloned
     let path_str = path.to_string_lossy();
-    if path_str.starts_with("git@") || 
+    let resolved_path = if path_str.starts_with("git@") || 
        path_str.starts_with("https://") || 
        path_str.starts_with("http://") ||
        path_str.starts_with("ssh://") {
-        // Provide helpful error message
-        bail!(
-            "Cannot add remote URL directly. Repository must be cloned first.\n\n\
-             To add this repository, use one of:\n\n\
-             1. Clone and manage automatically:\n\
-                thoughts mount clone {}\n\n\
-             2. Clone manually then add:\n\
-                git clone {} /path/to/local\n\
-                thoughts mount add /path/to/local",
-            path_str, path_str
-        );
-    }
+        // Check if this URL has been cloned
+        match repo_mapping.resolve_url(&path_str)? {
+            Some(local_path) => {
+                println!("Found cloned repository at: {}", local_path.display());
+                local_path
+            }
+            None => {
+                // Provide helpful error message
+                bail!(
+                    "Cannot add remote URL directly. Repository must be cloned first.\n\n\
+                     To add this repository, use one of:\n\n\
+                     1. Clone and manage automatically:\n\
+                        thoughts mount clone {}\n\n\
+                     2. Clone manually then add:\n\
+                        git clone {} /path/to/local\n\
+                        thoughts mount add /path/to/local",
+                    path_str, path_str
+                );
+            }
+        }
+    } else {
+        // Use the provided local path
+        path
+    };
     
-    // Only handle local paths - they MUST exist
-    let expanded = expand_path(&path)?;
+    // Continue with local path processing
+    let expanded = expand_path(&resolved_path)?;
     
     if !expanded.exists() {
         bail!("Path does not exist: {}", expanded.display());
