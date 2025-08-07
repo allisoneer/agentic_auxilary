@@ -54,5 +54,26 @@ universal-tool-core = "0.1"
 universal-tool-macros = "0.1"
 ```
 
+### Use claudecode in your project
+```toml
+[dependencies]
+claudecode = "0.1"
+```
+
+Quick example:
+```rust
+use claudecode::{Client, SessionConfig};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::new().await?;
+    let config = SessionConfig::builder("Hello, Claude!")
+        .build()?;
+    let result = client.launch_and_wait(config).await?;
+    println!("{:?}", result.content);
+    Ok(())
+}
+```
+
 ## License
 MIT - See [LICENSE](LICENSE)
