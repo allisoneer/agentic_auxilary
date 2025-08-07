@@ -8,7 +8,7 @@ use futures::StreamExt;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::io::AsyncBufReadExt;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;

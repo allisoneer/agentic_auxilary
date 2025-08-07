@@ -1,4 +1,4 @@
-use claudecode::{Client, MCPConfig, MCPServer, OutputFormat, SessionConfig};
+use claudecode::{Client, MCPConfig, MCPServer, Model, OutputFormat, SessionConfig};
 use std::collections::HashMap;
 
 #[tokio::test]
@@ -105,4 +105,25 @@ async fn test_mcp_config() {
     if let Some(content) = result.content {
         assert!(content.contains("56088") || content.contains("56,088"));
     }
+}
+
+#[tokio::test]
+#[ignore = "requires claude CLI to be installed and support haiku model"]
+async fn test_haiku_model() {
+    if which::which("claude").is_err() {
+        return;
+    }
+
+    let client = Client::new().await.unwrap();
+
+    let config = SessionConfig::builder("Say 'Hello from Haiku!' and nothing else")
+        .model(Model::Haiku)
+        .output_format(OutputFormat::Text)
+        .max_turns(1)
+        .build()
+        .unwrap();
+
+    let result = client.launch_and_wait(config).await.unwrap();
+    assert!(!result.is_error);
+    assert!(result.content.is_some());
 }

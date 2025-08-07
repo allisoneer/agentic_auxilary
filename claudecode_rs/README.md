@@ -133,7 +133,7 @@ let config = SessionConfig::builder("Your query here")
 ```
 
 Available options include:
-- `model`: `Model::Sonnet` or `Model::Opus`
+- `model`: `Model::Sonnet`, `Model::Opus`, or `Model::Haiku`
 - `output_format`: `OutputFormat::Text`, `OutputFormat::Json`, or `OutputFormat::StreamingJson`
 - `max_turns`: Limit interaction turns
 - `system_prompt`: Custom system prompt
