@@ -3,6 +3,9 @@ name = "test-simple"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 universal-tool-core = { path = "../../universal-tool-core", features = ["cli"] }
 serde = { version = "1.0", features = ["derive"] }

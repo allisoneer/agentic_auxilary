@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["Allison Durham"]
 description = "Flexible thought management using filesystem mounts for git repositories"
 license = "MIT"
-repository = "https://github.com/allisoneer/agentic_auxilary/tree/main/thoughts_tool"
+repository = "https://github.com/allisoneer/agentic_auxilary"
 homepage = "https://github.com/allisoneer/agentic_auxilary"
 readme = "README.md"
 keywords = ["filesystem", "mount", "git", "documentation", "mergerfs"]
@@ -57,3 +57,4 @@ pretty_assertions = "1"
 serial_test = "3"
 assert_cmd = "2.0"
 predicates = "3.1"
+
