@@ -7,11 +7,9 @@ impl Tools {
     fn new() -> Self {
         Self
     }
-    
+
     /// Test method
-    #[universal_tool(
-        description = "Test method"
-    )]
+    #[universal_tool(description = "Test method")]
     pub async fn test(&self) -> Result<String, ToolError> {
         Ok("test".to_string())
     }

@@ -50,28 +50,30 @@ pub async fn execute(key: String) -> Result<()> {
                 match *field {
                     "type" => println!("{}", mount.mount_type()),
                     "sync" => println!("{}", mount.sync_strategy()),
-                    "path" => {
-                        match mount {
-                            crate::config::Mount::Directory { path, .. } => println!("{}", path.display()),
-                            crate::config::Mount::Git { .. } => bail!("Git mounts don't have a path field, use 'url' instead"),
+                    "path" => match mount {
+                        crate::config::Mount::Directory { path, .. } => {
+                            println!("{}", path.display())
                         }
-                    }
-                    "url" => {
-                        match mount {
-                            crate::config::Mount::Git { url, .. } => println!("{}", url),
-                            crate::config::Mount::Directory { .. } => bail!("Directory mounts don't have a url field, use 'path' instead"),
+                        crate::config::Mount::Git { .. } => {
+                            bail!("Git mounts don't have a path field, use 'url' instead")
                         }
-                    }
-                    "subpath" => {
-                        match mount {
-                            crate::config::Mount::Git { subpath, .. } => {
-                                if let Some(sub) = subpath {
-                                    println!("{}", sub);
-                                }
+                    },
+                    "url" => match mount {
+                        crate::config::Mount::Git { url, .. } => println!("{}", url),
+                        crate::config::Mount::Directory { .. } => {
+                            bail!("Directory mounts don't have a url field, use 'path' instead")
+                        }
+                    },
+                    "subpath" => match mount {
+                        crate::config::Mount::Git { subpath, .. } => {
+                            if let Some(sub) = subpath {
+                                println!("{}", sub);
                             }
-                            crate::config::Mount::Directory { .. } => bail!("Directory mounts don't have a subpath field"),
                         }
-                    }
+                        crate::config::Mount::Directory { .. } => {
+                            bail!("Directory mounts don't have a subpath field")
+                        }
+                    },
                     _ => bail!("Unknown mount field: {}", field),
                 }
             } else {

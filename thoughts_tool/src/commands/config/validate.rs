@@ -6,7 +6,7 @@ use crate::git::utils::find_repo_root;
 
 pub async fn execute() -> Result<()> {
     let mut all_valid = true;
-    
+
     // Validate repository config if in a repo
     if let Ok(repo_root) = find_repo_root(&std::env::current_dir()?) {
         print!("Validating repository configuration... ");
@@ -20,7 +20,7 @@ pub async fn execute() -> Result<()> {
             }
         }
     }
-    
+
     // Validate personal config
     print!("Validating personal configuration... ");
     match PersonalConfigManager::load() {
@@ -31,12 +31,12 @@ pub async fn execute() -> Result<()> {
             all_valid = false;
         }
     }
-    
+
     if all_valid {
         println!("\n{} All configurations are valid", "✓".green());
     } else {
         anyhow::bail!("Configuration validation failed");
     }
-    
+
     Ok(())
 }

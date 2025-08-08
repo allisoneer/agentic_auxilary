@@ -10,12 +10,12 @@
 //! - MCP tool annotations (read_only, destructive, idempotent)
 //! - Error handling with MCP error codes
 
-use std::sync::Arc;
-use universal_tool_core::prelude::*;
-use universal_tool_core::mcp::{ServiceExt, stdio};
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
-use tokio::time::{sleep, Duration};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::time::{Duration, sleep};
+use universal_tool_core::mcp::{ServiceExt, stdio};
+use universal_tool_core::prelude::*;
 
 /// A simple text processing tool suite
 #[derive(Clone)]
@@ -47,21 +47,17 @@ struct ProcessingResult {
 }
 
 // MCP-specific attributes like read_only and destructive can be added to methods
-#[universal_tool_router(
-    mcp(name = "text-tools", version = "1.0.0")
-)]
+#[universal_tool_router(mcp(name = "text-tools", version = "1.0.0"))]
 impl TextTools {
     /// Count words, lines, and characters in text
-    /// 
+    ///
     /// Analyzes text and returns word, line, and character counts.
-    #[universal_tool(
-        description = "Count words, lines, and characters in text"
-    )]
+    #[universal_tool(description = "Count words, lines, and characters in text")]
     pub async fn analyze_text(&self, text: String) -> Result<WordCountResult, ToolError> {
         let words = text.split_whitespace().count();
         let lines = text.lines().count();
         let characters = text.chars().count();
-        
+
         Ok(WordCountResult {
             words,
             lines,
@@ -70,11 +66,9 @@ impl TextTools {
     }
 
     /// Convert text to uppercase
-    /// 
+    ///
     /// Transforms text to uppercase.
-    #[universal_tool(
-        description = "Convert text to uppercase"
-    )]
+    #[universal_tool(description = "Convert text to uppercase")]
     pub async fn to_uppercase(&self, text: String) -> Result<TransformResult, ToolError> {
         Ok(TransformResult {
             original: text.clone(),
@@ -83,11 +77,9 @@ impl TextTools {
     }
 
     /// Convert text to lowercase
-    /// 
+    ///
     /// Transforms text to lowercase.
-    #[universal_tool(
-        description = "Convert text to lowercase"
-    )]
+    #[universal_tool(description = "Convert text to lowercase")]
     pub async fn to_lowercase(&self, text: String) -> Result<TransformResult, ToolError> {
         Ok(TransformResult {
             original: text.clone(),
@@ -96,41 +88,41 @@ impl TextTools {
     }
 
     /// Reverse text
-    /// 
+    ///
     /// Reverses the characters in text.
-    #[universal_tool(
-        description = "Reverse text"
-    )]
+    #[universal_tool(description = "Reverse text")]
     pub async fn reverse_text(&self, text: String) -> Result<TransformResult, ToolError> {
         Ok(TransformResult {
             original: text.clone(),
             transformed: text.chars().rev().collect(),
         })
     }
-    
+
     /// Count characters (synchronous method)
-    /// 
+    ///
     /// Counts the number of characters in text.
     /// This is a synchronous method - UTF handles both sync and async methods.
-    #[universal_tool(
-        description = "Count characters in text"
-    )]
+    #[universal_tool(description = "Count characters in text")]
     pub async fn count_chars(&self, text: String) -> Result<usize, ToolError> {
         Ok(text.chars().count())
     }
 
     /// Extract summary from text
-    /// 
+    ///
     /// Extracts a summary from text (first N words).
     /// MCP hints: read_only, idempotent
     #[universal_tool(
         description = "Extract summary from text",
         mcp(read_only = true, idempotent = true)
     )]
-    pub async fn summarize(&self, text: String, max_words: Option<usize>) -> Result<String, ToolError> {
+    pub async fn summarize(
+        &self,
+        text: String,
+        max_words: Option<usize>,
+    ) -> Result<String, ToolError> {
         let max_words = max_words.unwrap_or(50);
         let words: Vec<&str> = text.split_whitespace().collect();
-        
+
         if words.len() <= max_words {
             Ok(text)
         } else {
@@ -139,7 +131,7 @@ impl TextTools {
     }
 
     /// Clear all text (destructive operation)
-    /// 
+    ///
     /// Clears all text - this is a destructive operation.
     /// MCP hint: destructive
     #[universal_tool(
@@ -150,24 +142,22 @@ impl TextTools {
         if confirm.to_lowercase() != "yes" {
             return Err(ToolError::new(
                 ErrorCode::InvalidArgument,
-                "Confirmation required: please pass 'yes' to confirm"
+                "Confirmation required: please pass 'yes' to confirm",
             ));
         }
         Ok("Text cleared successfully".to_string())
     }
 
     /// Process large dataset (progress reporting not supported in this example)
-    /// 
+    ///
     /// Processes a large dataset with configurable delay.
-    #[universal_tool(
-        description = "Process large dataset"
-    )]
+    #[universal_tool(description = "Process large dataset")]
     pub async fn process_large_dataset(
         &self,
-        #[universal_tool_param(description = "Number of items to process")]
-        item_count: usize,
-        #[universal_tool_param(description = "Processing delay per item in ms")]
-        delay_ms: Option<u64>,
+        #[universal_tool_param(description = "Number of items to process")] item_count: usize,
+        #[universal_tool_param(description = "Processing delay per item in ms")] delay_ms: Option<
+            u64,
+        >,
     ) -> Result<ProcessingResult, ToolError> {
         let delay_ms = delay_ms.unwrap_or(100);
         let start = std::time::Instant::now();
@@ -187,7 +177,7 @@ impl TextTools {
     }
 
     /// Validate input with detailed error codes
-    /// 
+    ///
     /// Validates input text according to rules.
     /// MCP hint: read_only
     #[universal_tool(
@@ -197,10 +187,8 @@ impl TextTools {
     pub async fn validate_text(
         &self,
         text: String,
-        #[universal_tool_param(description = "Minimum length required")]
-        min_length: Option<usize>,
-        #[universal_tool_param(description = "Maximum length allowed")]
-        max_length: Option<usize>,
+        #[universal_tool_param(description = "Minimum length required")] min_length: Option<usize>,
+        #[universal_tool_param(description = "Maximum length allowed")] max_length: Option<usize>,
         #[universal_tool_param(description = "Required pattern (substring)")]
         required_pattern: Option<String>,
     ) -> Result<bool, ToolError> {
@@ -209,8 +197,16 @@ impl TextTools {
             if text.len() < min {
                 return Err(ToolError::new(
                     ErrorCode::InvalidArgument,
-                    format!("Text too short: {} chars, minimum {} required", text.len(), min)
-                ).with_detail("help", "Provide longer text to meet the minimum length requirement"));
+                    format!(
+                        "Text too short: {} chars, minimum {} required",
+                        text.len(),
+                        min
+                    ),
+                )
+                .with_detail(
+                    "help",
+                    "Provide longer text to meet the minimum length requirement",
+                ));
             }
         }
 
@@ -219,8 +215,16 @@ impl TextTools {
             if text.len() > max {
                 return Err(ToolError::new(
                     ErrorCode::InvalidArgument,
-                    format!("Text too long: {} chars, maximum {} allowed", text.len(), max)
-                ).with_detail("help", "Shorten the text to meet the maximum length requirement"));
+                    format!(
+                        "Text too long: {} chars, maximum {} allowed",
+                        text.len(),
+                        max
+                    ),
+                )
+                .with_detail(
+                    "help",
+                    "Shorten the text to meet the maximum length requirement",
+                ));
             }
         }
 
@@ -229,8 +233,9 @@ impl TextTools {
             if !text.contains(&pattern) {
                 return Err(ToolError::new(
                     ErrorCode::InvalidArgument,
-                    format!("Required pattern '{}' not found in text", pattern)
-                ).with_detail("help", "The text must contain the specified pattern"));
+                    format!("Required pattern '{}' not found in text", pattern),
+                )
+                .with_detail("help", "The text must contain the specified pattern"));
             }
         }
 
@@ -274,12 +279,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create stdio transport
     let transport = stdio();
-    
+
     // Run the MCP server
-    server
-        .serve(transport)
-        .await
-        .unwrap();
+    server.serve(transport).await.unwrap();
 
     Ok(())
 }

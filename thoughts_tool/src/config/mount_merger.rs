@@ -1,9 +1,9 @@
-use crate::config::{PersonalConfigManager, RepoConfigManager, Mount, SyncStrategy};
-use crate::config::{PersonalMount, RequiredMount, MountPattern};
-use crate::git::utils::{get_remote_url, find_repo_root};
+use crate::config::{Mount, PersonalConfigManager, RepoConfigManager, SyncStrategy};
+use crate::config::{MountPattern, PersonalMount, RequiredMount};
+use crate::git::utils::{find_repo_root, get_remote_url};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use anyhow::Result;
 
 pub struct MountMerger {
     repo_root: PathBuf,
@@ -13,10 +13,10 @@ impl MountMerger {
     pub fn new(repo_root: PathBuf) -> Self {
         Self { repo_root }
     }
-    
+
     pub async fn get_all_mounts(&self) -> Result<HashMap<String, (Mount, MountSource)>> {
         let mut mounts = HashMap::new();
-        
+
         // 1. Load repository mounts from .thoughts/config.json
         let repo_manager = RepoConfigManager::new(self.repo_root.clone());
         if let Some(repo_config) = repo_manager.load()? {
@@ -31,10 +31,10 @@ impl MountMerger {
                 mounts.insert(name, (mount, MountSource::Repository));
             }
         }
-        
+
         // 2. Get current repository URL for pattern matching
         let repo_url = get_remote_url(&self.repo_root)?;
-        
+
         // 3. Load personal mounts for this specific repository
         // These are stored in ~/.thoughts/config.json under repository_mounts[repo_url]
         let personal_mounts = PersonalConfigManager::get_repository_mounts(&repo_url)?;
@@ -46,7 +46,7 @@ impl MountMerger {
             };
             mounts.insert(pm.mount_path, (mount, MountSource::Personal));
         }
-        
+
         // 4. Evaluate patterns to find matching mounts
         // Patterns like "git@github.com:mycompany/*" match repository URLs
         if let Some(personal_config) = PersonalConfigManager::load()? {
@@ -63,24 +63,22 @@ impl MountMerger {
                 }
             }
         }
-        
+
         Ok(mounts)
     }
 }
 
 #[derive(Debug)]
 pub enum MountSource {
-    Repository,  // From .thoughts/config.json in repository
-    Personal,    // From ~/.thoughts/config.json direct mount for this repo
-    Pattern,     // From ~/.thoughts/config.json pattern match
+    Repository, // From .thoughts/config.json in repository
+    Personal,   // From ~/.thoughts/config.json direct mount for this repo
+    Pattern,    // From ~/.thoughts/config.json pattern match
 }
 
 fn pattern_matches(pattern: &str, url: &str) -> bool {
     // Convert pattern to regex, supporting * wildcard
-    let regex_pattern = pattern
-        .replace(".", r"\.")
-        .replace("*", ".*");
-    
+    let regex_pattern = pattern.replace(".", r"\.").replace("*", ".*");
+
     regex::Regex::new(&format!("^{}$", regex_pattern))
         .map(|re| re.is_match(url))
         .unwrap_or(false)
