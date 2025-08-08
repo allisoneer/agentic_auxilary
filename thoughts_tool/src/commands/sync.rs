@@ -34,19 +34,13 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
             .map(|(name, _)| name.clone())
             .collect()
     } else {
-        // Repository-aware sync (default) - only sync mounts for current repo
+        // Repository-aware sync (default) - sync all auto mounts for current repo
+        // Note: get_all_mounts() already returns only mounts configured for this repository
         let repo_url = get_remote_url(&repo_root)?;
         println!("{} repository: {}", "Detected".cyan(), repo_url);
         
         all_mounts.iter()
-            .filter(|(_, (mount, _))| {
-                mount.sync_strategy() == SyncStrategy::Auto &&
-                if let Mount::Git { url, .. } = mount {
-                    url == &repo_url
-                } else {
-                    false
-                }
-            })
+            .filter(|(_, (mount, _))| mount.sync_strategy() == SyncStrategy::Auto)
             .map(|(name, _)| name.clone())
             .collect()
     };

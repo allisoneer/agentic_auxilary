@@ -24,7 +24,7 @@ impl MountMerger {
             for required in &repo_config.requires {
                 let mount = Mount::Git {
                     url: required.remote.clone(),
-                    sync: SyncStrategy::Auto,
+                    sync: required.sync.clone(),
                     subpath: required.subpath.clone(),
                 };
                 let name = required.mount_path.clone();
