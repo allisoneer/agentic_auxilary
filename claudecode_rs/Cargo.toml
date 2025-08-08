@@ -4,12 +4,15 @@ version = "0.1.0"
 edition = "2024"
 authors = ["ClaudeCode-RS Contributors"]
 description = "A Rust SDK for programmatically interacting with Claude Code"
-repository = "https://github.com/allisoneer/agentic_auxilary/tree/main/claudecode_rs"
+repository = "https://github.com/allisoneer/agentic_auxilary"
 homepage = "https://github.com/allisoneer/agentic_auxilary"
 documentation = "https://docs.rs/claudecode"
 license = "MIT"
 keywords = ["claude", "ai", "sdk", "anthropic"]
 categories = ["api-bindings", "development-tools"]
+
+[package.metadata.dist]
+dist = false
 
 [dependencies]
 # Core async runtime
