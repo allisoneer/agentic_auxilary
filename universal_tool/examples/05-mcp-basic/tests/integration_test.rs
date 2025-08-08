@@ -18,7 +18,7 @@ impl TestTextTools {
     async fn count_words(&self, text: String) -> Result<usize, ToolError> {
         Ok(text.split_whitespace().count())
     }
-    
+
     #[universal_tool(description = "Reverse text")]
     async fn reverse(&self, text: String) -> Result<String, ToolError> {
         Ok(text.chars().rev().collect())
@@ -30,25 +30,25 @@ async fn test_get_mcp_tools() {
     let tools = TestTextTools {
         name: "Test Tools".to_string(),
     };
-    
+
     // Get the tool definitions
     let tool_defs = tools.get_mcp_tools();
-    
+
     // Verify we have the expected number of tools
     assert_eq!(tool_defs.len(), 2);
-    
+
     // Check first tool
     let count_tool = &tool_defs[0];
     assert_eq!(count_tool["name"], "count_words");
     assert_eq!(count_tool["description"], "Count words in text");
-    
+
     // Verify input schema
     let schema = &count_tool["inputSchema"];
     assert_eq!(schema["type"], "object");
     assert!(schema["properties"]["text"].is_object());
     assert_eq!(schema["properties"]["text"]["type"], "string");
     assert_eq!(schema["required"], json!(["text"]));
-    
+
     // Check second tool
     let reverse_tool = &tool_defs[1];
     assert_eq!(reverse_tool["name"], "reverse");
@@ -60,15 +60,15 @@ async fn test_handle_mcp_call_count_words() {
     let tools = TestTextTools {
         name: "Test Tools".to_string(),
     };
-    
+
     // Call count_words tool
     let params = json!({
         "text": "hello world test"
     });
-    
+
     let result = tools.handle_mcp_call("count_words", params).await;
     assert!(result.is_ok());
-    
+
     let value = result.unwrap();
     assert_eq!(value, json!(3));
 }
@@ -78,15 +78,15 @@ async fn test_handle_mcp_call_reverse() {
     let tools = TestTextTools {
         name: "Test Tools".to_string(),
     };
-    
+
     // Call reverse tool
     let params = json!({
         "text": "hello"
     });
-    
+
     let result = tools.handle_mcp_call("reverse", params).await;
     assert!(result.is_ok());
-    
+
     let value = result.unwrap();
     assert_eq!(value, json!("olleh"));
 }
@@ -96,10 +96,10 @@ async fn test_handle_mcp_call_unknown_method() {
     let tools = TestTextTools {
         name: "Test Tools".to_string(),
     };
-    
+
     let params = json!({});
     let result = tools.handle_mcp_call("unknown_method", params).await;
-    
+
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("Unknown method"));
@@ -110,11 +110,11 @@ async fn test_handle_mcp_call_invalid_params() {
     let tools = TestTextTools {
         name: "Test Tools".to_string(),
     };
-    
+
     // Missing required parameter
     let params = json!({});
     let result = tools.handle_mcp_call("count_words", params).await;
-    
+
     assert!(result.is_err());
     // The error should be about missing field
     let err = result.unwrap_err();

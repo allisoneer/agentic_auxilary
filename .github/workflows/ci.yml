@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  test:
+    name: Test ${{ matrix.package }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        package: [thoughts_tool, universal_tool, claudecode_rs]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - uses: mozilla-actions/sccache-action@v0.0.7
+      
+      - name: Run tests
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
+        run: |
+          cd ${{ matrix.package }}
+          make test-normal
+
+  lint:
+    name: Lint ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [thoughts_tool, universal_tool, claudecode_rs]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - uses: mozilla-actions/sccache-action@v0.0.7
+      
+      - name: Check formatting
+        run: |
+          cd ${{ matrix.package }}
+          make fmt-check
+      
+      - name: Run clippy
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
+        run: |
+          cd ${{ matrix.package }}
+          make check-normal
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+        continue-on-error: true

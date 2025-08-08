@@ -237,7 +237,7 @@ impl RouterDef {
     /// Validate the router definition.
     pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
-        
+
         // Check for duplicate tool names
         let mut tool_names = std::collections::HashSet::new();
         for tool in &self.tools {
@@ -245,18 +245,20 @@ impl RouterDef {
                 errors.push(ValidationError {
                     span: tool.method_name.span(),
                     message: format!("Duplicate tool name: {}", tool.tool_name),
-                    help: Some("Use the 'name' attribute to specify a different tool name".to_string()),
+                    help: Some(
+                        "Use the 'name' attribute to specify a different tool name".to_string(),
+                    ),
                 });
             }
         }
-        
+
         // Validate each tool
         for tool in &self.tools {
             if let Err(tool_errors) = tool.validate() {
                 errors.extend(tool_errors);
             }
         }
-        
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -276,11 +278,11 @@ impl ToolDef {
         }
         params
     }
-    
+
     /// Validate the tool definition.
     pub fn validate(&self) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
-        
+
         // Validate return type is Result<T, ToolError>
         if !self.is_valid_return_type() {
             errors.push(ValidationError {
@@ -289,7 +291,7 @@ impl ToolDef {
                 help: Some("Change your return type to Result<YourType, ToolError>".to_string()),
             });
         }
-        
+
         // Validate parameter names don't conflict
         let mut param_names = std::collections::HashSet::new();
         for param in &self.params {
@@ -301,7 +303,7 @@ impl ToolDef {
                 });
             }
         }
-        
+
         // Validate REST configuration
         if let Some(rest_config) = &self.metadata.rest_config {
             // Extract path parameters from the REST path
@@ -310,7 +312,7 @@ impl ToolDef {
             } else {
                 Vec::new()
             };
-            
+
             // GET requests shouldn't have body parameters
             if rest_config.method == HttpMethod::Get {
                 for param in &self.params {
@@ -318,7 +320,7 @@ impl ToolDef {
                     if path_params.contains(&param.name.to_string()) {
                         continue;
                     }
-                    
+
                     if param.source == ParamSource::Body {
                         errors.push(ValidationError {
                             span: param.name.span(),
@@ -329,14 +331,14 @@ impl ToolDef {
                 }
             }
         }
-        
+
         if errors.is_empty() {
             Ok(())
         } else {
             Err(errors)
         }
     }
-    
+
     /// Check if the return type is Result<T, ToolError>.
     fn is_valid_return_type(&self) -> bool {
         // This is a simplified check - the actual implementation would

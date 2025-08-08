@@ -24,7 +24,6 @@ pub fn get_config_path() -> Result<PathBuf> {
     Ok(config_dir.join("thoughts").join("config.json"))
 }
 
-
 /// Ensure a directory exists, creating it if necessary
 pub fn ensure_dir(path: &Path) -> Result<()> {
     if !path.exists() {
@@ -52,15 +51,15 @@ pub fn get_repo_config_path(repo_root: &Path) -> PathBuf {
 
 /// Get the personal configuration file path
 pub fn get_personal_config_path() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     Ok(home.join(".thoughts").join("config.json"))
 }
 
 /// Get external metadata directory for personal metadata about other repos
 pub fn get_external_metadata_dir() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     Ok(home.join(".thoughts").join("data").join("external"))
 }
 
@@ -76,8 +75,8 @@ pub fn get_repo_rules_path(repo_root: &Path) -> PathBuf {
 
 /// Get the repository mapping file path
 pub fn get_repo_mapping_path() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     Ok(home.join(".thoughts").join("repos.json"))
 }
 
