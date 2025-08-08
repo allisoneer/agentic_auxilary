@@ -1,6 +1,6 @@
 [package]
 name = "claudecode"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["ClaudeCode-RS Contributors"]
 description = "A Rust SDK for programmatically interacting with Claude Code"
