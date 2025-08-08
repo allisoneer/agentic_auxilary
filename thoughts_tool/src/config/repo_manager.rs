@@ -1,10 +1,10 @@
-use crate::config::{RepoConfig, RequiredMount, MountDirs};
+use crate::config::{MountDirs, RepoConfig, RequiredMount};
 use crate::utils::paths;
-use anyhow::{Result, Context};
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use atomicwrites::{AtomicFile, OverwriteBehavior};
 use std::fs;
 use std::io::Write;
-use atomicwrites::{AtomicFile, OverwriteBehavior};
+use std::path::PathBuf;
 
 pub struct RepoConfigManager {
     repo_root: PathBuf,
@@ -20,34 +20,34 @@ impl RepoConfigManager {
         if !config_path.exists() {
             return Ok(None);
         }
-        
+
         let content = fs::read_to_string(&config_path)
             .with_context(|| format!("Failed to read config from {:?}", config_path))?;
         let config: RepoConfig = serde_json::from_str(&content)
             .with_context(|| "Failed to parse repository configuration")?;
-        
+
         self.validate(&config)?;
         Ok(Some(config))
     }
 
     pub fn save(&self, config: &RepoConfig) -> Result<()> {
         self.validate(config)?;
-        
+
         let config_path = paths::get_repo_config_path(&self.repo_root);
-        
+
         // Ensure .thoughts directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory {:?}", parent))?;
         }
-        
-        let json = serde_json::to_string_pretty(config)
-            .context("Failed to serialize configuration")?;
-        
+
+        let json =
+            serde_json::to_string_pretty(config).context("Failed to serialize configuration")?;
+
         AtomicFile::new(&config_path, OverwriteBehavior::AllowOverwrite)
             .write(|f| f.write_all(json.as_bytes()))
             .with_context(|| format!("Failed to write config to {:?}", config_path))?;
-        
+
         Ok(())
     }
 
@@ -55,14 +55,14 @@ impl RepoConfigManager {
         if let Some(config) = self.load()? {
             return Ok(config);
         }
-        
+
         let default_config = RepoConfig {
             version: "1.0".to_string(),
             mount_dirs: MountDirs::default(),
             requires: vec![],
             rules: vec![],
         };
-        
+
         self.save(&default_config)?;
         Ok(default_config)
     }
@@ -109,13 +109,17 @@ impl RepoConfigManager {
             // Local mount - relative path is OK
             return Ok(());
         }
-        
-        if !remote.starts_with("git@") && 
-           !remote.starts_with("https://") && 
-           !remote.starts_with("ssh://") {
-            anyhow::bail!("Invalid remote URL: {}. Must be a git URL or relative path starting with ./", remote);
+
+        if !remote.starts_with("git@")
+            && !remote.starts_with("https://")
+            && !remote.starts_with("ssh://")
+        {
+            anyhow::bail!(
+                "Invalid remote URL: {}. Must be a git URL or relative path starting with ./",
+                remote
+            );
         }
-        
+
         Ok(())
     }
 
@@ -128,7 +132,11 @@ impl RepoConfigManager {
         });
 
         // Check for duplicate mount paths
-        if config.requires.iter().any(|m| m.mount_path == mount.mount_path) {
+        if config
+            .requires
+            .iter()
+            .any(|m| m.mount_path == mount.mount_path)
+        {
             anyhow::bail!("Mount path '{}' already exists", mount.mount_path);
         }
 
@@ -138,12 +146,13 @@ impl RepoConfigManager {
     }
 
     pub fn remove_mount(&mut self, mount_path: &str) -> Result<bool> {
-        let mut config = self.load()?
+        let mut config = self
+            .load()?
             .ok_or_else(|| anyhow::anyhow!("No repository configuration found"))?;
 
         let initial_len = config.requires.len();
         config.requires.retain(|m| m.mount_path != mount_path);
-        
+
         if config.requires.len() == initial_len {
             return Ok(false);
         }
@@ -166,17 +175,15 @@ mod tests {
         let config = RepoConfig {
             version: "1.0".to_string(),
             mount_dirs: MountDirs::default(),
-            requires: vec![
-                RequiredMount {
-                    remote: "git@github.com:test/repo.git".to_string(),
-                    mount_path: "test".to_string(),
-                    subpath: None,
-                    description: "Test repository".to_string(),
-                    optional: false,
-                    override_rules: None,
-                    sync: crate::config::SyncStrategy::Auto,
-                },
-            ],
+            requires: vec![RequiredMount {
+                remote: "git@github.com:test/repo.git".to_string(),
+                mount_path: "test".to_string(),
+                subpath: None,
+                description: "Test repository".to_string(),
+                optional: false,
+                override_rules: None,
+                sync: crate::config::SyncStrategy::Auto,
+            }],
             rules: vec![],
         };
 
@@ -185,7 +192,7 @@ mod tests {
 
         // Load
         let loaded = manager.load().unwrap().unwrap();
-        
+
         assert_eq!(loaded.version, config.version);
         assert_eq!(loaded.requires.len(), config.requires.len());
         assert_eq!(loaded.requires[0].remote, config.requires[0].remote);
@@ -266,17 +273,15 @@ mod tests {
         let config = RepoConfig {
             version: "1.0".to_string(),
             mount_dirs: MountDirs::default(),
-            requires: vec![
-                RequiredMount {
-                    remote: "invalid-url".to_string(), // Invalid URL
-                    mount_path: "test".to_string(),
-                    subpath: None,
-                    description: "Test".to_string(),
-                    optional: false,
-                    override_rules: None,
-                    sync: crate::config::SyncStrategy::None,
-                },
-            ],
+            requires: vec![RequiredMount {
+                remote: "invalid-url".to_string(), // Invalid URL
+                mount_path: "test".to_string(),
+                subpath: None,
+                description: "Test".to_string(),
+                optional: false,
+                override_rules: None,
+                sync: crate::config::SyncStrategy::None,
+            }],
             rules: vec![],
         };
 
@@ -291,17 +296,15 @@ mod tests {
         let config = RepoConfig {
             version: "1.0".to_string(),
             mount_dirs: MountDirs::default(),
-            requires: vec![
-                RequiredMount {
-                    remote: "./local/path".to_string(), // Valid local mount
-                    mount_path: "local".to_string(),
-                    subpath: None,
-                    description: "Local mount".to_string(),
-                    optional: false,
-                    override_rules: None,
-                    sync: crate::config::SyncStrategy::None,
-                },
-            ],
+            requires: vec![RequiredMount {
+                remote: "./local/path".to_string(), // Valid local mount
+                mount_path: "local".to_string(),
+                subpath: None,
+                description: "Local mount".to_string(),
+                optional: false,
+                override_rules: None,
+                sync: crate::config::SyncStrategy::None,
+            }],
             rules: vec![],
         };
 

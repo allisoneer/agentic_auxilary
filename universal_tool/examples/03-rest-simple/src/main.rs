@@ -6,11 +6,11 @@
 //! - Error mapping to HTTP status codes
 //! - Simple server setup
 
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use universal_tool_core::prelude::*;
 use universal_tool_core::rest::Json;
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 
 /// A simple calculator API
 #[derive(Clone)]
@@ -25,12 +25,10 @@ struct CalculationResult {
 }
 
 // The REST prefix is specified at the router level
-#[universal_tool_router(
-    rest(prefix = "/api/v1")
-)]
+#[universal_tool_router(rest(prefix = "/api/v1"))]
 impl Calculator {
     /// Add two numbers together
-    /// 
+    ///
     /// Adds two numbers and returns the sum.
     /// Endpoint: POST /api/v1/add
     #[universal_tool(
@@ -45,7 +43,7 @@ impl Calculator {
     }
 
     /// Subtract one number from another
-    /// 
+    ///
     /// Subtracts b from a.
     /// Endpoint: POST /api/v1/subtract
     #[universal_tool(
@@ -60,7 +58,7 @@ impl Calculator {
     }
 
     /// Multiply two numbers
-    /// 
+    ///
     /// Multiplies two numbers together.
     /// Endpoint: POST /api/v1/multiply
     #[universal_tool(
@@ -75,7 +73,7 @@ impl Calculator {
     }
 
     /// Divide one number by another
-    /// 
+    ///
     /// Divides a by b with zero-check validation.
     /// Endpoint: POST /api/v1/divide
     #[universal_tool(
@@ -84,9 +82,12 @@ impl Calculator {
     )]
     pub async fn divide(&self, a: f64, b: f64) -> Result<CalculationResult, ToolError> {
         if b == 0.0 {
-            return Err(ToolError::new(universal_tool_core::error::ErrorCode::InvalidArgument, "Cannot divide by zero"));
+            return Err(ToolError::new(
+                universal_tool_core::error::ErrorCode::InvalidArgument,
+                "Cannot divide by zero",
+            ));
         }
-        
+
         Ok(CalculationResult {
             value: a / b,
             operation: format!("{} ÷ {} = {}", a, b, a / b),
@@ -94,7 +95,7 @@ impl Calculator {
     }
 
     /// Get information about the calculator
-    /// 
+    ///
     /// Returns calculator version information.
     /// Endpoint: GET /api/v1/info
     #[universal_tool(
@@ -123,21 +124,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Add user-defined endpoints
     let app = app
-        .route("/health", universal_tool_core::rest::routing::get(health_check))
-        .route("/openapi.json", universal_tool_core::rest::routing::get({
-            let calculator = calculator.clone();
-            move || async move {
-                // For now, OpenAPI returns a string message
-                // TODO: Enable the 'openapi' feature for full OpenAPI support
-                calculator.get_openapi_spec()
-            }
-        }));
+        .route(
+            "/health",
+            universal_tool_core::rest::routing::get(health_check),
+        )
+        .route(
+            "/openapi.json",
+            universal_tool_core::rest::routing::get({
+                let calculator = calculator.clone();
+                move || async move {
+                    // For now, OpenAPI returns a string message
+                    // TODO: Enable the 'openapi' feature for full OpenAPI support
+                    calculator.get_openapi_spec()
+                }
+            }),
+        );
 
     // Start the server
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    
+
     println!("🚀 REST API server running on http://127.0.0.1:3000");
     println!("📍 Try these endpoints:");
     println!("   GET  http://127.0.0.1:3000/health");

@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use ::tower_http::cors::CorsLayer;
+use ::tower_http::trace::TraceLayer;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use ::tower_http::cors::CorsLayer;
-use ::tower_http::trace::TraceLayer;
 use tracing::info;
 use universal_tool_core::prelude::*;
 use uuid::Uuid;
@@ -123,10 +123,10 @@ impl TaskManager {
         let per_page = params.per_page.unwrap_or(20).min(100);
         let total = items.len();
         let total_pages = ((total as f32) / (per_page as f32)).ceil() as u32;
-        
+
         let start = ((page - 1) * per_page) as usize;
         let end = (start + per_page as usize).min(total);
-        
+
         PaginatedResponse {
             data: items[start..end].to_vec(),
             page,
@@ -137,9 +137,7 @@ impl TaskManager {
     }
 }
 
-#[universal_tool_router(
-    rest(prefix = "/api/v1")
-)]
+#[universal_tool_router(rest(prefix = "/api/v1"))]
 impl TaskManager {
     #[universal_tool(
         description = "List all projects with pagination",
@@ -150,12 +148,14 @@ impl TaskManager {
         #[universal_tool_param(source = "query")] page: Option<u32>,
         #[universal_tool_param(source = "query")] per_page: Option<u32>,
     ) -> Result<PaginatedResponse<Project>, ToolError> {
-        let projects = self.projects.read()
+        let projects = self
+            .projects
+            .read()
             .map_err(|_| ToolError::internal("Failed to read projects"))?;
-        
+
         let mut project_list: Vec<Project> = projects.values().cloned().collect();
         project_list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         let pagination = PaginationParams { page, per_page };
         Ok(Self::paginate(project_list, &pagination))
     }
@@ -177,7 +177,8 @@ impl TaskManager {
             updated_at: now,
         };
 
-        self.projects.write()
+        self.projects
+            .write()
             .map_err(|_| ToolError::internal("Failed to write projects"))?
             .insert(project.id, project.clone());
 
@@ -189,14 +190,14 @@ impl TaskManager {
         description = "Get a project by ID",
         rest(method = "GET", path = "/projects/:project_id")
     )]
-    async fn get_project(
-        &self,
-        project_id: Uuid,
-    ) -> Result<Project, ToolError> {
-        let projects = self.projects.read()
+    async fn get_project(&self, project_id: Uuid) -> Result<Project, ToolError> {
+        let projects = self
+            .projects
+            .read()
             .map_err(|_| ToolError::internal("Failed to read projects"))?;
-        
-        projects.get(&project_id)
+
+        projects
+            .get(&project_id)
             .cloned()
             .ok_or_else(|| ToolError::not_found(format!("Project {} not found", project_id)))
     }
@@ -210,10 +211,13 @@ impl TaskManager {
         project_id: Uuid,
         #[universal_tool_param(source = "body")] request: UpdateProjectRequest,
     ) -> Result<Project, ToolError> {
-        let mut projects = self.projects.write()
+        let mut projects = self
+            .projects
+            .write()
             .map_err(|_| ToolError::internal("Failed to write projects"))?;
-        
-        let project = projects.get_mut(&project_id)
+
+        let project = projects
+            .get_mut(&project_id)
             .ok_or_else(|| ToolError::not_found(format!("Project {} not found", project_id)))?;
 
         if let Some(name) = request.name {
@@ -232,19 +236,21 @@ impl TaskManager {
         description = "Delete a project and all its tasks",
         rest(method = "DELETE", path = "/projects/:project_id")
     )]
-    async fn delete_project(
-        &self,
-        project_id: Uuid,
-    ) -> Result<(), ToolError> {
-        let mut projects = self.projects.write()
+    async fn delete_project(&self, project_id: Uuid) -> Result<(), ToolError> {
+        let mut projects = self
+            .projects
+            .write()
             .map_err(|_| ToolError::internal("Failed to write projects"))?;
-        
-        projects.remove(&project_id)
+
+        projects
+            .remove(&project_id)
             .ok_or_else(|| ToolError::not_found(format!("Project {} not found", project_id)))?;
 
-        let mut tasks = self.tasks.write()
+        let mut tasks = self
+            .tasks
+            .write()
             .map_err(|_| ToolError::internal("Failed to write tasks"))?;
-        
+
         tasks.retain(|_, task| task.project_id != project_id);
 
         info!("Deleted project and its tasks: {}", project_id);
@@ -264,26 +270,38 @@ impl TaskManager {
         #[universal_tool_param(source = "query")] page: Option<u32>,
         #[universal_tool_param(source = "query")] per_page: Option<u32>,
     ) -> Result<PaginatedResponse<Task>, ToolError> {
-        let projects = self.projects.read()
+        let projects = self
+            .projects
+            .read()
             .map_err(|_| ToolError::internal("Failed to read projects"))?;
-        
+
         if !projects.contains_key(&project_id) {
-            return Err(ToolError::not_found(format!("Project {} not found", project_id)));
+            return Err(ToolError::not_found(format!(
+                "Project {} not found",
+                project_id
+            )));
         }
 
-        let tasks = self.tasks.read()
+        let tasks = self
+            .tasks
+            .read()
             .map_err(|_| ToolError::internal("Failed to read tasks"))?;
-        
-        let mut task_list: Vec<Task> = tasks.values()
+
+        let mut task_list: Vec<Task> = tasks
+            .values()
             .filter(|task| task.project_id == project_id)
             .filter(|task| status.as_ref().map_or(true, |s| &task.status == s))
             .filter(|task| priority.as_ref().map_or(true, |p| &task.priority == p))
-            .filter(|task| assigned_to.as_ref().map_or(true, |a| task.assigned_to.as_ref() == Some(a)))
+            .filter(|task| {
+                assigned_to
+                    .as_ref()
+                    .map_or(true, |a| task.assigned_to.as_ref() == Some(a))
+            })
             .cloned()
             .collect();
-        
+
         task_list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         let pagination = PaginationParams { page, per_page };
         Ok(Self::paginate(task_list, &pagination))
     }
@@ -297,11 +315,16 @@ impl TaskManager {
         project_id: Uuid,
         #[universal_tool_param(source = "body")] request: CreateTaskRequest,
     ) -> Result<Task, ToolError> {
-        let projects = self.projects.read()
+        let projects = self
+            .projects
+            .read()
             .map_err(|_| ToolError::internal("Failed to read projects"))?;
-        
+
         if !projects.contains_key(&project_id) {
-            return Err(ToolError::not_found(format!("Project {} not found", project_id)));
+            return Err(ToolError::not_found(format!(
+                "Project {} not found",
+                project_id
+            )));
         }
 
         let now = Utc::now();
@@ -318,7 +341,8 @@ impl TaskManager {
             updated_at: now,
         };
 
-        self.tasks.write()
+        self.tasks
+            .write()
             .map_err(|_| ToolError::internal("Failed to write tasks"))?
             .insert(task.id, task.clone());
 
@@ -330,14 +354,14 @@ impl TaskManager {
         description = "Get a specific task",
         rest(method = "GET", path = "/tasks/:task_id")
     )]
-    async fn get_task(
-        &self,
-        task_id: Uuid,
-    ) -> Result<Task, ToolError> {
-        let tasks = self.tasks.read()
+    async fn get_task(&self, task_id: Uuid) -> Result<Task, ToolError> {
+        let tasks = self
+            .tasks
+            .read()
             .map_err(|_| ToolError::internal("Failed to read tasks"))?;
-        
-        tasks.get(&task_id)
+
+        tasks
+            .get(&task_id)
             .cloned()
             .ok_or_else(|| ToolError::not_found(format!("Task {} not found", task_id)))
     }
@@ -351,10 +375,13 @@ impl TaskManager {
         task_id: Uuid,
         #[universal_tool_param(source = "body")] request: UpdateTaskRequest,
     ) -> Result<Task, ToolError> {
-        let mut tasks = self.tasks.write()
+        let mut tasks = self
+            .tasks
+            .write()
             .map_err(|_| ToolError::internal("Failed to write tasks"))?;
-        
-        let task = tasks.get_mut(&task_id)
+
+        let task = tasks
+            .get_mut(&task_id)
             .ok_or_else(|| ToolError::not_found(format!("Task {} not found", task_id)))?;
 
         if let Some(title) = request.title {
@@ -385,14 +412,14 @@ impl TaskManager {
         description = "Delete a task",
         rest(method = "DELETE", path = "/tasks/:task_id")
     )]
-    async fn delete_task(
-        &self,
-        task_id: Uuid,
-    ) -> Result<(), ToolError> {
-        let mut tasks = self.tasks.write()
+    async fn delete_task(&self, task_id: Uuid) -> Result<(), ToolError> {
+        let mut tasks = self
+            .tasks
+            .write()
             .map_err(|_| ToolError::internal("Failed to write tasks"))?;
-        
-        tasks.remove(&task_id)
+
+        tasks
+            .remove(&task_id)
             .ok_or_else(|| ToolError::not_found(format!("Task {} not found", task_id)))?;
 
         info!("Deleted task: {}", task_id);
@@ -411,18 +438,25 @@ impl TaskManager {
         #[universal_tool_param(source = "query")] page: Option<u32>,
         #[universal_tool_param(source = "query")] per_page: Option<u32>,
     ) -> Result<PaginatedResponse<Task>, ToolError> {
-        let tasks = self.tasks.read()
+        let tasks = self
+            .tasks
+            .read()
             .map_err(|_| ToolError::internal("Failed to read tasks"))?;
-        
-        let mut task_list: Vec<Task> = tasks.values()
+
+        let mut task_list: Vec<Task> = tasks
+            .values()
             .filter(|task| status.as_ref().map_or(true, |s| &task.status == s))
             .filter(|task| priority.as_ref().map_or(true, |p| &task.priority == p))
-            .filter(|task| assigned_to.as_ref().map_or(true, |a| task.assigned_to.as_ref() == Some(a)))
+            .filter(|task| {
+                assigned_to
+                    .as_ref()
+                    .map_or(true, |a| task.assigned_to.as_ref() == Some(a))
+            })
             .cloned()
             .collect();
-        
+
         task_list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         let pagination = PaginationParams { page, per_page };
         Ok(Self::paginate(task_list, &pagination))
     }
@@ -432,26 +466,28 @@ impl TaskManager {
         rest(method = "GET", path = "/stats/tasks")
     )]
     async fn get_task_stats(&self) -> Result<serde_json::Value, ToolError> {
-        let tasks = self.tasks.read()
+        let tasks = self
+            .tasks
+            .read()
             .map_err(|_| ToolError::internal("Failed to read tasks"))?;
-        
+
         let mut by_status: HashMap<String, usize> = HashMap::new();
         let mut by_priority: HashMap<String, usize> = HashMap::new();
-        
+
         for task in tasks.values() {
             let status = format!("{:?}", task.status);
             let priority = format!("{:?}", task.priority);
-            
+
             *by_status.entry(status).or_insert(0) += 1;
             *by_priority.entry(priority).or_insert(0) += 1;
         }
-        
+
         let stats = serde_json::json!({
             "total": tasks.len(),
             "by_status": by_status,
             "by_priority": by_priority
         });
-        
+
         Ok(stats)
     }
 }
@@ -473,7 +509,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
     info!("Task Manager API listening on: {}", listener.local_addr()?);
     info!("API endpoints available at: http://localhost:3000/api/v1");
-    
+
     axum::serve(listener, app).await?;
     Ok(())
 }

@@ -7,17 +7,17 @@
 
 use proc_macro::TokenStream;
 
+mod codegen;
 mod model;
 mod parser;
-mod codegen;
 
 /// The main attribute macro for defining universal tools.
-/// 
-/// This macro will generate interface-specific methods (CLI, REST, MCP) 
+///
+/// This macro will generate interface-specific methods (CLI, REST, MCP)
 /// from your tool implementation.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```ignore
 /// #[universal_tool_router]
 /// impl MyTools {

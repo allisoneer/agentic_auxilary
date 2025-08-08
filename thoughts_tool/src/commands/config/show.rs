@@ -14,7 +14,7 @@ pub async fn execute(json: bool, personal: bool) -> Result<()> {
             } else {
                 println!("{}", "Personal Configuration".bold());
                 println!();
-                
+
                 // Show patterns
                 if !config.patterns.is_empty() {
                     println!("{}:", "Patterns".cyan());
@@ -26,7 +26,7 @@ pub async fn execute(json: bool, personal: bool) -> Result<()> {
                     }
                     println!();
                 }
-                
+
                 // Show repository-specific mounts
                 if !config.repository_mounts.is_empty() {
                     println!("{}:", "Repository Mounts".cyan());
@@ -46,7 +46,7 @@ pub async fn execute(json: bool, personal: bool) -> Result<()> {
         // Show repository config from .thoughts/config.json
         let repo_root = find_repo_root(&std::env::current_dir()?)?;
         let repo_manager = RepoConfigManager::new(repo_root);
-        
+
         if let Some(config) = repo_manager.load()? {
             if json {
                 println!("{}", serde_json::to_string_pretty(&config)?);
@@ -55,7 +55,7 @@ pub async fn execute(json: bool, personal: bool) -> Result<()> {
                 println!();
                 println!("Version: {}", config.version);
                 println!();
-                
+
                 if !config.requires.is_empty() {
                     println!("{}:", "Required Mounts".cyan());
                     for mount in &config.requires {
@@ -75,6 +75,6 @@ pub async fn execute(json: bool, personal: bool) -> Result<()> {
             println!("Run {} to initialize", "thoughts init".cyan());
         }
     }
-    
+
     Ok(())
 }

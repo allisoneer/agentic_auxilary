@@ -1,6 +1,6 @@
 use std::io;
-use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Layer;
+use tracing_subscriber::layer::SubscriberExt;
 
 /// A guard that temporarily disables logging output.
 /// When dropped, the original logging configuration is restored.
@@ -13,14 +13,13 @@ impl TuiLogGuard {
     /// The original logging configuration is restored when this guard is dropped.
     pub fn new() -> Self {
         // Create a no-op subscriber that discards all logs
-        let noop_subscriber = tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::fmt::layer()
-                    .with_writer(io::sink) // Write to /dev/null equivalent
-                    .with_target(false)
-                    .with_thread_ids(false)
-                    .with_thread_names(false),
-            );
+        let noop_subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(io::sink) // Write to /dev/null equivalent
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_thread_names(false),
+        );
 
         // Set the no-op subscriber as the default for this scope
         let guard = tracing::subscriber::set_default(noop_subscriber);

@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
-use thiserror::Error;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
 
 /// The primary error type that all tool functions must return in their Result.
 #[derive(Debug, Error, Serialize, Deserialize, JsonSchema)]
@@ -55,7 +55,7 @@ impl ToolError {
         self.details = Some(details);
         self
     }
-    
+
     /// Add a single detail string to this error.
     pub fn with_detail(mut self, key: &str, value: impl Into<serde_json::Value>) -> Self {
         let mut details = self.details.unwrap_or_default();

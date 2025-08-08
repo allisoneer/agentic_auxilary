@@ -81,11 +81,13 @@ pub fn init_repo(path: &Path) -> Result<Repository> {
 pub fn get_remote_url(repo_path: &Path) -> Result<String> {
     let repo = Repository::open(repo_path)
         .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
-    
-    let remote = repo.find_remote("origin")
+
+    let remote = repo
+        .find_remote("origin")
         .map_err(|_| anyhow::anyhow!("No 'origin' remote found"))?;
-    
-    remote.url()
+
+    remote
+        .url()
         .ok_or_else(|| anyhow::anyhow!("Remote 'origin' has no URL"))
         .map(|s| s.to_string())
 }

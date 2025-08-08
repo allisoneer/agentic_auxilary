@@ -38,14 +38,14 @@ pub fn generate_unknown_tool_error(tool_name: &str, interface: &str) -> TokenStr
                 ::universal_tool_core::prelude::ErrorCode::NotFound,
                 format!("Unknown tool: {}", #tool_name)
             ));
-        }
+        },
     }
 }
 
 /// Generate consistent error response for tool errors
 pub fn generate_tool_error_response(error_var: &str, interface: &str) -> TokenStream {
     let err = quote::format_ident!("{}", error_var);
-    
+
     match interface {
         "cli" => quote! {
             eprintln!("Error: {}", #err);
@@ -94,21 +94,21 @@ pub fn generate_tool_error_response(error_var: &str, interface: &str) -> TokenSt
                     "details": details
                 }))).into_response()
             }
-        },
+        }
         "mcp" => quote! {
             // MCP errors are already converted via From<ToolError> for McpErrorData
             Err(#err)
         },
         _ => quote! {
             Err(#err)
-        }
+        },
     }
 }
 
 /// Generate validation error for missing required parameter
 pub fn generate_missing_param_error(param_name: &str, interface: &str) -> TokenStream {
     let error_msg = format!("Missing required parameter: {}", param_name);
-    
+
     match interface {
         "cli" => quote! {
             ::universal_tool_core::prelude::ToolError::new(
@@ -137,14 +137,17 @@ pub fn generate_missing_param_error(param_name: &str, interface: &str) -> TokenS
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 #error_msg
             ));
-        }
+        },
     }
 }
 
 /// Generate parsing error for invalid parameter value
 pub fn generate_parse_error(param_name: &str, expected_type: &str, interface: &str) -> TokenStream {
-    let error_msg = format!("Invalid value for parameter '{}'. Expected: {}", param_name, expected_type);
-    
+    let error_msg = format!(
+        "Invalid value for parameter '{}'. Expected: {}",
+        param_name, expected_type
+    );
+
     match interface {
         "cli" => quote! {
             ::universal_tool_core::prelude::ToolError::new(
@@ -174,7 +177,7 @@ pub fn generate_parse_error(param_name: &str, expected_type: &str, interface: &s
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 #error_msg
             ));
-        }
+        },
     }
 }
 
@@ -209,6 +212,6 @@ pub fn generate_validation_error(validation_msg: &str, interface: &str) -> Token
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 format!("Validation error: {}", #validation_msg)
             ));
-        }
+        },
     }
 }

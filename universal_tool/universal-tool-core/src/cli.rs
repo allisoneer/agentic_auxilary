@@ -75,16 +75,18 @@ pub trait CliFormatter: Serialize {
     fn format_output(&self, format: OutputFormat) -> Result<String, crate::error::ToolError> {
         match format {
             OutputFormat::Text => Ok(self.format_text()),
-            OutputFormat::Json => serde_json::to_string_pretty(self)
-                .map_err(|e| crate::error::ToolError::new(
+            OutputFormat::Json => serde_json::to_string_pretty(self).map_err(|e| {
+                crate::error::ToolError::new(
                     crate::error::ErrorCode::SerializationError,
-                    format!("Failed to serialize to JSON: {}", e)
-                )),
-            OutputFormat::Yaml => serde_yaml::to_string(self)
-                .map_err(|e| crate::error::ToolError::new(
+                    format!("Failed to serialize to JSON: {}", e),
+                )
+            }),
+            OutputFormat::Yaml => serde_yaml::to_string(self).map_err(|e| {
+                crate::error::ToolError::new(
                     crate::error::ErrorCode::SerializationError,
-                    format!("Failed to serialize to YAML: {}", e)
-                )),
+                    format!("Failed to serialize to YAML: {}", e),
+                )
+            }),
             OutputFormat::Table => {
                 use tabled::builder::Builder;
                 let rows = self.format_table();
@@ -103,25 +105,30 @@ pub trait CliFormatter: Serialize {
                 let mut buffer = Cursor::new(Vec::new());
                 {
                     let mut writer = csv::Writer::from_writer(&mut buffer);
-                    
+
                     for row in self.format_csv() {
-                        writer.write_record(&row).map_err(|e| crate::error::ToolError::new(
-                            crate::error::ErrorCode::SerializationError,
-                            format!("Failed to write CSV: {}", e)
-                        ))?;
+                        writer.write_record(&row).map_err(|e| {
+                            crate::error::ToolError::new(
+                                crate::error::ErrorCode::SerializationError,
+                                format!("Failed to write CSV: {}", e),
+                            )
+                        })?;
                     }
-                    
-                    writer.flush().map_err(|e| crate::error::ToolError::new(
-                        crate::error::ErrorCode::SerializationError,
-                        format!("Failed to flush CSV writer: {}", e)
-                    ))?;
+
+                    writer.flush().map_err(|e| {
+                        crate::error::ToolError::new(
+                            crate::error::ErrorCode::SerializationError,
+                            format!("Failed to flush CSV writer: {}", e),
+                        )
+                    })?;
                 } // writer is dropped here, releasing the borrow
-                
-                String::from_utf8(buffer.into_inner())
-                    .map_err(|e| crate::error::ToolError::new(
+
+                String::from_utf8(buffer.into_inner()).map_err(|e| {
+                    crate::error::ToolError::new(
                         crate::error::ErrorCode::SerializationError,
-                        format!("Failed to convert CSV to string: {}", e)
-                    ))
+                        format!("Failed to convert CSV to string: {}", e),
+                    )
+                })
             }
         }
     }
@@ -150,7 +157,7 @@ impl ProgressReporter {
     /// Create a new progress reporter
     pub fn new(style: ProgressStyle, total: Option<u64>) -> Self {
         use indicatif::{ProgressBar, ProgressStyle as IndicatifStyle};
-        
+
         let bar = match style {
             ProgressStyle::Bar => {
                 let pb = if let Some(total) = total {
@@ -158,34 +165,40 @@ impl ProgressReporter {
                 } else {
                     ProgressBar::new_spinner()
                 };
-                pb.set_style(IndicatifStyle::default_bar()
-                    .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-                    .unwrap()
-                    .progress_chars("#>-"));
+                pb.set_style(
+                    IndicatifStyle::default_bar()
+                        .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                        .unwrap()
+                        .progress_chars("#>-"),
+                );
                 Some(pb)
             }
             ProgressStyle::Spinner => {
                 let pb = ProgressBar::new_spinner();
-                pb.set_style(IndicatifStyle::default_spinner()
-                    .template("{spinner:.green} {msg}")
-                    .unwrap());
+                pb.set_style(
+                    IndicatifStyle::default_spinner()
+                        .template("{spinner:.green} {msg}")
+                        .unwrap(),
+                );
                 Some(pb)
             }
             ProgressStyle::Dots => {
                 let pb = ProgressBar::new_spinner();
-                pb.set_style(IndicatifStyle::default_spinner()
-                    .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-                    .template("{spinner:.green} {msg}")
-                    .unwrap());
+                pb.set_style(
+                    IndicatifStyle::default_spinner()
+                        .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+                        .template("{spinner:.green} {msg}")
+                        .unwrap(),
+                );
                 Some(pb)
             }
             ProgressStyle::None => None,
         };
-        
+
         if let Some(ref pb) = bar {
             pb.enable_steady_tick(std::time::Duration::from_millis(100));
         }
-        
+
         Self { _style: style, bar }
     }
 
@@ -227,17 +240,14 @@ impl ProgressReporter {
 
 /// Interactive prompt utilities
 pub mod interactive {
-    use crate::error::{ToolError, ErrorCode};
-    
+    use crate::error::{ErrorCode, ToolError};
+
     /// Prompt for text input
     pub fn input(prompt: &str) -> Result<String, ToolError> {
         dialoguer::Input::new()
             .with_prompt(prompt)
             .interact_text()
-            .map_err(|e| ToolError::new(
-                ErrorCode::IoError,
-                format!("Failed to read input: {}", e)
-            ))
+            .map_err(|e| ToolError::new(ErrorCode::IoError, format!("Failed to read input: {}", e)))
     }
 
     /// Prompt for text input with validation
@@ -249,10 +259,7 @@ pub mod interactive {
             .with_prompt(prompt)
             .validate_with(validator)
             .interact_text()
-            .map_err(|e| ToolError::new(
-                ErrorCode::IoError,
-                format!("Failed to read input: {}", e)
-            ))
+            .map_err(|e| ToolError::new(ErrorCode::IoError, format!("Failed to read input: {}", e)))
     }
 
     /// Prompt for selection from a list
@@ -264,10 +271,12 @@ pub mod interactive {
             .with_prompt(prompt)
             .items(items)
             .interact()
-            .map_err(|e| ToolError::new(
-                ErrorCode::IoError,
-                format!("Failed to read selection: {}", e)
-            ))
+            .map_err(|e| {
+                ToolError::new(
+                    ErrorCode::IoError,
+                    format!("Failed to read selection: {}", e),
+                )
+            })
     }
 
     /// Prompt for multiple selections
@@ -279,10 +288,12 @@ pub mod interactive {
             .with_prompt(prompt)
             .items(items)
             .interact()
-            .map_err(|e| ToolError::new(
-                ErrorCode::IoError,
-                format!("Failed to read selections: {}", e)
-            ))
+            .map_err(|e| {
+                ToolError::new(
+                    ErrorCode::IoError,
+                    format!("Failed to read selections: {}", e),
+                )
+            })
     }
 
     /// Prompt for confirmation
@@ -291,10 +302,12 @@ pub mod interactive {
             .with_prompt(prompt)
             .default(default)
             .interact()
-            .map_err(|e| ToolError::new(
-                ErrorCode::IoError,
-                format!("Failed to read confirmation: {}", e)
-            ))
+            .map_err(|e| {
+                ToolError::new(
+                    ErrorCode::IoError,
+                    format!("Failed to read confirmation: {}", e),
+                )
+            })
     }
 }
 
@@ -311,14 +324,15 @@ pub fn is_stdout_tty() -> bool {
 /// Read from stdin if available
 pub fn read_stdin() -> Result<Option<String>, crate::error::ToolError> {
     use std::io::Read;
-    
+
     if !is_stdin_tty() {
         let mut buffer = String::new();
-        std::io::stdin().read_to_string(&mut buffer)
-            .map_err(|e| crate::error::ToolError::new(
+        std::io::stdin().read_to_string(&mut buffer).map_err(|e| {
+            crate::error::ToolError::new(
                 crate::error::ErrorCode::IoError,
-                format!("Failed to read from stdin: {}", e)
-            ))?;
+                format!("Failed to read from stdin: {}", e),
+            )
+        })?;
         Ok(Some(buffer))
     } else {
         Ok(None)

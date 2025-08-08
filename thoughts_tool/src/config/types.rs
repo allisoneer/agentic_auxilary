@@ -26,7 +26,7 @@ pub enum Mount {
         sync: SyncStrategy,
     },
     Git {
-        url: String,  // ONLY the URL - no paths!
+        url: String, // ONLY the URL - no paths!
         #[serde(default = "default_git_sync")]
         sync: SyncStrategy,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -46,14 +46,14 @@ impl Mount {
             Mount::Git { .. } => MountType::Git,
         }
     }
-    
+
     pub fn sync_strategy(&self) -> SyncStrategy {
         match self {
             Mount::Directory { sync, .. } => *sync,
             Mount::Git { sync, .. } => *sync,
         }
     }
-    
+
     pub fn is_git(&self) -> bool {
         matches!(self, Mount::Git { .. })
     }
@@ -265,39 +265,41 @@ mod tests {
         let config = RepoConfig {
             version: "1.0".to_string(),
             mount_dirs: MountDirs::default(),
-            requires: vec![
-                RequiredMount {
-                    remote: "git@github.com:example/repo.git".to_string(),
-                    mount_path: "repo".to_string(),
-                    subpath: None,
-                    description: "Example repository".to_string(),
-                    optional: false,
-                    override_rules: Some(true),
-                    sync: SyncStrategy::Auto,
+            requires: vec![RequiredMount {
+                remote: "git@github.com:example/repo.git".to_string(),
+                mount_path: "repo".to_string(),
+                subpath: None,
+                description: "Example repository".to_string(),
+                optional: false,
+                override_rules: Some(true),
+                sync: SyncStrategy::Auto,
+            }],
+            rules: vec![Rule {
+                pattern: "*.md".to_string(),
+                metadata: {
+                    let mut m = HashMap::new();
+                    m.insert(
+                        "type".to_string(),
+                        serde_json::Value::String("documentation".to_string()),
+                    );
+                    m
                 },
-            ],
-            rules: vec![
-                Rule {
-                    pattern: "*.md".to_string(),
-                    metadata: {
-                        let mut m = HashMap::new();
-                        m.insert("type".to_string(), serde_json::Value::String("documentation".to_string()));
-                        m
-                    },
-                    description: "Markdown files".to_string(),
-                },
-            ],
+                description: "Markdown files".to_string(),
+            }],
         };
 
         // Serialize
         let json = serde_json::to_string_pretty(&config).unwrap();
-        
+
         // Deserialize
         let deserialized: RepoConfig = serde_json::from_str(&json).unwrap();
-        
+
         // Verify
         assert_eq!(deserialized.version, config.version);
-        assert_eq!(deserialized.mount_dirs.repository, config.mount_dirs.repository);
+        assert_eq!(
+            deserialized.mount_dirs.repository,
+            config.mount_dirs.repository
+        );
         assert_eq!(deserialized.mount_dirs.personal, config.mount_dirs.personal);
         assert_eq!(deserialized.requires.len(), config.requires.len());
         assert_eq!(deserialized.rules.len(), config.rules.len());
@@ -306,32 +308,26 @@ mod tests {
     #[test]
     fn test_personal_config_serialization() {
         let config = PersonalConfig {
-            patterns: vec![
-                MountPattern {
-                    match_remote: "git@github.com:mycompany/*".to_string(),
-                    personal_mounts: vec![
-                        PersonalMount {
-                            remote: "git@github.com:me/notes.git".to_string(),
-                            mount_path: "notes".to_string(),
-                            subpath: None,
-                            description: "My notes".to_string(),
-                        },
-                    ],
-                    description: "Company projects".to_string(),
-                },
-            ],
+            patterns: vec![MountPattern {
+                match_remote: "git@github.com:mycompany/*".to_string(),
+                personal_mounts: vec![PersonalMount {
+                    remote: "git@github.com:me/notes.git".to_string(),
+                    mount_path: "notes".to_string(),
+                    subpath: None,
+                    description: "My notes".to_string(),
+                }],
+                description: "Company projects".to_string(),
+            }],
             repository_mounts: {
                 let mut m = HashMap::new();
                 m.insert(
                     "git@github.com:example/project.git".to_string(),
-                    vec![
-                        PersonalMount {
-                            remote: "git@github.com:me/personal.git".to_string(),
-                            mount_path: "personal".to_string(),
-                            subpath: None,
-                            description: "Personal files".to_string(),
-                        },
-                    ],
+                    vec![PersonalMount {
+                        remote: "git@github.com:me/personal.git".to_string(),
+                        mount_path: "personal".to_string(),
+                        subpath: None,
+                        description: "Personal files".to_string(),
+                    }],
                 );
                 m
             },
@@ -341,13 +337,16 @@ mod tests {
 
         // Serialize
         let json = serde_json::to_string_pretty(&config).unwrap();
-        
+
         // Deserialize
         let deserialized: PersonalConfig = serde_json::from_str(&json).unwrap();
-        
+
         // Verify
         assert_eq!(deserialized.patterns.len(), config.patterns.len());
-        assert_eq!(deserialized.repository_mounts.len(), config.repository_mounts.len());
+        assert_eq!(
+            deserialized.repository_mounts.len(),
+            config.repository_mounts.len()
+        );
         assert_eq!(deserialized.rules.len(), config.rules.len());
     }
 
@@ -363,11 +362,17 @@ mod tests {
         let mut metadata = FileMetadata {
             auto_metadata: {
                 let mut m = HashMap::new();
-                m.insert("type".to_string(), serde_json::Value::String("research".to_string()));
-                m.insert("tags".to_string(), serde_json::Value::Array(vec![
-                    serde_json::Value::String("important".to_string()),
-                    serde_json::Value::String("review".to_string()),
-                ]));
+                m.insert(
+                    "type".to_string(),
+                    serde_json::Value::String("research".to_string()),
+                );
+                m.insert(
+                    "tags".to_string(),
+                    serde_json::Value::Array(vec![
+                        serde_json::Value::String("important".to_string()),
+                        serde_json::Value::String("review".to_string()),
+                    ]),
+                );
                 m
             },
             manual_metadata: HashMap::new(),
@@ -376,12 +381,15 @@ mod tests {
 
         // Serialize
         let json = serde_json::to_string_pretty(&metadata).unwrap();
-        
+
         // Deserialize
         let deserialized: FileMetadata = serde_json::from_str(&json).unwrap();
-        
+
         // Verify
-        assert_eq!(deserialized.auto_metadata.len(), metadata.auto_metadata.len());
+        assert_eq!(
+            deserialized.auto_metadata.len(),
+            metadata.auto_metadata.len()
+        );
         assert!(deserialized.last_updated.is_some());
     }
 }

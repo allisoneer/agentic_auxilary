@@ -60,9 +60,23 @@ pub fn is_primitive_type(ty: &Type) -> bool {
     if let Some(name) = get_type_name(ty) {
         matches!(
             name.as_str(),
-            "bool" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | 
-            "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | 
-            "f32" | "f64" | "String" | "str"
+            "bool"
+                | "i8"
+                | "i16"
+                | "i32"
+                | "i64"
+                | "i128"
+                | "isize"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "u128"
+                | "usize"
+                | "f32"
+                | "f64"
+                | "String"
+                | "str"
         )
     } else {
         false
@@ -85,7 +99,9 @@ pub fn get_generic_args(ty: &Type) -> Vec<&Type> {
     if let Type::Path(type_path) = ty {
         if let Some(segment) = type_path.path.segments.last() {
             if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                return args.args.iter()
+                return args
+                    .args
+                    .iter()
                     .filter_map(|arg| {
                         if let GenericArgument::Type(ty) = arg {
                             Some(ty)
@@ -125,7 +141,7 @@ mod tests {
     fn test_is_option() {
         let opt_ty: Type = parse_quote!(Option<String>);
         let non_opt_ty: Type = parse_quote!(String);
-        
+
         assert!(is_option(&opt_ty));
         assert!(!is_option(&non_opt_ty));
     }
@@ -135,7 +151,7 @@ mod tests {
         let opt_ty: Type = parse_quote!(Option<String>);
         let inner = extract_inner_type(&opt_ty);
         assert_eq!(quote::quote!(#inner).to_string(), "String");
-        
+
         let vec_ty: Type = parse_quote!(Vec<i32>);
         let inner = extract_inner_type(&vec_ty);
         assert_eq!(quote::quote!(#inner).to_string(), "i32");
@@ -145,7 +161,7 @@ mod tests {
     fn test_is_primitive_type() {
         let string_ty: Type = parse_quote!(String);
         let custom_ty: Type = parse_quote!(MyCustomType);
-        
+
         assert!(is_primitive_type(&string_ty));
         assert!(!is_primitive_type(&custom_ty));
     }

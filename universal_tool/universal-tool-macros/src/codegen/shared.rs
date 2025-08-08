@@ -13,12 +13,9 @@ use syn::Type;
 // For now, keeping them here to support early testing and development
 
 /// Generate error conversion from ToolError to interface-specific error
-pub fn generate_error_conversion(
-    error_var: &str,
-    interface: &str,
-) -> TokenStream {
+pub fn generate_error_conversion(error_var: &str, interface: &str) -> TokenStream {
     let err = format_ident!("{}", error_var);
-    
+
     match interface {
         "cli" => quote! {
             eprintln!("Error: {}", #err);
@@ -55,19 +52,15 @@ pub fn generate_error_conversion(
 }
 
 /// Generate async handling wrapper
-/// 
+///
 /// Wraps async method calls appropriately for each interface:
 /// - CLI: Uses block_on
 /// - REST/MCP: Natural async support
-pub fn generate_async_wrapper(
-    inner: TokenStream,
-    is_async: bool,
-    interface: &str,
-) -> TokenStream {
+pub fn generate_async_wrapper(inner: TokenStream, is_async: bool, interface: &str) -> TokenStream {
     if !is_async {
         return inner;
     }
-    
+
     match interface {
         "cli" => quote! {
             tokio::runtime::Runtime::new()
@@ -89,7 +82,7 @@ pub fn generate_normalized_method_call(
     let method_call = quote! {
         #self_expr.#method_name(#(#args),*)
     };
-    
+
     if tool.is_async {
         quote! { #method_call.await }
     } else {
@@ -100,7 +93,9 @@ pub fn generate_normalized_method_call(
 
 /// Generate method signature for documentation/schemas
 pub fn generate_method_signature(tool: &ToolDef) -> String {
-    let params = tool.params.iter()
+    let params = tool
+        .params
+        .iter()
         .filter(|p| p.name.to_string() != "self")
         .map(|p| {
             let ty = &p.ty;
@@ -108,10 +103,10 @@ pub fn generate_method_signature(tool: &ToolDef) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ");
-    
+
     let return_type = &tool.return_type;
     let return_type_str = quote!(#return_type).to_string();
-    
+
     format!(
         "{}fn {}({}) -> Result<{}, ToolError>",
         if tool.is_async { "async " } else { "" },
@@ -132,17 +127,19 @@ pub fn get_tool_description(tool: &ToolDef) -> String {
 
 /// Generate validation for required parameters
 pub fn generate_param_validation(tool: &ToolDef) -> TokenStream {
-    let validations = tool.params.iter()
+    let validations = tool
+        .params
+        .iter()
         .filter(|p| p.name.to_string() != "self" && !p.is_optional)
         .map(|param| {
             let _param_name = &param.name;
-            
+
             // For non-optional parameters that aren't already Option<T>
             quote! {
                 // Validation is handled by type system for required params
             }
         });
-    
+
     quote! { #(#validations)* }
 }
 
@@ -158,7 +155,11 @@ pub fn generate_json_schema(ty: &Type) -> TokenStream {
 /// Check if a method should be exposed on a given interface
 pub fn should_expose_on_interface(tool: &ToolDef, interface: &str) -> bool {
     match interface {
-        "cli" => tool.metadata.cli_config.as_ref().map_or(true, |c| !c.hidden),
+        "cli" => tool
+            .metadata
+            .cli_config
+            .as_ref()
+            .map_or(true, |c| !c.hidden),
         "rest" => tool.metadata.rest_config.is_some(),
         "mcp" => tool.metadata.mcp_config.is_some(),
         _ => true,
@@ -167,21 +168,27 @@ pub fn should_expose_on_interface(tool: &ToolDef, interface: &str) -> bool {
 
 /// Generate parameter documentation
 pub fn generate_param_docs(tool: &ToolDef) -> Vec<String> {
-    tool.params.iter()
+    tool.params
+        .iter()
         .filter(|p| p.name.to_string() != "self")
         .map(|param| {
-            let required = if param.is_optional { "optional" } else { "required" };
-            let desc = param.metadata.description.as_deref().unwrap_or("No description");
+            let required = if param.is_optional {
+                "optional"
+            } else {
+                "required"
+            };
+            let desc = param
+                .metadata
+                .description
+                .as_deref()
+                .unwrap_or("No description");
             format!("- {} ({}) - {}", param.name, required, desc)
         })
         .collect()
 }
 
 /// Generate progress notification helper (for long-running operations)
-pub fn generate_progress_helper(
-    _tool_name: &str,
-    _message: &str,
-) -> TokenStream {
+pub fn generate_progress_helper(_tool_name: &str, _message: &str) -> TokenStream {
     // TODO(3): Add progress feature support when implemented
     // For now, always generate empty code since progress feature doesn't exist yet
     quote! {}
@@ -199,7 +206,7 @@ pub fn check_streaming_type(return_type: &Type) -> bool {
 pub fn to_kebab_case(input: &str) -> String {
     let mut result = String::new();
     let chars: Vec<char> = input.chars().collect();
-    
+
     for (i, &ch) in chars.iter().enumerate() {
         if ch == '_' || ch == '-' {
             if !result.is_empty() && !result.ends_with('-') {
@@ -210,12 +217,13 @@ pub fn to_kebab_case(input: &str) -> String {
             if i > 0 && !result.ends_with('-') {
                 let prev = chars[i - 1];
                 let next = chars.get(i + 1);
-                
+
                 // Insert hyphen if:
                 // 1. Previous char was lowercase, or
                 // 2. Previous char was uppercase and next char is lowercase (end of acronym)
-                if prev.is_lowercase() || 
-                   (prev.is_uppercase() && next.map_or(false, |&c| c.is_lowercase())) {
+                if prev.is_lowercase()
+                    || (prev.is_uppercase() && next.map_or(false, |&c| c.is_lowercase()))
+                {
                     result.push('-');
                 }
             }
@@ -224,7 +232,7 @@ pub fn to_kebab_case(input: &str) -> String {
             result.push(ch);
         }
     }
-    
+
     result
 }
 
@@ -233,7 +241,7 @@ pub fn to_kebab_case(input: &str) -> String {
 pub fn to_snake_case(input: &str) -> String {
     let mut result = String::new();
     let chars: Vec<char> = input.chars().collect();
-    
+
     for (i, &ch) in chars.iter().enumerate() {
         if ch == '-' || ch == '_' {
             if !result.is_empty() && !result.ends_with('_') {
@@ -244,12 +252,13 @@ pub fn to_snake_case(input: &str) -> String {
             if i > 0 && !result.ends_with('_') {
                 let prev = chars[i - 1];
                 let next = chars.get(i + 1);
-                
+
                 // Insert underscore if:
                 // 1. Previous char was lowercase, or
                 // 2. Previous char was uppercase and next char is lowercase (end of acronym)
-                if prev.is_lowercase() || 
-                   (prev.is_uppercase() && next.map_or(false, |&c| c.is_lowercase())) {
+                if prev.is_lowercase()
+                    || (prev.is_uppercase() && next.map_or(false, |&c| c.is_lowercase()))
+                {
                     result.push('_');
                 }
             }
@@ -258,7 +267,7 @@ pub fn to_snake_case(input: &str) -> String {
             result.push(ch);
         }
     }
-    
+
     result
 }
 
@@ -268,7 +277,7 @@ pub fn to_camel_case(input: &str) -> String {
     let mut result = String::new();
     let mut capitalize_next = false;
     let mut is_first = true;
-    
+
     for ch in input.chars() {
         if ch == '_' || ch == '-' {
             capitalize_next = true;
@@ -286,7 +295,7 @@ pub fn to_camel_case(input: &str) -> String {
             is_first = false;
         }
     }
-    
+
     result
 }
 
@@ -295,7 +304,7 @@ pub fn to_camel_case(input: &str) -> String {
 pub fn to_pascal_case(input: &str) -> String {
     let mut result = String::new();
     let mut capitalize_next = true;
-    
+
     for ch in input.chars() {
         if ch == '_' || ch == '-' {
             capitalize_next = true;
@@ -306,7 +315,7 @@ pub fn to_pascal_case(input: &str) -> String {
             result.push(ch);
         }
     }
-    
+
     result
 }
 
@@ -316,7 +325,7 @@ pub fn snake_to_kebab_case(input: &str) -> String {
     to_kebab_case(input)
 }
 
-// Deprecated: Use the more general to_camel_case function instead  
+// Deprecated: Use the more general to_camel_case function instead
 #[deprecated(note = "Use to_camel_case instead")]
 pub fn snake_to_camel_case(input: &str) -> String {
     to_camel_case(input)
@@ -342,13 +351,56 @@ pub fn sanitize_identifier(name: &str) -> String {
 fn is_rust_keyword(name: &str) -> bool {
     matches!(
         name,
-        "as" | "break" | "const" | "continue" | "crate" | "else" | "enum" | 
-        "extern" | "false" | "fn" | "for" | "if" | "impl" | "in" | "let" | 
-        "loop" | "match" | "mod" | "move" | "mut" | "pub" | "ref" | "return" | 
-        "self" | "Self" | "static" | "struct" | "super" | "trait" | "true" | 
-        "type" | "unsafe" | "use" | "where" | "while" | "async" | "await" | 
-        "dyn" | "abstract" | "become" | "box" | "do" | "final" | "macro" | 
-        "override" | "priv" | "typeof" | "unsized" | "virtual" | "yield" | "try"
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+            | "try"
     )
 }
 
@@ -405,20 +457,46 @@ pub fn is_custom_struct_type(ty: &Type) -> bool {
     // If it's not a known type, assume it's a custom struct
     !matches!(
         ty_str.as_str(),
-        "String" | "str" | "bool" |
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-        "f32" | "f64" | "char"
-    ) && !is_vec_type(ty) && !is_hashmap_type(ty) && !ty_str.starts_with("Option<")
+        "String"
+            | "str"
+            | "bool"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+            | "f32"
+            | "f64"
+            | "char"
+    ) && !is_vec_type(ty)
+        && !is_hashmap_type(ty)
+        && !ty_str.starts_with("Option<")
 }
 
 /// Checks if a type is a numeric type
 pub fn is_numeric_type(ty: &Type) -> bool {
     matches!(
         type_to_string(ty).as_str(),
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-        "f32" | "f64"
+        "i8" | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+            | "f32"
+            | "f64"
     )
 }
 
@@ -453,16 +531,19 @@ mod tests {
             metadata: Default::default(),
             visibility: parse_quote!(pub),
         };
-        
+
         let sig = generate_method_signature(&tool);
-        assert_eq!(sig, "async fn analyze(path: String) -> Result<AnalysisResult, ToolError>");
+        assert_eq!(
+            sig,
+            "async fn analyze(path: String) -> Result<AnalysisResult, ToolError>"
+        );
     }
 
     #[test]
     fn test_error_conversion() {
         let cli_error = generate_error_conversion("err", "cli");
         assert!(cli_error.to_string().contains("eprintln"));
-        
+
         let rest_error = generate_error_conversion("err", "rest");
         assert!(rest_error.to_string().contains("StatusCode"));
     }
@@ -477,14 +558,14 @@ mod tests {
         assert_eq!(to_kebab_case("simple"), "simple");
         assert_eq!(to_kebab_case("HTTPSConnection"), "https-connection");
         assert_eq!(to_kebab_case("getHTTPResponse"), "get-http-response");
-        
+
         // Test to_snake_case with various inputs
         assert_eq!(to_snake_case("hello-world"), "hello_world");
         assert_eq!(to_snake_case("helloWorld"), "hello_world");
         assert_eq!(to_snake_case("HelloWorld"), "hello_world");
         assert_eq!(to_snake_case("hello_world"), "hello_world");
         assert_eq!(to_snake_case("HTTPSConnection"), "https_connection");
-        
+
         // Test to_camel_case with various inputs
         assert_eq!(to_camel_case("hello_world"), "helloWorld");
         assert_eq!(to_camel_case("hello-world"), "helloWorld");
@@ -492,7 +573,7 @@ mod tests {
         assert_eq!(to_camel_case("helloWorld"), "helloWorld");
         assert_eq!(to_camel_case("simple"), "simple");
         assert_eq!(to_camel_case("multi_word_name"), "multiWordName");
-        
+
         // Test to_pascal_case with various inputs
         assert_eq!(to_pascal_case("hello_world"), "HelloWorld");
         assert_eq!(to_pascal_case("hello-world"), "HelloWorld");

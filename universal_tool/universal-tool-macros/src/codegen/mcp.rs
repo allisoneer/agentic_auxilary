@@ -3,22 +3,22 @@
 //! This module generates `handle_mcp_call()` and `get_mcp_tools()` methods
 //! that enable tools to integrate with MCP servers.
 
+use crate::codegen::shared::is_optional_type;
+use crate::codegen::validation;
+use crate::model::{ParamDef, RouterDef, ToolDef};
 use proc_macro2::TokenStream;
 use quote::quote;
-use crate::model::{RouterDef, ToolDef, ParamDef};
-use crate::codegen::validation;
-use crate::codegen::shared::is_optional_type;
 
 /// Generates all MCP-related methods for a router
 pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
     let struct_type = &router.struct_type;
     let dispatch_method = generate_mcp_dispatch_method(router);
     let tools_method = generate_mcp_tools_method(router);
-    
+
     quote! {
         impl #struct_type {
             #dispatch_method
-            
+
             #tools_method
         }
     }
@@ -26,10 +26,12 @@ pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
 
 /// Generates the handle_mcp_call() method for dispatching MCP tool calls
 fn generate_mcp_dispatch_method(router: &RouterDef) -> TokenStream {
-    let match_arms: Vec<_> = router.tools.iter().map(|tool| {
-        generate_tool_match_arm(tool)
-    }).collect();
-    
+    let match_arms: Vec<_> = router
+        .tools
+        .iter()
+        .map(|tool| generate_tool_match_arm(tool))
+        .collect();
+
     quote! {
         /// Handles MCP tool calls by dispatching to the appropriate tool method
         /// Users integrate this into their MCP server implementation
@@ -57,17 +59,17 @@ fn generate_mcp_dispatch_method(router: &RouterDef) -> TokenStream {
 fn generate_tool_match_arm(tool: &ToolDef) -> TokenStream {
     let tool_name = &tool.tool_name;
     let _method_ident = &tool.method_name;
-    
+
     // Create parameter struct definition
     let params_struct = generate_params_struct(tool);
-    
+
     // Generate method call with proper parameter passing
     let method_call = generate_method_call(tool);
-    
+
     quote! {
         #tool_name => {
             #params_struct
-            
+
             let params: __Params = ::serde_json::from_value(params)?;
             #method_call
         }
@@ -77,10 +79,12 @@ fn generate_tool_match_arm(tool: &ToolDef) -> TokenStream {
 /// Generates inline parameter struct for deserialization
 fn generate_params_struct(tool: &ToolDef) -> TokenStream {
     // Filter out special MCP parameters that come from context
-    let deserializable_params: Vec<_> = tool.params.iter()
+    let deserializable_params: Vec<_> = tool
+        .params
+        .iter()
         .filter(|param| validation::should_include_param(param, "mcp"))
         .collect();
-    
+
     if deserializable_params.is_empty() {
         // No parameters - generate empty struct
         quote! {
@@ -95,7 +99,7 @@ fn generate_params_struct(tool: &ToolDef) -> TokenStream {
                 #name: #ty
             }
         });
-        
+
         quote! {
             #[derive(::serde::Deserialize)]
             struct __Params {
@@ -108,11 +112,14 @@ fn generate_params_struct(tool: &ToolDef) -> TokenStream {
 /// Generates the method call with proper parameter passing and result serialization
 fn generate_method_call(tool: &ToolDef) -> TokenStream {
     // Build parameter list, handling special MCP parameters
-    let param_args: Vec<_> = tool.params.iter().map(|param| {
+    let param_args: Vec<_> = tool
+        .params
+        .iter()
+        .map(|param| {
             let name = &param.name;
             let ty = &param.ty;
             let ty_str = quote!(#ty).to_string();
-            
+
             if ty_str.contains("ProgressReporter") {
                 // For now, pass None for progress reporter
                 // TODO: In the future, could accept progress_token in params and create reporter
@@ -125,15 +132,13 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
                 // Regular parameter from deserialized params
                 quote! { params.#name }
             }
-        }).collect();
-    
+        })
+        .collect();
+
     // Use the shared function to generate the method call with proper async/sync handling
-    let method_call = crate::codegen::shared::generate_normalized_method_call(
-        tool,
-        quote! { self },
-        param_args,
-    );
-    
+    let method_call =
+        crate::codegen::shared::generate_normalized_method_call(tool, quote! { self }, param_args);
+
     quote! {
         let result = #method_call?;
         ::std::result::Result::Ok(::serde_json::to_value(&result)?)
@@ -142,10 +147,11 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
 
 /// Generates the get_mcp_tools() method for tool discovery
 fn generate_mcp_tools_method(router: &RouterDef) -> TokenStream {
-    let tool_definitions = router.tools.iter().map(|tool| {
-        generate_tool_definition(tool)
-    });
-    
+    let tool_definitions = router
+        .tools
+        .iter()
+        .map(|tool| generate_tool_definition(tool));
+
     quote! {
         /// Returns tool definitions for MCP discovery
         /// Users can use this to implement list_tools in their ServerHandler
@@ -161,15 +167,15 @@ fn generate_mcp_tools_method(router: &RouterDef) -> TokenStream {
 fn generate_tool_definition(tool: &ToolDef) -> TokenStream {
     let name = &tool.tool_name;
     let description = &tool.metadata.description;
-    
+
     // Generate input schema
     let schema = generate_tool_schema(tool);
-    
+
     // Build the tool definition based on whether we have annotations
     if let Some(mcp_config) = &tool.metadata.mcp_config {
         let mut has_annotations = false;
         let mut annotation_fields = vec![];
-        
+
         if let Some(v) = mcp_config.annotations.read_only_hint {
             has_annotations = true;
             annotation_fields.push(quote! { "readOnlyHint": #v });
@@ -186,7 +192,7 @@ fn generate_tool_definition(tool: &ToolDef) -> TokenStream {
             has_annotations = true;
             annotation_fields.push(quote! { "openWorldHint": #v });
         }
-        
+
         if has_annotations {
             quote! {
                 {
@@ -232,7 +238,7 @@ fn generate_tool_definition(tool: &ToolDef) -> TokenStream {
 fn generate_param_schema(param: &ParamDef) -> TokenStream {
     let param_type = &param.ty;
     let description = &param.metadata.description.as_deref().unwrap_or("");
-    
+
     quote! {
         {
             let mut schema_gen = ::universal_tool_core::schemars::r#gen::SchemaGenerator::default();
@@ -251,10 +257,12 @@ fn generate_param_schema(param: &ParamDef) -> TokenStream {
 /// Generates JSON schema for tool parameters
 fn generate_tool_schema(tool: &ToolDef) -> TokenStream {
     // Filter out special MCP parameters from schema
-    let schema_params: Vec<_> = tool.params.iter()
+    let schema_params: Vec<_> = tool
+        .params
+        .iter()
         .filter(|param| validation::should_include_param(param, "mcp"))
         .collect();
-    
+
     if schema_params.is_empty() {
         // No parameters - empty object schema
         quote! {
@@ -266,7 +274,8 @@ fn generate_tool_schema(tool: &ToolDef) -> TokenStream {
         }
     } else {
         // Generate properties using schemars
-        let param_schemas: Vec<_> = schema_params.iter()
+        let param_schemas: Vec<_> = schema_params
+            .iter()
             .map(|param| {
                 let name = &param.name.to_string();
                 let schema = generate_param_schema(param);
@@ -279,14 +288,14 @@ fn generate_tool_schema(tool: &ToolDef) -> TokenStream {
                 }
             })
             .collect();
-        
+
         quote! {
             {
                 let mut properties = ::serde_json::Map::new();
                 let mut required = Vec::new();
-                
+
                 #(#param_schemas)*
-                
+
                 ::serde_json::json!({
                     "type": "object",
                     "properties": properties,
@@ -296,6 +305,3 @@ fn generate_tool_schema(tool: &ToolDef) -> TokenStream {
         }
     }
 }
-
-
-
