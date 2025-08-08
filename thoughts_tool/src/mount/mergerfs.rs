@@ -22,13 +22,13 @@ pub struct MergerfsManager {
 impl MergerfsManager {
     pub fn new() -> Self {
         let mergerfs_path = which::which("mergerfs").unwrap_or_else(|_| PathBuf::from("mergerfs"));
-        
+
         // Try to find fusermount or fusermount3
         let fusermount_path = which::which("fusermount")
             .or_else(|_| which::which("fusermount3"))
             .ok();
 
-        Self { 
+        Self {
             mergerfs_path,
             fusermount_path,
         }
@@ -197,26 +197,26 @@ impl MergerfsManager {
 
         Ok(None)
     }
-    
+
     /// Helper method to unmount using umount command
     async fn unmount_with_umount(&self, target: &Path, force: bool) -> Result<()> {
         let mut cmd = tokio::process::Command::new("umount");
-        
+
         if force {
             cmd.arg("-l"); // Lazy unmount
         }
-        
+
         cmd.arg(target);
-        
+
         let output = cmd.output().await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ThoughtsError::MountOperationFailed {
                 message: format!("umount failed: {}", stderr),
             });
         }
-        
+
         Ok(())
     }
 }
@@ -329,11 +329,14 @@ impl MountManager for MergerfsManager {
 
             if output.status.success() {
                 // Success with fusermount, continue to cleanup
-                info!("Successfully unmounted {} with fusermount", target.display());
+                info!(
+                    "Successfully unmounted {} with fusermount",
+                    target.display()
+                );
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 warn!("fusermount failed: {}, trying umount", stderr);
-                
+
                 // Fall through to try umount
                 self.unmount_with_umount(target, force).await?;
             }

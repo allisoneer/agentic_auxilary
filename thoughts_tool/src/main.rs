@@ -79,26 +79,26 @@ enum MountCommands {
     Add {
         /// Path to the local git repository
         path: std::path::PathBuf,
-        
+
         /// Mount name (optional positional)
         mount_path: Option<String>,
-        
+
         /// Sync strategy
         #[arg(long, value_parser = clap::value_parser!(SyncStrategy), default_value = "auto")]
         sync: SyncStrategy,
-        
+
         /// Mark as optional (repo-level only)
         #[arg(long)]
         optional: bool,
-        
+
         /// Override global rules (repo-level only)
         #[arg(long)]
         override_rules: Option<bool>,
-        
+
         /// Add as personal mount
         #[arg(short, long)]
         personal: bool,
-        
+
         /// Description
         #[arg(short, long)]
         description: Option<String>,
@@ -116,15 +116,15 @@ enum MountCommands {
         #[arg(short, long)]
         verbose: bool,
     },
-    
+
     /// Update active mounts to match configuration
     Update,
-    
+
     /// Clone a repository for mounting
     Clone {
         /// Git URL to clone
         url: String,
-        
+
         /// Optional path to clone to (defaults to ~/.thoughts/clones/<repo-name>)
         path: Option<std::path::PathBuf>,
     },
@@ -201,7 +201,18 @@ async fn main() -> Result<()> {
                 override_rules,
                 personal,
                 description,
-            } => commands::mount::add::execute(path, mount_path, sync, optional, override_rules, personal, description).await,
+            } => {
+                commands::mount::add::execute(
+                    path,
+                    mount_path,
+                    sync,
+                    optional,
+                    override_rules,
+                    personal,
+                    description,
+                )
+                .await
+            }
             MountCommands::Remove { mount_name } => {
                 commands::mount::remove::execute(mount_name).await
             }
@@ -211,7 +222,9 @@ async fn main() -> Result<()> {
         },
         Commands::Config { command } => match command {
             ConfigCommands::Create => commands::config::create::execute().await,
-            ConfigCommands::Show { json, personal } => commands::config::show::execute(json, personal).await,
+            ConfigCommands::Show { json, personal } => {
+                commands::config::show::execute(json, personal).await
+            }
             ConfigCommands::Edit { personal } => commands::config::edit::execute(personal).await,
             ConfigCommands::Validate => commands::config::validate::execute().await,
         },

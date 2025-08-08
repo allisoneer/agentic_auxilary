@@ -21,19 +21,17 @@ pub use rmcp::*;
 pub use rmcp::{
     ServerHandler,
     model::{
-        InitializeRequestParam, InitializeResult, Implementation,
-        ServerCapabilities, ListToolsResult, CallToolRequestParam, 
-        CallToolResult, Tool, Content, PaginatedRequestParam,
-        ErrorData, CompleteRequestParam, CompleteResult,
-        SetLevelRequestParam, GetPromptRequestParam, GetPromptResult,
-        ListPromptsResult, ListResourcesResult, ListResourceTemplatesResult,
-        ReadResourceRequestParam, ReadResourceResult,
-        SubscribeRequestParam, UnsubscribeRequestParam
+        CallToolRequestParam, CallToolResult, CompleteRequestParam, CompleteResult, Content,
+        ErrorData, GetPromptRequestParam, GetPromptResult, Implementation, InitializeRequestParam,
+        InitializeResult, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+        ListToolsResult, PaginatedRequestParam, ReadResourceRequestParam, ReadResourceResult,
+        ServerCapabilities, SetLevelRequestParam, SubscribeRequestParam, Tool,
+        UnsubscribeRequestParam,
     },
     service::{RequestContext, RoleServer, Service, ServiceExt},
 };
 
-// Re-export Error as McpError for convenience  
+// Re-export Error as McpError for convenience
 pub use rmcp::Error as McpError;
 
 // Re-export stdio function for creating stdio transport
@@ -135,7 +133,12 @@ pub struct ToolMetadata {
 #[async_trait::async_trait]
 pub trait ProgressReporter: Send + Sync {
     /// Report progress for an operation
-    async fn report(&self, progress: u32, total: Option<u32>, message: Option<String>) -> Result<(), ToolError>;
+    async fn report(
+        &self,
+        progress: u32,
+        total: Option<u32>,
+        message: Option<String>,
+    ) -> Result<(), ToolError>;
 }
 
 /// MCP-specific progress reporter that stores progress information
@@ -149,16 +152,16 @@ pub struct McpProgressReporter {
 impl McpProgressReporter {
     /// Create a new progress reporter with a token
     pub fn new(progress_token: ProgressToken) -> Self {
-        Self { 
+        Self {
             progress_token,
             sender: None,
         }
     }
-    
+
     /// Create a new progress reporter with a channel for sending updates
     pub fn with_sender(
-        progress_token: ProgressToken, 
-        sender: tokio::sync::mpsc::Sender<ProgressNotification>
+        progress_token: ProgressToken,
+        sender: tokio::sync::mpsc::Sender<ProgressNotification>,
     ) -> Self {
         Self {
             progress_token,
@@ -169,23 +172,29 @@ impl McpProgressReporter {
 
 #[async_trait::async_trait]
 impl ProgressReporter for McpProgressReporter {
-    async fn report(&self, current: u32, total: Option<u32>, message: Option<String>) -> Result<(), ToolError> {
+    async fn report(
+        &self,
+        current: u32,
+        total: Option<u32>,
+        message: Option<String>,
+    ) -> Result<(), ToolError> {
         let notification = ProgressNotification {
             progress_token: self.progress_token.clone(),
             progress: current,
             total,
             message,
         };
-        
+
         // If we have a sender, send the notification
         if let Some(sender) = &self.sender {
-            sender.send(notification).await
-                .map_err(|e| ToolError::new(
+            sender.send(notification).await.map_err(|e| {
+                ToolError::new(
                     ErrorCode::Internal,
-                    format!("Failed to send progress notification: {}", e)
-                ))?;
+                    format!("Failed to send progress notification: {}", e),
+                )
+            })?;
         }
-        
+
         // Otherwise, just succeed silently (no-op progress reporter)
         Ok(())
     }
@@ -228,23 +237,23 @@ thread_local! {
 /// Uses thread-local caching for efficient schema generation
 pub fn generate_schema<T: JsonSchema + 'static>() -> Arc<Value> {
     let type_id = TypeId::of::<T>();
-    
+
     SCHEMA_CACHE.with(|cache| {
         let mut cache_guard = cache.lock().unwrap();
-        
+
         if let Some(schema) = cache_guard.get(&type_id) {
             return schema.clone();
         }
-        
+
         // Generate schema using schemars with draft07
         let settings = schemars::r#gen::SchemaSettings::draft07();
         let generator = settings.into_generator();
         let schema = generator.into_root_schema_for::<T>();
-        
+
         // Convert to Value
         let schema_value = serde_json::to_value(schema).unwrap_or(Value::Null);
         let arc_schema = Arc::new(schema_value);
-        
+
         cache_guard.insert(type_id, arc_schema.clone());
         arc_schema
     })
@@ -274,29 +283,32 @@ pub trait IntoCallToolResult {
 impl<T: serde::Serialize> IntoCallToolResult for T {
     fn into_call_tool_result(self) -> CallToolResult {
         match serde_json::to_value(&self) {
-            Ok(value) => CallToolResult::success(vec![
-                Content::text(serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string()))
-            ]),
-            Err(e) => CallToolResult::error(vec![
-                Content::text(format!("Failed to serialize result: {}", e))
-            ]),
+            Ok(value) => CallToolResult::success(vec![Content::text(
+                serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string()),
+            )]),
+            Err(e) => CallToolResult::error(vec![Content::text(format!(
+                "Failed to serialize result: {}",
+                e
+            ))]),
         }
     }
 }
 
 /// Helper function to convert UTF generated tool definitions to MCP Tool types
 pub fn convert_tool_definitions(tool_jsons: Vec<JsonValue>) -> Vec<Tool> {
-    use std::sync::Arc;
     use rmcp::model::ToolAnnotations;
-    
-    tool_jsons.into_iter()
+    use std::sync::Arc;
+
+    tool_jsons
+        .into_iter()
         .filter_map(|json| {
             // Extract fields from the JSON
             let name = json.get("name")?.as_str()?.to_string();
-            let description = json.get("description")
+            let description = json
+                .get("description")
                 .and_then(|d| d.as_str())
                 .map(|s| s.to_string());
-            
+
             // Convert input schema to the expected format
             let input_schema = if let Some(schema_value) = json.get("inputSchema") {
                 if let Some(schema_obj) = schema_value.as_object() {
@@ -307,7 +319,7 @@ pub fn convert_tool_definitions(tool_jsons: Vec<JsonValue>) -> Vec<Tool> {
             } else {
                 None
             };
-            
+
             // Extract annotations from the JSON
             // For now, we'll map our custom annotations to the available fields in rmcp
             let annotations = if let Some(_hints) = json.get("annotations") {
@@ -318,7 +330,7 @@ pub fn convert_tool_definitions(tool_jsons: Vec<JsonValue>) -> Vec<Tool> {
             } else {
                 None
             };
-            
+
             Some(Tool {
                 name: name.into(),
                 description: description.map(|s| s.into()),
@@ -335,10 +347,13 @@ macro_rules! implement_mcp_server {
     ($struct_name:ident, $tools_field:ident) => {
         impl $crate::mcp::ServerHandler for $struct_name {
             fn initialize(
-                &self, 
+                &self,
                 _params: $crate::mcp::InitializeRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::InitializeResult, $crate::mcp::McpError>> + Send + '_ {
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::InitializeResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
                 async move {
                     Ok($crate::mcp::InitializeResult {
                         server_info: $crate::mcp::Implementation {
@@ -352,90 +367,123 @@ macro_rules! implement_mcp_server {
                     })
                 }
             }
-            
+
             fn list_tools(
                 &self,
                 _request: Option<$crate::mcp::PaginatedRequestParam>,
                 _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::ListToolsResult, $crate::mcp::McpError>> + Send + '_ {
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::ListToolsResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
                 async move {
-                    let tools = $crate::mcp::convert_tool_definitions(self.$tools_field.get_mcp_tools());
+                    let tools =
+                        $crate::mcp::convert_tool_definitions(self.$tools_field.get_mcp_tools());
                     Ok($crate::mcp::ListToolsResult::with_all_items(tools))
                 }
             }
-            
+
             fn call_tool(
                 &self,
                 request: $crate::mcp::CallToolRequestParam,
                 _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::CallToolResult, $crate::mcp::McpError>> + Send + '_ {
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::CallToolResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
                 async move {
-                    match self.$tools_field.handle_mcp_call(
-                        &request.name,
-                        $crate::mcp::JsonValue::Object(request.arguments.unwrap_or_default())
-                    ).await {
-                        Ok(result) => Ok($crate::mcp::IntoCallToolResult::into_call_tool_result(result)),
+                    match self
+                        .$tools_field
+                        .handle_mcp_call(
+                            &request.name,
+                            $crate::mcp::JsonValue::Object(request.arguments.unwrap_or_default()),
+                        )
+                        .await
+                    {
+                        Ok(result) => Ok($crate::mcp::IntoCallToolResult::into_call_tool_result(
+                            result,
+                        )),
                         Err(e) => Ok($crate::mcp::CallToolResult::error(vec![
-                            $crate::mcp::Content::text(format!("Error: {}", e))
+                            $crate::mcp::Content::text(format!("Error: {}", e)),
                         ])),
                     }
                 }
             }
-            
+
             // Default implementations for other required methods
             fn ping(
                 &self,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_ {
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_
+            {
                 async move { Ok(()) }
             }
-            
+
             fn complete(
                 &self,
                 _request: $crate::mcp::CompleteRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::CompleteResult, $crate::mcp::McpError>> + Send + '_ {
-                async move { 
-                    Err($crate::mcp::McpError::invalid_request("Method not implemented", None))
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::CompleteResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
+                async move {
+                    Err($crate::mcp::McpError::invalid_request(
+                        "Method not implemented",
+                        None,
+                    ))
                 }
             }
-            
+
             fn set_level(
                 &self,
                 _request: $crate::mcp::SetLevelRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_ {
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_
+            {
                 async move { Ok(()) }
             }
-            
+
             fn get_prompt(
                 &self,
                 _request: $crate::mcp::GetPromptRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::GetPromptResult, $crate::mcp::McpError>> + Send + '_ {
-                async move { 
-                    Err($crate::mcp::McpError::invalid_request("Method not implemented", None))
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::GetPromptResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
+                async move {
+                    Err($crate::mcp::McpError::invalid_request(
+                        "Method not implemented",
+                        None,
+                    ))
                 }
             }
-            
+
             fn list_prompts(
                 &self,
                 _request: Option<$crate::mcp::PaginatedRequestParam>,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::ListPromptsResult, $crate::mcp::McpError>> + Send + '_ {
-                async move { 
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::ListPromptsResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
+                async move {
                     Ok($crate::mcp::ListPromptsResult {
                         prompts: vec![],
                         next_cursor: None,
                     })
                 }
             }
-            
+
             fn list_resources(
                 &self,
                 _request: Option<$crate::mcp::PaginatedRequestParam>,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::ListResourcesResult, $crate::mcp::McpError>> + Send + '_ {
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::ListResourcesResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
                 async move {
                     Ok($crate::mcp::ListResourcesResult {
                         resources: vec![],
@@ -443,12 +491,15 @@ macro_rules! implement_mcp_server {
                     })
                 }
             }
-            
+
             fn list_resource_templates(
                 &self,
                 _request: Option<$crate::mcp::PaginatedRequestParam>,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::ListResourceTemplatesResult, $crate::mcp::McpError>> + Send + '_ {
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::ListResourceTemplatesResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
                 async move {
                     Ok($crate::mcp::ListResourceTemplatesResult {
                         resource_templates: vec![],
@@ -456,34 +507,48 @@ macro_rules! implement_mcp_server {
                     })
                 }
             }
-            
+
             fn read_resource(
                 &self,
                 _request: $crate::mcp::ReadResourceRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<$crate::mcp::ReadResourceResult, $crate::mcp::McpError>> + Send + '_ {
-                async move { 
-                    Err($crate::mcp::McpError::invalid_request("Method not implemented", None))
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<
+                Output = Result<$crate::mcp::ReadResourceResult, $crate::mcp::McpError>,
+            > + Send
+            + '_ {
+                async move {
+                    Err($crate::mcp::McpError::invalid_request(
+                        "Method not implemented",
+                        None,
+                    ))
                 }
             }
-            
+
             fn subscribe(
                 &self,
                 _request: $crate::mcp::SubscribeRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_ {
-                async move { 
-                    Err($crate::mcp::McpError::invalid_request("Method not implemented", None))
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_
+            {
+                async move {
+                    Err($crate::mcp::McpError::invalid_request(
+                        "Method not implemented",
+                        None,
+                    ))
                 }
             }
-            
+
             fn unsubscribe(
                 &self,
                 _request: $crate::mcp::UnsubscribeRequestParam,
-                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>
-            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_ {
-                async move { 
-                    Err($crate::mcp::McpError::invalid_request("Method not implemented", None))
+                _context: $crate::mcp::RequestContext<$crate::mcp::RoleServer>,
+            ) -> impl ::std::future::Future<Output = Result<(), $crate::mcp::McpError>> + Send + '_
+            {
+                async move {
+                    Err($crate::mcp::McpError::invalid_request(
+                        "Method not implemented",
+                        None,
+                    ))
                 }
             }
         }

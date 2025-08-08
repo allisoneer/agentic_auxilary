@@ -1,8 +1,8 @@
+pub mod auto_mount;
 mod manager;
+pub mod resolver;
 mod types;
 mod utils;
-pub mod resolver;
-pub mod auto_mount;
 
 #[cfg(target_os = "linux")]
 mod mergerfs;
@@ -13,9 +13,9 @@ mod fuse_t;
 #[cfg(test)]
 mod mock;
 
-pub use manager::{get_mount_manager, MountManager};
-pub use types::*;
+pub use manager::{MountManager, get_mount_manager};
 pub use resolver::MountResolver;
+pub use types::*;
 // pub use utils::*;
 
 // Re-export implementations for direct use if needed

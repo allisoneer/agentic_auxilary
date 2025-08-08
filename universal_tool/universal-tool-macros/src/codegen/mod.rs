@@ -7,16 +7,16 @@
 //!
 //! The generation is split into shared utilities and interface-specific modules.
 
+pub mod error_handling;
 pub mod shared;
 pub mod structs;
 pub mod types;
-pub mod error_handling;
 pub mod validation;
 
 // Interface-specific modules
-pub mod cli;  // CLI generation (Task 4 - implemented)
-pub mod rest; // REST generation (Task 6 - implemented)
-pub mod mcp;  // MCP generation (Task 8 - implemented)
+pub mod cli; // CLI generation (Task 4 - implemented)
+pub mod mcp;
+pub mod rest; // REST generation (Task 6 - implemented) // MCP generation (Task 8 - implemented)
 
 // Re-export commonly used types
 // pub use shared::*;

@@ -1,7 +1,7 @@
 use crate::config::{Mount, RepoMappingManager};
-use anyhow::{Result, Context, bail};
-use std::path::PathBuf;
+use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub struct MountResolver {
     repo_mapping: RepoMappingManager,
@@ -28,21 +28,20 @@ impl MountResolver {
                 } else {
                     url.clone()
                 };
-                
+
                 // Resolve through mapping
-                self.repo_mapping.resolve_url(&full_url)?
-                    .ok_or_else(|| {
-                        use colored::Colorize;
-                        anyhow::anyhow!(
-                            "Repository not cloned: {}\n\n\
+                self.repo_mapping.resolve_url(&full_url)?.ok_or_else(|| {
+                    use colored::Colorize;
+                    anyhow::anyhow!(
+                        "Repository not cloned: {}\n\n\
                              To fix this, run one of:\n  \
                              • {} (auto-managed)\n  \
                              • {} (custom location)",
-                            url,
-                            format!("thoughts mount clone {}", url).cyan(),
-                            format!("thoughts mount clone {} /your/path", url).cyan()
-                        )
-                    })
+                        url,
+                        format!("thoughts mount clone {}", url).cyan(),
+                        format!("thoughts mount clone {} /your/path", url).cyan()
+                    )
+                })
             }
         }
     }
@@ -51,9 +50,7 @@ impl MountResolver {
     pub fn needs_clone(&self, mount: &Mount) -> Result<bool> {
         match mount {
             Mount::Directory { .. } => Ok(false),
-            Mount::Git { url, .. } => {
-                Ok(self.repo_mapping.resolve_url(url)?.is_none())
-            }
+            Mount::Git { url, .. } => Ok(self.repo_mapping.resolve_url(url)?.is_none()),
         }
     }
 
@@ -74,10 +71,9 @@ impl MountResolver {
 
     /// Resolve all mounts in a config
     pub fn resolve_all(&self, mounts: &HashMap<String, Mount>) -> Vec<(String, Result<PathBuf>)> {
-        mounts.iter()
-            .map(|(name, mount)| {
-                (name.clone(), self.resolve_mount(mount))
-            })
+        mounts
+            .iter()
+            .map(|(name, mount)| (name.clone(), self.resolve_mount(mount)))
             .collect()
     }
 }
@@ -94,7 +90,7 @@ mod tests {
             path: PathBuf::from("/home/user/docs"),
             sync: SyncStrategy::None,
         };
-        
+
         let resolved = resolver.resolve_mount(&mount).unwrap();
         assert_eq!(resolved, PathBuf::from("/home/user/docs"));
     }
@@ -106,7 +102,7 @@ mod tests {
             sync: SyncStrategy::Auto,
             subpath: None,
         };
-        
+
         // Test that we can detect git mounts
         assert!(mount.is_git());
         assert_eq!(mount.mount_type(), crate::config::MountType::Git);

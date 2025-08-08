@@ -21,49 +21,52 @@ impl MountValidator {
             }
         }
     }
-    
+
     fn validate_mount_directory(path: &Path) -> Result<()> {
         let expanded_path = paths::expand_path(path)?;
-        
+
         if !expanded_path.exists() {
             return Err(ThoughtsError::MountSourceNotFound {
-                path: expanded_path
+                path: expanded_path,
             });
         }
-        
+
         if !expanded_path.is_dir() {
             return Err(ThoughtsError::ConfigInvalid {
-                message: format!("Mount path is not a directory: {}", expanded_path.display())
+                message: format!("Mount path is not a directory: {}", expanded_path.display()),
             });
         }
-        
+
         // Check path validity (no system directories, etc)
         Self::check_mount_path_validity(&expanded_path)?;
-        
+
         // Check permissions
         validate_directory_permissions(&expanded_path)?;
-        
+
         Ok(())
     }
-    
+
     fn validate_git_url(url: &str) -> Result<()> {
         if url.is_empty() {
             return Err(ThoughtsError::ConfigInvalid {
-                message: "Git URL cannot be empty".to_string()
+                message: "Git URL cannot be empty".to_string(),
             });
         }
-        
+
         // Basic URL validation
         let valid_prefixes = ["git@", "https://", "http://", "ssh://"];
         if !valid_prefixes.iter().any(|prefix| url.starts_with(prefix)) {
             return Err(ThoughtsError::ConfigInvalid {
-                message: format!("Invalid git URL format: {}. Must start with git@, https://, http://, or ssh://", url)
+                message: format!(
+                    "Invalid git URL format: {}. Must start with git@, https://, http://, or ssh://",
+                    url
+                ),
             });
         }
-        
+
         Ok(())
     }
-    
+
     // Keep existing check_mount_path_validity for directory validation
     pub fn check_mount_path_validity(path: &Path) -> Result<()> {
         let expanded = paths::expand_path(path)?;
@@ -177,23 +180,23 @@ mod tests {
         };
 
         assert!(MountValidator::validate_mount(&bad_mount).is_err());
-        
+
         // Test git mount validation
         let git_mount = Mount::Git {
             url: "git@github.com:user/repo.git".to_string(),
             sync: SyncStrategy::Auto,
             subpath: None,
         };
-        
+
         assert!(MountValidator::validate_mount(&git_mount).is_ok());
-        
+
         // Test invalid git URL
         let bad_git_mount = Mount::Git {
             url: "not-a-url".to_string(),
             sync: SyncStrategy::Auto,
             subpath: None,
         };
-        
+
         assert!(MountValidator::validate_mount(&bad_git_mount).is_err());
     }
 

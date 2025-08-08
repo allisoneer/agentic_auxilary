@@ -13,34 +13,34 @@ all: check test build
 
 # Silent versions (default) - uses script to show success/failure
 check:
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh "cargo clippy --workspace --all-features"
+	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh "cargo clippy -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features"
 
 test:
 	@echo "Running tests..."
-	@$(SILENT_ENV) $(SILENT_FLAGS) cargo test --workspace --all-features
+	@$(SILENT_ENV) $(SILENT_FLAGS) cargo test -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features
 
 build:
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh "cargo build --workspace --all-features"
+	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh "cargo build -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features"
 
 # Normal versions - standard output
 check-normal:
-	cargo clippy --workspace --all-features
+	cargo clippy -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features
 
 test-normal:
-	cargo test --workspace --all-features
+	cargo test -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features
 
 build-normal:
-	cargo build --workspace --all-features
+	cargo build -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features
 
 # Verbose versions - extra output
 check-verbose:
-	cargo clippy --workspace --all-features --verbose
+	cargo clippy -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features --verbose
 
 test-verbose:
-	cargo test --workspace --all-features --verbose -- --nocapture
+	cargo test -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features --verbose -- --nocapture
 
 build-verbose:
-	cargo build --workspace --all-features --verbose
+	cargo build -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features --verbose
 
 # Additional useful targets
 clean:
@@ -53,20 +53,20 @@ fmt-check:
 	cargo fmt --all -- --check
 
 doc:
-	cargo doc --workspace --no-deps --open
+	cargo doc -p 'universal-tool-*' -p 'example-*' -p test-simple --no-deps --open
 
 # Test targets
 test-unit:
 	@echo "Running unit tests..."
-	cargo test --workspace --lib
+	cargo test -p 'universal-tool-*' -p 'example-*' -p test-simple --lib
 
 test-integration:
 	@echo "Running integration tests..."
-	cargo test --workspace --test '*'
+	cargo test -p 'universal-tool-*' -p 'example-*' -p test-simple --test '*'
 
 test-all:
 	@echo "Running all tests..."
-	cargo test --workspace --all-features
+	cargo test -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features
 
 # Component-specific test targets
 test-core:
@@ -98,7 +98,7 @@ update:
 
 # Release build
 release:
-	cargo build --workspace --all-features --release
+	cargo build -p 'universal-tool-*' -p 'example-*' -p test-simple --all-features --release
 
 # Example runners
 run-cli-simple:

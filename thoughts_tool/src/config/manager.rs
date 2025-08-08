@@ -141,7 +141,6 @@ mod tests {
         assert_eq!(loaded.version, config.version);
     }
 
-
     #[test]
     fn test_backup_creation() {
         let temp_dir = TempDir::new().unwrap();
@@ -159,5 +158,4 @@ mod tests {
         let backup_path = config_path.with_extension("json.bak");
         assert!(backup_path.exists());
     }
-
 }

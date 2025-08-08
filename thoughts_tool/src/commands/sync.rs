@@ -1,8 +1,8 @@
-use crate::config::{Mount, SyncStrategy, MountMerger, RepoMappingManager};
-use crate::git::utils::{find_repo_root, get_remote_url};
+use crate::config::{Mount, MountMerger, RepoMappingManager, SyncStrategy};
 use crate::git::GitSync;
+use crate::git::utils::{find_repo_root, get_remote_url};
 use crate::mount::MountResolver;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use colored::*;
 use std::env;
 
@@ -11,14 +11,14 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     if mount_name.is_some() && all {
         anyhow::bail!("Cannot specify both a mount name and --all");
     }
-    
+
     let repo_root = find_repo_root(&env::current_dir()?)?;
     let merger = MountMerger::new(repo_root.clone());
     let resolver = MountResolver::new()?;
-    
+
     // Get all mounts from merged config
     let all_mounts = merger.get_all_mounts().await?;
-    
+
     // Determine mounts to sync
     let mounts_to_sync = if let Some(name) = mount_name {
         // Specific mount requested
@@ -29,7 +29,8 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         }
     } else if all {
         // All auto-sync mounts
-        all_mounts.iter()
+        all_mounts
+            .iter()
             .filter(|(_, (mount, _))| mount.sync_strategy() == SyncStrategy::Auto)
             .map(|(name, _)| name.clone())
             .collect()
@@ -38,23 +39,27 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         // Note: get_all_mounts() already returns only mounts configured for this repository
         let repo_url = get_remote_url(&repo_root)?;
         println!("{} repository: {}", "Detected".cyan(), repo_url);
-        
-        all_mounts.iter()
+
+        all_mounts
+            .iter()
             .filter(|(_, (mount, _))| mount.sync_strategy() == SyncStrategy::Auto)
             .map(|(name, _)| name.clone())
             .collect()
     };
-    
+
     if mounts_to_sync.is_empty() {
         println!("{}: No mounts to sync", "Info".yellow());
         if !all {
-            println!("Try '{}' to sync all auto-sync mounts", "thoughts sync --all".cyan());
+            println!(
+                "Try '{}' to sync all auto-sync mounts",
+                "thoughts sync --all".cyan()
+            );
         }
         return Ok(());
     }
-    
+
     println!("{} {} mount(s)...", "Syncing".green(), mounts_to_sync.len());
-    
+
     // Sync each mount
     for mount_name in &mounts_to_sync {
         if let Some((mount, _source)) = all_mounts.get(mount_name) {
@@ -64,18 +69,17 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
 async fn sync_mount(name: &str, mount: &Mount, resolver: &MountResolver) -> Result<()> {
-    let mount_path = resolver.resolve_mount(mount)
-        .context("Mount not cloned")?;
-    
+    let mount_path = resolver.resolve_mount(mount).context("Mount not cloned")?;
+
     if !mount_path.exists() {
         anyhow::bail!("Mount path does not exist: {}", mount_path.display());
     }
-    
+
     // Only sync git mounts
     match mount {
         Mount::Git { url, subpath, .. } => {
@@ -94,11 +98,11 @@ async fn sync_mount(name: &str, mount: &Mount, resolver: &MountResolver) -> Resu
                 // Mount path is the repo root
                 (mount_path.clone(), None)
             };
-            
+
             // Perform git sync
             let git_sync = GitSync::new(&repo_root, sync_subpath)?;
             git_sync.sync(name).await?;
-            
+
             // Update last sync time
             let mut repo_mapping = RepoMappingManager::new()?;
             repo_mapping.update_sync_time(url)?;
@@ -108,6 +112,6 @@ async fn sync_mount(name: &str, mount: &Mount, resolver: &MountResolver) -> Resu
             println!("  {} {} (directory mount)", "Skipping".dimmed(), name);
         }
     }
-    
+
     Ok(())
 }
