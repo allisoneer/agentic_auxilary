@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
 
-use crate::config::{ConfigManager, MountType, SyncStrategy};
+use crate::config::{ConfigManager, SyncStrategy};
 use crate::error::ThoughtsError;
 
 pub async fn execute(key: String, value: String) -> Result<()> {
@@ -32,7 +32,7 @@ pub async fn execute(key: String, value: String) -> Result<()> {
                     crate::config::Mount::Directory { sync, .. } => *sync = new_sync,
                     crate::config::Mount::Git { sync, .. } => *sync = new_sync,
                 }
-                println!("Set mount '{}' sync strategy to '{}'", name, value);
+                println!("Set mount '{name}' sync strategy to '{value}'");
             } else {
                 bail!("Mount '{}' not found", name);
             }
@@ -42,7 +42,7 @@ pub async fn execute(key: String, value: String) -> Result<()> {
                 match mount {
                     crate::config::Mount::Git { url, .. } => {
                         *url = value.clone();
-                        println!("Set mount '{}' url to '{}'", name, value);
+                        println!("Set mount '{name}' url to '{value}'");
                     }
                     crate::config::Mount::Directory { .. } => {
                         bail!("URL can only be set for git mounts");

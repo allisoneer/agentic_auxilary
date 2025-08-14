@@ -107,7 +107,7 @@ pub fn generate_tool_error_response(error_var: &str, interface: &str) -> TokenSt
 
 /// Generate validation error for missing required parameter
 pub fn generate_missing_param_error(param_name: &str, interface: &str) -> TokenStream {
-    let error_msg = format!("Missing required parameter: {}", param_name);
+    let error_msg = format!("Missing required parameter: {param_name}");
 
     match interface {
         "cli" => quote! {
@@ -144,8 +144,7 @@ pub fn generate_missing_param_error(param_name: &str, interface: &str) -> TokenS
 /// Generate parsing error for invalid parameter value
 pub fn generate_parse_error(param_name: &str, expected_type: &str, interface: &str) -> TokenStream {
     let error_msg = format!(
-        "Invalid value for parameter '{}'. Expected: {}",
-        param_name, expected_type
+        "Invalid value for parameter '{param_name}'. Expected: {expected_type}"
     );
 
     match interface {

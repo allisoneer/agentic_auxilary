@@ -233,7 +233,7 @@ impl TextTools {
             if !text.contains(&pattern) {
                 return Err(ToolError::new(
                     ErrorCode::InvalidArgument,
-                    format!("Required pattern '{}' not found in text", pattern),
+                    format!("Required pattern '{pattern}' not found in text"),
                 )
                 .with_detail("help", "The text must contain the specified pattern"));
             }
@@ -264,7 +264,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Print startup information
     eprintln!("🚀 Starting MCP Text Tools Server");
     eprintln!("📍 Communicating via stdio");
-    eprintln!("");
+    eprintln!();
     eprintln!("Available tools:");
     eprintln!("  - analyze_text: Count words, lines, and characters");
     eprintln!("  - to_uppercase: Convert text to uppercase");
@@ -274,7 +274,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("  - clear_text: Clear all text (destructive!)");
     eprintln!("  - process_large_dataset: Process with progress & cancellation");
     eprintln!("  - validate_text: Validate text with detailed errors");
-    eprintln!("");
+    eprintln!();
     eprintln!("Connect with: mcp-client stdio -- cargo run --example 05-mcp-basic");
 
     // Create stdio transport

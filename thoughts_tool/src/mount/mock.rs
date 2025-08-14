@@ -13,6 +13,12 @@ pub struct MockMountManager {
     should_fail: Arc<Mutex<bool>>,
 }
 
+impl Default for MockMountManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockMountManager {
     pub fn new() -> Self {
         Self {

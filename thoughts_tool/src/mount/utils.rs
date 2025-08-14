@@ -72,7 +72,7 @@ pub async fn validate_mount_point(path: &Path) -> Result<()> {
     ];
 
     for forbidden in &forbidden_paths {
-        if path_str == *forbidden || path_str.starts_with(&format!("{}/", forbidden)) {
+        if path_str == *forbidden || path_str.starts_with(&format!("{forbidden}/")) {
             return Err(crate::error::ThoughtsError::MountOperationFailed {
                 message: format!("Cannot mount on system directory: {}", path.display()),
             });
@@ -98,7 +98,7 @@ pub fn normalize_mount_path(path: &Path) -> Result<std::path::PathBuf> {
     use crate::utils::paths::expand_path;
 
     // Expand tilde
-    let expanded = expand_path(path).map_err(|e| crate::error::ThoughtsError::Other(e))?;
+    let expanded = expand_path(path).map_err(crate::error::ThoughtsError::Other)?;
 
     // Canonicalize if possible (path must exist)
     if expanded.exists() {

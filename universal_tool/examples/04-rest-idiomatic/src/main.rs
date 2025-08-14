@@ -199,7 +199,7 @@ impl TaskManager {
         projects
             .get(&project_id)
             .cloned()
-            .ok_or_else(|| ToolError::not_found(format!("Project {} not found", project_id)))
+            .ok_or_else(|| ToolError::not_found(format!("Project {project_id} not found")))
     }
 
     #[universal_tool(
@@ -218,7 +218,7 @@ impl TaskManager {
 
         let project = projects
             .get_mut(&project_id)
-            .ok_or_else(|| ToolError::not_found(format!("Project {} not found", project_id)))?;
+            .ok_or_else(|| ToolError::not_found(format!("Project {project_id} not found")))?;
 
         if let Some(name) = request.name {
             project.name = name;
@@ -244,7 +244,7 @@ impl TaskManager {
 
         projects
             .remove(&project_id)
-            .ok_or_else(|| ToolError::not_found(format!("Project {} not found", project_id)))?;
+            .ok_or_else(|| ToolError::not_found(format!("Project {project_id} not found")))?;
 
         let mut tasks = self
             .tasks
@@ -277,8 +277,7 @@ impl TaskManager {
 
         if !projects.contains_key(&project_id) {
             return Err(ToolError::not_found(format!(
-                "Project {} not found",
-                project_id
+                "Project {project_id} not found"
             )));
         }
 
@@ -290,12 +289,12 @@ impl TaskManager {
         let mut task_list: Vec<Task> = tasks
             .values()
             .filter(|task| task.project_id == project_id)
-            .filter(|task| status.as_ref().map_or(true, |s| &task.status == s))
-            .filter(|task| priority.as_ref().map_or(true, |p| &task.priority == p))
+            .filter(|task| status.as_ref().is_none_or(|s| &task.status == s))
+            .filter(|task| priority.as_ref().is_none_or(|p| &task.priority == p))
             .filter(|task| {
                 assigned_to
                     .as_ref()
-                    .map_or(true, |a| task.assigned_to.as_ref() == Some(a))
+                    .is_none_or(|a| task.assigned_to.as_ref() == Some(a))
             })
             .cloned()
             .collect();
@@ -322,8 +321,7 @@ impl TaskManager {
 
         if !projects.contains_key(&project_id) {
             return Err(ToolError::not_found(format!(
-                "Project {} not found",
-                project_id
+                "Project {project_id} not found"
             )));
         }
 
@@ -363,7 +361,7 @@ impl TaskManager {
         tasks
             .get(&task_id)
             .cloned()
-            .ok_or_else(|| ToolError::not_found(format!("Task {} not found", task_id)))
+            .ok_or_else(|| ToolError::not_found(format!("Task {task_id} not found")))
     }
 
     #[universal_tool(
@@ -382,7 +380,7 @@ impl TaskManager {
 
         let task = tasks
             .get_mut(&task_id)
-            .ok_or_else(|| ToolError::not_found(format!("Task {} not found", task_id)))?;
+            .ok_or_else(|| ToolError::not_found(format!("Task {task_id} not found")))?;
 
         if let Some(title) = request.title {
             task.title = title;
@@ -420,7 +418,7 @@ impl TaskManager {
 
         tasks
             .remove(&task_id)
-            .ok_or_else(|| ToolError::not_found(format!("Task {} not found", task_id)))?;
+            .ok_or_else(|| ToolError::not_found(format!("Task {task_id} not found")))?;
 
         info!("Deleted task: {}", task_id);
         Ok(())
@@ -445,12 +443,12 @@ impl TaskManager {
 
         let mut task_list: Vec<Task> = tasks
             .values()
-            .filter(|task| status.as_ref().map_or(true, |s| &task.status == s))
-            .filter(|task| priority.as_ref().map_or(true, |p| &task.priority == p))
+            .filter(|task| status.as_ref().is_none_or(|s| &task.status == s))
+            .filter(|task| priority.as_ref().is_none_or(|p| &task.priority == p))
             .filter(|task| {
                 assigned_to
                     .as_ref()
-                    .map_or(true, |a| task.assigned_to.as_ref() == Some(a))
+                    .is_none_or(|a| task.assigned_to.as_ref() == Some(a))
             })
             .cloned()
             .collect();

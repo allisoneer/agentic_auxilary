@@ -37,7 +37,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     println!("{}", "Repository:".bold());
     println!("  Path: {}", repo_root.display());
     if let Ok(url) = crate::git::utils::get_remote_url(&repo_root) {
-        println!("  Remote: {}", url);
+        println!("  Remote: {url}");
     }
     println!();
 
@@ -68,9 +68,9 @@ pub async fn execute(_detailed: bool) -> Result<()> {
             };
 
             let source_str = match source {
-                MountSource::Repository => format!("{} (shared with team)", source_label),
-                MountSource::Personal => format!("{} (private to you)", source_label),
-                MountSource::Pattern => format!("{} (matched by rule)", source_label),
+                MountSource::Repository => format!("{source_label} (shared with team)"),
+                MountSource::Personal => format!("{source_label} (private to you)"),
+                MountSource::Pattern => format!("{source_label} (matched by rule)"),
             };
 
             println!("    Source: {}", source_str.color(source_color));
@@ -79,12 +79,12 @@ pub async fn execute(_detailed: bool) -> Result<()> {
             match mount {
                 Mount::Git { url, subpath, sync } => {
                     let display_url = if let Some(sub) = subpath {
-                        format!("{}:{}", url, sub)
+                        format!("{url}:{sub}")
                     } else {
                         url.clone()
                     };
-                    println!("    URL: {}", display_url);
-                    println!("    Sync: {}", format!("{:?}", sync).dimmed());
+                    println!("    URL: {display_url}");
+                    println!("    Sync: {}", format!("{sync:?}").dimmed());
 
                     // Show local path and clone status
                     match resolver.resolve_mount(mount) {
@@ -107,7 +107,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                                 );
                                 println!(
                                     "    Tip: Run {} to clone now",
-                                    format!("thoughts mount clone {}", url).cyan()
+                                    format!("thoughts mount clone {url}").cyan()
                                 );
                             } else {
                                 println!("    Local: {} - {}", "Error".red(), e);
@@ -118,7 +118,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                 Mount::Directory { path, sync } => {
                     println!("    Type: Local directory");
                     println!("    Path: {}", path.display());
-                    println!("    Sync: {}", format!("{:?}", sync).dimmed());
+                    println!("    Sync: {}", format!("{sync:?}").dimmed());
                 }
             }
 
@@ -160,7 +160,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     } else {
         "Unsupported"
     };
-    println!("  Platform: {}", platform);
+    println!("  Platform: {platform}");
 
     Ok(())
 }

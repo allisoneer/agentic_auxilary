@@ -1,5 +1,4 @@
 use crate::config::RepoMappingManager;
-use crate::git::clone::clone_repository;
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
 use colored::*;
@@ -61,7 +60,7 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
 
     println!("{} Repository cloned successfully", "✓".green());
     println!("\nYou can now use this repository in mounts:");
-    println!("  {}", format!("thoughts mount add {}", url).cyan());
+    println!("  {}", format!("thoughts mount add {url}").cyan());
 
     Ok(())
 }

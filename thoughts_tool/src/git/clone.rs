@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use colored::*;
-use git2::{FetchOptions, Progress, RemoteCallbacks, Repository};
+use git2::{FetchOptions, Progress, RemoteCallbacks};
 use std::path::{Path, PathBuf};
 
 pub struct CloneOptions {
@@ -79,7 +79,7 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
                     }
 
                     // If that fails, try with public key
-                    let public_key = ssh_dir.join(format!("{}.pub", key_name));
+                    let public_key = ssh_dir.join(format!("{key_name}.pub"));
                     if public_key.exists() {
                         if let Ok(cred) = git2::Cred::ssh_key(
                             username,

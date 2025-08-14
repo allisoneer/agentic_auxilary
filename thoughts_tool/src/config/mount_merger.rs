@@ -1,6 +1,5 @@
 use crate::config::{Mount, PersonalConfigManager, RepoConfigManager, SyncStrategy};
-use crate::config::{MountPattern, PersonalMount, RequiredMount};
-use crate::git::utils::{find_repo_root, get_remote_url};
+use crate::git::utils::get_remote_url;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -24,7 +23,7 @@ impl MountMerger {
             for required in &repo_config.requires {
                 let mount = Mount::Git {
                     url: required.remote.clone(),
-                    sync: required.sync.clone(),
+                    sync: required.sync,
                     subpath: required.subpath.clone(),
                 };
                 let name = required.mount_path.clone();
@@ -79,7 +78,7 @@ fn pattern_matches(pattern: &str, url: &str) -> bool {
     // Convert pattern to regex, supporting * wildcard
     let regex_pattern = pattern.replace(".", r"\.").replace("*", ".*");
 
-    regex::Regex::new(&format!("^{}$", regex_pattern))
+    regex::Regex::new(&format!("^{regex_pattern}$"))
         .map(|re| re.is_match(url))
         .unwrap_or(false)
 }

@@ -58,7 +58,7 @@ fn generate_create_cli_command(router: &RouterDef) -> TokenStream {
     let subcommands: Vec<_> = router
         .tools
         .iter()
-        .map(|tool| generate_tool_subcommand(tool))
+        .map(generate_tool_subcommand)
         .collect();
 
     // Debug: Print number of subcommands

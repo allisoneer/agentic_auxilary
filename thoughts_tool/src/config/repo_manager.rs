@@ -22,7 +22,7 @@ impl RepoConfigManager {
         }
 
         let content = fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read config from {:?}", config_path))?;
+            .with_context(|| format!("Failed to read config from {config_path:?}"))?;
         let config: RepoConfig = serde_json::from_str(&content)
             .with_context(|| "Failed to parse repository configuration")?;
 
@@ -38,7 +38,7 @@ impl RepoConfigManager {
         // Ensure .thoughts directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {:?}", parent))?;
+                .with_context(|| format!("Failed to create directory {parent:?}"))?;
         }
 
         let json =
@@ -46,7 +46,7 @@ impl RepoConfigManager {
 
         AtomicFile::new(&config_path, OverwriteBehavior::AllowOverwrite)
             .write(|f| f.write_all(json.as_bytes()))
-            .with_context(|| format!("Failed to write config to {:?}", config_path))?;
+            .with_context(|| format!("Failed to write config to {config_path:?}"))?;
 
         Ok(())
     }

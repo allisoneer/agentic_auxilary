@@ -13,7 +13,7 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize main repository
     fs::create_dir(&main_repo)?;
     std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&main_repo)
         .output()?;
 
@@ -26,13 +26,13 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create an initial commit (required for worktree)
     std::process::Command::new("git")
-        .args(&["commit", "--allow-empty", "-m", "Initial commit"])
+        .args(["commit", "--allow-empty", "-m", "Initial commit"])
         .current_dir(&main_repo)
         .output()?;
 
     // Create worktree
     std::process::Command::new("git")
-        .args(&["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
+        .args(["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
         .current_dir(&main_repo)
         .output()?;
 
@@ -64,19 +64,19 @@ fn test_worktree_requires_main_init() -> Result<(), Box<dyn std::error::Error>> 
     // Create uninitialized main repo
     fs::create_dir(&main_repo)?;
     std::process::Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(&main_repo)
         .output()?;
 
     // Create an initial commit (required for worktree)
     std::process::Command::new("git")
-        .args(&["commit", "--allow-empty", "-m", "Initial commit"])
+        .args(["commit", "--allow-empty", "-m", "Initial commit"])
         .current_dir(&main_repo)
         .output()?;
 
     // Create worktree
     std::process::Command::new("git")
-        .args(&["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
+        .args(["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
         .current_dir(&main_repo)
         .output()?;
 

@@ -82,7 +82,7 @@ impl ConfigManager {
 
         let af = AtomicFile::new(&self.config_path, AllowOverwrite);
         af.write(|f| f.write_all(json.as_bytes()))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
 
         info!("Configuration saved successfully");
         Ok(())
@@ -91,7 +91,7 @@ impl ConfigManager {
     /// Enhanced validation with detailed error messages
     pub fn validate(&self, config: &Config) -> Result<()> {
         // Validate mounts using MountValidator
-        for (_name, mount) in &config.mounts {
+        for mount in config.mounts.values() {
             crate::config::validation::MountValidator::validate_mount(mount)?;
         }
 

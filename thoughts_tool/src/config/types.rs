@@ -92,16 +92,13 @@ impl std::fmt::Display for MountType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SyncStrategy {
+    #[default]
     None,
     Auto,
 }
 
-impl Default for SyncStrategy {
-    fn default() -> Self {
-        SyncStrategy::None
-    }
-}
 
 impl std::str::FromStr for SyncStrategy {
     type Err = anyhow::Error;
@@ -359,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_file_metadata_serialization() {
-        let mut metadata = FileMetadata {
+        let metadata = FileMetadata {
             auto_metadata: {
                 let mut m = HashMap::new();
                 m.insert(

@@ -44,9 +44,9 @@ pub async fn update_active_mounts() -> Result<()> {
         if !desired_mounts.contains_key(active_name) {
             println!("  {} removed mount: {}", "Unmounting".yellow(), active_name);
             mount_manager
-                .unmount(&active_path, false)
+                .unmount(active_path, false)
                 .await
-                .context(format!("Failed to unmount {}", active_name))?;
+                .context(format!("Failed to unmount {active_name}"))?;
         }
     }
 
@@ -74,7 +74,7 @@ pub async fn update_active_mounts() -> Result<()> {
                 "Mounting".green(),
                 name,
                 mount_description(mount),
-                format!("{:?}", source).to_lowercase()
+                format!("{source:?}").to_lowercase()
             );
 
             // Resolve mount path
@@ -150,7 +150,7 @@ fn mount_description(mount: &Mount) -> String {
     match mount {
         Mount::Git { url, subpath, .. } => {
             if let Some(sub) = subpath {
-                format!("{}:{}", url, sub)
+                format!("{url}:{sub}")
             } else {
                 url.clone()
             }

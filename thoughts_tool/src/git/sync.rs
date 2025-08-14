@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use colored::*;
 use git2::{FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, Signature};
 use std::path::Path;
@@ -119,11 +119,10 @@ impl GitSync {
         // Create descriptive commit message
         let message = if let Some(subpath) = &self.subpath {
             format!(
-                "Auto-sync thoughts for {} (subpath: {})",
-                mount_name, subpath
+                "Auto-sync thoughts for {mount_name} (subpath: {subpath})"
             )
         } else {
-            format!("Auto-sync thoughts for {}", mount_name)
+            format!("Auto-sync thoughts for {mount_name}")
         };
 
         // Handle both initial commit and subsequent commits
@@ -214,7 +213,7 @@ impl GitSync {
                         }
 
                         // If that fails, try with public key
-                        let public_key = ssh_dir.join(format!("{}.pub", key_name));
+                        let public_key = ssh_dir.join(format!("{key_name}.pub"));
                         if public_key.exists() {
                             if let Ok(cred) = git2::Cred::ssh_key(
                                 username,
@@ -252,7 +251,7 @@ impl GitSync {
         // Try to find the upstream commit
         let upstream_oid = match self
             .repo
-            .refname_to_id(&format!("refs/remotes/origin/{}", branch_name))
+            .refname_to_id(&format!("refs/remotes/origin/{branch_name}"))
         {
             Ok(oid) => oid,
             Err(_) => {
@@ -368,7 +367,7 @@ impl GitSync {
                         }
 
                         // If that fails, try with public key
-                        let public_key = ssh_dir.join(format!("{}.pub", key_name));
+                        let public_key = ssh_dir.join(format!("{key_name}.pub"));
                         if public_key.exists() {
                             if let Ok(cred) = git2::Cred::ssh_key(
                                 username,
@@ -398,7 +397,7 @@ impl GitSync {
 
         // Push
         remote.push(
-            &[&format!("refs/heads/{0}:refs/heads/{0}", branch)],
+            &[&format!("refs/heads/{branch}:refs/heads/{branch}")],
             Some(&mut push_options),
         )?;
 

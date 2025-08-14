@@ -22,7 +22,7 @@ pub async fn execute(key: String) -> Result<()> {
         ["version"] => println!("{}", config.version),
         ["mounts"] => {
             for name in config.mounts.keys() {
-                println!("{}", name);
+                println!("{name}");
             }
         }
         ["mounts", name] => {
@@ -31,13 +31,13 @@ pub async fn execute(key: String) -> Result<()> {
                 match mount {
                     crate::config::Mount::Directory { path, sync } => {
                         println!("path: {}", path.display());
-                        println!("sync: {}", sync);
+                        println!("sync: {sync}");
                     }
                     crate::config::Mount::Git { url, sync, subpath } => {
-                        println!("url: {}", url);
-                        println!("sync: {}", sync);
+                        println!("url: {url}");
+                        println!("sync: {sync}");
                         if let Some(sub) = subpath {
-                            println!("subpath: {}", sub);
+                            println!("subpath: {sub}");
                         }
                     }
                 }
@@ -59,7 +59,7 @@ pub async fn execute(key: String) -> Result<()> {
                         }
                     },
                     "url" => match mount {
-                        crate::config::Mount::Git { url, .. } => println!("{}", url),
+                        crate::config::Mount::Git { url, .. } => println!("{url}"),
                         crate::config::Mount::Directory { .. } => {
                             bail!("Directory mounts don't have a url field, use 'path' instead")
                         }
@@ -67,7 +67,7 @@ pub async fn execute(key: String) -> Result<()> {
                     "subpath" => match mount {
                         crate::config::Mount::Git { subpath, .. } => {
                             if let Some(sub) = subpath {
-                                println!("{}", sub);
+                                println!("{sub}");
                             }
                         }
                         crate::config::Mount::Directory { .. } => {

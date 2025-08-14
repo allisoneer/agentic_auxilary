@@ -59,8 +59,10 @@ pub struct ParamDef {
 
 /// Where a parameter comes from in different interfaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ParamSource {
     /// Default - comes from request body in REST/MCP, command args in CLI
+    #[default]
     Body,
     /// REST query parameters
     Query,
@@ -70,11 +72,6 @@ pub enum ParamSource {
     Header,
 }
 
-impl Default for ParamSource {
-    fn default() -> Self {
-        ParamSource::Body
-    }
-}
 
 /// Metadata for the router attribute.
 #[derive(Debug, Default)]
@@ -128,19 +125,16 @@ pub struct RestConfig {
 
 /// HTTP methods supported by REST endpoints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum HttpMethod {
     Get,
+    #[default]
     Post,
     Put,
     Delete,
     Patch,
 }
 
-impl Default for HttpMethod {
-    fn default() -> Self {
-        HttpMethod::Post
-    }
-}
 
 /// MCP-specific configuration.
 #[derive(Debug, Default)]
