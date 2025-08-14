@@ -1,6 +1,6 @@
 mod manager;
 mod types;
-mod validation;
+pub mod validation;
 // Add after line 2 (after existing modules)
 mod mount_merger;
 mod personal_manager;
