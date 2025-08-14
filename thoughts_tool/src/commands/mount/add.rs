@@ -1,6 +1,6 @@
+use crate::config::validation::sanitize_mount_name;
 use crate::config::{MountDirs, PersonalMount, RepoConfig, RequiredMount};
 use crate::config::{PersonalConfigManager, RepoConfigManager, RepoMappingManager, SyncStrategy};
-use crate::config::validation::sanitize_mount_name;
 use crate::git::utils::{find_repo_root, get_remote_url, is_git_repo};
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};

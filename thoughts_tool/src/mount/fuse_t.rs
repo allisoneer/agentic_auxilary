@@ -248,7 +248,7 @@ impl MountManager for FuseTManager {
 
         // Validate mount point first
         utils::validate_mount_point(target).await?;
-        
+
         // Ensure target directory exists
         utils::ensure_mount_point(target).await?;
 
