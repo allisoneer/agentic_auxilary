@@ -19,9 +19,7 @@ pub fn ensure_gitignore_entry(
         let entry_no_slash = entry.trim_start_matches('/');
         let has_entry = content.lines().any(|line| {
             let trimmed = line.trim();
-            trimmed == entry
-                || trimmed == entry_no_slash
-                || trimmed == format!("{entry_no_slash}/")
+            trimmed == entry || trimmed == entry_no_slash || trimmed == format!("{entry_no_slash}/")
         });
 
         if !has_entry {

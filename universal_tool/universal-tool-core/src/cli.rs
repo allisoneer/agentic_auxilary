@@ -272,10 +272,7 @@ pub mod interactive {
             .items(items)
             .interact()
             .map_err(|e| {
-                ToolError::new(
-                    ErrorCode::IoError,
-                    format!("Failed to read selection: {e}"),
-                )
+                ToolError::new(ErrorCode::IoError, format!("Failed to read selection: {e}"))
             })
     }
 

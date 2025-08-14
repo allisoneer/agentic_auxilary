@@ -310,14 +310,18 @@ pub fn convert_tool_definitions(tool_jsons: Vec<JsonValue>) -> Vec<Tool> {
 
             // Convert input schema to the expected format
             let input_schema = if let Some(schema_value) = json.get("inputSchema") {
-                schema_value.as_object().map(|schema_obj| Arc::new(schema_obj.clone()))
+                schema_value
+                    .as_object()
+                    .map(|schema_obj| Arc::new(schema_obj.clone()))
             } else {
                 None
             };
 
             // Extract annotations from the JSON
             // For now, we'll map our custom annotations to the available fields in rmcp
-            let annotations = json.get("annotations").map(|_hints| ToolAnnotations::default());
+            let annotations = json
+                .get("annotations")
+                .map(|_hints| ToolAnnotations::default());
 
             Some(Tool {
                 name: name.into(),

@@ -1,7 +1,5 @@
-use crate::config::{
-    PersonalConfigManager, RepoConfigManager, RepoMappingManager, SyncStrategy,
-};
 use crate::config::{MountDirs, PersonalMount, RepoConfig, RequiredMount};
+use crate::config::{PersonalConfigManager, RepoConfigManager, RepoMappingManager, SyncStrategy};
 use crate::git::utils::{find_repo_root, get_remote_url, is_git_repo};
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
@@ -134,8 +132,7 @@ pub async fn execute(
             remote: url.clone(),
             mount_path: mount_name.clone(),
             subpath: subpath.clone(),
-            description: description
-                .unwrap_or_else(|| format!("Personal mount for {mount_name}")),
+            description: description.unwrap_or_else(|| format!("Personal mount for {mount_name}")),
         };
 
         PersonalConfigManager::add_repository_mount(&current_repo_url, personal_mount)?;

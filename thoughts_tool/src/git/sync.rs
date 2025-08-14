@@ -118,9 +118,7 @@ impl GitSync {
 
         // Create descriptive commit message
         let message = if let Some(subpath) = &self.subpath {
-            format!(
-                "Auto-sync thoughts for {mount_name} (subpath: {subpath})"
-            )
+            format!("Auto-sync thoughts for {mount_name} (subpath: {subpath})")
         } else {
             format!("Auto-sync thoughts for {mount_name}")
         };

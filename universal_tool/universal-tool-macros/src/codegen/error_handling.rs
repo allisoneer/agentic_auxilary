@@ -143,9 +143,8 @@ pub fn generate_missing_param_error(param_name: &str, interface: &str) -> TokenS
 
 /// Generate parsing error for invalid parameter value
 pub fn generate_parse_error(param_name: &str, expected_type: &str, interface: &str) -> TokenStream {
-    let error_msg = format!(
-        "Invalid value for parameter '{param_name}'. Expected: {expected_type}"
-    );
+    let error_msg =
+        format!("Invalid value for parameter '{param_name}'. Expected: {expected_type}");
 
     match interface {
         "cli" => quote! {
