@@ -3,7 +3,7 @@ use crate::config::{Mount, MountMerger, MountSource, RepoConfigManager};
 use crate::git::clone::{CloneOptions, clone_repository};
 use crate::git::utils::find_repo_root;
 use crate::mount::MountResolver;
-use crate::mount::{MountManager, MountOptions, get_mount_manager};
+use crate::mount::{MountOptions, get_mount_manager};
 use crate::platform::detect_platform;
 use crate::utils::paths::ensure_dir;
 use anyhow::{Context, Result};
