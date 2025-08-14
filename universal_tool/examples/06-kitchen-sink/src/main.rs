@@ -135,9 +135,7 @@ impl FileManager {
         }
 
         if !resolved_path.is_dir() {
-            return Err(ToolError::invalid_input(format!(
-                "Not a directory: {path}"
-            )));
+            return Err(ToolError::invalid_input(format!("Not a directory: {path}")));
         }
 
         let include_hidden = include_hidden.unwrap_or(false);
@@ -301,13 +299,11 @@ impl FileManager {
 
         if resolved_path.is_dir() {
             if recursive.unwrap_or(false) {
-                fs::remove_dir_all(&resolved_path).map_err(|e| {
-                    ToolError::internal(format!("Failed to remove directory: {e}"))
-                })?;
+                fs::remove_dir_all(&resolved_path)
+                    .map_err(|e| ToolError::internal(format!("Failed to remove directory: {e}")))?;
             } else {
-                fs::remove_dir(&resolved_path).map_err(|e| {
-                    ToolError::internal(format!("Failed to remove directory: {e}"))
-                })?;
+                fs::remove_dir(&resolved_path)
+                    .map_err(|e| ToolError::internal(format!("Failed to remove directory: {e}")))?;
             }
         } else {
             fs::remove_file(&resolved_path)

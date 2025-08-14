@@ -26,11 +26,7 @@ pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
 
 /// Generates the handle_mcp_call() method for dispatching MCP tool calls
 fn generate_mcp_dispatch_method(router: &RouterDef) -> TokenStream {
-    let match_arms: Vec<_> = router
-        .tools
-        .iter()
-        .map(generate_tool_match_arm)
-        .collect();
+    let match_arms: Vec<_> = router.tools.iter().map(generate_tool_match_arm).collect();
 
     quote! {
         /// Handles MCP tool calls by dispatching to the appropriate tool method
@@ -147,10 +143,7 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
 
 /// Generates the get_mcp_tools() method for tool discovery
 fn generate_mcp_tools_method(router: &RouterDef) -> TokenStream {
-    let tool_definitions = router
-        .tools
-        .iter()
-        .map(generate_tool_definition);
+    let tool_definitions = router.tools.iter().map(generate_tool_definition);
 
     quote! {
         /// Returns tool definitions for MCP discovery

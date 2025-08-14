@@ -15,7 +15,6 @@ pub use personal_manager::PersonalConfigManager;
 pub use repo_manager::RepoConfigManager;
 pub use repo_mapping_manager::RepoMappingManager;
 pub use types::{
-    MountDirs, MountPattern, PersonalConfig, PersonalMount, RepoConfig,
-    RequiredMount, Rule,
+    MountDirs, MountPattern, PersonalConfig, PersonalMount, RepoConfig, RequiredMount, Rule,
 };
 // They are tested via their module unit tests

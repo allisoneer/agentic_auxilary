@@ -112,7 +112,12 @@ fn generate_param_structs(router: &RouterDef) -> TokenStream {
                 let fields = body_params.iter().map(|param| {
                     let name = &param.name;
                     let ty = &param.ty;
-                    let doc = param.metadata.description.as_deref().unwrap_or("").to_string();
+                    let doc = param
+                        .metadata
+                        .description
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_string();
 
                     quote! {
                         #[doc = #doc]
@@ -205,8 +210,6 @@ fn generate_handler(tool: &ToolDef, module_name: &syn::Ident) -> TokenStream {
         quote! { state },
         method_args_vec,
     );
-
-    
 
     if has_body_params {
         let params_struct = get_params_struct_name(tool);

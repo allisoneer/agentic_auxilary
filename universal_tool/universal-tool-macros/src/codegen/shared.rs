@@ -155,11 +155,7 @@ pub fn generate_json_schema(ty: &Type) -> TokenStream {
 /// Check if a method should be exposed on a given interface
 pub fn should_expose_on_interface(tool: &ToolDef, interface: &str) -> bool {
     match interface {
-        "cli" => tool
-            .metadata
-            .cli_config
-            .as_ref()
-            .is_none_or(|c| !c.hidden),
+        "cli" => tool.metadata.cli_config.as_ref().is_none_or(|c| !c.hidden),
         "rest" => tool.metadata.rest_config.is_some(),
         "mcp" => tool.metadata.mcp_config.is_some(),
         _ => true,

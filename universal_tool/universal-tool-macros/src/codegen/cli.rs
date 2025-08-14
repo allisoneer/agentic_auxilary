@@ -55,11 +55,7 @@ fn generate_create_cli_command(router: &RouterDef) -> TokenStream {
 
     // Generate subcommands
     // TODO(2): Support command_path for nested subcommands
-    let subcommands: Vec<_> = router
-        .tools
-        .iter()
-        .map(generate_tool_subcommand)
-        .collect();
+    let subcommands: Vec<_> = router.tools.iter().map(generate_tool_subcommand).collect();
 
     // Debug: Print number of subcommands
     if std::env::var("UTF_DEBUG").is_ok() {

@@ -649,7 +649,6 @@ fn strip_param_attributes(impl_block: &mut ItemImpl) {
 mod tests {
     use super::*;
     use quote::quote;
-    
 
     #[test]
     fn test_parse_simple_router() {

@@ -151,7 +151,8 @@ fn detect_linux_distro() -> (String, String) {
     if let Ok(output) = Command::new("lsb_release").args(["-d", "-r"]).output() {
         let output_str = String::from_utf8_lossy(&output.stdout);
         let lines: Vec<&str> = output_str.lines().collect();
-        let distro = lines.first()
+        let distro = lines
+            .first()
             .and_then(|l| l.split(':').nth(1))
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "Unknown".to_string());

@@ -32,21 +32,18 @@ pub async fn execute(force: bool) -> Result<()> {
         }
 
         // Check if already initialized
-        if worktree_thoughts_data.exists() && !force
-            && worktree_thoughts_data.is_symlink() {
-                eprintln!("{}: Worktree already initialized", "Info".cyan());
-                let target = fs::read_link(&worktree_thoughts_data)
-                    .unwrap_or_else(|_| PathBuf::from("<invalid>"));
-                eprintln!("  .thoughts-data -> {}", target.display());
-                return Ok(());
-            }
+        if worktree_thoughts_data.exists() && !force && worktree_thoughts_data.is_symlink() {
+            eprintln!("{}: Worktree already initialized", "Info".cyan());
+            let target = fs::read_link(&worktree_thoughts_data)
+                .unwrap_or_else(|_| PathBuf::from("<invalid>"));
+            eprintln!("  .thoughts-data -> {}", target.display());
+            return Ok(());
+        }
 
         // Clean up if forcing
         if force && worktree_thoughts_data.exists() {
             fs::remove_file(&worktree_thoughts_data).with_context(|| {
-                format!(
-                    "Failed to remove existing symlink: {worktree_thoughts_data:?}"
-                )
+                format!("Failed to remove existing symlink: {worktree_thoughts_data:?}")
             })?;
         }
 

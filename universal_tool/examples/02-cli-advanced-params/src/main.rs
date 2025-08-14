@@ -83,7 +83,8 @@ impl CliFormatter for AnalysisResult {
                     "Count".to_string(),
                     "Lines".to_string(),
                 ]
-                .into_iter().collect(),
+                .into_iter()
+                .collect(),
             );
             for ft in &self.file_types {
                 rows.push(vec![

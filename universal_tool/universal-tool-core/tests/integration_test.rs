@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod tests {
-    
+
     use universal_tool_core::prelude::*;
 
     /// Test struct with both sync and async methods

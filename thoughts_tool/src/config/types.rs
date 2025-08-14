@@ -99,7 +99,6 @@ pub enum SyncStrategy {
     Auto,
 }
 
-
 impl std::str::FromStr for SyncStrategy {
     type Err = anyhow::Error;
 
