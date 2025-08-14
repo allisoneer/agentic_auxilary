@@ -8,7 +8,7 @@ use super::manager::MountManager;
 use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
-use crate::platform::{MacOSInfo, common::*, macos::*};
+use crate::platform::MacOSInfo;
 
 pub struct FuseTManager {
     /// Platform information
@@ -246,6 +246,9 @@ impl MountManager for FuseTManager {
             }
         }
 
+        // Validate mount point first
+        utils::validate_mount_point(target).await?;
+        
         // Ensure target directory exists
         utils::ensure_mount_point(target).await?;
 
