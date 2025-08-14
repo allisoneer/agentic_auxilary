@@ -90,10 +90,10 @@ pub async fn find_claude_in_path() -> Result<PathBuf> {
 }
 
 pub fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
+    if let Some(stripped) = path.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(stripped);
     }
     PathBuf::from(path)
 }
