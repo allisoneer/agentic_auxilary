@@ -55,7 +55,7 @@ pub fn generate_rest_methods_split(router: &RouterDef) -> (TokenStream, TokenStr
 }
 
 /// Generates all REST-related methods for a router (legacy version for compatibility)
-#[allow(dead_code)]  // Part of incomplete OpenAPI feature
+#[allow(dead_code)] // Part of incomplete OpenAPI feature
 pub fn generate_rest_methods(router: &RouterDef) -> TokenStream {
     let (module_code, method_code) = generate_rest_methods_split(router);
     quote! {
@@ -332,7 +332,7 @@ fn get_handler_name(tool: &ToolDef) -> syn::Ident {
 }
 
 /// Generate OpenAPI schemas for parameter structs
-#[allow(dead_code)]  // Will be used when OpenAPI feature is completed
+#[allow(dead_code)] // Will be used when OpenAPI feature is completed
 fn generate_openapi_schemas(router: &RouterDef) -> TokenStream {
     let schemas = router
         .tools
@@ -352,7 +352,7 @@ fn generate_openapi_schemas(router: &RouterDef) -> TokenStream {
 }
 
 /// Generate OpenAPI path documentation
-#[allow(dead_code)]  // Will be used when OpenAPI feature is completed
+#[allow(dead_code)] // Will be used when OpenAPI feature is completed
 fn generate_openapi_paths(router: &RouterDef) -> TokenStream {
     let paths = router.tools.iter().map(|tool| {
         let fn_name = syn::Ident::new(
