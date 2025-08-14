@@ -1,20 +1,26 @@
 [advisories]
-db-paths = ["~/.cargo/advisory-db"]
+db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
+# All advisories are denied by default in cargo-deny 0.16.0+
+# Add specific advisory IDs to ignore if needed:
+# ignore = ["RUSTSEC-XXXX-XXXX"]
 
 [licenses]
-unlicensed = "deny"
-allow = ["MIT", "Apache-2.0", "BSD-3-Clause"]
-copyleft = "warn"
+# List of allowed licenses
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "ISC", "Unicode-DFS-2016"]
+# Confidence threshold for license detection (0.0-1.0)
+confidence-threshold = 0.93
 
 [bans]
+# Warn when multiple versions of the same crate are detected
 multiple-versions = "warn"
-skip = []
+# Deny wildcard dependencies
+wildcards = "deny"
 
 [sources]
+# Warn for crates from unknown registries
 unknown-registry = "warn"
+# Warn for crates from unknown git sources
 unknown-git = "warn"
+# Allow crates from crates.io
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
