@@ -296,16 +296,13 @@ pub fn should_include_param(param: &ParamDef, interface: &str) -> bool {
 
 /// Extracts the inner type from Option<T>
 fn extract_option_inner_type(ty: &Type) -> Type {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.first() {
-            if segment.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                        return inner_ty.clone();
-                    }
-                }
-            }
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.first()
+        && segment.ident == "Option"
+        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
+    {
+        return inner_ty.clone();
     }
     // Fallback to String if we can't extract the type
     parse_str("String").unwrap()
@@ -313,16 +310,14 @@ fn extract_option_inner_type(ty: &Type) -> Type {
 
 /// Extracts the value type from HashMap<K, V>
 fn extract_hashmap_value_type(ty: &Type) -> Type {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            if segment.ident == "HashMap" {
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    // HashMap has two type arguments, we want the second one (value type)
-                    if let Some(syn::GenericArgument::Type(value_ty)) = args.args.iter().nth(1) {
-                        return value_ty.clone();
-                    }
-                }
-            }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+        && segment.ident == "HashMap"
+        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+    {
+        // HashMap has two type arguments, we want the second one (value type)
+        if let Some(syn::GenericArgument::Type(value_ty)) = args.args.iter().nth(1) {
+            return value_ty.clone();
         }
     }
     // Fallback to String if we can't extract the type
