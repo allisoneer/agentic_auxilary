@@ -47,3 +47,14 @@ cd claudecode_rs && make build     # Build the project
 ```
 
 All tools support verbose and normal output variants for their make commands (e.g., `make test-normal`, `make test-verbose`).
+
+## Code Style Guidelines
+
+Rules on comment annotations:
+
+- Keep TODO annotations tagged with severity/priority:
+    - TODO(0): Egregious bugs, marked temporarily during development, should never be merged to head
+    - TODO(1): Significant architectural flaws, minor bugs
+    - TODO(2): Minor design flaws, lacking elegance, missing functionality
+    - TODO(3): Minor issues, e.g., lacking unit test coverage
+

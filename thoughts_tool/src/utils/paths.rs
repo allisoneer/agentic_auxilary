@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 pub fn expand_path(path: &Path) -> Result<PathBuf> {
     let path_str = path.to_string_lossy();
 
-    if path_str.starts_with("~/") {
+    if let Some(stripped) = path_str.strip_prefix("~/") {
         let home = dirs::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-        Ok(home.join(&path_str[2..]))
+        Ok(home.join(stripped))
     } else if path_str == "~" {
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))
     } else {

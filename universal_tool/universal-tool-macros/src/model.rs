@@ -262,8 +262,8 @@ impl ToolDef {
     fn extract_path_params(&self, path: &str) -> Vec<String> {
         let mut params = Vec::new();
         for segment in path.split('/') {
-            if segment.starts_with(':') {
-                params.push(segment[1..].to_string());
+            if let Some(stripped) = segment.strip_prefix(':') {
+                params.push(stripped.to_string());
             }
         }
         params

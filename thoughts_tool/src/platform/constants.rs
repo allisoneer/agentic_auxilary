@@ -1,5 +1,4 @@
 /// Platform-specific constants for mount operations
-
 #[cfg(target_os = "linux")]
 pub mod linux {
     /// Default mount options for mergerfs
