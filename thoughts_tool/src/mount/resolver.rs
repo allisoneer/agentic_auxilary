@@ -1,4 +1,5 @@
 use crate::config::{Mount, RepoMappingManager};
+use crate::mount::utils::normalize_mount_path;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,8 +19,8 @@ impl MountResolver {
     pub fn resolve_mount(&self, mount: &Mount) -> Result<PathBuf> {
         match mount {
             Mount::Directory { path, .. } => {
-                // Directory mounts are simple
-                Ok(path.clone())
+                // Directory mounts need path normalization
+                Ok(normalize_mount_path(path)?)
             }
             Mount::Git { url, subpath, .. } => {
                 // Build full URL with subpath if present
