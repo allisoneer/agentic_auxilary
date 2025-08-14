@@ -148,11 +148,10 @@ fn detect_linux_distro() -> (String, String) {
     }
 
     // Fallback to lsb_release if available
-    if let Ok(output) = Command::new("lsb_release").args(&["-d", "-r"]).output() {
+    if let Ok(output) = Command::new("lsb_release").args(["-d", "-r"]).output() {
         let output_str = String::from_utf8_lossy(&output.stdout);
         let lines: Vec<&str> = output_str.lines().collect();
-        let distro = lines
-            .get(0)
+        let distro = lines.first()
             .and_then(|l| l.split(':').nth(1))
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
@@ -178,7 +177,7 @@ fn check_mergerfs() -> (bool, Option<String>) {
                 if let Some(version_line) = version_str.lines().next() {
                     let version = version_line
                         .split_whitespace()
-                        .find(|s| s.chars().any(|c| c.is_digit(10)))
+                        .find(|s| s.chars().any(|c| c.is_ascii_digit()))
                         .map(|s| s.to_string());
                     return (true, version);
                 }

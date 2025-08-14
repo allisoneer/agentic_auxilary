@@ -213,7 +213,7 @@ impl MergerfsManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ThoughtsError::MountOperationFailed {
-                message: format!("umount failed: {}", stderr),
+                message: format!("umount failed: {stderr}"),
             });
         }
 
@@ -295,7 +295,7 @@ impl MountManager for MergerfsManager {
 
                 if attempt == options.retries {
                     return Err(ThoughtsError::MountOperationFailed {
-                        message: format!("mergerfs mount failed: {}", stderr),
+                        message: format!("mergerfs mount failed: {stderr}"),
                     });
                 }
             }
@@ -416,7 +416,7 @@ mod tests {
         let target = Path::new("/mnt/merged");
         let options = MountOptions::new().read_only();
 
-        let args = manager.build_mount_args(&sources, &target, &options);
+        let args = manager.build_mount_args(&sources, target, &options);
 
         assert_eq!(args[0], "-o");
         assert!(args[1].contains("category.create=mfs"));

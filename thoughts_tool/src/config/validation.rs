@@ -2,8 +2,8 @@ use crate::config::Mount;
 use crate::error::{Result, ThoughtsError};
 use crate::utils::paths;
 use std::fs;
-use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
+use std::path::Path;
+use tracing::warn;
 
 pub struct MountValidator;
 
@@ -58,8 +58,7 @@ impl MountValidator {
         if !valid_prefixes.iter().any(|prefix| url.starts_with(prefix)) {
             return Err(ThoughtsError::ConfigInvalid {
                 message: format!(
-                    "Invalid git URL format: {}. Must start with git@, https://, http://, or ssh://",
-                    url
+                    "Invalid git URL format: {url}. Must start with git@, https://, http://, or ssh://"
                 ),
             });
         }

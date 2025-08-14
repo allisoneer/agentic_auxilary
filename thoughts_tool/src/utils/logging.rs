@@ -1,11 +1,16 @@
 use std::io;
-use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 
 /// A guard that temporarily disables logging output.
 /// When dropped, the original logging configuration is restored.
 pub struct TuiLogGuard {
     _guard: tracing::subscriber::DefaultGuard,
+}
+
+impl Default for TuiLogGuard {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TuiLogGuard {

@@ -34,7 +34,7 @@ impl OutputFormat {
             "yaml" | "yml" => Ok(OutputFormat::Yaml),
             "table" => Ok(OutputFormat::Table),
             "csv" => Ok(OutputFormat::Csv),
-            _ => Err(format!("Unknown output format: {}", s)),
+            _ => Err(format!("Unknown output format: {s}")),
         }
     }
 }
@@ -78,13 +78,13 @@ pub trait CliFormatter: Serialize {
             OutputFormat::Json => serde_json::to_string_pretty(self).map_err(|e| {
                 crate::error::ToolError::new(
                     crate::error::ErrorCode::SerializationError,
-                    format!("Failed to serialize to JSON: {}", e),
+                    format!("Failed to serialize to JSON: {e}"),
                 )
             }),
             OutputFormat::Yaml => serde_yaml::to_string(self).map_err(|e| {
                 crate::error::ToolError::new(
                     crate::error::ErrorCode::SerializationError,
-                    format!("Failed to serialize to YAML: {}", e),
+                    format!("Failed to serialize to YAML: {e}"),
                 )
             }),
             OutputFormat::Table => {
@@ -110,7 +110,7 @@ pub trait CliFormatter: Serialize {
                         writer.write_record(&row).map_err(|e| {
                             crate::error::ToolError::new(
                                 crate::error::ErrorCode::SerializationError,
-                                format!("Failed to write CSV: {}", e),
+                                format!("Failed to write CSV: {e}"),
                             )
                         })?;
                     }
@@ -118,7 +118,7 @@ pub trait CliFormatter: Serialize {
                     writer.flush().map_err(|e| {
                         crate::error::ToolError::new(
                             crate::error::ErrorCode::SerializationError,
-                            format!("Failed to flush CSV writer: {}", e),
+                            format!("Failed to flush CSV writer: {e}"),
                         )
                     })?;
                 } // writer is dropped here, releasing the borrow
@@ -126,7 +126,7 @@ pub trait CliFormatter: Serialize {
                 String::from_utf8(buffer.into_inner()).map_err(|e| {
                     crate::error::ToolError::new(
                         crate::error::ErrorCode::SerializationError,
-                        format!("Failed to convert CSV to string: {}", e),
+                        format!("Failed to convert CSV to string: {e}"),
                     )
                 })
             }
@@ -247,7 +247,7 @@ pub mod interactive {
         dialoguer::Input::new()
             .with_prompt(prompt)
             .interact_text()
-            .map_err(|e| ToolError::new(ErrorCode::IoError, format!("Failed to read input: {}", e)))
+            .map_err(|e| ToolError::new(ErrorCode::IoError, format!("Failed to read input: {e}")))
     }
 
     /// Prompt for text input with validation
@@ -259,7 +259,7 @@ pub mod interactive {
             .with_prompt(prompt)
             .validate_with(validator)
             .interact_text()
-            .map_err(|e| ToolError::new(ErrorCode::IoError, format!("Failed to read input: {}", e)))
+            .map_err(|e| ToolError::new(ErrorCode::IoError, format!("Failed to read input: {e}")))
     }
 
     /// Prompt for selection from a list
@@ -274,7 +274,7 @@ pub mod interactive {
             .map_err(|e| {
                 ToolError::new(
                     ErrorCode::IoError,
-                    format!("Failed to read selection: {}", e),
+                    format!("Failed to read selection: {e}"),
                 )
             })
     }
@@ -291,7 +291,7 @@ pub mod interactive {
             .map_err(|e| {
                 ToolError::new(
                     ErrorCode::IoError,
-                    format!("Failed to read selections: {}", e),
+                    format!("Failed to read selections: {e}"),
                 )
             })
     }
@@ -305,7 +305,7 @@ pub mod interactive {
             .map_err(|e| {
                 ToolError::new(
                     ErrorCode::IoError,
-                    format!("Failed to read confirmation: {}", e),
+                    format!("Failed to read confirmation: {e}"),
                 )
             })
     }
@@ -330,7 +330,7 @@ pub fn read_stdin() -> Result<Option<String>, crate::error::ToolError> {
         std::io::stdin().read_to_string(&mut buffer).map_err(|e| {
             crate::error::ToolError::new(
                 crate::error::ErrorCode::IoError,
-                format!("Failed to read from stdin: {}", e),
+                format!("Failed to read from stdin: {e}"),
             )
         })?;
         Ok(Some(buffer))

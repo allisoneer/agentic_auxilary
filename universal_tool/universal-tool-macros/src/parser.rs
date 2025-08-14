@@ -112,7 +112,7 @@ pub fn parse_router(attr: TokenStream, item: TokenStream) -> syn::Result<TokenSt
 
     // Debug: Print the generated code to stderr for inspection
     if std::env::var("UTF_DEBUG").is_ok() {
-        eprintln!("Generated code:\n{}", output);
+        eprintln!("Generated code:\n{output}");
     }
 
     Ok(output)
@@ -353,7 +353,7 @@ fn parse_tool_method(method: &syn::ImplItemFn) -> syn::Result<Option<ToolDef>> {
     // Extract description from doc comments if not provided
     let description = if tool_attr.description.is_empty() {
         extract_doc_comment(&method.attrs)
-            .unwrap_or_else(|| format!("Execute {} operation", tool_name))
+            .unwrap_or_else(|| format!("Execute {tool_name} operation"))
     } else {
         tool_attr.description
     };
@@ -486,8 +486,7 @@ fn parse_typed_param(pat_type: &PatType) -> syn::Result<ParamDef> {
                 return Err(syn::Error::new_spanned(
                     pat_type,
                     format!(
-                        "Invalid parameter source: {}. Must be one of: body, query, path, header",
-                        source_str
+                        "Invalid parameter source: {source_str}. Must be one of: body, query, path, header"
                     ),
                 ));
             }
@@ -650,7 +649,7 @@ fn strip_param_attributes(impl_block: &mut ItemImpl) {
 mod tests {
     use super::*;
     use quote::quote;
-    use syn::parse_quote;
+    
 
     #[test]
     fn test_parse_simple_router() {

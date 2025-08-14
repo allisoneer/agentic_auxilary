@@ -44,7 +44,7 @@ impl MathTools {
         separator: Option<String>,
     ) -> Result<String, ToolError> {
         let sep = separator.unwrap_or_else(|| " ".to_string());
-        Ok(format!("{}{}{}", first, sep, second))
+        Ok(format!("{first}{sep}{second}"))
     }
 
     /// Check if a number is even
@@ -145,7 +145,7 @@ impl TextTools {
         prefix: Option<String>,
     ) -> Result<String, ToolError> {
         let prefix = prefix.unwrap_or_else(|| ">>>".to_string());
-        Ok(format!("{} {}", prefix, text))
+        Ok(format!("{prefix} {text}"))
     }
 }
 
@@ -184,14 +184,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("math", sub_matches)) => {
             // The math_tools CLI is already configured, we just need to handle its subcommands
             if let Err(e) = math_tools.execute_cli(sub_matches.clone()).await {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }
         Some(("text", sub_matches)) => {
             // The text_tools CLI is already configured, we just need to handle its subcommands
             if let Err(e) = text_tools.execute_cli(sub_matches.clone()).await {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }
@@ -216,8 +216,8 @@ mod tests {
         assert_eq!(tools.multiply(2.5, 4.0).await.unwrap(), 10.0);
 
         // Test is_even
-        assert_eq!(tools.is_even(4).await.unwrap(), true);
-        assert_eq!(tools.is_even(5).await.unwrap(), false);
+        assert!(tools.is_even(4).await.unwrap());
+        assert!(!tools.is_even(5).await.unwrap());
     }
 
     #[tokio::test]
@@ -254,7 +254,7 @@ mod tests {
             .unwrap();
         assert_eq!(result.word_count, 2);
         assert_eq!(result.char_count, 11);
-        assert_eq!(result.has_uppercase, true);
+        assert!(result.has_uppercase);
 
         // Test reverse
         let reversed = tools.reverse_string("Hello".to_string()).await.unwrap();

@@ -83,9 +83,7 @@ impl CliFormatter for AnalysisResult {
                     "Count".to_string(),
                     "Lines".to_string(),
                 ]
-                .into_iter()
-                .map(String::from)
-                .collect(),
+                .into_iter().collect(),
             );
             for ft in &self.file_types {
                 rows.push(vec![
@@ -145,7 +143,7 @@ impl CliFormatter for FilterResult {
             self.filter_summary,
             self.matched_files
                 .iter()
-                .map(|f| format!("  - {}", f))
+                .map(|f| format!("  - {f}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         )
@@ -167,7 +165,7 @@ impl CliFormatter for BatchResult {
         if !self.failed.is_empty() {
             output.push_str("\nFailed items:\n");
             for (item, error) in &self.failed {
-                output.push_str(&format!("  - {}: {}\n", item, error));
+                output.push_str(&format!("  - {item}: {error}\n"));
             }
         }
 
@@ -212,7 +210,7 @@ impl CliFormatter for ConfigResult {
         if !self.sample_config.is_empty() {
             output.push_str("\nSample config:\n");
             for item in &self.sample_config {
-                output.push_str(&format!("  - {}\n", item));
+                output.push_str(&format!("  - {item}\n"));
             }
         }
 
@@ -278,7 +276,7 @@ impl DataTools {
         let mut total_size_bytes = 0;
         let mut file_types = std::collections::HashMap::new();
 
-        for (_i, path) in paths.iter().enumerate() {
+        for path in paths.iter() {
             // Progress would be reported here if injected by framework
 
             // Simulate processing
@@ -289,7 +287,7 @@ impl DataTools {
             total_lines += 100;
             total_size_bytes += 1024;
 
-            let ext = path.split('.').last().unwrap_or("txt").to_string();
+            let ext = path.split('.').next_back().unwrap_or("txt").to_string();
             let entry = file_types.entry(ext.clone()).or_insert((0, 0));
             entry.0 += 1;
             entry.1 += 100;
@@ -347,7 +345,7 @@ impl DataTools {
                 if fail_fast {
                     return Err(ToolError::new(
                         ErrorCode::ExecutionFailed,
-                        format!("Failed to process: {}", item),
+                        format!("Failed to process: {item}"),
                     ));
                 }
             } else {
@@ -409,7 +407,7 @@ impl DataTools {
             sample_config: config
                 .iter()
                 .take(3)
-                .map(|(k, v)| format!("{}: {}", k, v))
+                .map(|(k, v)| format!("{k}: {v}"))
                 .collect(),
         })
     }
@@ -465,7 +463,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let verbose = matches.get_count("verbose");
 
     if verbose > 0 && !quiet {
-        eprintln!("Running with verbosity level: {}", verbose);
+        eprintln!("Running with verbosity level: {verbose}");
     }
 
     // Execute the tool - output formatting is handled inside execute_cli
@@ -473,7 +471,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(()) => Ok(()),
         Err(e) => {
             if !quiet {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
             }
             std::process::exit(1);
         }

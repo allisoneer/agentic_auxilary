@@ -29,7 +29,7 @@ fn generate_mcp_dispatch_method(router: &RouterDef) -> TokenStream {
     let match_arms: Vec<_> = router
         .tools
         .iter()
-        .map(|tool| generate_tool_match_arm(tool))
+        .map(generate_tool_match_arm)
         .collect();
 
     quote! {
@@ -150,7 +150,7 @@ fn generate_mcp_tools_method(router: &RouterDef) -> TokenStream {
     let tool_definitions = router
         .tools
         .iter()
-        .map(|tool| generate_tool_definition(tool));
+        .map(generate_tool_definition);
 
     quote! {
         /// Returns tool definitions for MCP discovery

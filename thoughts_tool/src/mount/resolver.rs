@@ -1,5 +1,5 @@
 use crate::config::{Mount, RepoMappingManager};
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -24,7 +24,7 @@ impl MountResolver {
             Mount::Git { url, subpath, .. } => {
                 // Build full URL with subpath if present
                 let full_url = if let Some(sub) = subpath {
-                    format!("{}:{}", url, sub)
+                    format!("{url}:{sub}")
                 } else {
                     url.clone()
                 };
@@ -38,8 +38,8 @@ impl MountResolver {
                              • {} (auto-managed)\n  \
                              • {} (custom location)",
                         url,
-                        format!("thoughts mount clone {}", url).cyan(),
-                        format!("thoughts mount clone {} /your/path", url).cyan()
+                        format!("thoughts mount clone {url}").cyan(),
+                        format!("thoughts mount clone {url} /your/path").cyan()
                     )
                 })
             }

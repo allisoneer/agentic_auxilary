@@ -21,7 +21,7 @@ pub fn ensure_gitignore_entry(
             let trimmed = line.trim();
             trimmed == entry
                 || trimmed == entry_no_slash
-                || trimmed == format!("{}/", entry_no_slash)
+                || trimmed == format!("{entry_no_slash}/")
         });
 
         if !has_entry {
@@ -31,7 +31,7 @@ pub fn ensure_gitignore_entry(
                 new_content.push('\n');
             }
             if let Some(comment_text) = comment {
-                new_content.push_str(&format!("\n# {}\n", comment_text));
+                new_content.push_str(&format!("\n# {comment_text}\n"));
             }
             new_content.push_str(entry);
             new_content.push('\n');
@@ -46,9 +46,9 @@ pub fn ensure_gitignore_entry(
         // Create new .gitignore
         let mut content = String::new();
         if let Some(comment_text) = comment {
-            content.push_str(&format!("# {}\n", comment_text));
+            content.push_str(&format!("# {comment_text}\n"));
         }
-        content.push_str(&format!("{}\n", entry));
+        content.push_str(&format!("{entry}\n"));
 
         fs::write(&gitignore_path, content)?;
         info!("Created .gitignore with {} entry", entry);

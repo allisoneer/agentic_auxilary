@@ -2,9 +2,8 @@ use super::types::{RepoLocation, RepoMapping};
 use crate::utils::paths;
 use anyhow::{Context, Result, bail};
 use atomicwrites::{AllowOverwrite, AtomicFile};
-use std::collections::HashMap;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct RepoMappingManager {
     mapping_path: PathBuf,

@@ -88,7 +88,7 @@ pub fn is_type_path(ty: &Type, expected: &str) -> bool {
     if let Type::Path(type_path) = ty {
         // Handle both simple names and qualified paths
         let path_str = quote::quote!(#type_path).to_string();
-        path_str == expected || path_str.ends_with(&format!("::{}", expected))
+        path_str == expected || path_str.ends_with(&format!("::{expected}"))
     } else {
         false
     }

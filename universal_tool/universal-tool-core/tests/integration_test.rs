@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod tests {
-    use serde::{Deserialize, Serialize};
+    
     use universal_tool_core::prelude::*;
 
     /// Test struct with both sync and async methods

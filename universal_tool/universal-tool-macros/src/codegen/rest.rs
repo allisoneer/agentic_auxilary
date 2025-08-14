@@ -112,7 +112,7 @@ fn generate_param_structs(router: &RouterDef) -> TokenStream {
                 let fields = body_params.iter().map(|param| {
                     let name = &param.name;
                     let ty = &param.ty;
-                    let doc = format!("{}", param.metadata.description.as_deref().unwrap_or(""));
+                    let doc = param.metadata.description.as_deref().unwrap_or("").to_string();
 
                     quote! {
                         #[doc = #doc]
@@ -206,7 +206,9 @@ fn generate_handler(tool: &ToolDef, module_name: &syn::Ident) -> TokenStream {
         method_args_vec,
     );
 
-    let handler_body = if has_body_params {
+    
+
+    if has_body_params {
         let params_struct = get_params_struct_name(tool);
         quote! {
             |::universal_tool_core::rest::State(state): ::universal_tool_core::rest::State<::std::sync::Arc<Self>>#param_extractors,
@@ -226,9 +228,7 @@ fn generate_handler(tool: &ToolDef, module_name: &syn::Ident) -> TokenStream {
                 }
             }
         }
-    };
-
-    handler_body
+    }
 }
 
 /// Generates parameter extractors for non-body parameters
@@ -355,7 +355,7 @@ fn generate_openapi_paths(router: &RouterDef) -> TokenStream {
         );
         let path = generate_route_path(tool);
         let method = determine_http_method(tool);
-        let method_str = format!("{:?}", method).to_lowercase();
+        let method_str = format!("{method:?}").to_lowercase();
         let description = &tool.metadata.description;
 
         // Determine request body

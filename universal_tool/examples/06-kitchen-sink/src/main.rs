@@ -131,13 +131,12 @@ impl FileManager {
         let resolved_path = self.resolve_path(&path);
 
         if !resolved_path.exists() {
-            return Err(ToolError::not_found(format!("Path not found: {}", path)));
+            return Err(ToolError::not_found(format!("Path not found: {path}")));
         }
 
         if !resolved_path.is_dir() {
             return Err(ToolError::invalid_input(format!(
-                "Not a directory: {}",
-                path
+                "Not a directory: {path}"
             )));
         }
 
@@ -156,7 +155,7 @@ impl FileManager {
         };
 
         for entry in walker {
-            let entry = entry.map_err(|e| ToolError::internal(format!("Walk error: {}", e)))?;
+            let entry = entry.map_err(|e| ToolError::internal(format!("Walk error: {e}")))?;
             let file_name = entry.file_name().to_string_lossy();
 
             if !include_hidden && file_name.starts_with('.') {
@@ -165,7 +164,7 @@ impl FileManager {
 
             let metadata = entry
                 .metadata()
-                .map_err(|e| ToolError::internal(format!("Metadata error: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Metadata error: {e}")))?;
 
             let file_info = FileInfo {
                 path: entry.path().to_string_lossy().to_string(),
@@ -189,8 +188,7 @@ impl FileManager {
         }
 
         self.log_operation(format!(
-            "Listed directory: {} (found {} files, {} dirs)",
-            path, file_count, dir_count
+            "Listed directory: {path} (found {file_count} files, {dir_count} dirs)"
         ));
 
         Ok(DirectoryListing {
@@ -214,15 +212,15 @@ impl FileManager {
         let resolved_path = self.resolve_path(&path);
 
         if !resolved_path.exists() {
-            return Err(ToolError::not_found(format!("File not found: {}", path)));
+            return Err(ToolError::not_found(format!("File not found: {path}")));
         }
 
         if !resolved_path.is_file() {
-            return Err(ToolError::invalid_input(format!("Not a file: {}", path)));
+            return Err(ToolError::invalid_input(format!("Not a file: {path}")));
         }
 
         let content = fs::read_to_string(&resolved_path)
-            .map_err(|e| ToolError::internal(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| ToolError::internal(format!("Failed to read file: {e}")))?;
 
         self.log_operation(format!("Read file: {} ({} bytes)", path, content.len()));
 
@@ -254,14 +252,14 @@ impl FileManager {
 
         if let Some(parent) = resolved_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| ToolError::internal(format!("Failed to create directories: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Failed to create directories: {e}")))?;
         }
 
         fs::write(&resolved_path, &request.content)
-            .map_err(|e| ToolError::internal(format!("Failed to write file: {}", e)))?;
+            .map_err(|e| ToolError::internal(format!("Failed to write file: {e}")))?;
 
         let metadata = fs::metadata(&resolved_path)
-            .map_err(|e| ToolError::internal(format!("Failed to get metadata: {}", e)))?;
+            .map_err(|e| ToolError::internal(format!("Failed to get metadata: {e}")))?;
 
         self.log_operation(format!(
             "Created file: {} ({} bytes)",
@@ -298,25 +296,25 @@ impl FileManager {
         let resolved_path = self.resolve_path(&path);
 
         if !resolved_path.exists() {
-            return Err(ToolError::not_found(format!("Path not found: {}", path)));
+            return Err(ToolError::not_found(format!("Path not found: {path}")));
         }
 
         if resolved_path.is_dir() {
             if recursive.unwrap_or(false) {
                 fs::remove_dir_all(&resolved_path).map_err(|e| {
-                    ToolError::internal(format!("Failed to remove directory: {}", e))
+                    ToolError::internal(format!("Failed to remove directory: {e}"))
                 })?;
             } else {
                 fs::remove_dir(&resolved_path).map_err(|e| {
-                    ToolError::internal(format!("Failed to remove directory: {}", e))
+                    ToolError::internal(format!("Failed to remove directory: {e}"))
                 })?;
             }
         } else {
             fs::remove_file(&resolved_path)
-                .map_err(|e| ToolError::internal(format!("Failed to remove file: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Failed to remove file: {e}")))?;
         }
 
-        self.log_operation(format!("Deleted: {}", path));
+        self.log_operation(format!("Deleted: {path}"));
         Ok(())
     }
 
@@ -349,12 +347,12 @@ impl FileManager {
 
         if let Some(parent) = dest_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| ToolError::internal(format!("Failed to create directories: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Failed to create directories: {e}")))?;
         }
 
         if source_path.is_file() {
             fs::copy(&source_path, &dest_path)
-                .map_err(|e| ToolError::internal(format!("Failed to copy file: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Failed to copy file: {e}")))?;
         } else {
             return Err(ToolError::invalid_input(
                 "Directory copying not implemented".to_string(),
@@ -362,7 +360,7 @@ impl FileManager {
         }
 
         let metadata = fs::metadata(&dest_path)
-            .map_err(|e| ToolError::internal(format!("Failed to get metadata: {}", e)))?;
+            .map_err(|e| ToolError::internal(format!("Failed to get metadata: {e}")))?;
 
         self.log_operation(format!(
             "Copied {} to {}",
@@ -404,7 +402,7 @@ impl FileManager {
             .unwrap_or_default();
 
         if !resolved_path.exists() {
-            return Err(ToolError::not_found(format!("Path not found: {}", path)));
+            return Err(ToolError::not_found(format!("Path not found: {path}")));
         }
 
         let mut results = Vec::new();
@@ -417,7 +415,7 @@ impl FileManager {
         };
 
         for entry in WalkDir::new(&resolved_path) {
-            let entry = entry.map_err(|e| ToolError::internal(format!("Walk error: {}", e)))?;
+            let entry = entry.map_err(|e| ToolError::internal(format!("Walk error: {e}")))?;
 
             if !entry.file_type().is_file() {
                 continue;
@@ -438,12 +436,12 @@ impl FileManager {
             files_searched += 1;
 
             let file = fs::File::open(file_path)
-                .map_err(|e| ToolError::internal(format!("Failed to open file: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Failed to open file: {e}")))?;
             let reader = BufReader::new(file);
 
             for (line_number, line_result) in reader.lines().enumerate() {
                 let line = line_result
-                    .map_err(|e| ToolError::internal(format!("Failed to read line: {}", e)))?;
+                    .map_err(|e| ToolError::internal(format!("Failed to read line: {e}")))?;
 
                 let search_line = if case_sensitive {
                     line.clone()
@@ -466,8 +464,7 @@ impl FileManager {
         let total_matches = results.len();
 
         self.log_operation(format!(
-            "Searched for '{}' in {} ({} files, {} matches)",
-            query, path, files_searched, total_matches
+            "Searched for '{query}' in {path} ({files_searched} files, {total_matches} matches)"
         ));
 
         Ok(SearchResults {
@@ -490,7 +487,7 @@ impl FileManager {
         let resolved_path = self.resolve_path(&path);
 
         if !resolved_path.exists() {
-            return Err(ToolError::not_found(format!("Path not found: {}", path)));
+            return Err(ToolError::not_found(format!("Path not found: {path}")));
         }
 
         let mut total_files = 0;
@@ -500,10 +497,10 @@ impl FileManager {
         let mut most_recent_file: Option<FileInfo> = None;
 
         for entry in WalkDir::new(&resolved_path) {
-            let entry = entry.map_err(|e| ToolError::internal(format!("Walk error: {}", e)))?;
+            let entry = entry.map_err(|e| ToolError::internal(format!("Walk error: {e}")))?;
             let metadata = entry
                 .metadata()
-                .map_err(|e| ToolError::internal(format!("Metadata error: {}", e)))?;
+                .map_err(|e| ToolError::internal(format!("Metadata error: {e}")))?;
 
             if metadata.is_dir() {
                 total_directories += 1;
@@ -524,21 +521,21 @@ impl FileManager {
 
                 if largest_file
                     .as_ref()
-                    .map_or(true, |f| file_info.size > f.size)
+                    .is_none_or(|f| file_info.size > f.size)
                 {
                     largest_file = Some(file_info.clone());
                 }
 
                 if most_recent_file
                     .as_ref()
-                    .map_or(true, |f| file_info.modified > f.modified)
+                    .is_none_or(|f| file_info.modified > f.modified)
                 {
                     most_recent_file = Some(file_info);
                 }
             }
         }
 
-        self.log_operation(format!("Generated stats for: {}", path));
+        self.log_operation(format!("Generated stats for: {path}"));
 
         Ok(FileStats {
             total_files,

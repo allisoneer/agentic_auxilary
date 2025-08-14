@@ -1,4 +1,4 @@
-use crate::config::{MountDirs, RepoConfig, RepoConfigManager};
+use crate::config::RepoConfigManager;
 use crate::git::utils::{get_current_repo, get_main_repo_for_worktree, is_worktree};
 use crate::utils::git::ensure_gitignore_entry;
 use crate::utils::paths::ensure_dir;
@@ -32,22 +32,20 @@ pub async fn execute(force: bool) -> Result<()> {
         }
 
         // Check if already initialized
-        if worktree_thoughts_data.exists() && !force {
-            if worktree_thoughts_data.is_symlink() {
+        if worktree_thoughts_data.exists() && !force
+            && worktree_thoughts_data.is_symlink() {
                 eprintln!("{}: Worktree already initialized", "Info".cyan());
                 let target = fs::read_link(&worktree_thoughts_data)
                     .unwrap_or_else(|_| PathBuf::from("<invalid>"));
                 eprintln!("  .thoughts-data -> {}", target.display());
                 return Ok(());
             }
-        }
 
         // Clean up if forcing
         if force && worktree_thoughts_data.exists() {
             fs::remove_file(&worktree_thoughts_data).with_context(|| {
                 format!(
-                    "Failed to remove existing symlink: {:?}",
-                    worktree_thoughts_data
+                    "Failed to remove existing symlink: {worktree_thoughts_data:?}"
                 )
             })?;
         }
@@ -102,7 +100,7 @@ pub async fn execute(force: bool) -> Result<()> {
                     let target = fs::read_link(path).unwrap_or_else(|_| PathBuf::from("<invalid>"));
                     eprintln!("  {} -> {}", name, target.display());
                 } else {
-                    eprintln!("  {} (not a symlink)", name);
+                    eprintln!("  {name} (not a symlink)");
                 }
             }
             eprintln!("\nUse {} to reinitialize.", "--force".cyan());
@@ -137,7 +135,7 @@ pub async fn execute(force: bool) -> Result<()> {
         for path in [&context_link, &personal_link] {
             if path.exists() && path.is_symlink() {
                 fs::remove_file(path)
-                    .with_context(|| format!("Failed to remove existing symlink: {:?}", path))?;
+                    .with_context(|| format!("Failed to remove existing symlink: {path:?}"))?;
             }
         }
     }
@@ -238,7 +236,7 @@ fn create_symlink(target: &str, link: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(target, link)
-            .with_context(|| format!("Failed to create symlink {:?} -> {}", link, target))?;
+            .with_context(|| format!("Failed to create symlink {link:?} -> {target}"))?;
     }
 
     #[cfg(windows)]
@@ -254,9 +252,9 @@ fn create_readme_if_empty(dir: &Path, title: &str, content: &str) -> Result<()> 
     let readme_path = dir.join("README.md");
 
     if !readme_path.exists() {
-        let full_content = format!("# {}\n\n{}", title, content);
+        let full_content = format!("# {title}\n\n{content}");
         fs::write(&readme_path, full_content)
-            .with_context(|| format!("Failed to create README at {:?}", readme_path))?;
+            .with_context(|| format!("Failed to create README at {readme_path:?}"))?;
     }
 
     Ok(())
