@@ -100,10 +100,10 @@ impl FileManager {
     }
 
     fn resolve_path(&self, path: &str) -> PathBuf {
-        if path.starts_with("~") {
-            if let Some(home) = home::home_dir() {
-                return home.join(&path[2..]);
-            }
+        if path.starts_with("~")
+            && let Some(home) = home::home_dir()
+        {
+            return home.join(&path[2..]);
         }
         PathBuf::from(path)
     }

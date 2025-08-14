@@ -299,10 +299,10 @@ fn determine_http_method(tool: &ToolDef) -> HttpMethod {
 /// Generates the route path for a tool
 fn generate_route_path(tool: &ToolDef) -> String {
     // Check if REST config specifies a path
-    if let Some(rest_config) = &tool.metadata.rest_config {
-        if let Some(path) = &rest_config.path {
-            return path.clone();
-        }
+    if let Some(rest_config) = &tool.metadata.rest_config
+        && let Some(path) = &rest_config.path
+    {
+        return path.clone();
     }
 
     // Generate path based on tool name

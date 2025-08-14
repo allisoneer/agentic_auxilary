@@ -244,10 +244,10 @@ fn generate_tool_subcommand(tool: &ToolDef) -> TokenStream {
     }
 
     // Add hidden flag if configured
-    if let Some(cli_config) = &tool.metadata.cli_config {
-        if cli_config.hidden {
-            subcommand = quote! { #subcommand .hide(true) };
-        }
+    if let Some(cli_config) = &tool.metadata.cli_config
+        && cli_config.hidden
+    {
+        subcommand = quote! { #subcommand .hide(true) };
     }
 
     // Add arguments

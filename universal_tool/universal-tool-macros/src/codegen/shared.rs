@@ -419,30 +419,30 @@ pub fn is_string_type(ty: &Type) -> bool {
 
 /// Checks if a type is Vec<T>
 pub fn is_vec_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.first() {
-            return segment.ident == "Vec";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.first()
+    {
+        return segment.ident == "Vec";
     }
     false
 }
 
 /// Checks if a type is HashMap<K, V>
 pub fn is_hashmap_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "HashMap";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "HashMap";
     }
     false
 }
 
 /// Checks if a type is Option<T>
 pub fn is_optional_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.first() {
-            return segment.ident == "Option";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.first()
+    {
+        return segment.ident == "Option";
     }
     false
 }

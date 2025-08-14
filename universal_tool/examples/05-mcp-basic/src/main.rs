@@ -193,50 +193,50 @@ impl TextTools {
         required_pattern: Option<String>,
     ) -> Result<bool, ToolError> {
         // Check minimum length
-        if let Some(min) = min_length {
-            if text.len() < min {
-                return Err(ToolError::new(
-                    ErrorCode::InvalidArgument,
-                    format!(
-                        "Text too short: {} chars, minimum {} required",
-                        text.len(),
-                        min
-                    ),
-                )
-                .with_detail(
-                    "help",
-                    "Provide longer text to meet the minimum length requirement",
-                ));
-            }
+        if let Some(min) = min_length
+            && text.len() < min
+        {
+            return Err(ToolError::new(
+                ErrorCode::InvalidArgument,
+                format!(
+                    "Text too short: {} chars, minimum {} required",
+                    text.len(),
+                    min
+                ),
+            )
+            .with_detail(
+                "help",
+                "Provide longer text to meet the minimum length requirement",
+            ));
         }
 
         // Check maximum length
-        if let Some(max) = max_length {
-            if text.len() > max {
-                return Err(ToolError::new(
-                    ErrorCode::InvalidArgument,
-                    format!(
-                        "Text too long: {} chars, maximum {} allowed",
-                        text.len(),
-                        max
-                    ),
-                )
-                .with_detail(
-                    "help",
-                    "Shorten the text to meet the maximum length requirement",
-                ));
-            }
+        if let Some(max) = max_length
+            && text.len() > max
+        {
+            return Err(ToolError::new(
+                ErrorCode::InvalidArgument,
+                format!(
+                    "Text too long: {} chars, maximum {} allowed",
+                    text.len(),
+                    max
+                ),
+            )
+            .with_detail(
+                "help",
+                "Shorten the text to meet the maximum length requirement",
+            ));
         }
 
         // Check required pattern
-        if let Some(pattern) = required_pattern {
-            if !text.contains(&pattern) {
-                return Err(ToolError::new(
-                    ErrorCode::InvalidArgument,
-                    format!("Required pattern '{pattern}' not found in text"),
-                )
-                .with_detail("help", "The text must contain the specified pattern"));
-            }
+        if let Some(pattern) = required_pattern
+            && !text.contains(&pattern)
+        {
+            return Err(ToolError::new(
+                ErrorCode::InvalidArgument,
+                format!("Required pattern '{pattern}' not found in text"),
+            )
+            .with_detail("help", "The text must contain the specified pattern"));
         }
 
         Ok(true)
