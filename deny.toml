@@ -7,9 +7,27 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 
 [licenses]
 # List of allowed licenses
-allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "ISC", "Unicode-DFS-2016"]
+allow = [
+    "MIT",
+    "Apache-2.0", 
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",  # Required for Unicode support (ICU crates, unicode-ident)
+    "MPL-2.0",       # Mozilla Public License (weak copyleft, used by colored and option-ext)
+]
 # Confidence threshold for license detection (0.0-1.0)
 confidence-threshold = 0.93
+# Allow example crates to be unlicensed (they're not published)
+exceptions = [
+    { allow = ["unlicensed"], name = "example-01-cli-simple" },
+    { allow = ["unlicensed"], name = "example-02-cli-advanced-params" },
+    { allow = ["unlicensed"], name = "example-03-rest-simple" },
+    { allow = ["unlicensed"], name = "example-04-rest-idiomatic" },
+    { allow = ["unlicensed"], name = "example-05-mcp-basic" },
+    { allow = ["unlicensed"], name = "example-06-kitchen-sink" },
+    { allow = ["unlicensed"], name = "test-simple" },
+]
 
 [bans]
 # Warn when multiple versions of the same crate are detected
