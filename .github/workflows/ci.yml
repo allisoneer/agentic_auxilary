@@ -21,17 +21,21 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         package: [thoughts_tool, universal_tool, claudecode_rs]
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
         with:
-          components: rustfmt, clippy
+          persist-credentials: false
       
-      - uses: mozilla-actions/sccache-action@v0.0.7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          cache: true
+      
+      - uses: mozilla-actions/sccache-action@v0.0.9
       
       - name: Run tests
         env:
-          SCCACHE_GHA_ENABLED: "true"
+          SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
         run: |
           cd ${{ matrix.package }}
@@ -44,13 +48,17 @@ jobs:
       matrix:
         package: [thoughts_tool, universal_tool, claudecode_rs]
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
         with:
-          components: rustfmt, clippy
+          persist-credentials: false
       
-      - uses: mozilla-actions/sccache-action@v0.0.7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          cache: true
+      
+      - uses: mozilla-actions/sccache-action@v0.0.9
       
       - name: Check formatting
         run: |
@@ -59,19 +67,26 @@ jobs:
       
       - name: Run clippy
         env:
-          SCCACHE_GHA_ENABLED: "true"
+          SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
         run: |
           cd ${{ matrix.package }}
           make check-normal
 
   security:
-    name: Security Audit
+    name: Security Audit (${{ matrix.checks }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check advisories
-        continue-on-error: true
+          command: check ${{ matrix.checks }}
+        continue-on-error: ${{ matrix.checks == 'advisories' }}
