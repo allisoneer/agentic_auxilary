@@ -153,14 +153,35 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     }
 
     // Platform info
-    let platform = if cfg!(target_os = "linux") {
-        "Linux (mergerfs)"
-    } else if cfg!(target_os = "macos") {
-        "macOS (FUSE-T)"
-    } else {
-        "Unsupported"
+    let platform_str = match &platform_info.platform {
+        crate::platform::Platform::Linux(info) => {
+            if info.has_mergerfs {
+                format!("Linux (mergerfs{})", 
+                    info.mergerfs_version.as_ref()
+                        .map(|v| format!(" v{}", v))
+                        .unwrap_or_default())
+            } else {
+                "Linux (mergerfs not installed)".to_string()
+            }
+        }
+        crate::platform::Platform::MacOS(info) => {
+            if info.has_fuse_t {
+                format!("macOS (FUSE-T{})",
+                    info.fuse_t_version.as_ref()
+                        .map(|v| format!(" v{}", v))
+                        .unwrap_or_default())
+            } else if info.has_macfuse {
+                format!("macOS (macFUSE{})",
+                    info.macfuse_version.as_ref()
+                        .map(|v| format!(" v{}", v))
+                        .unwrap_or_default())
+            } else {
+                "macOS (no FUSE implementation)".to_string()
+            }
+        }
+        crate::platform::Platform::Unsupported(os) => format!("{} (unsupported)", os),
     };
-    println!("  Platform: {platform}");
+    println!("  Platform: {}", platform_str);
 
     Ok(())
 }
