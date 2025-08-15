@@ -31,7 +31,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Run release-plz to create/update release PR
-        uses: release-plz/release-plz-action@v0.5
+        uses: release-plz/action@v0.5
         with:
           command: release-pr
         env:
@@ -59,7 +59,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Run release-plz to create tags and trigger releases
-        uses: release-plz/release-plz-action@v0.5
+        uses: release-plz/action@v0.5
         with:
           command: release
         env:
