@@ -6,7 +6,9 @@ use tracing::{debug, info};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
     Linux(LinuxInfo),
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     MacOS(MacOSInfo),
+    #[allow(dead_code)] // Needed for exhaustive matching but only constructed on non-Linux/macOS
     Unsupported(String),
 }
 
@@ -34,9 +36,8 @@ pub struct MacOSInfo {
 #[derive(Debug, Clone)]
 pub struct PlatformInfo {
     pub platform: Platform,
+    #[cfg(test)]
     pub arch: String,
-    pub can_mount: bool,
-    pub missing_tools: Vec<String>,
 }
 
 impl Platform {
@@ -79,9 +80,8 @@ pub fn detect_platform() -> Result<PlatformInfo> {
         let os = std::env::consts::OS;
         Ok(PlatformInfo {
             platform: Platform::Unsupported(os.to_string()),
+            #[cfg(test)]
             arch: std::env::consts::ARCH.to_string(),
-            can_mount: false,
-            missing_tools: vec!["Platform not supported".to_string()],
         })
     }
 }
@@ -116,14 +116,6 @@ fn detect_linux() -> Result<PlatformInfo> {
         info!("fusermount detected");
     }
 
-    let mut missing_tools = Vec::new();
-    if !has_mergerfs {
-        missing_tools.push("mergerfs".to_string());
-    }
-    if !fuse_available {
-        missing_tools.push("FUSE kernel module".to_string());
-    }
-
     let linux_info = LinuxInfo {
         distro,
         version,
@@ -134,10 +126,9 @@ fn detect_linux() -> Result<PlatformInfo> {
     };
 
     Ok(PlatformInfo {
-        platform: Platform::Linux(linux_info.clone()),
+        platform: Platform::Linux(linux_info),
+        #[cfg(test)]
         arch: std::env::consts::ARCH.to_string(),
-        can_mount: linux_info.has_mergerfs && linux_info.fuse_available,
-        missing_tools,
     })
 }
 
@@ -252,14 +243,6 @@ fn detect_macos() -> Result<PlatformInfo> {
         info!("Found unionfs at: {:?}", unionfs_path);
     }
 
-    let mut missing_tools = Vec::new();
-    if !has_fuse_t && !has_macfuse {
-        missing_tools.push("FUSE-T or macFUSE".to_string());
-    }
-    if !has_unionfs {
-        missing_tools.push("unionfs-fuse".to_string());
-    }
-
     let macos_info = MacOSInfo {
         version,
         has_fuse_t,
@@ -271,10 +254,9 @@ fn detect_macos() -> Result<PlatformInfo> {
     };
 
     Ok(PlatformInfo {
-        platform: Platform::MacOS(macos_info.clone()),
+        platform: Platform::MacOS(macos_info),
+        #[cfg(test)]
         arch: std::env::consts::ARCH.to_string(),
-        can_mount: macos_info.has_fuse_t || macos_info.has_macfuse,
-        missing_tools,
     })
 }
 

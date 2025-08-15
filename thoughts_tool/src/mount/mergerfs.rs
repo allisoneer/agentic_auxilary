@@ -432,8 +432,10 @@ mod tests {
         let manager = MergerfsManager::new();
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/mnt/merged");
-        let mut options = MountOptions::default();
-        options.read_only = true;
+        let options = MountOptions {
+            read_only: true,
+            ..Default::default()
+        };
 
         let args = manager.build_mount_args(&sources, target, &options);
 

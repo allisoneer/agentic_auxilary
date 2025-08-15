@@ -110,6 +110,5 @@ mod tests {
 
         // Test that we can detect git mounts
         assert!(mount.is_git());
-        assert_eq!(mount.mount_type(), crate::config::MountType::Git);
     }
 }

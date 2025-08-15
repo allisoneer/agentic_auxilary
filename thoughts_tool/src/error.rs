@@ -3,9 +3,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ThoughtsError {
-    #[error("Invalid configuration: {message}")]
-    ConfigInvalid { message: String },
-
     #[error("Not in a git repository")]
     NotInGitRepo,
 
@@ -20,9 +17,6 @@ pub enum ThoughtsError {
 
     #[error("Mount operation failed: {message}")]
     MountOperationFailed { message: String },
-
-    #[error("Mount permission denied: {path} ({reason})")]
-    MountPermissionDenied { path: PathBuf, reason: String },
 
     #[error("Command timeout: {command} timed out after {timeout_secs} seconds")]
     CommandTimeout { command: String, timeout_secs: u64 },

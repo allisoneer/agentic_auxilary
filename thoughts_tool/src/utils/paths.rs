@@ -50,6 +50,7 @@ pub fn get_personal_config_path() -> Result<PathBuf> {
 }
 
 /// Get external metadata directory for personal metadata about other repos
+#[cfg(target_os = "macos")]
 pub fn get_external_metadata_dir() -> Result<PathBuf> {
     let home =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
