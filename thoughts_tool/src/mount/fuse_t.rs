@@ -10,7 +10,7 @@ use super::utils;
 use crate::error::{Result, ThoughtsError};
 use crate::platform::common::{MOUNT_RETRY_DELAY, MOUNT_TIMEOUT, UNMOUNT_TIMEOUT};
 use crate::platform::detector::MacOSInfo;
-use crate::platform::macos::{DEFAULT_VOLUME_NAME, DISKUTIL_CMD, MOUNT_CMD};
+use crate::platform::macos::{DEFAULT_MOUNT_OPTIONS, DEFAULT_VOLUME_NAME, DISKUTIL_CMD, MOUNT_CMD};
 
 pub struct FuseTManager {
     /// Platform information
@@ -89,27 +89,22 @@ impl FuseTManager {
 
         let mut opts = Vec::new();
 
-        // Volume name for FUSE-T
+        // Volume name for FUSE-T (dynamic, so we set it separately)
         let default_volname = DEFAULT_VOLUME_NAME.to_string();
         let volname = options.volume_name.as_ref().unwrap_or(&default_volname);
         opts.push(format!("volname={}", volname));
 
-        // Enable copy-on-write for better performance
-        opts.push("cow".to_string());
+        // Add default mount options (excluding volname which we set above)
+        for opt in DEFAULT_MOUNT_OPTIONS {
+            if !opt.starts_with("volname=") {
+                opts.push(opt.to_string());
+            }
+        }
 
-        // Hide unionfs metadata files
-        opts.push("hide_meta_files".to_string());
-
-        // Increase max files for large directory trees
-        opts.push("max_files=32768".to_string());
-
-        // Add default FUSE-T options
+        // Add allow_other if requested
         if options.allow_other {
             opts.push("allow_other".to_string());
         }
-
-        // Use ino for better inode handling
-        opts.push("use_ino".to_string());
 
         // Add extra options
         opts.extend(options.extra_options.clone());
