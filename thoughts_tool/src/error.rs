@@ -9,23 +9,11 @@ pub enum ThoughtsError {
     #[error("Invalid configuration: {message}")]
     ConfigInvalid { message: String },
 
-    #[error("Mount '{name}' already exists")]
-    MountAlreadyExists { name: String },
-
-    #[error("Mount '{name}' not found")]
-    MountNotFound { name: String },
-
     #[error("Not in a git repository")]
     NotInGitRepo,
 
-    #[error("Git operation failed: {message}")]
-    GitError { message: String },
-
     #[error("Mount source does not exist: {path}")]
     MountSourceNotFound { path: PathBuf },
-
-    #[error("Mount type mismatch: expected {expected}, found {found}")]
-    MountTypeMismatch { expected: String, found: String },
 
     #[error("Platform not supported: {platform}")]
     PlatformNotSupported { platform: String },
@@ -36,20 +24,8 @@ pub enum ThoughtsError {
     #[error("Mount operation failed: {message}")]
     MountOperationFailed { message: String },
 
-    #[error("Mount is busy: {path}")]
-    MountBusy { path: PathBuf },
-
-    #[error("Invalid mount configuration: {reason}")]
-    InvalidMountConfig { reason: String },
-
     #[error("Mount permission denied: {path} ({reason})")]
     MountPermissionDenied { path: PathBuf, reason: String },
-
-    #[error("FUSE not available: {details}")]
-    FuseNotAvailable { details: String },
-
-    #[error("Mount timeout after {seconds} seconds")]
-    MountTimeout { seconds: u64 },
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

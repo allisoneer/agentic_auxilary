@@ -157,6 +157,7 @@ pub fn sanitize_mount_name(name: &str) -> String {
 mod tests {
     use super::*;
     use crate::config::SyncStrategy;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     #[test]

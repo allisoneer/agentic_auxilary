@@ -50,7 +50,6 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
     let clone_opts = crate::git::clone::CloneOptions {
         url: url.clone(),
         target_path: clone_path.clone(),
-        shallow: false,
         branch: None,
     };
     crate::git::clone::clone_repository(&clone_opts).context("Failed to clone repository")?;

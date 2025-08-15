@@ -37,7 +37,7 @@ async fn test_basic_mount_unmount() {
     let manager = get_mount_manager(&platform_info).expect("Failed to create mount manager");
 
     // Test mount
-    let options = MountOptions::new();
+    let options = MountOptions::default();
     let sources = vec![source1.clone(), source2.clone()];
 
     manager

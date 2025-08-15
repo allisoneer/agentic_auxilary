@@ -5,11 +5,12 @@ pub mod mount;
 pub mod platform;
 pub mod utils;
 
-pub use config::{Config, ConfigManager, Mount, MountType, SyncStrategy};
+pub use config::{Config, Mount, MountType, SyncStrategy};
 // Add after line 10 (after existing config exports)
 pub use config::{
     FileMetadata, MountDirs, MountPattern, PersonalConfig, PersonalConfigManager, PersonalMount,
-    RepoConfig, RepoConfigManager, RequiredMount, Rule,
+    RepoConfig, RepoConfigManager, RepoMappingManager, RequiredMount, Rule,
+    MountMerger, MountSource,
 };
 pub use error::{Result, ThoughtsError};
 #[cfg(test)]

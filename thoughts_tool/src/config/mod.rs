@@ -1,4 +1,3 @@
-mod manager;
 mod types;
 pub mod validation;
 // Add after line 2 (after existing modules)
@@ -7,7 +6,6 @@ mod personal_manager;
 mod repo_manager;
 pub mod repo_mapping_manager;
 
-pub use manager::ConfigManager;
 pub use types::*;
 // Add after line 10 (after existing exports)
 pub use mount_merger::{MountMerger, MountSource};

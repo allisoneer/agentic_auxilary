@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
 use colored::*;
 use git2::{FetchOptions, Progress, RemoteCallbacks};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct CloneOptions {
     pub url: String,
     pub target_path: PathBuf,
-    pub shallow: bool,
     pub branch: Option<String>,
 }
 
@@ -141,15 +140,3 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
     Ok(())
 }
 
-pub fn is_valid_clone_target(path: &Path) -> Result<bool> {
-    if !path.exists() {
-        return Ok(true);
-    }
-
-    if path.is_dir() {
-        let entries = std::fs::read_dir(path)?;
-        Ok(entries.count() == 0)
-    } else {
-        Ok(false)
-    }
-}
