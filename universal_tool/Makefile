@@ -5,42 +5,63 @@
 # Default environment variables for silent output
 SILENT_ENV = CARGO_TERM_QUIET=true CARGO_TERM_PROGRESS_WHEN=never CARGO_TERM_VERBOSE=false
 
-# TODO: Remove RUSTFLAGS="-A warnings" once we fix all warnings
-SILENT_FLAGS = RUSTFLAGS="-A warnings"
-
 # Default targets run silently with warnings disabled
 all: check test build
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "✅ All checks passed successfully!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Silent versions (default) - uses script to show success/failure
+# Silent versions (default) - smart output with fail-fast
 check:
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh cargo clippy -p 'universal-tool-*' -p 'example-*' --all-features
+	@echo "━━━ Checking universal-tool packages ━━━"
+	@./hack/cargo-smart.sh clippy -p universal-tool-core --all-features
+	@./hack/cargo-smart.sh clippy -p universal-tool-macros --all-features
+	@echo ""
+	@echo "━━━ Checking examples (individually) ━━━"
+	@$(MAKE) -s check-examples
 
 test:
-	@echo "Running tests..."
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh cargo test -p 'universal-tool-*' -p 'example-*' --all-features
+	@echo "━━━ Testing universal-tool packages ━━━"
+	@./hack/cargo-smart.sh test -p universal-tool-core --all-features
+	@./hack/cargo-smart.sh test -p universal-tool-macros
+	@echo ""
+	@echo "━━━ Testing examples ━━━"
+	@$(MAKE) -s test-examples
 
 build:
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh cargo build -p 'universal-tool-*' -p 'example-*' --all-features
+	@echo "━━━ Building universal-tool packages ━━━"
+	@./hack/cargo-smart.sh build -p universal-tool-core --all-features
+	@./hack/cargo-smart.sh build -p universal-tool-macros --all-features
+	@echo ""
+	@echo "━━━ Building examples ━━━"
+	@$(MAKE) -s build-examples
 
 # Normal versions - standard output
 check-normal:
-	cargo clippy -p 'universal-tool-*' -p 'example-*' --all-features
+	cargo clippy -p 'universal-tool-*' --all-features
+	@$(MAKE) check-examples-normal
 
 test-normal:
-	cargo test -p 'universal-tool-*' -p 'example-*' --all-features
+	cargo test -p 'universal-tool-*' --all-features
+	@$(MAKE) test-examples-normal
 
 build-normal:
-	cargo build -p 'universal-tool-*' -p 'example-*' --all-features
+	cargo build -p 'universal-tool-*' --all-features
+	@$(MAKE) build-examples-normal
 
 # Verbose versions - extra output
 check-verbose:
-	cargo clippy -p 'universal-tool-*' -p 'example-*' --all-features --verbose
+	cargo clippy -p 'universal-tool-*' --all-features --verbose
+	@$(MAKE) check-examples-verbose
 
 test-verbose:
-	cargo test -p 'universal-tool-*' -p 'example-*' --all-features --verbose -- --nocapture
+	cargo test -p 'universal-tool-*' --all-features --verbose -- --nocapture
+	@$(MAKE) test-examples-verbose
 
 build-verbose:
-	cargo build -p 'universal-tool-*' -p 'example-*' --all-features --verbose
+	cargo build -p 'universal-tool-*' --all-features --verbose
+	@$(MAKE) build-examples-verbose
 
 # Additional useful targets
 clean:
@@ -53,20 +74,21 @@ fmt-check:
 	cargo fmt --all -- --check
 
 doc:
-	cargo doc -p 'universal-tool-*' -p 'example-*' --no-deps --open
+	cargo doc -p 'universal-tool-*' --no-deps --open
 
 # Test targets
 test-unit:
 	@echo "Running unit tests..."
-	cargo test -p 'universal-tool-*' -p 'example-*' --lib
+	cargo test -p 'universal-tool-*' --lib
 
 test-integration:
 	@echo "Running integration tests..."
-	cargo test -p 'universal-tool-*' -p 'example-*' --test '*'
+	cargo test -p 'universal-tool-*' --test '*'
 
 test-all:
 	@echo "Running all tests..."
-	cargo test -p 'universal-tool-*' -p 'example-*' --all-features
+	cargo test -p 'universal-tool-*' --all-features
+	@$(MAKE) test-examples
 
 # Component-specific test targets
 test-core:
@@ -78,11 +100,80 @@ test-macros:
 	cargo test -p universal-tool-macros
 
 test-examples:
+	@set -e; \
+	for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			./hack/cargo-smart.sh test --manifest-path "$$example/Cargo.toml" || exit 1; \
+		fi \
+	done
+
+test-examples-normal:
 	@echo "Testing examples..."
 	@for example in examples/*/; do \
 		if [ -f "$$example/Cargo.toml" ]; then \
 			echo "Testing $$example..."; \
 			cargo test --manifest-path "$$example/Cargo.toml"; \
+		fi \
+	done
+
+test-examples-verbose:
+	@echo "Testing examples (verbose)..."
+	@for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			echo "Testing $$example..."; \
+			cargo test --manifest-path "$$example/Cargo.toml" --verbose -- --nocapture; \
+		fi \
+	done
+
+check-examples:
+	@set -e; \
+	for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			./hack/cargo-smart.sh clippy --manifest-path "$$example/Cargo.toml" || exit 1; \
+		fi \
+	done
+
+check-examples-normal:
+	@echo "Checking examples with clippy..."
+	@for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			echo "Checking $$example..."; \
+			cargo clippy --manifest-path "$$example/Cargo.toml"; \
+		fi \
+	done
+
+check-examples-verbose:
+	@echo "Checking examples with clippy (verbose)..."
+	@for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			echo "Checking $$example..."; \
+			cargo clippy --manifest-path "$$example/Cargo.toml" --verbose; \
+		fi \
+	done
+
+build-examples:
+	@set -e; \
+	for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			./hack/cargo-smart.sh build --manifest-path "$$example/Cargo.toml" || exit 1; \
+		fi \
+	done
+
+build-examples-normal:
+	@echo "Building examples..."
+	@for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			echo "Building $$example..."; \
+			cargo build --manifest-path "$$example/Cargo.toml"; \
+		fi \
+	done
+
+build-examples-verbose:
+	@echo "Building examples (verbose)..."
+	@for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			echo "Building $$example..."; \
+			cargo build --manifest-path "$$example/Cargo.toml" --verbose; \
 		fi \
 	done
 
@@ -98,26 +189,32 @@ update:
 
 # Release build
 release:
-	cargo build -p 'universal-tool-*' -p 'example-*' --all-features --release
+	cargo build -p 'universal-tool-*' --all-features --release
+	@for example in examples/*/; do \
+		if [ -f "$$example/Cargo.toml" ]; then \
+			echo "Building release for $$example..."; \
+			cargo build --manifest-path "$$example/Cargo.toml" --release; \
+		fi \
+	done
 
 # Example runners
 run-cli-simple:
-	cargo run --example 01-cli-simple -- $(ARGS)
+	cargo run --manifest-path examples/01-cli-simple/Cargo.toml -- $(ARGS)
 
 run-cli-advanced:
-	cargo run --example 02-cli-advanced-params -- $(ARGS)
+	cargo run --manifest-path examples/02-cli-advanced-params/Cargo.toml -- $(ARGS)
 
 run-rest-simple:
-	cargo run --example 03-rest-simple
+	cargo run --manifest-path examples/03-rest-simple/Cargo.toml
 
 run-rest-idiomatic:
-	cargo run --example 04-rest-idiomatic
+	cargo run --manifest-path examples/04-rest-idiomatic/Cargo.toml
 
 run-mcp:
-	cargo run --example 05-mcp-basic
+	cargo run --manifest-path examples/05-mcp-basic/Cargo.toml
 
 run-kitchen-sink:
-	cargo run --example 06-kitchen-sink -- $(ARGS)
+	cargo run --manifest-path examples/06-kitchen-sink/Cargo.toml -- $(ARGS)
 
 # Install examples as binaries
 install-examples:

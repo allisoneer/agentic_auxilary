@@ -4,22 +4,25 @@
 # Default environment variables for silent output
 SILENT_ENV = CARGO_TERM_QUIET=true CARGO_TERM_PROGRESS_WHEN=never CARGO_TERM_VERBOSE=false
 
-# TODO: Remove RUSTFLAGS="-A warnings" once we fix all warnings
-SILENT_FLAGS = RUSTFLAGS="-A warnings"
-
 # Default targets run silently with warnings disabled
 all: check test build
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "✅ All checks passed successfully!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Silent versions (default) - uses script to show success/failure
+# Silent versions (default) - smart output with fail-fast
 check:
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh "cargo clippy"
+	@echo "━━━ Checking thoughts_tool ━━━"
+	@./hack/cargo-smart.sh clippy
 
 test:
-	@echo "Running tests..."
-	@$(SILENT_ENV) $(SILENT_FLAGS) cargo test
+	@echo "━━━ Testing thoughts_tool ━━━"
+	@./hack/cargo-smart.sh test
 
 build:
-	@$(SILENT_ENV) $(SILENT_FLAGS) ./hack/run-silent.sh "cargo build"
+	@echo "━━━ Building thoughts_tool ━━━"
+	@./hack/cargo-smart.sh build
 
 # Normal versions - standard output
 check-normal:
