@@ -8,9 +8,7 @@ use universal_tool_core::prelude::*;
 
 /// Test struct matching the example
 #[derive(Clone)]
-struct TestTextTools {
-    name: String,
-}
+struct TestTextTools;
 
 #[universal_tool_router]
 impl TestTextTools {
@@ -27,9 +25,7 @@ impl TestTextTools {
 
 #[tokio::test]
 async fn test_get_mcp_tools() {
-    let tools = TestTextTools {
-        name: "Test Tools".to_string(),
-    };
+    let tools = TestTextTools;
 
     // Get the tool definitions
     let tool_defs = tools.get_mcp_tools();
@@ -57,9 +53,7 @@ async fn test_get_mcp_tools() {
 
 #[tokio::test]
 async fn test_handle_mcp_call_count_words() {
-    let tools = TestTextTools {
-        name: "Test Tools".to_string(),
-    };
+    let tools = TestTextTools;
 
     // Call count_words tool
     let params = json!({
@@ -75,9 +69,7 @@ async fn test_handle_mcp_call_count_words() {
 
 #[tokio::test]
 async fn test_handle_mcp_call_reverse() {
-    let tools = TestTextTools {
-        name: "Test Tools".to_string(),
-    };
+    let tools = TestTextTools;
 
     // Call reverse tool
     let params = json!({
@@ -93,9 +85,7 @@ async fn test_handle_mcp_call_reverse() {
 
 #[tokio::test]
 async fn test_handle_mcp_call_unknown_method() {
-    let tools = TestTextTools {
-        name: "Test Tools".to_string(),
-    };
+    let tools = TestTextTools;
 
     let params = json!({});
     let result = tools.handle_mcp_call("unknown_method", params).await;
@@ -107,9 +97,7 @@ async fn test_handle_mcp_call_unknown_method() {
 
 #[tokio::test]
 async fn test_handle_mcp_call_invalid_params() {
-    let tools = TestTextTools {
-        name: "Test Tools".to_string(),
-    };
+    let tools = TestTextTools;
 
     // Missing required parameter
     let params = json!({});

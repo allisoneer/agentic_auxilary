@@ -19,9 +19,7 @@ use universal_tool_core::prelude::*;
 
 /// A simple text processing tool suite
 #[derive(Clone)]
-struct TextTools {
-    name: String,
-}
+struct TextTools;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 struct WordCountResult {
@@ -254,9 +252,7 @@ universal_tool_core::implement_mcp_server!(TextToolsServer, tools);
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create the text tools instance
-    let tools = Arc::new(TextTools {
-        name: "UTF Text Tools v1.0".to_string(),
-    });
+    let tools = Arc::new(TextTools);
 
     // Create the MCP server
     let server = TextToolsServer { tools };
