@@ -278,7 +278,18 @@ impl DataTools {
         let mut file_types = std::collections::HashMap::new();
 
         for path in paths.iter() {
-            // Progress would be reported here if injected by framework
+            // Filter by extension if specified
+            if !extensions.is_empty() {
+                let file_ext = path.split('.').next_back().unwrap_or("");
+                if !extensions.iter().any(|ext| ext == file_ext) {
+                    continue;
+                }
+            }
+
+            // Show progress if requested
+            if show_progress {
+                eprintln!("Processing {}/{}: {}", files_processed + 1, total_files, path);
+            }
 
             // Simulate processing
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -338,8 +349,13 @@ impl DataTools {
         for item in items {
             // Progress would be reported here if injected by framework
 
-            // Simulate processing with potential failures
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            // Vary processing time based on mode
+            let delay = match mode.as_str() {
+                "fast" => Duration::from_millis(50),
+                "thorough" => Duration::from_millis(500),
+                _ => Duration::from_millis(200), // normal
+            };
+            tokio::time::sleep(delay).await;
 
             if item.contains("error") {
                 failed.push((item.clone(), "Simulated error".to_string()));
@@ -430,12 +446,27 @@ impl DataTools {
         #[universal_tool_param(description = "Directories to search (accepts multiple values)")]
         directories: Vec<String>,
     ) -> Result<FilterResult, ToolError> {
-        // Simulate filtering
-        let matched_files = vec![
-            "src/main.rs".to_string(),
-            "src/lib.rs".to_string(),
-            "tests/integration.rs".to_string(),
-        ];
+        // Simulate filtering files in specified directories
+        let mut matched_files = Vec::new();
+        
+        for dir in directories.iter() {
+            // In a real implementation, we'd walk the directory tree
+            // For the example, we'll simulate finding files
+            if filter.include_patterns.iter().any(|p| p == "*.rs") {
+                matched_files.push(format!("{}/main.rs", dir));
+                matched_files.push(format!("{}/lib.rs", dir));
+            }
+            if filter.include_patterns.iter().any(|p| p == "*.toml") {
+                matched_files.push(format!("{}/Cargo.toml", dir));
+            }
+        }
+        
+        // Apply exclude patterns
+        matched_files.retain(|file| {
+            !filter.exclude_patterns.iter().any(|pattern| {
+                file.contains(pattern.trim_start_matches('*').trim_end_matches('*'))
+            })
+        });
 
         Ok(FilterResult {
             matched_count: matched_files.len(),
@@ -459,21 +490,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = tools.create_cli_command();
     let matches = app.get_matches();
 
-    // Check global flags
-    let quiet = matches.get_flag("quiet");
-    let verbose = matches.get_count("verbose");
-
-    if verbose > 0 && !quiet {
-        eprintln!("Running with verbosity level: {verbose}");
-    }
-
     // Execute the tool - output formatting is handled inside execute_cli
     match tools.execute_cli(matches).await {
         Ok(()) => Ok(()),
         Err(e) => {
-            if !quiet {
-                eprintln!("Error: {e}");
-            }
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
     }
