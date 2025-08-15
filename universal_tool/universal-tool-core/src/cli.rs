@@ -5,6 +5,7 @@
 
 use serde::Serialize;
 use std::fmt;
+use std::str::FromStr;
 
 // Re-export clap and related types so users don't need to depend on them
 pub use clap;
@@ -25,9 +26,10 @@ pub enum OutputFormat {
     Csv,
 }
 
-impl OutputFormat {
-    /// Parse output format from string
-    pub fn from_str(s: &str) -> Result<Self, String> {
+impl FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "text" | "human" => Ok(OutputFormat::Text),
             "json" => Ok(OutputFormat::Json),

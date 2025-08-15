@@ -6,6 +6,7 @@
 //! - All interfaces can be used together
 
 #[cfg(test)]
+#[allow(dead_code, unused_variables)]
 mod tests {
 
     use universal_tool_core::prelude::*;

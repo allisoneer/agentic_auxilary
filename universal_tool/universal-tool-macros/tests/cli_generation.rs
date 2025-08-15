@@ -3,6 +3,8 @@
 //! These tests verify that the generated CLI methods work correctly
 //! and that all Phase 4 features are properly implemented.
 
+#![allow(dead_code, unused_variables)]
+
 use universal_tool_core::prelude::*;
 use universal_tool_macros::{universal_tool, universal_tool_router};
 
