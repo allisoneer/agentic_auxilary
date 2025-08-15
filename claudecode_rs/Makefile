@@ -6,28 +6,31 @@ CARGO_TERM_QUIET := true
 CARGO_FLAGS := --quiet
 export CARGO_TERM_QUIET
 
-# Silence specific warnings if needed
-RUSTFLAGS := -A warnings
-export RUSTFLAGS
-
 # Platform detection
 UNAME := $(shell uname)
 
 # Core targets (silent by default)
 .PHONY: all
 all: check test build
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "✅ All checks passed successfully!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 .PHONY: check
 check:
-	@./hack/run-silent.sh cargo clippy $(CARGO_FLAGS) --all-targets --all-features -- -D warnings
+	@echo "━━━ Checking claudecode_rs ━━━"
+	@./hack/cargo-smart.sh clippy --all-targets --all-features -- -D warnings
 
 .PHONY: test
 test:
-	@./hack/run-silent.sh cargo test $(CARGO_FLAGS) --all-features
+	@echo "━━━ Testing claudecode_rs ━━━"
+	@./hack/cargo-smart.sh test --all-features
 
 .PHONY: build
 build:
-	@./hack/run-silent.sh cargo build $(CARGO_FLAGS) --release --all-features
+	@echo "━━━ Building claudecode_rs ━━━"
+	@./hack/cargo-smart.sh build --release --all-features
 
 # Normal output variants
 .PHONY: check-normal
