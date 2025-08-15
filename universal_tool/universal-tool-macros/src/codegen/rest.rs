@@ -55,6 +55,7 @@ pub fn generate_rest_methods_split(router: &RouterDef) -> (TokenStream, TokenStr
 }
 
 /// Generates all REST-related methods for a router (legacy version for compatibility)
+#[allow(dead_code)] // Part of incomplete OpenAPI feature
 pub fn generate_rest_methods(router: &RouterDef) -> TokenStream {
     let (module_code, method_code) = generate_rest_methods_split(router);
     quote! {
@@ -112,7 +113,12 @@ fn generate_param_structs(router: &RouterDef) -> TokenStream {
                 let fields = body_params.iter().map(|param| {
                     let name = &param.name;
                     let ty = &param.ty;
-                    let doc = format!("{}", param.metadata.description.as_deref().unwrap_or(""));
+                    let doc = param
+                        .metadata
+                        .description
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_string();
 
                     quote! {
                         #[doc = #doc]
@@ -206,7 +212,7 @@ fn generate_handler(tool: &ToolDef, module_name: &syn::Ident) -> TokenStream {
         method_args_vec,
     );
 
-    let handler_body = if has_body_params {
+    if has_body_params {
         let params_struct = get_params_struct_name(tool);
         quote! {
             |::universal_tool_core::rest::State(state): ::universal_tool_core::rest::State<::std::sync::Arc<Self>>#param_extractors,
@@ -226,9 +232,7 @@ fn generate_handler(tool: &ToolDef, module_name: &syn::Ident) -> TokenStream {
                 }
             }
         }
-    };
-
-    handler_body
+    }
 }
 
 /// Generates parameter extractors for non-body parameters
@@ -295,10 +299,10 @@ fn determine_http_method(tool: &ToolDef) -> HttpMethod {
 /// Generates the route path for a tool
 fn generate_route_path(tool: &ToolDef) -> String {
     // Check if REST config specifies a path
-    if let Some(rest_config) = &tool.metadata.rest_config {
-        if let Some(path) = &rest_config.path {
-            return path.clone();
-        }
+    if let Some(rest_config) = &tool.metadata.rest_config
+        && let Some(path) = &rest_config.path
+    {
+        return path.clone();
     }
 
     // Generate path based on tool name
@@ -328,6 +332,7 @@ fn get_handler_name(tool: &ToolDef) -> syn::Ident {
 }
 
 /// Generate OpenAPI schemas for parameter structs
+#[allow(dead_code)] // Will be used when OpenAPI feature is completed
 fn generate_openapi_schemas(router: &RouterDef) -> TokenStream {
     let schemas = router
         .tools
@@ -347,6 +352,7 @@ fn generate_openapi_schemas(router: &RouterDef) -> TokenStream {
 }
 
 /// Generate OpenAPI path documentation
+#[allow(dead_code)] // Will be used when OpenAPI feature is completed
 fn generate_openapi_paths(router: &RouterDef) -> TokenStream {
     let paths = router.tools.iter().map(|tool| {
         let fn_name = syn::Ident::new(
@@ -355,7 +361,7 @@ fn generate_openapi_paths(router: &RouterDef) -> TokenStream {
         );
         let path = generate_route_path(tool);
         let method = determine_http_method(tool);
-        let method_str = format!("{:?}", method).to_lowercase();
+        let method_str = format!("{method:?}").to_lowercase();
         let description = &tool.metadata.description;
 
         // Determine request body

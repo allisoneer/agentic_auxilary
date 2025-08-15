@@ -84,7 +84,6 @@ impl CliFormatter for AnalysisResult {
                     "Lines".to_string(),
                 ]
                 .into_iter()
-                .map(String::from)
                 .collect(),
             );
             for ft in &self.file_types {
@@ -145,7 +144,7 @@ impl CliFormatter for FilterResult {
             self.filter_summary,
             self.matched_files
                 .iter()
-                .map(|f| format!("  - {}", f))
+                .map(|f| format!("  - {f}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         )
@@ -167,7 +166,7 @@ impl CliFormatter for BatchResult {
         if !self.failed.is_empty() {
             output.push_str("\nFailed items:\n");
             for (item, error) in &self.failed {
-                output.push_str(&format!("  - {}: {}\n", item, error));
+                output.push_str(&format!("  - {item}: {error}\n"));
             }
         }
 
@@ -212,7 +211,7 @@ impl CliFormatter for ConfigResult {
         if !self.sample_config.is_empty() {
             output.push_str("\nSample config:\n");
             for item in &self.sample_config {
-                output.push_str(&format!("  - {}\n", item));
+                output.push_str(&format!("  - {item}\n"));
             }
         }
 
@@ -278,8 +277,19 @@ impl DataTools {
         let mut total_size_bytes = 0;
         let mut file_types = std::collections::HashMap::new();
 
-        for (_i, path) in paths.iter().enumerate() {
-            // Progress would be reported here if injected by framework
+        for path in paths.iter() {
+            // Filter by extension if specified
+            if !extensions.is_empty() {
+                let file_ext = path.split('.').next_back().unwrap_or("");
+                if !extensions.iter().any(|ext| ext == file_ext) {
+                    continue;
+                }
+            }
+
+            // Show progress if requested
+            if show_progress {
+                eprintln!("Processing {}/{}: {}", files_processed + 1, total_files, path);
+            }
 
             // Simulate processing
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -289,7 +299,7 @@ impl DataTools {
             total_lines += 100;
             total_size_bytes += 1024;
 
-            let ext = path.split('.').last().unwrap_or("txt").to_string();
+            let ext = path.split('.').next_back().unwrap_or("txt").to_string();
             let entry = file_types.entry(ext.clone()).or_insert((0, 0));
             entry.0 += 1;
             entry.1 += 100;
@@ -339,15 +349,20 @@ impl DataTools {
         for item in items {
             // Progress would be reported here if injected by framework
 
-            // Simulate processing with potential failures
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            // Vary processing time based on mode
+            let delay = match mode.as_str() {
+                "fast" => Duration::from_millis(50),
+                "thorough" => Duration::from_millis(500),
+                _ => Duration::from_millis(200), // normal
+            };
+            tokio::time::sleep(delay).await;
 
             if item.contains("error") {
                 failed.push((item.clone(), "Simulated error".to_string()));
                 if fail_fast {
                     return Err(ToolError::new(
                         ErrorCode::ExecutionFailed,
-                        format!("Failed to process: {}", item),
+                        format!("Failed to process: {item}"),
                     ));
                 }
             } else {
@@ -409,7 +424,7 @@ impl DataTools {
             sample_config: config
                 .iter()
                 .take(3)
-                .map(|(k, v)| format!("{}: {}", k, v))
+                .map(|(k, v)| format!("{k}: {v}"))
                 .collect(),
         })
     }
@@ -431,12 +446,27 @@ impl DataTools {
         #[universal_tool_param(description = "Directories to search (accepts multiple values)")]
         directories: Vec<String>,
     ) -> Result<FilterResult, ToolError> {
-        // Simulate filtering
-        let matched_files = vec![
-            "src/main.rs".to_string(),
-            "src/lib.rs".to_string(),
-            "tests/integration.rs".to_string(),
-        ];
+        // Simulate filtering files in specified directories
+        let mut matched_files = Vec::new();
+        
+        for dir in directories.iter() {
+            // In a real implementation, we'd walk the directory tree
+            // For the example, we'll simulate finding files
+            if filter.include_patterns.iter().any(|p| p == "*.rs") {
+                matched_files.push(format!("{}/main.rs", dir));
+                matched_files.push(format!("{}/lib.rs", dir));
+            }
+            if filter.include_patterns.iter().any(|p| p == "*.toml") {
+                matched_files.push(format!("{}/Cargo.toml", dir));
+            }
+        }
+        
+        // Apply exclude patterns
+        matched_files.retain(|file| {
+            !filter.exclude_patterns.iter().any(|pattern| {
+                file.contains(pattern.trim_start_matches('*').trim_end_matches('*'))
+            })
+        });
 
         Ok(FilterResult {
             matched_count: matched_files.len(),
@@ -460,21 +490,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = tools.create_cli_command();
     let matches = app.get_matches();
 
-    // Check global flags
-    let quiet = matches.get_flag("quiet");
-    let verbose = matches.get_count("verbose");
-
-    if verbose > 0 && !quiet {
-        eprintln!("Running with verbosity level: {}", verbose);
-    }
-
     // Execute the tool - output formatting is handled inside execute_cli
     match tools.execute_cli(matches).await {
         Ok(()) => Ok(()),
         Err(e) => {
-            if !quiet {
-                eprintln!("Error: {}", e);
-            }
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
     }

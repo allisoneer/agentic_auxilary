@@ -16,7 +16,7 @@ impl PersonalConfigManager {
         }
 
         let content = fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read personal config from {:?}", config_path))?;
+            .with_context(|| format!("Failed to read personal config from {config_path:?}"))?;
         let config: PersonalConfig =
             serde_json::from_str(&content).context("Failed to parse personal configuration")?;
 
@@ -29,7 +29,7 @@ impl PersonalConfigManager {
         // Ensure directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {:?}", parent))?;
+                .with_context(|| format!("Failed to create directory {parent:?}"))?;
         }
 
         let json = serde_json::to_string_pretty(config)
@@ -37,11 +37,14 @@ impl PersonalConfigManager {
 
         AtomicFile::new(&config_path, OverwriteBehavior::AllowOverwrite)
             .write(|f| f.write_all(json.as_bytes()))
-            .with_context(|| format!("Failed to write personal config to {:?}", config_path))?;
+            .with_context(|| format!("Failed to write personal config to {config_path:?}"))?;
 
         Ok(())
     }
 
+    #[allow(dead_code)]
+    // TODO(1): Add CLI command for personal config initialization
+    // Reference: https://github.com/allisoneer/agentic_auxilary/issues/4
     pub fn ensure_default() -> Result<PersonalConfig> {
         if let Some(config) = Self::load()? {
             return Ok(config);
@@ -58,6 +61,9 @@ impl PersonalConfigManager {
         Ok(default_config)
     }
 
+    #[allow(dead_code)]
+    // TODO(1): Add "thoughts config pattern add" command
+    // Reference: https://github.com/allisoneer/agentic_auxilary/issues/4
     pub fn add_pattern(pattern: MountPattern) -> Result<()> {
         let mut config = Self::load()?.unwrap_or_else(|| PersonalConfig {
             patterns: vec![],
@@ -71,6 +77,9 @@ impl PersonalConfigManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    // TODO(1): Add personal config rules management
+    // Reference: https://github.com/allisoneer/agentic_auxilary/issues/4
     pub fn add_rule(rule: Rule) -> Result<()> {
         let mut config = Self::load()?.unwrap_or_else(|| PersonalConfig {
             patterns: vec![],
@@ -141,10 +150,10 @@ impl PersonalConfigManager {
     }
 
     pub fn get_repository_mounts(repo_url: &str) -> Result<Vec<PersonalMount>> {
-        if let Some(config) = Self::load()? {
-            if let Some(mounts) = config.repository_mounts.get(repo_url) {
-                return Ok(mounts.clone());
-            }
+        if let Some(config) = Self::load()?
+            && let Some(mounts) = config.repository_mounts.get(repo_url)
+        {
+            return Ok(mounts.clone());
         }
         Ok(vec![])
     }

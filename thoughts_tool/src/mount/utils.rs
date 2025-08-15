@@ -48,8 +48,21 @@ pub async fn cleanup_mount_point(path: &Path) -> Result<()> {
 
 /// Check if a path is safe to use as a mount point
 pub async fn validate_mount_point(path: &Path) -> Result<()> {
-    // Prevent mounting on system directories
     let path_str = path.to_str().unwrap_or("");
+
+    // First, check if path is under user's home directory or /tmp (allowed paths)
+    if let Ok(home) = std::env::var("HOME")
+        && path_str.starts_with(&home)
+    {
+        return Ok(());
+    }
+
+    // Also allow temp directories
+    if path_str.starts_with("/tmp") || path_str.starts_with("/private/tmp") {
+        return Ok(());
+    }
+
+    // Now check forbidden system directories
     let forbidden_paths = [
         "/",
         "/bin",
@@ -68,24 +81,16 @@ pub async fn validate_mount_point(path: &Path) -> Result<()> {
         "/System",
         "/Library",
         "/Applications",
-        "/Users",
+        // Note: /Users is not forbidden as it contains home directories on macOS
+        // Instead, we forbid specific system directories under /Users
+        "/Users/Shared",
     ];
 
     for forbidden in &forbidden_paths {
-        if path_str == *forbidden || path_str.starts_with(&format!("{}/", forbidden)) {
+        if path_str == *forbidden || path_str.starts_with(&format!("{forbidden}/")) {
             return Err(crate::error::ThoughtsError::MountOperationFailed {
                 message: format!("Cannot mount on system directory: {}", path.display()),
             });
-        }
-    }
-
-    // Check if path is under user's home directory or /tmp
-    if let Ok(home) = std::env::var("HOME") {
-        if path_str.starts_with(&home)
-            || path_str.starts_with("/tmp")
-            || path_str.starts_with("/private/tmp")
-        {
-            return Ok(());
         }
     }
 
@@ -98,7 +103,7 @@ pub fn normalize_mount_path(path: &Path) -> Result<std::path::PathBuf> {
     use crate::utils::paths::expand_path;
 
     // Expand tilde
-    let expanded = expand_path(path).map_err(|e| crate::error::ThoughtsError::Other(e))?;
+    let expanded = expand_path(path).map_err(crate::error::ThoughtsError::Other)?;
 
     // Canonicalize if possible (path must exist)
     if expanded.exists() {

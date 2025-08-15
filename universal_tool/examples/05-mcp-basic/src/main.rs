@@ -19,9 +19,7 @@ use universal_tool_core::prelude::*;
 
 /// A simple text processing tool suite
 #[derive(Clone)]
-struct TextTools {
-    name: String,
-}
+struct TextTools;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 struct WordCountResult {
@@ -193,50 +191,50 @@ impl TextTools {
         required_pattern: Option<String>,
     ) -> Result<bool, ToolError> {
         // Check minimum length
-        if let Some(min) = min_length {
-            if text.len() < min {
-                return Err(ToolError::new(
-                    ErrorCode::InvalidArgument,
-                    format!(
-                        "Text too short: {} chars, minimum {} required",
-                        text.len(),
-                        min
-                    ),
-                )
-                .with_detail(
-                    "help",
-                    "Provide longer text to meet the minimum length requirement",
-                ));
-            }
+        if let Some(min) = min_length
+            && text.len() < min
+        {
+            return Err(ToolError::new(
+                ErrorCode::InvalidArgument,
+                format!(
+                    "Text too short: {} chars, minimum {} required",
+                    text.len(),
+                    min
+                ),
+            )
+            .with_detail(
+                "help",
+                "Provide longer text to meet the minimum length requirement",
+            ));
         }
 
         // Check maximum length
-        if let Some(max) = max_length {
-            if text.len() > max {
-                return Err(ToolError::new(
-                    ErrorCode::InvalidArgument,
-                    format!(
-                        "Text too long: {} chars, maximum {} allowed",
-                        text.len(),
-                        max
-                    ),
-                )
-                .with_detail(
-                    "help",
-                    "Shorten the text to meet the maximum length requirement",
-                ));
-            }
+        if let Some(max) = max_length
+            && text.len() > max
+        {
+            return Err(ToolError::new(
+                ErrorCode::InvalidArgument,
+                format!(
+                    "Text too long: {} chars, maximum {} allowed",
+                    text.len(),
+                    max
+                ),
+            )
+            .with_detail(
+                "help",
+                "Shorten the text to meet the maximum length requirement",
+            ));
         }
 
         // Check required pattern
-        if let Some(pattern) = required_pattern {
-            if !text.contains(&pattern) {
-                return Err(ToolError::new(
-                    ErrorCode::InvalidArgument,
-                    format!("Required pattern '{}' not found in text", pattern),
-                )
-                .with_detail("help", "The text must contain the specified pattern"));
-            }
+        if let Some(pattern) = required_pattern
+            && !text.contains(&pattern)
+        {
+            return Err(ToolError::new(
+                ErrorCode::InvalidArgument,
+                format!("Required pattern '{pattern}' not found in text"),
+            )
+            .with_detail("help", "The text must contain the specified pattern"));
         }
 
         Ok(true)
@@ -254,9 +252,7 @@ universal_tool_core::implement_mcp_server!(TextToolsServer, tools);
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create the text tools instance
-    let tools = Arc::new(TextTools {
-        name: "UTF Text Tools v1.0".to_string(),
-    });
+    let tools = Arc::new(TextTools);
 
     // Create the MCP server
     let server = TextToolsServer { tools };
@@ -264,7 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Print startup information
     eprintln!("🚀 Starting MCP Text Tools Server");
     eprintln!("📍 Communicating via stdio");
-    eprintln!("");
+    eprintln!();
     eprintln!("Available tools:");
     eprintln!("  - analyze_text: Count words, lines, and characters");
     eprintln!("  - to_uppercase: Convert text to uppercase");
@@ -274,7 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("  - clear_text: Clear all text (destructive!)");
     eprintln!("  - process_large_dataset: Process with progress & cancellation");
     eprintln!("  - validate_text: Validate text with detailed errors");
-    eprintln!("");
+    eprintln!();
     eprintln!("Connect with: mcp-client stdio -- cargo run --example 05-mcp-basic");
 
     // Create stdio transport

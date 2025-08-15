@@ -1,7 +1,6 @@
-use crate::config::{
-    Mount, PersonalConfigManager, RepoConfigManager, RepoMappingManager, SyncStrategy,
-};
+use crate::config::validation::sanitize_mount_name;
 use crate::config::{MountDirs, PersonalMount, RepoConfig, RequiredMount};
+use crate::config::{PersonalConfigManager, RepoConfigManager, RepoMappingManager, SyncStrategy};
 use crate::git::utils::{find_repo_root, get_remote_url, is_git_repo};
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
@@ -73,7 +72,7 @@ pub async fn execute(
         let url = get_remote_url(&expanded)
             .context("Git repository has no remote URL. Add a remote first.")?;
 
-        println!("Found remote URL: {}", url);
+        println!("Found remote URL: {url}");
 
         // Add mapping (auto_managed=false for existing repos)
         repo_mapping.add_mapping(url.clone(), expanded.clone(), false)?;
@@ -82,7 +81,7 @@ pub async fn execute(
             expanded
                 .file_name()
                 .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
+                .map(sanitize_mount_name)
                 .unwrap_or_else(|| "unnamed".to_string())
         });
 
@@ -106,7 +105,7 @@ pub async fn execute(
             expanded
                 .file_name()
                 .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
+                .map(sanitize_mount_name)
                 .unwrap_or_else(|| "unnamed".to_string())
         });
 
@@ -134,12 +133,11 @@ pub async fn execute(
             remote: url.clone(),
             mount_path: mount_name.clone(),
             subpath: subpath.clone(),
-            description: description
-                .unwrap_or_else(|| format!("Personal mount for {}", mount_name)),
+            description: description.unwrap_or_else(|| format!("Personal mount for {mount_name}")),
         };
 
         PersonalConfigManager::add_repository_mount(&current_repo_url, personal_mount)?;
-        println!("✓ Added personal mount '{}'", mount_name);
+        println!("✓ Added personal mount '{mount_name}'");
     } else {
         // Add to repository config at .thoughts/config.json
         let repo_root = find_repo_root(&std::env::current_dir()?)?.to_path_buf();
@@ -161,14 +159,14 @@ pub async fn execute(
             mount_path: mount_name.clone(),
             subpath,
             description: description
-                .unwrap_or_else(|| format!("Repository mount for {}", mount_name)),
+                .unwrap_or_else(|| format!("Repository mount for {mount_name}")),
             optional,
             override_rules,
             sync,
         };
         config.requires.push(required_mount);
         repo_manager.save(&config)?;
-        println!("✓ Added repository mount '{}'", mount_name);
+        println!("✓ Added repository mount '{mount_name}'");
     }
 
     // Automatically update active mounts

@@ -1,5 +1,6 @@
 use crate::config::{Mount, RepoMappingManager};
-use anyhow::{Context, Result, bail};
+use crate::mount::utils::normalize_mount_path;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -18,13 +19,13 @@ impl MountResolver {
     pub fn resolve_mount(&self, mount: &Mount) -> Result<PathBuf> {
         match mount {
             Mount::Directory { path, .. } => {
-                // Directory mounts are simple
-                Ok(path.clone())
+                // Directory mounts need path normalization
+                Ok(normalize_mount_path(path)?)
             }
             Mount::Git { url, subpath, .. } => {
                 // Build full URL with subpath if present
                 let full_url = if let Some(sub) = subpath {
-                    format!("{}:{}", url, sub)
+                    format!("{url}:{sub}")
                 } else {
                     url.clone()
                 };
@@ -38,8 +39,8 @@ impl MountResolver {
                              • {} (auto-managed)\n  \
                              • {} (custom location)",
                         url,
-                        format!("thoughts mount clone {}", url).cyan(),
-                        format!("thoughts mount clone {} /your/path", url).cyan()
+                        format!("thoughts mount clone {url}").cyan(),
+                        format!("thoughts mount clone {url} /your/path").cyan()
                     )
                 })
             }
@@ -55,6 +56,8 @@ impl MountResolver {
     }
 
     /// Get clone URL and suggested path for a mount
+    #[allow(dead_code)]
+    // TODO(2): Integrate into clone command for consistency
     pub fn get_clone_info(&self, mount: &Mount) -> Result<Option<(String, PathBuf)>> {
         match mount {
             Mount::Directory { .. } => Ok(None),
@@ -70,6 +73,8 @@ impl MountResolver {
     }
 
     /// Resolve all mounts in a config
+    #[allow(dead_code)]
+    // TODO(2): Keep for future batch operations and diagnostics
     pub fn resolve_all(&self, mounts: &HashMap<String, Mount>) -> Vec<(String, Result<PathBuf>)> {
         mounts
             .iter()
@@ -105,6 +110,5 @@ mod tests {
 
         // Test that we can detect git mounts
         assert!(mount.is_git());
-        assert_eq!(mount.mount_type(), crate::config::MountType::Git);
     }
 }

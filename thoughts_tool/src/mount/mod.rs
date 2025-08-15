@@ -13,7 +13,7 @@ mod fuse_t;
 #[cfg(test)]
 mod mock;
 
-pub use manager::{MountManager, get_mount_manager};
+pub use manager::get_mount_manager;
 pub use resolver::MountResolver;
 pub use types::*;
 // pub use utils::*;
@@ -21,9 +21,3 @@ pub use types::*;
 // Re-export implementations for direct use if needed
 // #[cfg(target_os = "linux")]
 // pub use mergerfs::MergerfsManager;
-
-#[cfg(target_os = "macos")]
-pub use fuse_t::FuseTManager;
-
-#[cfg(test)]
-pub use mock::MockMountManager;

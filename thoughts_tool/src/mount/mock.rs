@@ -13,6 +13,12 @@ pub struct MockMountManager {
     should_fail: Arc<Mutex<bool>>,
 }
 
+impl Default for MockMountManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockMountManager {
     pub fn new() -> Self {
         Self {
@@ -23,10 +29,6 @@ impl MockMountManager {
 
     pub fn set_should_fail(&self, fail: bool) {
         *self.should_fail.lock().unwrap() = fail;
-    }
-
-    pub fn get_mounts(&self) -> HashMap<PathBuf, MountInfo> {
-        self.mounts.lock().unwrap().clone()
     }
 }
 
@@ -113,7 +115,7 @@ mod tests {
         let manager = MockMountManager::new();
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/tmp/merged");
-        let options = MountOptions::new();
+        let options = MountOptions::default();
 
         // Should not be mounted initially
         assert!(!manager.is_mounted(target).await.unwrap());

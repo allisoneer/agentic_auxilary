@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{debug, error, info, warn};
 
 use super::manager::MountManager;
@@ -21,9 +21,12 @@ pub struct MergerfsManager {
 
 impl MergerfsManager {
     pub fn new() -> Self {
-        let mergerfs_path = which::which("mergerfs").unwrap_or_else(|_| PathBuf::from("mergerfs"));
+        // Platform detection already verified mergerfs exists
+        // No need to duplicate the check here
+        let mergerfs_path = PathBuf::from("mergerfs");
 
-        // Try to find fusermount or fusermount3
+        // Try to find fusermount or fusermount3 for unmounting
+        // This is optional - we can fall back to umount if not available
         let fusermount_path = which::which("fusermount")
             .or_else(|_| which::which("fusermount3"))
             .ok();
@@ -208,12 +211,18 @@ impl MergerfsManager {
 
         cmd.arg(target);
 
-        let output = cmd.output().await?;
+        let output = timeout(UNMOUNT_TIMEOUT, cmd.output())
+            .await
+            .map_err(|_| ThoughtsError::CommandTimeout {
+                command: "umount".to_string(),
+                timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+            })?
+            .map_err(ThoughtsError::from)?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ThoughtsError::MountOperationFailed {
-                message: format!("umount failed: {}", stderr),
+                message: format!("umount failed: {stderr}"),
             });
         }
 
@@ -244,6 +253,9 @@ impl MountManager for MergerfsManager {
                 });
             }
         }
+
+        // Validate mount point first
+        utils::validate_mount_point(target).await?;
 
         // Ensure target directory exists
         utils::ensure_mount_point(target).await?;
@@ -295,7 +307,7 @@ impl MountManager for MergerfsManager {
 
                 if attempt == options.retries {
                     return Err(ThoughtsError::MountOperationFailed {
-                        message: format!("mergerfs mount failed: {}", stderr),
+                        message: format!("mergerfs mount failed: {stderr}"),
                     });
                 }
             }
@@ -325,7 +337,13 @@ impl MountManager for MergerfsManager {
 
             cmd.arg(target);
 
-            let output = cmd.output().await?;
+            let output = timeout(UNMOUNT_TIMEOUT, cmd.output())
+                .await
+                .map_err(|_| ThoughtsError::CommandTimeout {
+                    command: "fusermount".to_string(),
+                    timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+                })?
+                .map_err(ThoughtsError::from)?;
 
             if output.status.success() {
                 // Success with fusermount, continue to cleanup
@@ -414,9 +432,12 @@ mod tests {
         let manager = MergerfsManager::new();
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/mnt/merged");
-        let options = MountOptions::new().read_only();
+        let options = MountOptions {
+            read_only: true,
+            ..Default::default()
+        };
 
-        let args = manager.build_mount_args(&sources, &target, &options);
+        let args = manager.build_mount_args(&sources, target, &options);
 
         assert_eq!(args[0], "-o");
         assert!(args[1].contains("category.create=mfs"));
@@ -429,7 +450,7 @@ mod tests {
     async fn test_mount_validation() {
         let manager = MergerfsManager::new();
         let target = Path::new("/tmp/test_mount");
-        let options = MountOptions::new();
+        let options = MountOptions::default();
 
         // Test with empty sources
         let result = manager.mount(&[], target, &options).await;

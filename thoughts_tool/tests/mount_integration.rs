@@ -14,9 +14,12 @@ async fn test_basic_mount_unmount() {
 
     let platform_info = detect_platform().expect("Failed to detect platform");
 
-    if !platform_info.can_mount {
+    // Check if platform can mount using the Platform enum's method
+    if !platform_info.platform.can_mount() {
         eprintln!("Skipping test: mount tools not available");
-        eprintln!("Missing tools: {:?}", platform_info.missing_tools);
+        if let Some(tool_name) = platform_info.platform.mount_tool_name() {
+            eprintln!("Required tool: {}", tool_name);
+        }
         return;
     }
 
@@ -37,7 +40,7 @@ async fn test_basic_mount_unmount() {
     let manager = get_mount_manager(&platform_info).expect("Failed to create mount manager");
 
     // Test mount
-    let options = MountOptions::new();
+    let options = MountOptions::default();
     let sources = vec![source1.clone(), source2.clone()];
 
     manager

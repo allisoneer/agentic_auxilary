@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use colored::Colorize;
 use std::env;
 use std::process::Command;

@@ -1,10 +1,9 @@
 use super::types::{RepoLocation, RepoMapping};
-use crate::utils::paths;
+use crate::utils::paths::{self, sanitize_dir_name};
 use anyhow::{Context, Result, bail};
 use atomicwrites::{AllowOverwrite, AtomicFile};
-use std::collections::HashMap;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct RepoMappingManager {
     mapping_path: PathBuf,
@@ -88,6 +87,8 @@ impl RepoMappingManager {
     }
 
     /// Remove a URL mapping
+    #[allow(dead_code)]
+    // TODO(2): Add "thoughts mount unmap" command for cleanup
     pub fn remove_mapping(&mut self, url: &str) -> Result<()> {
         let mut mapping = self.load()?;
         mapping.mappings.remove(url);
@@ -110,7 +111,7 @@ impl RepoMappingManager {
         let home = dirs::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
 
-        let repo_name = extract_repo_name_from_url(url)?;
+        let repo_name = sanitize_dir_name(&extract_repo_name_from_url(url)?);
         Ok(home.join(".thoughts").join("clones").join(repo_name))
     }
 

@@ -44,12 +44,12 @@ pub async fn execute(verbose: bool) -> Result<()> {
         match mount {
             Mount::Git { url, sync, subpath } => {
                 let display_url = if let Some(sub) = subpath {
-                    format!("{}:{}", url, sub)
+                    format!("{url}:{sub}")
                 } else {
                     url.clone()
                 };
-                println!("  URL: {}", display_url);
-                println!("  Sync: {}", sync);
+                println!("  URL: {display_url}");
+                println!("  Sync: {sync}");
 
                 if verbose {
                     // Show resolved path if available
@@ -64,7 +64,7 @@ pub async fn execute(verbose: bool) -> Result<()> {
             }
             Mount::Directory { path, sync } => {
                 println!("  Path: {}", path.display());
-                println!("  Sync: {}", sync);
+                println!("  Sync: {sync}");
             }
         }
         println!();

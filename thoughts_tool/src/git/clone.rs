@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
 use colored::*;
-use git2::{FetchOptions, Progress, RemoteCallbacks, Repository};
-use std::path::{Path, PathBuf};
+use git2::{FetchOptions, Progress, RemoteCallbacks};
+use std::path::PathBuf;
 
 pub struct CloneOptions {
     pub url: String,
     pub target_path: PathBuf,
-    pub shallow: bool,
     pub branch: Option<String>,
 }
 
@@ -79,16 +78,16 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
                     }
 
                     // If that fails, try with public key
-                    let public_key = ssh_dir.join(format!("{}.pub", key_name));
-                    if public_key.exists() {
-                        if let Ok(cred) = git2::Cred::ssh_key(
+                    let public_key = ssh_dir.join(format!("{key_name}.pub"));
+                    if public_key.exists()
+                        && let Ok(cred) = git2::Cred::ssh_key(
                             username,
                             Some(public_key.as_path()),
                             private_key.as_path(),
                             None,
-                        ) {
-                            return Ok(cred);
-                        }
+                        )
+                    {
+                        return Ok(cred);
                     }
                 }
             }
@@ -139,17 +138,4 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
 
     println!("\n✓ Clone completed successfully");
     Ok(())
-}
-
-pub fn is_valid_clone_target(path: &Path) -> Result<bool> {
-    if !path.exists() {
-        return Ok(true);
-    }
-
-    if path.is_dir() {
-        let entries = std::fs::read_dir(path)?;
-        Ok(entries.count() == 0)
-    } else {
-        Ok(false)
-    }
 }

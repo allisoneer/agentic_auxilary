@@ -1,11 +1,12 @@
 [package]
 name = "example-05-mcp-basic"
 version = "0.1.0"
+license = "MIT"
 edition = "2024"
 publish = false
 
 [dependencies]
-universal-tool-core = { path = "../../universal-tool-core", features = ["mcp"] }
+universal-tool-core = { version = "0.1.0", path = "../../universal-tool-core", features = ["mcp"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

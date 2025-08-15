@@ -1,5 +1,4 @@
 use crate::config::RepoMappingManager;
-use crate::git::clone::clone_repository;
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
 use colored::*;
@@ -30,10 +29,10 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
         let expanded = expand_path(&p)?;
 
         // Validate parent directory exists
-        if let Some(parent) = expanded.parent() {
-            if !parent.exists() {
-                bail!("Parent directory does not exist: {}", parent.display());
-            }
+        if let Some(parent) = expanded.parent()
+            && !parent.exists()
+        {
+            bail!("Parent directory does not exist: {}", parent.display());
         }
 
         (expanded, false) // User-specified path is not auto-managed
@@ -51,7 +50,6 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
     let clone_opts = crate::git::clone::CloneOptions {
         url: url.clone(),
         target_path: clone_path.clone(),
-        shallow: false,
         branch: None,
     };
     crate::git::clone::clone_repository(&clone_opts).context("Failed to clone repository")?;
@@ -61,7 +59,7 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
 
     println!("{} Repository cloned successfully", "✓".green());
     println!("\nYou can now use this repository in mounts:");
-    println!("  {}", format!("thoughts mount add {}", url).cyan());
+    println!("  {}", format!("thoughts mount add {url}").cyan());
 
     Ok(())
 }

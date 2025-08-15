@@ -55,11 +55,7 @@ fn generate_create_cli_command(router: &RouterDef) -> TokenStream {
 
     // Generate subcommands
     // TODO(2): Support command_path for nested subcommands
-    let subcommands: Vec<_> = router
-        .tools
-        .iter()
-        .map(|tool| generate_tool_subcommand(tool))
-        .collect();
+    let subcommands: Vec<_> = router.tools.iter().map(generate_tool_subcommand).collect();
 
     // Debug: Print number of subcommands
     if std::env::var("UTF_DEBUG").is_ok() {
@@ -248,10 +244,10 @@ fn generate_tool_subcommand(tool: &ToolDef) -> TokenStream {
     }
 
     // Add hidden flag if configured
-    if let Some(cli_config) = &tool.metadata.cli_config {
-        if cli_config.hidden {
-            subcommand = quote! { #subcommand .hide(true) };
-        }
+    if let Some(cli_config) = &tool.metadata.cli_config
+        && cli_config.hidden
+    {
+        subcommand = quote! { #subcommand .hide(true) };
     }
 
     // Add arguments

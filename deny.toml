@@ -1,20 +1,65 @@
 [advisories]
-db-paths = ["~/.cargo/advisory-db"]
+db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
+# All advisories are denied by default in cargo-deny 0.16.0+
+# Add specific advisory IDs to ignore if needed:
+# ignore = ["RUSTSEC-XXXX-XXXX"]
 
 [licenses]
-unlicensed = "deny"
-allow = ["MIT", "Apache-2.0", "BSD-3-Clause"]
-copyleft = "warn"
+# List of allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0", 
+    "BSD-3-Clause",
+    "Unicode-3.0",  # Required for Unicode support (ICU crates, unicode-ident)
+    "MPL-2.0",       # Mozilla Public License (weak copyleft, used by colored and option-ext)
+]
+# Confidence threshold for license detection (0.0-1.0)
+confidence-threshold = 0.93
 
 [bans]
+# Warn when multiple versions of the same crate are detected
 multiple-versions = "warn"
-skip = []
+# Deny wildcard dependencies
+wildcards = "deny"
+# Allow specific version duplicates that are transitive dependencies we can't control
+skip = [
+    # heck is used by different proc-macro crates with different major versions
+    { name = "heck", version = "0.4" },  # Used by tabled_derive
+    # unicode-width has different behavior between 0.1 and 0.2 for control characters
+    { name = "unicode-width", version = "0.1" },  # Some crates need the old behavior
+    # syn 1.0 is still used by some older proc-macro crates
+    { name = "syn", version = "1.0" },  # Used by older proc-macro dependencies
+    # regex-automata and regex-syntax have different versions in the ecosystem
+    { name = "regex-automata", version = "0.1" },
+    { name = "regex-syntax", version = "0.6" },
+    # System-level crates with different major versions
+    { name = "rustix", version = "0.38" },
+    { name = "linux-raw-sys", version = "0.4" },
+    # thiserror v1 is still used by dialoguer
+    { name = "thiserror", version = "1.0" },  # Used by dialoguer v0.11
+    { name = "thiserror-impl", version = "1.0" },  # Proc-macro for thiserror v1
+    # getrandom has different major versions in the ecosystem
+    { name = "getrandom", version = "0.2" },  # Used by older crates
+    # wasi has different versions for different snapshot versions
+    { name = "wasi", version = "0.11" },  # Used by getrandom 0.2 and mio
+    # Windows-specific crates (we don't support Windows, but these are transitive deps)
+    { name = "windows-sys" },  # Multiple versions from different dependencies
+    { name = "windows-targets" },
+    { name = "windows_aarch64_gnullvm" },
+    { name = "windows_aarch64_msvc" },
+    { name = "windows_i686_gnu" },
+    { name = "windows_i686_gnullvm" },
+    { name = "windows_i686_msvc" },
+    { name = "windows_x86_64_gnu" },
+    { name = "windows_x86_64_gnullvm" },
+    { name = "windows_x86_64_msvc" },
+]
 
 [sources]
+# Warn for crates from unknown registries
 unknown-registry = "warn"
+# Warn for crates from unknown git sources
 unknown-git = "warn"
+# Allow crates from crates.io
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,6 +1,6 @@
 use crate::config::{MountMerger, MountSource, PersonalConfigManager, RepoConfigManager};
 use crate::git::utils::{find_repo_root, get_remote_url};
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use colored::Colorize;
 use std::env;
 
@@ -22,13 +22,13 @@ pub async fn execute(mount_name: String) -> Result<()> {
                 if let Some(mut config) = repo_manager.load()? {
                     config.requires.retain(|r| r.mount_path != mount_name);
                     repo_manager.save(&config)?;
-                    println!("✓ Removed repository mount '{}'", mount_name);
+                    println!("✓ Removed repository mount '{mount_name}'");
                 }
             }
             MountSource::Personal => {
                 // Remove from personal config for this repository
                 if PersonalConfigManager::remove_repository_mount(&repo_url, &mount_name)? {
-                    println!("✓ Removed personal mount '{}'", mount_name);
+                    println!("✓ Removed personal mount '{mount_name}'");
                 } else {
                     bail!("Failed to remove personal mount");
                 }

@@ -3,7 +3,8 @@
 //! These tests verify that the generated CLI methods work correctly
 //! and that all Phase 4 features are properly implemented.
 
-use serde::{Deserialize, Serialize};
+#![allow(dead_code, unused_variables)]
+
 use universal_tool_core::prelude::*;
 use universal_tool_macros::{universal_tool, universal_tool_router};
 
@@ -44,7 +45,7 @@ impl TestTools {
         #[universal_tool_param(env = "TEST_PREFIX", default = ">>>")] prefix: Option<String>,
     ) -> Result<String, ToolError> {
         let prefix = prefix.unwrap_or_else(|| ">>>".to_string());
-        Ok(format!("{} {}", prefix, text))
+        Ok(format!("{prefix} {text}"))
     }
 
     /// Function with optional parameter and default
@@ -56,7 +57,7 @@ impl TestTools {
         #[universal_tool_param(default = " ", description = "Separator")] sep: Option<String>,
     ) -> Result<String, ToolError> {
         let sep = sep.unwrap_or_else(|| " ".to_string());
-        Ok(format!("{}{}{}", a, sep, b))
+        Ok(format!("{a}{sep}{b}"))
     }
 }
 
@@ -169,7 +170,7 @@ mod tests {
         // Check default value
         let default_values: Vec<_> = sep_arg
             .get_default_values()
-            .into_iter()
+            .iter()
             .map(|v| v.to_str().unwrap())
             .collect();
         assert_eq!(default_values, vec![" "]);

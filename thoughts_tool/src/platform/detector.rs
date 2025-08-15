@@ -1,12 +1,15 @@
 use crate::error::Result;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{debug, info};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Linux(LinuxInfo),
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     MacOS(MacOSInfo),
+    #[allow(dead_code)] // Needed for exhaustive matching but only constructed on non-Linux/macOS
     Unsupported(String),
 }
 
@@ -17,6 +20,7 @@ pub struct LinuxInfo {
     pub has_mergerfs: bool,
     pub mergerfs_version: Option<String>,
     pub fuse_available: bool,
+    pub has_fusermount: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,17 +30,20 @@ pub struct MacOSInfo {
     pub fuse_t_version: Option<String>,
     pub has_macfuse: bool,
     pub macfuse_version: Option<String>,
+    pub has_unionfs: bool,
+    pub unionfs_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PlatformInfo {
     pub platform: Platform,
+    #[cfg(test)]
     pub arch: String,
-    pub can_mount: bool,
-    pub missing_tools: Vec<String>,
 }
 
 impl Platform {
+    #[allow(dead_code)]
+    // Used in tests, could be useful for diagnostics
     pub fn can_mount(&self) -> bool {
         match self {
             Platform::Linux(info) => info.has_mergerfs && info.fuse_available,
@@ -45,6 +52,8 @@ impl Platform {
         }
     }
 
+    #[allow(dead_code)]
+    // Could be used in error messages showing required tools
     pub fn mount_tool_name(&self) -> Option<&'static str> {
         match self {
             Platform::Linux(_) => Some("mergerfs"),
@@ -72,9 +81,8 @@ pub fn detect_platform() -> Result<PlatformInfo> {
         let os = std::env::consts::OS;
         Ok(PlatformInfo {
             platform: Platform::Unsupported(os.to_string()),
+            #[cfg(test)]
             arch: std::env::consts::ARCH.to_string(),
-            can_mount: false,
-            missing_tools: vec!["Platform not supported".to_string()],
         })
     }
 }
@@ -101,12 +109,12 @@ fn detect_linux() -> Result<PlatformInfo> {
         info!("FUSE support not detected");
     }
 
-    let mut missing_tools = Vec::new();
-    if !has_mergerfs {
-        missing_tools.push("mergerfs".to_string());
-    }
-    if !fuse_available {
-        missing_tools.push("FUSE kernel module".to_string());
+    // Check for fusermount
+    let has_fusermount = which::which("fusermount")
+        .or_else(|_| which::which("fusermount3"))
+        .is_ok();
+    if has_fusermount {
+        info!("fusermount detected");
     }
 
     let linux_info = LinuxInfo {
@@ -115,13 +123,13 @@ fn detect_linux() -> Result<PlatformInfo> {
         has_mergerfs,
         mergerfs_version,
         fuse_available,
+        has_fusermount,
     };
 
     Ok(PlatformInfo {
-        platform: Platform::Linux(linux_info.clone()),
+        platform: Platform::Linux(linux_info),
+        #[cfg(test)]
         arch: std::env::consts::ARCH.to_string(),
-        can_mount: linux_info.has_mergerfs && linux_info.fuse_available,
-        missing_tools,
     })
 }
 
@@ -137,10 +145,10 @@ fn detect_linux_distro() -> (String, String) {
                 name = value.trim_matches('"').to_string();
             } else if let Some(value) = line.strip_prefix("VERSION=") {
                 version = value.trim_matches('"').to_string();
-            } else if let Some(value) = line.strip_prefix("VERSION_ID=") {
-                if version == "Unknown" {
-                    version = value.trim_matches('"').to_string();
-                }
+            } else if let Some(value) = line.strip_prefix("VERSION_ID=")
+                && version == "Unknown"
+            {
+                version = value.trim_matches('"').to_string();
             }
         }
 
@@ -148,11 +156,11 @@ fn detect_linux_distro() -> (String, String) {
     }
 
     // Fallback to lsb_release if available
-    if let Ok(output) = Command::new("lsb_release").args(&["-d", "-r"]).output() {
+    if let Ok(output) = Command::new("lsb_release").args(["-d", "-r"]).output() {
         let output_str = String::from_utf8_lossy(&output.stdout);
         let lines: Vec<&str> = output_str.lines().collect();
         let distro = lines
-            .get(0)
+            .first()
             .and_then(|l| l.split(':').nth(1))
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
@@ -178,7 +186,7 @@ fn check_mergerfs() -> (bool, Option<String>) {
                 if let Some(version_line) = version_str.lines().next() {
                     let version = version_line
                         .split_whitespace()
-                        .find(|s| s.chars().any(|c| c.is_digit(10)))
+                        .find(|s| s.chars().any(|c| c.is_ascii_digit()))
                         .map(|s| s.to_string());
                     return (true, version);
                 }
@@ -227,9 +235,14 @@ fn detect_macos() -> Result<PlatformInfo> {
         info!("Found macFUSE version: {:?}", macfuse_version);
     }
 
-    let mut missing_tools = Vec::new();
-    if !has_fuse_t && !has_macfuse {
-        missing_tools.push("FUSE-T or macFUSE".to_string());
+    // Check for unionfs-fuse
+    use crate::platform::macos::UNIONFS_BINARIES;
+    let unionfs_path = UNIONFS_BINARIES
+        .iter()
+        .find_map(|binary| which::which(binary).ok());
+    let has_unionfs = unionfs_path.is_some();
+    if has_unionfs {
+        info!("Found unionfs at: {:?}", unionfs_path);
     }
 
     let macos_info = MacOSInfo {
@@ -238,13 +251,14 @@ fn detect_macos() -> Result<PlatformInfo> {
         fuse_t_version,
         has_macfuse,
         macfuse_version,
+        has_unionfs,
+        unionfs_path,
     };
 
     Ok(PlatformInfo {
-        platform: Platform::MacOS(macos_info.clone()),
+        platform: Platform::MacOS(macos_info),
+        #[cfg(test)]
         arch: std::env::consts::ARCH.to_string(),
-        can_mount: macos_info.has_fuse_t || macos_info.has_macfuse,
-        missing_tools,
     })
 }
 
@@ -259,8 +273,10 @@ fn get_macos_version() -> String {
 
 #[cfg(target_os = "macos")]
 fn check_fuse_t() -> (bool, Option<String>) {
+    use crate::platform::macos::FUSE_T_FS_PATH;
+
     // FUSE-T detection: Check for the FUSE-T filesystem bundle
-    let fuse_t_path = Path::new("/Library/Filesystems/fuse-t.fs");
+    let fuse_t_path = Path::new(FUSE_T_FS_PATH);
     if fuse_t_path.exists() {
         // Try to get version from Info.plist
         let plist_path = fuse_t_path.join("Contents/Info.plist");
@@ -353,6 +369,7 @@ mod tests {
             has_mergerfs: true,
             mergerfs_version: Some("2.33.5".to_string()),
             fuse_available: true,
+            has_fusermount: true,
         });
         assert_eq!(linux_platform.mount_tool_name(), Some("mergerfs"));
 
@@ -369,6 +386,8 @@ mod tests {
             fuse_t_version: Some("1.0.0".to_string()),
             has_macfuse: false,
             macfuse_version: None,
+            has_unionfs: true,
+            unionfs_path: Some(PathBuf::from("/usr/local/bin/unionfs-fuse")),
         });
         assert_eq!(macos_platform.mount_tool_name(), Some("FUSE-T or macFUSE"));
 
