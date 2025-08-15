@@ -51,10 +51,10 @@ pub async fn validate_mount_point(path: &Path) -> Result<()> {
     let path_str = path.to_str().unwrap_or("");
 
     // First, check if path is under user's home directory or /tmp (allowed paths)
-    if let Ok(home) = std::env::var("HOME") {
-        if path_str.starts_with(&home) {
-            return Ok(());
-        }
+    if let Ok(home) = std::env::var("HOME")
+        && path_str.starts_with(&home)
+    {
+        return Ok(());
     }
 
     // Also allow temp directories
