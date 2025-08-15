@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -66,7 +67,7 @@ pub enum MountMetadata {
 }
 
 /// Options for mount operations
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MountOptions {
     /// Read-only mount
     pub read_only: bool,
@@ -85,6 +86,24 @@ pub struct MountOptions {
 
     /// Number of retries on failure
     pub retries: u32,
+}
+
+/// Mount state cache for persistence (macOS FUSE-T)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MountStateCache {
+    pub version: String,
+    pub mounts: HashMap<PathBuf, CachedMountInfo>,
+}
+
+/// Cached information about a mount
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CachedMountInfo {
+    pub target: PathBuf,
+    pub sources: Vec<PathBuf>,
+    pub mount_options: MountOptions,
+    pub created_at: SystemTime,
+    pub mount_command: String,
+    pub pid: Option<u32>,
 }
 
 #[cfg(test)]

@@ -4,6 +4,12 @@ mod detector;
 pub use constants::*;
 pub use detector::{Platform, PlatformInfo, detect_platform};
 
-// Export these only for tests
+// Export platform-specific info types (needed by mount managers)
+#[cfg(all(target_os = "linux", not(test)))]
+pub use detector::LinuxInfo;
+#[cfg(all(target_os = "macos", not(test)))]
+pub use detector::MacOSInfo;
+
+// Export both for tests on all platforms
 #[cfg(test)]
 pub use detector::{LinuxInfo, MacOSInfo};
