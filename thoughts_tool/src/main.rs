@@ -128,6 +128,33 @@ enum MountCommands {
         /// Optional path to clone to (defaults to ~/.thoughts/clones/<repo-name>)
         path: Option<std::path::PathBuf>,
     },
+
+    /// Debug mount operations
+    Debug {
+        #[command(subcommand)]
+        command: MountDebugCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum MountDebugCommands {
+    /// Show detailed mount information
+    Info {
+        /// Mount name or target path
+        target: String,
+    },
+
+    /// Show exact mount command for debugging
+    Command {
+        /// Mount name
+        mount_name: String,
+    },
+
+    /// Force remount with current settings
+    Remount {
+        /// Mount name
+        mount_name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -219,6 +246,17 @@ async fn main() -> Result<()> {
             MountCommands::List { verbose } => commands::mount::list::execute(verbose).await,
             MountCommands::Update => commands::mount::update::execute().await,
             MountCommands::Clone { url, path } => commands::mount::clone::execute(url, path).await,
+            MountCommands::Debug { command } => match command {
+                MountDebugCommands::Info { target } => {
+                    commands::mount::debug::info::execute(target).await
+                }
+                MountDebugCommands::Command { mount_name } => {
+                    commands::mount::debug::command::execute(mount_name).await
+                }
+                MountDebugCommands::Remount { mount_name } => {
+                    commands::mount::debug::remount::execute(mount_name).await
+                }
+            },
         },
         Commands::Config { command } => match command {
             ConfigCommands::Create => commands::config::create::execute().await,

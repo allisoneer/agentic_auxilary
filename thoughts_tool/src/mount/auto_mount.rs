@@ -3,7 +3,7 @@ use crate::config::{Mount, MountMerger, MountSource, RepoConfigManager};
 use crate::git::clone::{CloneOptions, clone_repository};
 use crate::git::utils::find_repo_root;
 use crate::mount::MountResolver;
-use crate::mount::{MountManager, MountOptions, get_mount_manager};
+use crate::mount::{MountOptions, get_mount_manager};
 use crate::platform::detect_platform;
 use crate::utils::paths::ensure_dir;
 use anyhow::{Context, Result};
@@ -32,10 +32,9 @@ pub async fn update_active_mounts() -> Result<()> {
         if mount_info
             .target
             .starts_with(repo_root.join(".thoughts-data"))
+            && let Some(name) = mount_info.target.file_name().and_then(|n| n.to_str())
         {
-            if let Some(name) = mount_info.target.file_name().and_then(|n| n.to_str()) {
-                active_map.insert(name.to_string(), mount_info.target.clone());
-            }
+            active_map.insert(name.to_string(), mount_info.target.clone());
         }
     }
 
@@ -44,9 +43,9 @@ pub async fn update_active_mounts() -> Result<()> {
         if !desired_mounts.contains_key(active_name) {
             println!("  {} removed mount: {}", "Unmounting".yellow(), active_name);
             mount_manager
-                .unmount(&active_path, false)
+                .unmount(active_path, false)
                 .await
-                .context(format!("Failed to unmount {}", active_name))?;
+                .context(format!("Failed to unmount {active_name}"))?;
         }
     }
 
@@ -74,7 +73,7 @@ pub async fn update_active_mounts() -> Result<()> {
                 "Mounting".green(),
                 name,
                 mount_description(mount),
-                format!("{:?}", source).to_lowercase()
+                format!("{source:?}").to_lowercase()
             );
 
             // Resolve mount path
@@ -135,7 +134,6 @@ async fn clone_and_map(url: &str, _name: &str) -> Result<PathBuf> {
     let clone_opts = CloneOptions {
         url: url.to_string(),
         target_path: default_path.clone(),
-        shallow: false,
         branch: None,
     };
     clone_repository(&clone_opts)?;
@@ -150,7 +148,7 @@ fn mount_description(mount: &Mount) -> String {
     match mount {
         Mount::Git { url, subpath, .. } => {
             if let Some(sub) = subpath {
-                format!("{}:{}", url, sub)
+                format!("{url}:{sub}")
             } else {
                 url.clone()
             }

@@ -48,12 +48,12 @@ impl SessionConfig {
             });
         }
 
-        if let Some(turns) = self.max_turns {
-            if turns == 0 {
-                return Err(ClaudeError::InvalidConfiguration {
-                    message: "Max turns must be greater than 0".to_string(),
-                });
-            }
+        if let Some(turns) = self.max_turns
+            && turns == 0
+        {
+            return Err(ClaudeError::InvalidConfiguration {
+                message: "Max turns must be greater than 0".to_string(),
+            });
         }
 
         Ok(())

@@ -96,10 +96,10 @@ pub fn generate_method_signature(tool: &ToolDef) -> String {
     let params = tool
         .params
         .iter()
-        .filter(|p| p.name.to_string() != "self")
+        .filter(|p| p.name != "self")
         .map(|p| {
             let ty = &p.ty;
-            format!("{}: {}", p.name, quote!(#ty).to_string())
+            format!("{}: {}", p.name, quote!(#ty))
         })
         .collect::<Vec<_>>()
         .join(", ");
@@ -130,7 +130,7 @@ pub fn generate_param_validation(tool: &ToolDef) -> TokenStream {
     let validations = tool
         .params
         .iter()
-        .filter(|p| p.name.to_string() != "self" && !p.is_optional)
+        .filter(|p| p.name != "self" && !p.is_optional)
         .map(|param| {
             let _param_name = &param.name;
 
@@ -155,11 +155,7 @@ pub fn generate_json_schema(ty: &Type) -> TokenStream {
 /// Check if a method should be exposed on a given interface
 pub fn should_expose_on_interface(tool: &ToolDef, interface: &str) -> bool {
     match interface {
-        "cli" => tool
-            .metadata
-            .cli_config
-            .as_ref()
-            .map_or(true, |c| !c.hidden),
+        "cli" => tool.metadata.cli_config.as_ref().is_none_or(|c| !c.hidden),
         "rest" => tool.metadata.rest_config.is_some(),
         "mcp" => tool.metadata.mcp_config.is_some(),
         _ => true,
@@ -170,7 +166,7 @@ pub fn should_expose_on_interface(tool: &ToolDef, interface: &str) -> bool {
 pub fn generate_param_docs(tool: &ToolDef) -> Vec<String> {
     tool.params
         .iter()
-        .filter(|p| p.name.to_string() != "self")
+        .filter(|p| p.name != "self")
         .map(|param| {
             let required = if param.is_optional {
                 "optional"
@@ -222,7 +218,7 @@ pub fn to_kebab_case(input: &str) -> String {
                 // 1. Previous char was lowercase, or
                 // 2. Previous char was uppercase and next char is lowercase (end of acronym)
                 if prev.is_lowercase()
-                    || (prev.is_uppercase() && next.map_or(false, |&c| c.is_lowercase()))
+                    || (prev.is_uppercase() && next.is_some_and(|&c| c.is_lowercase()))
                 {
                     result.push('-');
                 }
@@ -257,7 +253,7 @@ pub fn to_snake_case(input: &str) -> String {
                 // 1. Previous char was lowercase, or
                 // 2. Previous char was uppercase and next char is lowercase (end of acronym)
                 if prev.is_lowercase()
-                    || (prev.is_uppercase() && next.map_or(false, |&c| c.is_lowercase()))
+                    || (prev.is_uppercase() && next.is_some_and(|&c| c.is_lowercase()))
                 {
                     result.push('_');
                 }
@@ -341,7 +337,7 @@ pub fn snake_to_pascal_case(input: &str) -> String {
 pub fn sanitize_identifier(name: &str) -> String {
     // Handle reserved keywords by appending underscore
     if is_rust_keyword(name) {
-        format!("{}_", name)
+        format!("{name}_")
     } else {
         name.to_string()
     }
@@ -423,30 +419,30 @@ pub fn is_string_type(ty: &Type) -> bool {
 
 /// Checks if a type is Vec<T>
 pub fn is_vec_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.first() {
-            return segment.ident == "Vec";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.first()
+    {
+        return segment.ident == "Vec";
     }
     false
 }
 
 /// Checks if a type is HashMap<K, V>
 pub fn is_hashmap_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "HashMap";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "HashMap";
     }
     false
 }
 
 /// Checks if a type is Option<T>
 pub fn is_optional_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.first() {
-            return segment.ident == "Option";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.first()
+    {
+        return segment.ident == "Option";
     }
     false
 }

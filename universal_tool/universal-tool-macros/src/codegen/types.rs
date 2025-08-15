@@ -9,20 +9,20 @@ use syn::{GenericArgument, PathArguments, Type};
 
 /// Check if a type is Option<T>
 pub fn is_option(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Option";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "Option";
     }
     false
 }
 
 /// Check if a type is Vec<T> or similar collection
 pub fn is_vec(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Vec";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "Vec";
     }
     false
 }
@@ -31,26 +31,23 @@ pub fn is_vec(ty: &Type) -> bool {
 /// Returns the inner type if it's a generic type with one argument,
 /// otherwise returns the original type.
 pub fn extract_inner_type(ty: &Type) -> &Type {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                if args.args.len() == 1 {
-                    if let GenericArgument::Type(inner_ty) = &args.args[0] {
-                        return inner_ty;
-                    }
-                }
-            }
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+        && let PathArguments::AngleBracketed(args) = &segment.arguments
+        && args.args.len() == 1
+        && let GenericArgument::Type(inner_ty) = &args.args[0]
+    {
+        return inner_ty;
     }
     ty
 }
 
 /// Get the last segment name of a type path (e.g., "String" from "std::string::String")
 pub fn get_type_name(ty: &Type) -> Option<String> {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return Some(segment.ident.to_string());
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return Some(segment.ident.to_string());
     }
     None
 }
@@ -88,7 +85,7 @@ pub fn is_type_path(ty: &Type, expected: &str) -> bool {
     if let Type::Path(type_path) = ty {
         // Handle both simple names and qualified paths
         let path_str = quote::quote!(#type_path).to_string();
-        path_str == expected || path_str.ends_with(&format!("::{}", expected))
+        path_str == expected || path_str.ends_with(&format!("::{expected}"))
     } else {
         false
     }
@@ -96,22 +93,21 @@ pub fn is_type_path(ty: &Type, expected: &str) -> bool {
 
 /// Extract generic arguments from a type
 pub fn get_generic_args(ty: &Type) -> Vec<&Type> {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                return args
-                    .args
-                    .iter()
-                    .filter_map(|arg| {
-                        if let GenericArgument::Type(ty) = arg {
-                            Some(ty)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-            }
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+        && let PathArguments::AngleBracketed(args) = &segment.arguments
+    {
+        return args
+            .args
+            .iter()
+            .filter_map(|arg| {
+                if let GenericArgument::Type(ty) = arg {
+                    Some(ty)
+                } else {
+                    None
+                }
+            })
+            .collect();
     }
     vec![]
 }

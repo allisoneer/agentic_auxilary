@@ -6,22 +6,15 @@ use std::path::{Path, PathBuf};
 pub fn expand_path(path: &Path) -> Result<PathBuf> {
     let path_str = path.to_string_lossy();
 
-    if path_str.starts_with("~/") {
+    if let Some(stripped) = path_str.strip_prefix("~/") {
         let home = dirs::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-        Ok(home.join(&path_str[2..]))
+        Ok(home.join(stripped))
     } else if path_str == "~" {
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))
     } else {
         Ok(path.to_path_buf())
     }
-}
-
-/// Get the default config file path
-pub fn get_config_path() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
-    Ok(config_dir.join("thoughts").join("config.json"))
 }
 
 /// Ensure a directory exists, creating it if necessary
@@ -57,6 +50,7 @@ pub fn get_personal_config_path() -> Result<PathBuf> {
 }
 
 /// Get external metadata directory for personal metadata about other repos
+#[cfg(target_os = "macos")]
 pub fn get_external_metadata_dir() -> Result<PathBuf> {
     let home =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
@@ -64,11 +58,15 @@ pub fn get_external_metadata_dir() -> Result<PathBuf> {
 }
 
 /// Get local metadata file path for a repository
+#[allow(dead_code)]
+// TODO(2): Implement local metadata caching
 pub fn get_local_metadata_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".thoughts").join("data").join("local.json")
 }
 
 /// Get rules file path for a repository
+#[allow(dead_code)]
+// TODO(2): Implement repository-specific rules system
 pub fn get_repo_rules_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".thoughts").join("rules.json")
 }
@@ -83,8 +81,10 @@ pub fn get_repo_mapping_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_expand_path() {
         // Test tilde expansion
         let home = dirs::home_dir().unwrap();

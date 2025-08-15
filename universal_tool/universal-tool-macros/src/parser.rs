@@ -112,7 +112,7 @@ pub fn parse_router(attr: TokenStream, item: TokenStream) -> syn::Result<TokenSt
 
     // Debug: Print the generated code to stderr for inspection
     if std::env::var("UTF_DEBUG").is_ok() {
-        eprintln!("Generated code:\n{}", output);
+        eprintln!("Generated code:\n{output}");
     }
 
     Ok(output)
@@ -286,10 +286,10 @@ fn parse_impl_to_router(impl_block: &ItemImpl, router_attr: RouterAttr) -> syn::
     // Parse all tool methods
     let mut tools = Vec::new();
     for item in &impl_block.items {
-        if let ImplItem::Fn(method) = item {
-            if let Some(tool) = parse_tool_method(method)? {
-                tools.push(tool);
-            }
+        if let ImplItem::Fn(method) = item
+            && let Some(tool) = parse_tool_method(method)?
+        {
+            tools.push(tool);
         }
     }
 
@@ -353,7 +353,7 @@ fn parse_tool_method(method: &syn::ImplItemFn) -> syn::Result<Option<ToolDef>> {
     // Extract description from doc comments if not provided
     let description = if tool_attr.description.is_empty() {
         extract_doc_comment(&method.attrs)
-            .unwrap_or_else(|| format!("Execute {} operation", tool_name))
+            .unwrap_or_else(|| format!("Execute {tool_name} operation"))
     } else {
         tool_attr.description
     };
@@ -396,20 +396,20 @@ fn parse_tool_method(method: &syn::ImplItemFn) -> syn::Result<Option<ToolDef>> {
     };
 
     // Update parameter sources based on REST path
-    if let Some(rest_config) = &metadata.rest_config {
-        if let Some(path) = &rest_config.path {
-            // Extract path parameter names from REST path (e.g., ":project_id" -> "project_id")
-            let path_param_names: Vec<String> = path
-                .split('/')
-                .filter(|segment| segment.starts_with(':'))
-                .map(|segment| segment[1..].to_string())
-                .collect();
+    if let Some(rest_config) = &metadata.rest_config
+        && let Some(path) = &rest_config.path
+    {
+        // Extract path parameter names from REST path (e.g., ":project_id" -> "project_id")
+        let path_param_names: Vec<String> = path
+            .split('/')
+            .filter(|segment| segment.starts_with(':'))
+            .map(|segment| segment[1..].to_string())
+            .collect();
 
-            // Update the source for any matching parameters
-            for param in &mut params {
-                if path_param_names.contains(&param.name.to_string()) {
-                    param.source = ParamSource::Path;
-                }
+        // Update the source for any matching parameters
+        for param in &mut params {
+            if path_param_names.contains(&param.name.to_string()) {
+                param.source = ParamSource::Path;
             }
         }
     }
@@ -486,8 +486,7 @@ fn parse_typed_param(pat_type: &PatType) -> syn::Result<ParamDef> {
                 return Err(syn::Error::new_spanned(
                     pat_type,
                     format!(
-                        "Invalid parameter source: {}. Must be one of: body, query, path, header",
-                        source_str
+                        "Invalid parameter source: {source_str}. Must be one of: body, query, path, header"
                     ),
                 ));
             }
@@ -523,52 +522,52 @@ fn parse_typed_param(pat_type: &PatType) -> syn::Result<ParamDef> {
 
 /// Check if a type is Option<T>.
 fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(segment) = path.segments.first() {
-            return segment.ident == "Option";
-        }
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(segment) = path.segments.first()
+    {
+        return segment.ident == "Option";
     }
     false
 }
 
 /// Validate that the return type is Result<T, ToolError>.
 fn validate_return_type(ty: &Type) -> syn::Result<()> {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(segment) = path.segments.last() {
-            if segment.ident != "Result" {
-                return Err(syn::Error::new_spanned(
-                    ty,
-                    "Tool methods must return Result<T, ToolError>",
-                ));
-            }
-
-            // Check that it has two type arguments
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                if args.args.len() != 2 {
-                    return Err(syn::Error::new_spanned(
-                        ty,
-                        "Result must have exactly two type parameters: Result<T, ToolError>",
-                    ));
-                }
-
-                // Check that the error type is ToolError
-                if let Some(GenericArgument::Type(error_type)) = args.args.iter().nth(1) {
-                    if !is_tool_error_type(error_type) {
-                        return Err(syn::Error::new_spanned(
-                            error_type,
-                            "Tool methods must return Result<T, ToolError>. The error type must be ToolError.",
-                        ));
-                    }
-                }
-            } else {
-                return Err(syn::Error::new_spanned(
-                    ty,
-                    "Result must have type parameters: Result<T, ToolError>",
-                ));
-            }
-
-            return Ok(());
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(segment) = path.segments.last()
+    {
+        if segment.ident != "Result" {
+            return Err(syn::Error::new_spanned(
+                ty,
+                "Tool methods must return Result<T, ToolError>",
+            ));
         }
+
+        // Check that it has two type arguments
+        if let PathArguments::AngleBracketed(args) = &segment.arguments {
+            if args.args.len() != 2 {
+                return Err(syn::Error::new_spanned(
+                    ty,
+                    "Result must have exactly two type parameters: Result<T, ToolError>",
+                ));
+            }
+
+            // Check that the error type is ToolError
+            if let Some(GenericArgument::Type(error_type)) = args.args.iter().nth(1)
+                && !is_tool_error_type(error_type)
+            {
+                return Err(syn::Error::new_spanned(
+                    error_type,
+                    "Tool methods must return Result<T, ToolError>. The error type must be ToolError.",
+                ));
+            }
+        } else {
+            return Err(syn::Error::new_spanned(
+                ty,
+                "Result must have type parameters: Result<T, ToolError>",
+            ));
+        }
+
+        return Ok(());
     }
 
     Err(syn::Error::new_spanned(
@@ -579,10 +578,10 @@ fn validate_return_type(ty: &Type) -> syn::Result<()> {
 
 /// Check if a type is ToolError (or a path ending in ToolError).
 fn is_tool_error_type(ty: &Type) -> bool {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(segment) = path.segments.last() {
-            return segment.ident == "ToolError";
-        }
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(segment) = path.segments.last()
+    {
+        return segment.ident == "ToolError";
     }
     false
 }
@@ -604,17 +603,15 @@ fn extract_doc_comment(attrs: &[Attribute]) -> Option<String> {
     let mut docs = Vec::new();
 
     for attr in attrs {
-        if attr.path().is_ident("doc") {
-            if let syn::Meta::NameValue(meta) = &attr.meta {
-                if let syn::Expr::Lit(lit) = &meta.value {
-                    if let syn::Lit::Str(s) = &lit.lit {
-                        let line = s.value();
-                        // Remove leading space if present (rustdoc convention)
-                        let line = line.strip_prefix(' ').unwrap_or(&line);
-                        docs.push(line.to_string());
-                    }
-                }
-            }
+        if attr.path().is_ident("doc")
+            && let syn::Meta::NameValue(meta) = &attr.meta
+            && let syn::Expr::Lit(lit) = &meta.value
+            && let syn::Lit::Str(s) = &lit.lit
+        {
+            let line = s.value();
+            // Remove leading space if present (rustdoc convention)
+            let line = line.strip_prefix(' ').unwrap_or(&line);
+            docs.push(line.to_string());
         }
     }
 
@@ -650,7 +647,6 @@ fn strip_param_attributes(impl_block: &mut ItemImpl) {
 mod tests {
     use super::*;
     use quote::quote;
-    use syn::parse_quote;
 
     #[test]
     fn test_parse_simple_router() {

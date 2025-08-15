@@ -31,7 +31,7 @@ pub async fn execute(json: bool, personal: bool) -> Result<()> {
                 if !config.repository_mounts.is_empty() {
                     println!("{}:", "Repository Mounts".cyan());
                     for (repo, mounts) in &config.repository_mounts {
-                        println!("  {}:", repo);
+                        println!("  {repo}:");
                         for mount in mounts {
                             println!("    {} → {}", mount.mount_path, mount.remote);
                         }

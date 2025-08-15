@@ -29,19 +29,6 @@ pub trait MountManager: Send + Sync {
     /// Get detailed information about a specific mount
     async fn get_mount_info(&self, target: &Path) -> Result<Option<MountInfo>>;
 
-    /// Remount with different sources (atomic operation)
-    async fn remount(
-        &self,
-        sources: &[PathBuf],
-        target: &Path,
-        options: &MountOptions,
-    ) -> Result<()> {
-        // Default implementation: unmount then mount
-        // Platform-specific implementations may override for atomic operations
-        self.unmount(target, false).await?;
-        self.mount(sources, target, options).await
-    }
-
     /// Check if the mount system is available and properly configured
     async fn check_health(&self) -> Result<()>;
 
@@ -96,11 +83,16 @@ pub fn get_mount_manager(platform_info: &PlatformInfo) -> Result<Box<dyn MountMa
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    use super::get_mount_manager;
     #[cfg(target_os = "linux")]
-    use crate::platform::LinuxInfo;
+    use crate::platform::detector::LinuxInfo;
     #[cfg(target_os = "macos")]
-    use crate::platform::MacOSInfo;
+    use crate::platform::detector::MacOSInfo;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    use crate::platform::{Platform, PlatformInfo};
+    #[cfg(target_os = "macos")]
+    use std::path::PathBuf;
 
     #[test]
     #[cfg(target_os = "linux")]
@@ -112,10 +104,9 @@ mod tests {
                 has_mergerfs: true,
                 mergerfs_version: Some("2.33.5".to_string()),
                 fuse_available: true,
+                has_fusermount: false, // Testing without fusermount - should still work
             }),
             arch: "x86_64".to_string(),
-            can_mount: true,
-            missing_tools: vec![],
         };
 
         let manager = get_mount_manager(&platform_info);
@@ -132,10 +123,9 @@ mod tests {
                 has_mergerfs: false,
                 mergerfs_version: None,
                 fuse_available: true,
+                has_fusermount: true, // Even with fusermount, can't mount without mergerfs
             }),
             arch: "x86_64".to_string(),
-            can_mount: false,
-            missing_tools: vec!["mergerfs".to_string()],
         };
 
         let result = get_mount_manager(&platform_info);
@@ -144,6 +134,54 @@ mod tests {
             match e {
                 crate::error::ThoughtsError::ToolNotFound { tool } => {
                     assert_eq!(tool, "mergerfs");
+                }
+                _ => panic!("Expected ToolNotFound error"),
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn test_get_mount_manager_macos() {
+        let platform_info = PlatformInfo {
+            platform: Platform::MacOS(MacOSInfo {
+                version: "14.0".to_string(),
+                has_fuse_t: true,
+                fuse_t_version: Some("1.0.0".to_string()),
+                has_macfuse: false,
+                macfuse_version: None,
+                has_unionfs: true,
+                unionfs_path: Some(PathBuf::from("/usr/local/bin/unionfs-fuse")),
+            }),
+            arch: "aarch64".to_string(),
+        };
+
+        let manager = get_mount_manager(&platform_info);
+        assert!(manager.is_ok());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn test_get_mount_manager_no_fuse() {
+        let platform_info = PlatformInfo {
+            platform: Platform::MacOS(MacOSInfo {
+                version: "14.0".to_string(),
+                has_fuse_t: false,
+                fuse_t_version: None,
+                has_macfuse: false,
+                macfuse_version: None,
+                has_unionfs: false,
+                unionfs_path: None,
+            }),
+            arch: "aarch64".to_string(),
+        };
+
+        let result = get_mount_manager(&platform_info);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            match e {
+                crate::error::ThoughtsError::ToolNotFound { tool } => {
+                    assert_eq!(tool, "FUSE-T or macFUSE");
                 }
                 _ => panic!("Expected ToolNotFound error"),
             }

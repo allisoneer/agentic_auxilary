@@ -40,13 +40,6 @@ fn default_git_sync() -> SyncStrategy {
 
 // Helper methods for compatibility with existing code
 impl Mount {
-    pub fn mount_type(&self) -> MountType {
-        match self {
-            Mount::Directory { .. } => MountType::Directory,
-            Mount::Git { .. } => MountType::Git,
-        }
-    }
-
     pub fn sync_strategy(&self) -> SyncStrategy {
         match self {
             Mount::Directory { sync, .. } => *sync,
@@ -54,6 +47,7 @@ impl Mount {
         }
     }
 
+    #[cfg(test)] // Only used in tests
     pub fn is_git(&self) -> bool {
         matches!(self, Mount::Git { .. })
     }
@@ -61,46 +55,11 @@ impl Mount {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MountType {
-    Directory,
-    Git,
-}
-
-impl std::str::FromStr for MountType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "directory" | "dir" => Ok(MountType::Directory),
-            "git" => Ok(MountType::Git),
-            _ => Err(anyhow::anyhow!(
-                "Invalid mount type: {}. Must be 'directory' or 'git'",
-                s
-            )),
-        }
-    }
-}
-
-impl std::fmt::Display for MountType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MountType::Directory => write!(f, "directory"),
-            MountType::Git => write!(f, "git"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SyncStrategy {
+    #[default]
     None,
     Auto,
-}
-
-impl Default for SyncStrategy {
-    fn default() -> Self {
-        SyncStrategy::None
-    }
 }
 
 impl std::str::FromStr for SyncStrategy {
@@ -258,7 +217,6 @@ impl Default for RepoMapping {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_repo_config_serialization() {
@@ -359,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_file_metadata_serialization() {
-        let mut metadata = FileMetadata {
+        let metadata = FileMetadata {
             auto_metadata: {
                 let mut m = HashMap::new();
                 m.insert(

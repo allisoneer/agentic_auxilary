@@ -58,9 +58,10 @@ pub struct ParamDef {
 }
 
 /// Where a parameter comes from in different interfaces.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ParamSource {
     /// Default - comes from request body in REST/MCP, command args in CLI
+    #[default]
     Body,
     /// REST query parameters
     Query,
@@ -68,12 +69,6 @@ pub enum ParamSource {
     Path,
     /// REST headers
     Header,
-}
-
-impl Default for ParamSource {
-    fn default() -> Self {
-        ParamSource::Body
-    }
 }
 
 /// Metadata for the router attribute.
@@ -127,19 +122,14 @@ pub struct RestConfig {
 }
 
 /// HTTP methods supported by REST endpoints.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HttpMethod {
     Get,
+    #[default]
     Post,
     Put,
     Delete,
     Patch,
-}
-
-impl Default for HttpMethod {
-    fn default() -> Self {
-        HttpMethod::Post
-    }
 }
 
 /// MCP-specific configuration.
@@ -272,8 +262,8 @@ impl ToolDef {
     fn extract_path_params(&self, path: &str) -> Vec<String> {
         let mut params = Vec::new();
         for segment in path.split('/') {
-            if segment.starts_with(':') {
-                params.push(segment[1..].to_string());
+            if let Some(stripped) = segment.strip_prefix(':') {
+                params.push(stripped.to_string());
             }
         }
         params

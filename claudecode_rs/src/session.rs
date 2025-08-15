@@ -346,21 +346,21 @@ impl Session {
     pub async fn interrupt(&mut self) -> Result<()> {
         #[cfg(unix)]
         {
-            if let Some(process) = self.process.lock().await.as_mut() {
-                if let Some(pid) = process.id() {
-                    // Send SIGINT for graceful shutdown
-                    unsafe {
-                        let result = libc::kill(pid as i32, libc::SIGINT);
-                        if result == 0 {
-                            return Ok(());
-                        } else {
-                            return Err(ClaudeError::SessionError {
-                                message: format!(
-                                    "Failed to send interrupt signal: {}",
-                                    std::io::Error::last_os_error()
-                                ),
-                            });
-                        }
+            if let Some(process) = self.process.lock().await.as_mut()
+                && let Some(pid) = process.id()
+            {
+                // Send SIGINT for graceful shutdown
+                unsafe {
+                    let result = libc::kill(pid as i32, libc::SIGINT);
+                    if result == 0 {
+                        return Ok(());
+                    } else {
+                        return Err(ClaudeError::SessionError {
+                            message: format!(
+                                "Failed to send interrupt signal: {}",
+                                std::io::Error::last_os_error()
+                            ),
+                        });
                     }
                 }
             }

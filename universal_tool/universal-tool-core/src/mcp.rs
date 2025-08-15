@@ -190,7 +190,7 @@ impl ProgressReporter for McpProgressReporter {
             sender.send(notification).await.map_err(|e| {
                 ToolError::new(
                     ErrorCode::Internal,
-                    format!("Failed to send progress notification: {}", e),
+                    format!("Failed to send progress notification: {e}"),
                 )
             })?;
         }
@@ -287,8 +287,7 @@ impl<T: serde::Serialize> IntoCallToolResult for T {
                 serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string()),
             )]),
             Err(e) => CallToolResult::error(vec![Content::text(format!(
-                "Failed to serialize result: {}",
-                e
+                "Failed to serialize result: {e}"
             ))]),
         }
     }
@@ -311,25 +310,18 @@ pub fn convert_tool_definitions(tool_jsons: Vec<JsonValue>) -> Vec<Tool> {
 
             // Convert input schema to the expected format
             let input_schema = if let Some(schema_value) = json.get("inputSchema") {
-                if let Some(schema_obj) = schema_value.as_object() {
-                    Some(Arc::new(schema_obj.clone()))
-                } else {
-                    None
-                }
+                schema_value
+                    .as_object()
+                    .map(|schema_obj| Arc::new(schema_obj.clone()))
             } else {
                 None
             };
 
             // Extract annotations from the JSON
             // For now, we'll map our custom annotations to the available fields in rmcp
-            let annotations = if let Some(_hints) = json.get("annotations") {
-                // rmcp::model::ToolAnnotations has different fields than we expected
-                // We'll need to map our custom annotations to what's available
-                // For now, just preserve the JSON structure for potential future use
-                Some(ToolAnnotations::default())
-            } else {
-                None
-            };
+            let annotations = json
+                .get("annotations")
+                .map(|_hints| ToolAnnotations::default());
 
             Some(Tool {
                 name: name.into(),

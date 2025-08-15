@@ -1,14 +1,16 @@
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{debug, error, info, warn};
 
 use super::manager::MountManager;
 use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
-use crate::platform::{MacOSInfo, common::*, macos::*};
+use crate::platform::common::{MOUNT_RETRY_DELAY, MOUNT_TIMEOUT, UNMOUNT_TIMEOUT};
+use crate::platform::detector::MacOSInfo;
+use crate::platform::macos::{DEFAULT_MOUNT_OPTIONS, DEFAULT_VOLUME_NAME, DISKUTIL_CMD, MOUNT_CMD};
 
 pub struct FuseTManager {
     /// Platform information
@@ -20,7 +22,8 @@ pub struct FuseTManager {
 
 impl FuseTManager {
     pub fn new(platform_info: MacOSInfo) -> Self {
-        // Try to find unionfs-fuse binary
+        // Platform detection already verified FUSE-T or macFUSE exists
+        // Still need to check for unionfs-fuse as it's a separate tool
         let unionfs_path = which::which("unionfs-fuse")
             .or_else(|_| which::which("unionfs"))
             .ok();
@@ -86,29 +89,22 @@ impl FuseTManager {
 
         let mut opts = Vec::new();
 
-        // Volume name for FUSE-T
-        let volname = options
-            .volume_name
-            .as_ref()
-            .unwrap_or(&DEFAULT_VOLUME_NAME.to_string());
+        // Volume name for FUSE-T (dynamic, so we set it separately)
+        let default_volname = DEFAULT_VOLUME_NAME.to_string();
+        let volname = options.volume_name.as_ref().unwrap_or(&default_volname);
         opts.push(format!("volname={}", volname));
 
-        // Enable copy-on-write for better performance
-        opts.push("cow".to_string());
+        // Add default mount options (excluding volname which we set above)
+        for opt in DEFAULT_MOUNT_OPTIONS {
+            if !opt.starts_with("volname=") {
+                opts.push(opt.to_string());
+            }
+        }
 
-        // Hide unionfs metadata files
-        opts.push("hide_meta_files".to_string());
-
-        // Increase max files for large directory trees
-        opts.push("max_files=32768".to_string());
-
-        // Add default FUSE-T options
+        // Add allow_other if requested
         if options.allow_other {
             opts.push("allow_other".to_string());
         }
-
-        // Use ino for better inode handling
-        opts.push("use_ino".to_string());
 
         // Add extra options
         opts.extend(options.extra_options.clone());
@@ -127,13 +123,17 @@ impl FuseTManager {
 
     /// Parse mount command output to find active mounts
     async fn parse_mount_output(&self) -> Result<Vec<MountInfo>> {
-        let output = tokio::process::Command::new("mount").output().await?;
+        let output = tokio::process::Command::new(MOUNT_CMD).output().await?;
 
         if !output.status.success() {
             return Err(ThoughtsError::MountOperationFailed {
                 message: "Failed to list mounts".to_string(),
             });
         }
+
+        // Load mount cache to get source information
+        #[cfg(target_os = "macos")]
+        let mount_cache = self.load_mount_cache().await.ok().flatten();
 
         let mut mounts = Vec::new();
         let output_str = String::from_utf8_lossy(&output.stdout);
@@ -142,13 +142,14 @@ impl FuseTManager {
             // Format: unionfs-fuse on /path/to/mount (fuse-t, local, synchronous)
             // or: unionfs on /path/to/mount (macfuse, local, synchronous)
 
-            if !line.contains("unionfs") {
-                continue;
-            }
-
             // Parse the mount line
             if let Some(on_pos) = line.find(" on ") {
                 let device = &line[..on_pos];
+
+                // Only process unionfs mounts
+                if !device.contains("unionfs") {
+                    continue;
+                }
                 let rest = &line[on_pos + 4..];
 
                 if let Some(paren_pos) = rest.find(" (") {
@@ -157,10 +158,23 @@ impl FuseTManager {
                     let options: Vec<String> =
                         options_str.split(", ").map(|s| s.to_string()).collect();
 
-                    // Parse sources from mount info if possible
-                    // unionfs-fuse doesn't expose source dirs in mount output
-                    // We'll need to track this separately in our config
-                    let sources = vec![PathBuf::from("<merged>")];
+                    // Get sources from cache if available, otherwise use placeholder
+                    let sources = {
+                        #[cfg(target_os = "macos")]
+                        if let Some(ref cache) = mount_cache {
+                            if let Some(cached_info) = cache.mounts.get(&PathBuf::from(mount_point))
+                            {
+                                cached_info.sources.clone()
+                            } else {
+                                vec![PathBuf::from("<merged>")]
+                            }
+                        } else {
+                            vec![PathBuf::from("<merged>")]
+                        }
+
+                        #[cfg(not(target_os = "macos"))]
+                        vec![PathBuf::from("<merged>")]
+                    };
 
                     let fs_type = options
                         .first()
@@ -220,6 +234,73 @@ impl FuseTManager {
             _ => Ok(None),
         }
     }
+
+    /// Store mount state for persistence
+    #[cfg(target_os = "macos")]
+    async fn store_mount_state(
+        &self,
+        sources: &[PathBuf],
+        target: &Path,
+        options: &MountOptions,
+        cmd_path: &str,
+        args: &[String],
+    ) -> Result<()> {
+        use super::types::{CachedMountInfo, MountStateCache};
+        use std::time::SystemTime;
+
+        let cache_path = crate::utils::paths::get_external_metadata_dir()?.join("mount_state.json");
+
+        // Load existing cache or create new one
+        let mut cache = if cache_path.exists() {
+            let content = tokio::fs::read_to_string(&cache_path).await?;
+            serde_json::from_str(&content).unwrap_or_else(|_| MountStateCache {
+                version: "1.0".to_string(),
+                mounts: std::collections::HashMap::new(),
+            })
+        } else {
+            MountStateCache {
+                version: "1.0".to_string(),
+                mounts: std::collections::HashMap::new(),
+            }
+        };
+
+        // Add current mount info
+        let mount_info = CachedMountInfo {
+            target: target.to_path_buf(),
+            sources: sources.to_vec(),
+            mount_options: options.clone(),
+            created_at: SystemTime::now(),
+            mount_command: format!("{} {}", cmd_path, args.join(" ")),
+            pid: None, // Could get this from process if needed
+        };
+
+        cache.mounts.insert(target.to_path_buf(), mount_info);
+
+        // Ensure directory exists
+        if let Some(parent) = cache_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        // Save cache
+        let content = serde_json::to_string_pretty(&cache)?;
+        tokio::fs::write(&cache_path, content).await?;
+
+        Ok(())
+    }
+
+    /// Load cached mount sources
+    #[cfg(target_os = "macos")]
+    async fn load_mount_cache(&self) -> Result<Option<super::types::MountStateCache>> {
+        let cache_path = crate::utils::paths::get_external_metadata_dir()?.join("mount_state.json");
+
+        if !cache_path.exists() {
+            return Ok(None);
+        }
+
+        let content = tokio::fs::read_to_string(&cache_path).await?;
+        let cache = serde_json::from_str(&content)?;
+        Ok(Some(cache))
+    }
 }
 
 #[async_trait]
@@ -245,6 +326,9 @@ impl MountManager for FuseTManager {
                 });
             }
         }
+
+        // Validate mount point first
+        utils::validate_mount_point(target).await?;
 
         // Ensure target directory exists
         utils::ensure_mount_point(target).await?;
@@ -287,6 +371,16 @@ impl MountManager for FuseTManager {
                 // Verify mount succeeded
                 sleep(Duration::from_millis(500)).await; // macOS needs more time
                 if self.is_mounted(target).await? {
+                    // Store mount state for macOS
+                    #[cfg(target_os = "macos")]
+                    {
+                        if let Err(e) = self
+                            .store_mount_state(sources, target, options, &cmd_path, &args)
+                            .await
+                        {
+                            warn!("Failed to store mount state: {}", e);
+                        }
+                    }
                     return Ok(());
                 } else {
                     warn!("Mount command succeeded but mount not found");
@@ -325,7 +419,13 @@ impl MountManager for FuseTManager {
 
         cmd.arg(target);
 
-        let output = cmd.output().await?;
+        let output = timeout(UNMOUNT_TIMEOUT, cmd.output())
+            .await
+            .map_err(|_| ThoughtsError::CommandTimeout {
+                command: "umount".to_string(),
+                timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+            })?
+            .map_err(ThoughtsError::from)?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -333,10 +433,18 @@ impl MountManager for FuseTManager {
             // Try diskutil eject as fallback
             if force {
                 warn!("umount failed, trying diskutil eject: {}", stderr);
-                let eject_output = tokio::process::Command::new(DISKUTIL_CMD)
-                    .args(&["unmount", "force", target.to_str().unwrap_or("")])
-                    .output()
-                    .await?;
+                let eject_output = timeout(
+                    UNMOUNT_TIMEOUT,
+                    tokio::process::Command::new(DISKUTIL_CMD)
+                        .args(&["unmount", "force", target.to_str().unwrap_or("")])
+                        .output(),
+                )
+                .await
+                .map_err(|_| ThoughtsError::CommandTimeout {
+                    command: "diskutil unmount".to_string(),
+                    timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+                })?
+                .map_err(ThoughtsError::from)?;
 
                 if !eject_output.status.success() {
                     return Err(ThoughtsError::MountOperationFailed {
@@ -441,7 +549,7 @@ impl MountManager for FuseTManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::MacOSInfo;
+    use crate::platform::detector::MacOSInfo;
 
     fn test_platform_info() -> MacOSInfo {
         MacOSInfo {
@@ -450,6 +558,8 @@ mod tests {
             fuse_t_version: Some("1.0.0".to_string()),
             has_macfuse: false,
             macfuse_version: None,
+            has_unionfs: true,
+            unionfs_path: Some(PathBuf::from("/usr/local/bin/unionfs-fuse")),
         }
     }
 
@@ -469,7 +579,7 @@ mod tests {
     async fn test_mount_validation() {
         let manager = FuseTManager::new(test_platform_info());
         let target = Path::new("/tmp/test_mount");
-        let options = MountOptions::new();
+        let options = MountOptions::default();
 
         // Test with empty sources
         let result = manager.mount(&[], target, &options).await;

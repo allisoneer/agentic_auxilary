@@ -16,11 +16,7 @@ pub fn generate_param_struct(tool: &ToolDef, struct_name: &str, derives: &[&str]
     let struct_ident = format_ident!("{}", struct_name);
 
     // Filter out self parameter
-    let params: Vec<&ParamDef> = tool
-        .params
-        .iter()
-        .filter(|p| p.name.to_string() != "self")
-        .collect();
+    let params: Vec<&ParamDef> = tool.params.iter().filter(|p| p.name != "self").collect();
 
     if params.is_empty() {
         // Empty struct for tools with no parameters
@@ -72,11 +68,7 @@ pub fn generate_inline_param_struct(
     let struct_ident = format_ident!("{}", struct_name);
 
     // Filter out self parameter
-    let params: Vec<&ParamDef> = tool
-        .params
-        .iter()
-        .filter(|p| p.name.to_string() != "self")
-        .collect();
+    let params: Vec<&ParamDef> = tool.params.iter().filter(|p| p.name != "self").collect();
 
     if params.is_empty() {
         let derive_tokens = generate_derives(derives);
@@ -218,11 +210,7 @@ pub fn generate_method_call_from_struct(tool: &ToolDef, struct_var: &str) -> Tok
     let method_name = &tool.method_name;
 
     // Get non-self parameters
-    let params: Vec<&ParamDef> = tool
-        .params
-        .iter()
-        .filter(|p| p.name.to_string() != "self")
-        .collect();
+    let params: Vec<&ParamDef> = tool.params.iter().filter(|p| p.name != "self").collect();
 
     // Generate parameter list
     let args = params.iter().map(|param| {
@@ -256,7 +244,7 @@ mod tests {
             source: ParamSource::Body,
             is_optional,
             metadata: ParamMetadata {
-                description: Some(format!("Test parameter {}", name)),
+                description: Some(format!("Test parameter {name}")),
                 ..Default::default()
             },
         }
