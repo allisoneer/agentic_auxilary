@@ -32,10 +32,9 @@ pub async fn update_active_mounts() -> Result<()> {
         if mount_info
             .target
             .starts_with(repo_root.join(".thoughts-data"))
+            && let Some(name) = mount_info.target.file_name().and_then(|n| n.to_str())
         {
-            if let Some(name) = mount_info.target.file_name().and_then(|n| n.to_str()) {
-                active_map.insert(name.to_string(), mount_info.target.clone());
-            }
+            active_map.insert(name.to_string(), mount_info.target.clone());
         }
     }
 

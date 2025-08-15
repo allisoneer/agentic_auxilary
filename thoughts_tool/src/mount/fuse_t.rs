@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{debug, error, info, warn};
 
 use super::manager::MountManager;
@@ -9,7 +9,7 @@ use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
 use crate::platform::MacOSInfo;
-use crate::platform::common::{MOUNT_RETRY_DELAY, MOUNT_TIMEOUT};
+use crate::platform::common::{MOUNT_RETRY_DELAY, MOUNT_TIMEOUT, UNMOUNT_TIMEOUT};
 use crate::platform::macos::{DEFAULT_VOLUME_NAME, DISKUTIL_CMD};
 
 pub struct FuseTManager {
@@ -22,7 +22,8 @@ pub struct FuseTManager {
 
 impl FuseTManager {
     pub fn new(platform_info: MacOSInfo) -> Self {
-        // Try to find unionfs-fuse binary
+        // Platform detection already verified FUSE-T or macFUSE exists
+        // Still need to check for unionfs-fuse as it's a separate tool
         let unionfs_path = which::which("unionfs-fuse")
             .or_else(|_| which::which("unionfs"))
             .ok();
@@ -423,7 +424,13 @@ impl MountManager for FuseTManager {
 
         cmd.arg(target);
 
-        let output = cmd.output().await?;
+        let output = timeout(UNMOUNT_TIMEOUT, cmd.output())
+            .await
+            .map_err(|_| ThoughtsError::CommandTimeout {
+                command: "umount".to_string(),
+                timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+            })?
+            .map_err(ThoughtsError::from)?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -431,10 +438,18 @@ impl MountManager for FuseTManager {
             // Try diskutil eject as fallback
             if force {
                 warn!("umount failed, trying diskutil eject: {}", stderr);
-                let eject_output = tokio::process::Command::new(DISKUTIL_CMD)
-                    .args(&["unmount", "force", target.to_str().unwrap_or("")])
-                    .output()
-                    .await?;
+                let eject_output = timeout(
+                    UNMOUNT_TIMEOUT,
+                    tokio::process::Command::new(DISKUTIL_CMD)
+                        .args(&["unmount", "force", target.to_str().unwrap_or("")])
+                        .output(),
+                )
+                .await
+                .map_err(|_| ThoughtsError::CommandTimeout {
+                    command: "diskutil unmount".to_string(),
+                    timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+                })?
+                .map_err(ThoughtsError::from)?;
 
                 if !eject_output.status.success() {
                     return Err(ThoughtsError::MountOperationFailed {
@@ -548,6 +563,8 @@ mod tests {
             fuse_t_version: Some("1.0.0".to_string()),
             has_macfuse: false,
             macfuse_version: None,
+            has_unionfs: true,
+            unionfs_path: Some(PathBuf::from("/usr/local/bin/unionfs-fuse")),
         }
     }
 

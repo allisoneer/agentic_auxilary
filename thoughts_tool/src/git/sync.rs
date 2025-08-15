@@ -212,15 +212,15 @@ impl GitSync {
 
                         // If that fails, try with public key
                         let public_key = ssh_dir.join(format!("{key_name}.pub"));
-                        if public_key.exists() {
-                            if let Ok(cred) = git2::Cred::ssh_key(
+                        if public_key.exists()
+                            && let Ok(cred) = git2::Cred::ssh_key(
                                 username,
                                 Some(public_key.as_path()),
                                 private_key.as_path(),
                                 None,
-                            ) {
-                                return Ok(cred);
-                            }
+                            )
+                        {
+                            return Ok(cred);
                         }
                     }
                 }
@@ -366,15 +366,15 @@ impl GitSync {
 
                         // If that fails, try with public key
                         let public_key = ssh_dir.join(format!("{key_name}.pub"));
-                        if public_key.exists() {
-                            if let Ok(cred) = git2::Cred::ssh_key(
+                        if public_key.exists()
+                            && let Ok(cred) = git2::Cred::ssh_key(
                                 username,
                                 Some(public_key.as_path()),
                                 private_key.as_path(),
                                 None,
-                            ) {
-                                return Ok(cred);
-                            }
+                            )
+                        {
+                            return Ok(cred);
                         }
                     }
                 }

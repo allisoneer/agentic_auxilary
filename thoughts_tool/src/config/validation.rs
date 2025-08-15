@@ -105,10 +105,10 @@ impl MountValidator {
         }
 
         // Check if path is in user's home or temp directory
-        if let Some(home) = dirs::home_dir() {
-            if expanded.starts_with(&home) {
-                return Ok(());
-            }
+        if let Some(home) = dirs::home_dir()
+            && expanded.starts_with(&home)
+        {
+            return Ok(());
         }
 
         // Allow /tmp and common temp directories

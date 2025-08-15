@@ -80,13 +80,12 @@ pub async fn validate_mount_point(path: &Path) -> Result<()> {
     }
 
     // Check if path is under user's home directory or /tmp
-    if let Ok(home) = std::env::var("HOME") {
-        if path_str.starts_with(&home)
+    if let Ok(home) = std::env::var("HOME")
+        && (path_str.starts_with(&home)
             || path_str.starts_with("/tmp")
-            || path_str.starts_with("/private/tmp")
-        {
-            return Ok(());
-        }
+            || path_str.starts_with("/private/tmp"))
+    {
+        return Ok(());
     }
 
     // Allow any path that's not explicitly forbidden

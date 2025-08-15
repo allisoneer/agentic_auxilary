@@ -50,15 +50,13 @@ pub fn get_main_repo_for_worktree(worktree_path: &Path) -> Result<PathBuf> {
             let gitdir_path = PathBuf::from(gitdir);
 
             // Navigate from .git/worktrees/name to the main repo
-            if let Some(parent) = gitdir_path.parent() {
-                if let Some(parent_parent) = parent.parent() {
-                    if parent_parent.ends_with(".git") {
-                        if let Some(main_repo) = parent_parent.parent() {
-                            debug!("Found main repo at: {:?}", main_repo);
-                            return Ok(main_repo.to_path_buf());
-                        }
-                    }
-                }
+            if let Some(parent) = gitdir_path.parent()
+                && let Some(parent_parent) = parent.parent()
+                && parent_parent.ends_with(".git")
+                && let Some(main_repo) = parent_parent.parent()
+            {
+                debug!("Found main repo at: {:?}", main_repo);
+                return Ok(main_repo.to_path_buf());
             }
         }
     }
@@ -73,6 +71,8 @@ pub fn is_git_repo(path: &Path) -> bool {
 }
 
 /// Initialize a new git repository
+#[allow(dead_code)]
+// TODO(2): Plan initialization architecture for consumer vs source repos
 pub fn init_repo(path: &Path) -> Result<Repository> {
     Ok(Repository::init(path)?)
 }

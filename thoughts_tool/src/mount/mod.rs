@@ -13,7 +13,7 @@ mod fuse_t;
 #[cfg(test)]
 mod mock;
 
-pub use manager::{MountManager, get_mount_manager};
+pub use manager::get_mount_manager;
 pub use resolver::MountResolver;
 pub use types::*;
 // pub use utils::*;

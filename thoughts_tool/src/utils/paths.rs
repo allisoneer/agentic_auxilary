@@ -57,11 +57,15 @@ pub fn get_external_metadata_dir() -> Result<PathBuf> {
 }
 
 /// Get local metadata file path for a repository
+#[allow(dead_code)]
+// TODO(2): Implement local metadata caching
 pub fn get_local_metadata_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".thoughts").join("data").join("local.json")
 }
 
 /// Get rules file path for a repository
+#[allow(dead_code)]
+// TODO(2): Implement repository-specific rules system
 pub fn get_repo_rules_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".thoughts").join("rules.json")
 }

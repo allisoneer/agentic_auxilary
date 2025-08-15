@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{debug, error, info, warn};
 
 use super::manager::MountManager;
@@ -21,9 +21,12 @@ pub struct MergerfsManager {
 
 impl MergerfsManager {
     pub fn new() -> Self {
-        let mergerfs_path = which::which("mergerfs").unwrap_or_else(|_| PathBuf::from("mergerfs"));
+        // Platform detection already verified mergerfs exists
+        // No need to duplicate the check here
+        let mergerfs_path = PathBuf::from("mergerfs");
 
-        // Try to find fusermount or fusermount3
+        // Try to find fusermount or fusermount3 for unmounting
+        // This is optional - we can fall back to umount if not available
         let fusermount_path = which::which("fusermount")
             .or_else(|_| which::which("fusermount3"))
             .ok();
@@ -208,7 +211,13 @@ impl MergerfsManager {
 
         cmd.arg(target);
 
-        let output = cmd.output().await?;
+        let output = timeout(UNMOUNT_TIMEOUT, cmd.output())
+            .await
+            .map_err(|_| ThoughtsError::CommandTimeout {
+                command: "umount".to_string(),
+                timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+            })?
+            .map_err(ThoughtsError::from)?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -328,7 +337,13 @@ impl MountManager for MergerfsManager {
 
             cmd.arg(target);
 
-            let output = cmd.output().await?;
+            let output = timeout(UNMOUNT_TIMEOUT, cmd.output())
+                .await
+                .map_err(|_| ThoughtsError::CommandTimeout {
+                    command: "fusermount".to_string(),
+                    timeout_secs: UNMOUNT_TIMEOUT.as_secs(),
+                })?
+                .map_err(ThoughtsError::from)?;
 
             if output.status.success() {
                 // Success with fusermount, continue to cleanup

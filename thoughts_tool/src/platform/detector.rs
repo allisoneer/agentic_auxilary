@@ -154,9 +154,10 @@ fn detect_linux_distro() -> (String, String) {
             } else if let Some(value) = line.strip_prefix("VERSION=") {
                 version = value.trim_matches('"').to_string();
             } else if let Some(value) = line.strip_prefix("VERSION_ID=")
-                && version == "Unknown" {
-                    version = value.trim_matches('"').to_string();
-                }
+                && version == "Unknown"
+            {
+                version = value.trim_matches('"').to_string();
+            }
         }
 
         return (name, version);
