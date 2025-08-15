@@ -5,7 +5,7 @@ pub mod mount;
 pub mod platform;
 pub mod utils;
 
-pub use config::{Config, Mount, MountType, SyncStrategy};
+pub use config::{Config, Mount, SyncStrategy};
 // Add after line 10 (after existing config exports)
 pub use config::{
     FileMetadata, MountDirs, MountMerger, MountPattern, MountSource, PersonalConfig,
@@ -13,7 +13,5 @@ pub use config::{
     RequiredMount, Rule,
 };
 pub use error::{Result, ThoughtsError};
-#[cfg(test)]
-pub use mount::MockMountManager;
 pub use mount::{MountInfo, MountOptions, get_mount_manager};
 pub use platform::{Platform, PlatformInfo, detect_platform};

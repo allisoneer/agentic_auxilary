@@ -29,19 +29,6 @@ pub trait MountManager: Send + Sync {
     /// Get detailed information about a specific mount
     async fn get_mount_info(&self, target: &Path) -> Result<Option<MountInfo>>;
 
-    /// Remount with different sources (atomic operation)
-    async fn remount(
-        &self,
-        sources: &[PathBuf],
-        target: &Path,
-        options: &MountOptions,
-    ) -> Result<()> {
-        // Default implementation: unmount then mount
-        // Platform-specific implementations may override for atomic operations
-        self.unmount(target, false).await?;
-        self.mount(sources, target, options).await
-    }
-
     /// Check if the mount system is available and properly configured
     async fn check_health(&self) -> Result<()>;
 
@@ -118,8 +105,6 @@ mod tests {
                 has_fusermount: false, // Testing without fusermount - should still work
             }),
             arch: "x86_64".to_string(),
-            can_mount: true,
-            missing_tools: vec![],
         };
 
         let manager = get_mount_manager(&platform_info);
@@ -139,8 +124,6 @@ mod tests {
                 has_fusermount: true, // Even with fusermount, can't mount without mergerfs
             }),
             arch: "x86_64".to_string(),
-            can_mount: false,
-            missing_tools: vec!["mergerfs".to_string()],
         };
 
         let result = get_mount_manager(&platform_info);
@@ -169,8 +152,6 @@ mod tests {
                 unionfs_path: Some(PathBuf::from("/usr/local/bin/unionfs-fuse")),
             }),
             arch: "aarch64".to_string(),
-            can_mount: true,
-            missing_tools: vec![],
         };
 
         let manager = get_mount_manager(&platform_info);
@@ -191,8 +172,6 @@ mod tests {
                 unionfs_path: None,
             }),
             arch: "aarch64".to_string(),
-            can_mount: false,
-            missing_tools: vec!["FUSE-T".to_string()],
         };
 
         let result = get_mount_manager(&platform_info);

@@ -24,6 +24,3 @@ pub use types::*;
 
 #[cfg(target_os = "macos")]
 pub use fuse_t::FuseTManager;
-
-#[cfg(test)]
-pub use mock::MockMountManager;

@@ -30,10 +30,6 @@ impl MockMountManager {
     pub fn set_should_fail(&self, fail: bool) {
         *self.should_fail.lock().unwrap() = fail;
     }
-
-    pub fn get_mounts(&self) -> HashMap<PathBuf, MountInfo> {
-        self.mounts.lock().unwrap().clone()
-    }
 }
 
 #[async_trait]
