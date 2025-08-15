@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use crate::platform::common::MAX_MOUNT_RETRIES;
+
 /// Information about an active mount
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MountInfo {
@@ -67,7 +69,7 @@ pub enum MountMetadata {
 }
 
 /// Options for mount operations
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MountOptions {
     /// Read-only mount
     pub read_only: bool,
@@ -86,6 +88,19 @@ pub struct MountOptions {
 
     /// Number of retries on failure
     pub retries: u32,
+}
+
+impl Default for MountOptions {
+    fn default() -> Self {
+        Self {
+            read_only: false,
+            allow_other: false,
+            volume_name: None,
+            extra_options: Vec::new(),
+            timeout: None,
+            retries: MAX_MOUNT_RETRIES,
+        }
+    }
 }
 
 /// Mount state cache for persistence (macOS FUSE-T)
@@ -116,6 +131,7 @@ mod tests {
 
         assert!(!options.read_only);
         assert!(!options.allow_other);
+        assert_eq!(options.retries, MAX_MOUNT_RETRIES);
         assert_eq!(options.volume_name, None);
     }
 
