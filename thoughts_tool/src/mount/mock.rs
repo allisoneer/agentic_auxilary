@@ -119,7 +119,7 @@ mod tests {
         let manager = MockMountManager::new();
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/tmp/merged");
-        let options = MountOptions::new();
+        let options = MountOptions::default();
 
         // Should not be mounted initially
         assert!(!manager.is_mounted(target).await.unwrap());

@@ -17,13 +17,6 @@ pub fn expand_path(path: &Path) -> Result<PathBuf> {
     }
 }
 
-/// Get the default config file path
-pub fn get_config_path() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
-    Ok(config_dir.join("thoughts").join("config.json"))
-}
-
 /// Ensure a directory exists, creating it if necessary
 pub fn ensure_dir(path: &Path) -> Result<()> {
     if !path.exists() {
@@ -83,8 +76,10 @@ pub fn get_repo_mapping_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_expand_path() {
         // Test tilde expansion
         let home = dirs::home_dir().unwrap();

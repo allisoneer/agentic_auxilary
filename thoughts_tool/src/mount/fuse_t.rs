@@ -472,7 +472,7 @@ mod tests {
     async fn test_mount_validation() {
         let manager = FuseTManager::new(test_platform_info());
         let target = Path::new("/tmp/test_mount");
-        let options = MountOptions::new();
+        let options = MountOptions::default();
 
         // Test with empty sources
         let result = manager.mount(&[], target, &options).await;

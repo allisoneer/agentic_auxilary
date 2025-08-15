@@ -135,7 +135,6 @@ async fn clone_and_map(url: &str, _name: &str) -> Result<PathBuf> {
     let clone_opts = CloneOptions {
         url: url.to_string(),
         target_path: default_path.clone(),
-        shallow: false,
         branch: None,
     };
     clone_repository(&clone_opts)?;

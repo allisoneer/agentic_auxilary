@@ -87,63 +87,17 @@ pub struct MountOptions {
     pub retries: u32,
 }
 
-impl MountOptions {
-    pub fn new() -> Self {
-        Self {
-            read_only: false,
-            allow_other: false,
-            volume_name: None,
-            extra_options: Vec::new(),
-            timeout: Some(crate::platform::common::MOUNT_TIMEOUT),
-            retries: crate::platform::common::MAX_MOUNT_RETRIES,
-        }
-    }
-
-    pub fn read_only(mut self) -> Self {
-        self.read_only = true;
-        self
-    }
-
-    pub fn allow_other(mut self) -> Self {
-        self.allow_other = true;
-        self
-    }
-
-    pub fn with_volume_name(mut self, name: String) -> Self {
-        self.volume_name = Some(name);
-        self
-    }
-
-    pub fn with_extra_options(mut self, options: Vec<String>) -> Self {
-        self.extra_options = options;
-        self
-    }
-}
-
-/// Result of a mount operation attempt
-#[derive(Debug)]
-pub struct MountAttempt {
-    pub success: bool,
-    pub command: String,
-    pub stdout: String,
-    pub stderr: String,
-    pub duration: std::time::Duration,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_mount_options_builder() {
-        let options = MountOptions::new()
-            .read_only()
-            .allow_other()
-            .with_volume_name("TestVolume".to_string());
+    fn test_mount_options_default() {
+        let options = MountOptions::default();
 
-        assert!(options.read_only);
-        assert!(options.allow_other);
-        assert_eq!(options.volume_name, Some("TestVolume".to_string()));
+        assert!(!options.read_only);
+        assert!(!options.allow_other);
+        assert_eq!(options.volume_name, None);
     }
 
     #[test]

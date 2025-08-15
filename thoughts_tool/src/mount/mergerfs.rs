@@ -417,7 +417,8 @@ mod tests {
         let manager = MergerfsManager::new();
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/mnt/merged");
-        let options = MountOptions::new().read_only();
+        let mut options = MountOptions::default();
+        options.read_only = true;
 
         let args = manager.build_mount_args(&sources, target, &options);
 
@@ -432,7 +433,7 @@ mod tests {
     async fn test_mount_validation() {
         let manager = MergerfsManager::new();
         let target = Path::new("/tmp/test_mount");
-        let options = MountOptions::new();
+        let options = MountOptions::default();
 
         // Test with empty sources
         let result = manager.mount(&[], target, &options).await;
