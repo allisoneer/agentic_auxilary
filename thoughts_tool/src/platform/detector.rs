@@ -5,6 +5,7 @@ use tracing::{debug, info};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Linux(LinuxInfo),
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     MacOS(MacOSInfo),
@@ -235,9 +236,10 @@ fn detect_macos() -> Result<PlatformInfo> {
     }
 
     // Check for unionfs-fuse
-    let unionfs_path = which::which("unionfs-fuse")
-        .or_else(|_| which::which("unionfs"))
-        .ok();
+    use crate::platform::macos::UNIONFS_BINARIES;
+    let unionfs_path = UNIONFS_BINARIES
+        .iter()
+        .find_map(|binary| which::which(binary).ok());
     let has_unionfs = unionfs_path.is_some();
     if has_unionfs {
         info!("Found unionfs at: {:?}", unionfs_path);
@@ -271,8 +273,10 @@ fn get_macos_version() -> String {
 
 #[cfg(target_os = "macos")]
 fn check_fuse_t() -> (bool, Option<String>) {
+    use crate::platform::macos::FUSE_T_FS_PATH;
+
     // FUSE-T detection: Check for the FUSE-T filesystem bundle
-    let fuse_t_path = Path::new("/Library/Filesystems/fuse-t.fs");
+    let fuse_t_path = Path::new(FUSE_T_FS_PATH);
     if fuse_t_path.exists() {
         // Try to get version from Info.plist
         let plist_path = fuse_t_path.join("Contents/Info.plist");
