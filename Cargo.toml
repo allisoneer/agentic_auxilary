@@ -5,7 +5,9 @@ members = [
     "claudecode_rs",
     "universal_tool/universal-tool-core",
     "universal_tool/universal-tool-macros",
-    "universal_tool/examples/*",
+]
+exclude = [
+    "universal_tool/examples",
 ]
 
 [workspace.dependencies]
