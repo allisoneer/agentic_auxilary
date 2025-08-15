@@ -42,6 +42,9 @@ impl PersonalConfigManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    // TODO(1): Add CLI command for personal config initialization
+    // Reference: https://github.com/allisoneer/agentic_auxilary/issues/4
     pub fn ensure_default() -> Result<PersonalConfig> {
         if let Some(config) = Self::load()? {
             return Ok(config);
@@ -58,6 +61,9 @@ impl PersonalConfigManager {
         Ok(default_config)
     }
 
+    #[allow(dead_code)]
+    // TODO(1): Add "thoughts config pattern add" command
+    // Reference: https://github.com/allisoneer/agentic_auxilary/issues/4
     pub fn add_pattern(pattern: MountPattern) -> Result<()> {
         let mut config = Self::load()?.unwrap_or_else(|| PersonalConfig {
             patterns: vec![],
@@ -71,6 +77,9 @@ impl PersonalConfigManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    // TODO(1): Add personal config rules management
+    // Reference: https://github.com/allisoneer/agentic_auxilary/issues/4
     pub fn add_rule(rule: Rule) -> Result<()> {
         let mut config = Self::load()?.unwrap_or_else(|| PersonalConfig {
             patterns: vec![],
@@ -141,10 +150,10 @@ impl PersonalConfigManager {
     }
 
     pub fn get_repository_mounts(repo_url: &str) -> Result<Vec<PersonalMount>> {
-        if let Some(config) = Self::load()? {
-            if let Some(mounts) = config.repository_mounts.get(repo_url) {
-                return Ok(mounts.clone());
-            }
+        if let Some(config) = Self::load()?
+            && let Some(mounts) = config.repository_mounts.get(repo_url)
+        {
+            return Ok(mounts.clone());
         }
         Ok(vec![])
     }

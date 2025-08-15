@@ -123,6 +123,8 @@ impl RepoConfigManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    // TODO(2): Refactor mount add/remove to use these manager methods
     pub fn add_mount(&mut self, mount: RequiredMount) -> Result<()> {
         let mut config = self.load()?.unwrap_or_else(|| RepoConfig {
             version: "1.0".to_string(),
@@ -145,6 +147,8 @@ impl RepoConfigManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    // TODO(2): Refactor mount remove to use this method
     pub fn remove_mount(&mut self, mount_path: &str) -> Result<bool> {
         let mut config = self
             .load()?

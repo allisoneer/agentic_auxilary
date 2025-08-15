@@ -29,10 +29,10 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
         let expanded = expand_path(&p)?;
 
         // Validate parent directory exists
-        if let Some(parent) = expanded.parent() {
-            if !parent.exists() {
-                bail!("Parent directory does not exist: {}", parent.display());
-            }
+        if let Some(parent) = expanded.parent()
+            && !parent.exists()
+        {
+            bail!("Parent directory does not exist: {}", parent.display());
         }
 
         (expanded, false) // User-specified path is not auto-managed

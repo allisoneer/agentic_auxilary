@@ -3,9 +3,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ThoughtsError {
-    #[error("Configuration file not found at {path}")]
-    ConfigNotFound { path: PathBuf },
-
     #[error("Invalid configuration: {message}")]
     ConfigInvalid { message: String },
 
@@ -26,6 +23,9 @@ pub enum ThoughtsError {
 
     #[error("Mount permission denied: {path} ({reason})")]
     MountPermissionDenied { path: PathBuf, reason: String },
+
+    #[error("Command timeout: {command} timed out after {timeout_secs} seconds")]
+    CommandTimeout { command: String, timeout_secs: u64 },
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

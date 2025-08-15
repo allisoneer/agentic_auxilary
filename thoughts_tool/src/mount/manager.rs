@@ -115,6 +115,7 @@ mod tests {
                 has_mergerfs: true,
                 mergerfs_version: Some("2.33.5".to_string()),
                 fuse_available: true,
+                has_fusermount: false, // Testing without fusermount - should still work
             }),
             arch: "x86_64".to_string(),
             can_mount: true,
@@ -135,6 +136,7 @@ mod tests {
                 has_mergerfs: false,
                 mergerfs_version: None,
                 fuse_available: true,
+                has_fusermount: true, // Even with fusermount, can't mount without mergerfs
             }),
             arch: "x86_64".to_string(),
             can_mount: false,
@@ -163,6 +165,8 @@ mod tests {
                 fuse_t_version: Some("1.0.0".to_string()),
                 has_macfuse: false,
                 macfuse_version: None,
+                has_unionfs: true,
+                unionfs_path: Some(PathBuf::from("/usr/local/bin/unionfs-fuse")),
             }),
             arch: "aarch64".to_string(),
             can_mount: true,
@@ -183,6 +187,8 @@ mod tests {
                 fuse_t_version: None,
                 has_macfuse: false,
                 macfuse_version: None,
+                has_unionfs: false,
+                unionfs_path: None,
             }),
             arch: "aarch64".to_string(),
             can_mount: false,

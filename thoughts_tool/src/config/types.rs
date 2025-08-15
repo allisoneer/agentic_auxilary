@@ -54,6 +54,7 @@ impl Mount {
         }
     }
 
+    #[cfg(test)] // Only used in tests
     pub fn is_git(&self) -> bool {
         matches!(self, Mount::Git { .. })
     }
@@ -254,7 +255,6 @@ impl Default for RepoMapping {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_repo_config_serialization() {

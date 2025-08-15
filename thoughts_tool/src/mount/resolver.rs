@@ -56,6 +56,8 @@ impl MountResolver {
     }
 
     /// Get clone URL and suggested path for a mount
+    #[allow(dead_code)]
+    // TODO(2): Integrate into clone command for consistency
     pub fn get_clone_info(&self, mount: &Mount) -> Result<Option<(String, PathBuf)>> {
         match mount {
             Mount::Directory { .. } => Ok(None),
@@ -71,6 +73,8 @@ impl MountResolver {
     }
 
     /// Resolve all mounts in a config
+    #[allow(dead_code)]
+    // TODO(2): Keep for future batch operations and diagnostics
     pub fn resolve_all(&self, mounts: &HashMap<String, Mount>) -> Vec<(String, Result<PathBuf>)> {
         mounts
             .iter()
