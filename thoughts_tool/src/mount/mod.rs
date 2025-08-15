@@ -21,6 +21,3 @@ pub use types::*;
 // Re-export implementations for direct use if needed
 // #[cfg(target_os = "linux")]
 // pub use mergerfs::MergerfsManager;
-
-#[cfg(target_os = "macos")]
-pub use fuse_t::FuseTManager;

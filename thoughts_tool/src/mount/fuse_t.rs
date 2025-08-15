@@ -8,9 +8,9 @@ use super::manager::MountManager;
 use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
-use crate::platform::MacOSInfo;
 use crate::platform::common::{MOUNT_RETRY_DELAY, MOUNT_TIMEOUT, UNMOUNT_TIMEOUT};
-use crate::platform::macos::{DEFAULT_VOLUME_NAME, DISKUTIL_CMD};
+use crate::platform::detector::MacOSInfo;
+use crate::platform::macos::{DEFAULT_VOLUME_NAME, DISKUTIL_CMD, MOUNT_CMD};
 
 pub struct FuseTManager {
     /// Platform information
@@ -128,7 +128,7 @@ impl FuseTManager {
 
     /// Parse mount command output to find active mounts
     async fn parse_mount_output(&self) -> Result<Vec<MountInfo>> {
-        let output = tokio::process::Command::new("mount").output().await?;
+        let output = tokio::process::Command::new(MOUNT_CMD).output().await?;
 
         if !output.status.success() {
             return Err(ThoughtsError::MountOperationFailed {
@@ -554,7 +554,7 @@ impl MountManager for FuseTManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::MacOSInfo;
+    use crate::platform::detector::MacOSInfo;
 
     fn test_platform_info() -> MacOSInfo {
         MacOSInfo {

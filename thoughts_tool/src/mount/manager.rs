@@ -86,11 +86,13 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use super::get_mount_manager;
     #[cfg(target_os = "linux")]
-    use crate::platform::LinuxInfo;
+    use crate::platform::detector::LinuxInfo;
     #[cfg(target_os = "macos")]
-    use crate::platform::MacOSInfo;
+    use crate::platform::detector::MacOSInfo;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use crate::platform::{Platform, PlatformInfo};
+    #[cfg(target_os = "macos")]
+    use std::path::PathBuf;
 
     #[test]
     #[cfg(target_os = "linux")]
