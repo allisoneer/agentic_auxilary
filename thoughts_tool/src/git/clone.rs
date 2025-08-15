@@ -139,4 +139,3 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
     println!("\n✓ Clone completed successfully");
     Ok(())
 }
-
