@@ -1,6 +1,6 @@
 # Rust build artifacts
 /target
-debug/
+/debug/
 target/
 
 # Cargo lock is included for binary projects
