@@ -9,13 +9,12 @@ on:
     branches: [ main ]
 
 jobs:
-  # Wait for CI to pass before running release-plz
-  release-pr:
-    name: Release PR
+  release-plz:
+    name: Release-plz
     runs-on: ubuntu-latest
     # Only run on main branch pushes (not PRs to main)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    # Prevent multiple concurrent release-pr jobs
+    # Prevent multiple concurrent jobs
     concurrency:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
@@ -30,38 +29,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Run release-plz to create/update release PR
+      - name: Run release-plz
         uses: release-plz/action@v0.5
-        with:
-          command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
-  # Automatically release when release PR is merged
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    # Only run on main branch pushes
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    # Prevent concurrent releases
-    concurrency:
-      group: release-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          submodules: recursive
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Run release-plz to create tags and trigger releases
-        uses: release-plz/action@v0.5
-        with:
-          command: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
