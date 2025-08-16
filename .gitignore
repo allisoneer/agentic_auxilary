@@ -1,4 +1,8 @@
-.claude/
+# Claude configuration - ignore most files but keep commit.md
+.claude/settings.json
+.claude/settings.local.json
+.claude/agents/**/*.md
+.claude/commands/**/*.md
 !.claude/commands/commit.md
 
 # Thoughts data directory (created by thoughts init)
