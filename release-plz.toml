@@ -10,25 +10,25 @@ pr_labels = ["release"]
 name = "thoughts-tool"
 changelog_path = "thoughts_tool/CHANGELOG.md"
 git_tag_name = "thoughts-tool-v{{ version }}"
-release_always = false
+release = true
 
 [[package]]
 name = "universal-tool-core"
 changelog_path = "universal_tool/CHANGELOG.md"
 git_tag_name = "universal-tool-v{{ version }}"
-release_always = false
+release = true
 
 [[package]]
 name = "universal-tool-macros"
 changelog_path = "universal_tool/CHANGELOG.md"
 git_tag_name = "universal-tool-macros-v{{ version }}"
-release_always = false
+release = true
 
 [[package]]
 name = "claudecode"
 changelog_path = "claudecode_rs/CHANGELOG.md"
 git_tag_name = "claudecode-v{{ version }}"
-release_always = false
+release = true
 
 [changelog]
 header = """
