@@ -39,3 +39,9 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 """
 
+# Semantic version bumping rules
+[[version_updater]]
+# Define how release-plz interprets commits for version bumping
+bump_minor = ["feat"]
+bump_patch = ["fix", "perf", "refactor", "style", "docs", "test", "chore", "ci", "build"]
+# Breaking changes always bump major (detected in commit body/footer)
