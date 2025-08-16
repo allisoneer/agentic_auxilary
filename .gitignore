@@ -1,4 +1,5 @@
 .claude/
+!.claude/commands/commit.md
 
 # Thoughts data directory (created by thoughts init)
 /.thoughts-data
