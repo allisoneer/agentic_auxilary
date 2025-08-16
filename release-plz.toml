@@ -1,7 +1,7 @@
 [workspace]
 changelog_config = "cliff.toml"
 changelog_update = true
-git_release_enable = true
+git_release_enable = false
 git_tag_enable = true
 publish = true
 pr_labels = ["release"]
