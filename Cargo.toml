@@ -5,6 +5,7 @@ members = [
     "claudecode_rs",
     "universal_tool/universal-tool-core",
     "universal_tool/universal-tool-macros",
+    "pr_comments",
 ]
 exclude = [
     "universal_tool/examples",

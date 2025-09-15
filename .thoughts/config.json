@@ -92,6 +92,13 @@
       "description": "Repository mount for references/thirtyfour",
       "optional": true,
       "sync": "none"
+    },
+    {
+      "remote": "git@github.com:64bit/async-openai.git",
+      "mount_path": "references/async-openai",
+      "description": "Repository mount for references/async-openai",
+      "optional": true,
+      "sync": "none"
     }
   ],
   "rules": []
