@@ -14,23 +14,37 @@ impl GitHubClient {
             Octocrab::builder()
                 .personal_token(token)
                 .build()
-                .map_err(|e| anyhow::anyhow!("Failed to create GitHub client with token: {:?}", e))?
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to create GitHub client with token: {:?}", e)
+                })?
         } else {
             Octocrab::default()
         };
 
-        Ok(Self { client, owner, repo })
+        Ok(Self {
+            client,
+            owner,
+            repo,
+        })
     }
 
     pub async fn get_pr_from_branch(&self, branch: &str) -> Result<Option<u64>> {
         // Search for open PRs with this head branch
-        let pulls = self.client
+        let pulls = self
+            .client
             .pulls(&self.owner, &self.repo)
             .list()
             .state(octocrab::params::State::Open)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to list open pull requests for {}/{}: {:?}", self.owner, self.repo, e))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to list open pull requests for {}/{}: {:?}",
+                    self.owner,
+                    self.repo,
+                    e
+                )
+            })?;
 
         for pr in pulls {
             if pr.head.ref_field == branch {
@@ -43,11 +57,20 @@ impl GitHubClient {
 
     pub async fn get_all_comments(&self, pr_number: u64) -> Result<AllComments> {
         // Get PR details
-        let pr = self.client
+        let pr = self
+            .client
             .pulls(&self.owner, &self.repo)
             .get(pr_number)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to get PR #{} details for {}/{}: {:?}", pr_number, self.owner, self.repo, e))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to get PR #{} details for {}/{}: {:?}",
+                    pr_number,
+                    self.owner,
+                    self.repo,
+                    e
+                )
+            })?;
 
         // Get review comments (code comments)
         let review_comments = self.get_review_comments(pr_number).await?;
@@ -69,24 +92,27 @@ impl GitHubClient {
         let mut page = 1u32;
 
         loop {
-            let response = self.client
+            let response = self
+                .client
                 .pulls(&self.owner, &self.repo)
                 .list_comments(Some(pr_number))
                 .page(page)
                 .per_page(100)
                 .send()
                 .await
-                .map_err(|e| anyhow::anyhow!("Failed to fetch review comments for PR #{}: {:?}", pr_number, e))?;
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to fetch review comments for PR #{}: {:?}",
+                        pr_number,
+                        e
+                    )
+                })?;
 
             if response.items.is_empty() {
                 break;
             }
 
-            comments.extend(
-                response.items
-                    .into_iter()
-                    .map(ReviewComment::from)
-            );
+            comments.extend(response.items.into_iter().map(ReviewComment::from));
 
             page += 1;
         }
@@ -99,24 +125,27 @@ impl GitHubClient {
         let mut page = 1u32;
 
         loop {
-            let response = self.client
+            let response = self
+                .client
                 .issues(&self.owner, &self.repo)
                 .list_comments(pr_number)
                 .page(page)
                 .per_page(100)
                 .send()
                 .await
-                .map_err(|e| anyhow::anyhow!("Failed to fetch issue comments for PR #{}: {:?}", pr_number, e))?;
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to fetch issue comments for PR #{}: {:?}",
+                        pr_number,
+                        e
+                    )
+                })?;
 
             if response.items.is_empty() {
                 break;
             }
 
-            comments.extend(
-                response.items
-                    .into_iter()
-                    .map(IssueComment::from)
-            );
+            comments.extend(response.items.into_iter().map(IssueComment::from));
 
             page += 1;
         }
@@ -130,31 +159,46 @@ impl GitHubClient {
             Some("closed") => octocrab::params::State::Closed,
             Some("all") => octocrab::params::State::All,
             None => octocrab::params::State::Open,
-            _ => anyhow::bail!("Invalid state: {}. Use 'open', 'closed', or 'all'", state.unwrap()),
+            _ => anyhow::bail!(
+                "Invalid state: {}. Use 'open', 'closed', or 'all'",
+                state.unwrap()
+            ),
         };
 
-        let pulls = self.client
+        let pulls = self
+            .client
             .pulls(&self.owner, &self.repo)
             .list()
             .state(state)
             .per_page(30)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to list pull requests for {}/{}: {:?}", self.owner, self.repo, e))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to list pull requests for {}/{}: {:?}",
+                    self.owner,
+                    self.repo,
+                    e
+                )
+            })?;
 
-        Ok(pulls.items.into_iter().map(|pr| PrSummary {
-            number: pr.number,
-            title: pr.title.unwrap_or_default(),
-            author: pr.user.map(|u| u.login).unwrap_or_default(),
-            state: if pr.state == Some(octocrab::models::IssueState::Open) {
-                "open".to_string()
-            } else {
-                "closed".to_string()
-            },
-            created_at: pr.created_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
-            updated_at: pr.updated_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
-            comment_count: pr.comments.unwrap_or(0) as u32,
-            review_comment_count: pr.review_comments.unwrap_or(0) as u32,
-        }).collect())
+        Ok(pulls
+            .items
+            .into_iter()
+            .map(|pr| PrSummary {
+                number: pr.number,
+                title: pr.title.unwrap_or_default(),
+                author: pr.user.map(|u| u.login).unwrap_or_default(),
+                state: if pr.state == Some(octocrab::models::IssueState::Open) {
+                    "open".to_string()
+                } else {
+                    "closed".to_string()
+                },
+                created_at: pr.created_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
+                updated_at: pr.updated_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
+                comment_count: pr.comments.unwrap_or(0) as u32,
+                review_comment_count: pr.review_comments.unwrap_or(0) as u32,
+            })
+            .collect())
     }
 }

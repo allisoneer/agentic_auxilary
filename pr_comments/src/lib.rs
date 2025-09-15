@@ -16,8 +16,7 @@ pub struct PrComments {
 
 impl PrComments {
     pub fn new() -> Result<Self> {
-        let git_info = git::get_git_info()
-            .context("Failed to get git information")?;
+        let git_info = git::get_git_info().context("Failed to get git information")?;
 
         let token = std::env::var("GITHUB_TOKEN").ok();
 
@@ -40,21 +39,21 @@ impl PrComments {
 
         // Try to detect from current branch
         let git_info = git::get_git_info()?;
-        let branch = git_info.current_branch
+        let branch = git_info
+            .current_branch
             .context("Could not determine current git branch")?;
 
-        let client = github::GitHubClient::new(
-            self.owner.clone(),
-            self.repo.clone(),
-            self.token.clone(),
-        )?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())?;
 
         match client.get_pr_from_branch(&branch).await {
             Ok(Some(pr)) => Ok(pr),
             Ok(None) => Err(anyhow::anyhow!(
                 "No open PR found for branch '{}' in {}/{}. \n\
                 Make sure you have an open PR for this branch.",
-                branch, self.owner, self.repo
+                branch,
+                self.owner,
+                self.repo
             )),
             Err(e) => {
                 let msg = e.to_string();
@@ -63,8 +62,14 @@ impl PrComments {
                         "Failed to access {}/{}: {}\n\n\
                         Hint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.\n\
                         Current token: {}",
-                        self.owner, self.repo, msg,
-                        if self.token.is_some() { "Set" } else { "Not set (required for private repos)" }
+                        self.owner,
+                        self.repo,
+                        msg,
+                        if self.token.is_some() {
+                            "Set"
+                        } else {
+                            "Not set (required for private repos)"
+                        }
                     ))
                 } else {
                     Err(e)
@@ -90,14 +95,14 @@ impl PrComments {
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
     ) -> Result<AllComments, ToolError> {
-        let pr = self.get_pr_number(pr_number).await
+        let pr = self
+            .get_pr_number(pr_number)
+            .await
             .map_err(|e| ToolError::new(ErrorCode::InvalidArgument, e.to_string()))?;
 
-        let client = github::GitHubClient::new(
-            self.owner.clone(),
-            self.repo.clone(),
-            self.token.clone(),
-        ).map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
         client.get_all_comments(pr).await
             .map_err(|e| {
@@ -124,14 +129,14 @@ impl PrComments {
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
     ) -> Result<Vec<ReviewComment>, ToolError> {
-        let pr = self.get_pr_number(pr_number).await
+        let pr = self
+            .get_pr_number(pr_number)
+            .await
             .map_err(|e| ToolError::new(ErrorCode::InvalidArgument, e.to_string()))?;
 
-        let client = github::GitHubClient::new(
-            self.owner.clone(),
-            self.repo.clone(),
-            self.token.clone(),
-        ).map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
         client.get_review_comments(pr).await
             .map_err(|e| {
@@ -158,14 +163,14 @@ impl PrComments {
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
     ) -> Result<Vec<IssueComment>, ToolError> {
-        let pr = self.get_pr_number(pr_number).await
+        let pr = self
+            .get_pr_number(pr_number)
+            .await
             .map_err(|e| ToolError::new(ErrorCode::InvalidArgument, e.to_string()))?;
 
-        let client = github::GitHubClient::new(
-            self.owner.clone(),
-            self.repo.clone(),
-            self.token.clone(),
-        ).map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
         client.get_issue_comments(pr).await
             .map_err(|e| {
@@ -195,11 +200,9 @@ impl PrComments {
         )]
         state: Option<String>,
     ) -> Result<Vec<PrSummary>, ToolError> {
-        let client = github::GitHubClient::new(
-            self.owner.clone(),
-            self.repo.clone(),
-            self.token.clone(),
-        ).map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
         client.list_prs(state).await
             .map_err(|e| {
