@@ -9,18 +9,18 @@ pub struct GitInfo {
 }
 
 pub fn get_git_info() -> Result<GitInfo> {
-    let repo = Repository::discover(".")
-        .context("Not in a git repository")?;
+    let repo = Repository::discover(".").context("Not in a git repository")?;
 
-    let remote = repo.find_remote("origin")
+    let remote = repo
+        .find_remote("origin")
         .context("No 'origin' remote found")?;
 
-    let url = remote.url()
-        .context("Remote 'origin' has no URL")?;
+    let url = remote.url().context("Remote 'origin' has no URL")?;
 
     let (owner, repo_name) = parse_github_url(url)?;
 
-    let current_branch = repo.head()
+    let current_branch = repo
+        .head()
         .ok()
         .and_then(|head| head.shorthand().map(String::from));
 

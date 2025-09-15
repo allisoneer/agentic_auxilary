@@ -78,13 +78,15 @@ async fn run_cli(repo: Option<String>, cli_args: Vec<String>) -> Result<()> {
     };
 
     // Create CLI app
-    let app = tool.create_cli_command()
+    let app = tool
+        .create_cli_command()
         .about("Fetch GitHub PR comments")
         .version(env!("CARGO_PKG_VERSION"))
         .arg_required_else_help(true);
 
     // Parse and execute with forwarded args
-    let matches = app.try_get_matches_from(cli_args)
+    let matches = app
+        .try_get_matches_from(cli_args)
         .unwrap_or_else(|e| e.exit());
 
     match tool.execute_cli(matches).await {
@@ -110,7 +112,9 @@ async fn run_mcp_server(repo: Option<String>) -> Result<()> {
         match PrComments::new() {
             Ok(tool) => tool,
             Err(_) => {
-                eprintln!("Warning: Not in a git repository. Repository must be specified with --repo");
+                eprintln!(
+                    "Warning: Not in a git repository. Repository must be specified with --repo"
+                );
                 eprintln!("MCP clients will need to provide repository information");
                 // Create a dummy instance for MCP - clients will need to specify repo
                 PrComments::with_repo("".to_string(), "".to_string())

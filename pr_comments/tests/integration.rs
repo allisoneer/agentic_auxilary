@@ -3,13 +3,19 @@ use pr_comments::{git, models::*};
 #[test]
 fn test_url_parsing() {
     let urls = vec![
-        ("https://github.com/rust-lang/rust.git", ("rust-lang", "rust")),
+        (
+            "https://github.com/rust-lang/rust.git",
+            ("rust-lang", "rust"),
+        ),
         ("git@github.com:rust-lang/rust.git", ("rust-lang", "rust")),
     ];
 
     for (url, (expected_owner, expected_repo)) in urls {
         let result = git::parse_github_url(url).unwrap();
-        assert_eq!(result, (expected_owner.to_string(), expected_repo.to_string()));
+        assert_eq!(
+            result,
+            (expected_owner.to_string(), expected_repo.to_string())
+        );
     }
 }
 
