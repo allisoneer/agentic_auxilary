@@ -75,6 +75,7 @@ Explore our examples to see UTF in action:
 - [Getting Started Guide](docs/getting-started.md) - Build your first UTF tool in 5 minutes
 - [Architecture Overview](docs/architecture.md) - Understand how UTF works under the hood
 - [Migration Guide](docs/migration.md) - Convert existing CLIs and APIs to UTF
+- [MCP Migration Guide](docs/MIGRATION.md) - Upgrade from rmcp v0.2 to v0.6.4+
 - [API Reference](https://docs.rs/universal-tool) - Complete API documentation (available after crates.io publication)
 
 ## Why UTF?
@@ -146,5 +147,18 @@ MIT - See [LICENSE](../LICENSE) in the root of the repository.
 UTF builds upon excellent Rust libraries:
 - [clap](https://github.com/clap-rs/clap) for CLI parsing
 - [axum](https://github.com/tokio-rs/axum) for REST APIs
+- [rmcp](https://github.com/modelcontextprotocol/rust-sdk) for MCP servers
 - [serde](https://github.com/serde-rs/serde) for serialization
 - [schemars](https://github.com/GREsau/schemars) for JSON Schema generation
+
+## MCP Protocol Compliance
+
+UTF implements the Model Context Protocol (MCP) specification with full compliance to the official protocol. MCP servers created with UTF:
+
+- Follow the required 3-step handshake sequence
+- Support all standard MCP capabilities
+- Generate proper JSON Schema for tool parameters
+- Handle cancellation and progress reporting
+- Provide helpful error diagnostics for protocol violations
+
+For details on the protocol handshake and troubleshooting, see the [MCP Basic example](examples/05-mcp-basic/README.md).
