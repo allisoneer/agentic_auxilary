@@ -61,6 +61,20 @@ pr_comments --mcp
 pr_comments mcp
 ```
 
+#### Using with MCP Inspector
+
+Test the MCP server with the official MCP Inspector:
+
+```bash
+# Install MCP Inspector (if not already installed)
+npm install -g @modelcontextprotocol/inspector
+
+# Connect to the pr_comments MCP server
+mcp-inspector stdio -- pr_comments mcp
+```
+
+The MCP server follows the official protocol specification including the required 3-step handshake. Compatible with all official MCP clients.
+
 ### Specifying Repository
 
 If not in a git repository, specify the repository explicitly:
