@@ -8,26 +8,43 @@ use universal_tool_core::mcp::ServiceExt;
 #[derive(Parser)]
 #[command(name = "pr-comments")]
 #[command(about = "Fetch GitHub PR comments via CLI or MCP", long_about = None)]
+#[command(version)]
 struct Args {
     #[command(subcommand)]
-    command: Option<Commands>,
-
-    /// Run as MCP server
-    #[arg(long)]
-    mcp: bool,
+    command: Commands,
 
     /// Repository in owner/repo format (auto-detected if not provided)
-    #[arg(long, value_name = "OWNER/REPO")]
+    #[arg(long, value_name = "OWNER/REPO", global = true)]
     repo: Option<String>,
-
-    /// CLI subcommand and arguments
-    #[arg(trailing_var_arg = true)]
-    args: Vec<String>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run as MCP server (same as --mcp)
+    /// Get all comments for a PR
+    All {
+        /// PR number (auto-detected if not provided)
+        #[arg(long)]
+        pr: Option<u64>,
+    },
+    /// Get review comments (code comments) for a PR
+    ReviewComments {
+        /// PR number (auto-detected if not provided)
+        #[arg(long)]
+        pr: Option<u64>,
+    },
+    /// Get issue comments (discussion) for a PR
+    IssueComments {
+        /// PR number (auto-detected if not provided)
+        #[arg(long)]
+        pr: Option<u64>,
+    },
+    /// List pull requests in the repository
+    ListPrs {
+        /// PR state filter: open, closed, or all
+        #[arg(long, default_value = "open")]
+        state: String,
+    },
+    /// Run as MCP server
     Mcp,
 }
 
@@ -44,30 +61,15 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    // Determine if we should run MCP mode
-    let run_mcp = args.mcp || matches!(args.command, Some(Commands::Mcp));
-
-    if run_mcp {
-        run_mcp_server(args.repo).await
-    } else {
-        // Build CLI args to forward to UTF
-        let cli_args: Vec<String> = if args.args.is_empty() {
-            // No trailing args captured - use full env args
-            std::env::args().collect()
-        } else {
-            // Trailing args captured - prepend program name
-            let mut cli_args = vec![env!("CARGO_PKG_NAME").to_string()];
-            cli_args.extend(args.args);
-            cli_args
-        };
-
-        run_cli(args.repo, cli_args).await
+    match args.command {
+        Commands::Mcp => run_mcp_server(args.repo).await,
+        _ => run_cli(args).await,
     }
 }
 
-async fn run_cli(repo: Option<String>, cli_args: Vec<String>) -> Result<()> {
+async fn run_cli(args: Args) -> Result<()> {
     // Create the tool instance
-    let tool = if let Some(repo_spec) = repo {
+    let tool = if let Some(repo_spec) = args.repo {
         let parts: Vec<&str> = repo_spec.split('/').collect();
         if parts.len() != 2 {
             anyhow::bail!("Repository must be in owner/repo format");
@@ -77,25 +79,48 @@ async fn run_cli(repo: Option<String>, cli_args: Vec<String>) -> Result<()> {
         PrComments::new()?
     };
 
-    // Create CLI app
-    let app = tool
-        .create_cli_command()
-        .about("Fetch GitHub PR comments")
-        .version(env!("CARGO_PKG_VERSION"))
-        .arg_required_else_help(true);
-
-    // Parse and execute with forwarded args
-    let matches = app
-        .try_get_matches_from(cli_args)
-        .unwrap_or_else(|e| e.exit());
-
-    match tool.execute_cli(matches).await {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
+    // Execute the appropriate command
+    match args.command {
+        Commands::All { pr } => {
+            match tool.get_all_comments(pr).await {
+                Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
+        Commands::ReviewComments { pr } => {
+            match tool.get_review_comments(pr).await {
+                Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::IssueComments { pr } => {
+            match tool.get_issue_comments(pr).await {
+                Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::ListPrs { state } => {
+            match tool.list_prs(Some(state)).await {
+                Ok(prs) => println!("{}", serde_json::to_string_pretty(&prs)?),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Mcp => unreachable!("MCP command should be handled in main"),
     }
+
+    Ok(())
 }
 
 async fn run_mcp_server(repo: Option<String>) -> Result<()> {
@@ -126,10 +151,20 @@ async fn run_mcp_server(repo: Option<String>) -> Result<()> {
     let transport = universal_tool_core::mcp::stdio();
 
     // The serve method will run until the client disconnects
-    let _running = server.serve(transport).await.map_err(|e| {
+    let result = server.serve(transport).await;
+    if let Err(e) = result {
         eprintln!("MCP server error: {}", e);
-        anyhow::anyhow!("MCP server failed: {}", e)
-    })?;
+
+        // Add targeted hints for common handshake issues
+        let msg = format!("{e}");
+        if msg.contains("ExpectedInitializeRequest") || msg.contains("expect initialized request") {
+            eprintln!("Hint: Client must send 'initialize' request first.");
+        }
+        if msg.contains("ExpectedInitializedNotification") || msg.contains("initialize notification") {
+            eprintln!("Hint: Client must send 'notifications/initialized' after receiving InitializeResult.");
+        }
+        return Err(anyhow::anyhow!("MCP server failed: {}", e));
+    }
 
     // The server has stopped (client disconnected)
     eprintln!("MCP server stopped");
