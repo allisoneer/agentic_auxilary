@@ -34,23 +34,23 @@ class McpTestClient:
         """Send a JSON-RPC request to the server."""
         if not self.process:
             raise RuntimeError("Server not started")
-            
+
         self.request_id += 1
         request = {
             "jsonrpc": "2.0",
             "method": method,
             "id": self.request_id
         }
-        
+
         if params is not None:
             request["params"] = params
-            
+
         # Send request
         request_str = json.dumps(request) + "\n"
         print(f"\n→ Sending: {request_str.strip()}")
         self.process.stdin.write(request_str)
         self.process.stdin.flush()
-        
+
         # Read response
         response_line = self.process.stdout.readline()
         if not response_line:
@@ -59,14 +59,26 @@ class McpTestClient:
                 stderr = self.process.stderr.read()
                 raise RuntimeError(f"Server terminated unexpectedly. Stderr: {stderr}")
             raise RuntimeError("No response from server")
-            
+
         print(f"← Received: {response_line.strip()}")
-        
+
         try:
             response = json.loads(response_line)
             return response
         except json.JSONDecodeError as e:
             raise RuntimeError(f"Invalid JSON response: {response_line}") from e
+
+    def send_notification(self, method: str, params: Optional[Dict[str, Any]] = None) -> None:
+        """Send a JSON-RPC notification to the server."""
+        if not self.process:
+            raise RuntimeError("Server not started")
+        message = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            message["params"] = params
+        msg_str = json.dumps(message) + "\n"
+        print(f"\n→ Notifying: {msg_str.strip()}")
+        self.process.stdin.write(msg_str)
+        self.process.stdin.flush()
             
     def close(self):
         """Close the server process."""
@@ -99,14 +111,19 @@ def main():
             "protocolVersion": "1.0",
             "clientCapabilities": {}
         })
-        
+
         if "result" in response:
             print("✅ Initialize successful!")
             print(f"   Server: {response['result'].get('serverInfo', {})}")
             print(f"   Capabilities: {response['result'].get('capabilities', {})}")
+
+            # Send initialized notification as required by MCP spec
+            print("\n   Sending initialized notification...")
+            client.send_notification("notifications/initialized")
+            print("✅ Handshake complete!")
         else:
             print("❌ Initialize failed:", response.get("error"))
-            
+
         # Test 2: List tools
         print("\n2. Testing list_tools...")
         response = client.send_request("tools/list", {})

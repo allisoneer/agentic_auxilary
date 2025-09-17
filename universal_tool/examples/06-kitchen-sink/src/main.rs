@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -7,17 +7,19 @@ use ::tower_http::cors::CorsLayer;
 use ::tower_http::trace::TraceLayer;
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use schemars::JsonSchema;
+// Using JsonSchema from universal_tool_core::prelude
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 use universal_tool_core::prelude::*;
+use universal_tool_core::mcp::ServiceExt;
+use schemars::JsonSchema;
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 struct FileInfo {
     path: String,
     size: u64,
-    modified: DateTime<Utc>,
+    modified: String, // RFC3339 timestamp
     is_directory: bool,
 }
 
@@ -167,11 +169,11 @@ impl FileManager {
             let file_info = FileInfo {
                 path: entry.path().to_string_lossy().to_string(),
                 size: metadata.len(),
-                modified: DateTime::from(
+                modified: DateTime::<Utc>::from(
                     metadata
                         .modified()
                         .unwrap_or_else(|_| std::time::SystemTime::now()),
-                ),
+                ).to_rfc3339(),
                 is_directory: metadata.is_dir(),
             };
 
@@ -268,11 +270,11 @@ impl FileManager {
         Ok(FileInfo {
             path: resolved_path.to_string_lossy().to_string(),
             size: metadata.len(),
-            modified: DateTime::from(
+            modified: DateTime::<Utc>::from(
                 metadata
                     .modified()
                     .unwrap_or_else(|_| std::time::SystemTime::now()),
-            ),
+            ).to_rfc3339(),
             is_directory: false,
         })
     }
@@ -366,11 +368,11 @@ impl FileManager {
         Ok(FileInfo {
             path: dest_path.to_string_lossy().to_string(),
             size: metadata.len(),
-            modified: DateTime::from(
+            modified: DateTime::<Utc>::from(
                 metadata
                     .modified()
                     .unwrap_or_else(|_| std::time::SystemTime::now()),
-            ),
+            ).to_rfc3339(),
             is_directory: metadata.is_dir(),
         })
     }
@@ -507,11 +509,11 @@ impl FileManager {
                 let file_info = FileInfo {
                     path: entry.path().to_string_lossy().to_string(),
                     size: metadata.len(),
-                    modified: DateTime::from(
+                    modified: DateTime::<Utc>::from(
                         metadata
                             .modified()
                             .unwrap_or_else(|_| std::time::SystemTime::now()),
-                    ),
+                    ).to_rfc3339(),
                     is_directory: false,
                 };
 
@@ -522,10 +524,7 @@ impl FileManager {
                     largest_file = Some(file_info.clone());
                 }
 
-                if most_recent_file
-                    .as_ref()
-                    .is_none_or(|f| file_info.modified > f.modified)
-                {
+                if most_recent_file.is_none() || file_info.modified > most_recent_file.as_ref().unwrap().modified {
                     most_recent_file = Some(file_info);
                 }
             }
@@ -587,142 +586,24 @@ struct Args {
 async fn run_mcp_server(file_manager: FileManager) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting MCP server on stdio");
 
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let mut stdout = stdout.lock();
-
-    // Send initial response
-    let init_response = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": {
-            "protocolVersion": "2024-11-05",
-            "serverInfo": {
-                "name": "file-manager",
-                "version": "1.0.0"
-            },
-            "capabilities": {
-                "tools": true
-            }
-        }
-    });
-
-    writeln!(stdout, "{}", serde_json::to_string(&init_response)?)?;
-    stdout.flush()?;
-
-    // Process incoming requests
-    let reader = BufReader::new(stdin);
-    for line in reader.lines() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        match serde_json::from_str::<serde_json::Value>(&line) {
-            Ok(request) => {
-                let method = request["method"].as_str().unwrap_or("");
-                let params = &request["params"];
-                let id = request["id"].clone();
-
-                let response = match method {
-                    "tools/list" => {
-                        // Return list of available tools
-                        serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "result": {
-                                "tools": [
-                                    {
-                                        "name": "list_files",
-                                        "description": "List files in a directory",
-                                        "inputSchema": {
-                                            "type": "object",
-                                            "properties": {
-                                                "path": { "type": "string", "description": "Directory path" },
-                                                "include_hidden": { "type": "boolean", "description": "Include hidden files" },
-                                                "recursive": { "type": "boolean", "description": "Recursive listing" }
-                                            },
-                                            "required": ["path"]
-                                        }
-                                    },
-                                    {
-                                        "name": "read_file",
-                                        "description": "Read file contents",
-                                        "inputSchema": {
-                                            "type": "object",
-                                            "properties": {
-                                                "path": { "type": "string", "description": "File path" }
-                                            },
-                                            "required": ["path"]
-                                        }
-                                    },
-                                    {
-                                        "name": "search_files",
-                                        "description": "Search for text in files",
-                                        "inputSchema": {
-                                            "type": "object",
-                                            "properties": {
-                                                "query": { "type": "string", "description": "Search query" },
-                                                "path": { "type": "string", "description": "Directory to search in" },
-                                                "extensions": { "type": "string", "description": "File extensions to search" },
-                                                "case_sensitive": { "type": "boolean", "description": "Case sensitive search" }
-                                            },
-                                            "required": ["query", "path"]
-                                        }
-                                    }
-                                ]
-                            }
-                        })
-                    }
-                    "tools/call" => {
-                        // Handle tool calls via UTF's MCP handler
-                        let tool_name = params["name"].as_str().unwrap_or("");
-                        let tool_params = &params["arguments"];
-
-                        match file_manager
-                            .handle_mcp_call(tool_name, tool_params.clone())
-                            .await
-                        {
-                            Ok(result) => {
-                                serde_json::json!({
-                                    "jsonrpc": "2.0",
-                                    "id": id,
-                                    "result": result
-                                })
-                            }
-                            Err(e) => {
-                                serde_json::json!({
-                                    "jsonrpc": "2.0",
-                                    "id": id,
-                                    "error": {
-                                        "code": -32603,
-                                        "message": e.to_string()
-                                    }
-                                })
-                            }
-                        }
-                    }
-                    _ => {
-                        // Unknown method
-                        serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "error": {
-                                "code": -32601,
-                                "message": "Method not found"
-                            }
-                        })
-                    }
-                };
-
-                writeln!(stdout, "{}", serde_json::to_string(&response)?)?;
-                stdout.flush()?;
-            }
-            Err(e) => {
-                error!("Failed to parse request: {}", e);
-            }
-        }
+    // Create the MCP server wrapper
+    struct FileManagerServer {
+        tools: Arc<FileManager>,
     }
+
+    // Implement the MCP server using the macro
+    universal_tool_core::implement_mcp_server!(FileManagerServer, tools);
+
+    // Create the server instance
+    let server = FileManagerServer {
+        tools: Arc::new(file_manager),
+    };
+
+    // Create stdio transport
+    let transport = universal_tool_core::mcp::stdio();
+
+    // Serve the MCP protocol
+    server.serve(transport).await.unwrap();
 
     Ok(())
 }

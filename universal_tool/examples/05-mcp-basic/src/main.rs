@@ -276,8 +276,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create stdio transport
     let transport = stdio();
 
-    // Run the MCP server
-    server.serve(transport).await.unwrap();
+    // Run the MCP server with error handling
+    match server.serve(transport).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("MCP server error: {}", e);
 
-    Ok(())
+            // Add targeted hints for common handshake issues
+            let msg = format!("{e}");
+            if msg.contains("ExpectedInitializeRequest") || msg.contains("expect initialized request") {
+                eprintln!("Hint: Client must send 'initialize' request first.");
+            }
+            if msg.contains("ExpectedInitializedNotification") || msg.contains("initialize notification") {
+                eprintln!("Hint: Client must send 'notifications/initialized' after receiving InitializeResult.");
+            }
+            Err(Box::new(e) as Box<dyn std::error::Error>)
+        }
+    }
 }

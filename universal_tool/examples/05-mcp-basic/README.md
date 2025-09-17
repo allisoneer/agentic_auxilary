@@ -212,6 +212,15 @@ server.serve(stdio()).await
 - Check that JSON-RPC messages are properly formatted
 - Enable debug logging by setting `RUST_LOG=debug`
 
+### MCP Protocol Handshake
+The MCP protocol requires a specific 3-step handshake:
+1. Client sends `initialize` request
+2. Server responds with `InitializeResult`
+3. Client sends `notifications/initialized` notification
+4. Only then can normal operations (tools/list, tools/call) proceed
+
+If you see errors like "expected initialized notification", ensure your client follows this handshake sequence.
+
 ## Next Steps
 
 - Add more complex tools with multiple parameters
