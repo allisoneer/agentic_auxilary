@@ -276,9 +276,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create stdio transport
     let transport = stdio();
 
-    // Run the MCP server with error handling
-    match server.serve(transport).await {
-        Ok(_) => Ok(()),
+    // Run the MCP server and wait for completion
+    let service = match server.serve(transport).await {
+        Ok(service) => service,
         Err(e) => {
             eprintln!("MCP server error: {}", e);
 
@@ -290,7 +290,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if msg.contains("ExpectedInitializedNotification") || msg.contains("initialize notification") {
                 eprintln!("Hint: Client must send 'notifications/initialized' after receiving InitializeResult.");
             }
-            Err(Box::new(e) as Box<dyn std::error::Error>)
+            return Err(Box::new(e) as Box<dyn std::error::Error>);
         }
-    }
+    };
+
+    // Wait for the service to complete
+    service.waiting().await?;
+    Ok(())
 }
