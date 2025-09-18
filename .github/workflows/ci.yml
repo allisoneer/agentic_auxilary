@@ -27,7 +27,7 @@ jobs:
       
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.89
           components: rustfmt, clippy
           cache: true
       
@@ -54,7 +54,7 @@ jobs:
       
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.89
           components: rustfmt, clippy
           cache: true
       
