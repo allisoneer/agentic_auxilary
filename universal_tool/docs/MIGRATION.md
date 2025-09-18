@@ -4,6 +4,13 @@
 
 This guide covers the migration from rmcp v0.2 to v0.6.4+ (official rust-sdk) for the Universal Tool Framework's MCP functionality.
 
+### ⚠️ Critical Changes Summary
+
+1. **Server must use `service.waiting().await`** - Without this, servers exit immediately
+2. **Custom stdio test clients no longer work** - Use official SDKs instead
+3. **Stricter connection handling** - Protocol violations result in immediate connection closure
+4. **New required struct fields** - `Tool` and `Implementation` need additional fields
+
 ### Breaking Changes
 
 #### 1. Error Type Changes
@@ -72,14 +79,46 @@ let settings = schemars::r#gen::SchemaSettings::draft07();
 let settings = ::schemars::r#gen::SchemaSettings::draft07();
 ```
 
-### Protocol Compliance
+### Protocol Compliance and Connection Handling
 
-The newer rmcp version is stricter about MCP protocol compliance. Ensure your clients follow the required handshake sequence:
+The newer rmcp version has significantly stricter connection handling and protocol compliance:
 
+#### Required Handshake Sequence:
 1. Client sends `initialize` request
 2. Server responds with `InitializeResult`
 3. Client sends `notifications/initialized` notification
 4. Only then can normal operations proceed
+
+#### Critical Server Lifecycle Change:
+**IMPORTANT**: Servers must now use the `waiting()` pattern:
+
+```rust
+// Before (v0.2) - This worked but is incomplete in v0.6.4
+server.serve(transport).await?;
+
+// After (v0.6.4+) - REQUIRED pattern
+let service = server.serve(transport).await?;
+service.waiting().await?;  // <-- Without this, the server exits immediately
+```
+
+Without `service.waiting().await`, your server will exit immediately after initialization.
+
+Complete example:
+```rust
+use universal_tool_core::mcp::{ServiceExt, stdio};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let server = MyMcpServer::new();
+    let transport = stdio();
+
+    // CRITICAL: Must capture service and call waiting()
+    let service = server.serve(transport).await?;
+    service.waiting().await?;
+
+    Ok(())
+}
+```
 
 ### Migration Steps
 
@@ -97,11 +136,32 @@ The newer rmcp version is stricter about MCP protocol compliance. Ensure your cl
    - Add required fields to `Tool` and `Implementation` structs
    - Update namespace references for schemars
 
-3. **Update test clients:**
-   Ensure all test clients send the `notifications/initialized` notification after receiving the initialize response.
+3. **Update server implementation:**
+   Add the `service.waiting().await` pattern to your server's main function.
 
-4. **Test with official clients:**
-   Test your server with official MCP clients like MCP Inspector to ensure protocol compliance.
+4. **Replace custom test clients:**
+   **IMPORTANT**: Custom stdio test clients that worked with rmcp v0.2 will NOT work with v0.6.4 due to stricter connection handling. The server will immediately close connections with "connection closed: initialized request" errors.
+
+   Instead, use official MCP SDKs for testing:
+
+   ```bash
+   # Python SDK test (with uv)
+   cd examples/05-mcp-basic
+   uv run test_with_uv.py
+
+   # TypeScript SDK test (with bun)
+   cd examples/05-mcp-basic
+   # Note: bun auto-install has issues with scoped packages, explicit install required
+   bun add @modelcontextprotocol/sdk
+   bun run test_with_bun_simple.ts
+   ```
+
+5. **Test with official clients:**
+   - MCP Inspector
+   - Official Python SDK (`mcp` package)
+   - Official TypeScript SDK (`@modelcontextprotocol/sdk`)
+
+   These clients properly implement the required handshake and connection handling.
 
 ### Backward Compatibility
 
@@ -115,6 +175,23 @@ The updated framework includes improved error diagnostics. When handshake errors
 - "Client must send 'notifications/initialized' after receiving InitializeResult."
 
 These hints help identify protocol compliance issues quickly.
+
+### Common Issues and Troubleshooting
+
+#### "connection closed: initialized request" Error
+This error occurs when:
+- Using custom stdio test clients from rmcp v0.2 era
+- Missing the `service.waiting().await` pattern
+- Client doesn't properly implement the MCP handshake
+
+**Solution**: Use official SDKs and ensure your server includes `service.waiting().await`.
+
+#### Server Exits Immediately
+If your server starts and immediately exits without errors:
+- You're missing `service.waiting().await` after `server.serve(transport).await`
+
+#### Test Clients Fail to Connect
+Custom test clients that manually construct JSON-RPC messages will fail with rmcp v0.6.4. The new version has stricter connection lifecycle management that immediately closes connections if the protocol isn't followed exactly.
 
 ### Testing
 
@@ -130,6 +207,15 @@ cargo test --workspace
 # Build examples
 cargo build --examples
 
-# Test with official MCP clients
+# Test with official Python SDK
+cd examples/05-mcp-basic
+uv run test_with_uv.py
+
+# Test with official TypeScript SDK
+cd examples/05-mcp-basic
+bun add @modelcontextprotocol/sdk
+bun run test_with_bun_simple.ts
+
+# Test with MCP Inspector (if installed)
 mcp-client stdio -- cargo run --example 05-mcp-basic
 ```
