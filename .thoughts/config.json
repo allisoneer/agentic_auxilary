@@ -99,6 +99,34 @@
       "description": "Repository mount for references/async-openai",
       "optional": true,
       "sync": "none"
+    },
+    {
+      "remote": "git@github.com:modelcontextprotocol/rust-sdk.git",
+      "mount_path": "references/rust-sdk",
+      "description": "Repository mount for references/rust-sdk",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "https://github.com/modelcontextprotocol/modelcontextprotocol.git",
+      "mount_path": "references/modelcontextprotocol",
+      "description": "Repository mount for references/modelcontextprotocol",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "https://github.com/modelcontextprotocol/python-sdk.git",
+      "mount_path": "references/python-sdk",
+      "description": "Repository mount for references/python-sdk",
+      "optional": true,
+      "sync": "none"
+    },
+    {
+      "remote": "https://github.com/modelcontextprotocol/typescript-sdk.git",
+      "mount_path": "references/typescript-sdk",
+      "description": "Repository mount for references/typescript-sdk",
+      "optional": true,
+      "sync": "none"
     }
   ],
   "rules": []
