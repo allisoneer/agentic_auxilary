@@ -37,23 +37,41 @@ The server communicates via stdio (standard input/output) using the MCP protocol
 
 ## Testing with MCP Clients
 
-### Option 1: Using the Test Client
+### Option 1: Using the Official Python SDK
 
-A Python test client is provided to verify the server functionality:
+Test the server using the official MCP Python SDK with uv:
 
 ```bash
-# Make sure you have Python 3 installed
-python3 examples/05-mcp-basic/test_mcp_client.py
+# From the 05-mcp-basic directory
+cd examples/05-mcp-basic
+uv run test_with_uv.py
 ```
 
 The test client will:
 1. Start the MCP server
-2. Initialize the connection
+2. Initialize the connection using the official protocol
 3. List available tools
 4. Test each tool with sample data
 5. Display the results
 
-### Option 2: Using Claude Desktop
+### Option 2: Using the Official TypeScript SDK
+
+Test the server using the official MCP TypeScript SDK with bun:
+
+```bash
+# From the 05-mcp-basic directory
+cd examples/05-mcp-basic
+
+# First install the SDK (bun auto-install has issues with scoped packages)
+bun add @modelcontextprotocol/sdk
+
+# Then run the test
+bun run test_with_bun_simple.ts
+```
+
+Both test clients handle the complete MCP handshake protocol correctly and demonstrate successful integration with rmcp v0.6.4.
+
+### Option 3: Using Claude Desktop
 
 You can integrate this MCP server with Claude Desktop by adding it to your configuration:
 
@@ -75,7 +93,7 @@ You can integrate this MCP server with Claude Desktop by adding it to your confi
 
 3. Restart Claude Desktop to load the new MCP server.
 
-### Option 3: Using mcp-client CLI
+### Option 4: Using mcp-client CLI
 
 If you have the official MCP client installed:
 
@@ -211,6 +229,15 @@ server.serve(stdio()).await
 - The server uses stdio for communication - ensure your client supports this
 - Check that JSON-RPC messages are properly formatted
 - Enable debug logging by setting `RUST_LOG=debug`
+
+### MCP Protocol Handshake
+The MCP protocol requires a specific 3-step handshake:
+1. Client sends `initialize` request
+2. Server responds with `InitializeResult`
+3. Client sends `notifications/initialized` notification
+4. Only then can normal operations (tools/list, tools/call) proceed
+
+If you see errors like "expected initialized notification", ensure your client follows this handshake sequence.
 
 ## Next Steps
 
