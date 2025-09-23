@@ -1010,9 +1010,8 @@ dependencies = [
  "atomic-waker",
  "bytes",
  "futures-channel",
- "futures-util",
- "h2",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "httparse",
@@ -1717,7 +1716,7 @@ checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.105",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1777,7 +1776,7 @@ dependencies = [
  "git2",
  "mockito",
  "octocrab",
- "schemars",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "tempfile",
@@ -1785,7 +1784,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "universal-tool-core 0.1.2",
  "url",
 ]
 
@@ -1991,6 +1990,27 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37f2048a81a7ff7e8ef6bc5abced70c3d9114c8f03d85d7aaaafd9fd04f12e9e"
+dependencies = [
+ "base64",
+ "chrono",
+ "futures",
+ "paste",
+ "pin-project-lite",
+ "rmcp-macros 0.2.1",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "rmcp"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41ab0892f4938752b34ae47cb53910b1b0921e55e77ddb6e44df666cab17939f"
@@ -2000,7 +2020,7 @@ dependencies = [
  "futures",
  "paste",
  "pin-project-lite",
- "rmcp-macros",
+ "rmcp-macros 0.6.4",
  "schemars 1.0.4",
  "serde",
  "serde_json",
@@ -2008,6 +2028,19 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "rmcp-macros"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72398e694b9f6dbb5de960cf158c8699e6a1854cb5bbaac7de0646b2005763c4"
+dependencies = [
+ "darling 0.20.11",
+ "proc-macro2",
+ "quote",
+ "serde_json",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2190,6 +2223,7 @@ version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
 dependencies = [
+ "chrono",
  "dyn-clone",
  "schemars_derive 0.8.22",
  "serde",
@@ -2454,7 +2488,7 @@ checksum = "297f631f50729c8c99b84667867963997ec0b50f32b2a7dbcab828ef0541e8bb"
 dependencies = [
  "num-bigint",
  "num-traits",
- "thiserror 2.0.14",
+ "thiserror 2.0.16",
  "time",
 ]
 
@@ -2488,7 +2522,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.105",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2947,35 +2981,6 @@ checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "universal-tool-core"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "atty",
- "axum",
- "clap",
- "clap_complete",
- "console",
- "csv",
- "dialoguer",
- "indicatif",
- "rmcp",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "serde_yaml",
- "tabled",
- "thiserror 2.0.16",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "universal-tool-macros 0.1.2",
- "utoipa",
- "utoipa-swagger-ui",
-]
-
-[[package]]
-name = "universal-tool-core"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb15f89cc1a6d43f8914b5e1645c85569aa914beb496548d49f898ad0927ffc7"
@@ -2988,16 +2993,57 @@ dependencies = [
  "csv",
  "dialoguer",
  "indicatif",
- "rmcp",
- "schemars",
+ "rmcp 0.2.1",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "serde_yaml",
  "tabled",
- "thiserror 2.0.14",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-util",
- "universal-tool-macros 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "universal-tool-macros 0.1.2",
+]
+
+[[package]]
+name = "universal-tool-core"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "atty",
+ "axum",
+ "clap",
+ "clap_complete",
+ "console",
+ "csv",
+ "dialoguer",
+ "indicatif",
+ "rmcp 0.6.4",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tabled",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "universal-tool-macros 0.1.3",
+ "utoipa",
+ "utoipa-swagger-ui",
+]
+
+[[package]]
+name = "universal-tool-macros"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a7bcc71b7db7b18d1152be6f89aee94d01ea45cabe0e45da58cd525ceda8be5"
+dependencies = [
+ "darling 0.20.11",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -3012,19 +3058,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.106",
  "tokio",
- "universal-tool-core 0.1.2",
-]
-
-[[package]]
-name = "universal-tool-macros"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a7bcc71b7db7b18d1152be6f89aee94d01ea45cabe0e45da58cd525ceda8be5"
-dependencies = [
- "darling",
- "proc-macro2",
- "quote",
- "syn 2.0.105",
+ "universal-tool-core 0.2.0",
 ]
 
 [[package]]
@@ -3347,12 +3381,6 @@ checksum = "45e46c0661abb7180e7b9c281db115305d49ca1709ab8242adf09666d2173c65"
 
 [[package]]
 name = "windows-result"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45e46c0661abb7180e7b9c281db115305d49ca1709ab8242adf09666d2173c65"
-
-[[package]]
-name = "windows-result"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7084dcc306f89883455a206237404d3eaf961e5bd7e0f312f7c91f57eb44167f"
@@ -3665,7 +3693,7 @@ checksum = "88d2b8d9c68ad2b9e4340d7832716a4d21a22a1154777ad56ea55c51a9cf3831"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.105",
+ "syn 2.0.106",
 ]
 
 [[package]]
