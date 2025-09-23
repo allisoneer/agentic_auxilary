@@ -81,42 +81,34 @@ async fn run_cli(args: Args) -> Result<()> {
 
     // Execute the appropriate command
     match args.command {
-        Commands::All { pr } => {
-            match tool.get_all_comments(pr).await {
-                Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
+        Commands::All { pr } => match tool.get_all_comments(pr).await {
+            Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
-        }
-        Commands::ReviewComments { pr } => {
-            match tool.get_review_comments(pr).await {
-                Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
+        },
+        Commands::ReviewComments { pr } => match tool.get_review_comments(pr).await {
+            Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
-        }
-        Commands::IssueComments { pr } => {
-            match tool.get_issue_comments(pr).await {
-                Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
+        },
+        Commands::IssueComments { pr } => match tool.get_issue_comments(pr).await {
+            Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
-        }
-        Commands::ListPrs { state } => {
-            match tool.list_prs(Some(state)).await {
-                Ok(prs) => println!("{}", serde_json::to_string_pretty(&prs)?),
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
+        },
+        Commands::ListPrs { state } => match tool.list_prs(Some(state)).await {
+            Ok(prs) => println!("{}", serde_json::to_string_pretty(&prs)?),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
-        }
+        },
         Commands::Mcp => unreachable!("MCP command should be handled in main"),
     }
 
@@ -160,8 +152,12 @@ async fn run_mcp_server(repo: Option<String>) -> Result<()> {
         if msg.contains("ExpectedInitializeRequest") || msg.contains("expect initialized request") {
             eprintln!("Hint: Client must send 'initialize' request first.");
         }
-        if msg.contains("ExpectedInitializedNotification") || msg.contains("initialize notification") {
-            eprintln!("Hint: Client must send 'notifications/initialized' after receiving InitializeResult.");
+        if msg.contains("ExpectedInitializedNotification")
+            || msg.contains("initialize notification")
+        {
+            eprintln!(
+                "Hint: Client must send 'notifications/initialized' after receiving InitializeResult."
+            );
         }
         return Err(anyhow::anyhow!("MCP server failed: {}", e));
     }
