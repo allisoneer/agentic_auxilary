@@ -603,7 +603,8 @@ async fn run_mcp_server(file_manager: FileManager) -> Result<(), Box<dyn std::er
     let transport = universal_tool_core::mcp::stdio();
 
     // Serve the MCP protocol
-    server.serve(transport).await.unwrap();
+    let service = server.serve(transport).await?;
+    service.waiting().await?;
 
     Ok(())
 }
