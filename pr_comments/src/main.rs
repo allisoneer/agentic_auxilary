@@ -150,7 +150,9 @@ async fn run_mcp_server(repo: Option<String>) -> Result<()> {
 
             // Add targeted hints for common handshake issues
             let msg = format!("{e}");
-            if msg.contains("ExpectedInitializeRequest") || msg.contains("expect initialized request") {
+            if msg.contains("ExpectedInitializeRequest")
+                || msg.contains("expect initialized request")
+            {
                 eprintln!("Hint: Client must send 'initialize' request first.");
             }
             if msg.contains("ExpectedInitializedNotification")
