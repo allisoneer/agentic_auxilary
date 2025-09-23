@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::borrow::Cow;
 
 use crate::error::{ErrorCode, ToolError};
-use schemars::JsonSchema;
+use ::schemars::JsonSchema;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -32,7 +32,7 @@ pub use rmcp::{
 };
 
 // Re-export Error as McpError for convenience
-pub use rmcp::Error as McpError;
+pub use rmcp::ErrorData as McpError;
 
 // Re-export stdio function for creating stdio transport
 pub use rmcp::transport::stdio;
@@ -246,7 +246,7 @@ pub fn generate_schema<T: JsonSchema + 'static>() -> Arc<Value> {
         }
 
         // Generate schema using schemars with draft07
-        let settings = schemars::r#gen::SchemaSettings::draft07();
+        let settings = ::schemars::r#gen::SchemaSettings::draft07();
         let generator = settings.into_generator();
         let schema = generator.into_root_schema_for::<T>();
 
@@ -324,10 +324,13 @@ pub fn convert_tool_definitions(tool_jsons: Vec<JsonValue>) -> Vec<Tool> {
                 .map(|_hints| ToolAnnotations::default());
 
             Some(Tool {
-                name: name.into(),
+                name: name.clone().into(),
+                title: name.into(),
                 description: description.map(|s| s.into()),
                 input_schema: input_schema.unwrap_or_else(|| Arc::new(serde_json::Map::new())),
                 annotations,
+                output_schema: None,
+                icons: None,
             })
         })
         .collect()
@@ -350,7 +353,10 @@ macro_rules! implement_mcp_server {
                     Ok($crate::mcp::InitializeResult {
                         server_info: $crate::mcp::Implementation {
                             name: stringify!($struct_name).to_string().into(),
+                            title: env!("CARGO_PKG_NAME").to_string().into(),
                             version: env!("CARGO_PKG_VERSION").to_string().into(),
+                            website_url: None,
+                            icons: None,
                         },
                         capabilities: $crate::mcp::ServerCapabilities::builder()
                             .enable_tools()
