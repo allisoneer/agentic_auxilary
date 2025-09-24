@@ -40,3 +40,58 @@ async fn test_model_serialization() {
 }
 
 // Additional integration tests would require mocking GitHub API
+
+#[cfg(test)]
+mod resolution_tests {
+    use pr_comments::models::{GraphQLResponse, PullRequestData};
+
+    #[test]
+    fn test_include_resolved_default() {
+        // Test the default behavior concept used in get_review_comments
+        fn get_include_resolved(opt: Option<bool>) -> bool {
+            opt.unwrap_or(false)
+        }
+
+        // Test that None defaults to false
+        assert!(!get_include_resolved(None));
+        // Test that Some(true) returns true
+        assert!(get_include_resolved(Some(true)));
+        // Test that Some(false) returns false
+        assert!(!get_include_resolved(Some(false)));
+    }
+
+    #[test]
+    fn test_graphql_models() {
+        // Test that GraphQL response models deserialize correctly
+        let json = r#"{
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{
+                                "id": "PRRT_123",
+                                "isResolved": true,
+                                "comments": {
+                                    "nodes": [{
+                                        "id": "RC_123",
+                                        "databaseId": 456
+                                    }]
+                                }
+                            }],
+                            "pageInfo": {
+                                "hasNextPage": false,
+                                "endCursor": null
+                            }
+                        }
+                    }
+                }
+            }
+        }"#;
+
+        let response: GraphQLResponse<PullRequestData> = serde_json::from_str(json).unwrap();
+        assert!(response.data.is_some());
+        let data = response.data.unwrap();
+        assert_eq!(data.repository.pull_request.review_threads.nodes.len(), 1);
+        assert!(data.repository.pull_request.review_threads.nodes[0].is_resolved);
+    }
+}

@@ -1,6 +1,7 @@
-use crate::models::{AllComments, IssueComment, PrSummary, ReviewComment};
+use crate::models::{AllComments, IssueComment, PrSummary, ReviewComment, GraphQLResponse, PullRequestData};
 use anyhow::Result;
 use octocrab::Octocrab;
+use std::collections::HashMap;
 
 pub struct GitHubClient {
     client: Octocrab,
@@ -72,8 +73,8 @@ impl GitHubClient {
                 )
             })?;
 
-        // Get review comments (code comments)
-        let review_comments = self.get_review_comments(pr_number).await?;
+        // Get review comments (code comments) - always include all for this method
+        let review_comments = self.get_review_comments(pr_number, Some(true)).await?;
 
         // Get issue comments (discussion comments)
         let issue_comments = self.get_issue_comments(pr_number).await?;
@@ -87,8 +88,9 @@ impl GitHubClient {
         })
     }
 
-    pub async fn get_review_comments(&self, pr_number: u64) -> Result<Vec<ReviewComment>> {
-        let mut comments = Vec::new();
+    pub async fn get_review_comments(&self, pr_number: u64, include_resolved: Option<bool>) -> Result<Vec<ReviewComment>> {
+        // First, fetch all review comments using REST API
+        let mut all_comments = Vec::new();
         let mut page = 1u32;
 
         loop {
@@ -112,12 +114,25 @@ impl GitHubClient {
                 break;
             }
 
-            comments.extend(response.items.into_iter().map(ReviewComment::from));
-
+            all_comments.extend(response.items.into_iter().map(ReviewComment::from));
             page += 1;
         }
 
-        Ok(comments)
+        // If include_resolved is None or false, filter out resolved comments
+        let include_resolved = include_resolved.unwrap_or(false);
+        if !include_resolved && !all_comments.is_empty() {
+            // Fetch resolution status via GraphQL
+            let resolution_map = self.get_review_thread_resolution_status(pr_number).await?;
+
+            // Filter out resolved comments
+            all_comments.retain(|comment| {
+                // If we don't have resolution info for a comment, include it by default
+                // If we do have info and it's resolved, exclude it
+                resolution_map.get(&comment.id).map(|&is_resolved| !is_resolved).unwrap_or(true)
+            });
+        }
+
+        Ok(all_comments)
     }
 
     pub async fn get_issue_comments(&self, pr_number: u64) -> Result<Vec<IssueComment>> {
@@ -200,5 +215,81 @@ impl GitHubClient {
                 review_comment_count: pr.review_comments.unwrap_or(0) as u32,
             })
             .collect())
+    }
+
+    async fn get_review_thread_resolution_status(&self, pr_number: u64) -> Result<HashMap<u64, bool>> {
+        let query = r#"
+            query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) {
+                        reviewThreads(first: 100, after: $cursor) {
+                            nodes {
+                                id
+                                isResolved
+                                comments(first: 50) {
+                                    nodes {
+                                        id
+                                        databaseId
+                                    }
+                                }
+                            }
+                            pageInfo {
+                                hasNextPage
+                                endCursor
+                            }
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let mut comment_resolution_map = HashMap::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let variables = serde_json::json!({
+                "owner": self.owner,
+                "repo": self.repo,
+                "number": pr_number as i32,
+                "cursor": cursor,
+            });
+
+            let response: GraphQLResponse<PullRequestData> = self
+                .client
+                .graphql(&serde_json::json!({
+                    "query": query,
+                    "variables": variables,
+                }))
+                .await
+                .map_err(|e| anyhow::anyhow!("GraphQL query failed: {}", e))?;
+
+            if let Some(errors) = response.errors
+                && !errors.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "GraphQL errors: {}",
+                        errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+
+            let data = response.data.ok_or_else(|| anyhow::anyhow!("No data in GraphQL response"))?;
+            let threads = &data.repository.pull_request.review_threads;
+
+            // Build map of comment ID -> resolution status
+            for thread in &threads.nodes {
+                for comment in &thread.comments.nodes {
+                    if let Some(db_id) = comment.database_id {
+                        comment_resolution_map.insert(db_id, thread.is_resolved);
+                    }
+                }
+            }
+
+            if !threads.page_info.has_next_page {
+                break;
+            }
+
+            cursor = threads.page_info.end_cursor.clone();
+        }
+
+        Ok(comment_resolution_map)
     }
 }
