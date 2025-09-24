@@ -31,6 +31,9 @@ enum Commands {
         /// PR number (auto-detected if not provided)
         #[arg(long)]
         pr: Option<u64>,
+        /// Include resolved review comments (defaults to false)
+        #[arg(long)]
+        include_resolved: bool,
     },
     /// Get issue comments (discussion) for a PR
     IssueComments {
@@ -88,7 +91,7 @@ async fn run_cli(args: Args) -> Result<()> {
                 std::process::exit(1);
             }
         },
-        Commands::ReviewComments { pr } => match tool.get_review_comments(pr).await {
+        Commands::ReviewComments { pr, include_resolved } => match tool.get_review_comments(pr, Some(include_resolved)).await {
             Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
             Err(e) => {
                 eprintln!("Error: {}", e);

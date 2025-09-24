@@ -75,3 +75,66 @@ impl From<octocrab::models::issues::Comment> for IssueComment {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphQLResponse<T> {
+    pub data: Option<T>,
+    pub errors: Option<Vec<GraphQLError>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphQLError {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PullRequestData {
+    pub repository: Repository,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Repository {
+    #[serde(rename = "pullRequest")]
+    pub pull_request: PullRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PullRequest {
+    #[serde(rename = "reviewThreads")]
+    pub review_threads: ReviewThreadConnection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewThreadConnection {
+    pub nodes: Vec<ReviewThread>,
+    #[serde(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewThread {
+    pub id: String,
+    #[serde(rename = "isResolved")]
+    pub is_resolved: bool,
+    pub comments: ReviewThreadCommentConnection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewThreadCommentConnection {
+    pub nodes: Vec<ReviewThreadComment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewThreadComment {
+    pub id: String,
+    #[serde(rename = "databaseId")]
+    pub database_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageInfo {
+    #[serde(rename = "hasNextPage")]
+    pub has_next_page: bool,
+    #[serde(rename = "endCursor")]
+    pub end_cursor: Option<String>,
+}

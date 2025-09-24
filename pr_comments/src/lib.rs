@@ -128,6 +128,8 @@ impl PrComments {
         &self,
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
+        #[universal_tool_param(description = "Include resolved review comments (defaults to false)")]
+        include_resolved: Option<bool>,
     ) -> Result<Vec<ReviewComment>, ToolError> {
         let pr = self
             .get_pr_number(pr_number)
@@ -138,7 +140,7 @@ impl PrComments {
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
                 .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
-        client.get_review_comments(pr).await
+        client.get_review_comments(pr, include_resolved).await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
