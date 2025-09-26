@@ -87,18 +87,6 @@ enum MountCommands {
         #[arg(long, value_parser = clap::value_parser!(SyncStrategy), default_value = "auto")]
         sync: SyncStrategy,
 
-        /// Mark as optional (repo-level only)
-        #[arg(long)]
-        optional: bool,
-
-        /// Override global rules (repo-level only)
-        #[arg(long)]
-        override_rules: Option<bool>,
-
-        /// Add as personal mount
-        #[arg(short, long)]
-        personal: bool,
-
         /// Description
         #[arg(short, long)]
         description: Option<String>,
@@ -167,17 +155,10 @@ enum ConfigCommands {
         /// Output as JSON
         #[arg(short, long)]
         json: bool,
-        /// Show personal config instead of repository config
-        #[arg(short, long)]
-        personal: bool,
     },
 
     /// Edit configuration in $EDITOR
-    Edit {
-        /// Edit personal config instead of repository config
-        #[arg(short, long)]
-        personal: bool,
-    },
+    Edit {},
 
     /// Validate configuration
     Validate,
@@ -224,22 +205,8 @@ async fn main() -> Result<()> {
                 path,
                 mount_path,
                 sync,
-                optional,
-                override_rules,
-                personal,
                 description,
-            } => {
-                commands::mount::add::execute(
-                    path,
-                    mount_path,
-                    sync,
-                    optional,
-                    override_rules,
-                    personal,
-                    description,
-                )
-                .await
-            }
+            } => commands::mount::add::execute(path, mount_path, sync, description).await,
             MountCommands::Remove { mount_name } => {
                 commands::mount::remove::execute(mount_name).await
             }
@@ -260,10 +227,8 @@ async fn main() -> Result<()> {
         },
         Commands::Config { command } => match command {
             ConfigCommands::Create => commands::config::create::execute().await,
-            ConfigCommands::Show { json, personal } => {
-                commands::config::show::execute(json, personal).await
-            }
-            ConfigCommands::Edit { personal } => commands::config::edit::execute(personal).await,
+            ConfigCommands::Show { json } => commands::config::show::execute(json).await,
+            ConfigCommands::Edit {} => commands::config::edit::execute().await,
             ConfigCommands::Validate => commands::config::validate::execute().await,
         },
     }

@@ -1,4 +1,4 @@
-use crate::config::{Mount, MountMerger, MountSource};
+use crate::config::{Mount, RepoConfigManager};
 use crate::git::utils::find_repo_root;
 use crate::mount::MountResolver;
 use anyhow::Result;
@@ -7,67 +7,89 @@ use std::env;
 
 pub async fn execute(verbose: bool) -> Result<()> {
     let repo_root = find_repo_root(&env::current_dir()?)?;
-    let merger = MountMerger::new(repo_root);
+    let repo_manager = RepoConfigManager::new(repo_root);
     let resolver = MountResolver::new()?;
 
-    let all_mounts = merger.get_all_mounts().await?;
+    let desired = repo_manager
+        .load_desired_state()?
+        .ok_or_else(|| anyhow::anyhow!("No repository configuration found"))?;
 
-    if all_mounts.is_empty() {
+    // Check if any mounts are configured
+    let has_mounts = desired.thoughts_mount.is_some()
+        || !desired.context_mounts.is_empty()
+        || !desired.references.is_empty();
+
+    if !has_mounts {
         println!("No mounts configured");
         println!("\nAdd mounts with:");
-        println!(
-            "  {} (repository mount)",
-            "thoughts mount add <path>".cyan()
-        );
-        println!(
-            "  {} (personal mount)",
-            "thoughts mount add <path> --personal".cyan()
-        );
+        println!("  {}", "thoughts mount add <path>".cyan());
         return Ok(());
     }
 
     println!("{}", "Configured mounts:".bold());
     println!();
 
-    for (name, (mount, source)) in &all_mounts {
-        println!("{}:", name.cyan());
-
-        // Show source
-        let source_indicator = match source {
-            MountSource::Repository => "[repo]",
-            MountSource::Personal => "[personal]",
-            MountSource::Pattern => "[pattern]",
+    // Show thoughts mount if configured
+    if let Some(tm) = &desired.thoughts_mount {
+        println!("{} {}:", "thoughts".cyan(), "[thoughts workspace]".dimmed());
+        let display_url = if let Some(sub) = &tm.subpath {
+            format!("{}:{}", tm.remote, sub)
+        } else {
+            tm.remote.clone()
         };
-        println!("  Type: {}", source_indicator.dimmed());
+        println!("  URL: {display_url}");
+        println!("  Sync: {}", tm.sync);
 
-        // Show mount details
-        match mount {
-            Mount::Git { url, sync, subpath } => {
-                let display_url = if let Some(sub) = subpath {
-                    format!("{url}:{sub}")
-                } else {
-                    url.clone()
-                };
-                println!("  URL: {display_url}");
-                println!("  Sync: {sync}");
-
-                if verbose {
-                    // Show resolved path if available
-                    match resolver.resolve_mount(mount) {
-                        Ok(path) => println!("  Path: {}", path.display()),
-                        Err(_) => println!(
-                            "  Path: {} (will clone on first use)",
-                            "not cloned".yellow()
-                        ),
-                    }
-                }
-            }
-            Mount::Directory { path, sync } => {
-                println!("  Path: {}", path.display());
-                println!("  Sync: {sync}");
+        if verbose {
+            let mount = Mount::Git {
+                url: tm.remote.clone(),
+                sync: tm.sync,
+                subpath: tm.subpath.clone(),
+            };
+            match resolver.resolve_mount(&mount) {
+                Ok(path) => println!("  Path: {}", path.display()),
+                Err(_) => println!("  Path: {} (not cloned)", "not cloned".yellow()),
             }
         }
         println!();
+    }
+
+    // Show context mounts
+    if !desired.context_mounts.is_empty() {
+        println!("{}", "Context mounts:".yellow());
+        for cm in &desired.context_mounts {
+            println!("  {}:", cm.mount_path.cyan());
+            let display_url = if let Some(sub) = &cm.subpath {
+                format!("{}:{}", cm.remote, sub)
+            } else {
+                cm.remote.clone()
+            };
+            println!("    URL: {display_url}");
+            println!("    Sync: {}", cm.sync);
+
+            if verbose {
+                let mount = Mount::Git {
+                    url: cm.remote.clone(),
+                    sync: cm.sync,
+                    subpath: cm.subpath.clone(),
+                };
+                match resolver.resolve_mount(&mount) {
+                    Ok(path) => println!("    Path: {}", path.display()),
+                    Err(_) => println!(
+                        "    Path: {} (will clone on first use)",
+                        "not cloned".yellow()
+                    ),
+                }
+            }
+            println!();
+        }
+    }
+
+    // Show references
+    if !desired.references.is_empty() {
+        println!("{}", "References:".green());
+        println!("  {} URLs configured", desired.references.len());
+        println!("  Use {} to see details", "thoughts references list".cyan());
     }
 
     Ok(())

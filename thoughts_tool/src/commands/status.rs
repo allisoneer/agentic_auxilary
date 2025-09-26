@@ -1,4 +1,4 @@
-use crate::config::{Mount, MountMerger, MountSource, RepoMappingManager};
+use crate::config::{Mount, RepoConfigManager, RepoMappingManager};
 use crate::git::utils::find_repo_root;
 use crate::mount::{MountResolver, get_mount_manager};
 use crate::platform::detect_platform;
@@ -19,14 +19,14 @@ pub async fn execute(_detailed: bool) -> Result<()> {
         }
     };
 
-    let merger = MountMerger::new(repo_root.clone());
+    let repo_manager = RepoConfigManager::new(repo_root.clone());
     let platform_info = detect_platform()?;
     let mount_manager = get_mount_manager(&platform_info)?;
     let resolver = MountResolver::new()?;
     let repo_mapping = RepoMappingManager::new()?;
 
-    // Get all configured mounts with sources
-    let all_mounts = merger.get_all_mounts().await?;
+    // Get configuration
+    let desired = repo_manager.load_desired_state()?;
     let active_mounts = mount_manager.list_mounts().await?;
 
     println!("{}", "Thoughts Tool Status".bold().cyan());
@@ -41,102 +41,116 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     }
     println!();
 
+    // Configuration status
+    if let Some(ds) = &desired
+        && ds.was_v1
+    {
+        println!("  {}: Using v1 configuration (legacy)", "Note".yellow());
+        println!("  Personal mounts are deprecated and ignored");
+        println!();
+    }
+
     // Mount status
     println!("{}", "Mounts:".bold());
 
-    if all_mounts.is_empty() {
+    if desired.is_none() {
+        println!("  No configuration found");
+        println!();
+        println!("  Initialize with:");
+        println!("    {}", "thoughts init".cyan());
+        return Ok(());
+    }
+
+    let ds = desired.unwrap();
+    let has_mounts =
+        ds.thoughts_mount.is_some() || !ds.context_mounts.is_empty() || !ds.references.is_empty();
+
+    if !has_mounts {
         println!("  No mounts configured");
         println!();
         println!("  Add mounts with:");
-        println!(
-            "    {} (repository mount)",
-            "thoughts mount add <url>".cyan()
-        );
-        println!(
-            "    {} (personal mount)",
-            "thoughts mount add <url> --personal".cyan()
-        );
+        println!("    {}", "thoughts mount add <path>".cyan());
     } else {
-        for (name, (mount, source)) in &all_mounts {
-            println!("\n  {}:", name.cyan().bold());
-
-            // Show source with description
-            let (source_label, source_color) = match source {
-                MountSource::Repository => ("Repository", "green"),
-                MountSource::Personal => ("Personal", "blue"),
-                MountSource::Pattern => ("Pattern", "magenta"),
+        // Show thoughts mount
+        if let Some(tm) = &ds.thoughts_mount {
+            println!(
+                "\n  {} {}:",
+                "thoughts".cyan().bold(),
+                "(workspace)".dimmed()
+            );
+            let display_url = if let Some(sub) = &tm.subpath {
+                format!("{}:{}", tm.remote, sub)
+            } else {
+                tm.remote.clone()
             };
+            println!("    URL: {display_url}");
+            println!("    Sync: {}", tm.sync);
 
-            let source_str = match source {
-                MountSource::Repository => format!("{source_label} (shared with team)"),
-                MountSource::Personal => format!("{source_label} (private to you)"),
-                MountSource::Pattern => format!("{source_label} (matched by rule)"),
+            // Show local path and status
+            let mount = Mount::Git {
+                url: tm.remote.clone(),
+                sync: tm.sync,
+                subpath: tm.subpath.clone(),
             };
+            show_mount_status(&mount, &resolver, &repo_mapping, &tm.remote).await?;
 
-            println!("    Source: {}", source_str.color(source_color));
-
-            // Show mount details
-            match mount {
-                Mount::Git { url, subpath, sync } => {
-                    let display_url = if let Some(sub) = subpath {
-                        format!("{url}:{sub}")
-                    } else {
-                        url.clone()
-                    };
-                    println!("    URL: {display_url}");
-                    println!("    Sync: {}", format!("{sync:?}").dimmed());
-
-                    // Show local path and clone status
-                    match resolver.resolve_mount(mount) {
-                        Ok(path) => {
-                            println!("    Local: {}", path.display());
-
-                            // Check if it's auto-managed
-                            if repo_mapping.is_auto_managed(url)? {
-                                println!("    Managed: {} (auto-cloned)", "Yes".green());
-                            } else {
-                                println!("    Managed: {} (user clone)", "No".yellow());
-                            }
-                        }
-                        Err(e) => {
-                            // Check if it's just not cloned yet
-                            if e.to_string().contains("No local repository found") {
-                                println!(
-                                    "    Local: {} (will clone on first use)",
-                                    "Not cloned".yellow()
-                                );
-                                println!(
-                                    "    Tip: Run {} to clone now",
-                                    format!("thoughts mount clone {url}").cyan()
-                                );
-                            } else {
-                                println!("    Local: {} - {}", "Error".red(), e);
-                            }
-                        }
-                    }
-                }
-                Mount::Directory { path, sync } => {
-                    println!("    Type: Local directory");
-                    println!("    Path: {}", path.display());
-                    println!("    Sync: {}", format!("{sync:?}").dimmed());
-                }
-            }
-
-            // Show mount status
-            let is_mounted = active_mounts.iter().any(|m| {
-                m.target
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n == name)
-                    .unwrap_or(false)
-            });
-
+            // Check if mounted
+            let target = repo_root
+                .join(".thoughts-data")
+                .join(&ds.mount_dirs.thoughts);
+            let is_mounted = active_mounts.iter().any(|m| m.target == target);
             if is_mounted {
                 println!("    Status: {} ✓", "Mounted".green().bold());
             } else {
                 println!("    Status: {} ✗", "Not mounted".red().bold());
                 println!("    Tip: Run {} to mount", "thoughts mount update".cyan());
             }
+        }
+
+        // Show context mounts
+        if !ds.context_mounts.is_empty() {
+            println!("\n  {}:", "Context mounts".yellow().bold());
+            for cm in &ds.context_mounts {
+                println!("    {}:", cm.mount_path.cyan());
+                let display_url = if let Some(sub) = &cm.subpath {
+                    format!("{}:{}", cm.remote, sub)
+                } else {
+                    cm.remote.clone()
+                };
+                println!("      URL: {display_url}");
+                println!("      Sync: {}", cm.sync);
+
+                // Show local path and status
+                let mount = Mount::Git {
+                    url: cm.remote.clone(),
+                    sync: cm.sync,
+                    subpath: cm.subpath.clone(),
+                };
+                show_mount_status(&mount, &resolver, &repo_mapping, &cm.remote).await?;
+
+                // Check if mounted
+                let target = repo_root
+                    .join(".thoughts-data")
+                    .join(&ds.mount_dirs.context)
+                    .join(&cm.mount_path);
+                let is_mounted = active_mounts.iter().any(|m| m.target == target);
+                if is_mounted {
+                    println!("      Status: {} ✓", "Mounted".green().bold());
+                } else {
+                    println!("      Status: {} ✗", "Not mounted".red().bold());
+                }
+            }
+        }
+
+        // Show references summary
+        if !ds.references.is_empty() {
+            println!("\n  {}:", "References".green().bold());
+            println!("    Count: {} repositories", ds.references.len());
+            println!("    Mount: Read-only under {}/", ds.mount_dirs.references);
+            println!(
+                "    Tip: Use {} for details",
+                "thoughts references list".cyan()
+            );
         }
     }
 
@@ -192,5 +206,41 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     };
     println!("  Platform: {}", platform_str);
 
+    Ok(())
+}
+
+async fn show_mount_status(
+    mount: &Mount,
+    resolver: &MountResolver,
+    repo_mapping: &RepoMappingManager,
+    url: &str,
+) -> Result<()> {
+    match resolver.resolve_mount(mount) {
+        Ok(path) => {
+            println!("      Local: {}", path.display());
+
+            // Check if it's auto-managed
+            if repo_mapping.is_auto_managed(url)? {
+                println!("      Managed: {} (auto-cloned)", "Yes".green());
+            } else {
+                println!("      Managed: {} (user clone)", "No".yellow());
+            }
+        }
+        Err(e) => {
+            // Check if it's just not cloned yet
+            if e.to_string().contains("No local repository found") {
+                println!(
+                    "      Local: {} (will clone on first use)",
+                    "Not cloned".yellow()
+                );
+                println!(
+                    "      Tip: Run {} to clone now",
+                    format!("thoughts mount clone {url}").cyan()
+                );
+            } else {
+                println!("      Local: {} - {}", "Error".red(), e);
+            }
+        }
+    }
     Ok(())
 }

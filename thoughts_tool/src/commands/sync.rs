@@ -1,4 +1,4 @@
-use crate::config::{Mount, MountMerger, RepoMappingManager, SyncStrategy};
+use crate::config::{Mount, RepoConfigManager, RepoMappingManager, SyncStrategy};
 use crate::git::GitSync;
 use crate::git::utils::{find_repo_root, get_remote_url};
 use crate::mount::MountResolver;
@@ -13,38 +13,61 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     }
 
     let repo_root = find_repo_root(&env::current_dir()?)?;
-    let merger = MountMerger::new(repo_root.clone());
+    let repo_manager = RepoConfigManager::new(repo_root.clone());
     let resolver = MountResolver::new()?;
 
-    // Get all mounts from merged config
-    let all_mounts = merger.get_all_mounts().await?;
+    let desired = repo_manager
+        .load_desired_state()?
+        .ok_or_else(|| anyhow::anyhow!("No repository configuration found"))?;
+
+    // Build mount list from DesiredState
+    let mut sync_list = vec![];
+
+    // Add thoughts mount if configured and auto-sync
+    if let Some(tm) = &desired.thoughts_mount
+        && tm.sync == SyncStrategy::Auto
+    {
+        sync_list.push((
+            "thoughts".to_string(),
+            Mount::Git {
+                url: tm.remote.clone(),
+                sync: tm.sync,
+                subpath: tm.subpath.clone(),
+            },
+        ));
+    }
+
+    // Add context mounts that are auto-sync
+    for cm in &desired.context_mounts {
+        if cm.sync == SyncStrategy::Auto {
+            sync_list.push((
+                cm.mount_path.clone(),
+                Mount::Git {
+                    url: cm.remote.clone(),
+                    sync: cm.sync,
+                    subpath: cm.subpath.clone(),
+                },
+            ));
+        }
+    }
 
     // Determine mounts to sync
     let mounts_to_sync = if let Some(name) = mount_name {
         // Specific mount requested
-        if all_mounts.contains_key(&name) {
+        if sync_list.iter().any(|(n, _)| n == &name) {
             vec![name]
         } else {
-            anyhow::bail!("Mount '{}' not found", name);
+            anyhow::bail!("Mount '{}' not found or not configured for sync", name);
         }
     } else if all {
         // All auto-sync mounts
-        all_mounts
-            .iter()
-            .filter(|(_, (mount, _))| mount.sync_strategy() == SyncStrategy::Auto)
-            .map(|(name, _)| name.clone())
-            .collect()
+        sync_list.iter().map(|(n, _)| n.clone()).collect()
     } else {
         // Repository-aware sync (default) - sync all auto mounts for current repo
-        // Note: get_all_mounts() already returns only mounts configured for this repository
         let repo_url = get_remote_url(&repo_root)?;
         println!("{} repository: {}", "Detected".cyan(), repo_url);
 
-        all_mounts
-            .iter()
-            .filter(|(_, (mount, _))| mount.sync_strategy() == SyncStrategy::Auto)
-            .map(|(name, _)| name.clone())
-            .collect()
+        sync_list.iter().map(|(n, _)| n.clone()).collect()
     };
 
     if mounts_to_sync.is_empty() {
@@ -62,7 +85,7 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
 
     // Sync each mount
     for mount_name in &mounts_to_sync {
-        if let Some((mount, _source)) = all_mounts.get(mount_name) {
+        if let Some((_, mount)) = sync_list.iter().find(|(n, _)| n == mount_name) {
             match sync_mount(mount_name, mount, &resolver).await {
                 Ok(_) => println!("  {} {}", "✓".green(), mount_name),
                 Err(e) => eprintln!("  {} {}: {}", "✗".red(), mount_name, e),
