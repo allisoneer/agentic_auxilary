@@ -171,6 +171,31 @@ pub fn extract_repo_name_from_url(url: &str) -> Result<String> {
     }
 }
 
+pub fn extract_org_repo_from_url(url: &str) -> anyhow::Result<(String, String)> {
+    // Normalize
+    let url = url.trim_end_matches(".git");
+    // SSH: git@github.com:org/repo
+    if let Some(at_pos) = url.find('@')
+        && let Some(colon_pos) = url[at_pos..].find(':')
+    {
+        let path = &url[at_pos + colon_pos + 1..]; // org/repo
+        let mut it = path.split('/');
+        let org = it.next().ok_or_else(|| anyhow::anyhow!("No org"))?;
+        let repo = it.next().ok_or_else(|| anyhow::anyhow!("No repo"))?;
+        return Ok((org.into(), repo.into()));
+    }
+    // HTTPS: https://github.com/org/repo
+    if let Some(host_pos) = url.find("://") {
+        let path = &url[host_pos + 3..]; // host/org/repo
+        let mut it = path.split('/');
+        let _host = it.next().ok_or_else(|| anyhow::anyhow!("No host"))?;
+        let org = it.next().ok_or_else(|| anyhow::anyhow!("No org"))?;
+        let repo = it.next().ok_or_else(|| anyhow::anyhow!("No repo"))?;
+        return Ok((org.into(), repo.into()));
+    }
+    anyhow::bail!("Unsupported URL: {url}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +228,27 @@ mod tests {
         assert_eq!(
             extract_repo_name_from_url("git@github.com:user/repo").unwrap(),
             "repo"
+        );
+    }
+
+    #[test]
+    fn test_extract_org_repo() {
+        assert_eq!(
+            extract_org_repo_from_url("git@github.com:user/repo.git").unwrap(),
+            ("user".to_string(), "repo".to_string())
+        );
+        assert_eq!(
+            extract_org_repo_from_url("https://github.com/user/repo").unwrap(),
+            ("user".to_string(), "repo".to_string())
+        );
+        assert_eq!(
+            extract_org_repo_from_url("git@github.com:user/repo").unwrap(),
+            ("user".to_string(), "repo".to_string())
+        );
+        assert_eq!(
+            extract_org_repo_from_url("https://github.com/modelcontextprotocol/rust-sdk.git")
+                .unwrap(),
+            ("modelcontextprotocol".to_string(), "rust-sdk".to_string())
         );
     }
 }
