@@ -1,121 +1,125 @@
 use crate::config::RepoMappingManager;
-use crate::config::{Mount, MountMerger, MountSource, RepoConfigManager};
+use crate::config::{Mount, RepoConfigManager, SyncStrategy, extract_org_repo_from_url};
 use crate::git::clone::{CloneOptions, clone_repository};
 use crate::git::utils::find_repo_root;
 use crate::mount::MountResolver;
 use crate::mount::{MountOptions, get_mount_manager};
 use crate::platform::detect_platform;
 use crate::utils::paths::ensure_dir;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub async fn update_active_mounts() -> Result<()> {
     let repo_root = find_repo_root(&std::env::current_dir()?)?;
-    let merger = MountMerger::new(repo_root.clone());
     let platform_info = detect_platform()?;
     let mount_manager = get_mount_manager(&platform_info)?;
+    let repo_manager = RepoConfigManager::new(repo_root.clone());
+    let desired = repo_manager.load_desired_state()?.ok_or_else(|| {
+        anyhow::anyhow!("No repository configuration found. Run 'thoughts init'.")
+    })?;
+
+    let base = repo_root.join(".thoughts-data");
+    ensure_dir(&base)?;
+
+    // Symlink targets (actual mount dirs)
+    let thoughts_dir = base.join(&desired.mount_dirs.thoughts);
+    let context_dir = base.join(&desired.mount_dirs.context);
+    let references_dir = base.join(&desired.mount_dirs.references);
+    ensure_dir(&thoughts_dir)?;
+    ensure_dir(&context_dir)?;
+    ensure_dir(&references_dir)?;
 
     println!("{} filesystem mounts...", "Synchronizing".cyan());
 
-    // Get desired mounts from config
-    let desired_mounts = merger.get_all_mounts().await?;
+    // Build desired target map: key = relative path (e.g., "context/api-docs" or "references/org/repo" or "thoughts")
+    let mut desired_targets: Vec<(String, Mount, bool)> = vec![]; // (target_key, mount, read_only)
 
-    // Get currently mounted - need to check both context and personal directories
-    let active_mounts = mount_manager.list_mounts().await?;
-    let mut active_map: HashMap<String, PathBuf> = HashMap::new();
+    if let Some(tm) = &desired.thoughts_mount {
+        let m = Mount::Git {
+            url: tm.remote.clone(),
+            subpath: tm.subpath.clone(),
+            sync: tm.sync,
+        };
+        desired_targets.push((desired.mount_dirs.thoughts.clone(), m, false));
+    }
 
-    // Look for mounts in .thoughts-data subdirectories
-    for mount_info in &active_mounts {
-        // Check if this mount is in our .thoughts-data directory
-        if mount_info
-            .target
-            .starts_with(repo_root.join(".thoughts-data"))
-            && let Some(name) = mount_info.target.file_name().and_then(|n| n.to_str())
+    for cm in &desired.context_mounts {
+        let m = Mount::Git {
+            url: cm.remote.clone(),
+            subpath: cm.subpath.clone(),
+            sync: cm.sync,
+        };
+        let key = format!("{}/{}", desired.mount_dirs.context, cm.mount_path);
+        desired_targets.push((key, m, false));
+    }
+
+    for url in &desired.references {
+        let (org, repo) = extract_org_repo_from_url(url)?;
+        let key = format!("{}/{}/{}", desired.mount_dirs.references, org, repo);
+        let m = Mount::Git {
+            url: url.clone(),
+            subpath: None,
+            sync: SyncStrategy::None,
+        };
+        desired_targets.push((key, m, true));
+    }
+
+    // Query active mounts and key them by relative path under .thoughts-data
+    let active = mount_manager.list_mounts().await?;
+    let mut active_map = HashMap::<String, PathBuf>::new();
+    for mi in active {
+        if mi.target.starts_with(&base)
+            && let Ok(rel) = mi.target.strip_prefix(&base)
         {
-            active_map.insert(name.to_string(), mount_info.target.clone());
+            let key = rel.to_string_lossy().to_string();
+            active_map.insert(key, mi.target.clone());
         }
     }
 
-    // Phase 1: Unmount removed mounts
-    for (active_name, active_path) in &active_map {
-        if !desired_mounts.contains_key(active_name) {
-            println!("  {} removed mount: {}", "Unmounting".yellow(), active_name);
-            mount_manager
-                .unmount(active_path, false)
-                .await
-                .context(format!("Failed to unmount {active_name}"))?;
+    // Unmount no-longer-desired
+    for (active_key, target_path) in &active_map {
+        if !desired_targets.iter().any(|(k, _, _)| k == active_key) {
+            println!("  {} removed mount: {}", "Unmounting".yellow(), active_key);
+            mount_manager.unmount(target_path, false).await?;
         }
     }
 
-    // Phase 2: Mount new/missing mounts
-    // Load repository config to get mount directories
-    let repo_manager = RepoConfigManager::new(repo_root.clone());
-    let repo_config = repo_manager.load()?.ok_or_else(|| {
-        anyhow::anyhow!("No repository configuration found. Run 'thoughts init' first.")
-    })?;
+    // Mount missing
+    let resolver = MountResolver::new()?;
+    for (key, m, read_only) in desired_targets {
+        if !active_map.contains_key(&key) {
+            let target = base.join(&key);
+            ensure_dir(target.parent().unwrap())?;
 
-    // Mount base is in the repository's .thoughts-data directory
-    let thoughts_data_base = repo_root.join(".thoughts-data");
-    ensure_dir(&thoughts_data_base)?;
-
-    // Ensure mount directories exist
-    let context_dir = thoughts_data_base.join(&repo_config.mount_dirs.repository);
-    let personal_dir = thoughts_data_base.join(&repo_config.mount_dirs.personal);
-    ensure_dir(&context_dir)?;
-    ensure_dir(&personal_dir)?;
-
-    for (name, (mount, source)) in &desired_mounts {
-        if !active_map.contains_key(name) {
-            println!(
-                "  {} {}: {} ({})",
-                "Mounting".green(),
-                name,
-                mount_description(mount),
-                format!("{source:?}").to_lowercase()
-            );
-
-            // Resolve mount path
-            let resolver = MountResolver::new()?;
-            let mount_path = match resolver.resolve_mount(mount) {
-                Ok(path) => path,
+            // Resolve mount source
+            let src = match resolver.resolve_mount(&m) {
+                Ok(p) => p,
                 Err(_) => {
-                    // Need to clone first
-                    if let Mount::Git { url, .. } = mount {
-                        if resolver.needs_clone(mount)? {
-                            println!("    {} repository...", "Cloning".yellow());
-                            clone_and_map(url, name).await?
-                        } else {
-                            eprintln!("    {} Failed to resolve mount path", "Error:".red());
-                            continue;
-                        }
+                    if let Mount::Git { url, .. } = &m {
+                        println!("  {} repository {} ...", "Cloning".yellow(), url);
+                        clone_and_map(url, &key).await?
                     } else {
                         continue;
                     }
                 }
             };
 
-            // Verify mount path exists
-            if !mount_path.exists() {
-                eprintln!(
-                    "    {} Mount path does not exist: {}",
-                    "Error:".red(),
-                    mount_path.display()
-                );
-                continue;
+            // Mount with appropriate options
+            let mut options = MountOptions::default();
+            if read_only {
+                options.read_only = true;
             }
 
-            // Determine target directory based on mount source
-            let target = match source {
-                MountSource::Repository => context_dir.join(name),
-                MountSource::Personal => personal_dir.join(name),
-                MountSource::Pattern => personal_dir.join(name), // Patterns are personal
-            };
+            println!(
+                "  {} {}: {}",
+                "Mounting".green(),
+                key,
+                if read_only { "(read-only)" } else { "" }
+            );
 
-            // Mount it
-            let options = MountOptions::default();
-            match mount_manager.mount(&[mount_path], &target, &options).await {
+            match mount_manager.mount(&[src], &target, &options).await {
                 Ok(_) => println!("    {} Successfully mounted", "✓".green()),
                 Err(e) => eprintln!("    {} Failed to mount: {}", "✗".red(), e),
             }
@@ -126,7 +130,7 @@ pub async fn update_active_mounts() -> Result<()> {
     Ok(())
 }
 
-async fn clone_and_map(url: &str, _name: &str) -> Result<PathBuf> {
+async fn clone_and_map(url: &str, _key: &str) -> Result<PathBuf> {
     let mut repo_mapping = RepoMappingManager::new()?;
     let default_path = RepoMappingManager::get_default_clone_path(url)?;
 
@@ -142,17 +146,4 @@ async fn clone_and_map(url: &str, _name: &str) -> Result<PathBuf> {
     repo_mapping.add_mapping(url.to_string(), default_path.clone(), true)?;
 
     Ok(default_path)
-}
-
-fn mount_description(mount: &Mount) -> String {
-    match mount {
-        Mount::Git { url, subpath, .. } => {
-            if let Some(sub) = subpath {
-                format!("{url}:{sub}")
-            } else {
-                url.clone()
-            }
-        }
-        Mount::Directory { path, .. } => path.display().to_string(),
-    }
 }
