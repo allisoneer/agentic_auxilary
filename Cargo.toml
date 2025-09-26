@@ -6,6 +6,7 @@ members = [
     "universal_tool/universal-tool-core",
     "universal_tool/universal-tool-macros",
     "pr_comments",
+    "gpt5_reasoner",
 ]
 exclude = [
     "universal_tool/examples",
