@@ -128,7 +128,9 @@ impl PrComments {
         &self,
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
-        #[universal_tool_param(description = "Include resolved review comments (defaults to false)")]
+        #[universal_tool_param(
+            description = "Include resolved review comments (defaults to false)"
+        )]
         include_resolved: Option<bool>,
     ) -> Result<Vec<ReviewComment>, ToolError> {
         let pr = self

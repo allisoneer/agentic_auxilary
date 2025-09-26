@@ -91,7 +91,10 @@ async fn run_cli(args: Args) -> Result<()> {
                 std::process::exit(1);
             }
         },
-        Commands::ReviewComments { pr, include_resolved } => match tool.get_review_comments(pr, Some(include_resolved)).await {
+        Commands::ReviewComments {
+            pr,
+            include_resolved,
+        } => match tool.get_review_comments(pr, Some(include_resolved)).await {
             Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
             Err(e) => {
                 eprintln!("Error: {}", e);

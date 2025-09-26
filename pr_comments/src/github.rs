@@ -1,4 +1,6 @@
-use crate::models::{AllComments, IssueComment, PrSummary, ReviewComment, GraphQLResponse, PullRequestData};
+use crate::models::{
+    AllComments, GraphQLResponse, IssueComment, PrSummary, PullRequestData, ReviewComment,
+};
 use anyhow::Result;
 use octocrab::Octocrab;
 use std::collections::HashMap;
@@ -88,7 +90,11 @@ impl GitHubClient {
         })
     }
 
-    pub async fn get_review_comments(&self, pr_number: u64, include_resolved: Option<bool>) -> Result<Vec<ReviewComment>> {
+    pub async fn get_review_comments(
+        &self,
+        pr_number: u64,
+        include_resolved: Option<bool>,
+    ) -> Result<Vec<ReviewComment>> {
         // First, fetch all review comments using REST API
         let mut all_comments = Vec::new();
         let mut page = 1u32;
@@ -128,7 +134,10 @@ impl GitHubClient {
             all_comments.retain(|comment| {
                 // If we don't have resolution info for a comment, include it by default
                 // If we do have info and it's resolved, exclude it
-                resolution_map.get(&comment.id).map(|&is_resolved| !is_resolved).unwrap_or(true)
+                resolution_map
+                    .get(&comment.id)
+                    .map(|&is_resolved| !is_resolved)
+                    .unwrap_or(true)
             });
         }
 
@@ -217,7 +226,10 @@ impl GitHubClient {
             .collect())
     }
 
-    async fn get_review_thread_resolution_status(&self, pr_number: u64) -> Result<HashMap<u64, bool>> {
+    async fn get_review_thread_resolution_status(
+        &self,
+        pr_number: u64,
+    ) -> Result<HashMap<u64, bool>> {
         let query = r#"
             query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
                 repository(owner: $owner, name: $repo) {
@@ -264,14 +276,21 @@ impl GitHubClient {
                 .map_err(|e| anyhow::anyhow!("GraphQL query failed: {}", e))?;
 
             if let Some(errors) = response.errors
-                && !errors.is_empty() {
-                    return Err(anyhow::anyhow!(
-                        "GraphQL errors: {}",
-                        errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join(", ")
-                    ));
-                }
+                && !errors.is_empty()
+            {
+                return Err(anyhow::anyhow!(
+                    "GraphQL errors: {}",
+                    errors
+                        .iter()
+                        .map(|e| e.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
 
-            let data = response.data.ok_or_else(|| anyhow::anyhow!("No data in GraphQL response"))?;
+            let data = response
+                .data
+                .ok_or_else(|| anyhow::anyhow!("No data in GraphQL response"))?;
             let threads = &data.repository.pull_request.review_threads;
 
             // Build map of comment ID -> resolution status
