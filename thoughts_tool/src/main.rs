@@ -71,6 +71,18 @@ enum Commands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+
+    /// Manage read-only reference repositories
+    References {
+        #[command(subcommand)]
+        command: ReferenceCommands,
+    },
+
+    /// Manage work directories in thoughts mount
+    Work {
+        #[command(subcommand)]
+        command: WorkCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -164,6 +176,43 @@ enum ConfigCommands {
     Validate,
 }
 
+#[derive(Subcommand)]
+enum ReferenceCommands {
+    /// Add a reference repository URL
+    Add {
+        /// Git URL of the reference repository
+        url: String,
+    },
+
+    /// Remove a reference repository
+    Remove {
+        /// Git URL of the reference repository to remove
+        url: String,
+    },
+
+    /// List all reference repositories
+    List,
+
+    /// Sync (clone) all reference repositories
+    Sync,
+}
+
+#[derive(Subcommand)]
+enum WorkCommands {
+    /// Initialize a new work directory based on current branch/week
+    Init,
+
+    /// Mark current work as complete and archive it
+    Complete,
+
+    /// List work directories
+    List {
+        /// Show only the N most recent completed items
+        #[arg(short, long)]
+        recent: Option<usize>,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -230,6 +279,17 @@ async fn main() -> Result<()> {
             ConfigCommands::Show { json } => commands::config::show::execute(json).await,
             ConfigCommands::Edit {} => commands::config::edit::execute().await,
             ConfigCommands::Validate => commands::config::validate::execute().await,
+        },
+        Commands::References { command } => match command {
+            ReferenceCommands::Add { url } => commands::references::add::execute(url).await,
+            ReferenceCommands::Remove { url } => commands::references::remove::execute(url).await,
+            ReferenceCommands::List => commands::references::list::execute().await,
+            ReferenceCommands::Sync => commands::references::sync::execute().await,
+        },
+        Commands::Work { command } => match command {
+            WorkCommands::Init => commands::work::init::execute().await,
+            WorkCommands::Complete => commands::work::complete::execute().await,
+            WorkCommands::List { recent } => commands::work::list::execute(recent).await,
         },
     }
 }

@@ -272,6 +272,86 @@ impl RepoConfigManager {
         self.save(&config)?;
         Ok(true)
     }
+
+    /// Load v2 config or error if it doesn't exist
+    pub fn load_v2_or_bail(&self) -> Result<RepoConfigV2> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+        if !config_path.exists() {
+            anyhow::bail!("No repository configuration found. Run 'thoughts init' first.");
+        }
+
+        let raw = std::fs::read_to_string(&config_path)?;
+        let v: serde_json::Value = serde_json::from_str(&raw)?;
+        let version = v.get("version").and_then(|x| x.as_str()).unwrap_or("1.0");
+
+        if version == "2.0" {
+            let v2: RepoConfigV2 = serde_json::from_str(&raw)?;
+            Ok(v2)
+        } else {
+            anyhow::bail!(
+                "Repository is using v1 configuration. Please migrate to v2 configuration format."
+            );
+        }
+    }
+
+    /// Save v2 configuration
+    pub fn save_v2(&self, config: &RepoConfigV2) -> Result<()> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+
+        // Ensure .thoughts directory exists
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {parent:?}"))?;
+        }
+
+        let json =
+            serde_json::to_string_pretty(config).context("Failed to serialize configuration")?;
+
+        AtomicFile::new(&config_path, OverwriteBehavior::AllowOverwrite)
+            .write(|f| f.write_all(json.as_bytes()))
+            .with_context(|| format!("Failed to write config to {config_path:?}"))?;
+
+        Ok(())
+    }
+
+    /// Ensure v2 config exists, create default if not
+    pub fn ensure_v2_default(&self) -> Result<RepoConfigV2> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+        if config_path.exists() {
+            // Try to load existing config
+            let raw = std::fs::read_to_string(&config_path)?;
+            let v: serde_json::Value = serde_json::from_str(&raw)?;
+            let version = v.get("version").and_then(|x| x.as_str()).unwrap_or("1.0");
+
+            if version == "2.0" {
+                return serde_json::from_str(&raw).context("Failed to parse v2 configuration");
+            }
+            // If v1, convert and save
+            if let Some(ds) = self.load_desired_state()? {
+                let v2_config = RepoConfigV2 {
+                    version: "2.0".to_string(),
+                    mount_dirs: ds.mount_dirs,
+                    thoughts_mount: ds.thoughts_mount,
+                    context_mounts: ds.context_mounts,
+                    references: ds.references,
+                };
+                self.save_v2(&v2_config)?;
+                return Ok(v2_config);
+            }
+        }
+
+        // Create default v2 config
+        let default_config = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+
+        self.save_v2(&default_config)?;
+        Ok(default_config)
+    }
 }
 
 #[cfg(test)]
