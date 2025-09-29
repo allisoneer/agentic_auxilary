@@ -66,19 +66,26 @@ pub async fn call_optimizer(
         ])
         .temperature(0.2);
 
-    // If the optimizer model is GPT-5 or o-series, set reasoning_effort=High
-    if optimizer_model.contains("gpt-5") || optimizer_model.starts_with("o") {
+    // If the optimizer model is GPT-5 or gpt-oss, set reasoning_effort=High
+    let using_reasoning = optimizer_model.contains("gpt-5") || optimizer_model.contains("gpt-oss");
+    if using_reasoning {
+        tracing::debug!("Using high reasoning effort for optimizer model: {}", optimizer_model);
         req_builder.reasoning_effort(ReasoningEffort::High);
+    } else {
+        tracing::debug!("Using standard mode (no reasoning effort) for optimizer model: {}", optimizer_model);
     }
 
     let req = req_builder.build().map_err(ReasonerError::OpenAI)?;
 
+    tracing::debug!("Calling optimizer with model: {}", optimizer_model);
     let resp = client.client.chat().create(req).await?;
     let content = resp
         .choices
         .first()
         .and_then(|c| c.message.content.clone())
         .ok_or_else(|| ReasonerError::Template("Optimizer returned empty content".into()))?;
+
+    tracing::debug!("Optimizer response received, length: {} chars", content.len());
     Ok(content)
 }
 
