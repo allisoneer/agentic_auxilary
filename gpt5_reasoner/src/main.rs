@@ -89,7 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (Some(_), Some(_)) => unreachable!("clap handles conflicts"),
             };
 
-            let files: Vec<FileMeta> = serde_json::from_str(&std::fs::read_to_string(&files_json)?)?;
+            let files: Vec<FileMeta> =
+                serde_json::from_str(&std::fs::read_to_string(&files_json)?)?;
 
             let result = gpt5_reasoner_impl(prompt, files, None, prompt_type).await;
 

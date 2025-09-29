@@ -4,13 +4,16 @@ pub mod optimizer;
 pub mod template;
 pub mod token;
 
-use serde::{Deserialize, Serialize};
-use universal_tool_core::prelude::*;
 use crate::{
-    client::OrClient, errors::*, optimizer::{call_optimizer, parser::parse_optimizer_output},
-    template::inject_files, token::enforce_limit
+    client::OrClient,
+    errors::*,
+    optimizer::{call_optimizer, parser::parse_optimizer_output},
+    template::inject_files,
+    token::enforce_limit,
 };
 use async_openai::types::*;
+use serde::{Deserialize, Serialize};
+use universal_tool_core::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FileMeta {
@@ -60,7 +63,8 @@ pub async fn gpt5_reasoner_impl(
         .unwrap_or_else(|| "openai/gpt-5".to_string());
 
     let raw = call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files)
-        .await.map_err(ToolError::from)?;
+        .await
+        .map_err(ToolError::from)?;
 
     // Debug: Print the raw optimizer output if RUST_LOG is set
     tracing::debug!("Raw optimizer output:\n{}", raw);
@@ -71,22 +75,28 @@ pub async fn gpt5_reasoner_impl(
         ToolError::from(e)
     })?;
 
-    tracing::debug!("Parsed optimizer output: {} groups found", parsed.groups.file_groups.len());
+    tracing::debug!(
+        "Parsed optimizer output: {} groups found",
+        parsed.groups.file_groups.len()
+    );
     for group in &parsed.groups.file_groups {
         tracing::debug!("  Group '{}': {} files", group.name, group.files.len());
     }
 
     // Step 2: inject, token check, execute
     let mut final_prompt = inject_files(&parsed.xml_template, &parsed.groups)
-        .await.map_err(ToolError::from)?;
+        .await
+        .map_err(ToolError::from)?;
 
     // Replace the {original_prompt} placeholder with the actual prompt
     final_prompt = final_prompt.replace("{original_prompt}", &prompt);
 
     let token_count = crate::token::count_tokens(&final_prompt).map_err(ToolError::from)?;
     tracing::debug!("Final prompt token count: {}", token_count);
-    tracing::debug!("Final prompt after injection (first 500 chars):\n{}...",
-        final_prompt.chars().take(500).collect::<String>());
+    tracing::debug!(
+        "Final prompt after injection (first 500 chars):\n{}...",
+        final_prompt.chars().take(500).collect::<String>()
+    );
 
     enforce_limit(&final_prompt).map_err(ToolError::from)?;
 
@@ -94,17 +104,32 @@ pub async fn gpt5_reasoner_impl(
     tracing::debug!("Executing final prompt with openai/gpt-5 at high reasoning effort");
     let req = CreateChatCompletionRequestArgs::default()
         .model("openai/gpt-5")
-        .messages([
-            ChatCompletionRequestMessage::User(
-                ChatCompletionRequestUserMessageArgs::default().content(final_prompt).build().unwrap()
-            )
-        ])
+        .messages([ChatCompletionRequestMessage::User(
+            ChatCompletionRequestUserMessageArgs::default()
+                .content(final_prompt)
+                .build()
+                .unwrap(),
+        )])
         .reasoning_effort(ReasoningEffort::High)
         .temperature(0.2)
-        .build().map_err(|e| ToolError::from(ReasonerError::OpenAI(e)))?;
+        .build()
+        .map_err(|e| ToolError::from(ReasonerError::OpenAI(e)))?;
 
-    let resp = client.client.chat().create(req).await.map_err(|e| ToolError::from(ReasonerError::from(e)))?;
-    let content = resp.choices.first().and_then(|c| c.message.content.clone())
-        .ok_or_else(|| ToolError::new(universal_tool_core::error::ErrorCode::ExecutionFailed, "GPT-5 returned empty content"))?;
+    let resp = client
+        .client
+        .chat()
+        .create(req)
+        .await
+        .map_err(|e| ToolError::from(ReasonerError::from(e)))?;
+    let content = resp
+        .choices
+        .first()
+        .and_then(|c| c.message.content.clone())
+        .ok_or_else(|| {
+            ToolError::new(
+                universal_tool_core::error::ErrorCode::ExecutionFailed,
+                "GPT-5 returned empty content",
+            )
+        })?;
     Ok(content)
 }
