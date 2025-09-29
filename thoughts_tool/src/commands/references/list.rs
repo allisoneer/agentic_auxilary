@@ -1,0 +1,37 @@
+use crate::config::{RepoConfigManager, RepoMappingManager};
+use crate::git::utils::find_repo_root;
+use anyhow::Result;
+use colored::Colorize;
+
+pub async fn execute() -> Result<()> {
+    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let mgr = RepoConfigManager::new(repo_root);
+    let mapping_mgr = RepoMappingManager::new()?;
+
+    let ds = mgr.load_desired_state()?.ok_or_else(|| {
+        anyhow::anyhow!("No repository configuration found. Run 'thoughts init'.")
+    })?;
+
+    if ds.references.is_empty() {
+        println!("No references configured.");
+        println!("Use 'thoughts references add <url>' to add a reference.");
+        return Ok(());
+    }
+
+    println!("{}", "References:".bold());
+    for url in &ds.references {
+        let (org, repo) = crate::config::extract_org_repo_from_url(url)
+            .unwrap_or_else(|_| ("unknown".to_string(), url.clone()));
+
+        let status = if let Ok(Some(_)) = mapping_mgr.resolve_url(url) {
+            "✓ cloned".green()
+        } else {
+            "✗ not cloned".red()
+        };
+
+        println!("  - {}/{} ({})", org, repo, status);
+        println!("    {}", url.dimmed());
+    }
+
+    Ok(())
+}
