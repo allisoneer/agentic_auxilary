@@ -1,10 +1,10 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use tracing::{error, info, warn};
 
-use crate::config::{Mount, RepoConfigManager};
+use crate::config::RepoConfigManager;
 use crate::git::utils::find_repo_root;
-use crate::mount::{MountResolver, get_mount_manager};
+use crate::mount::{MountResolver, MountSpace, get_mount_manager};
 use crate::platform::detect_platform;
 
 pub async fn execute(mount_name: String) -> Result<()> {
@@ -17,44 +17,22 @@ pub async fn execute(mount_name: String) -> Result<()> {
         .load_desired_state()?
         .ok_or_else(|| anyhow::anyhow!("No repository configuration found"))?;
 
-    // Find mount in configuration
-    let mount = if mount_name == "thoughts" && desired.thoughts_mount.is_some() {
-        let tm = desired.thoughts_mount.as_ref().unwrap();
-        Mount::Git {
-            url: tm.remote.clone(),
-            sync: tm.sync,
-            subpath: tm.subpath.clone(),
-        }
-    } else if let Some(cm) = desired
-        .context_mounts
-        .iter()
-        .find(|m| m.mount_path == mount_name)
-    {
-        Mount::Git {
-            url: cm.remote.clone(),
-            sync: cm.sync,
-            subpath: cm.subpath.clone(),
-        }
-    } else {
-        anyhow::bail!("Mount '{}' not found in configuration", mount_name);
-    };
+    // Parse mount name to MountSpace
+    let mount_space = MountSpace::parse(&mount_name)
+        .with_context(|| format!("Invalid mount name: {}", mount_name))?;
+
+    // Find mount using MountSpace
+    let mount = desired
+        .find_mount(&mount_space)
+        .ok_or_else(|| anyhow::anyhow!("Mount '{}' not found in configuration", mount_name))?;
 
     // Resolve mount sources
     let resolver = MountResolver::new()?;
     let source_path = resolver.resolve_mount(&mount)?;
     let sources = vec![source_path];
 
-    // Get mount target based on type
-    let target = if mount_name == "thoughts" {
-        repo_root
-            .join(".thoughts-data")
-            .join(&desired.mount_dirs.thoughts)
-    } else {
-        repo_root
-            .join(".thoughts-data")
-            .join(&desired.mount_dirs.context)
-            .join(&mount_name)
-    };
+    // Get mount target using MountSpace
+    let target = desired.get_mount_target(&mount_space, &repo_root);
 
     // Get platform and mount manager
     let platform_info = detect_platform()?;

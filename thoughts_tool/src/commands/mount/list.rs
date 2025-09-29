@@ -1,6 +1,6 @@
 use crate::config::{Mount, RepoConfigManager};
 use crate::git::utils::find_repo_root;
-use crate::mount::MountResolver;
+use crate::mount::{MountResolver, MountSpace};
 use anyhow::Result;
 use colored::*;
 use std::env;
@@ -31,7 +31,12 @@ pub async fn execute(verbose: bool) -> Result<()> {
 
     // Show thoughts mount if configured
     if let Some(tm) = &desired.thoughts_mount {
-        println!("{} {}:", "thoughts".cyan(), "[thoughts workspace]".dimmed());
+        let mount_space = MountSpace::Thoughts;
+        println!(
+            "{} {}:",
+            mount_space.as_str().cyan(),
+            "[thoughts workspace]".dimmed()
+        );
         let display_url = if let Some(sub) = &tm.subpath {
             format!("{}:{}", tm.remote, sub)
         } else {
@@ -58,7 +63,12 @@ pub async fn execute(verbose: bool) -> Result<()> {
     if !desired.context_mounts.is_empty() {
         println!("{}", "Context mounts:".yellow());
         for cm in &desired.context_mounts {
-            println!("  {}:", cm.mount_path.cyan());
+            let mount_space = MountSpace::Context(cm.mount_path.clone());
+            println!(
+                "  {} {}:",
+                mount_space.as_str().cyan(),
+                format!("[{}]", cm.mount_path).dimmed()
+            );
             let display_url = if let Some(sub) = &cm.subpath {
                 format!("{}:{}", cm.remote, sub)
             } else {

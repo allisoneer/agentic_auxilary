@@ -1,7 +1,7 @@
 use crate::config::{Mount, RepoConfigManager, RepoMappingManager, SyncStrategy};
 use crate::git::GitSync;
 use crate::git::utils::{find_repo_root, get_remote_url};
-use crate::mount::MountResolver;
+use crate::mount::{MountResolver, MountSpace};
 use anyhow::{Context, Result};
 use colored::*;
 use std::env;
@@ -20,15 +20,15 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         .load_desired_state()?
         .ok_or_else(|| anyhow::anyhow!("No repository configuration found"))?;
 
-    // Build mount list from DesiredState
-    let mut sync_list = vec![];
+    // Build mount list with MountSpace
+    let mut sync_list: Vec<(MountSpace, Mount)> = vec![];
 
     // Add thoughts mount if configured and auto-sync
     if let Some(tm) = &desired.thoughts_mount
         && tm.sync == SyncStrategy::Auto
     {
         sync_list.push((
-            "thoughts".to_string(),
+            MountSpace::Thoughts,
             Mount::Git {
                 url: tm.remote.clone(),
                 sync: tm.sync,
@@ -41,7 +41,7 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     for cm in &desired.context_mounts {
         if cm.sync == SyncStrategy::Auto {
             sync_list.push((
-                cm.mount_path.clone(),
+                MountSpace::Context(cm.mount_path.clone()),
                 Mount::Git {
                     url: cm.remote.clone(),
                     sync: cm.sync,
@@ -51,23 +51,23 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         }
     }
 
-    // Determine mounts to sync
-    let mounts_to_sync = if let Some(name) = mount_name {
-        // Specific mount requested
-        if sync_list.iter().any(|(n, _)| n == &name) {
-            vec![name]
+    // Update mount name comparisons to use MountSpace
+    let mounts_to_sync: Vec<MountSpace> = if let Some(name) = mount_name {
+        let requested = MountSpace::parse(&name)?;
+        if sync_list.iter().any(|(space, _)| space == &requested) {
+            vec![requested]
         } else {
             anyhow::bail!("Mount '{}' not found or not configured for sync", name);
         }
     } else if all {
         // All auto-sync mounts
-        sync_list.iter().map(|(n, _)| n.clone()).collect()
+        sync_list.iter().map(|(space, _)| space.clone()).collect()
     } else {
         // Repository-aware sync (default) - sync all auto mounts for current repo
         let repo_url = get_remote_url(&repo_root)?;
         println!("{} repository: {}", "Detected".cyan(), repo_url);
 
-        sync_list.iter().map(|(n, _)| n.clone()).collect()
+        sync_list.iter().map(|(space, _)| space.clone()).collect()
     };
 
     if mounts_to_sync.is_empty() {
@@ -84,11 +84,11 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     println!("{} {} mount(s)...", "Syncing".green(), mounts_to_sync.len());
 
     // Sync each mount
-    for mount_name in &mounts_to_sync {
-        if let Some((_, mount)) = sync_list.iter().find(|(n, _)| n == mount_name) {
-            match sync_mount(mount_name, mount, &resolver).await {
-                Ok(_) => println!("  {} {}", "✓".green(), mount_name),
-                Err(e) => eprintln!("  {} {}: {}", "✗".red(), mount_name, e),
+    for mount_space in &mounts_to_sync {
+        if let Some((_, mount)) = sync_list.iter().find(|(space, _)| space == mount_space) {
+            match sync_mount(&mount_space.as_str(), mount, &resolver).await {
+                Ok(_) => println!("  {} {}", "✓".green(), mount_space),
+                Err(e) => eprintln!("  {} {}: {}", "✗".red(), mount_space, e),
             }
         }
     }
