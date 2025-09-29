@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use gpt5_reasoner::{FileMeta, Gpt5Reasoner, PromptType, gpt5_reasoner_impl};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -11,29 +11,36 @@ use universal_tool_core::mcp::ServiceExt;
     about = "GPT-5 prompt optimizer and executor"
 )]
 struct Args {
-    /// Run in MCP server mode
-    #[arg(long)]
-    mcp: bool,
+    #[command(subcommand)]
+    command: Commands,
 
     /// Load .env from current directory
-    #[arg(long = "dot-env")]
+    #[arg(long = "dot-env", global = true)]
     dot_env: bool,
+}
 
-    /// Prompt type: reasoning | plan
-    #[arg(long)]
-    prompt_type: PromptType,
+#[derive(Subcommand)]
+enum Commands {
+    /// Run the optimizer and executor
+    Run {
+        /// Prompt type: reasoning | plan
+        #[arg(long)]
+        prompt_type: PromptType,
 
-    /// Path to text file containing the user prompt (exclusive with --prompt)
-    #[arg(long)]
-    prompt_file: Option<String>,
+        /// Path to text file containing the user prompt (exclusive with --prompt)
+        #[arg(long, conflicts_with = "prompt")]
+        prompt_file: Option<String>,
 
-    /// Raw prompt string (exclusive with --prompt-file)
-    #[arg(long)]
-    prompt: Option<String>,
+        /// Raw prompt string (exclusive with --prompt-file)
+        #[arg(long, conflicts_with = "prompt_file")]
+        prompt: Option<String>,
 
-    /// Path to JSON file with array of {filename, description}
-    #[arg(long)]
-    files_json: String,
+        /// Path to JSON file with array of {filename, description}
+        #[arg(long)]
+        files_json: String,
+    },
+    /// Run as MCP server
+    Mcp,
 }
 
 #[tokio::main]
@@ -48,43 +55,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Args::parse();
 
-    if args.mcp {
-        // MCP mode
-        let server = Gpt5ReasonerServer {
-            tools: Arc::new(Gpt5Reasoner),
-        };
-        let transport = universal_tool_core::mcp::stdio();
-        let svc = server.serve(transport).await?;
-        svc.waiting().await?;
-        return Ok(());
-    }
-
-    // CLI mode
+    // Handle .env loading globally
     if args.dot_env {
         let _ = dotenvy::dotenv(); // ignore errors
     }
 
-    let prompt = match (&args.prompt, &args.prompt_file) {
-        (Some(p), None) => p.clone(),
-        (None, Some(path)) => std::fs::read_to_string(path)?,
-        _ => {
-            eprintln!("Provide either --prompt or --prompt-file");
-            std::process::exit(2);
-        }
-    };
-
-    let files: Vec<FileMeta> = serde_json::from_str(&std::fs::read_to_string(&args.files_json)?)?;
-
-    let result = gpt5_reasoner_impl(prompt, files, args.prompt_type).await;
-
-    match result {
-        Ok(out) => {
-            println!("{}", out);
+    match args.command {
+        Commands::Mcp => {
+            // MCP mode
+            let server = Gpt5ReasonerServer {
+                tools: Arc::new(Gpt5Reasoner),
+            };
+            let transport = universal_tool_core::mcp::stdio();
+            let svc = server.serve(transport).await?;
+            svc.waiting().await?;
             Ok(())
         }
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
+        Commands::Run {
+            prompt_type,
+            prompt_file,
+            prompt,
+            files_json,
+        } => {
+            // CLI mode
+            let prompt = match (&prompt, &prompt_file) {
+                (Some(p), None) => p.clone(),
+                (None, Some(path)) => std::fs::read_to_string(path)?,
+                (None, None) => {
+                    eprintln!("Error: Must provide either --prompt or --prompt-file");
+                    eprintln!("\nFor more information, try '--help'");
+                    std::process::exit(2);
+                }
+                (Some(_), Some(_)) => unreachable!("clap handles conflicts"),
+            };
+
+            let files: Vec<FileMeta> = serde_json::from_str(&std::fs::read_to_string(&files_json)?)?;
+
+            let result = gpt5_reasoner_impl(prompt, files, None, prompt_type).await;
+
+            match result {
+                Ok(out) => {
+                    println!("{}", out);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
     }
 }
