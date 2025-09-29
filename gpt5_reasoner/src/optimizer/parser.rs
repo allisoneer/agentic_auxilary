@@ -1,6 +1,6 @@
-use serde::Deserialize;
-use regex::Regex;
 use crate::errors::*;
+use regex::Regex;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct FileGroup {
@@ -46,7 +46,9 @@ pub fn parse_optimizer_output(raw: &str) -> Result<OptimizerOutput> {
             // Try to help debug by showing what markers were found
             let found_markers: Vec<String> = xml
                 .lines()
-                .filter(|line| line.trim().starts_with("<!-- GROUP:") && line.trim().ends_with("-->"))
+                .filter(|line| {
+                    line.trim().starts_with("<!-- GROUP:") && line.trim().ends_with("-->")
+                })
                 .map(|s| s.to_string())
                 .collect();
 
@@ -57,18 +59,25 @@ pub fn parse_optimizer_output(raw: &str) -> Result<OptimizerOutput> {
         }
     }
 
-    Ok(OptimizerOutput { groups, xml_template: xml })
+    Ok(OptimizerOutput {
+        groups,
+        xml_template: xml,
+    })
 }
 
 fn extract_fenced_block(s: &str, lang: &str) -> Option<String> {
     let re = Regex::new(&format!(r"(?s)```{}\s*(.*?)```", regex::escape(lang))).ok()?;
-    re.captures(s).and_then(|cap| cap.get(1)).map(|m| m.as_str().to_string())
+    re.captures(s)
+        .and_then(|cap| cap.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 fn extract_yaml_by_anchor(s: &str) -> Option<String> {
     // simple heuristic: capture from "file_groups:" until next fenced block or end
     let re = Regex::new(r"(?s)(file_groups:\s.*?)(```|$)").ok()?;
-    re.captures(s).and_then(|cap| cap.get(1)).map(|m| m.as_str().to_string())
+    re.captures(s)
+        .and_then(|cap| cap.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 #[cfg(test)]

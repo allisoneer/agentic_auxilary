@@ -1,8 +1,8 @@
-use std::path::PathBuf;
-use futures::stream::{self, StreamExt};
-use tokio::fs;
 use crate::errors::*;
-use crate::optimizer::parser::{FileGrouping, FileGroup};
+use crate::optimizer::parser::{FileGroup, FileGrouping};
+use futures::stream::{self, StreamExt};
+use std::path::PathBuf;
+use tokio::fs;
 
 async fn read_file_utf8(path: &str) -> Result<String> {
     let pb = PathBuf::from(path);
@@ -10,8 +10,7 @@ async fn read_file_utf8(path: &str) -> Result<String> {
         return Err(ReasonerError::MissingFile(pb));
     }
     let bytes = fs::read(&pb).await?;
-    let content = String::from_utf8(bytes)
-        .map_err(|_| ReasonerError::NonUtf8(pb))?;
+    let content = String::from_utf8(bytes).map_err(|_| ReasonerError::NonUtf8(pb))?;
     Ok(content)
 }
 
@@ -27,20 +26,22 @@ fn build_group_injection(group: &FileGroup, file_contents: &[(String, String)]) 
     out
 }
 
-pub async fn inject_files(
-    xml_template: &str,
-    groups: &FileGrouping,
-) -> Result<String> {
+pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<String> {
     // Preload all file contents, dedup by path, excluding embedded files
-    let all_paths: Vec<String> = groups.file_groups.iter()
+    let all_paths: Vec<String> = groups
+        .file_groups
+        .iter()
         .flat_map(|g| g.files.iter().cloned())
-        .filter(|p| p != "plan_structure.md")  // Exclude embedded template
+        .filter(|p| p != "plan_structure.md") // Exclude embedded template
         .collect();
 
     let unique_paths: Vec<String> = {
         use std::collections::HashSet;
         let mut seen = HashSet::new();
-        all_paths.into_iter().filter(|p| seen.insert(p.clone())).collect()
+        all_paths
+            .into_iter()
+            .filter(|p| seen.insert(p.clone()))
+            .collect()
     };
 
     let file_map_vec: Vec<(String, String)> = stream::iter(unique_paths.into_iter())
@@ -54,8 +55,10 @@ pub async fn inject_files(
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
 
-    let file_map: std::collections::HashMap<&str, &str> =
-        file_map_vec.iter().map(|(k,v)| (k.as_str(), v.as_str())).collect();
+    let file_map: std::collections::HashMap<&str, &str> = file_map_vec
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
 
     // Replace markers
     let mut final_xml = xml_template.to_string();
@@ -63,14 +66,20 @@ pub async fn inject_files(
     for g in &groups.file_groups {
         let marker = format!("<!-- GROUP: {} -->", g.name);
 
-        let contents: Vec<(String, String)> = g.files.iter()
+        let contents: Vec<(String, String)> = g
+            .files
+            .iter()
             .map(|p| {
                 // Special handling for plan_structure.md - use embedded content
                 if p == "plan_structure.md" {
                     tracing::debug!("Using embedded plan_structure.md template");
-                    Ok((p.clone(), crate::optimizer::prompts::PLAN_STRUCTURE_TEMPLATE.to_string()))
+                    Ok((
+                        p.clone(),
+                        crate::optimizer::prompts::PLAN_STRUCTURE_TEMPLATE.to_string(),
+                    ))
                 } else {
-                    let content = file_map.get(p.as_str())
+                    let content = file_map
+                        .get(p.as_str())
                         .ok_or_else(|| ReasonerError::MissingFile(PathBuf::from(p)))?
                         .to_string();
                     Ok((p.clone(), content))
@@ -89,8 +98,8 @@ pub async fn inject_files(
 mod tests {
     use super::*;
     use crate::optimizer::parser::{FileGroup, FileGrouping};
-    use tokio::fs;
     use tempfile::TempDir;
+    use tokio::fs;
 
     #[tokio::test]
     async fn test_read_file_utf8_success() {
@@ -140,7 +149,10 @@ mod tests {
 
         let file_contents = vec![
             ("src/lib.rs".to_string(), "pub fn hello() {}".to_string()),
-            ("src/main.rs".to_string(), "fn main() { hello(); }".to_string()),
+            (
+                "src/main.rs".to_string(),
+                "fn main() { hello(); }".to_string(),
+            ),
         ];
 
         let result = build_group_injection(&group, &file_contents);
@@ -234,14 +246,12 @@ fn main() { hello(); }
     #[tokio::test]
     async fn test_inject_files_missing_file() {
         let groups = FileGrouping {
-            file_groups: vec![
-                FileGroup {
-                    name: "group1".to_string(),
-                    purpose: None,
-                    critical: None,
-                    files: vec!["/nonexistent/file.rs".to_string()],
-                },
-            ],
+            file_groups: vec![FileGroup {
+                name: "group1".to_string(),
+                purpose: None,
+                critical: None,
+                files: vec!["/nonexistent/file.rs".to_string()],
+            }],
         };
 
         let xml_template = "<!-- GROUP: group1 -->";
