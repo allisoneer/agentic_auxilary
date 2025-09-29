@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Rust CLI application called "thoughts" - a flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux, fuse-t on macOS).
+This is a Rust CLI application called "thoughts" - a flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux, fuse-t on macOS) with a three-space architecture:
+- **thoughts/** - Personal workspace for work documents
+- **context/** - Team-shared documentation repositories
+- **references/** - Read-only external code repositories
 
 ## Common Development Commands
 
@@ -54,10 +57,12 @@ make help       # Show all available targets with descriptions
 
 ### Command Structure
 The application uses a modular command pattern with each CLI command implemented in `/src/commands/`:
-- `init` - Initialize thoughts for a repository
+- `init` - Initialize thoughts for a repository (creates three symlinks)
 - `sync` - Sync git-backed mounts
 - `status` - Show mount status
-- `mount/*` - Mount management (add, remove, list, update, clone)
+- `mount/*` - Context mount management (add, remove, list, update, clone)
+- `references/*` - Reference repository management (add, remove, list, sync)
+- `work/*` - Work organization (init, complete, list)
 - `config/*` - Configuration management (create, show, edit, validate)
   - Note: `get` and `set` commands exist in the codebase but are not wired to the CLI
 
@@ -68,15 +73,15 @@ The application supports both Linux (mergerfs) and macOS (fuse-t) through:
 - Conditional compilation with feature flags
 
 ### Configuration System
-- JSON-based configuration managed by `ConfigManager`
-- Schema validation and enforcement via `MountValidator`
+- JSON-based configuration (v2 format) in `.thoughts/config.json`
+- Automatic v1 to v2 migration via `DesiredState` abstraction
+- Type-safe mount identification using `MountSpace` enum
 - Interactive editing with `$EDITOR`
-- Collections support for organizing mounts
-- Three-tier configuration hierarchy (personal, repository, merged)
 - Repository mapping system (`RepoMappingManager`) for URL to local path mappings
-- Personal configuration management (`PersonalManager`) for user-wide settings
-- Mount configuration merging (`MountMerger`) for combining configurations
-- Rules framework for file metadata and validation
+- Three-space architecture configuration:
+  - `thoughts_mount` - Personal workspace repository
+  - `context_mounts` - Team-shared documentation
+  - `references` - External code repository URLs
 
 ### Testing Strategy
 - Unit tests embedded in modules (`#[cfg(test)]`)
@@ -117,11 +122,22 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - Worktree init creates symlinks to main repository's `.thoughts-data` (src/commands/init.rs:16-57)
 - No duplicate FUSE mounts or manual cleanup required
 
+### Three-Space Architecture
+- **Thoughts Space**: Single git repository for personal work, organized by branch/week
+- **Context Space**: Multiple team-shared repositories, each in its own subdirectory
+- **References Space**: Read-only external repositories, auto-organized by org/repo
+
 ### Auto-Mount System
-- Automatic mount management via `AutoMountManager`
+- Automatic mount management for all three spaces
 - Mount path resolution through `MountResolver`
-- Distinguishes between auto-managed and user-managed repository clones
-- Handles mount patterns and repository-specific configurations
+- Read-only enforcement for reference mounts
+- Unique target keys prevent mount conflicts
+
+### Work Organization
+- Branch-based directories for feature work
+- ISO week-based directories for main branch work
+- Automatic directory structure with research/, plans/, artifacts/
+- Work completion moves to dated directories
 
 ### Repository Mapping System
 - Maps repository URLs to local filesystem paths
@@ -129,8 +145,8 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - Critical for tracking repository locations across the system
 - Managed by `RepoMappingManager`
 
-### Validation Framework
-- Comprehensive configuration validation
-- Ensures mount configurations are valid
-- Prevents configuration conflicts
-- Enforces rules and constraints
+### Type-Safe Mount Identification
+- `MountSpace` enum provides compile-time safety
+- Pattern matching ensures exhaustive handling
+- Automatic org/repo extraction for references
+- Clean separation between CLI strings and internal types
