@@ -60,7 +60,7 @@
           purpose: "MANDATORY format for the plan output"
           critical: true
           files:
-            - "thoughts/docs/plan_structure.md"
+            - "plan_structure.md"
         - name: "implementation_targets"
           purpose: "Files that need modification"
           files:
@@ -120,14 +120,26 @@
   </optimization_requirements>
 
   <meta_instructions>
+    CRITICAL FORMAT REQUIREMENTS:
+    1. You MUST output EXACTLY two sections labeled "FILE_GROUPING" and "OPTIMIZED_TEMPLATE"
+    2. In the XML template, you MUST use the EXACT format: <!-- GROUP: groupname -->
+    3. Do NOT add any explanatory comments like "contents will be injected here"
+    4. The markers must match EXACTLY the group names from your YAML
+    5. Do NOT use markdown headers like **FILE_GROUPING** - just the plain labels
+
+    Example of CORRECT marker format:
+    <!-- GROUP: plan_template -->
+
+    Example of WRONG marker format:
+    <!-- The contents of template.md will be injected here -->
+    <!-- GROUP: plan_template (template goes here) -->
+
     Key differences for plan optimization:
     1. Plan template file gets special prominence and repeated emphasis
     2. Double bookending: both task AND format requirements
     3. Explicit validation reminders at the end
     4. Hierarchical grouping that prioritizes format over content
 
-    You're creating structure, not content. The <!-- GROUP: name --> markers show
-    where file contents will be injected. Focus on ensuring the plan template is
-    unmissable and the output format is crystal clear.
+    Remember: The <!-- GROUP: name --> markers are parsed by code. They must be exact.
   </meta_instructions>
 </optimize_prompt>
