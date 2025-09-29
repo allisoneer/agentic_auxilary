@@ -71,6 +71,13 @@ pub fn get_repo_mapping_path() -> Result<PathBuf> {
     Ok(home.join(".thoughts").join("repos.json"))
 }
 
+/// Get the personal config path (for deprecation warnings)
+pub fn get_personal_config_path() -> Result<PathBuf> {
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    Ok(home.join(".thoughts").join("config.json"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

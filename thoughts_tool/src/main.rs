@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -239,6 +240,17 @@ async fn main() -> Result<()> {
         .init();
 
     info!("Starting thoughts v{}", env!("CARGO_PKG_VERSION"));
+
+    // Check for personal config and warn about deprecation
+    if let Ok(personal_config_path) = crate::utils::paths::get_personal_config_path()
+        && personal_config_path.exists()
+    {
+        eprintln!(
+            "{}: Detected personal config at {}. Personal mounts are deprecated and ignored. To migrate, re-add any needed repos as context mounts (thoughts mount add) or references (thoughts references add).",
+            "Warning".yellow(),
+            personal_config_path.display()
+        );
+    }
 
     // Execute command
     match cli.command {
