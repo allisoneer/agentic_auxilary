@@ -22,7 +22,7 @@ Guidance for Claude Code when working with this repository.
 ### thoughts_tool
 ```bash
 cd thoughts_tool && make all       # Check, test, and build (silent)
-cd thoughts_tool && make check     # Run clippy
+cd thoughts_tool && make check     # Run formatting and clippy checks
 cd thoughts_tool && make test      # Run tests
 cd thoughts_tool && make build     # Build the project
 ```
@@ -30,7 +30,7 @@ cd thoughts_tool && make build     # Build the project
 ### universal_tool
 ```bash
 cd universal_tool && make all       # Check, test, and build (silent)
-cd universal_tool && make check     # Run clippy
+cd universal_tool && make check     # Run formatting and clippy checks
 cd universal_tool && make test      # Run tests
 cd universal_tool && make build     # Build the project
 
@@ -41,7 +41,7 @@ cd universal_tool && cargo build --workspace --all-features
 ### claudecode_rs
 ```bash
 cd claudecode_rs && make all       # Check, test, and build (silent)
-cd claudecode_rs && make check     # Run clippy
+cd claudecode_rs && make check     # Run formatting and clippy checks
 cd claudecode_rs && make test      # Run tests
 cd claudecode_rs && make build     # Build the project
 ```

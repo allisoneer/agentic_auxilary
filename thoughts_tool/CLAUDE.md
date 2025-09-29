@@ -11,7 +11,7 @@ This is a Rust CLI application called "thoughts" - a flexible thought management
 ### Building and Testing
 ```bash
 # Default targets (silent if succeasful)
-make check      # Run clippy
+make check      # Run formatting and clippy checks
 make test       # Run all tests
 make build      # Build the project
 
