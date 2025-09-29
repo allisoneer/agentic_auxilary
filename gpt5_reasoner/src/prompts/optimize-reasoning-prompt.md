@@ -97,10 +97,21 @@
   </optimization_requirements>
 
   <meta_instructions>
-    Remember you're creating a TEMPLATE. The <!-- GROUP: name --> markers show where
-    file contents will be injected. You decide the groupings based solely on filenames
-    and descriptions. The deterministic code will handle reading files and injecting content.
+    CRITICAL FORMAT REQUIREMENTS:
+    1. You MUST output EXACTLY two sections labeled "FILE_GROUPING" and "OPTIMIZED_TEMPLATE"
+    2. In the XML template, you MUST use the EXACT format: <!-- GROUP: groupname -->
+    3. Do NOT add any explanatory comments like "contents will be injected here"
+    4. The markers must match EXACTLY the group names from your YAML
+    5. Do NOT use markdown headers like **FILE_GROUPING** - just the plain labels
 
+    Example of CORRECT marker format:
+    <!-- GROUP: primary_targets -->
+
+    Example of WRONG marker format:
+    <!-- The contents of file.py will be injected here -->
+    <!-- GROUP: primary_targets (files go here) -->
+
+    Remember: The <!-- GROUP: name --> markers are parsed by code. They must be exact.
     Your job is architectural: determine optimal structure, grouping, and placement for
     maximum GPT-5 performance on the given task.
   </meta_instructions>
