@@ -10,5 +10,5 @@ pub use config::{
     FileMetadata, MountDirs, RepoConfig, RepoConfigManager, RepoMappingManager, RequiredMount, Rule,
 };
 pub use error::{Result, ThoughtsError};
-pub use mount::{MountInfo, MountOptions, get_mount_manager};
+pub use mount::{MountInfo, MountOptions, MountSpace, get_mount_manager};
 pub use platform::{Platform, PlatformInfo, detect_platform};

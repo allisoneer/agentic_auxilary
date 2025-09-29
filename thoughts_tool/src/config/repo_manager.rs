@@ -1,13 +1,14 @@
 use crate::config::{
-    ContextMount, MountDirs, MountDirsV2, RepoConfig, RepoConfigV2, RequiredMount, SyncStrategy,
-    ThoughtsMount,
+    ContextMount, Mount, MountDirs, MountDirsV2, RepoConfig, RepoConfigV2, RequiredMount,
+    SyncStrategy, ThoughtsMount,
 };
+use crate::mount::MountSpace;
 use crate::utils::paths;
 use anyhow::{Context, Result};
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct DesiredState {
@@ -16,6 +17,40 @@ pub struct DesiredState {
     pub context_mounts: Vec<ContextMount>,
     pub references: Vec<String>,
     pub was_v1: bool, // for messaging
+}
+
+impl DesiredState {
+    /// Find a mount by its MountSpace identifier
+    pub fn find_mount(&self, space: &MountSpace) -> Option<Mount> {
+        match space {
+            MountSpace::Thoughts => self.thoughts_mount.as_ref().map(|tm| Mount::Git {
+                url: tm.remote.clone(),
+                sync: tm.sync,
+                subpath: tm.subpath.clone(),
+            }),
+            MountSpace::Context(mount_path) => self
+                .context_mounts
+                .iter()
+                .find(|cm| &cm.mount_path == mount_path)
+                .map(|cm| Mount::Git {
+                    url: cm.remote.clone(),
+                    sync: cm.sync,
+                    subpath: cm.subpath.clone(),
+                }),
+            MountSpace::Reference { org: _, repo: _ } => {
+                // References need URL lookup - for now return None
+                // This will be addressed when references commands are implemented
+                None
+            }
+        }
+    }
+
+    /// Get target path for a mount space
+    pub fn get_mount_target(&self, space: &MountSpace, repo_root: &Path) -> PathBuf {
+        repo_root
+            .join(".thoughts-data")
+            .join(space.relative_path(&self.mount_dirs))
+    }
 }
 
 pub struct RepoConfigManager {

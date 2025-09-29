@@ -2,8 +2,8 @@ use crate::config::RepoMappingManager;
 use crate::config::{Mount, RepoConfigManager, SyncStrategy, extract_org_repo_from_url};
 use crate::git::clone::{CloneOptions, clone_repository};
 use crate::git::utils::find_repo_root;
-use crate::mount::MountResolver;
 use crate::mount::{MountOptions, get_mount_manager};
+use crate::mount::{MountResolver, MountSpace};
 use crate::platform::detect_platform;
 use crate::utils::paths::ensure_dir;
 use anyhow::Result;
@@ -33,8 +33,8 @@ pub async fn update_active_mounts() -> Result<()> {
 
     println!("{} filesystem mounts...", "Synchronizing".cyan());
 
-    // Build desired target map: key = relative path (e.g., "context/api-docs" or "references/org/repo" or "thoughts")
-    let mut desired_targets: Vec<(String, Mount, bool)> = vec![]; // (target_key, mount, read_only)
+    // Build desired targets with MountSpace
+    let mut desired_targets: Vec<(MountSpace, Mount, bool)> = vec![];
 
     if let Some(tm) = &desired.thoughts_mount {
         let m = Mount::Git {
@@ -42,7 +42,7 @@ pub async fn update_active_mounts() -> Result<()> {
             subpath: tm.subpath.clone(),
             sync: tm.sync,
         };
-        desired_targets.push((desired.mount_dirs.thoughts.clone(), m, false));
+        desired_targets.push((MountSpace::Thoughts, m, false));
     }
 
     for cm in &desired.context_mounts {
@@ -51,19 +51,19 @@ pub async fn update_active_mounts() -> Result<()> {
             subpath: cm.subpath.clone(),
             sync: cm.sync,
         };
-        let key = format!("{}/{}", desired.mount_dirs.context, cm.mount_path);
-        desired_targets.push((key, m, false));
+        let space = MountSpace::Context(cm.mount_path.clone());
+        desired_targets.push((space, m, false));
     }
 
     for url in &desired.references {
         let (org, repo) = extract_org_repo_from_url(url)?;
-        let key = format!("{}/{}/{}", desired.mount_dirs.references, org, repo);
         let m = Mount::Git {
             url: url.clone(),
             subpath: None,
             sync: SyncStrategy::None,
         };
-        desired_targets.push((key, m, true));
+        let space = MountSpace::Reference { org, repo };
+        desired_targets.push((space, m, true));
     }
 
     // Query active mounts and key them by relative path under .thoughts-data
@@ -80,21 +80,25 @@ pub async fn update_active_mounts() -> Result<()> {
 
     // Unmount no-longer-desired
     for (active_key, target_path) in &active_map {
-        if !desired_targets.iter().any(|(k, _, _)| k == active_key) {
+        if !desired_targets
+            .iter()
+            .any(|(space, _, _)| space.relative_path(&desired.mount_dirs) == *active_key)
+        {
             println!("  {} removed mount: {}", "Unmounting".yellow(), active_key);
             mount_manager.unmount(target_path, false).await?;
         }
     }
 
-    // Mount missing
+    // Mount missing targets
     let resolver = MountResolver::new()?;
-    for (key, m, read_only) in desired_targets {
+    for (space, m, _read_only) in &desired_targets {
+        let key = space.relative_path(&desired.mount_dirs);
         if !active_map.contains_key(&key) {
-            let target = base.join(&key);
+            let target = desired.get_mount_target(space, &repo_root);
             ensure_dir(target.parent().unwrap())?;
 
             // Resolve mount source
-            let src = match resolver.resolve_mount(&m) {
+            let src = match resolver.resolve_mount(m) {
                 Ok(p) => p,
                 Err(_) => {
                     if let Mount::Git { url, .. } = &m {
@@ -108,15 +112,19 @@ pub async fn update_active_mounts() -> Result<()> {
 
             // Mount with appropriate options
             let mut options = MountOptions::default();
-            if read_only {
+            if space.is_read_only() {
                 options.read_only = true;
             }
 
             println!(
                 "  {} {}: {}",
                 "Mounting".green(),
-                key,
-                if read_only { "(read-only)" } else { "" }
+                space,
+                if space.is_read_only() {
+                    "(read-only)"
+                } else {
+                    ""
+                }
             );
 
             match mount_manager.mount(&[src], &target, &options).await {
