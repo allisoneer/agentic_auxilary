@@ -20,6 +20,9 @@ all: check test build
 .PHONY: check
 check:
 	@echo "━━━ Checking claudecode_rs ━━━"
+	@echo "Checking code formatting..."
+	@./hack/cargo-smart.sh fmt-check
+	@echo "Running clippy..."
 	@./hack/cargo-smart.sh clippy --all-targets --all-features -- -D warnings
 
 .PHONY: test
@@ -35,6 +38,7 @@ build:
 # Normal output variants
 .PHONY: check-normal
 check-normal:
+	cargo fmt -- --check
 	cargo clippy --all-targets --all-features -- -D warnings
 
 .PHONY: test-normal
@@ -131,7 +135,7 @@ help:
 	@echo "ClaudeCode-RS Makefile targets:"
 	@echo ""
 	@echo "  all            - Run check, test, and build (silent)"
-	@echo "  check          - Run clippy linting (silent)"
+	@echo "  check          - Run formatting and clippy checks (silent)"
 	@echo "  test           - Run all tests (silent)"
 	@echo "  build          - Build release binary (silent)"
 	@echo ""

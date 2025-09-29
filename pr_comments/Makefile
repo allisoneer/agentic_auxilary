@@ -4,6 +4,9 @@
 all: check test build
 
 check:
+	@echo "Checking code formatting..."
+	@./hack/cargo-smart.sh fmt-check
+	@echo "Running clippy..."
 	@./hack/cargo-smart.sh clippy --all-targets
 
 test:
@@ -14,6 +17,7 @@ build:
 
 # Normal output versions
 check-normal:
+	cargo fmt -- --check
 	cargo clippy --all-targets
 
 test-normal:
@@ -62,7 +66,7 @@ run:
 help:
 	@echo "Available targets:"
 	@echo "  all          - Run check, test, and build (default, silent)"
-	@echo "  check        - Run clippy (silent)"
+	@echo "  check        - Run formatting and clippy checks (silent)"
 	@echo "  test         - Run tests (silent)"
 	@echo "  build        - Build the project (silent)"
 	@echo "  *-normal     - Normal output versions of check/test/build"
