@@ -15,6 +15,9 @@ all: check test build
 # Silent versions (default) - smart output with fail-fast
 check:
 	@echo "━━━ Checking universal-tool packages ━━━"
+	@echo "Checking code formatting..."
+	@./hack/cargo-smart.sh fmt-check --all
+	@echo "Running clippy..."
 	@./hack/cargo-smart.sh clippy -p universal-tool-core --all-features
 	@./hack/cargo-smart.sh clippy -p universal-tool-macros --all-features
 	@echo ""
@@ -39,6 +42,7 @@ build:
 
 # Normal versions - standard output
 check-normal:
+	cargo fmt --all -- --check
 	cargo clippy -p 'universal-tool-*' --all-features
 	@$(MAKE) check-examples-normal
 
@@ -229,7 +233,7 @@ install-examples:
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  make check       - Run clippy (silent with warnings disabled)"
+	@echo "  make check       - Run formatting and clippy checks (silent)"
 	@echo "  make test        - Run tests (silent with warnings disabled)"
 	@echo "  make build       - Build project (silent with warnings disabled)"
 	@echo ""

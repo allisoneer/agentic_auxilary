@@ -1,10 +1,10 @@
 use crate::config::{MountDirs, RepoConfig, RepoConfigManager};
-use crate::git::utils::get_current_repo;
+use crate::git::utils::get_current_control_repo_root;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
 pub async fn execute() -> Result<()> {
-    let repo_root = get_current_repo().context("Not in a git repository")?;
+    let repo_root = get_current_control_repo_root().context("Not in a git repository")?;
 
     let manager = RepoConfigManager::new(repo_root);
 
