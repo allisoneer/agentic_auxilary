@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -71,6 +72,18 @@ enum Commands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+
+    /// Manage read-only reference repositories
+    References {
+        #[command(subcommand)]
+        command: ReferenceCommands,
+    },
+
+    /// Manage work directories in thoughts mount
+    Work {
+        #[command(subcommand)]
+        command: WorkCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -86,18 +99,6 @@ enum MountCommands {
         /// Sync strategy
         #[arg(long, value_parser = clap::value_parser!(SyncStrategy), default_value = "auto")]
         sync: SyncStrategy,
-
-        /// Mark as optional (repo-level only)
-        #[arg(long)]
-        optional: bool,
-
-        /// Override global rules (repo-level only)
-        #[arg(long)]
-        override_rules: Option<bool>,
-
-        /// Add as personal mount
-        #[arg(short, long)]
-        personal: bool,
 
         /// Description
         #[arg(short, long)]
@@ -167,20 +168,50 @@ enum ConfigCommands {
         /// Output as JSON
         #[arg(short, long)]
         json: bool,
-        /// Show personal config instead of repository config
-        #[arg(short, long)]
-        personal: bool,
     },
 
     /// Edit configuration in $EDITOR
-    Edit {
-        /// Edit personal config instead of repository config
-        #[arg(short, long)]
-        personal: bool,
-    },
+    Edit {},
 
     /// Validate configuration
     Validate,
+}
+
+#[derive(Subcommand)]
+enum ReferenceCommands {
+    /// Add a reference repository URL
+    Add {
+        /// Git URL of the reference repository
+        url: String,
+    },
+
+    /// Remove a reference repository
+    Remove {
+        /// Git URL of the reference repository to remove
+        url: String,
+    },
+
+    /// List all reference repositories
+    List,
+
+    /// Sync (clone) all reference repositories
+    Sync,
+}
+
+#[derive(Subcommand)]
+enum WorkCommands {
+    /// Initialize a new work directory based on current branch/week
+    Init,
+
+    /// Mark current work as complete and archive it
+    Complete,
+
+    /// List work directories
+    List {
+        /// Show only the N most recent completed items
+        #[arg(short, long)]
+        recent: Option<usize>,
+    },
 }
 
 #[tokio::main]
@@ -210,6 +241,17 @@ async fn main() -> Result<()> {
 
     info!("Starting thoughts v{}", env!("CARGO_PKG_VERSION"));
 
+    // Check for personal config and warn about deprecation
+    if let Ok(personal_config_path) = crate::utils::paths::get_personal_config_path()
+        && personal_config_path.exists()
+    {
+        eprintln!(
+            "{}: Detected personal config at {}. Personal mounts are deprecated and ignored. To migrate, re-add any needed repos as context mounts (thoughts mount add) or references (thoughts references add).",
+            "Warning".yellow(),
+            personal_config_path.display()
+        );
+    }
+
     // Execute command
     match cli.command {
         Commands::Init { force } => commands::init::execute(force).await,
@@ -224,22 +266,8 @@ async fn main() -> Result<()> {
                 path,
                 mount_path,
                 sync,
-                optional,
-                override_rules,
-                personal,
                 description,
-            } => {
-                commands::mount::add::execute(
-                    path,
-                    mount_path,
-                    sync,
-                    optional,
-                    override_rules,
-                    personal,
-                    description,
-                )
-                .await
-            }
+            } => commands::mount::add::execute(path, mount_path, sync, description).await,
             MountCommands::Remove { mount_name } => {
                 commands::mount::remove::execute(mount_name).await
             }
@@ -260,11 +288,20 @@ async fn main() -> Result<()> {
         },
         Commands::Config { command } => match command {
             ConfigCommands::Create => commands::config::create::execute().await,
-            ConfigCommands::Show { json, personal } => {
-                commands::config::show::execute(json, personal).await
-            }
-            ConfigCommands::Edit { personal } => commands::config::edit::execute(personal).await,
+            ConfigCommands::Show { json } => commands::config::show::execute(json).await,
+            ConfigCommands::Edit {} => commands::config::edit::execute().await,
             ConfigCommands::Validate => commands::config::validate::execute().await,
+        },
+        Commands::References { command } => match command {
+            ReferenceCommands::Add { url } => commands::references::add::execute(url).await,
+            ReferenceCommands::Remove { url } => commands::references::remove::execute(url).await,
+            ReferenceCommands::List => commands::references::list::execute().await,
+            ReferenceCommands::Sync => commands::references::sync::execute().await,
+        },
+        Commands::Work { command } => match command {
+            WorkCommands::Init => commands::work::init::execute().await,
+            WorkCommands::Complete => commands::work::complete::execute().await,
+            WorkCommands::List { recent } => commands::work::list::execute(recent).await,
         },
     }
 }

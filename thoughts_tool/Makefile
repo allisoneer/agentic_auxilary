@@ -14,6 +14,9 @@ all: check test build
 # Silent versions (default) - smart output with fail-fast
 check:
 	@echo "━━━ Checking thoughts_tool ━━━"
+	@echo "Checking code formatting..."
+	@./hack/cargo-smart.sh fmt-check
+	@echo "Running clippy..."
 	@./hack/cargo-smart.sh clippy
 
 test:
@@ -26,6 +29,7 @@ build:
 
 # Normal versions - standard output
 check-normal:
+	cargo fmt -- --check
 	cargo clippy
 
 test-normal:
@@ -92,7 +96,7 @@ install:
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  make check       - Run clippy (silent with warnings disabled)"
+	@echo "  make check       - Run formatting and clippy checks (silent)"
 	@echo "  make test        - Run tests (silent with warnings disabled)"
 	@echo "  make build       - Build project (silent with warnings disabled)"
 	@echo ""

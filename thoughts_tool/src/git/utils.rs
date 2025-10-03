@@ -65,6 +65,24 @@ pub fn get_main_repo_for_worktree(worktree_path: &Path) -> Result<PathBuf> {
     Ok(worktree_path.to_path_buf())
 }
 
+/// Get the control repository root (main repo for worktrees, repo root otherwise)
+/// This is the authoritative location for .thoughts/config.json and .thoughts-data
+pub fn get_control_repo_root(start_path: &Path) -> Result<PathBuf> {
+    let repo_root = find_repo_root(start_path)?;
+    if is_worktree(&repo_root)? {
+        // Best-effort: fall back to repo_root if main cannot be determined
+        Ok(get_main_repo_for_worktree(&repo_root).unwrap_or(repo_root))
+    } else {
+        Ok(repo_root)
+    }
+}
+
+/// Get the control repository root for the current directory
+pub fn get_current_control_repo_root() -> Result<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    get_control_repo_root(&cwd)
+}
+
 /// Check if a path is a git repository
 pub fn is_git_repo(path: &Path) -> bool {
     Repository::open(path).is_ok()
@@ -92,6 +110,22 @@ pub fn get_remote_url(repo_path: &Path) -> Result<String> {
         .map(|s| s.to_string())
 }
 
+/// Get the current branch name, or "detached" if in detached HEAD state
+pub fn get_current_branch(repo_path: &Path) -> Result<String> {
+    let repo = Repository::open(repo_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+
+    let head = repo
+        .head()
+        .map_err(|e| anyhow::anyhow!("Failed to get HEAD reference: {}", e))?;
+
+    if head.is_branch() {
+        Ok(head.shorthand().unwrap_or("unknown").to_string())
+    } else {
+        Ok("detached".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +140,44 @@ mod tests {
 
         Repository::init(repo_path).unwrap();
         assert!(is_git_repo(repo_path));
+    }
+
+    #[test]
+    fn test_get_current_branch() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Initialize repo
+        let repo = Repository::init(repo_path).unwrap();
+
+        // Create initial commit so we have a proper HEAD
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let tree_id = {
+            let mut index = repo.index().unwrap();
+            index.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_id).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+            .unwrap();
+
+        // Should be on master or main (depending on git version)
+        let branch = get_current_branch(repo_path).unwrap();
+        assert!(branch == "master" || branch == "main");
+
+        // Create and checkout a feature branch
+        let head = repo.head().unwrap();
+        let commit = head.peel_to_commit().unwrap();
+        repo.branch("feature-branch", &commit, false).unwrap();
+        repo.set_head("refs/heads/feature-branch").unwrap();
+        repo.checkout_head(None).unwrap();
+
+        let branch = get_current_branch(repo_path).unwrap();
+        assert_eq!(branch, "feature-branch");
+
+        // Test detached HEAD
+        let commit_oid = commit.id();
+        repo.set_head_detached(commit_oid).unwrap();
+        let branch = get_current_branch(repo_path).unwrap();
+        assert_eq!(branch, "detached");
     }
 }

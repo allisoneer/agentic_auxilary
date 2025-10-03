@@ -1,20 +1,26 @@
-# Thoughts Tool
+# Thoughts Tool v2
 
-A flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux, fuse-t on macOS).
+A flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux, fuse-t on macOS) with a three-space architecture.
 
 ## What is Thoughts Tool?
 
-Thoughts Tool creates a unified filesystem view of documentation scattered across multiple git repositories. It automatically mounts and syncs git-backed directories, allowing you to access all your project notes, decisions, and documentation from a single location while keeping them versioned with their respective codebases.
+Thoughts Tool creates a unified filesystem view of documentation through three distinct mount spaces:
+- **thoughts/** - Your personal workspace for work documents, plans, and research
+- **context/** - Team-shared documentation and context repositories
+- **references/** - Read-only external code repositories for reference
+
+It automatically mounts and syncs git-backed directories, allowing you to access all your project notes, decisions, and documentation from a single location while keeping them versioned with their respective repositories.
 
 ## Key Features
 
-- 🔀 **Unified Filesystem**: Merge documentation from multiple repositories into a single mountpoint
-- 🔄 **Automatic Git Sync**: Keep your thoughts synchronized across repositories
+- 🗂️ **Three-Space Architecture**: Organized separation of thoughts, context, and references
+- 🔄 **Automatic Git Sync**: Keep your documentation synchronized across repositories
 - 🖥️ **Cross-Platform**: Works on Linux (mergerfs) and macOS (fuse-t)
-- 📁 **Flexible Organization**: Support for collections, patterns, and custom mount configurations
+- 📚 **Reference Management**: Read-only mounts for external code repositories
+- 🌿 **Branch-Based Work Organization**: Automatic directory structure based on current branch/week
 - 🔧 **Repository Integration**: Seamlessly integrates with existing git workflows
 - 🎯 **Worktree Support**: Full support for git worktrees
-- 🚀 **Auto-Mount System**: Automatic mount management for configured repositories
+- 🚀 **Auto-Mount System**: Automatic mount management for all three spaces
 
 ## Installation
 
@@ -55,28 +61,54 @@ cd /path/to/your/project
 thoughts init
 ```
 
-This creates a `.thoughts/` directory in your repository to store thoughts and documentation.
+This creates:
+- `.thoughts/` directory for configuration
+- `.thoughts-data/` directory for mount storage
+- Three symlinks: `thoughts/`, `context/`, and `references/` pointing to the mount spaces
 
-### 2. Add a Mount
+### 2. Configure Your Thoughts Mount (optional)
 
-```bash
-# Add a git-backed mount
-thoughts mount add https://github.com/user/docs-repo.git docs
+Edit `.thoughts/config.json` to add your personal workspace repository:
 
-# Or add a local directory mount
-thoughts mount add /path/to/local/docs local-docs
+```json
+{
+  "version": "2.0",
+  "thoughts_mount": {
+    "remote": "git@github.com:user/my-thoughts.git",
+    "sync": "auto"
+  }
+}
 ```
 
-### 3. Check Status
+### 3. Add Context Mounts
 
 ```bash
-thoughts status
+# Add a team documentation repository
+thoughts mount add https://github.com/team/docs-repo.git team-docs
 ```
 
-### 4. Sync Your Mounts
+### 4. Add Reference Repositories
 
 ```bash
-thoughts sync
+# Add a reference repository (automatically organized by org/repo)
+thoughts references add https://github.com/rust-lang/rust
+```
+
+### 5. Update All Mounts
+
+```bash
+# Mount everything configured
+thoughts mount update
+
+# Sync all git repositories
+thoughts sync --all
+```
+
+### 6. Start Working
+
+```bash
+# Initialize a work directory for current branch/week
+thoughts work init
 ```
 
 ## Usage
@@ -91,15 +123,26 @@ thoughts [COMMAND] [OPTIONS]
 
 #### Core Commands
 - `init` - Initialize thoughts for a repository
-- `sync` - Sync all git-backed mounts
+- `sync [<mount>]` - Sync specific mount or all with --all
 - `status` - Show current mount status and configuration
 
-#### Mount Management
-- `mount add <source> <name>` - Add a new mount
-- `mount remove <name>` - Remove a mount
+#### Mount Management (Context Mounts)
+- `mount add <source> <name>` - Add a new context mount
+- `mount remove <name>` - Remove a context mount
 - `mount list` - List all configured mounts
-- `mount update <name>` - Update mount configuration
-- `mount clone <source> <name>` - Clone and add a repository as a mount
+- `mount update` - Update/refresh all active mounts
+- `mount clone <url> [<path>]` - Clone a repository to local path
+
+#### Reference Management
+- `references add <url>` - Add a reference repository
+- `references remove <url>` - Remove a reference repository
+- `references list` - List all configured references
+- `references sync` - Clone missing reference repositories
+
+#### Work Management
+- `work init` - Initialize work directory for current branch/week
+- `work complete` - Move current work to completed with date range
+- `work list [--recent N]` - List active and completed work directories
 
 #### Configuration Management
 - `config create` - Create a new configuration
@@ -109,40 +152,79 @@ thoughts [COMMAND] [OPTIONS]
 
 ## Configuration
 
-Thoughts Tool uses a three-tier configuration system:
+Thoughts Tool uses a repository-based configuration system with automatic v1 to v2 migration support.
 
-### 1. Personal Configuration
-User-wide settings stored in `~/.config/thoughts/`
+### Configuration Structure
 
-### 2. Repository Configuration  
-Project-specific settings in `.thoughts/config.json`
+The configuration file (`.thoughts/config.json`) defines:
+- **thoughts_mount** - Your personal workspace repository (optional)
+- **context_mounts** - Team-shared documentation repositories
+- **references** - External code repositories for reference
+- **mount_dirs** - Directory names for the three spaces (defaults: thoughts, context, references)
 
-### 3. Merged Configuration
-Runtime combination of personal and repository configurations
-
-### Configuration Example
+### v2 Configuration Example
 
 ```json
 {
-  "mounts": [
+  "version": "2.0",
+  "mount_dirs": {
+    "thoughts": "thoughts",
+    "context": "context",
+    "references": "references"
+  },
+  "thoughts_mount": {
+    "remote": "git@github.com:user/my-thoughts.git",
+    "subpath": "projects/current",
+    "sync": "auto"
+  },
+  "context_mounts": [
     {
-      "name": "shared-docs",
-      "source": "https://github.com/team/shared-docs.git",
-      "mount_point": "docs/shared",
-      "sync_strategy": "auto",
-      "patterns": ["*.md", "*.txt"]
+      "remote": "https://github.com/team/shared-docs.git",
+      "mount_path": "team-docs",
+      "sync": "auto"
+    },
+    {
+      "remote": "git@github.com:company/architecture.git",
+      "mount_path": "architecture",
+      "subpath": "docs",
+      "sync": "auto"
     }
   ],
-  "collections": {
-    "project-docs": {
-      "description": "Project documentation collection",
-      "mounts": ["shared-docs", "local-notes"]
-    }
-  }
+  "references": [
+    "https://github.com/rust-lang/rust",
+    "git@github.com:tokio-rs/tokio.git"
+  ]
 }
 ```
 
+### Migration from v1
+
+If you have an existing v1 configuration, it will be automatically mapped:
+- Mounts with `sync: none` or paths starting with `references/` become references
+- Other mounts become context mounts
+- Personal mounts are deprecated and ignored (warning displayed)
+
+For detailed migration instructions, see [MIGRATION_V1_TO_V2.md](./MIGRATION_V1_TO_V2.md).
+
 ## Architecture
+
+### Three-Space Design
+The tool organizes all mounts into three distinct spaces:
+
+1. **Thoughts Space** (`thoughts/`)
+   - Single git repository for personal work
+   - Organized by branch/week in `active/` and `completed/` directories
+   - Supports subpath mounting for monorepo scenarios
+
+2. **Context Space** (`context/`)
+   - Multiple team-shared repositories
+   - Each mount gets its own subdirectory
+   - Full read-write access for collaboration
+
+3. **References Space** (`references/`)
+   - Read-only external code repositories
+   - Auto-organized by `{org}/{repo}` structure
+   - Never synced to prevent accidental modifications
 
 ### Platform Abstraction
 The tool automatically detects your platform and uses the appropriate mount technology:
@@ -150,16 +232,16 @@ The tool automatically detects your platform and uses the appropriate mount tech
 - **macOS**: Uses fuse-t for FUSE support on Apple Silicon and Intel Macs
 
 ### Mount Resolution
-1. Checks for user-managed repository clones
-2. Falls back to auto-managed clones in `~/.thoughts/mounts/`
-3. Resolves patterns and collections
-4. Merges configurations based on rules
+1. Uses type-safe `MountSpace` enum for mount identification
+2. Resolves to unique paths under `.thoughts-data/`
+3. Handles automatic cloning for missing repositories
+4. Maintains mappings in `~/.thoughts/repos.json`
 
 ### Git Integration
 - Full support for worktrees (see Git Worktree Support section)
 - Automatic detection of repository boundaries
-- Smart sync strategies (auto, manual, on-demand)
-- Conflict resolution helpers
+- Smart sync strategies (auto for thoughts/context, none for references)
+- Branch-based work organization
 
 ## Git Worktree Support
 
@@ -189,11 +271,11 @@ thoughts init
 
 Worktrees use a simple symlink approach:
 - `.thoughts-data` -> Points to main repository's `.thoughts-data`
-- The `context` and `personal` symlinks are already tracked in git
+- The `thoughts`, `context`, and `references` symlinks are already tracked in git
 
 This ensures:
 - No duplicate mounts
-- Consistent access to thoughts across worktrees
+- Consistent access to all three spaces across worktrees
 - Automatic cleanup when worktree is removed
 
 ## Development
@@ -244,46 +326,61 @@ thoughts_tool/
 
 ## Advanced Features
 
-### Collections
-Group related mounts together for easier management:
+### Work Organization
+
+The work commands help organize your documentation by branch or week:
 
 ```bash
-# Work with all mounts in a collection
-thoughts sync --collection project-docs
+# On feature branch - creates thoughts/active/my-feature/
+thoughts work init
+
+# On main branch - creates thoughts/active/2025_week_04/
+thoughts work init
+
+# Complete work - moves to thoughts/completed/2025-01-15_to_2025-01-22_my-feature/
+thoughts work complete
 ```
 
-### Patterns
-Use glob patterns to selectively sync files:
+Each work directory includes:
+- `research/` - Investigation notes and findings
+- `plans/` - Design documents and implementation plans
+- `artifacts/` - Generated files, diagrams, exports
+- `manifest.json` - Metadata about the work session
+
+### Reference Repository Management
+
+References are read-only external repositories organized by org/repo:
+
+```bash
+# Add multiple references
+thoughts references add https://github.com/rust-lang/rust
+thoughts references add https://github.com/tokio-rs/tokio
+
+# They mount to:
+# references/rust-lang/rust/
+# references/tokio-rs/tokio/
+
+# Sync all references (clones if missing)
+thoughts references sync
+```
+
+### Subpath Mounting
+
+Mount specific subdirectories from larger repositories:
 
 ```json
 {
-  "patterns": ["*.md", "docs/**/*.txt", "!*.tmp"]
-}
-```
-
-### Rules Framework
-Define validation rules and metadata for your thoughts:
-
-```json
-{
-  "rules": {
-    "require_frontmatter": true,
-    "max_file_size": "10MB",
-    "allowed_extensions": [".md", ".txt", ".adoc"]
-  }
-}
-```
-
-### Auto-Mount System
-Configure repositories to automatically mount when accessed:
-
-```json
-{
-  "auto_mount": {
-    "enabled": true,
-    "patterns": ["github.com/myorg/*"],
-    "mount_point_template": "external/{repo_name}"
-  }
+  "thoughts_mount": {
+    "remote": "git@github.com:user/monorepo.git",
+    "subpath": "projects/current",
+    "sync": "auto"
+  },
+  "context_mounts": [{
+    "remote": "git@github.com:company/docs.git",
+    "mount_path": "api-docs",
+    "subpath": "api/v2",
+    "sync": "auto"
+  }]
 }
 ```
 

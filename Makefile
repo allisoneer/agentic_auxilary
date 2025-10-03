@@ -4,7 +4,7 @@
 .PHONY: thoughts-check thoughts-test thoughts-build thoughts-all
 .PHONY: claude-check claude-test claude-build claude-all
 .PHONY: universal-check universal-test universal-build universal-all
-.PHONY: fmt-all clean-all status
+.PHONY: fmt-all fmt-check-all clean-all status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -46,7 +46,7 @@ check:
 		echo -e "$(RED)✗ $$failures tool(s) failed checks$(NC)"; \
 		exit 1; \
 	else \
-		echo -e "$(GREEN)✓ All tools passed clippy checks$(NC)"; \
+		echo -e "$(GREEN)✓ All tools passed formatting and clippy checks$(NC)"; \
 	fi
 
 test:
@@ -185,6 +185,27 @@ fmt-all:
 	done
 	@echo -e "$(GREEN)✓ All code formatted$(NC)"
 
+fmt-check-all:
+	@echo "━━━ Checking formatting for all tools ━━━"
+	@failures=0; \
+	for tool in $(TOOLS); do \
+		echo -e "$(BLUE)▶$(NC) Checking $$tool formatting..."; \
+		if $(MAKE) -C $$tool fmt-check > /dev/null 2>&1; then \
+			echo -e "  $(GREEN)✓$(NC) $$tool: properly formatted"; \
+		else \
+			echo -e "  $(RED)✗$(NC) $$tool: formatting issues"; \
+			echo -e "  Run 'make -C $$tool fmt' to fix"; \
+			failures=$$((failures + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	if [ $$failures -gt 0 ]; then \
+		echo -e "$(RED)✗ $$failures tool(s) have formatting issues$(NC)"; \
+		exit 1; \
+	else \
+		echo -e "$(GREEN)✓ All tools properly formatted$(NC)"; \
+	fi
+
 clean-all:
 	@echo "━━━ Cleaning all build artifacts ━━━"
 	@for tool in $(TOOLS); do \
@@ -226,7 +247,7 @@ help:
 	@echo ""
 	@echo -e "$(BOLD)Quick Commands:$(NC)"
 	@echo "  make all         - Check, test, and build all tools"
-	@echo "  make check       - Run clippy on all tools"
+	@echo "  make check       - Run formatting and clippy checks on all tools"
 	@echo "  make test        - Test all tools"
 	@echo "  make build       - Build all tools"
 	@echo ""
@@ -240,8 +261,9 @@ help:
 	@echo "  make universal-check - Check universal_tool"
 	@echo ""
 	@echo -e "$(BOLD)Workspace Commands:$(NC)"
-	@echo "  make fmt-all     - Format all code"
-	@echo "  make clean-all   - Clean all artifacts"
-	@echo "  make status      - Show tool versions"
+	@echo "  make fmt-all       - Format all code"
+	@echo "  make fmt-check-all - Check formatting for all tools"
+	@echo "  make clean-all     - Clean all artifacts"
+	@echo "  make status        - Show tool versions"
 	@echo ""
 	@echo -e "$(BOLD)Tools:$(NC) thoughts_tool, claudecode_rs, universal_tool"
