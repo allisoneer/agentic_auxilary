@@ -1,11 +1,11 @@
 use crate::config::{RepoConfigManager, RepoMappingManager};
 use crate::git::clone::{CloneOptions, clone_repository};
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;
 
 pub async fn execute() -> Result<()> {
-    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
     let mut mapping_mgr = RepoMappingManager::new()?;
 

@@ -1,5 +1,7 @@
 use crate::config::RepoConfigManager;
-use crate::git::utils::{get_current_repo, get_main_repo_for_worktree, is_worktree};
+use crate::git::utils::{
+    get_control_repo_root, get_current_repo, get_main_repo_for_worktree, is_worktree,
+};
 use crate::utils::git::ensure_gitignore_entry;
 use crate::utils::paths::ensure_dir;
 use anyhow::{Context, Result, anyhow};
@@ -56,8 +58,49 @@ pub async fn execute(force: bool) -> Result<()> {
             "{}: Created .thoughts-data symlink to main repository",
             "Success".green()
         );
+
+        // Get mount dirs from config to create workspace symlinks
+        let repo_config_manager = RepoConfigManager::new(get_control_repo_root(&repo_root)?);
+        let mount_dirs = if let Some(desired) = repo_config_manager.load_desired_state()? {
+            desired.mount_dirs
+        } else {
+            // Use v1 defaults that will map to v2
+            crate::config::MountDirsV2 {
+                thoughts: "thoughts".into(),
+                context: "context".into(),
+                references: "references".into(),
+            }
+        };
+
+        // Create the three workspace symlinks in the worktree
+        let thoughts_link = repo_root.join(&mount_dirs.thoughts);
+        let context_link = repo_root.join(&mount_dirs.context);
+        let references_link = repo_root.join(&mount_dirs.references);
+
+        let thoughts_relative = format!(".thoughts-data/{}", mount_dirs.thoughts);
+        let context_relative = format!(".thoughts-data/{}", mount_dirs.context);
+        let references_relative = format!(".thoughts-data/{}", mount_dirs.references);
+
+        // Remove existing symlinks if forcing
+        if force {
+            for path in [&thoughts_link, &context_link, &references_link] {
+                if path.exists() && path.is_symlink() {
+                    fs::remove_file(path)
+                        .with_context(|| format!("Failed to remove existing symlink: {path:?}"))?;
+                }
+            }
+        }
+
+        create_symlink(&thoughts_relative, &thoughts_link)?;
+        create_symlink(&context_relative, &context_link)?;
+        create_symlink(&references_relative, &references_link)?;
+
         eprintln!("{}: Worktree initialization complete!", "Success".green());
         eprintln!("The worktree now shares mounts with the main repository.");
+        eprintln!("\nCreated workspace symlinks:");
+        eprintln!("  {} -> {}", mount_dirs.thoughts, thoughts_relative);
+        eprintln!("  {} -> {}", mount_dirs.context, context_relative);
+        eprintln!("  {} -> {}", mount_dirs.references, references_relative);
 
         return Ok(());
     }

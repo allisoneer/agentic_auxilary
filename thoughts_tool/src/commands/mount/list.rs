@@ -1,12 +1,12 @@
 use crate::config::{Mount, RepoConfigManager};
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 use crate::mount::{MountResolver, MountSpace};
 use anyhow::Result;
 use colored::*;
 use std::env;
 
 pub async fn execute(verbose: bool) -> Result<()> {
-    let repo_root = find_repo_root(&env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&env::current_dir()?)?;
     let repo_manager = RepoConfigManager::new(repo_root);
     let resolver = MountResolver::new()?;
 

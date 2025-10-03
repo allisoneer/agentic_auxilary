@@ -1,12 +1,12 @@
 use crate::config::RepoConfigManager;
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 use crate::mount::MountSpace;
 use anyhow::{Result, bail};
 use colored::Colorize;
 use std::env;
 
 pub async fn execute(mount_name: String) -> Result<()> {
-    let repo_root = find_repo_root(&env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&env::current_dir()?)?;
     let repo_manager = RepoConfigManager::new(repo_root.clone());
 
     // Parse to MountSpace for validation

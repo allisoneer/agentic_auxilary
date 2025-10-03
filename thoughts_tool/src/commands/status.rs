@@ -1,5 +1,5 @@
 use crate::config::{Mount, RepoConfigManager, RepoMappingManager};
-use crate::git::utils::find_repo_root;
+use crate::git::utils::{find_repo_root, get_control_repo_root};
 use crate::mount::{MountResolver, get_mount_manager};
 use crate::platform::detect_platform;
 use anyhow::Result;
@@ -7,7 +7,7 @@ use colored::*;
 use std::env;
 
 pub async fn execute(_detailed: bool) -> Result<()> {
-    let repo_root = match find_repo_root(&env::current_dir()?) {
+    let code_root = match find_repo_root(&env::current_dir()?) {
         Ok(root) => root,
         Err(_) => {
             println!("{}: Not in a git repository", "Error".red());
@@ -19,7 +19,9 @@ pub async fn execute(_detailed: bool) -> Result<()> {
         }
     };
 
-    let repo_manager = RepoConfigManager::new(repo_root.clone());
+    let control_root = get_control_repo_root(&env::current_dir()?)?;
+
+    let repo_manager = RepoConfigManager::new(control_root.clone());
     let platform_info = detect_platform()?;
     let mount_manager = get_mount_manager(&platform_info)?;
     let resolver = MountResolver::new()?;
@@ -27,7 +29,6 @@ pub async fn execute(_detailed: bool) -> Result<()> {
 
     // Get configuration
     let desired = repo_manager.load_desired_state()?;
-    let active_mounts = mount_manager.list_mounts().await?;
 
     println!("{}", "Thoughts Tool Status".bold().cyan());
     println!("{}", "===================".cyan());
@@ -35,8 +36,8 @@ pub async fn execute(_detailed: bool) -> Result<()> {
 
     // Repository info
     println!("{}", "Repository:".bold());
-    println!("  Path: {}", repo_root.display());
-    if let Ok(url) = crate::git::utils::get_remote_url(&repo_root) {
+    println!("  Path: {}", code_root.display());
+    if let Ok(url) = crate::git::utils::get_remote_url(&code_root) {
         println!("  Remote: {url}");
     }
     println!();
@@ -95,10 +96,10 @@ pub async fn execute(_detailed: bool) -> Result<()> {
             show_mount_status(&mount, &resolver, &repo_mapping, &tm.remote).await?;
 
             // Check if mounted
-            let target = repo_root
+            let target = control_root
                 .join(".thoughts-data")
                 .join(&ds.mount_dirs.thoughts);
-            let is_mounted = active_mounts.iter().any(|m| m.target == target);
+            let is_mounted = mount_manager.is_mounted(&target).await?;
             if is_mounted {
                 println!("    Status: {} ✓", "Mounted".green().bold());
             } else {
@@ -129,11 +130,11 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                 show_mount_status(&mount, &resolver, &repo_mapping, &cm.remote).await?;
 
                 // Check if mounted
-                let target = repo_root
+                let target = control_root
                     .join(".thoughts-data")
                     .join(&ds.mount_dirs.context)
                     .join(&cm.mount_path);
-                let is_mounted = active_mounts.iter().any(|m| m.target == target);
+                let is_mounted = mount_manager.is_mounted(&target).await?;
                 if is_mounted {
                     println!("      Status: {} ✓", "Mounted".green().bold());
                 } else {

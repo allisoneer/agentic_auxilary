@@ -1,7 +1,7 @@
 use crate::config::validation::sanitize_mount_name;
 use crate::config::{MountDirs, RepoConfig, RequiredMount};
 use crate::config::{RepoConfigManager, RepoMappingManager, SyncStrategy};
-use crate::git::utils::{find_repo_root, get_remote_url, is_git_repo};
+use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url, is_git_repo};
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
 use colored::*;
@@ -122,7 +122,7 @@ pub async fn execute(
     };
 
     // Add to repository config at .thoughts/config.json
-    let repo_root = find_repo_root(&std::env::current_dir()?)?.to_path_buf();
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?.to_path_buf();
     let repo_manager = RepoConfigManager::new(repo_root);
     let mut config = repo_manager.load()?.unwrap_or_else(|| RepoConfig {
         version: "1.0".to_string(),

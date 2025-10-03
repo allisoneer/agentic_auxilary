@@ -1,14 +1,14 @@
 use crate::config::{Mount, RepoConfigManager};
-use crate::git::utils::find_repo_root;
+use crate::git::utils::{find_repo_root, get_control_repo_root};
 use crate::mount::MountResolver;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::fs;
 
 pub async fn execute(recent: Option<usize>) -> Result<()> {
-    let code_root = find_repo_root(&std::env::current_dir()?)?;
+    let _code_root = find_repo_root(&std::env::current_dir()?)?;
 
-    let mgr = RepoConfigManager::new(code_root.clone());
+    let mgr = RepoConfigManager::new(get_control_repo_root(&std::env::current_dir()?)?);
     let ds = mgr.load_desired_state()?.ok_or_else(|| {
         anyhow::anyhow!("No repository configuration found. Run 'thoughts init'.")
     })?;

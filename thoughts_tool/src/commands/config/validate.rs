@@ -2,11 +2,11 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::config::RepoConfigManager;
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 
 pub async fn execute() -> Result<()> {
     // Validate repository config
-    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     print!("Validating repository configuration... ");
     let repo_manager = RepoConfigManager::new(repo_root);
     match repo_manager.load() {

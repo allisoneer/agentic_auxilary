@@ -3,11 +3,11 @@ use colored::Colorize;
 use serde_json;
 
 use crate::config::RepoConfigManager;
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 
 pub async fn execute(json: bool) -> Result<()> {
     // Show repository config from .thoughts/config.json
-    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let repo_manager = RepoConfigManager::new(repo_root);
 
     if let Some(config) = repo_manager.load()? {

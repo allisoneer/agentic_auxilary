@@ -1,6 +1,6 @@
 use crate::config::{Mount, RepoConfigManager, RepoMappingManager, SyncStrategy};
 use crate::git::GitSync;
-use crate::git::utils::{find_repo_root, get_remote_url};
+use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url};
 use crate::mount::{MountResolver, MountSpace};
 use anyhow::{Context, Result};
 use colored::*;
@@ -12,8 +12,9 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         anyhow::bail!("Cannot specify both a mount name and --all");
     }
 
-    let repo_root = find_repo_root(&env::current_dir()?)?;
-    let repo_manager = RepoConfigManager::new(repo_root.clone());
+    let code_root = find_repo_root(&env::current_dir()?)?;
+    let control_root = get_control_repo_root(&env::current_dir()?)?;
+    let repo_manager = RepoConfigManager::new(control_root.clone());
     let resolver = MountResolver::new()?;
 
     let desired = repo_manager
@@ -64,7 +65,7 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         sync_list.iter().map(|(space, _)| space.clone()).collect()
     } else {
         // Repository-aware sync (default) - sync all auto mounts for current repo
-        let repo_url = get_remote_url(&repo_root)?;
+        let repo_url = get_remote_url(&code_root)?;
         println!("{} repository: {}", "Detected".cyan(), repo_url);
 
         sync_list.iter().map(|(space, _)| space.clone()).collect()

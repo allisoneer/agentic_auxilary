@@ -1,7 +1,7 @@
 use crate::config::RepoMappingManager;
 use crate::config::{Mount, RepoConfigManager, SyncStrategy, extract_org_repo_from_url};
 use crate::git::clone::{CloneOptions, clone_repository};
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 use crate::mount::{MountOptions, get_mount_manager};
 use crate::mount::{MountResolver, MountSpace};
 use crate::platform::detect_platform;
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub async fn update_active_mounts() -> Result<()> {
-    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let platform_info = detect_platform()?;
     let mount_manager = get_mount_manager(&platform_info)?;
     let repo_manager = RepoConfigManager::new(repo_root.clone());
@@ -21,7 +21,19 @@ pub async fn update_active_mounts() -> Result<()> {
     })?;
 
     let base = repo_root.join(".thoughts-data");
+
+    // Check for broken symlink before proceeding
+    if base.is_symlink() && !base.exists() {
+        anyhow::bail!(
+            "Worktree .thoughts-data symlink is broken. \
+             Re-run 'thoughts init' in the worktree or main repository."
+        );
+    }
+
     ensure_dir(&base)?;
+
+    // Canonicalize base for mount comparison
+    let base_canon = std::fs::canonicalize(&base).unwrap_or_else(|_| base.clone());
 
     // Symlink targets (actual mount dirs)
     let thoughts_dir = base.join(&desired.mount_dirs.thoughts);
@@ -70,8 +82,10 @@ pub async fn update_active_mounts() -> Result<()> {
     let active = mount_manager.list_mounts().await?;
     let mut active_map = HashMap::<String, PathBuf>::new();
     for mi in active {
-        if mi.target.starts_with(&base)
-            && let Ok(rel) = mi.target.strip_prefix(&base)
+        // Canonicalize target for comparison
+        let target_canon = std::fs::canonicalize(&mi.target).unwrap_or_else(|_| mi.target.clone());
+        if target_canon.starts_with(&base_canon)
+            && let Ok(rel) = target_canon.strip_prefix(&base_canon)
         {
             let key = rel.to_string_lossy().to_string();
             active_map.insert(key, mi.target.clone());

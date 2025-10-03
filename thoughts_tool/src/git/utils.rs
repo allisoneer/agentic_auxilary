@@ -65,6 +65,24 @@ pub fn get_main_repo_for_worktree(worktree_path: &Path) -> Result<PathBuf> {
     Ok(worktree_path.to_path_buf())
 }
 
+/// Get the control repository root (main repo for worktrees, repo root otherwise)
+/// This is the authoritative location for .thoughts/config.json and .thoughts-data
+pub fn get_control_repo_root(start_path: &Path) -> Result<PathBuf> {
+    let repo_root = find_repo_root(start_path)?;
+    if is_worktree(&repo_root)? {
+        // Best-effort: fall back to repo_root if main cannot be determined
+        Ok(get_main_repo_for_worktree(&repo_root).unwrap_or(repo_root))
+    } else {
+        Ok(repo_root)
+    }
+}
+
+/// Get the control repository root for the current directory
+pub fn get_current_control_repo_root() -> Result<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    get_control_repo_root(&cwd)
+}
+
 /// Check if a path is a git repository
 pub fn is_git_repo(path: &Path) -> bool {
     Repository::open(path).is_ok()
