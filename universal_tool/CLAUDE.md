@@ -8,8 +8,13 @@ Universal Tool Framework (UTF) is a Rust procedural macro library that generates
 
 ## Common Development Commands
 
-### Building
+### Building and Testing
 ```bash
+# Default targets (silent if successful)
+make check      # Run formatting and clippy checks
+make test       # Run all tests
+make build      # Build the project
+
 # Build entire workspace with all features
 cargo build --workspace --all-features
 

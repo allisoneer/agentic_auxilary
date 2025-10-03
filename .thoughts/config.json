@@ -1,133 +1,54 @@
 {
-  "version": "1.0",
-  "mount_dirs": {
-    "repository": "context",
-    "personal": "personal"
-  },
-  "requires": [
-    {
-      "remote": "git@github.com:allisoneer/personal_thoughts.git",
-      "mount_path": "universal_tool",
-      "subpath": "projects/universal_tool",
-      "description": "Repository mount for universal_tool",
-      "optional": false,
-      "sync": "auto"
-    },
-    {
-      "remote": "git@github.com:allisoneer/personal_thoughts.git",
-      "mount_path": "thoughts_tool",
-      "subpath": "projects/thoughts_tool",
-      "description": "Repository mount for thoughts_tool",
-      "optional": false,
-      "sync": "auto"
-    },
-    {
-      "remote": "git@github.com:allisoneer/personal_thoughts.git",
-      "mount_path": "general",
-      "subpath": "projects/agentic_auxilary",
-      "description": "Repository mount for agentic_auxilary",
-      "optional": false,
-      "sync": "auto"
-    },
-    {
-      "remote": "git@github.com:allisoneer/personal_thoughts.git",
-      "mount_path": "claudecode_rs",
-      "subpath": "projects/claudecode_rs",
-      "description": "Repository mount for claudecode_rs",
-      "optional": false,
-      "sync": "auto"
-    },
-    {
-      "remote": "git@github.com:seanmonstar/reqwest.git",
-      "mount_path": "references/reqwest",
-      "description": "Repository mount for references/reqwest",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:XAMPPRocky/octocrab.git",
-      "mount_path": "references/octocrab",
-      "description": "Repository mount for references/octocrab",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:obmarg/cynic.git",
-      "mount_path": "references/cynic",
-      "description": "Repository mount for references/cynic",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:letmutex/htmd.git",
-      "mount_path": "references/htmd",
-      "description": "Repository mount for references/htmd",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:zurawiki/tiktoken-rs.git",
-      "mount_path": "references/tiktoken-rs",
-      "description": "Repository mount for references/tiktoken-rs",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:BurntSushi/ripgrep.git",
-      "mount_path": "references/ripgrep",
-      "description": "Repository mount for references/ripgrep",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:anthropics/claude-code-action.git",
-      "mount_path": "references/claude-code-action",
-      "description": "Repository mount for references/claude-code-action",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:Vrtgs/thirtyfour.git",
-      "mount_path": "references/thirtyfour",
-      "description": "Repository mount for references/thirtyfour",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:64bit/async-openai.git",
-      "mount_path": "references/async-openai",
-      "description": "Repository mount for references/async-openai",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "git@github.com:modelcontextprotocol/rust-sdk.git",
-      "mount_path": "references/rust-sdk",
-      "description": "Repository mount for references/rust-sdk",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "https://github.com/modelcontextprotocol/modelcontextprotocol.git",
-      "mount_path": "references/modelcontextprotocol",
-      "description": "Repository mount for references/modelcontextprotocol",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "https://github.com/modelcontextprotocol/python-sdk.git",
-      "mount_path": "references/python-sdk",
-      "description": "Repository mount for references/python-sdk",
-      "optional": true,
-      "sync": "none"
-    },
-    {
-      "remote": "https://github.com/modelcontextprotocol/typescript-sdk.git",
-      "mount_path": "references/typescript-sdk",
-      "description": "Repository mount for references/typescript-sdk",
-      "optional": true,
-      "sync": "none"
-    }
-  ],
-  "rules": []
+	"version": "2.0",
+	"mount_dirs": {
+		"thoughts": "thoughts",
+		"context": "context",
+		"references": "references"
+	},
+	"thoughts_mount": {
+		"remote": "git@github.com:allisoneer/personal_thoughts.git",
+		"sync": "auto",
+		"subpath": "projects/agentic_auxilary_thoughts"
+	},
+	"context_mounts": [
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"subpath": "projects/universal_tool",
+			"mount_path": "universal_tool",
+			"sync": "auto"
+		},
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"subpath": "projects/thoughts_tool",
+			"mount_path": "thoughts_tool",
+			"sync": "auto"
+		},
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"subpath": "projects/agentic_auxilary",
+			"mount_path": "general",
+			"sync": "auto"
+		},
+		{
+			"remote": "git@github.com:allisoneer/personal_thoughts.git",
+			"subpath": "projects/claudecode_rs",
+			"mount_path": "claudecode_rs",
+			"sync": "auto"
+		}
+	],
+	"references": [
+		"git@github.com:seanmonstar/reqwest.git",
+		"git@github.com:XAMPPRocky/octocrab.git",
+		"git@github.com:obmarg/cynic.git",
+		"git@github.com:letmutex/htmd.git",
+		"git@github.com:zurawiki/tiktoken-rs.git",
+		"git@github.com:BurntSushi/ripgrep.git",
+		"git@github.com:anthropics/claude-code-action.git",
+		"git@github.com:Vrtgs/thirtyfour.git",
+		"git@github.com:64bit/async-openai.git",
+		"git@github.com:modelcontextprotocol/rust-sdk.git",
+		"https://github.com/modelcontextprotocol/modelcontextprotocol.git",
+		"https://github.com/modelcontextprotocol/python-sdk.git",
+		"https://github.com/modelcontextprotocol/typescript-sdk.git"
+	]
 }

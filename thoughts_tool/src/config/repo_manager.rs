@@ -1,10 +1,57 @@
-use crate::config::{MountDirs, RepoConfig, RequiredMount};
+use crate::config::{
+    ContextMount, Mount, MountDirs, MountDirsV2, RepoConfig, RepoConfigV2, RequiredMount,
+    SyncStrategy, ThoughtsMount,
+};
+use crate::mount::MountSpace;
 use crate::utils::paths;
 use anyhow::{Context, Result};
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone)]
+pub struct DesiredState {
+    pub mount_dirs: MountDirsV2,
+    pub thoughts_mount: Option<ThoughtsMount>,
+    pub context_mounts: Vec<ContextMount>,
+    pub references: Vec<String>,
+    pub was_v1: bool, // for messaging
+}
+
+impl DesiredState {
+    /// Find a mount by its MountSpace identifier
+    pub fn find_mount(&self, space: &MountSpace) -> Option<Mount> {
+        match space {
+            MountSpace::Thoughts => self.thoughts_mount.as_ref().map(|tm| Mount::Git {
+                url: tm.remote.clone(),
+                sync: tm.sync,
+                subpath: tm.subpath.clone(),
+            }),
+            MountSpace::Context(mount_path) => self
+                .context_mounts
+                .iter()
+                .find(|cm| &cm.mount_path == mount_path)
+                .map(|cm| Mount::Git {
+                    url: cm.remote.clone(),
+                    sync: cm.sync,
+                    subpath: cm.subpath.clone(),
+                }),
+            MountSpace::Reference { org: _, repo: _ } => {
+                // References need URL lookup - for now return None
+                // This will be addressed when references commands are implemented
+                None
+            }
+        }
+    }
+
+    /// Get target path for a mount space
+    pub fn get_mount_target(&self, space: &MountSpace, repo_root: &Path) -> PathBuf {
+        repo_root
+            .join(".thoughts-data")
+            .join(space.relative_path(&self.mount_dirs))
+    }
+}
 
 pub struct RepoConfigManager {
     repo_root: PathBuf,
@@ -65,6 +112,67 @@ impl RepoConfigManager {
 
         self.save(&default_config)?;
         Ok(default_config)
+    }
+
+    pub fn load_desired_state(&self) -> Result<Option<DesiredState>> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+        if !config_path.exists() {
+            return Ok(None);
+        }
+
+        let raw = std::fs::read_to_string(&config_path)?;
+        // Peek version
+        let v: serde_json::Value = serde_json::from_str(&raw)?;
+        let version = v.get("version").and_then(|x| x.as_str()).unwrap_or("1.0");
+
+        if version == "2.0" {
+            let v2: RepoConfigV2 = serde_json::from_str(&raw)?;
+            return Ok(Some(DesiredState {
+                mount_dirs: v2.mount_dirs,
+                thoughts_mount: v2.thoughts_mount,
+                context_mounts: v2.context_mounts,
+                references: v2.references,
+                was_v1: false,
+            }));
+        }
+
+        // Fallback: v1 mapping (legacy RepoConfig)
+        let v1: RepoConfig = serde_json::from_str(&raw)?;
+        // Map to v2-like DesiredState
+        let defaults = MountDirsV2::default();
+        let mut context_mounts = vec![];
+        let mut references = vec![];
+
+        for req in v1.requires {
+            let is_ref =
+                req.mount_path.starts_with("references/") || req.sync == SyncStrategy::None;
+            if is_ref {
+                references.push(req.remote);
+            } else {
+                context_mounts.push(ContextMount {
+                    remote: req.remote,
+                    subpath: req.subpath,
+                    mount_path: req.mount_path,
+                    sync: if req.sync == SyncStrategy::None {
+                        SyncStrategy::Auto // guardrail; never none for context
+                    } else {
+                        req.sync
+                    },
+                });
+            }
+        }
+
+        Ok(Some(DesiredState {
+            mount_dirs: MountDirsV2 {
+                thoughts: defaults.thoughts,
+                context: v1.mount_dirs.repository, // keep existing "context" name
+                references: defaults.references,
+            },
+            thoughts_mount: None, // requires explicit config in v2
+            context_mounts,
+            references,
+            was_v1: true,
+        }))
     }
 
     fn validate(&self, config: &RepoConfig) -> Result<()> {
@@ -163,6 +271,86 @@ impl RepoConfigManager {
 
         self.save(&config)?;
         Ok(true)
+    }
+
+    /// Load v2 config or error if it doesn't exist
+    pub fn load_v2_or_bail(&self) -> Result<RepoConfigV2> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+        if !config_path.exists() {
+            anyhow::bail!("No repository configuration found. Run 'thoughts init' first.");
+        }
+
+        let raw = std::fs::read_to_string(&config_path)?;
+        let v: serde_json::Value = serde_json::from_str(&raw)?;
+        let version = v.get("version").and_then(|x| x.as_str()).unwrap_or("1.0");
+
+        if version == "2.0" {
+            let v2: RepoConfigV2 = serde_json::from_str(&raw)?;
+            Ok(v2)
+        } else {
+            anyhow::bail!(
+                "Repository is using v1 configuration. Please migrate to v2 configuration format."
+            );
+        }
+    }
+
+    /// Save v2 configuration
+    pub fn save_v2(&self, config: &RepoConfigV2) -> Result<()> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+
+        // Ensure .thoughts directory exists
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {parent:?}"))?;
+        }
+
+        let json =
+            serde_json::to_string_pretty(config).context("Failed to serialize configuration")?;
+
+        AtomicFile::new(&config_path, OverwriteBehavior::AllowOverwrite)
+            .write(|f| f.write_all(json.as_bytes()))
+            .with_context(|| format!("Failed to write config to {config_path:?}"))?;
+
+        Ok(())
+    }
+
+    /// Ensure v2 config exists, create default if not
+    pub fn ensure_v2_default(&self) -> Result<RepoConfigV2> {
+        let config_path = paths::get_repo_config_path(&self.repo_root);
+        if config_path.exists() {
+            // Try to load existing config
+            let raw = std::fs::read_to_string(&config_path)?;
+            let v: serde_json::Value = serde_json::from_str(&raw)?;
+            let version = v.get("version").and_then(|x| x.as_str()).unwrap_or("1.0");
+
+            if version == "2.0" {
+                return serde_json::from_str(&raw).context("Failed to parse v2 configuration");
+            }
+            // If v1, convert and save
+            if let Some(ds) = self.load_desired_state()? {
+                let v2_config = RepoConfigV2 {
+                    version: "2.0".to_string(),
+                    mount_dirs: ds.mount_dirs,
+                    thoughts_mount: ds.thoughts_mount,
+                    context_mounts: ds.context_mounts,
+                    references: ds.references,
+                };
+                self.save_v2(&v2_config)?;
+                return Ok(v2_config);
+            }
+        }
+
+        // Create default v2 config
+        let default_config = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+
+        self.save_v2(&default_config)?;
+        Ok(default_config)
     }
 }
 
@@ -347,5 +535,121 @@ mod tests {
 
         // Try to remove non-existent mount
         assert!(!manager.remove_mount("test").unwrap());
+    }
+
+    #[test]
+    fn test_v1_to_desired_state_mapping() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        // Create a v1 config with both context mounts and references
+        let v1_config = RepoConfig {
+            version: "1.0".to_string(),
+            mount_dirs: MountDirs {
+                repository: "context".to_string(),
+                personal: "personal".to_string(),
+            },
+            requires: vec![
+                RequiredMount {
+                    remote: "git@github.com:user/context-repo.git".to_string(),
+                    mount_path: "context-mount".to_string(),
+                    subpath: Some("subdir".to_string()),
+                    description: "Context mount".to_string(),
+                    optional: false,
+                    override_rules: None,
+                    sync: crate::config::SyncStrategy::Auto,
+                },
+                RequiredMount {
+                    remote: "git@github.com:org/ref-repo.git".to_string(),
+                    mount_path: "references/ref-mount".to_string(),
+                    subpath: None,
+                    description: "Reference mount".to_string(),
+                    optional: true,
+                    override_rules: None,
+                    sync: crate::config::SyncStrategy::None,
+                },
+            ],
+            rules: vec![],
+        };
+
+        // Save the v1 config
+        manager.save(&v1_config).unwrap();
+
+        // Load as DesiredState
+        let desired_state = manager.load_desired_state().unwrap().unwrap();
+
+        // Verify the mapping
+        assert_eq!(desired_state.was_v1, true);
+        assert_eq!(desired_state.mount_dirs.context, "context");
+        assert_eq!(desired_state.mount_dirs.thoughts, "thoughts");
+        assert_eq!(desired_state.mount_dirs.references, "references");
+
+        // Check context mounts
+        assert_eq!(desired_state.context_mounts.len(), 1);
+        assert_eq!(
+            desired_state.context_mounts[0].remote,
+            "git@github.com:user/context-repo.git"
+        );
+        assert_eq!(desired_state.context_mounts[0].mount_path, "context-mount");
+        assert_eq!(
+            desired_state.context_mounts[0].subpath,
+            Some("subdir".to_string())
+        );
+
+        // Check references
+        assert_eq!(desired_state.references.len(), 1);
+        assert_eq!(
+            desired_state.references[0],
+            "git@github.com:org/ref-repo.git"
+        );
+
+        // Verify no thoughts mount (requires explicit config in v2)
+        assert!(desired_state.thoughts_mount.is_none());
+    }
+
+    #[test]
+    fn test_v2_config_loading() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        // Create a v2 config
+        let v2_config = crate::config::RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: crate::config::MountDirsV2::default(),
+            thoughts_mount: Some(crate::config::ThoughtsMount {
+                remote: "git@github.com:user/thoughts.git".to_string(),
+                subpath: None,
+                sync: crate::config::SyncStrategy::Auto,
+            }),
+            context_mounts: vec![crate::config::ContextMount {
+                remote: "git@github.com:user/context.git".to_string(),
+                subpath: Some("docs".to_string()),
+                mount_path: "docs".to_string(),
+                sync: crate::config::SyncStrategy::Auto,
+            }],
+            references: vec![
+                "git@github.com:org/ref1.git".to_string(),
+                "https://github.com/org/ref2.git".to_string(),
+            ],
+        };
+
+        // Save the v2 config directly using JSON
+        let config_path = paths::get_repo_config_path(&temp_dir.path());
+        std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+        let json = serde_json::to_string_pretty(&v2_config).unwrap();
+        std::fs::write(&config_path, json).unwrap();
+
+        // Load as DesiredState
+        let desired_state = manager.load_desired_state().unwrap().unwrap();
+
+        // Verify the loading
+        assert_eq!(desired_state.was_v1, false);
+        assert!(desired_state.thoughts_mount.is_some());
+        assert_eq!(
+            desired_state.thoughts_mount.as_ref().unwrap().remote,
+            "git@github.com:user/thoughts.git"
+        );
+        assert_eq!(desired_state.context_mounts.len(), 1);
+        assert_eq!(desired_state.references.len(), 2);
     }
 }
