@@ -40,7 +40,13 @@ TARGET_NAME=$(get_target_name "$@")
 
 # Run the cargo command and capture output
 EXIT_CODE=0
-cargo "$COMMAND" "$@" > "$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$?
+if [[ "$COMMAND" == "fmt-check" ]]; then
+    # For fmt-check, arguments before -- need special handling
+    # cargo fmt [FLAGS] -- --check
+    cargo fmt "$@" -- --check > "$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$?
+else
+    cargo "$COMMAND" "$@" > "$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$?
+fi
 
 # Count important metrics
 if [[ "$COMMAND" == "test" ]]; then
@@ -122,7 +128,21 @@ elif [[ "$COMMAND" == "build" ]]; then
         # Clean build
         echo -e "${GREEN}✓${NC}  $TARGET_NAME: built successfully"
     fi
-    
+
+elif [[ "$COMMAND" == "fmt-check" ]]; then
+    if [[ $EXIT_CODE -ne 0 ]]; then
+        # Formatting issues - show full output and exit
+        echo -e "${RED}✗ $TARGET_NAME formatting issues${NC}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        cat "$TEMP_OUTPUT"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo -e "${RED}Stopping due to formatting issues in $TARGET_NAME${NC}"
+        exit 1
+    else
+        # Clean formatting
+        echo -e "${GREEN}✓${NC}  $TARGET_NAME: properly formatted"
+    fi
+
 else
     # Generic command
     if [[ $EXIT_CODE -ne 0 ]]; then

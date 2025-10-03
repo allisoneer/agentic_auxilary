@@ -40,13 +40,6 @@ fn default_git_sync() -> SyncStrategy {
 
 // Helper methods for compatibility with existing code
 impl Mount {
-    pub fn sync_strategy(&self) -> SyncStrategy {
-        match self {
-            Mount::Directory { sync, .. } => *sync,
-            Mount::Git { sync, .. } => *sync,
-        }
-    }
-
     #[cfg(test)] // Only used in tests
     pub fn is_git(&self) -> bool {
         matches!(self, Mount::Git { .. })
@@ -350,4 +343,67 @@ mod tests {
         );
         assert!(deserialized.last_updated.is_some());
     }
+}
+
+// New v2 config types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MountDirsV2 {
+    #[serde(default = "default_thoughts_dir")]
+    pub thoughts: String,
+    #[serde(default = "default_context_dir")]
+    pub context: String,
+    #[serde(default = "default_references_dir")]
+    pub references: String,
+}
+
+impl Default for MountDirsV2 {
+    fn default() -> Self {
+        Self {
+            thoughts: default_thoughts_dir(),
+            context: default_context_dir(),
+            references: default_references_dir(),
+        }
+    }
+}
+
+fn default_thoughts_dir() -> String {
+    "thoughts".into()
+}
+fn default_context_dir() -> String {
+    "context".into()
+}
+fn default_references_dir() -> String {
+    "references".into()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThoughtsMount {
+    pub remote: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subpath: Option<String>,
+    #[serde(default = "default_git_sync")]
+    pub sync: SyncStrategy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextMount {
+    pub remote: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subpath: Option<String>,
+    pub mount_path: String,
+    #[serde(default = "default_git_sync")]
+    pub sync: SyncStrategy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoConfigV2 {
+    pub version: String, // "2.0"
+    #[serde(default)]
+    pub mount_dirs: MountDirsV2,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thoughts_mount: Option<ThoughtsMount>,
+    #[serde(default)]
+    pub context_mounts: Vec<ContextMount>,
+    #[serde(default)]
+    pub references: Vec<String>, // raw URLs only
 }

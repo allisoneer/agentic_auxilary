@@ -11,7 +11,7 @@ claudecode_rs is a Rust SDK for programmatically interacting with Claude Code (t
 ### Quick Commands (Silent by Default)
 ```bash
 make all        # Run check, test, and build (silent)
-make check      # Run clippy linting
+make check      # Run formatting and clippy checks
 make test       # Run all tests
 make build      # Build release binary
 ```

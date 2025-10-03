@@ -1,5 +1,7 @@
 use crate::config::RepoConfigManager;
-use crate::git::utils::{get_current_repo, get_main_repo_for_worktree, is_worktree};
+use crate::git::utils::{
+    get_control_repo_root, get_current_repo, get_main_repo_for_worktree, is_worktree,
+};
 use crate::utils::git::ensure_gitignore_entry;
 use crate::utils::paths::ensure_dir;
 use anyhow::{Context, Result, anyhow};
@@ -56,8 +58,49 @@ pub async fn execute(force: bool) -> Result<()> {
             "{}: Created .thoughts-data symlink to main repository",
             "Success".green()
         );
+
+        // Get mount dirs from config to create workspace symlinks
+        let repo_config_manager = RepoConfigManager::new(get_control_repo_root(&repo_root)?);
+        let mount_dirs = if let Some(desired) = repo_config_manager.load_desired_state()? {
+            desired.mount_dirs
+        } else {
+            // Use v1 defaults that will map to v2
+            crate::config::MountDirsV2 {
+                thoughts: "thoughts".into(),
+                context: "context".into(),
+                references: "references".into(),
+            }
+        };
+
+        // Create the three workspace symlinks in the worktree
+        let thoughts_link = repo_root.join(&mount_dirs.thoughts);
+        let context_link = repo_root.join(&mount_dirs.context);
+        let references_link = repo_root.join(&mount_dirs.references);
+
+        let thoughts_relative = format!(".thoughts-data/{}", mount_dirs.thoughts);
+        let context_relative = format!(".thoughts-data/{}", mount_dirs.context);
+        let references_relative = format!(".thoughts-data/{}", mount_dirs.references);
+
+        // Remove existing symlinks if forcing
+        if force {
+            for path in [&thoughts_link, &context_link, &references_link] {
+                if path.exists() && path.is_symlink() {
+                    fs::remove_file(path)
+                        .with_context(|| format!("Failed to remove existing symlink: {path:?}"))?;
+                }
+            }
+        }
+
+        create_symlink(&thoughts_relative, &thoughts_link)?;
+        create_symlink(&context_relative, &context_link)?;
+        create_symlink(&references_relative, &references_link)?;
+
         eprintln!("{}: Worktree initialization complete!", "Success".green());
         eprintln!("The worktree now shares mounts with the main repository.");
+        eprintln!("\nCreated workspace symlinks:");
+        eprintln!("  {} -> {}", mount_dirs.thoughts, thoughts_relative);
+        eprintln!("  {} -> {}", mount_dirs.context, context_relative);
+        eprintln!("  {} -> {}", mount_dirs.references, references_relative);
 
         return Ok(());
     }
@@ -74,17 +117,33 @@ pub async fn execute(force: bool) -> Result<()> {
         .ensure_default()
         .context("Failed to create repository configuration")?;
 
+    // Get v2 mount dirs - either from desired state or from v1 config defaults
+    let mount_dirs = if let Some(desired) = repo_config_manager.load_desired_state()? {
+        desired.mount_dirs
+    } else {
+        // Use v1 defaults that will map to v2
+        crate::config::MountDirsV2 {
+            thoughts: "thoughts".into(),
+            context: config.mount_dirs.repository.clone(),
+            references: "references".into(),
+        }
+    };
+
     // Check for existing symlinks
-    let context_link = repo_root.join(&config.mount_dirs.repository);
-    let personal_link = repo_root.join(&config.mount_dirs.personal);
+    let thoughts_link = repo_root.join(&mount_dirs.thoughts);
+    let context_link = repo_root.join(&mount_dirs.context);
+    let references_link = repo_root.join(&mount_dirs.references);
 
     if !force {
         let mut existing = vec![];
-        if context_link.exists() {
-            existing.push((&config.mount_dirs.repository, &context_link));
+        if thoughts_link.exists() {
+            existing.push((&mount_dirs.thoughts, &thoughts_link));
         }
-        if personal_link.exists() {
-            existing.push((&config.mount_dirs.personal, &personal_link));
+        if context_link.exists() {
+            existing.push((&mount_dirs.context, &context_link));
+        }
+        if references_link.exists() {
+            existing.push((&mount_dirs.references, &references_link));
         }
 
         if !existing.is_empty() {
@@ -97,7 +156,7 @@ pub async fn execute(force: bool) -> Result<()> {
                     let target = fs::read_link(path).unwrap_or_else(|_| PathBuf::from("<invalid>"));
                     eprintln!("  {} -> {}", name, target.display());
                 } else {
-                    eprintln!("  {name} (not a symlink)");
+                    eprintln!("  {} (not a symlink)", name);
                 }
             }
             eprintln!("\nUse {} to reinitialize.", "--force".cyan());
@@ -107,8 +166,9 @@ pub async fn execute(force: bool) -> Result<()> {
 
     // Validate that paths are not regular files/directories
     for (name, path) in [
-        (&config.mount_dirs.repository, &context_link),
-        (&config.mount_dirs.personal, &personal_link),
+        (&mount_dirs.thoughts, &thoughts_link),
+        (&mount_dirs.context, &context_link),
+        (&mount_dirs.references, &references_link),
     ] {
         if path.exists() && !path.is_symlink() {
             eprintln!("{}: {} exists but is not a symlink", "Error".red(), name);
@@ -121,15 +181,17 @@ pub async fn execute(force: bool) -> Result<()> {
     let thoughts_dir = repo_root.join(".thoughts-data");
     ensure_dir(&thoughts_dir)?;
 
-    let context_dir = thoughts_dir.join(&config.mount_dirs.repository);
-    let personal_dir = thoughts_dir.join(&config.mount_dirs.personal);
+    let thoughts_target_dir = thoughts_dir.join(&mount_dirs.thoughts);
+    let context_target_dir = thoughts_dir.join(&mount_dirs.context);
+    let references_target_dir = thoughts_dir.join(&mount_dirs.references);
 
-    ensure_dir(&context_dir)?;
-    ensure_dir(&personal_dir)?;
+    ensure_dir(&thoughts_target_dir)?;
+    ensure_dir(&context_target_dir)?;
+    ensure_dir(&references_target_dir)?;
 
     // Remove existing symlinks if forcing
     if force {
-        for path in [&context_link, &personal_link] {
+        for path in [&thoughts_link, &context_link, &references_link] {
             if path.exists() && path.is_symlink() {
                 fs::remove_file(path)
                     .with_context(|| format!("Failed to remove existing symlink: {path:?}"))?;
@@ -138,10 +200,13 @@ pub async fn execute(force: bool) -> Result<()> {
     }
 
     // Create symlinks with relative paths
-    let context_relative = format!(".thoughts-data/{}", config.mount_dirs.repository);
-    let personal_relative = format!(".thoughts-data/{}", config.mount_dirs.personal);
+    let thoughts_relative = format!(".thoughts-data/{}", mount_dirs.thoughts);
+    let context_relative = format!(".thoughts-data/{}", mount_dirs.context);
+    let references_relative = format!(".thoughts-data/{}", mount_dirs.references);
+
+    create_symlink(&thoughts_relative, &thoughts_link)?;
     create_symlink(&context_relative, &context_link)?;
-    create_symlink(&personal_relative, &personal_link)?;
+    create_symlink(&references_relative, &references_link)?;
 
     // Add to .gitignore - only the data directory needs to be ignored!
     // The symlinks themselves can be tracked by git
@@ -153,30 +218,40 @@ pub async fn execute(force: bool) -> Result<()> {
 
     // Create README files if directories are empty
     create_readme_if_empty(
-        &context_dir,
-        "Repository Thoughts",
-        "This directory contains repository-specific thoughts and documentation.\n\n\
-         These files are shared with your team through git.\n\n\
-         ## Suggested Structure\n\n\
-         - `architecture/` - System design and architecture documents\n\
-         - `decisions/` - Architectural decision records (ADRs)\n\
-         - `planning/` - Feature planning and specifications\n\
-         - `research/` - Technical research and investigations\n",
+        &thoughts_target_dir,
+        "Thoughts Workspace",
+        "This is your unified thoughts workspace.\n\n\
+         When configured, your personal thoughts repository will be mounted here.\n\n\
+         ## Usage\n\n\
+         - Configure thoughts mount: Add `thoughts_mount` to your config\n\
+         - This provides a single workspace for all your notes across projects\n\
+         - Changes here sync to your personal thoughts repository\n",
     )?;
 
     create_readme_if_empty(
-        &personal_dir,
-        "Personal Thoughts",
-        "This directory contains your personal thoughts about this repository.\n\n\
-         These files are private to you and not shared with the team.\n\n\
-         ## Suggested Structure\n\n\
-         - `todo.md` - Personal task list and notes\n\
-         - `ideas/` - Feature ideas and brainstorming\n\
-         - `learning/` - Notes while learning the codebase\n\
-         - `debugging/` - Debugging notes and investigations\n",
+        &context_target_dir,
+        "Context Mounts",
+        "This directory contains project-specific context and documentation.\n\n\
+         These mounts are shared with your team through the repository config.\n\n\
+         ## Suggested Mounts\n\n\
+         - `docs` - Project documentation\n\
+         - `architecture` - System design documents\n\
+         - `decisions` - Architectural decision records\n\
+         - `planning` - Feature planning and specs\n",
     )?;
 
-    // Note: The actual mounting of personal mounts happens in a separate sync step
+    create_readme_if_empty(
+        &references_target_dir,
+        "Reference Repositories",
+        "This directory contains read-only reference repositories.\n\n\
+         References are organized by organization/repository.\n\n\
+         ## Usage\n\n\
+         - Add references: `thoughts references add <url>`\n\
+         - Browse code from other repositories\n\
+         - All mounts here are read-only for safety\n",
+    )?;
+
+    // Note: The actual mounting happens in a separate sync step
     // This init command only sets up the directory structure and configuration
 
     // Auto-mount all configured mounts
@@ -196,34 +271,41 @@ pub async fn execute(force: bool) -> Result<()> {
     println!("\n{} Successfully initialized thoughts!", "✓".green());
     println!("\nCreated directory structure:");
     println!(
-        "  {} -> {} (team-shared thoughts)",
-        config.mount_dirs.repository.cyan(),
-        context_dir
+        "  {} -> {} (personal workspace)",
+        mount_dirs.thoughts.cyan(),
+        thoughts_target_dir
             .strip_prefix(&repo_root)
-            .unwrap_or(&context_dir)
+            .unwrap_or(&thoughts_target_dir)
             .display()
     );
     println!(
-        "  {} -> {} (personal thoughts)",
-        config.mount_dirs.personal.cyan(),
-        personal_dir
+        "  {} -> {} (team-shared context)",
+        mount_dirs.context.cyan(),
+        context_target_dir
             .strip_prefix(&repo_root)
-            .unwrap_or(&personal_dir)
+            .unwrap_or(&context_target_dir)
+            .display()
+    );
+    println!(
+        "  {} -> {} (reference repos)",
+        mount_dirs.references.cyan(),
+        references_target_dir
+            .strip_prefix(&repo_root)
+            .unwrap_or(&references_target_dir)
             .display()
     );
     println!(
         "\nConfiguration saved to: {}",
         ".thoughts/config.json".cyan()
     );
-    println!("\nYour configured mounts are now available in the thoughts/ directory.");
     println!("\nNext steps:");
     println!(
-        "  - {} to add a repository mount",
-        "thoughts mount add <url>".cyan()
+        "  - {} to add a context mount",
+        "thoughts mount add <path>".cyan()
     );
     println!(
-        "  - {} to add a personal mount",
-        "thoughts mount add <url> --personal".cyan()
+        "  - {} to add a reference",
+        "thoughts references add <url>".cyan()
     );
 
     Ok(())

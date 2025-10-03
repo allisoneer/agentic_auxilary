@@ -1,7 +1,7 @@
 use crate::config::validation::sanitize_mount_name;
-use crate::config::{MountDirs, PersonalMount, RepoConfig, RequiredMount};
-use crate::config::{PersonalConfigManager, RepoConfigManager, RepoMappingManager, SyncStrategy};
-use crate::git::utils::{find_repo_root, get_remote_url, is_git_repo};
+use crate::config::{MountDirs, RepoConfig, RequiredMount};
+use crate::config::{RepoConfigManager, RepoMappingManager, SyncStrategy};
+use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url, is_git_repo};
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
 use colored::*;
@@ -11,9 +11,6 @@ pub async fn execute(
     path: PathBuf,
     mount_path: Option<String>,
     sync: SyncStrategy,
-    optional: bool,
-    override_rules: Option<bool>,
-    personal: bool,
     description: Option<String>,
 ) -> Result<()> {
     println!("{} mount configuration...", "Adding".green());
@@ -124,50 +121,34 @@ pub async fn execute(
         );
     };
 
-    if personal {
-        // Add to personal config at ~/.thoughts/config.json
-        let current_repo_url =
-            get_remote_url(&find_repo_root(&std::env::current_dir()?)?)?.to_string();
+    // Add to repository config at .thoughts/config.json
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?.to_path_buf();
+    let repo_manager = RepoConfigManager::new(repo_root);
+    let mut config = repo_manager.load()?.unwrap_or_else(|| RepoConfig {
+        version: "1.0".to_string(),
+        mount_dirs: MountDirs::default(),
+        requires: vec![],
+        rules: vec![],
+    });
 
-        let personal_mount = PersonalMount {
-            remote: url.clone(),
-            mount_path: mount_name.clone(),
-            subpath: subpath.clone(),
-            description: description.unwrap_or_else(|| format!("Personal mount for {mount_name}")),
-        };
-
-        PersonalConfigManager::add_repository_mount(&current_repo_url, personal_mount)?;
-        println!("✓ Added personal mount '{mount_name}'");
-    } else {
-        // Add to repository config at .thoughts/config.json
-        let repo_root = find_repo_root(&std::env::current_dir()?)?.to_path_buf();
-        let repo_manager = RepoConfigManager::new(repo_root);
-        let mut config = repo_manager.load()?.unwrap_or_else(|| RepoConfig {
-            version: "1.0".to_string(),
-            mount_dirs: MountDirs::default(),
-            requires: vec![],
-            rules: vec![],
-        });
-
-        // Check for duplicates in requires
-        if config.requires.iter().any(|r| r.mount_path == mount_name) {
-            bail!("Mount '{}' already exists", mount_name);
-        }
-
-        let required_mount = RequiredMount {
-            remote: url,
-            mount_path: mount_name.clone(),
-            subpath,
-            description: description
-                .unwrap_or_else(|| format!("Repository mount for {mount_name}")),
-            optional,
-            override_rules,
-            sync,
-        };
-        config.requires.push(required_mount);
-        repo_manager.save(&config)?;
-        println!("✓ Added repository mount '{mount_name}'");
+    // Check for duplicates in requires
+    if config.requires.iter().any(|r| r.mount_path == mount_name) {
+        bail!("Mount '{}' already exists", mount_name);
     }
+
+    let required_mount = RequiredMount {
+        remote: url,
+        mount_path: mount_name.clone(),
+        subpath,
+        description: description.unwrap_or_else(|| format!("Repository mount for {mount_name}")),
+        optional: false,      // v2 removes optional concept
+        override_rules: None, // v2 removes override_rules concept
+        sync,
+    };
+    config.requires.push(required_mount);
+    repo_manager.save(&config)?;
+    println!("✓ Added repository mount '{mount_name}'");
+    // Note: Personal mounts are deprecated in v2
 
     // Automatically update active mounts
     crate::mount::auto_mount::update_active_mounts().await?;
