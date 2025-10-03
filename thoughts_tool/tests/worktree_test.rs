@@ -140,3 +140,94 @@ fn test_worktree_requires_main_init() -> Result<(), Box<dyn std::error::Error>> 
 
     Ok(())
 }
+
+#[test]
+fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
+    // Create temp directory for test
+    let temp = TempDir::new()?;
+    let main_repo = temp.path().join("main");
+    let worktree = temp.path().join("worktree");
+
+    // Initialize main repository
+    fs::create_dir(&main_repo)?;
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(&main_repo)
+        .output()?;
+
+    // Configure git for CI environment
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@example.com"])
+        .current_dir(&main_repo)
+        .output()?;
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Test User"])
+        .current_dir(&main_repo)
+        .output()?;
+
+    // Run thoughts init in main repo
+    Command::cargo_bin("thoughts")?
+        .current_dir(&main_repo)
+        .arg("init")
+        .assert()
+        .success();
+
+    // Create an initial commit (required for worktree)
+    let output = std::process::Command::new("git")
+        .args(["commit", "--allow-empty", "-m", "Initial commit"])
+        .current_dir(&main_repo)
+        .output()?;
+    if !output.status.success() {
+        eprintln!(
+            "Git commit failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return Err("Failed to create initial commit".into());
+    }
+
+    // Create worktree
+    let output = std::process::Command::new("git")
+        .args(["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
+        .current_dir(&main_repo)
+        .output()?;
+    if !output.status.success() {
+        eprintln!(
+            "Git worktree add failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return Err("Failed to create worktree".into());
+    }
+
+    // Run thoughts init in worktree (this should NOT create a config in the worktree)
+    Command::cargo_bin("thoughts")?
+        .current_dir(&worktree)
+        .arg("init")
+        .assert()
+        .success();
+
+    // Verify config exists in main repo (created by init in main)
+    let main_config = main_repo.join(".thoughts").join("config.json");
+    assert!(
+        main_config.exists(),
+        "Config should exist in main repo at {:?}",
+        main_config
+    );
+
+    // Verify config does NOT exist in worktree
+    let worktree_config = worktree.join(".thoughts").join("config.json");
+    assert!(
+        !worktree_config.exists(),
+        "Config should NOT exist in worktree at {:?}",
+        worktree_config
+    );
+
+    // Verify that config show from worktree also works
+    Command::cargo_bin("thoughts")?
+        .current_dir(&worktree)
+        .args(["config", "show"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Repository Configuration"));
+
+    Ok(())
+}

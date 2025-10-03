@@ -1,10 +1,10 @@
 use crate::config::RepoConfigManager;
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;
 
 pub async fn execute(url: String) -> Result<()> {
-    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
 
     let mut cfg = mgr.ensure_v2_default()?;

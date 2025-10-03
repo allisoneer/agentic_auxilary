@@ -467,7 +467,11 @@ impl MountManager for FuseTManager {
 
     async fn is_mounted(&self, target: &Path) -> Result<bool> {
         let mounts = self.parse_mount_output().await?;
-        Ok(mounts.iter().any(|m| m.target == target))
+        let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
+        Ok(mounts.iter().any(|m| {
+            let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
+            mt == target_canon
+        }))
     }
 
     async fn list_mounts(&self) -> Result<Vec<MountInfo>> {
@@ -476,8 +480,12 @@ impl MountManager for FuseTManager {
 
     async fn get_mount_info(&self, target: &Path) -> Result<Option<MountInfo>> {
         let mounts = self.parse_mount_output().await?;
+        let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
 
-        if let Some(mut mount) = mounts.into_iter().find(|m| m.target == target) {
+        if let Some(mut mount) = mounts.into_iter().find(|m| {
+            let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
+            mt == target_canon
+        }) {
             // Try to get additional volume information
             if let Ok(Some((name, uuid))) = self.get_volume_info(target).await {
                 if let MountMetadata::MacOS {

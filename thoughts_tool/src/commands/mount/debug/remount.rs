@@ -3,13 +3,13 @@ use colored::Colorize;
 use tracing::{error, info, warn};
 
 use crate::config::RepoConfigManager;
-use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
 use crate::mount::{MountResolver, MountSpace, get_mount_manager};
 use crate::platform::detect_platform;
 
 pub async fn execute(mount_name: String) -> Result<()> {
     // Get repository root
-    let repo_root = find_repo_root(&std::env::current_dir()?)?;
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
 
     // Get configuration
     let repo_manager = RepoConfigManager::new(repo_root.clone());

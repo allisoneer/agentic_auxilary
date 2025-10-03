@@ -1,6 +1,6 @@
 use super::utils::current_iso_week_dir;
 use crate::config::{Mount, RepoConfigManager};
-use crate::git::utils::{find_repo_root, get_current_branch};
+use crate::git::utils::{find_repo_root, get_control_repo_root, get_current_branch};
 use crate::mount::MountResolver;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -11,7 +11,7 @@ pub async fn execute() -> Result<()> {
     let code_root = find_repo_root(&std::env::current_dir()?)?;
     let branch = get_current_branch(&code_root)?;
 
-    let mgr = RepoConfigManager::new(code_root.clone());
+    let mgr = RepoConfigManager::new(get_control_repo_root(&std::env::current_dir()?)?);
     let ds = mgr.load_desired_state()?.ok_or_else(|| {
         anyhow::anyhow!("No repository configuration found. Run 'thoughts init'.")
     })?;

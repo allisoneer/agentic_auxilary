@@ -133,12 +133,17 @@ impl MergerfsManager {
     async fn get_detailed_mount_info(&self, target: &Path) -> Result<Option<MountInfo>> {
         use tokio::fs;
 
+        let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
+
         let content = match fs::read_to_string(PROC_MOUNTINFO).await {
             Ok(c) => c,
             Err(_) => {
                 // Fall back to basic info from /proc/mounts
                 let mounts = self.parse_proc_mounts().await?;
-                return Ok(mounts.into_iter().find(|m| m.target == target));
+                return Ok(mounts.into_iter().find(|m| {
+                    let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
+                    mt == target_canon
+                }));
             }
         };
 
@@ -163,7 +168,9 @@ impl MergerfsManager {
             }
 
             let mount_point = PathBuf::from(fields[4]);
-            if mount_point != target {
+            let mount_point_canon =
+                std::fs::canonicalize(&mount_point).unwrap_or_else(|_| mount_point.clone());
+            if mount_point_canon != target_canon {
                 continue;
             }
 
@@ -373,7 +380,11 @@ impl MountManager for MergerfsManager {
 
     async fn is_mounted(&self, target: &Path) -> Result<bool> {
         let mounts = self.parse_proc_mounts().await?;
-        Ok(mounts.iter().any(|m| m.target == target))
+        let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
+        Ok(mounts.iter().any(|m| {
+            let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
+            mt == target_canon
+        }))
     }
 
     async fn list_mounts(&self) -> Result<Vec<MountInfo>> {
