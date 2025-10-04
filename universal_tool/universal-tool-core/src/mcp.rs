@@ -245,8 +245,9 @@ pub fn generate_schema<T: JsonSchema + 'static>() -> Arc<Value> {
             return schema.clone();
         }
 
-        // Generate schema using schemars with draft07
-        let settings = ::schemars::r#gen::SchemaSettings::draft07();
+        // Generate schema using schemars with draft07 and inline subschemas
+        let mut settings = ::schemars::r#gen::SchemaSettings::draft07();
+        settings.inline_subschemas = true;
         let generator = settings.into_generator();
         let schema = generator.into_root_schema_for::<T>();
 
