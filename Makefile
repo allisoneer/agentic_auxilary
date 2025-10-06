@@ -10,7 +10,7 @@
 .DEFAULT_GOAL := help
 
 # Tools to build
-TOOLS := thoughts_tool claudecode_rs universal_tool pr_comments
+TOOLS := thoughts_tool claudecode_rs universal_tool pr_comments gpt5_reasoner
 
 # Colors for output
 RED := \033[0;31m
