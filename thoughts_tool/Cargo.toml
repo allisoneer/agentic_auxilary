@@ -34,6 +34,8 @@ which = "6"
 atomicwrites = "0.4"
 colored = "2"
 regex = "1"
+schemars = "0.8"
+universal-tool-core = { version = "0.2.1", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
 
 # Platform-specific dependencies
 [target.'cfg(unix)'.dependencies]
