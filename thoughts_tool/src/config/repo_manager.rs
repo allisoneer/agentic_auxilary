@@ -579,7 +579,7 @@ mod tests {
         let desired_state = manager.load_desired_state().unwrap().unwrap();
 
         // Verify the mapping
-        assert_eq!(desired_state.was_v1, true);
+        assert!(desired_state.was_v1);
         assert_eq!(desired_state.mount_dirs.context, "context");
         assert_eq!(desired_state.mount_dirs.thoughts, "thoughts");
         assert_eq!(desired_state.mount_dirs.references, "references");
@@ -634,7 +634,7 @@ mod tests {
         };
 
         // Save the v2 config directly using JSON
-        let config_path = paths::get_repo_config_path(&temp_dir.path());
+        let config_path = paths::get_repo_config_path(temp_dir.path());
         std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
         let json = serde_json::to_string_pretty(&v2_config).unwrap();
         std::fs::write(&config_path, json).unwrap();
@@ -643,7 +643,7 @@ mod tests {
         let desired_state = manager.load_desired_state().unwrap().unwrap();
 
         // Verify the loading
-        assert_eq!(desired_state.was_v1, false);
+        assert!(!desired_state.was_v1);
         assert!(desired_state.thoughts_mount.is_some());
         assert_eq!(
             desired_state.thoughts_mount.as_ref().unwrap().remote,

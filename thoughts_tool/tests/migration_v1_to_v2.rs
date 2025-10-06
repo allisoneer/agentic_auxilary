@@ -3,12 +3,12 @@
 use anyhow::Result;
 use serde_json::json;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use tempfile::TempDir;
 use thoughts_tool::{MountSpace, RepoConfigManager};
 
 /// Create a v1 config file in the test repository
-fn create_v1_config(repo_dir: &PathBuf) -> Result<()> {
+fn create_v1_config(repo_dir: &Path) -> Result<()> {
     let config_dir = repo_dir.join(".thoughts");
     fs::create_dir_all(&config_dir)?;
 
