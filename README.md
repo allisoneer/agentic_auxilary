@@ -23,6 +23,13 @@ Rust SDK for programmatically interacting with Claude Code CLI.
 - MCP (Model Context Protocol) support
 - Builder pattern configuration
 
+### 🧠 [GPT-5 Reasoner](gpt5_reasoner/)
+Two-phase prompt optimization tool: optimize with Claude, execute with GPT-5.
+- Directory-based file discovery with smart filtering
+- Dual CLI and MCP interfaces
+- Configurable optimizer model (default: Claude Sonnet 4.5)
+- Automatic binary file detection and deduplication
+
 ## Quick Start
 
 ```bash
@@ -38,6 +45,9 @@ cd universal_tool && cargo build --workspace
 
 # Build claudecode_rs
 cd claudecode_rs && make build
+
+# Build gpt5_reasoner
+cd gpt5_reasoner && make build
 ```
 
 ## Installation
@@ -50,17 +60,27 @@ cargo install thoughts-tool
 ### Use universal_tool in your project
 ```toml
 [dependencies]
-universal-tool-core = "0.1"
-universal-tool-macros = "0.1"
+universal-tool-core = "0.2.1"
+universal-tool-macros = "0.1.4"
 ```
 
 ### Use claudecode in your project
 ```toml
 [dependencies]
-claudecode = "0.1"
+claudecode = "0.1.4"
 ```
 
-Quick example:
+### Install gpt5_reasoner
+```bash
+cargo install gpt5_reasoner
+```
+
+### Install pr_comments
+```bash
+cargo install pr_comments
+```
+
+Quick example (ClaudeCode):
 ```rust
 use claudecode::{Client, SessionConfig};
 
