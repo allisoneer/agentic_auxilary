@@ -15,9 +15,9 @@ use crate::{
 use crate::optimizer::parser::{FileGroup, OptimizerOutput};
 use async_openai::types::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use universal_tool_core::prelude::*;
 use walkdir::WalkDir;
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FileMeta {
@@ -64,7 +64,9 @@ impl Gpt5Reasoner {
         &self,
         prompt: String,
         files: Vec<FileMeta>,
-        #[universal_tool_param(description = "Directories to expand into files before optimization")]
+        #[universal_tool_param(
+            description = "Directories to expand into files before optimization"
+        )]
         directories: Option<Vec<DirectoryMeta>>,
         prompt_type: PromptType,
     ) -> std::result::Result<String, ToolError> {
@@ -83,7 +85,10 @@ fn ext_matches(filter: &Option<Vec<String>>, path: &std::path::Path) -> bool {
                 None => return false, // skip files with no extension when a filter is provided
             };
             let file_ext_norm = file_ext.trim_start_matches('.').to_ascii_lowercase();
-            exts.iter().any(|e| e.trim_start_matches('.').eq_ignore_ascii_case(&file_ext_norm))
+            exts.iter().any(|e| {
+                e.trim_start_matches('.')
+                    .eq_ignore_ascii_case(&file_ext_norm)
+            })
         }
     }
 }
@@ -124,9 +129,10 @@ fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<Vec<F
             }
 
             let entry = entry.map_err(|e| {
-                ReasonerError::Io(std::io::Error::other(
-                    format!("Walk error in {}: {}", dir.directory_path, e)
-                ))
+                ReasonerError::Io(std::io::Error::other(format!(
+                    "Walk error in {}: {}",
+                    dir.directory_path, e
+                )))
             })?;
 
             if !entry.file_type().is_file() {
@@ -206,8 +212,7 @@ pub async fn gpt5_reasoner_impl(
 ) -> std::result::Result<String, ToolError> {
     // Expand directories to files BEFORE optimizer sees them
     if let Some(dirs) = directories.as_ref() {
-        let mut expanded = expand_directories_to_filemeta(dirs)
-            .map_err(ToolError::from)?;
+        let mut expanded = expand_directories_to_filemeta(dirs).map_err(ToolError::from)?;
         files.append(&mut expanded);
 
         // Dedup (by filename) to avoid duplicates from files + directories
@@ -618,8 +623,8 @@ mod model_selection_tests {
 #[cfg(test)]
 mod directory_expansion_tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     fn write(p: &std::path::Path, content: &str) {
         fs::write(p, content).unwrap();
@@ -657,9 +662,9 @@ mod directory_expansion_tests {
         let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
 
         assert!(names.iter().any(|p| p.ends_with("a.rs")));
-        assert!(!names.iter().any(|p| p.ends_with("b.txt")));      // filtered by ext
+        assert!(!names.iter().any(|p| p.ends_with("b.txt"))); // filtered by ext
         assert!(!names.iter().any(|p| p.ends_with(".hidden.rs"))); // hidden excluded
-        assert!(!names.iter().any(|p| p.ends_with("c.rs")));       // non-recursive
+        assert!(!names.iter().any(|p| p.ends_with("c.rs"))); // non-recursive
     }
 
     #[test]
@@ -750,7 +755,10 @@ mod directory_expansion_tests {
         let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
 
         assert!(names.iter().any(|p| p.ends_with("visible.rs")));
-        assert!(!names.iter().any(|p| p.contains(".hidden")), "hidden directory should be pruned");
+        assert!(
+            !names.iter().any(|p| p.contains(".hidden")),
+            "hidden directory should be pruned"
+        );
     }
 
     #[test]
@@ -785,7 +793,11 @@ mod directory_expansion_tests {
         }];
 
         let files = expand_directories_to_filemeta(&dirs).unwrap();
-        assert_eq!(files.len(), 2, "empty extensions vec should include all files");
+        assert_eq!(
+            files.len(),
+            2,
+            "empty extensions vec should include all files"
+        );
     }
 
     #[test]
