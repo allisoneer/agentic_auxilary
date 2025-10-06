@@ -60,6 +60,44 @@ impl From<ReasonerError> for ToolError {
     }
 }
 
+/// Determine if an OpenAI error is retryable at the application level
+///
+/// The async-openai library already retries 5xx and 429 errors with exponential backoff.
+/// This function identifies errors that are NOT retried by the library but are safe to retry.
+///
+/// Retryable errors:
+/// - Reqwest: Network/transport failures (timeouts, DNS, connection reset, TLS)
+/// - StreamError: Network-layer streaming issues (not used for non-streaming, but conservative)
+/// - JSONDeserialize: Rare parsing glitches that may resolve on retry
+///
+/// Non-retryable errors:
+/// - ApiError: Library already handled 5xx/429; remaining are typically permanent
+/// - InvalidArgument: Client-side validation errors
+/// - FileSaveError/FileReadError: Local filesystem issues
+pub fn is_retryable_app_level(e: &async_openai::error::OpenAIError) -> bool {
+    use async_openai::error::OpenAIError;
+    match e {
+        // Transient network failures - safe to retry
+        OpenAIError::Reqwest(_) => true,
+
+        // Stream errors - not expected for non-streaming, but conservative to retry
+        OpenAIError::StreamError(_) => true,
+
+        // Rare JSON deserialization glitches - defensive retry during unstable period
+        OpenAIError::JSONDeserialize(_) => true,
+
+        // Do NOT retry ApiError - library already retried 5xx/429
+        // Anything left is likely permanent (invalid request, insufficient_quota, etc.)
+        OpenAIError::ApiError(_) => false,
+
+        // Client-side validation errors
+        OpenAIError::InvalidArgument(_) => false,
+
+        // Local file operation errors
+        OpenAIError::FileSaveError(_) | OpenAIError::FileReadError(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,5 +108,16 @@ mod tests {
         let tool_err: ToolError = err.into();
         // Can't directly check ErrorCode since it's not public, but we can check the conversion works
         assert!(tool_err.to_string().contains("TEST_VAR"));
+    }
+
+    #[test]
+    fn test_is_retryable_app_level_exists() {
+        use async_openai::error::OpenAIError;
+        // Compile-time check that function exists and accepts OpenAIError reference
+        // Cannot easily construct real OpenAIError variants without internals,
+        // but this ensures the function signature is correct
+        fn _type_check(e: &OpenAIError) -> bool {
+            super::is_retryable_app_level(e)
+        }
     }
 }

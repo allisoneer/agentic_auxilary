@@ -100,36 +100,76 @@ pub async fn gpt5_reasoner_impl(
 
     enforce_limit(&final_prompt).map_err(ToolError::from)?;
 
-    // Execute GPT-5
-    tracing::debug!("Executing final prompt with openai/gpt-5 at high reasoning effort");
-    let req = CreateChatCompletionRequestArgs::default()
-        .model("openai/gpt-5")
-        .messages([ChatCompletionRequestMessage::User(
-            ChatCompletionRequestUserMessageArgs::default()
-                .content(final_prompt)
-                .build()
-                .unwrap(),
-        )])
-        .reasoning_effort(ReasoningEffort::High)
-        .temperature(0.2)
-        .build()
-        .map_err(|e| ToolError::from(ReasonerError::OpenAI(e)))?;
+    // Execute GPT-5 with application-level retries for network/transport errors
+    const GPT5_RETRIES: usize = 1;
+    const GPT5_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
-    let resp = client
-        .client
-        .chat()
-        .create(req)
-        .await
-        .map_err(|e| ToolError::from(ReasonerError::from(e)))?;
-    let content = resp
-        .choices
-        .first()
-        .and_then(|c| c.message.content.clone())
-        .ok_or_else(|| {
-            ToolError::new(
-                universal_tool_core::error::ErrorCode::ExecutionFailed,
-                "GPT-5 returned empty content",
-            )
-        })?;
-    Ok(content)
+    tracing::debug!("Executing final prompt with openai/gpt-5 at high reasoning effort");
+
+    for attempt in 0..=GPT5_RETRIES {
+        if attempt > 0 {
+            tracing::warn!("GPT-5 API attempt {} of {}", attempt + 1, GPT5_RETRIES + 1);
+            tokio::time::sleep(GPT5_DELAY).await;
+        }
+
+        // Build request inside the loop; clone final_prompt to keep ownership
+        let req = CreateChatCompletionRequestArgs::default()
+            .model("openai/gpt-5")
+            .messages([ChatCompletionRequestMessage::User(
+                ChatCompletionRequestUserMessageArgs::default()
+                    .content(final_prompt.clone())
+                    .build()
+                    .map_err(|e| ToolError::from(ReasonerError::from(e)))?,
+            )])
+            .reasoning_effort(ReasoningEffort::High)
+            .temperature(0.2)
+            .build()
+            .map_err(|e| ToolError::from(ReasonerError::from(e)))?;
+
+        let start = std::time::Instant::now();
+        match client.client.chat().create(req).await {
+            Ok(resp) => {
+                let duration = start.elapsed();
+                tracing::debug!("GPT-5 API succeeded in {:?}", duration);
+
+                let content = resp
+                    .choices
+                    .first()
+                    .and_then(|c| c.message.content.clone())
+                    .ok_or_else(|| {
+                        ToolError::new(
+                            universal_tool_core::error::ErrorCode::ExecutionFailed,
+                            "GPT-5 returned empty content",
+                        )
+                    })?;
+
+                return Ok(content);
+            }
+            Err(e) => {
+                let retryable = crate::errors::is_retryable_app_level(&e);
+                if attempt < GPT5_RETRIES && retryable {
+                    tracing::warn!("GPT-5 call failed with retryable error: {e}; retrying...");
+                    continue;
+                }
+
+                // Not retryable or retries exhausted
+                if retryable {
+                    tracing::error!(
+                        "GPT-5 call failed after {} attempts with retryable error: {}",
+                        attempt + 1,
+                        e
+                    );
+                } else {
+                    tracing::error!("GPT-5 call failed with non-retryable error: {}", e);
+                }
+                return Err(ToolError::from(ReasonerError::from(e)));
+            }
+        }
+    }
+
+    // Should never reach here due to loop logic, but provide a defensive error
+    Err(ToolError::new(
+        universal_tool_core::error::ErrorCode::ExecutionFailed,
+        "GPT-5 failed after all retries",
+    ))
 }
