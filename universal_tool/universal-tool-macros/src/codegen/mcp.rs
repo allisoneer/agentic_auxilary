@@ -234,7 +234,9 @@ fn generate_param_schema(param: &ParamDef) -> TokenStream {
 
     quote! {
         {
-            let mut schema_gen = ::universal_tool_core::schemars::r#gen::SchemaGenerator::default();
+            let mut settings = ::universal_tool_core::schemars::r#gen::SchemaSettings::draft07();
+            settings.inline_subschemas = true;
+            let mut schema_gen = settings.into_generator();
             let schema = <#param_type as ::universal_tool_core::JsonSchema>::json_schema(&mut schema_gen);
             let mut json_schema = ::serde_json::to_value(&schema).unwrap_or_else(|_| ::serde_json::json!({"type": "string"}));
             if let ::serde_json::Value::Object(ref mut map) = json_schema {
