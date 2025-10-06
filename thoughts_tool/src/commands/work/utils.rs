@@ -36,7 +36,7 @@ mod tests {
         // Week should be 2 digits
         assert_eq!(parts[2].len(), 2);
         let week: u32 = parts[2].parse().unwrap();
-        assert!(week >= 1 && week <= 53);
+        assert!((1..=53).contains(&week));
     }
 
     #[test]
