@@ -15,7 +15,9 @@ use crate::{
 use crate::optimizer::parser::{FileGroup, OptimizerOutput};
 use async_openai::types::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use universal_tool_core::prelude::*;
+use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FileMeta {
@@ -28,6 +30,25 @@ pub struct FileMeta {
 pub enum PromptType {
     Reasoning,
     Plan,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct DirectoryMeta {
+    pub directory_path: String,
+    pub description: String,
+    #[serde(default)]
+    pub extensions: Option<Vec<String>>,
+    #[serde(default)]
+    pub recursive: bool,
+    #[serde(default)]
+    pub include_hidden: bool,
+    /// Maximum number of files to include from this directory (default: 1000)
+    #[serde(default = "default_max_files")]
+    pub max_files: usize,
+}
+
+fn default_max_files() -> usize {
+    1000
 }
 
 #[derive(Clone, Default)]
@@ -43,18 +64,163 @@ impl Gpt5Reasoner {
         &self,
         prompt: String,
         files: Vec<FileMeta>,
+        #[universal_tool_param(
+            description = "Directories to expand into files before optimization"
+        )]
+        directories: Option<Vec<DirectoryMeta>>,
         prompt_type: PromptType,
     ) -> std::result::Result<String, ToolError> {
-        gpt5_reasoner_impl(prompt, files, None, prompt_type).await
+        gpt5_reasoner_impl(prompt, files, directories, None, prompt_type).await
     }
+}
+
+// Helper: extension normalization and check
+fn ext_matches(filter: &Option<Vec<String>>, path: &std::path::Path) -> bool {
+    match filter {
+        None => true,
+        Some(exts) if exts.is_empty() => true,
+        Some(exts) => {
+            let file_ext = match path.extension() {
+                Some(e) => e.to_string_lossy().to_string(),
+                None => return false, // skip files with no extension when a filter is provided
+            };
+            let file_ext_norm = file_ext.trim_start_matches('.').to_ascii_lowercase();
+            exts.iter().any(|e| {
+                e.trim_start_matches('.')
+                    .eq_ignore_ascii_case(&file_ext_norm)
+            })
+        }
+    }
+}
+
+// Helper: expand directories to FileMeta
+fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<Vec<FileMeta>> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::<String>::new();
+
+    for dir in directories {
+        // Build walker with filter_entry to prune hidden directories when include_hidden=false
+        let walker = WalkDir::new(&dir.directory_path)
+            .min_depth(1)
+            .max_depth(if dir.recursive { usize::MAX } else { 1 })
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|e| {
+                if dir.include_hidden {
+                    return true;
+                }
+                let name = e.file_name().to_string_lossy();
+                !name.starts_with('.')
+            });
+
+        let mut dir_file_count = 0;
+        let mut skipped_binary = 0;
+        let mut skipped_other = 0;
+
+        for entry in walker {
+            // Check max_files cap for this directory
+            if dir_file_count >= dir.max_files {
+                tracing::warn!(
+                    "Directory '{}' hit max_files limit of {}; stopping traversal",
+                    dir.directory_path,
+                    dir.max_files
+                );
+                break;
+            }
+
+            let entry = entry.map_err(|e| {
+                ReasonerError::Io(std::io::Error::other(format!(
+                    "Walk error in {}: {}",
+                    dir.directory_path, e
+                )))
+            })?;
+
+            if !entry.file_type().is_file() {
+                continue;
+            }
+
+            let file_name = entry.file_name().to_string_lossy();
+            if !dir.include_hidden && file_name.starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            if !ext_matches(&dir.extensions, path) {
+                skipped_other += 1;
+                continue;
+            }
+
+            // Skip binary files - attempt to read as UTF-8
+            match std::fs::read_to_string(path) {
+                Ok(_) => {
+                    // File is valid UTF-8, continue processing
+                }
+                Err(_) => {
+                    // File is binary or not UTF-8 - skip it
+                    skipped_binary += 1;
+                    tracing::debug!("Skipping binary/non-UTF-8 file: {}", path.display());
+                    continue;
+                }
+            }
+
+            // Normalize path to absolute without resolving symlinks
+            let path_str = if path.is_absolute() {
+                path.to_string_lossy().to_string()
+            } else {
+                std::env::current_dir()
+                    .map(|cwd| cwd.join(path))
+                    .unwrap_or_else(|_| path.to_path_buf())
+                    .to_string_lossy()
+                    .to_string()
+            };
+
+            if seen.insert(path_str.clone()) {
+                out.push(FileMeta {
+                    filename: path_str,
+                    description: dir.description.clone(),
+                });
+                dir_file_count += 1;
+            }
+        }
+
+        tracing::debug!(
+            "Expanded directory '{}': {} files (skipped {} binary, {} filtered)",
+            dir.directory_path,
+            dir_file_count,
+            skipped_binary,
+            skipped_other
+        );
+    }
+
+    tracing::info!("Total files from directories: {}", out.len());
+    Ok(out)
+}
+
+// Helper: select optimizer model with precedence: param > env > default
+fn select_optimizer_model(optimizer_model: Option<String>) -> String {
+    optimizer_model
+        .or_else(|| std::env::var("OPTIMIZER_MODEL").ok())
+        .unwrap_or_else(|| "anthropic/claude-sonnet-4.5".to_string())
 }
 
 pub async fn gpt5_reasoner_impl(
     prompt: String,
-    mut files: Vec<FileMeta>, // make mutable
+    mut files: Vec<FileMeta>,
+    directories: Option<Vec<DirectoryMeta>>,
     optimizer_model: Option<String>,
     prompt_type: PromptType,
 ) -> std::result::Result<String, ToolError> {
+    // Expand directories to files BEFORE optimizer sees them
+    if let Some(dirs) = directories.as_ref() {
+        let mut expanded = expand_directories_to_filemeta(dirs).map_err(ToolError::from)?;
+        files.append(&mut expanded);
+
+        // Dedup (by filename) to avoid duplicates from files + directories
+        // Note: paths are normalized to absolute in expand_directories_to_filemeta
+        let mut seen = HashSet::<String>::new();
+        files.retain(|f| seen.insert(f.filename.clone()));
+    }
+
     // Auto-inject plan_structure.md for Plan prompts (before optimizer)
     maybe_inject_plan_structure_meta(&prompt_type, &mut files);
 
@@ -62,10 +228,8 @@ pub async fn gpt5_reasoner_impl(
     let client = OrClient::from_env().map_err(ToolError::from)?;
 
     // Step 1: optimize
-    // Get optimizer model from parameter or environment, default to "openai/gpt-5"
-    let opt_model = optimizer_model
-        .or_else(|| std::env::var("OPTIMIZER_MODEL").ok())
-        .unwrap_or_else(|| "openai/gpt-5".to_string());
+    // Default changed to anthropic/claude-sonnet-4.5, preserving param/env override order
+    let opt_model = select_optimizer_model(optimizer_model);
 
     let raw = call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files)
         .await
@@ -393,5 +557,269 @@ file_groups:
         // Verify plan structure is present
         assert!(final_prompt.contains("# [Feature/Task Name] Implementation Plan"));
         assert!(final_prompt.contains("## Overview"));
+    }
+}
+
+#[cfg(test)]
+mod model_selection_tests {
+    use super::*;
+    use serial_test::serial;
+
+    struct EnvGuard {
+        key: &'static str,
+        prev: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, val: &str) -> Self {
+            let prev = std::env::var(key).ok();
+            // SAFETY: Tests are serialized via #[serial(env)], preventing concurrent access
+            unsafe { std::env::set_var(key, val) };
+            Self { key, prev }
+        }
+        fn remove(key: &'static str) -> Self {
+            let prev = std::env::var(key).ok();
+            // SAFETY: Tests are serialized via #[serial(env)], preventing concurrent access
+            unsafe { std::env::remove_var(key) };
+            Self { key, prev }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: Tests are serialized via #[serial(env)], preventing concurrent access
+            match &self.prev {
+                Some(v) => unsafe { std::env::set_var(self.key, v) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
+        }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn test_default_model_when_no_param_no_env() {
+        let _g = EnvGuard::remove("OPTIMIZER_MODEL");
+        let model = select_optimizer_model(None);
+        assert_eq!(model, "anthropic/claude-sonnet-4.5");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn test_env_overrides_default() {
+        let _g = EnvGuard::set("OPTIMIZER_MODEL", "test/model-from-env");
+        let model = select_optimizer_model(None);
+        assert_eq!(model, "test/model-from-env");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn test_param_overrides_env_and_default() {
+        let _g = EnvGuard::set("OPTIMIZER_MODEL", "test/env-model");
+        let model = select_optimizer_model(Some("test/param-model".into()));
+        assert_eq!(model, "test/param-model");
+    }
+}
+
+#[cfg(test)]
+mod directory_expansion_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write(p: &std::path::Path, content: &str) {
+        fs::write(p, content).unwrap();
+    }
+
+    #[test]
+    fn test_expand_non_recursive_ext_filter_and_hidden() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+
+        // Files at root
+        let f_rs = root.join("a.rs");
+        let f_txt = root.join("b.txt");
+        let f_hidden = root.join(".hidden.rs");
+        write(&f_rs, "fn a() {}");
+        write(&f_txt, "hello");
+        write(&f_hidden, "hidden");
+
+        // Subdir with a file (should be skipped when non-recursive)
+        let sub = root.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        let sub_rs = sub.join("c.rs");
+        write(&sub_rs, "fn c() {}");
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: root.to_string_lossy().to_string(),
+            description: "test".into(),
+            extensions: Some(vec!["rs".into(), ".RS".into()]), // case-insensitive, dot/no-dot
+            recursive: false,
+            include_hidden: false,
+            max_files: 1000,
+        }];
+
+        let files = expand_directories_to_filemeta(&dirs).unwrap();
+        let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
+
+        assert!(names.iter().any(|p| p.ends_with("a.rs")));
+        assert!(!names.iter().any(|p| p.ends_with("b.txt"))); // filtered by ext
+        assert!(!names.iter().any(|p| p.ends_with(".hidden.rs"))); // hidden excluded
+        assert!(!names.iter().any(|p| p.ends_with("c.rs"))); // non-recursive
+    }
+
+    #[test]
+    fn test_expand_recursive_include_hidden_and_no_filter() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+
+        let f1 = root.join(".hidden.md");
+        let f2 = root.join("readme.MD");
+        let sub = root.join("src");
+        fs::create_dir_all(&sub).unwrap();
+        let f3 = sub.join("lib.Rs");
+        write(&f1, "h");
+        write(&f2, "r");
+        write(&f3, "l");
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: root.to_string_lossy().to_string(),
+            description: "all".into(),
+            extensions: None, // no filter
+            recursive: true,
+            include_hidden: true,
+            max_files: 1000,
+        }];
+
+        let files = expand_directories_to_filemeta(&dirs).unwrap();
+        let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
+        assert!(names.iter().any(|p| p.ends_with(".hidden.md")));
+        assert!(names.iter().any(|p| p.ends_with("readme.MD")));
+        assert!(names.iter().any(|p| p.ends_with("lib.Rs")));
+    }
+
+    #[test]
+    fn test_expand_dedup_across_directories() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let f = root.join("x.rs");
+        fs::write(&f, "//").unwrap();
+
+        let dirs = vec![
+            DirectoryMeta {
+                directory_path: root.to_string_lossy().to_string(),
+                description: "d1".into(),
+                extensions: Some(vec!["rs".into()]),
+                recursive: false,
+                include_hidden: false,
+                max_files: 1000,
+            },
+            DirectoryMeta {
+                directory_path: root.to_string_lossy().to_string(),
+                description: "d2".into(),
+                extensions: Some(vec![".rs".into()]),
+                recursive: false,
+                include_hidden: false,
+                max_files: 1000,
+            },
+        ];
+
+        let files = expand_directories_to_filemeta(&dirs).unwrap();
+        assert_eq!(files.len(), 1, "should dedup same path across entries");
+    }
+
+    #[test]
+    fn test_hidden_directory_pruned() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+
+        // Hidden directory with file inside
+        let hidden_dir = root.join(".hidden");
+        fs::create_dir_all(&hidden_dir).unwrap();
+        let hidden_file = hidden_dir.join("secret.rs");
+        write(&hidden_file, "fn secret() {}");
+
+        // Visible file at root
+        let visible = root.join("visible.rs");
+        write(&visible, "fn visible() {}");
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: root.to_string_lossy().to_string(),
+            description: "test".into(),
+            extensions: Some(vec!["rs".into()]),
+            recursive: true,
+            include_hidden: false,
+            max_files: 1000,
+        }];
+
+        let files = expand_directories_to_filemeta(&dirs).unwrap();
+        let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
+
+        assert!(names.iter().any(|p| p.ends_with("visible.rs")));
+        assert!(
+            !names.iter().any(|p| p.contains(".hidden")),
+            "hidden directory should be pruned"
+        );
+    }
+
+    #[test]
+    fn test_nonexistent_directory() {
+        let dirs = vec![DirectoryMeta {
+            directory_path: "/nonexistent/path/12345".into(),
+            description: "test".into(),
+            extensions: None,
+            recursive: false,
+            include_hidden: false,
+            max_files: 1000,
+        }];
+
+        let result = expand_directories_to_filemeta(&dirs);
+        assert!(result.is_err(), "should error on nonexistent directory");
+    }
+
+    #[test]
+    fn test_empty_extensions_vec_is_no_filter() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        write(&root.join("a.rs"), "rs");
+        write(&root.join("b.txt"), "txt");
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: root.to_string_lossy().to_string(),
+            description: "test".into(),
+            extensions: Some(vec![]), // empty = no filter
+            recursive: false,
+            include_hidden: false,
+            max_files: 1000,
+        }];
+
+        let files = expand_directories_to_filemeta(&dirs).unwrap();
+        assert_eq!(
+            files.len(),
+            2,
+            "empty extensions vec should include all files"
+        );
+    }
+
+    #[test]
+    fn test_max_files_cap() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+
+        // Create 10 files
+        for i in 0..10 {
+            write(&root.join(format!("file{}.txt", i)), "content");
+        }
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: root.to_string_lossy().to_string(),
+            description: "test".into(),
+            extensions: None,
+            recursive: false,
+            include_hidden: false,
+            max_files: 5, // Cap at 5
+        }];
+
+        let files = expand_directories_to_filemeta(&dirs).unwrap();
+        assert_eq!(files.len(), 5, "should stop at max_files cap");
     }
 }

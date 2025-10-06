@@ -1059,6 +1059,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "serial_test",
  "tempfile",
  "thiserror 2.0.16",
  "tiktoken-rs",
@@ -1067,6 +1068,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "universal-tool-core 0.2.1",
+ "walkdir",
 ]
 
 [[package]]
