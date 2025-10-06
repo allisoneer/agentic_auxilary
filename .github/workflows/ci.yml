@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments]
+        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments]
+        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner]
     steps:
       - uses: actions/checkout@v5
         with:

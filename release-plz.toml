@@ -34,3 +34,9 @@ release = true
 name = "universal-tool-integration-tests"
 publish = false
 
+[[package]]
+name = "gpt5_reasoner"
+changelog_path = "gpt5_reasoner/CHANGELOG.md"
+git_tag_name = "gpt5_reasoner-v{{ version }}"
+release = true
+
