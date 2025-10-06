@@ -3039,6 +3039,7 @@ dependencies = [
  "pretty_assertions",
  "regex",
  "rustc_version",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "serial_test",
@@ -3047,6 +3048,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "universal-tool-core 0.2.1",
  "which",
 ]
 
