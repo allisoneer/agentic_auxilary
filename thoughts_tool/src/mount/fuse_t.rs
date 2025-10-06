@@ -24,9 +24,12 @@ impl FuseTManager {
     pub fn new(platform_info: MacOSInfo) -> Self {
         // Platform detection already verified FUSE-T or macFUSE exists
         // Still need to check for unionfs-fuse as it's a separate tool
-        let unionfs_path = which::which("unionfs-fuse")
-            .or_else(|_| which::which("unionfs"))
-            .ok();
+        // Prefer detector-provided path for consistency; fall back to which() if not provided
+        let unionfs_path = platform_info
+            .unionfs_path
+            .clone()
+            .or_else(|| which::which("unionfs-fuse").ok())
+            .or_else(|| which::which("unionfs").ok());
 
         Self {
             platform_info,
@@ -121,58 +124,54 @@ impl FuseTManager {
         Ok((unionfs_path.display().to_string(), args))
     }
 
-    /// Parse mount command output to find active mounts
-    async fn parse_mount_output(&self) -> Result<Vec<MountInfo>> {
-        let output = tokio::process::Command::new(MOUNT_CMD).output().await?;
-
-        if !output.status.success() {
-            return Err(ThoughtsError::MountOperationFailed {
-                message: "Failed to list mounts".to_string(),
-            });
-        }
-
-        // Load mount cache to get source information
-        #[cfg(target_os = "macos")]
-        let mount_cache = self.load_mount_cache().await.ok().flatten();
-
+    /// Parse mount output text into MountInfo structures
+    ///
+    /// This is a pure function that takes mount command output as a string
+    /// and returns parsed mount information. Separated from parse_mount_output()
+    /// to enable unit testing without async I/O or actual mount commands.
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn parse_mount_text(
+        &self,
+        text: &str,
+        mount_cache: Option<&super::types::MountStateCache>,
+    ) -> Vec<MountInfo> {
         let mut mounts = Vec::new();
-        let output_str = String::from_utf8_lossy(&output.stdout);
 
-        for line in output_str.lines() {
-            // Format: unionfs-fuse on /path/to/mount (fuse-t, local, synchronous)
-            // or: unionfs on /path/to/mount (macfuse, local, synchronous)
+        for line in text.lines() {
+            // Format examples:
+            // FUSE-T:   fuse-t:/VolumeName on /mount/point (nfs, nodev, nosuid, mounted by user)
+            // macFUSE:  unionfs on /mount/point (macfuse, local, synchronous)
+            // osxfuse:  unionfs on /mount/point (osxfuse, local, nosuid, synchronous)
 
-            // Parse the mount line
             if let Some(on_pos) = line.find(" on ") {
                 let device = &line[..on_pos];
-
-                // Only process unionfs mounts
-                if !device.contains("unionfs") {
-                    continue;
-                }
                 let rest = &line[on_pos + 4..];
 
                 if let Some(paren_pos) = rest.find(" (") {
                     let mount_point = &rest[..paren_pos];
-                    let options_str = &rest[paren_pos + 2..rest.len() - 1];
+                    let options_str = rest[paren_pos + 2..].trim_end_matches(')');
                     let options: Vec<String> =
                         options_str.split(", ").map(|s| s.to_string()).collect();
 
+                    // Determine relevance: unionfs (macFUSE), FUSE-T devices, or entries in our mount cache
+                    let relevant = device.contains("unionfs")
+                        || device.starts_with("fuse-t:")
+                        || mount_cache
+                            .and_then(|c| c.mounts.get(&PathBuf::from(mount_point)))
+                            .is_some();
+
+                    if !relevant {
+                        continue;
+                    }
+
                     // Get sources from cache if available, otherwise use placeholder
-                    let sources = {
-                        #[cfg(target_os = "macos")]
-                        if let Some(ref cache) = mount_cache {
-                            if let Some(cached_info) = cache.mounts.get(&PathBuf::from(mount_point))
-                            {
-                                cached_info.sources.clone()
-                            } else {
-                                vec![PathBuf::from("<merged>")]
-                            }
+                    let sources = if let Some(cache) = mount_cache {
+                        if let Some(cached) = cache.mounts.get(&PathBuf::from(mount_point)) {
+                            cached.sources.clone()
                         } else {
                             vec![PathBuf::from("<merged>")]
                         }
-
-                        #[cfg(not(target_os = "macos"))]
+                    } else {
                         vec![PathBuf::from("<merged>")]
                     };
 
@@ -199,7 +198,25 @@ impl FuseTManager {
             }
         }
 
-        Ok(mounts)
+        mounts
+    }
+
+    /// Parse mount command output to find active mounts (refactored)
+    async fn parse_mount_output(&self) -> Result<Vec<MountInfo>> {
+        let output = tokio::process::Command::new(MOUNT_CMD).output().await?;
+
+        if !output.status.success() {
+            return Err(ThoughtsError::MountOperationFailed {
+                message: "Failed to list mounts".to_string(),
+            });
+        }
+
+        // Load mount cache to get source information
+        #[cfg(target_os = "macos")]
+        let mount_cache = self.load_mount_cache().await.ok().flatten();
+
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        Ok(self.parse_mount_text(&output_str, mount_cache.as_ref()))
     }
 
     /// Get volume information using diskutil
@@ -384,6 +401,25 @@ impl MountManager for FuseTManager {
                     return Ok(());
                 } else {
                     warn!("Mount command succeeded but mount not found");
+                    // Show diagnostic mount output for the target
+                    if let Ok(out) = tokio::process::Command::new(MOUNT_CMD).output().await {
+                        if out.status.success() {
+                            let out_str = String::from_utf8_lossy(&out.stdout);
+                            let target_str = target.display().to_string();
+                            let relevant: Vec<&str> = out_str
+                                .lines()
+                                .filter(|l| l.contains(" on ") && l.contains(&target_str))
+                                .collect();
+
+                            if !relevant.is_empty() {
+                                warn!(
+                                    "Mount verification diagnostics for {}:\n    {}",
+                                    target.display(),
+                                    relevant.join("\n    ")
+                                );
+                            }
+                        }
+                    }
                 }
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -466,12 +502,35 @@ impl MountManager for FuseTManager {
     }
 
     async fn is_mounted(&self, target: &Path) -> Result<bool> {
-        let mounts = self.parse_mount_output().await?;
+        // Device-agnostic approach: check raw mount output for mount point
+        // This avoids relying on device name filtering and works for any FUSE implementation
+        let output = tokio::process::Command::new(MOUNT_CMD).output().await?;
+
+        if !output.status.success() {
+            return Ok(false);
+        }
+
         let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
-        Ok(mounts.iter().any(|m| {
-            let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
-            mt == target_canon
-        }))
+
+        let text = String::from_utf8_lossy(&output.stdout);
+
+        // Look for lines with " on <target>" pattern
+        Ok(text
+            .lines()
+            .filter(|line| line.contains(" on "))
+            .any(|line| {
+                if let Some(on_pos) = line.find(" on ") {
+                    let rest = &line[on_pos + 4..];
+                    if let Some(paren_pos) = rest.find(" (") {
+                        let mount_point = rest[..paren_pos].trim();
+                        // Canonicalize the mount point from output for comparison
+                        let mount_canon = std::fs::canonicalize(mount_point)
+                            .unwrap_or_else(|_| PathBuf::from(mount_point));
+                        return mount_canon == target_canon;
+                    }
+                }
+                false
+            }))
     }
 
     async fn list_mounts(&self) -> Result<Vec<MountInfo>> {
@@ -531,6 +590,39 @@ impl MountManager for FuseTManager {
                 return Err(ThoughtsError::MountOperationFailed {
                     message: format!("unionfs-fuse at {} is not executable", path.display()),
                 });
+            }
+        }
+
+        // Add after executable permission check, before final info!() in check_health():
+        #[cfg(target_os = "macos")]
+        if let Some(path) = &self.unionfs_path {
+            // Best-effort: use otool -L to inspect dynamic library linkage
+            // This helps detect the common libfuse.2.dylib symlink issue
+            if which::which("otool").is_ok() {
+                let path_str = path.to_str().unwrap_or_default();
+                if let Ok(out) = tokio::process::Command::new("otool")
+                    .args(&["-L", path_str])
+                    .output()
+                    .await
+                {
+                    if out.status.success() {
+                        let libs = String::from_utf8_lossy(&out.stdout);
+                        // Check if linked to libfuse.2.dylib and whether it exists
+                        if libs.contains("libfuse.2.dylib") {
+                            let fuse2 = std::path::Path::new("/usr/local/lib/libfuse.2.dylib");
+                            let fuse_t = std::path::Path::new("/usr/local/lib/libfuse-t.dylib");
+
+                            if !fuse2.exists() && fuse_t.exists() {
+                                warn!(
+                                    "unionfs-fuse requires /usr/local/lib/libfuse.2.dylib but it was not found.\n\
+                                     FUSE-T installs libfuse-t.dylib instead. Create a symlink to fix this:\n\
+                                     \n\
+                                     sudo ln -sf /usr/local/lib/libfuse-t.dylib /usr/local/lib/libfuse.2.dylib"
+                                );
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -597,5 +689,103 @@ mod tests {
         let sources = vec![PathBuf::from("/this/does/not/exist")];
         let result = manager.mount(&sources, target, &options).await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_fuse_t_mount() {
+        let manager = FuseTManager::new(test_platform_info());
+        let text =
+            "fuse-t:/Thoughts on /tmp/test-mount (nfs, nodev, nosuid, mounted by testuser)\n";
+        let mounts = manager.parse_mount_text(text, None);
+
+        assert_eq!(mounts.len(), 1, "Should parse one FUSE-T mount");
+        assert_eq!(mounts[0].target, PathBuf::from("/tmp/test-mount"));
+
+        if let MountMetadata::MacOS {
+            disk_identifier, ..
+        } = &mounts[0].metadata
+        {
+            assert_eq!(disk_identifier.as_deref(), Some("fuse-t:/Thoughts"));
+        } else {
+            panic!("Expected MacOS metadata");
+        }
+    }
+
+    #[test]
+    fn test_parse_macfuse_mount() {
+        let manager = FuseTManager::new(test_platform_info());
+        let text = "unionfs on /tmp/test-mount (macfuse, local, synchronous)\n";
+        let mounts = manager.parse_mount_text(text, None);
+
+        assert_eq!(mounts.len(), 1, "Should parse one macFUSE mount");
+        assert_eq!(mounts[0].target, PathBuf::from("/tmp/test-mount"));
+        assert_eq!(mounts[0].fs_type, "macfuse");
+    }
+
+    #[test]
+    fn test_parse_osxfuse_mount() {
+        let manager = FuseTManager::new(test_platform_info());
+        let text = "unionfs on /tmp/test-mount (osxfuse, local, nosuid, synchronous)\n";
+        let mounts = manager.parse_mount_text(text, None);
+
+        assert_eq!(mounts.len(), 1, "Should parse one osxfuse mount");
+        assert_eq!(mounts[0].target, PathBuf::from("/tmp/test-mount"));
+        assert_eq!(mounts[0].fs_type, "osxfuse");
+    }
+
+    #[test]
+    fn test_parse_ignores_other_mounts() {
+        let manager = FuseTManager::new(test_platform_info());
+        let text = "\
+/dev/disk3s1s1 on / (apfs, local, read-only, journaled)
+map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
+//server/share on /Volumes/share (smbfs, nodev, nosuid, mounted by user)
+";
+        let mounts = manager.parse_mount_text(text, None);
+
+        assert!(
+            mounts.is_empty(),
+            "Should ignore non-unionfs/non-fuse-t mounts"
+        );
+    }
+
+    #[test]
+    fn test_regression_issue_19_fuse_t_detected() {
+        // Regression test for GitHub Issue #19
+        // Ensure FUSE-T mount format is recognized to prevent duplicate mounts
+        let manager = FuseTManager::new(test_platform_info());
+        let text = "fuse-t:/Thoughts on /path/to/mount (nfs, nodev, nosuid, mounted by dex)\n";
+        let mounts = manager.parse_mount_text(text, None);
+
+        assert_eq!(
+            mounts.len(),
+            1,
+            "FUSE-T mount should be recognized (Issue #19)"
+        );
+        assert_eq!(mounts[0].target, PathBuf::from("/path/to/mount"));
+    }
+
+    #[test]
+    fn test_parse_empty_output() {
+        let manager = FuseTManager::new(test_platform_info());
+        let mounts = manager.parse_mount_text("", None);
+        assert!(mounts.is_empty(), "Empty output should return empty vec");
+    }
+
+    #[test]
+    fn test_parse_multiple_relevant_mounts() {
+        let manager = FuseTManager::new(test_platform_info());
+        let text = "\
+fuse-t:/Thoughts on /tmp/mount1 (nfs, nodev, nosuid, mounted by user)
+unionfs on /tmp/mount2 (macfuse, local, synchronous)
+/dev/disk1 on /Volumes/Data (apfs, local)
+unionfs on /tmp/mount3 (osxfuse, local, synchronous)
+";
+        let mounts = manager.parse_mount_text(text, None);
+
+        assert_eq!(mounts.len(), 3, "Should parse all relevant mounts");
+        assert_eq!(mounts[0].target, PathBuf::from("/tmp/mount1"));
+        assert_eq!(mounts[1].target, PathBuf::from("/tmp/mount2"));
+        assert_eq!(mounts[2].target, PathBuf::from("/tmp/mount3"));
     }
 }
