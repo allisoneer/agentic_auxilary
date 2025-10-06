@@ -5,12 +5,9 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod commands;
-mod config;
-mod error;
-mod git;
-mod mount;
-mod platform;
-mod utils;
+
+// Re-export library modules into binary's namespace
+pub use thoughts_tool::{config, error, git, mount, platform, utils};
 
 use crate::config::SyncStrategy;
 
@@ -84,6 +81,9 @@ enum Commands {
         #[command(subcommand)]
         command: WorkCommands,
     },
+
+    /// Run as MCP server over stdio
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -212,6 +212,13 @@ enum WorkCommands {
         #[arg(short, long)]
         recent: Option<usize>,
     },
+
+    /// Open active work directory in your editor
+    Open {
+        /// Optional subdir: research | plans | artifacts
+        #[arg(long, value_parser = ["research", "plans", "artifacts"])]
+        subdir: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -302,6 +309,20 @@ async fn main() -> Result<()> {
             WorkCommands::Init => commands::work::init::execute().await,
             WorkCommands::Complete => commands::work::complete::execute().await,
             WorkCommands::List { recent } => commands::work::list::execute(recent).await,
+            WorkCommands::Open { subdir } => {
+                use commands::work::open::{OpenSubdir, execute};
+                let which = match subdir.as_deref() {
+                    Some("research") => OpenSubdir::Research,
+                    Some("plans") => OpenSubdir::Plans,
+                    Some("artifacts") => OpenSubdir::Artifacts,
+                    None => OpenSubdir::Base,
+                    _ => OpenSubdir::Base,
+                };
+                execute(which).await
+            }
         },
+        Commands::Mcp => thoughts_tool::mcp::serve_stdio()
+            .await
+            .map_err(|e| anyhow::anyhow!("MCP server error: {}", e)),
     }
 }

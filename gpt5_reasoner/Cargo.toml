@@ -1,6 +1,6 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
@@ -24,6 +24,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
 secrecy = "0.10"
+walkdir = "2.5"
 
 [[bin]]
 name = "gpt5_reasoner"
@@ -36,3 +37,4 @@ path = "src/lib.rs"
 [dev-dependencies]
 tempfile = "3"
 tokio-test = "0.4"
+serial_test = "3"

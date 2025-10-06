@@ -1046,7 +1046,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-openai",
  "clap",
@@ -1059,6 +1059,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "serial_test",
  "tempfile",
  "thiserror 2.0.16",
  "tiktoken-rs",
@@ -1067,6 +1068,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "universal-tool-core 0.2.1",
+ "walkdir",
 ]
 
 [[package]]
@@ -3020,7 +3022,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3037,6 +3039,7 @@ dependencies = [
  "pretty_assertions",
  "regex",
  "rustc_version",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "serial_test",
@@ -3045,6 +3048,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "universal-tool-core 0.2.1",
  "which",
 ]
 

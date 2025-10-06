@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use gpt5_reasoner::{FileMeta, Gpt5Reasoner, PromptType, gpt5_reasoner_impl};
+use gpt5_reasoner::{DirectoryMeta, FileMeta, Gpt5Reasoner, PromptType, gpt5_reasoner_impl};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use universal_tool_core::mcp::ServiceExt;
@@ -38,6 +38,11 @@ enum Commands {
         /// Path to JSON file with array of {filename, description}
         #[arg(long)]
         files_json: String,
+
+        /// Optional path to JSON file with array of DirectoryMeta
+        /// Example: [{ "directory_path": "src", "description": "source", "extensions": ["rs"], "recursive": true, "include_hidden": false }]
+        #[arg(long)]
+        directories_json: Option<String>,
     },
     /// Run as MCP server
     Mcp,
@@ -76,6 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             prompt_file,
             prompt,
             files_json,
+            directories_json,
         } => {
             // CLI mode
             let prompt = match (&prompt, &prompt_file) {
@@ -92,7 +98,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let files: Vec<FileMeta> =
                 serde_json::from_str(&std::fs::read_to_string(&files_json)?)?;
 
-            let result = gpt5_reasoner_impl(prompt, files, None, prompt_type).await;
+            let directories: Option<Vec<DirectoryMeta>> = match directories_json {
+                Some(path) => {
+                    let txt = std::fs::read_to_string(path)?;
+                    let dirs: Vec<DirectoryMeta> = serde_json::from_str(&txt)?;
+                    Some(dirs)
+                }
+                None => None,
+            };
+
+            let result = gpt5_reasoner_impl(prompt, files, directories, None, prompt_type).await;
 
             match result {
                 Ok(out) => {
