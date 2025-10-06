@@ -5,6 +5,7 @@ members = [
     "claudecode_rs",
     "universal_tool/universal-tool-core",
     "universal_tool/universal-tool-macros",
+    "universal_tool/universal-tool-integration-tests",
     "pr_comments",
     "gpt5_reasoner",
 ]

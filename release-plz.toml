@@ -30,4 +30,7 @@ changelog_path = "claudecode_rs/CHANGELOG.md"
 git_tag_name = "claudecode-v{{ version }}"
 release = true
 
+[[package]]
+name = "universal-tool-integration-tests"
+publish = false
 

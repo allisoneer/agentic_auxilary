@@ -136,6 +136,19 @@ All interfaces use unified `ToolError` type with:
 - Each example has its own Cargo.toml with specific dependencies
 - Test new macro features by adding cases to examples
 
+### Proc-macro integration test pattern
+
+- **Do NOT add [dev-dependencies] to universal-tool-macros** to avoid circular dev-deps with universal-tool-core.
+- Cross-crate integration tests live in **universal-tool-integration-tests** (publish = false).
+- This follows the pattern used by serde, tokio, etc.: macro crates remain dependency-light; tests that exercise generated code are hosted in a separate test crate.
+
+**Test locations:**
+- `universal-tool-macros/tests/` - Compile-time tests only (no runtime dependencies)
+- `universal-tool-integration-tests/tests/` - Integration tests requiring both macros and core
+
+**To add a new integration test:**
+Create test file in `universal_tool/universal-tool-integration-tests/tests/` and run `make test-normal`
+
 ## Important Files to Know
 
 - `/universal-tool-macros/src/parser.rs` - Attribute parsing logic
