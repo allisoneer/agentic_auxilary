@@ -3408,6 +3408,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "universal-tool-integration-tests"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+ "universal-tool-core 0.2.0",
+ "universal-tool-macros 0.1.3",
+]
+
+[[package]]
 name = "universal-tool-macros"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3423,15 +3434,10 @@ dependencies = [
 name = "universal-tool-macros"
 version = "0.1.3"
 dependencies = [
- "clap",
  "darling 0.20.11",
  "proc-macro2",
  "quote",
- "serde",
- "serde_json",
  "syn 2.0.106",
- "tokio",
- "universal-tool-core 0.2.0",
 ]
 
 [[package]]
