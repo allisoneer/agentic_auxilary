@@ -1,13 +1,13 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
 license = "MIT"
 
 [dependencies]
-universal-tool-core = { version = "0.2.0", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+universal-tool-core = { version = "0.2.1", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
 async-openai = "0.29.3"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
