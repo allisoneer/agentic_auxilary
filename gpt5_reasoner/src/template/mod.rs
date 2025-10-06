@@ -264,4 +264,26 @@ fn main() { hello(); }
             _ => panic!("Expected MissingFile error"),
         }
     }
+
+    #[tokio::test]
+    async fn test_inject_files_plan_structure_embedded() {
+        let groups = FileGrouping {
+            file_groups: vec![FileGroup {
+                name: "plan_template".to_string(),
+                purpose: None,
+                critical: None,
+                files: vec!["plan_structure.md".to_string()],
+            }],
+        };
+
+        let xml_template = r#"<context>
+  <!-- GROUP: plan_template -->
+</context>"#;
+
+        let result = inject_files(xml_template, &groups).await.unwrap();
+        // Should contain the embedded plan structure content header
+        assert!(result.contains("# [Feature/Task Name] Implementation Plan"));
+        // No unresolved markers
+        assert!(!result.contains("<!-- GROUP: plan_template -->"));
+    }
 }

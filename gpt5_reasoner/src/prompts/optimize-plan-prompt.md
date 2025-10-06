@@ -3,7 +3,8 @@
     <files>
       {FILES_ARRAY}
       <!-- Array of {filename: string, description: string} objects -->
-      <!-- Will ALWAYS include plan_structure.md or similar template file -->
+      <!-- Executor will auto-inject plan_structure.md when prompt_type=plan.
+           The optimizer MUST include a plan_template group with this file first. -->
     </files>
 
     <original_prompt>
