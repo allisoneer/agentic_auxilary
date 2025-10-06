@@ -20,6 +20,8 @@ check:
 	@echo "Running clippy..."
 	@./hack/cargo-smart.sh clippy -p universal-tool-core --all-features
 	@./hack/cargo-smart.sh clippy -p universal-tool-macros --all-features
+	@echo "Verifying: universal-tool-macros has no [dev-dependencies] (guard against circular deps)..."
+	@! grep -q '^\[dev-dependencies\]' universal-tool-macros/Cargo.toml || (echo "ERROR: universal-tool-macros must not define [dev-dependencies]. Use universal-tool-integration-tests crate."; exit 1)
 	@echo ""
 	@echo "━━━ Checking examples (individually) ━━━"
 	@$(MAKE) -s check-examples
@@ -44,6 +46,7 @@ build:
 check-normal:
 	cargo fmt --all -- --check
 	cargo clippy -p 'universal-tool-*' --all-features
+	@! grep -q '^\[dev-dependencies\]' universal-tool-macros/Cargo.toml || (echo "ERROR: universal-tool-macros must not define [dev-dependencies]. Use universal-tool-integration-tests crate."; exit 1)
 	@$(MAKE) check-examples-normal
 
 test-normal:

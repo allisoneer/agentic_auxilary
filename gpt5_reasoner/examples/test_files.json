@@ -1,0 +1,14 @@
+[
+  {
+    "filename": "examples/test1.py",
+    "description": "Simple Python function that adds two numbers"
+  },
+  {
+    "filename": "examples/test2.py",
+    "description": "Function that checks if a number is prime"
+  },
+  {
+    "filename": "examples/test3.py",
+    "description": "Basic unit tests for the math functions"
+  }
+]
