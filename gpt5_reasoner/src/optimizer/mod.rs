@@ -44,58 +44,99 @@ pub async fn call_optimizer(
     prompt: &str,
     files: &[FileMeta],
 ) -> Result<String> {
+    // Prepare the user prompt once; clone per attempt when building request
     let user_prompt = build_user_prompt(pt, prompt, files);
 
-    // Build the request with optional reasoning_effort for GPT-5/o-series models
-    let mut req_builder = CreateChatCompletionRequestArgs::default();
-    req_builder
-        .model(optimizer_model)
-        .messages([
-            ChatCompletionRequestMessage::System(
-                ChatCompletionRequestSystemMessageArgs::default()
-                    .content(prompts::SYSTEM_OPTIMIZER)
-                    .build()
-                    .map_err(ReasonerError::OpenAI)?,
-            ),
-            ChatCompletionRequestMessage::User(
-                ChatCompletionRequestUserMessageArgs::default()
-                    .content(user_prompt)
-                    .build()
-                    .map_err(ReasonerError::OpenAI)?,
-            ),
-        ])
-        .temperature(0.2);
+    // Application-level retry policy: 2 retries (3 attempts total), 500ms fixed delay
+    const RETRIES: usize = 2;
+    const DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
-    // If the optimizer model is GPT-5 or gpt-oss, set reasoning_effort=High
-    let using_reasoning = optimizer_model.contains("gpt-5") || optimizer_model.contains("gpt-oss");
-    if using_reasoning {
-        tracing::debug!(
-            "Using high reasoning effort for optimizer model: {}",
-            optimizer_model
-        );
-        req_builder.reasoning_effort(ReasoningEffort::High);
-    } else {
-        tracing::debug!(
-            "Using standard mode (no reasoning effort) for optimizer model: {}",
-            optimizer_model
-        );
+    for attempt in 0..=RETRIES {
+        if attempt > 0 {
+            tracing::warn!("Optimizer API attempt {} of {}", attempt + 1, RETRIES + 1);
+            tokio::time::sleep(DELAY).await;
+        }
+
+        // Build the request inside the loop (cheap compared to network call)
+        let mut req_builder = CreateChatCompletionRequestArgs::default();
+        req_builder
+            .model(optimizer_model)
+            .messages([
+                ChatCompletionRequestMessage::System(
+                    ChatCompletionRequestSystemMessageArgs::default()
+                        .content(prompts::SYSTEM_OPTIMIZER)
+                        .build()
+                        .map_err(ReasonerError::OpenAI)?,
+                ),
+                ChatCompletionRequestMessage::User(
+                    ChatCompletionRequestUserMessageArgs::default()
+                        .content(user_prompt.clone())
+                        .build()
+                        .map_err(ReasonerError::OpenAI)?,
+                ),
+            ])
+            .temperature(0.2);
+
+        // Set reasoning_effort for reasoning models
+        let using_reasoning =
+            optimizer_model.contains("gpt-5") || optimizer_model.contains("gpt-oss");
+        if using_reasoning {
+            tracing::debug!(
+                "Using high reasoning effort for optimizer model: {}",
+                optimizer_model
+            );
+            req_builder.reasoning_effort(ReasoningEffort::High);
+        } else {
+            tracing::debug!(
+                "Using standard mode (no reasoning effort) for optimizer model: {}",
+                optimizer_model
+            );
+        }
+
+        let req = req_builder.build().map_err(ReasonerError::OpenAI)?;
+
+        tracing::debug!("Calling optimizer with model: {}", optimizer_model);
+        let start = std::time::Instant::now();
+
+        match client.client.chat().create(req).await {
+            Ok(resp) => {
+                let duration = start.elapsed();
+                tracing::debug!("Optimizer API succeeded in {:?}", duration);
+
+                let content = resp
+                    .choices
+                    .first()
+                    .and_then(|c| c.message.content.clone())
+                    .ok_or_else(|| {
+                        ReasonerError::Template("Optimizer returned empty content".into())
+                    })?;
+
+                tracing::debug!("Optimizer response length: {} chars", content.len());
+                return Ok(content);
+            }
+            Err(e) => {
+                let retryable = crate::errors::is_retryable_app_level(&e);
+                if attempt < RETRIES && retryable {
+                    tracing::warn!("Optimizer call failed with retryable error: {e}; retrying...");
+                    continue;
+                }
+
+                // Not retryable or retries exhausted
+                if retryable {
+                    tracing::error!(
+                        "Optimizer call failed after {} attempts with retryable error: {}",
+                        attempt + 1,
+                        e
+                    );
+                } else {
+                    tracing::error!("Optimizer call failed with non-retryable error: {}", e);
+                }
+                return Err(ReasonerError::OpenAI(e));
+            }
+        }
     }
 
-    let req = req_builder.build().map_err(ReasonerError::OpenAI)?;
-
-    tracing::debug!("Calling optimizer with model: {}", optimizer_model);
-    let resp = client.client.chat().create(req).await?;
-    let content = resp
-        .choices
-        .first()
-        .and_then(|c| c.message.content.clone())
-        .ok_or_else(|| ReasonerError::Template("Optimizer returned empty content".into()))?;
-
-    tracing::debug!(
-        "Optimizer response received, length: {} chars",
-        content.len()
-    );
-    Ok(content)
+    unreachable!("Optimizer retry loop should return on success or error")
 }
 
 #[cfg(test)]
