@@ -189,7 +189,9 @@ fn maybe_inject_plan_structure_meta(prompt_type: &PromptType, files: &mut Vec<Fi
     if matches!(prompt_type, PromptType::Plan) {
         let has_plan = files.iter().any(|f| f.filename == "plan_structure.md");
         if !has_plan {
-            tracing::info!("Auto-injecting plan_structure.md into files array for PromptType::Plan");
+            tracing::info!(
+                "Auto-injecting plan_structure.md into files array for PromptType::Plan"
+            );
             files.insert(
                 0,
                 FileMeta {
@@ -215,7 +217,10 @@ fn ensure_xml_has_group_marker(xml: &str, group_name: &str) -> String {
     // 1) If there are existing group markers, insert right after the last one.
     if let Some(pos) = xml.rfind("<!-- GROUP:") {
         // Insert after the end of that marker's line
-        let insert_pos = xml[pos..].find('\n').map(|off| pos + off + 1).unwrap_or(xml.len());
+        let insert_pos = xml[pos..]
+            .find('\n')
+            .map(|off| pos + off + 1)
+            .unwrap_or(xml.len());
         let mut out = String::with_capacity(xml.len() + marker.len() + 2);
         out.push_str(&xml[..insert_pos]);
         out.push_str(&marker);
@@ -274,7 +279,7 @@ fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
         .file_groups
         .iter_mut()
         .find(|g| g.name == "plan_template")
-            && !g.files.iter().any(|f| f == "plan_structure.md")
+        && !g.files.iter().any(|f| f == "plan_structure.md")
     {
         tracing::warn!("'plan_template' group missing plan_structure.md; executor will add it.");
         g.files.insert(0, "plan_structure.md".to_string());
@@ -325,16 +330,30 @@ mod plan_guards_tests {
 
     #[test]
     fn test_ensure_plan_template_group_and_marker() {
-        let groups = FileGrouping { file_groups: vec![] };
+        let groups = FileGrouping {
+            file_groups: vec![],
+        };
         let xml = "<context>\n  <!-- GROUP: other -->\n</context>\n".to_string();
-        let mut parsed = OptimizerOutput { groups, xml_template: xml };
+        let mut parsed = OptimizerOutput {
+            groups,
+            xml_template: xml,
+        };
 
         ensure_plan_template_group(&mut parsed);
 
         // Group should exist and include plan_structure.md
-        let g = parsed.groups.file_groups.iter().find(|g| g.name == "plan_template").unwrap();
+        let g = parsed
+            .groups
+            .file_groups
+            .iter()
+            .find(|g| g.name == "plan_template")
+            .unwrap();
         assert!(g.files.iter().any(|f| f == "plan_structure.md"));
-        assert!(parsed.xml_template.contains("<!-- GROUP: plan_template -->"));
+        assert!(
+            parsed
+                .xml_template
+                .contains("<!-- GROUP: plan_template -->")
+        );
     }
 }
 
@@ -367,7 +386,9 @@ file_groups:
         ensure_plan_template_group(&mut parsed);
 
         // Inject
-        let final_prompt = inject_files(&parsed.xml_template, &parsed.groups).await.unwrap();
+        let final_prompt = inject_files(&parsed.xml_template, &parsed.groups)
+            .await
+            .unwrap();
 
         // Verify plan structure is present
         assert!(final_prompt.contains("# [Feature/Task Name] Implementation Plan"));
