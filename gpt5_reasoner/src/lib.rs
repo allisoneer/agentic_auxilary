@@ -227,22 +227,67 @@ pub async fn gpt5_reasoner_impl(
     // Load env OpenRouter key (CLI already optionally did dotenv)
     let client = OrClient::from_env().map_err(ToolError::from)?;
 
-    // Step 1: optimize
-    // Default changed to anthropic/claude-sonnet-4.5, preserving param/env override order
+    // Step 1: optimize with retry on validation errors
     let opt_model = select_optimizer_model(optimizer_model);
 
-    let raw = call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files)
-        .await
-        .map_err(ToolError::from)?;
+    // Layer 3: Validation retry (complements Layer 2 network retry in optimizer/mod.rs)
+    const TEMPLATE_RETRIES: usize = 2; // 3 total attempts
+    const TEMPLATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(900);
 
-    // Debug: Print the raw optimizer output if RUST_LOG is set
-    tracing::debug!("Raw optimizer output:\n{}", raw);
+    let mut parsed: Option<OptimizerOutput> = None;
 
-    let mut parsed = parse_optimizer_output(&raw).map_err(|e| {
-        // On parse error, include the raw output for debugging
-        tracing::error!("Failed to parse optimizer output:\n{}", raw);
-        ToolError::from(e)
-    })?;
+    for attempt in 0..=TEMPLATE_RETRIES {
+        if attempt > 0 {
+            tracing::warn!(
+                "Retrying optimizer due to template validation error (attempt {} of {})",
+                attempt + 1,
+                TEMPLATE_RETRIES + 1
+            );
+            tokio::time::sleep(TEMPLATE_RETRY_DELAY).await;
+        }
+
+        // Call optimizer (this has its own Layer 2 network retry)
+        let raw = call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files)
+            .await
+            .map_err(ToolError::from)?;
+
+        tracing::debug!("Raw optimizer output:\n{}", raw);
+
+        // Parse and validate
+        match parse_optimizer_output(&raw) {
+            Ok(p) => {
+                parsed = Some(p);
+                break; // Success - exit retry loop
+            }
+            Err(e) => {
+                // Only retry Template validation errors, not other parse errors
+                let is_template_error = matches!(e, ReasonerError::Template(_));
+
+                if is_template_error && attempt < TEMPLATE_RETRIES {
+                    tracing::warn!(
+                        "Template validation failed: {}; retrying optimizer call",
+                        e
+                    );
+                    continue;
+                }
+
+                // Final failure or non-retryable error
+                if is_template_error {
+                    tracing::error!(
+                        "Template validation failed after {} attempts. Raw output (first 800 chars):\n{}",
+                        attempt + 1,
+                        raw.chars().take(800).collect::<String>()
+                    );
+                } else {
+                    tracing::error!("Non-template parse error: {}", e);
+                }
+
+                return Err(ToolError::from(e));
+            }
+        }
+    }
+
+    let mut parsed = parsed.expect("retry loop must exit via break or return");
 
     tracing::debug!(
         "Parsed optimizer output: {} groups found",
@@ -456,6 +501,27 @@ fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
 }
 
 #[cfg(test)]
+mod retry_tests {
+    use crate::errors::ReasonerError;
+
+    #[test]
+    fn test_template_error_is_retryable() {
+        let template_err = ReasonerError::Template("missing marker".into());
+        assert!(matches!(template_err, ReasonerError::Template(_)));
+    }
+
+    #[test]
+    fn test_yaml_error_is_not_template_error() {
+        // Create a YAML error by parsing invalid YAML
+        let yaml_result: Result<serde_yaml::Value, _> = serde_yaml::from_str("invalid: yaml: syntax");
+        assert!(yaml_result.is_err());
+
+        let yaml_err = ReasonerError::Yaml(yaml_result.unwrap_err());
+        assert!(!matches!(yaml_err, ReasonerError::Template(_)));
+    }
+}
+
+#[cfg(test)]
 mod plan_guards_tests {
     use super::*;
     use crate::optimizer::parser::{FileGrouping, OptimizerOutput};
@@ -531,12 +597,14 @@ mod integration_tests {
     async fn test_end_to_end_plan_template_injection() {
         // Simulate optimizer output without plan_template
         let raw_yaml = r#"
+FILE_GROUPING
 ```yaml
 file_groups:
   - name: implementation_targets
     files: []
 ```
 
+OPTIMIZED_TEMPLATE
 ```xml
 <context>
   <!-- GROUP: implementation_targets -->
