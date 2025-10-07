@@ -9,6 +9,8 @@ repository = "https://github.com/allisoneer/agentic_auxilary"
 homepage = "https://github.com/allisoneer/agentic_auxilary"
 keywords = ["codegen", "cli", "rest", "mcp", "framework"]
 categories = ["development-tools", "web-programming", "command-line-interface"]
+
+[package.metadata.dist]
 dist = false
 
 [features]
