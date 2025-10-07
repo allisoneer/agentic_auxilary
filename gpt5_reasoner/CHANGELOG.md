@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
-# Changelog
 
-All notable changes to this project will be documented in this file.
+## [0.2.1] - 2025-10-07
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+### ⚙️  Miscellaneous
+- Updated the following local packages: universal-tool-core
+
+## [0.2.0] - 2025-10-06
+
+### ⛰️  Features
+- *(gpt5_reasoner)* [**breaking**] Add directory support and change default optimizer model
 
 ### Added
 - Directory support: Accept directories via `DirectoryMeta` with automatic file expansion
