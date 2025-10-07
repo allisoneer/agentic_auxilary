@@ -7,8 +7,8 @@
 	},
 	"thoughts_mount": {
 		"remote": "git@github.com:allisoneer/personal_thoughts.git",
-		"sync": "auto",
-		"subpath": "projects/agentic_auxilary_thoughts"
+		"subpath": "projects/agentic_auxilary_thoughts",
+		"sync": "auto"
 	},
 	"context_mounts": [
 		{
@@ -49,6 +49,8 @@
 		"git@github.com:modelcontextprotocol/rust-sdk.git",
 		"https://github.com/modelcontextprotocol/modelcontextprotocol.git",
 		"https://github.com/modelcontextprotocol/python-sdk.git",
-		"https://github.com/modelcontextprotocol/typescript-sdk.git"
+		"https://github.com/modelcontextprotocol/typescript-sdk.git",
+		"https://github.com/allisoneer/cocoz.git"
 	]
 }
+

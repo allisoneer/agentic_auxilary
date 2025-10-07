@@ -10,6 +10,9 @@ homepage = "https://github.com/allisoneer/agentic_auxilary"
 keywords = ["proc-macro", "codegen", "cli", "rest", "mcp"]
 categories = ["development-tools::procedural-macro-helpers"]
 
+[package.metadata.dist]
+dist = false
+
 [lib]
 proc-macro = true
 
