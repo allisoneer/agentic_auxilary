@@ -264,10 +264,7 @@ pub async fn gpt5_reasoner_impl(
                 let is_template_error = matches!(e, ReasonerError::Template(_));
 
                 if is_template_error && attempt < TEMPLATE_RETRIES {
-                    tracing::warn!(
-                        "Template validation failed: {}; retrying optimizer call",
-                        e
-                    );
+                    tracing::warn!("Template validation failed: {}; retrying optimizer call", e);
                     continue;
                 }
 
@@ -513,7 +510,8 @@ mod retry_tests {
     #[test]
     fn test_yaml_error_is_not_template_error() {
         // Create a YAML error by parsing invalid YAML
-        let yaml_result: Result<serde_yaml::Value, _> = serde_yaml::from_str("invalid: yaml: syntax");
+        let yaml_result: Result<serde_yaml::Value, _> =
+            serde_yaml::from_str("invalid: yaml: syntax");
         assert!(yaml_result.is_err());
 
         let yaml_err = ReasonerError::Yaml(yaml_result.unwrap_err());
