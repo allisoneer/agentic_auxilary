@@ -1,6 +1,6 @@
 [package]
 name = "universal-tool-core"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Core runtime library for Universal Tool Framework - multi-interface code generation"
@@ -26,7 +26,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 schemars = { version = "0.8", features = ["derive"] }
 thiserror = "2.0"
-universal-tool-macros = { version = "0.1.4", path = "../universal-tool-macros" }
+universal-tool-macros = { version = "0.1.5", path = "../universal-tool-macros" }
 
 # Interface-specific dependencies (optional)
 clap = { version = "4.0", features = ["derive", "env"], optional = true }
