@@ -54,20 +54,29 @@ fn default_max_files() -> usize {
 #[derive(Clone, Default)]
 pub struct Gpt5Reasoner;
 
-#[universal_tool_router(
-    cli(name = "gpt5_reasoner"), // we won't use generated CLI, but harmless
-    mcp(name = "gpt5_reasoner", version = "0.1.0")
-)]
+#[universal_tool_router(mcp(name = "reasoning_model", version = "0.1.0"))]
 impl Gpt5Reasoner {
-    #[universal_tool(description = "Optimize a prompt using file metadata and execute with GPT-5")]
-    pub async fn optimize_and_execute(
+    #[universal_tool(
+        description = "Request assistance from a super smart comrade! This is a great tool to use anytime you want to double check something, or get a second opinion. In addition, it can write full plans for you! The tool will automatically optimize the prompt you send it and combine it with any and all context you pass along. It is best practice to pass as much context as possible and to write descriptions for them that accurately reflect the purpose of the files and/or directories of files (in relation to the prompt). Even though the responses from this tool are from an expert, be sure to look over them with a close eye. Better to have 2 experts than 1, right ;)"
+    )]
+    pub async fn request(
         &self,
-        prompt: String,
-        files: Vec<FileMeta>,
         #[universal_tool_param(
-            description = "Directories to expand into files before optimization"
+            description = "Prompt to pass in to the request. Be specific and detailed, but attempt to avoid utilize biasing-language. This tool works best with neutral verbage. This allows it to reason over the scope of the problem more efficiently."
+        )]
+        prompt: String,
+        #[universal_tool_param(
+            description = r#"List of directories that will be expanded into files. You can choose if you want to walk the directory recurisively or not, if you want to specify a maximum amount of files, and if you want to whitelist/filter by certain file extensions. This can be useful for passing more files that are important to a problem context without having to specify every file path. 
+        "#
         )]
         directories: Option<Vec<DirectoryMeta>>,
+        #[universal_tool_param(
+            description = "A list of file paths and their descriptions. File paths can be relative from the directory you were launched from, or full paths from the root of file system."
+        )]
+        files: Vec<FileMeta>,
+        #[universal_tool_param(
+            description = r#"Type of the output you desire. An enum with either "plan" or "reasoning" as options. Reasoning is perfect for anytime you need to ask a question or consider something deeply. "plan" is useful for writing fully-fledged implementation plans given a certain desire and context."#
+        )]
         prompt_type: PromptType,
     ) -> std::result::Result<String, ToolError> {
         gpt5_reasoner_impl(prompt, files, directories, None, prompt_type).await
@@ -196,6 +205,62 @@ fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<Vec<F
     Ok(out)
 }
 
+// Helper: convert to absolute path string, resolving symlinks when file exists
+fn to_abs_string(p: &str) -> String {
+    let path = std::path::Path::new(p);
+
+    // Try to canonicalize first (resolves symlinks, requires file to exist)
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return canonical.to_string_lossy().to_string();
+    }
+
+    // Fallback: just make it absolute without resolving symlinks
+    if path.is_absolute() {
+        path.to_string_lossy().to_string()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+            .to_string_lossy()
+            .to_string()
+    }
+}
+
+// Helper: normalize all file paths in place (skip embedded template)
+fn normalize_paths_in_place(files: &mut [FileMeta]) {
+    for f in files {
+        if f.filename == "plan_structure.md" {
+            continue;
+        }
+        f.filename = to_abs_string(&f.filename);
+    }
+}
+
+// Helper: deduplicate files by filename (post-normalization)
+fn dedup_files_in_place(files: &mut Vec<FileMeta>) {
+    let mut seen = std::collections::HashSet::<String>::new();
+    files.retain(|f| seen.insert(f.filename.clone()));
+}
+
+// Helper: existence + readability + UTF-8 validation (fail fast)
+fn precheck_files(files: &[FileMeta]) -> std::result::Result<(), ToolError> {
+    for f in files {
+        if f.filename == "plan_structure.md" {
+            continue;
+        }
+        let pb = std::path::PathBuf::from(&f.filename);
+        if !pb.exists() {
+            return Err(ToolError::from(ReasonerError::MissingFile(pb)));
+        }
+        // Readability + UTF-8 check (mirrors directory expansion behavior)
+        let bytes = std::fs::read(&pb).map_err(ReasonerError::from)?;
+        if String::from_utf8(bytes).is_err() {
+            return Err(ToolError::from(ReasonerError::NonUtf8(pb)));
+        }
+    }
+    Ok(())
+}
+
 // Helper: select optimizer model with precedence: param > env > default
 fn select_optimizer_model(optimizer_model: Option<String>) -> String {
     optimizer_model
@@ -214,12 +279,27 @@ pub async fn gpt5_reasoner_impl(
     if let Some(dirs) = directories.as_ref() {
         let mut expanded = expand_directories_to_filemeta(dirs).map_err(ToolError::from)?;
         files.append(&mut expanded);
-
-        // Dedup (by filename) to avoid duplicates from files + directories
-        // Note: paths are normalized to absolute in expand_directories_to_filemeta
-        let mut seen = HashSet::<String>::new();
-        files.retain(|f| seen.insert(f.filename.clone()));
     }
+
+    // ===== NEW: normalize + validate BEFORE optimizer =====
+    tracing::debug!("Normalizing {} file path(s) to absolute", files.len());
+    normalize_paths_in_place(&mut files);
+
+    let before = files.len();
+    dedup_files_in_place(&mut files);
+    let after = files.len();
+    if before != after {
+        tracing::debug!(
+            "Deduplicated files post-normalization: {} -> {} ({} removed)",
+            before,
+            after,
+            before - after
+        );
+    }
+
+    tracing::info!("Pre-validating {} file(s) before optimizer", files.len());
+    precheck_files(&files)?;
+    // ===== END NEW =====
 
     // Auto-inject plan_structure.md for Plan prompts (before optimizer)
     maybe_inject_plan_structure_meta(&prompt_type, &mut files);
@@ -227,22 +307,64 @@ pub async fn gpt5_reasoner_impl(
     // Load env OpenRouter key (CLI already optionally did dotenv)
     let client = OrClient::from_env().map_err(ToolError::from)?;
 
-    // Step 1: optimize
-    // Default changed to anthropic/claude-sonnet-4.5, preserving param/env override order
+    // Step 1: optimize with retry on validation errors
     let opt_model = select_optimizer_model(optimizer_model);
 
-    let raw = call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files)
-        .await
-        .map_err(ToolError::from)?;
+    // Layer 3: Validation retry (complements Layer 2 network retry in optimizer/mod.rs)
+    const TEMPLATE_RETRIES: usize = 2; // 3 total attempts
+    const TEMPLATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(900);
 
-    // Debug: Print the raw optimizer output if RUST_LOG is set
-    tracing::debug!("Raw optimizer output:\n{}", raw);
+    let mut parsed: Option<OptimizerOutput> = None;
 
-    let mut parsed = parse_optimizer_output(&raw).map_err(|e| {
-        // On parse error, include the raw output for debugging
-        tracing::error!("Failed to parse optimizer output:\n{}", raw);
-        ToolError::from(e)
-    })?;
+    for attempt in 0..=TEMPLATE_RETRIES {
+        if attempt > 0 {
+            tracing::warn!(
+                "Retrying optimizer due to template validation error (attempt {} of {})",
+                attempt + 1,
+                TEMPLATE_RETRIES + 1
+            );
+            tokio::time::sleep(TEMPLATE_RETRY_DELAY).await;
+        }
+
+        // Call optimizer (this has its own Layer 2 network retry)
+        let raw = call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files)
+            .await
+            .map_err(ToolError::from)?;
+
+        tracing::debug!("Raw optimizer output:\n{}", raw);
+
+        // Parse and validate
+        match parse_optimizer_output(&raw) {
+            Ok(p) => {
+                parsed = Some(p);
+                break; // Success - exit retry loop
+            }
+            Err(e) => {
+                // Only retry Template validation errors, not other parse errors
+                let is_template_error = matches!(e, ReasonerError::Template(_));
+
+                if is_template_error && attempt < TEMPLATE_RETRIES {
+                    tracing::warn!("Template validation failed: {}; retrying optimizer call", e);
+                    continue;
+                }
+
+                // Final failure or non-retryable error
+                if is_template_error {
+                    tracing::error!(
+                        "Template validation failed after {} attempts. Raw output (first 800 chars):\n{}",
+                        attempt + 1,
+                        raw.chars().take(800).collect::<String>()
+                    );
+                } else {
+                    tracing::error!("Non-template parse error: {}", e);
+                }
+
+                return Err(ToolError::from(e));
+            }
+        }
+    }
+
+    let mut parsed = parsed.expect("retry loop must exit via break or return");
 
     tracing::debug!(
         "Parsed optimizer output: {} groups found",
@@ -456,6 +578,28 @@ fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
 }
 
 #[cfg(test)]
+mod retry_tests {
+    use crate::errors::ReasonerError;
+
+    #[test]
+    fn test_template_error_is_retryable() {
+        let template_err = ReasonerError::Template("missing marker".into());
+        assert!(matches!(template_err, ReasonerError::Template(_)));
+    }
+
+    #[test]
+    fn test_yaml_error_is_not_template_error() {
+        // Create a YAML error by parsing invalid YAML
+        let yaml_result: Result<serde_yaml::Value, _> =
+            serde_yaml::from_str("invalid: yaml: syntax");
+        assert!(yaml_result.is_err());
+
+        let yaml_err = ReasonerError::Yaml(yaml_result.unwrap_err());
+        assert!(!matches!(yaml_err, ReasonerError::Template(_)));
+    }
+}
+
+#[cfg(test)]
 mod plan_guards_tests {
     use super::*;
     use crate::optimizer::parser::{FileGrouping, OptimizerOutput};
@@ -531,12 +675,14 @@ mod integration_tests {
     async fn test_end_to_end_plan_template_injection() {
         // Simulate optimizer output without plan_template
         let raw_yaml = r#"
+FILE_GROUPING
 ```yaml
 file_groups:
   - name: implementation_targets
     files: []
 ```
 
+OPTIMIZED_TEMPLATE
 ```xml
 <context>
   <!-- GROUP: implementation_targets -->
@@ -821,5 +967,139 @@ mod directory_expansion_tests {
 
         let files = expand_directories_to_filemeta(&dirs).unwrap();
         assert_eq!(files.len(), 5, "should stop at max_files cap");
+    }
+}
+
+#[cfg(test)]
+mod pre_validation_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_to_abs_string_makes_relative_absolute() {
+        let rel = "foo/bar/baz.txt";
+        let abs = to_abs_string(rel);
+        assert!(std::path::Path::new(&abs).is_absolute());
+    }
+
+    #[test]
+    fn test_to_abs_string_preserves_absolute() {
+        let abs_path = "/home/user/file.rs";
+        let result = to_abs_string(abs_path);
+        assert_eq!(result, abs_path);
+    }
+
+    #[test]
+    fn test_normalize_paths_in_place_skips_embedded() {
+        let mut files = vec![
+            FileMeta {
+                filename: "plan_structure.md".into(),
+                description: "embedded".into(),
+            },
+            FileMeta {
+                filename: "a.rs".into(),
+                description: "code".into(),
+            },
+        ];
+        normalize_paths_in_place(&mut files);
+        assert_eq!(files[0].filename, "plan_structure.md");
+        assert!(std::path::Path::new(&files[1].filename).is_absolute());
+    }
+
+    #[test]
+    fn test_dedup_files_in_place_across_rel_abs() {
+        let td = TempDir::new().unwrap();
+        let file = td.path().join("dup.rs");
+        fs::write(&file, "code").unwrap();
+
+        let abs = file.to_string_lossy().to_string();
+
+        // Save current dir and change to temp dir so relative path resolves correctly
+        let orig_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(td.path()).unwrap();
+
+        let mut files = vec![
+            FileMeta {
+                filename: "dup.rs".into(),
+                description: "rel".into(),
+            },
+            FileMeta {
+                filename: abs.clone(),
+                description: "abs".into(),
+            },
+        ];
+
+        // Need to normalize first for dedup to work correctly
+        normalize_paths_in_place(&mut files);
+        dedup_files_in_place(&mut files);
+
+        // Restore original directory
+        std::env::set_current_dir(orig_dir).unwrap();
+
+        assert_eq!(
+            files.len(),
+            1,
+            "duplicates should be removed after normalization"
+        );
+        assert!(files[0].filename.ends_with("dup.rs"));
+        assert!(std::path::Path::new(&files[0].filename).is_absolute());
+    }
+
+    #[test]
+    fn test_precheck_files_missing_fails_fast() {
+        let files = vec![FileMeta {
+            filename: "/nonexistent/file.xyz".into(),
+            description: "missing".into(),
+        }];
+        let err = precheck_files(&files).unwrap_err();
+        assert!(err.to_string().contains("File not found"));
+    }
+
+    #[test]
+    fn test_precheck_files_non_utf8_fails_fast() {
+        let td = TempDir::new().unwrap();
+        let p = td.path().join("bin.dat");
+        fs::write(&p, &[0xFF, 0xFE, 0xFD]).unwrap();
+        let files = vec![FileMeta {
+            filename: p.to_string_lossy().to_string(),
+            description: "bin".into(),
+        }];
+        let err = precheck_files(&files).unwrap_err();
+        assert!(err.to_string().contains("Unsupported file encoding"));
+    }
+
+    #[test]
+    fn test_precheck_files_utf8_ok() {
+        let td = TempDir::new().unwrap();
+        let p = td.path().join("ok.txt");
+        fs::write(&p, "hello").unwrap();
+        let files = vec![FileMeta {
+            filename: p.to_string_lossy().to_string(),
+            description: "ok".into(),
+        }];
+        precheck_files(&files).unwrap();
+    }
+
+    #[test]
+    fn test_precheck_files_skips_plan_structure() {
+        let files = vec![FileMeta {
+            filename: "plan_structure.md".into(),
+            description: "embedded template".into(),
+        }];
+        // Should not try to read from filesystem
+        precheck_files(&files).unwrap();
+    }
+
+    #[test]
+    fn test_precheck_files_empty_file() {
+        let td = TempDir::new().unwrap();
+        let p = td.path().join("empty.txt");
+        fs::write(&p, "").unwrap();
+        let files = vec![FileMeta {
+            filename: p.to_string_lossy().to_string(),
+            description: "empty".into(),
+        }];
+        precheck_files(&files).unwrap();
     }
 }
