@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.0] - 2025-10-08
+
+### ⛰️  Features
+- *(gpt5_reasoner)* Add file validation and improve MCP interface
+
+### 🐛 Bug Fixes
+- *(gpt5_reasoner)* Handle nested code fences in LLM output parsing
+- *(gpt5_reasoner)* Resolve symlinks in path normalization for macOS
 
 ## [0.2.1] - 2025-10-07
 
