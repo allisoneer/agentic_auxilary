@@ -205,9 +205,16 @@ fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<Vec<F
     Ok(out)
 }
 
-// Helper: convert to absolute path string without resolving symlinks
+// Helper: convert to absolute path string, resolving symlinks when file exists
 fn to_abs_string(p: &str) -> String {
     let path = std::path::Path::new(p);
+
+    // Try to canonicalize first (resolves symlinks, requires file to exist)
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return canonical.to_string_lossy().to_string();
+    }
+
+    // Fallback: just make it absolute without resolving symlinks
     if path.is_absolute() {
         path.to_string_lossy().to_string()
     } else {
