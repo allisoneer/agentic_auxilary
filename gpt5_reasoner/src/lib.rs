@@ -282,7 +282,12 @@ pub async fn gpt5_reasoner_impl(
     dedup_files_in_place(&mut files);
     let after = files.len();
     if before != after {
-        tracing::debug!("Deduplicated files post-normalization: {} -> {} ({} removed)", before, after, before - after);
+        tracing::debug!(
+            "Deduplicated files post-normalization: {} -> {} ({} removed)",
+            before,
+            after,
+            before - after
+        );
     }
 
     tracing::info!("Pre-validating {} file(s) before optimizer", files.len());
@@ -961,8 +966,8 @@ mod directory_expansion_tests {
 #[cfg(test)]
 mod pre_validation_tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_to_abs_string_makes_relative_absolute() {
@@ -981,8 +986,14 @@ mod pre_validation_tests {
     #[test]
     fn test_normalize_paths_in_place_skips_embedded() {
         let mut files = vec![
-            FileMeta { filename: "plan_structure.md".into(), description: "embedded".into() },
-            FileMeta { filename: "a.rs".into(), description: "code".into() },
+            FileMeta {
+                filename: "plan_structure.md".into(),
+                description: "embedded".into(),
+            },
+            FileMeta {
+                filename: "a.rs".into(),
+                description: "code".into(),
+            },
         ];
         normalize_paths_in_place(&mut files);
         assert_eq!(files[0].filename, "plan_structure.md");
@@ -1002,8 +1013,14 @@ mod pre_validation_tests {
         std::env::set_current_dir(td.path()).unwrap();
 
         let mut files = vec![
-            FileMeta { filename: "dup.rs".into(), description: "rel".into() },
-            FileMeta { filename: abs.clone(), description: "abs".into() },
+            FileMeta {
+                filename: "dup.rs".into(),
+                description: "rel".into(),
+            },
+            FileMeta {
+                filename: abs.clone(),
+                description: "abs".into(),
+            },
         ];
 
         // Need to normalize first for dedup to work correctly
@@ -1013,7 +1030,11 @@ mod pre_validation_tests {
         // Restore original directory
         std::env::set_current_dir(orig_dir).unwrap();
 
-        assert_eq!(files.len(), 1, "duplicates should be removed after normalization");
+        assert_eq!(
+            files.len(),
+            1,
+            "duplicates should be removed after normalization"
+        );
         assert!(files[0].filename.ends_with("dup.rs"));
         assert!(std::path::Path::new(&files[0].filename).is_absolute());
     }
