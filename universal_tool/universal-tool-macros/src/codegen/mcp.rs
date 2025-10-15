@@ -13,11 +13,14 @@ use quote::quote;
 pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
     let struct_type = &router.struct_type;
     let dispatch_method = generate_mcp_dispatch_method(router);
+    let dispatch_method_mcp = generate_mcp_dispatch_method_mcp(router);
     let tools_method = generate_mcp_tools_method(router);
 
     quote! {
         impl #struct_type {
             #dispatch_method
+
+            #dispatch_method_mcp
 
             #tools_method
         }
@@ -36,6 +39,36 @@ fn generate_mcp_dispatch_method(router: &RouterDef) -> TokenStream {
             method: &str,
             params: ::serde_json::Value
         ) -> ::std::result::Result<::serde_json::Value, ::universal_tool_core::error::ToolError> {
+            match method {
+                #(#match_arms)*
+                _ => {
+                    ::std::result::Result::Err(
+                        ::universal_tool_core::error::ToolError::new(
+                            ::universal_tool_core::error::ErrorCode::NotFound,
+                            ::std::format!("Unknown method: {}", method)
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// Generates the handle_mcp_call_mcp() method that returns McpOutput (Text or Json)
+fn generate_mcp_dispatch_method_mcp(router: &RouterDef) -> TokenStream {
+    let match_arms: Vec<_> = router
+        .tools
+        .iter()
+        .map(generate_tool_match_arm_mcp)
+        .collect();
+
+    quote! {
+        /// Handles MCP tool calls and returns McpOutput (Text or Json), honoring per-tool output mode.
+        pub async fn handle_mcp_call_mcp(
+            &self,
+            method: &str,
+            params: ::serde_json::Value
+        ) -> ::std::result::Result<::universal_tool_core::mcp::McpOutput, ::universal_tool_core::error::ToolError> {
             match method {
                 #(#match_arms)*
                 _ => {
@@ -138,6 +171,71 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
     quote! {
         let result = #method_call?;
         ::std::result::Result::Ok(::serde_json::to_value(&result)?)
+    }
+}
+
+/// Generates a match arm for the new MCP dispatch method with output mode support
+fn generate_tool_match_arm_mcp(tool: &ToolDef) -> TokenStream {
+    let tool_name = &tool.tool_name;
+    let params_struct = generate_params_struct(tool);
+
+    // Build parameter args list
+    let param_args: Vec<_> = tool
+        .params
+        .iter()
+        .map(|param| {
+            let name = &param.name;
+            let ty = &param.ty;
+            let ty_str = quote!(#ty).to_string();
+
+            if ty_str.contains("ProgressReporter") {
+                quote! { None }
+            } else if ty_str.contains("CancellationToken") {
+                quote! { ::universal_tool_core::mcp::CancellationToken::new() }
+            } else {
+                quote! { params.#name }
+            }
+        })
+        .collect();
+
+    let method_call =
+        crate::codegen::shared::generate_normalized_method_call(tool, quote! { self }, param_args);
+
+    // Determine output mode at codegen time
+    let output_mode_tokens = if let Some(mcp_config) = &tool.metadata.mcp_config {
+        if matches!(
+            mcp_config.output_mode,
+            Some(crate::model::McpOutputMode::Text)
+        ) {
+            // TEXT mode: require McpFormatter at compile time
+            quote! {
+                let result = #method_call?;
+                let text = ::universal_tool_core::mcp::McpFormatter::mcp_format_text(&result);
+                ::std::result::Result::Ok(::universal_tool_core::mcp::McpOutput::Text(text))
+            }
+        } else {
+            // JSON mode
+            quote! {
+                let result = #method_call?;
+                let val = ::serde_json::to_value(&result)?;
+                ::std::result::Result::Ok(::universal_tool_core::mcp::McpOutput::Json(val))
+            }
+        }
+    } else {
+        // Default to JSON
+        quote! {
+            let result = #method_call?;
+            let val = ::serde_json::to_value(&result)?;
+            ::std::result::Result::Ok(::universal_tool_core::mcp::McpOutput::Json(val))
+        }
+    };
+
+    quote! {
+        #tool_name => {
+            #params_struct
+            let params: __Params = ::serde_json::from_value(params)?;
+            #output_mode_tokens
+        }
     }
 }
 
