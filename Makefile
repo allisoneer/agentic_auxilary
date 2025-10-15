@@ -4,6 +4,8 @@
 .PHONY: thoughts-check thoughts-test thoughts-build thoughts-all
 .PHONY: claude-check claude-test claude-build claude-all
 .PHONY: universal-check universal-test universal-build universal-all
+.PHONY: pr-check pr-test pr-build pr-all
+.PHONY: gpt5-check gpt5-test gpt5-build gpt5-all
 .PHONY: fmt-all fmt-check-all clean-all status
 
 # Default target
@@ -37,7 +39,14 @@ check:
 			echo -e "  $(GREEN)✓$(NC) $$tool: clean"; \
 		else \
 			echo -e "  $(RED)✗$(NC) $$tool: failed"; \
-			echo -e "  Run 'make $$(echo $$tool | cut -d_ -f1)-check' for details"; \
+			case $$tool in \
+			  thoughts_tool) alias="thoughts" ;; \
+			  claudecode_rs) alias="claude" ;; \
+			  universal_tool) alias="universal" ;; \
+			  pr_comments) alias="pr" ;; \
+			  gpt5_reasoner) alias="gpt5" ;; \
+			esac; \
+			echo -e "  Run 'make $$alias-check' for details"; \
 			failures=$$((failures + 1)); \
 		fi; \
 	done; \
@@ -59,7 +68,14 @@ test:
 			echo -e "  $(GREEN)✓$(NC) $$tool: tests passed"; \
 		else \
 			echo -e "  $(RED)✗$(NC) $$tool: tests failed"; \
-			echo -e "  Run 'make $$(echo $$tool | cut -d_ -f1)-test' for details"; \
+			case $$tool in \
+			  thoughts_tool) alias="thoughts" ;; \
+			  claudecode_rs) alias="claude" ;; \
+			  universal_tool) alias="universal" ;; \
+			  pr_comments) alias="pr" ;; \
+			  gpt5_reasoner) alias="gpt5" ;; \
+			esac; \
+			echo -e "  Run 'make $$alias-test' for details"; \
 			failures=$$((failures + 1)); \
 		fi; \
 	done; \
@@ -81,7 +97,14 @@ build:
 			echo -e "  $(GREEN)✓$(NC) $$tool: built successfully"; \
 		else \
 			echo -e "  $(RED)✗$(NC) $$tool: build failed"; \
-			echo -e "  Run 'make $$(echo $$tool | cut -d_ -f1)-build' for details"; \
+			case $$tool in \
+			  thoughts_tool) alias="thoughts" ;; \
+			  claudecode_rs) alias="claude" ;; \
+			  universal_tool) alias="universal" ;; \
+			  pr_comments) alias="pr" ;; \
+			  gpt5_reasoner) alias="gpt5" ;; \
+			esac; \
+			echo -e "  Run 'make $$alias-build' for details"; \
 			failures=$$((failures + 1)); \
 		fi; \
 	done; \
@@ -176,6 +199,32 @@ universal-build:
 universal-all:
 	@$(MAKE) -C universal_tool all
 
+# Individual tool targets - pr_comments
+pr-check:
+	@$(MAKE) -C pr_comments check
+
+pr-test:
+	@$(MAKE) -C pr_comments test
+
+pr-build:
+	@$(MAKE) -C pr_comments build
+
+pr-all:
+	@$(MAKE) -C pr_comments all
+
+# Individual tool targets - gpt5_reasoner
+gpt5-check:
+	@$(MAKE) -C gpt5_reasoner check
+
+gpt5-test:
+	@$(MAKE) -C gpt5_reasoner test
+
+gpt5-build:
+	@$(MAKE) -C gpt5_reasoner build
+
+gpt5-all:
+	@$(MAKE) -C gpt5_reasoner all
+
 # Workspace-wide commands
 fmt-all:
 	@echo "━━━ Formatting all code ━━━"
@@ -266,4 +315,4 @@ help:
 	@echo "  make clean-all     - Clean all artifacts"
 	@echo "  make status        - Show tool versions"
 	@echo ""
-	@echo -e "$(BOLD)Tools:$(NC) thoughts_tool, claudecode_rs, universal_tool"
+	@echo -e "$(BOLD)Tools:$(NC) $(TOOLS)"
