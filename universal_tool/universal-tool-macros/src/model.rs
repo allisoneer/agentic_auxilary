@@ -132,11 +132,20 @@ pub enum HttpMethod {
     Patch,
 }
 
+/// MCP output mode for tool responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpOutputMode {
+    Json,
+    Text,
+}
+
 /// MCP-specific configuration.
 #[derive(Debug, Default)]
 pub struct McpConfig {
     /// MCP annotations for the tool
     pub annotations: McpAnnotations,
+    /// Output mode for this tool (Text or Json)
+    pub output_mode: Option<McpOutputMode>,
 }
 
 /// MCP tool annotations.

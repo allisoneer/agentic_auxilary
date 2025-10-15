@@ -214,6 +214,8 @@ struct McpAttr {
     idempotent: Option<bool>,
     /// Open world hint - accepts additional parameters
     open_world: Option<bool>,
+    /// Output mode: "text" or "json"
+    output: Option<String>,
 }
 
 /// CLI configuration attributes
@@ -366,13 +368,28 @@ fn parse_tool_method(method: &syn::ImplItemFn) -> syn::Result<Option<ToolDef>> {
             path: r.path,
             method: parse_http_method(&r.method).unwrap_or_default(),
         }),
-        mcp_config: tool_attr.mcp.map(|m| McpConfig {
-            annotations: McpAnnotations {
-                read_only_hint: m.read_only,
-                destructive_hint: m.destructive,
-                idempotent_hint: m.idempotent,
-                open_world_hint: m.open_world,
-            },
+        mcp_config: tool_attr.mcp.map(|m| {
+            let output_mode = match m.output.as_deref() {
+                None => None,
+                Some("text") => Some(crate::model::McpOutputMode::Text),
+                Some("json") => Some(crate::model::McpOutputMode::Json),
+                Some(other) => {
+                    panic!(
+                        "Invalid mcp(output) value: {}. Expected \"text\" or \"json\".",
+                        other
+                    );
+                }
+            };
+
+            McpConfig {
+                annotations: McpAnnotations {
+                    read_only_hint: m.read_only,
+                    destructive_hint: m.destructive,
+                    idempotent_hint: m.idempotent,
+                    open_world_hint: m.open_world,
+                },
+                output_mode,
+            }
         }),
         cli_config: tool_attr.cli.map(|c| CliConfig {
             name: c.name,
