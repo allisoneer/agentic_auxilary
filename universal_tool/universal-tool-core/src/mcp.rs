@@ -275,10 +275,48 @@ pub fn extract_parameter_schema<T: JsonSchema + 'static>() -> Value {
     }
 }
 
+/// Trait for human-friendly MCP text formatting.
+/// Implement this on your tool's return types when opting in to text output.
+pub trait McpFormatter {
+    fn mcp_format_text(&self) -> String;
+}
+
+/// Output carrier for MCP tools. Tools can return either text or JSON.
+pub enum McpOutput {
+    Text(String),
+    Json(Value),
+}
+
+impl From<String> for McpOutput {
+    fn from(s: String) -> Self {
+        McpOutput::Text(s)
+    }
+}
+
+impl From<Value> for McpOutput {
+    fn from(v: Value) -> Self {
+        McpOutput::Json(v)
+    }
+}
+
 /// Helper trait for converting tool results to MCP CallToolResult
 pub trait IntoCallToolResult {
     /// Convert the result into a CallToolResult
     fn into_call_tool_result(self) -> CallToolResult;
+}
+
+// Convert McpOutput into an MCP CallToolResult
+impl IntoCallToolResult for McpOutput {
+    fn into_call_tool_result(self) -> CallToolResult {
+        match self {
+            McpOutput::Text(text) => CallToolResult::success(vec![Content::text(text)]),
+            McpOutput::Json(value) => {
+                let pretty =
+                    serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string());
+                CallToolResult::success(vec![Content::text(pretty)])
+            }
+        }
+    }
 }
 
 impl<T: serde::Serialize> IntoCallToolResult for T {
@@ -393,7 +431,7 @@ macro_rules! implement_mcp_server {
                 async move {
                     match self
                         .$tools_field
-                        .handle_mcp_call(
+                        .handle_mcp_call_mcp(
                             &request.name,
                             $crate::mcp::JsonValue::Object(request.arguments.unwrap_or_default()),
                         )
@@ -552,4 +590,28 @@ macro_rules! implement_mcp_server {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mcp_output_text_to_result() {
+        let r = McpOutput::Text("hello".into()).into_call_tool_result();
+        assert_eq!(r.content.len(), 1);
+        // Check that content has text "hello"
+        let content_str = format!("{:?}", r.content[0]);
+        assert!(content_str.contains("hello"));
+    }
+
+    #[test]
+    fn mcp_output_json_to_result() {
+        let val = serde_json::json!({"k": "v"});
+        let r = McpOutput::Json(val).into_call_tool_result();
+        // Check that content contains the JSON keys
+        let content_str = format!("{:?}", r.content[0]);
+        assert!(content_str.contains("k"));
+        assert!(content_str.contains("v"));
+    }
 }
