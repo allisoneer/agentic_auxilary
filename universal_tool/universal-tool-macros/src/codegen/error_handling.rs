@@ -127,16 +127,16 @@ pub fn generate_missing_param_error(param_name: &str, interface: &str) -> TokenS
             ).into_response());
         },
         "mcp" => quote! {
-            return Err(::universal_tool_core::prelude::ToolError::new(
+            ::universal_tool_core::prelude::ToolError::new(
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 #error_msg
-            ));
+            )
         },
         _ => quote! {
-            return Err(::universal_tool_core::prelude::ToolError::new(
+            ::universal_tool_core::prelude::ToolError::new(
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 #error_msg
-            ));
+            )
         },
     }
 }
@@ -165,16 +165,16 @@ pub fn generate_parse_error(param_name: &str, expected_type: &str, interface: &s
             ).into_response());
         },
         "mcp" => quote! {
-            return Err(::universal_tool_core::prelude::ToolError::new(
+            ::universal_tool_core::prelude::ToolError::new(
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 #error_msg
-            ));
+            )
         },
         _ => quote! {
-            return Err(::universal_tool_core::prelude::ToolError::new(
+            ::universal_tool_core::prelude::ToolError::new(
                 ::universal_tool_core::prelude::ErrorCode::InvalidArgument,
                 #error_msg
-            ));
+            )
         },
     }
 }
