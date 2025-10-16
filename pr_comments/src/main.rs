@@ -34,6 +34,9 @@ enum Commands {
         /// Include resolved review comments (defaults to false)
         #[arg(long)]
         include_resolved: bool,
+        /// Limit the number of comments returned (optional)
+        #[arg(long)]
+        limit: Option<usize>,
     },
     /// Get issue comments (discussion) for a PR
     IssueComments {
@@ -94,22 +97,26 @@ async fn run_cli(args: Args) -> Result<()> {
         Commands::ReviewComments {
             pr,
             include_resolved,
-        } => match tool.get_review_comments(pr, Some(include_resolved)).await {
-            Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+            limit,
+        } => match tool
+            .get_review_comments(pr, Some(include_resolved), limit)
+            .await
+        {
+            Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         },
         Commands::IssueComments { pr } => match tool.get_issue_comments(pr).await {
-            Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
+            Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         },
         Commands::ListPrs { state } => match tool.list_prs(Some(state)).await {
-            Ok(prs) => println!("{}", serde_json::to_string_pretty(&prs)?),
+            Ok(list) => println!("{}", serde_json::to_string_pretty(&list.prs)?),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
