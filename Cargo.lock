@@ -1046,7 +1046,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-openai",
  "clap",
@@ -1067,7 +1067,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core 0.2.2",
+ "universal-tool-core 0.2.3",
  "walkdir",
 ]
 
@@ -3022,7 +3022,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3048,7 +3048,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core 0.2.2",
+ "universal-tool-core 0.2.3",
  "which",
 ]
 
@@ -3384,7 +3384,7 @@ dependencies = [
 
 [[package]]
 name = "universal-tool-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "async-trait",
  "atty",
@@ -3406,7 +3406,7 @@ dependencies = [
  "tokio-util",
  "tower",
  "tower-http",
- "universal-tool-macros 0.1.5",
+ "universal-tool-macros 0.1.6",
  "utoipa",
  "utoipa-swagger-ui",
 ]
@@ -3418,8 +3418,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "universal-tool-core 0.2.2",
- "universal-tool-macros 0.1.5",
+ "universal-tool-core 0.2.3",
+ "universal-tool-macros 0.1.6",
 ]
 
 [[package]]
@@ -3436,7 +3436,7 @@ dependencies = [
 
 [[package]]
 name = "universal-tool-macros"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",
