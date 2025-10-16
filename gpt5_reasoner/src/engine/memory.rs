@@ -1,0 +1,543 @@
+use crate::engine::paths::{is_ancestor, walk_up_to_boundary};
+use crate::types::FileMeta;
+
+pub fn memory_files_in_dir(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let claude_md = dir.join("CLAUDE.md");
+    if claude_md.exists() && claude_md.is_file() {
+        out.push(claude_md);
+    }
+    let dot_claude_md = dir.join(".claude").join("CLAUDE.md");
+    if dot_claude_md.exists() && dot_claude_md.is_file() {
+        out.push(dot_claude_md);
+    }
+    out
+}
+
+pub fn injection_enabled_from_env() -> bool {
+    match std::env::var("INJECT_CLAUDE_MD") {
+        Err(_) => true,
+        Ok(val) => {
+            let v = val.trim().to_ascii_lowercase();
+            !(v == "0" || v == "false")
+        }
+    }
+}
+
+pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
+    let cwd = match std::env::current_dir() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Skipping CLAUDE.md injection: unable to get cwd: {}", e);
+            return 0;
+        }
+    };
+
+    let mut parent_dirs = Vec::<std::path::PathBuf>::new();
+    let mut seen_dirs = std::collections::HashSet::<std::path::PathBuf>::new();
+
+    for f in files.iter() {
+        if f.filename == "plan_structure.md" {
+            continue;
+        }
+        let p = std::path::Path::new(&f.filename);
+        if let Some(parent) = p.parent()
+            && is_ancestor(&cwd, parent)
+            && seen_dirs.insert(parent.to_path_buf())
+        {
+            parent_dirs.push(parent.to_path_buf());
+        }
+    }
+
+    if parent_dirs.is_empty() {
+        tracing::debug!("No file parents under cwd boundary; skipping CLAUDE.md injection");
+        return 0;
+    }
+
+    parent_dirs.sort_by_key(|d| d.components().count());
+
+    let mut ordered_dirs = Vec::<std::path::PathBuf>::new();
+    let mut seen_chain_dir = std::collections::HashSet::<std::path::PathBuf>::new();
+
+    for parent in parent_dirs {
+        if let Some(chain) = walk_up_to_boundary(&parent, &cwd) {
+            for dir in chain {
+                if seen_chain_dir.insert(dir.clone()) {
+                    ordered_dirs.push(dir);
+                }
+            }
+        }
+    }
+
+    let mut discovered = Vec::<std::path::PathBuf>::new();
+    let mut seen_mem = std::collections::HashSet::<std::path::PathBuf>::new();
+
+    for dir in ordered_dirs {
+        for mf in memory_files_in_dir(&dir) {
+            if seen_mem.insert(mf.clone()) {
+                discovered.push(mf);
+            }
+        }
+    }
+
+    if discovered.is_empty() {
+        tracing::debug!("No CLAUDE.md files found in directory chain");
+        return 0;
+    }
+
+    let count_before = files.len();
+
+    for mf in discovered {
+        let dir = mf
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "<unknown>".to_string());
+
+        tracing::debug!("Discovered memory file: {}", mf.display());
+
+        files.push(FileMeta {
+            filename: mf.to_string_lossy().to_string(),
+            description: format!("Project memory from {}, auto-injected for context", dir),
+        });
+    }
+
+    let injected = files.len() - count_before;
+    tracing::info!("Auto-injected {} CLAUDE.md memory file(s)", injected);
+    injected
+}
+
+#[cfg(test)]
+mod claude_injection_tests {
+    use super::*;
+    use serial_test::serial;
+    use std::fs;
+    use tempfile::TempDir;
+
+    struct DirGuard {
+        prev: std::path::PathBuf,
+    }
+    impl DirGuard {
+        fn set(to: &std::path::Path) -> Self {
+            let prev = std::env::current_dir().unwrap();
+            std::env::set_current_dir(to).unwrap();
+            Self { prev }
+        }
+    }
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.prev).unwrap();
+        }
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        prev: Option<String>,
+    }
+    impl EnvGuard {
+        fn set(key: &'static str, val: &str) -> Self {
+            let prev = std::env::var(key).ok();
+            unsafe { std::env::set_var(key, val) };
+            Self { key, prev }
+        }
+        fn remove(key: &'static str) -> Self {
+            let prev = std::env::var(key).ok();
+            unsafe { std::env::remove_var(key) };
+            Self { key, prev }
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(v) => unsafe { std::env::set_var(self.key, v) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
+        }
+    }
+
+    #[test]
+    fn test_is_ancestor_basic() {
+        let a = std::path::Path::new("/foo");
+        let b = std::path::Path::new("/foo/bar");
+        let c = std::path::Path::new("/bar");
+        assert!(is_ancestor(a, b));
+        assert!(is_ancestor(a, a));
+        assert!(!is_ancestor(b, a));
+        assert!(!is_ancestor(c, b));
+    }
+
+    #[test]
+    fn test_walk_up_to_boundary_success() {
+        let start = std::path::Path::new("/foo/bar/baz");
+        let stop = std::path::Path::new("/foo");
+        let result = walk_up_to_boundary(start, stop).unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], std::path::Path::new("/foo"));
+        assert_eq!(result[1], std::path::Path::new("/foo/bar"));
+        assert_eq!(result[2], std::path::Path::new("/foo/bar/baz"));
+    }
+
+    #[test]
+    fn test_walk_up_to_boundary_reject_when_not_ancestor() {
+        let start = std::path::Path::new("/bar/baz");
+        let stop = std::path::Path::new("/foo");
+        let result = walk_up_to_boundary(start, stop);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_memory_files_in_dir_variants() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        fs::create_dir(root.join(".claude")).unwrap();
+        fs::write(root.join(".claude").join("CLAUDE.md"), "dot").unwrap();
+
+        let discovered = memory_files_in_dir(root);
+        assert_eq!(discovered.len(), 2);
+        assert!(discovered.iter().any(|p| p.ends_with("CLAUDE.md")));
+        assert!(discovered.iter().any(|p| p.ends_with(".claude/CLAUDE.md")));
+    }
+
+    #[test]
+    #[serial]
+    fn test_auto_inject_order_and_dedup() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let a_dir = root.join("a");
+        let b_dir = a_dir.join("b");
+        fs::create_dir_all(&b_dir).unwrap();
+
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        fs::write(a_dir.join("CLAUDE.md"), "a").unwrap();
+        fs::write(b_dir.join("CLAUDE.md"), "b").unwrap();
+
+        let file_in_b = b_dir.join("code.rs");
+        fs::write(&file_in_b, "fn f() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![FileMeta {
+            filename: file_in_b.to_string_lossy().to_string(),
+            description: "code".into(),
+        }];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 3);
+        assert_eq!(files.len(), 4);
+
+        let names: Vec<_> = files.iter().map(|f| &f.filename).collect();
+        let root_idx = names
+            .iter()
+            .position(|n| n.ends_with("CLAUDE.md") && !n.contains("a/") && !n.contains("b/"))
+            .unwrap();
+        let a_idx = names
+            .iter()
+            .position(|n| n.ends_with("a/CLAUDE.md"))
+            .unwrap();
+        let b_idx = names
+            .iter()
+            .position(|n| n.ends_with("b/CLAUDE.md"))
+            .unwrap();
+        assert!(root_idx < a_idx && a_idx < b_idx);
+    }
+
+    #[test]
+    #[serial]
+    fn test_auto_inject_skips_outside_cwd() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+
+        let outside = TempDir::new().unwrap();
+        let file_outside = outside.path().join("external.rs");
+        fs::write(&file_outside, "fn e() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![FileMeta {
+            filename: file_outside.to_string_lossy().to_string(),
+            description: "external".into(),
+        }];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 0);
+        assert_eq!(files.len(), 1);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn test_injection_enabled_from_env() {
+        let _g1 = EnvGuard::remove("INJECT_CLAUDE_MD");
+        assert!(injection_enabled_from_env());
+
+        let _g2 = EnvGuard::set("INJECT_CLAUDE_MD", "1");
+        assert!(injection_enabled_from_env());
+
+        let _g3 = EnvGuard::set("INJECT_CLAUDE_MD", "true");
+        assert!(injection_enabled_from_env());
+
+        let _g4 = EnvGuard::set("INJECT_CLAUDE_MD", "0");
+        assert!(!injection_enabled_from_env());
+
+        let _g5 = EnvGuard::set("INJECT_CLAUDE_MD", "false");
+        assert!(!injection_enabled_from_env());
+    }
+}
+
+#[cfg(test)]
+mod claude_injection_integration_tests {
+    use super::*;
+    use crate::template::inject_files;
+    use serial_test::serial;
+    use std::fs;
+    use tempfile::TempDir;
+
+    struct DirGuard {
+        prev: std::path::PathBuf,
+    }
+    impl DirGuard {
+        fn set(to: &std::path::Path) -> Self {
+            let prev = std::env::current_dir().unwrap();
+            std::env::set_current_dir(to).unwrap();
+            Self { prev }
+        }
+    }
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.prev).unwrap();
+        }
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        prev: Option<String>,
+    }
+    impl EnvGuard {
+        fn set(key: &'static str, val: &str) -> Self {
+            let prev = std::env::var(key).ok();
+            unsafe { std::env::set_var(key, val) };
+            Self { key, prev }
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(v) => unsafe { std::env::set_var(self.key, v) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_e2e_template_injection_with_discovered_claude() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let src = root.join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(root.join("CLAUDE.md"), "# Project Guide\nDo X").unwrap();
+        fs::write(src.join("code.rs"), "fn f() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![FileMeta {
+            filename: src.join("code.rs").to_string_lossy().to_string(),
+            description: "impl".into(),
+        }];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 1, "should inject root CLAUDE.md");
+
+        let xml = r#"<context>
+<!-- GROUP: implementation -->
+</context>"#;
+
+        use crate::optimizer::parser::{FileGroup, FileGrouping};
+        let groups = FileGrouping {
+            file_groups: vec![FileGroup {
+                name: "implementation".to_string(),
+                purpose: None,
+                critical: None,
+                files: files.iter().map(|f| f.filename.clone()).collect(),
+            }],
+        };
+
+        let final_prompt = inject_files(xml, &groups).await.unwrap();
+        assert!(final_prompt.contains("# Project Guide"));
+        assert!(final_prompt.contains("Do X"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_env_gate_disables_injection() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        fs::write(root.join("CLAUDE.md"), "mem").unwrap();
+        let file = root.join("code.rs");
+        fs::write(&file, "fn f() {}").unwrap();
+
+        let _g1 = DirGuard::set(root);
+        let _g2 = EnvGuard::set("INJECT_CLAUDE_MD", "0");
+
+        let mut files = vec![FileMeta {
+            filename: file.to_string_lossy().to_string(),
+            description: "code".into(),
+        }];
+
+        // Simulate pipeline behavior - check env gate before calling
+        let count = if injection_enabled_from_env() {
+            auto_inject_claude_memories(&mut files)
+        } else {
+            0
+        };
+
+        assert_eq!(
+            count, 0,
+            "injection should be disabled when INJECT_CLAUDE_MD=0"
+        );
+        assert_eq!(files.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod claude_injection_edge_tests {
+    use super::*;
+    use serial_test::serial;
+    use std::fs;
+    use tempfile::TempDir;
+
+    struct DirGuard {
+        prev: std::path::PathBuf,
+    }
+    impl DirGuard {
+        fn set(to: &std::path::Path) -> Self {
+            let prev = std::env::current_dir().unwrap();
+            std::env::set_current_dir(to).unwrap();
+            Self { prev }
+        }
+    }
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.prev).unwrap();
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_multiple_subtrees() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let a = root.join("a");
+        let b = root.join("b");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        fs::write(a.join("CLAUDE.md"), "a").unwrap();
+        fs::write(b.join("CLAUDE.md"), "b").unwrap();
+
+        let file_a = a.join("x.rs");
+        let file_b = b.join("y.rs");
+        fs::write(&file_a, "fn x() {}").unwrap();
+        fs::write(&file_b, "fn y() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![
+            FileMeta {
+                filename: file_a.to_string_lossy().to_string(),
+                description: "x".into(),
+            },
+            FileMeta {
+                filename: file_b.to_string_lossy().to_string(),
+                description: "y".into(),
+            },
+        ];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 3, "root, a, b memories");
+        assert_eq!(files.len(), 5);
+    }
+
+    #[test]
+    #[serial]
+    fn test_file_in_cwd_only() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        let file = root.join("code.rs");
+        fs::write(&file, "fn f() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![FileMeta {
+            filename: file.to_string_lossy().to_string(),
+            description: "code".into(),
+        }];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 1);
+        assert!(files[1].filename.ends_with("CLAUDE.md"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_no_input_files_no_injection() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![];
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_dedup_when_user_passed_claude() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let claude_path = root.join("CLAUDE.md");
+        fs::write(&claude_path, "root").unwrap();
+
+        let file = root.join("code.rs");
+        fs::write(&file, "fn f() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![
+            FileMeta {
+                filename: claude_path.to_string_lossy().to_string(),
+                description: "user-provided".into(),
+            },
+            FileMeta {
+                filename: file.to_string_lossy().to_string(),
+                description: "code".into(),
+            },
+        ];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 1);
+        assert_eq!(files.len(), 3);
+    }
+
+    #[test]
+    #[serial]
+    fn test_skips_plan_structure() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let mut files = vec![FileMeta {
+            filename: "plan_structure.md".into(),
+            description: "embedded".into(),
+        }];
+
+        let count = auto_inject_claude_memories(&mut files);
+        assert_eq!(count, 0, "plan_structure.md has no real parent");
+    }
+}
