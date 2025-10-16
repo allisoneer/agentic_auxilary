@@ -6,8 +6,8 @@ publish = false
 license = "MIT"
 
 [dev-dependencies]
-universal-tool-core = { version = "0.2.2", path = "../universal-tool-core", features = ["cli"] }
-universal-tool-macros = { version = "0.1.5", path = "../universal-tool-macros" }
+universal-tool-core = { version = "0.2.3", path = "../universal-tool-core", features = ["cli"] }
+universal-tool-macros = { version = "0.1.6", path = "../universal-tool-macros" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
