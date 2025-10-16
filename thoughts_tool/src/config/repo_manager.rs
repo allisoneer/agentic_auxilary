@@ -352,6 +352,17 @@ impl RepoConfigManager {
         self.save_v2(&default_config)?;
         Ok(default_config)
     }
+
+    /// Soft validation for v2 configuration returning warnings only
+    pub fn validate_v2_soft(&self, cfg: &RepoConfigV2) -> Vec<String> {
+        let mut warnings = Vec::new();
+        for r in &cfg.references {
+            if let Err(e) = crate::config::validation::validate_reference_url(r) {
+                warnings.push(format!("Invalid reference '{}': {}", r, e));
+            }
+        }
+        warnings
+    }
 }
 
 #[cfg(test)]
