@@ -104,7 +104,7 @@ async fn test_handle_mcp_call_invalid_params() {
     let result = tools.handle_mcp_call("count_words", params).await;
 
     assert!(result.is_err());
-    // The error should be about missing field
+    // The error should be about missing parameter
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("missing field"));
+    assert!(err.to_string().contains("Missing required parameter"));
 }
