@@ -13,11 +13,14 @@ use quote::quote;
 pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
     let struct_type = &router.struct_type;
     let dispatch_method = generate_mcp_dispatch_method(router);
+    let dispatch_method_mcp = generate_mcp_dispatch_method_mcp(router);
     let tools_method = generate_mcp_tools_method(router);
 
     quote! {
         impl #struct_type {
             #dispatch_method
+
+            #dispatch_method_mcp
 
             #tools_method
         }
@@ -51,56 +54,77 @@ fn generate_mcp_dispatch_method(router: &RouterDef) -> TokenStream {
     }
 }
 
-/// Generates a match arm for a single tool
-fn generate_tool_match_arm(tool: &ToolDef) -> TokenStream {
-    let tool_name = &tool.tool_name;
-    let _method_ident = &tool.method_name;
-
-    // Create parameter struct definition
-    let params_struct = generate_params_struct(tool);
-
-    // Generate method call with proper parameter passing
-    let method_call = generate_method_call(tool);
+/// Generates the handle_mcp_call_mcp() method that returns McpOutput (Text or Json)
+fn generate_mcp_dispatch_method_mcp(router: &RouterDef) -> TokenStream {
+    let match_arms: Vec<_> = router
+        .tools
+        .iter()
+        .map(generate_tool_match_arm_mcp)
+        .collect();
 
     quote! {
-        #tool_name => {
-            #params_struct
-
-            let params: __Params = ::serde_json::from_value(params)?;
-            #method_call
+        /// Handles MCP tool calls and returns McpOutput (Text or Json), honoring per-tool output mode.
+        pub async fn handle_mcp_call_mcp(
+            &self,
+            method: &str,
+            params: ::serde_json::Value
+        ) -> ::std::result::Result<::universal_tool_core::mcp::McpOutput, ::universal_tool_core::error::ToolError> {
+            match method {
+                #(#match_arms)*
+                _ => {
+                    ::std::result::Result::Err(
+                        ::universal_tool_core::error::ToolError::new(
+                            ::universal_tool_core::error::ErrorCode::NotFound,
+                            ::std::format!("Unknown method: {}", method)
+                        )
+                    )
+                }
+            }
         }
     }
 }
 
-/// Generates inline parameter struct for deserialization
-fn generate_params_struct(tool: &ToolDef) -> TokenStream {
-    // Filter out special MCP parameters that come from context
-    let deserializable_params: Vec<_> = tool
+/// Generates a match arm for a single tool
+fn generate_tool_match_arm(tool: &ToolDef) -> TokenStream {
+    let tool_name = &tool.tool_name;
+
+    // Generate per-field extraction bindings for MCP
+    let param_extractions = crate::codegen::validation::generate_params_extraction(tool, "mcp");
+
+    // Determine if we have any includable params (excluding ProgressReporter/CancellationToken)
+    let has_includable_params = tool
         .params
         .iter()
-        .filter(|param| validation::should_include_param(param, "mcp"))
-        .collect();
+        .any(|p| crate::codegen::validation::should_include_param(p, "mcp"));
 
-    if deserializable_params.is_empty() {
-        // No parameters - generate empty struct
+    // If there are includable params, assert params is a JSON object and bind it
+    let object_assertion = if has_includable_params {
         quote! {
-            #[derive(::serde::Deserialize)]
-            struct __Params {}
+            let params = match params {
+                ::serde_json::Value::Object(map) => map,
+                _ => {
+                    return ::std::result::Result::Err(
+                        ::universal_tool_core::error::ToolError::new(
+                            ::universal_tool_core::error::ErrorCode::InvalidArgument,
+                            "Parameters must be a JSON object"
+                        )
+                    );
+                }
+            };
         }
     } else {
-        let fields = deserializable_params.iter().map(|param| {
-            let name = &param.name;
-            let ty = &param.ty;
-            quote! {
-                #name: #ty
-            }
-        });
+        quote! {}
+    };
 
-        quote! {
-            #[derive(::serde::Deserialize)]
-            struct __Params {
-                #(#fields),*
-            }
+    // Generate method call (now uses local variables instead of params.#field)
+    let method_call = generate_method_call(tool);
+
+    quote! {
+        #tool_name => {
+            #object_assertion
+            #( #param_extractions )*
+
+            #method_call
         }
     }
 }
@@ -108,6 +132,7 @@ fn generate_params_struct(tool: &ToolDef) -> TokenStream {
 /// Generates the method call with proper parameter passing and result serialization
 fn generate_method_call(tool: &ToolDef) -> TokenStream {
     // Build parameter list, handling special MCP parameters
+    // For normal params, use the local variable bound by per-field extraction
     let param_args: Vec<_> = tool
         .params
         .iter()
@@ -125,8 +150,8 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
                 // TODO: In the future, could get from MCP request context
                 quote! { ::universal_tool_core::mcp::CancellationToken::new() }
             } else {
-                // Regular parameter from deserialized params
-                quote! { params.#name }
+                // Regular parameter - use local variable binding
+                quote! { #name }
             }
         })
         .collect();
@@ -138,6 +163,98 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
     quote! {
         let result = #method_call?;
         ::std::result::Result::Ok(::serde_json::to_value(&result)?)
+    }
+}
+
+/// Generates a match arm for the new MCP dispatch method with output mode support
+fn generate_tool_match_arm_mcp(tool: &ToolDef) -> TokenStream {
+    let tool_name = &tool.tool_name;
+
+    // Generate per-field extraction bindings for MCP
+    let param_extractions = crate::codegen::validation::generate_params_extraction(tool, "mcp");
+
+    // Determine if we have any includable params (excluding ProgressReporter/CancellationToken)
+    let has_includable_params = tool
+        .params
+        .iter()
+        .any(|p| crate::codegen::validation::should_include_param(p, "mcp"));
+
+    // If there are includable params, assert params is a JSON object and bind it
+    let object_assertion = if has_includable_params {
+        quote! {
+            let params = match params {
+                ::serde_json::Value::Object(map) => map,
+                _ => {
+                    return ::std::result::Result::Err(
+                        ::universal_tool_core::error::ToolError::new(
+                            ::universal_tool_core::error::ErrorCode::InvalidArgument,
+                            "Parameters must be a JSON object"
+                        )
+                    );
+                }
+            };
+        }
+    } else {
+        quote! {}
+    };
+
+    // Build parameter args list using local bindings
+    let param_args: Vec<_> = tool
+        .params
+        .iter()
+        .map(|param| {
+            let name = &param.name;
+            let ty = &param.ty;
+            let ty_str = quote!(#ty).to_string();
+
+            if ty_str.contains("ProgressReporter") {
+                quote! { None }
+            } else if ty_str.contains("CancellationToken") {
+                quote! { ::universal_tool_core::mcp::CancellationToken::new() }
+            } else {
+                quote! { #name }
+            }
+        })
+        .collect();
+
+    let method_call =
+        crate::codegen::shared::generate_normalized_method_call(tool, quote! { self }, param_args);
+
+    // Determine output mode at codegen time
+    let output_mode_tokens = if let Some(mcp_config) = &tool.metadata.mcp_config {
+        if matches!(
+            mcp_config.output_mode,
+            Some(crate::model::McpOutputMode::Text)
+        ) {
+            // TEXT mode: require McpFormatter at compile time
+            quote! {
+                let result = #method_call?;
+                let text = ::universal_tool_core::mcp::McpFormatter::mcp_format_text(&result);
+                ::std::result::Result::Ok(::universal_tool_core::mcp::McpOutput::Text(text))
+            }
+        } else {
+            // JSON mode
+            quote! {
+                let result = #method_call?;
+                let val = ::serde_json::to_value(&result)?;
+                ::std::result::Result::Ok(::universal_tool_core::mcp::McpOutput::Json(val))
+            }
+        }
+    } else {
+        // Default to JSON
+        quote! {
+            let result = #method_call?;
+            let val = ::serde_json::to_value(&result)?;
+            ::std::result::Result::Ok(::universal_tool_core::mcp::McpOutput::Json(val))
+        }
+    };
+
+    quote! {
+        #tool_name => {
+            #object_assertion
+            #( #param_extractions )*
+            #output_mode_tokens
+        }
     }
 }
 
