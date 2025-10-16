@@ -21,30 +21,30 @@ pub async fn execute() -> Result<()> {
     let mut cloned_count = 0;
     let mut skipped_count = 0;
 
-    for url in &ds.references {
+    for rm in &ds.references {
         // Check if already cloned
-        if mapping_mgr.resolve_url(url)?.is_some() {
-            println!("{} {} (already cloned)", "→".dimmed(), url.dimmed());
+        if mapping_mgr.resolve_url(&rm.remote)?.is_some() {
+            println!("{} {} (already cloned)", "→".dimmed(), rm.remote.dimmed());
             skipped_count += 1;
             continue;
         }
 
         // Clone to default path
-        let default_path = RepoMappingManager::get_default_clone_path(url)?;
+        let default_path = RepoMappingManager::get_default_clone_path(&rm.remote)?;
 
         match clone_repository(&CloneOptions {
-            url: url.clone(),
+            url: rm.remote.clone(),
             target_path: default_path.clone(),
             branch: None,
         }) {
             Ok(_) => {
                 // Add mapping
-                mapping_mgr.add_mapping(url.clone(), default_path, true)?;
-                println!("{} Cloned {}", "✓".green(), url);
+                mapping_mgr.add_mapping(rm.remote.clone(), default_path, true)?;
+                println!("{} Cloned {}", "✓".green(), rm.remote);
                 cloned_count += 1;
             }
             Err(e) => {
-                println!("{} Failed to clone {}: {}", "✗".red(), url, e);
+                println!("{} Failed to clone {}: {}", "✗".red(), rm.remote, e);
             }
         }
     }
