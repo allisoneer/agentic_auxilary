@@ -92,12 +92,14 @@ fn test_v1_config_loads_as_desired_state() -> Result<()> {
     assert!(
         desired_state
             .references
-            .contains(&"https://github.com/rust-lang/rust.git".to_string())
+            .iter()
+            .any(|rm| rm.remote == "https://github.com/rust-lang/rust.git")
     );
     assert!(
         desired_state
             .references
-            .contains(&"https://github.com/tokio-rs/tokio.git".to_string())
+            .iter()
+            .any(|rm| rm.remote == "https://github.com/tokio-rs/tokio.git")
     );
 
     Ok(())
@@ -168,7 +170,8 @@ fn test_references_detection_by_path() -> Result<()> {
     assert!(
         desired_state
             .references
-            .contains(&"https://github.com/rust-lang/rust.git".to_string())
+            .iter()
+            .any(|rm| rm.remote == "https://github.com/rust-lang/rust.git")
     );
 
     // Verify context mount
@@ -212,7 +215,8 @@ fn test_references_detection_by_sync_none() -> Result<()> {
     assert!(
         desired_state
             .references
-            .contains(&"https://github.com/tokio-rs/tokio.git".to_string())
+            .iter()
+            .any(|rm| rm.remote == "https://github.com/tokio-rs/tokio.git")
     );
     assert_eq!(desired_state.context_mounts.len(), 0);
 

@@ -1,4 +1,4 @@
-use crate::config::RepoConfigManager;
+use crate::config::{ReferenceEntry, RepoConfigManager};
 use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;
@@ -9,13 +9,14 @@ pub async fn execute(url: String) -> Result<()> {
 
     let mut cfg = mgr.ensure_v2_default()?;
 
-    // Check if URL already exists
-    if cfg.references.contains(&url) {
+    // Check if URL already exists (compare with Simple variant)
+    let entry = ReferenceEntry::Simple(url.clone());
+    if cfg.references.contains(&entry) {
         println!("{}: Reference already exists", "Note".yellow());
         return Ok(());
     }
 
-    cfg.references.push(url.clone());
+    cfg.references.push(entry);
     mgr.save_v2(&cfg)?;
 
     println!("{} Added reference: {}", "✓".green(), url);

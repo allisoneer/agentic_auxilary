@@ -67,10 +67,10 @@ pub async fn update_active_mounts() -> Result<()> {
         desired_targets.push((space, m, false));
     }
 
-    for url in &desired.references {
-        let (org, repo) = extract_org_repo_from_url(url)?;
+    for rm in &desired.references {
+        let (org, repo) = extract_org_repo_from_url(&rm.remote)?;
         let m = Mount::Git {
-            url: url.clone(),
+            url: rm.remote.clone(),
             subpath: None,
             sync: SyncStrategy::None,
         };
