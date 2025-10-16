@@ -1,4 +1,4 @@
-use crate::engine::paths::{is_ancestor, walk_up_to_boundary};
+use crate::engine::paths::{is_ancestor, to_abs_string, walk_up_to_boundary};
 use crate::types::FileMeta;
 
 pub fn memory_files_in_dir(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -25,11 +25,22 @@ pub fn injection_enabled_from_env() -> bool {
 }
 
 pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
-    let cwd = match std::env::current_dir() {
+    let cwd_raw = match std::env::current_dir() {
         Ok(c) => c,
         Err(e) => {
             tracing::warn!("Skipping CLAUDE.md injection: unable to get cwd: {}", e);
             return 0;
+        }
+    };
+    let cwd = match std::fs::canonicalize(&cwd_raw) {
+        Ok(canonical) => canonical,
+        Err(e) => {
+            tracing::warn!(
+                "Unable to canonicalize cwd ({}); using raw cwd {}",
+                e,
+                cwd_raw.display()
+            );
+            cwd_raw
         }
     };
 
@@ -40,7 +51,8 @@ pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
         if f.filename == "plan_structure.md" {
             continue;
         }
-        let p = std::path::Path::new(&f.filename);
+        let abs = to_abs_string(&f.filename);
+        let p = std::path::Path::new(&abs);
         if let Some(parent) = p.parent()
             && is_ancestor(&cwd, parent)
             && seen_dirs.insert(parent.to_path_buf())
@@ -119,7 +131,8 @@ mod claude_injection_tests {
     impl DirGuard {
         fn set(to: &std::path::Path) -> Self {
             let prev = std::env::current_dir().unwrap();
-            std::env::set_current_dir(to).unwrap();
+            let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
+            std::env::set_current_dir(&to_canonical).unwrap();
             Self { prev }
         }
     }
@@ -298,7 +311,8 @@ mod claude_injection_integration_tests {
     impl DirGuard {
         fn set(to: &std::path::Path) -> Self {
             let prev = std::env::current_dir().unwrap();
-            std::env::set_current_dir(to).unwrap();
+            let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
+            std::env::set_current_dir(&to_canonical).unwrap();
             Self { prev }
         }
     }
@@ -412,7 +426,8 @@ mod claude_injection_edge_tests {
     impl DirGuard {
         fn set(to: &std::path::Path) -> Self {
             let prev = std::env::current_dir().unwrap();
-            std::env::set_current_dir(to).unwrap();
+            let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
+            std::env::set_current_dir(&to_canonical).unwrap();
             Self { prev }
         }
     }
