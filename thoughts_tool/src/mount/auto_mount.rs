@@ -68,7 +68,18 @@ pub async fn update_active_mounts() -> Result<()> {
     }
 
     for url in &desired.references {
-        let (org, repo) = extract_org_repo_from_url(url)?;
+        let (org, repo) = match extract_org_repo_from_url(url) {
+            Ok(x) => x,
+            Err(e) => {
+                println!(
+                    "  {} Invalid reference in config, skipping: {}\n     {}",
+                    "Warning:".yellow(),
+                    url,
+                    e
+                );
+                continue;
+            }
+        };
         let m = Mount::Git {
             url: url.clone(),
             subpath: None,

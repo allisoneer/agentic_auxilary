@@ -1002,7 +1002,7 @@ checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "universal-tool-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "atty",
  "clap",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "universal-tool-macros"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "darling",
  "proc-macro2",

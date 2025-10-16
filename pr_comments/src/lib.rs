@@ -3,7 +3,7 @@ pub mod github;
 pub mod models;
 
 use anyhow::{Context, Result};
-use models::{AllComments, IssueComment, PrSummary, ReviewComment};
+use models::{AllComments, IssueCommentList, PrSummaryList, ReviewCommentList};
 use std::sync::Arc;
 use universal_tool_core::prelude::*;
 
@@ -88,7 +88,7 @@ impl PrComments {
     #[universal_tool(
         description = "Get all comments for a PR",
         cli(name = "all", alias = "get"),
-        mcp(read_only = true)
+        mcp(read_only = true, output = "text")
     )]
     pub async fn get_all_comments(
         &self,
@@ -122,7 +122,7 @@ impl PrComments {
     #[universal_tool(
         description = "Get review comments (code comments) for a PR",
         cli(name = "review-comments", alias = "review"),
-        mcp(read_only = true)
+        mcp(read_only = true, output = "text")
     )]
     pub async fn get_review_comments(
         &self,
@@ -132,7 +132,9 @@ impl PrComments {
             description = "Include resolved review comments (defaults to false)"
         )]
         include_resolved: Option<bool>,
-    ) -> Result<Vec<ReviewComment>, ToolError> {
+        #[universal_tool_param(description = "Limit the number of comments returned (optional)")]
+        limit: Option<usize>,
+    ) -> Result<ReviewCommentList, ToolError> {
         let pr = self
             .get_pr_number(pr_number)
             .await
@@ -142,7 +144,9 @@ impl PrComments {
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
                 .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
-        client.get_review_comments(pr, include_resolved).await
+        let mut comments = client
+            .get_review_comments(pr, include_resolved)
+            .await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
@@ -153,20 +157,27 @@ impl PrComments {
                 } else {
                     ToolError::new(ErrorCode::ExternalServiceError, msg)
                 }
-            })
+            })?;
+
+        if let Some(n) = limit
+            && comments.len() > n
+        {
+            comments.truncate(n);
+        }
+        Ok(ReviewCommentList { comments })
     }
 
     /// Get only issue comments (discussion comments) for a PR
     #[universal_tool(
         description = "Get issue comments (discussion) for a PR",
         cli(name = "issue-comments", alias = "discussion"),
-        mcp(read_only = true)
+        mcp(read_only = true, output = "text")
     )]
     pub async fn get_issue_comments(
         &self,
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
-    ) -> Result<Vec<IssueComment>, ToolError> {
+    ) -> Result<IssueCommentList, ToolError> {
         let pr = self
             .get_pr_number(pr_number)
             .await
@@ -176,7 +187,9 @@ impl PrComments {
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
                 .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
-        client.get_issue_comments(pr).await
+        let comments = client
+            .get_issue_comments(pr)
+            .await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
@@ -187,14 +200,15 @@ impl PrComments {
                 } else {
                     ToolError::new(ErrorCode::ExternalServiceError, msg)
                 }
-            })
+            })?;
+        Ok(IssueCommentList { comments })
     }
 
     /// List pull requests in the repository
     #[universal_tool(
         description = "List pull requests in the repository",
         cli(name = "list-prs", alias = "list"),
-        mcp(read_only = true)
+        mcp(read_only = true, output = "text")
     )]
     pub async fn list_prs(
         &self,
@@ -203,12 +217,14 @@ impl PrComments {
             default = "open"
         )]
         state: Option<String>,
-    ) -> Result<Vec<PrSummary>, ToolError> {
+    ) -> Result<PrSummaryList, ToolError> {
         let client =
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
                 .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
-        client.list_prs(state).await
+        let prs = client
+            .list_prs(state)
+            .await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
@@ -219,7 +235,8 @@ impl PrComments {
                 } else {
                     ToolError::new(ErrorCode::ExternalServiceError, msg)
                 }
-            })
+            })?;
+        Ok(PrSummaryList { prs })
     }
 }
 

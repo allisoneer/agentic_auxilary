@@ -111,7 +111,8 @@ impl RepoMappingManager {
         let home = dirs::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
 
-        let repo_name = sanitize_dir_name(&extract_repo_name_from_url(url)?);
+        let (base_url, _sub) = parse_url_and_subpath(url);
+        let repo_name = sanitize_dir_name(&extract_repo_name_from_url(&base_url)?);
         Ok(home.join(".thoughts").join("clones").join(repo_name))
     }
 
@@ -128,7 +129,7 @@ impl RepoMappingManager {
     }
 }
 
-fn parse_url_and_subpath(url: &str) -> (String, Option<String>) {
+pub fn parse_url_and_subpath(url: &str) -> (String, Option<String>) {
     // Look for a subpath pattern: URL followed by :path
     // For SSH URLs like git@github.com:user/repo.git, the first colon is part of the URL
     // So we look for a pattern where we have a second colon after .git or end of repo name
@@ -250,5 +251,12 @@ mod tests {
                 .unwrap(),
             ("modelcontextprotocol".to_string(), "rust-sdk".to_string())
         );
+    }
+
+    #[test]
+    fn test_default_clone_path_uses_base_url_for_subpath() {
+        let p =
+            RepoMappingManager::get_default_clone_path("git@github.com:org/repo.git:docs").unwrap();
+        assert!(p.ends_with(std::path::Path::new(".thoughts/clones/repo")));
     }
 }
