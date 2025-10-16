@@ -6,16 +6,21 @@ Guidance for Claude Code when working with this repository.
 - `thoughts_tool/` - Flexible thought management using filesystem mounts (Rust CLI)
 - `universal_tool/` - Code generation library for multi-interface deployment (Rust library)
 - `claudecode_rs/` - Rust SDK for programmatically interacting with Claude Code (Rust library)
+- `pr_comments/` - Fetch GitHub PR comments with resolution filtering (CLI + MCP, Rust)
+- `gpt5_reasoner/` - Two-phase GPT-5 prompt optimizer/executor with directory-aware file ingestion (CLI + MCP, Rust)
 - `context/` - Thoughts-based documentation and planning
   - `context/general/` - Root level documents impacting multiple tools/directories in the monorepo
   - `context/thoughts_tool/` - Thoughts-based documents for thoughts_tool
   - `context/universal_tool/` - Thoughts-based documents for universal_tool
   - `context/claudecode_rs/` - Thoughts-based documents for claudecode_rs
+  - `context/gpt5_reasoner/` - Thoughts-based documents for gpt5_reasoner
 
 ## Tool-Specific Guidance
 - For thoughts_tool development: See `thoughts_tool/CLAUDE.md`
 - For universal_tool development: See `universal_tool/CLAUDE.md`
 - For claudecode_rs development: See `claudecode_rs/CLAUDE.md`
+- For pr_comments development: See `pr_comments/CLAUDE.md`
+- For gpt5_reasoner development: See `gpt5_reasoner/CLAUDE.md`
 
 ## Common Commands
 
@@ -44,6 +49,25 @@ cd claudecode_rs && make all       # Check, test, and build (silent)
 cd claudecode_rs && make check     # Run formatting and clippy checks
 cd claudecode_rs && make test      # Run tests
 cd claudecode_rs && make build     # Build the project
+```
+
+### pr_comments
+```bash
+cd pr_comments && make all       # Check, test, and build (silent)
+cd pr_comments && make check     # Run formatting and clippy checks
+cd pr_comments && make test      # Run tests
+cd pr_comments && make build     # Build the project
+```
+
+### gpt5_reasoner
+```bash
+cd gpt5_reasoner && make all       # Check, test, and build (silent)
+cd gpt5_reasoner && make check     # Run formatting and clippy checks
+cd gpt5_reasoner && make test      # Run tests
+cd gpt5_reasoner && make build     # Build the project
+
+# Useful during debugging:
+RUST_LOG=gpt5_reasoner=debug make test
 ```
 
 All tools support verbose and normal output variants for their make commands (e.g., `make test-normal`, `make test-verbose`).

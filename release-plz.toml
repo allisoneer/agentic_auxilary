@@ -73,6 +73,12 @@ git_tag_name = "claudecode-v{{ version }}"
 release = true
 
 [[package]]
+name = "pr_comments"
+changelog_path = "pr_comments/CHANGELOG.md"
+git_tag_name = "pr_comments-v{{ version }}"
+release = true
+
+[[package]]
 name = "universal-tool-integration-tests"
 publish = false
 
