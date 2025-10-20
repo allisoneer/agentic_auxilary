@@ -19,18 +19,21 @@ pub async fn execute() -> Result<()> {
     }
 
     println!("{}", "References:".bold());
-    for url in &ds.references {
-        let (org, repo) = crate::config::extract_org_repo_from_url(url)
-            .unwrap_or_else(|_| ("unknown".to_string(), url.clone()));
+    for rm in &ds.references {
+        let (org, repo) = crate::config::extract_org_repo_from_url(&rm.remote)
+            .unwrap_or_else(|_| ("unknown".to_string(), rm.remote.clone()));
 
-        let status = if let Ok(Some(_)) = mapping_mgr.resolve_url(url) {
+        let status = if let Ok(Some(_)) = mapping_mgr.resolve_url(&rm.remote) {
             "✓ cloned".green()
         } else {
             "✗ not cloned".red()
         };
 
         println!("  - {}/{} ({})", org, repo, status);
-        println!("    {}", url.dimmed());
+        println!("    {}", rm.remote.dimmed());
+        if let Some(desc) = &rm.description {
+            println!("      {}", desc.dimmed());
+        }
     }
 
     Ok(())

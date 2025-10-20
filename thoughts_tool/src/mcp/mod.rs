@@ -279,15 +279,15 @@ impl ThoughtsMcpTools {
         let base = ds.mount_dirs.references.clone();
         let mut entries = Vec::new();
 
-        // Phase 3: ds.references is still Vec<String>; description: None
-        for url in &ds.references {
-            let path = match extract_org_repo_from_url(url) {
+        // Phase 4: ds.references is now Vec<ReferenceMount> with optional descriptions
+        for rm in &ds.references {
+            let path = match extract_org_repo_from_url(&rm.remote) {
                 Ok((org, repo)) => format!("{}/{}", org, repo),
-                Err(_) => url.clone(),
+                Err(_) => rm.remote.clone(),
             };
             entries.push(ReferenceItem {
                 path: format!("{}/{}", base, path),
-                description: None,
+                description: rm.description.clone(),
             });
         }
 
