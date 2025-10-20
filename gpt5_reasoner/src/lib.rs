@@ -10,6 +10,9 @@ pub use types::*;
 pub mod engine;
 pub use engine::gpt5_reasoner_impl;
 
+#[cfg(test)]
+pub mod test_support;
+
 use universal_tool_core::prelude::*;
 
 #[derive(Clone, Default)]

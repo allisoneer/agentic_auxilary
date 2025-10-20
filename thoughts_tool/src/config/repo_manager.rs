@@ -1,6 +1,6 @@
 use crate::config::{
-    ContextMount, Mount, MountDirs, MountDirsV2, RepoConfig, RepoConfigV2, RequiredMount,
-    SyncStrategy, ThoughtsMount,
+    ContextMount, Mount, MountDirs, MountDirsV2, ReferenceEntry, ReferenceMount, RepoConfig,
+    RepoConfigV2, RequiredMount, SyncStrategy, ThoughtsMount,
 };
 use crate::mount::MountSpace;
 use crate::utils::paths;
@@ -15,7 +15,7 @@ pub struct DesiredState {
     pub mount_dirs: MountDirsV2,
     pub thoughts_mount: Option<ThoughtsMount>,
     pub context_mounts: Vec<ContextMount>,
-    pub references: Vec<String>,
+    pub references: Vec<ReferenceMount>,
     pub was_v1: bool, // for messaging
 }
 
@@ -127,11 +127,23 @@ impl RepoConfigManager {
 
         if version == "2.0" {
             let v2: RepoConfigV2 = serde_json::from_str(&raw)?;
+            // Normalize ReferenceEntry to ReferenceMount
+            let refs = v2
+                .references
+                .into_iter()
+                .map(|e| match e {
+                    ReferenceEntry::Simple(url) => ReferenceMount {
+                        remote: url,
+                        description: None,
+                    },
+                    ReferenceEntry::WithMetadata(rm) => rm,
+                })
+                .collect();
             return Ok(Some(DesiredState {
                 mount_dirs: v2.mount_dirs,
                 thoughts_mount: v2.thoughts_mount,
                 context_mounts: v2.context_mounts,
-                references: v2.references,
+                references: refs,
                 was_v1: false,
             }));
         }
@@ -147,7 +159,10 @@ impl RepoConfigManager {
             let is_ref =
                 req.mount_path.starts_with("references/") || req.sync == SyncStrategy::None;
             if is_ref {
-                references.push(req.remote);
+                references.push(ReferenceMount {
+                    remote: req.remote,
+                    description: Some(req.description), // PRESERVE v1 description
+                });
             } else {
                 context_mounts.push(ContextMount {
                     remote: req.remote,
@@ -333,7 +348,17 @@ impl RepoConfigManager {
                     mount_dirs: ds.mount_dirs,
                     thoughts_mount: ds.thoughts_mount,
                     context_mounts: ds.context_mounts,
-                    references: ds.references,
+                    references: ds
+                        .references
+                        .into_iter()
+                        .map(|rm| {
+                            if rm.description.is_some() {
+                                ReferenceEntry::WithMetadata(rm)
+                            } else {
+                                ReferenceEntry::Simple(rm.remote)
+                            }
+                        })
+                        .collect(),
                 };
                 self.save_v2(&v2_config)?;
                 return Ok(v2_config);
@@ -357,8 +382,12 @@ impl RepoConfigManager {
     pub fn validate_v2_soft(&self, cfg: &RepoConfigV2) -> Vec<String> {
         let mut warnings = Vec::new();
         for r in &cfg.references {
-            if let Err(e) = crate::config::validation::validate_reference_url(r) {
-                warnings.push(format!("Invalid reference '{}': {}", r, e));
+            let url = match r {
+                ReferenceEntry::Simple(s) => s.as_str(),
+                ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+            };
+            if let Err(e) = crate::config::validation::validate_reference_url(url) {
+                warnings.push(format!("Invalid reference '{}': {}", url, e));
             }
         }
         warnings
@@ -610,8 +639,12 @@ mod tests {
         // Check references
         assert_eq!(desired_state.references.len(), 1);
         assert_eq!(
-            desired_state.references[0],
+            desired_state.references[0].remote,
             "git@github.com:org/ref-repo.git"
+        );
+        assert_eq!(
+            desired_state.references[0].description.as_deref(),
+            Some("Reference mount")
         );
 
         // Verify no thoughts mount (requires explicit config in v2)
@@ -639,8 +672,8 @@ mod tests {
                 sync: crate::config::SyncStrategy::Auto,
             }],
             references: vec![
-                "git@github.com:org/ref1.git".to_string(),
-                "https://github.com/org/ref2.git".to_string(),
+                ReferenceEntry::Simple("git@github.com:org/ref1.git".to_string()),
+                ReferenceEntry::Simple("https://github.com/org/ref2.git".to_string()),
             ],
         };
 
@@ -662,5 +695,93 @@ mod tests {
         );
         assert_eq!(desired_state.context_mounts.len(), 1);
         assert_eq!(desired_state.references.len(), 2);
+    }
+
+    #[test]
+    fn test_v2_references_normalize_to_reference_mount() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let json = r#"{
+            "version": "2.0",
+            "mount_dirs": {},
+            "context_mounts": [],
+            "references": [
+                "git@github.com:org/ref1.git",
+                {"remote": "https://github.com/org/ref2.git", "description": "Ref 2"}
+            ]
+        }"#;
+
+        let config_path = paths::get_repo_config_path(temp_dir.path());
+        std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+        std::fs::write(&config_path, json).unwrap();
+
+        let ds = manager.load_desired_state().unwrap().unwrap();
+        assert_eq!(ds.references.len(), 2);
+        assert_eq!(ds.references[0].remote, "git@github.com:org/ref1.git");
+        assert_eq!(ds.references[0].description, None);
+        assert_eq!(ds.references[1].remote, "https://github.com/org/ref2.git");
+        assert_eq!(ds.references[1].description.as_deref(), Some("Ref 2"));
+    }
+
+    #[test]
+    fn test_v1_migration_preserves_reference_descriptions() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        // Create v1 config with reference having description
+        let v1_config = RepoConfig {
+            version: "1.0".to_string(),
+            mount_dirs: MountDirs::default(),
+            requires: vec![RequiredMount {
+                remote: "git@github.com:org/ref-repo.git".to_string(),
+                mount_path: "references/ref-mount".to_string(),
+                subpath: None,
+                description: "Important reference repository".to_string(),
+                optional: true,
+                override_rules: None,
+                sync: crate::config::SyncStrategy::None,
+            }],
+            rules: vec![],
+        };
+
+        // Save the v1 config
+        manager.save(&v1_config).unwrap();
+
+        // Load via load_desired_state()
+        let ds = manager.load_desired_state().unwrap().unwrap();
+
+        // Verify description is preserved in DesiredState.references
+        assert!(ds.was_v1);
+        assert_eq!(ds.references.len(), 1);
+        assert_eq!(ds.references[0].remote, "git@github.com:org/ref-repo.git");
+        assert_eq!(
+            ds.references[0].description.as_deref(),
+            Some("Important reference repository")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_soft_handles_both_variants() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".into(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![
+                ReferenceEntry::Simple("https://github.com/org/repo".into()),
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "git@github.com:org/repo.git:docs".into(), // invalid: subpath
+                    description: None,
+                }),
+            ],
+        };
+
+        let warnings = mgr.validate_v2_soft(&cfg);
+        assert_eq!(warnings.len(), 1, "Expected one invalid reference warning");
+        assert!(warnings[0].contains("git@github.com:org/repo.git:docs"));
     }
 }

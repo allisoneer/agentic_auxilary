@@ -1,4 +1,4 @@
-use crate::config::RepoConfigManager;
+use crate::config::{ReferenceEntry, RepoConfigManager};
 use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;
@@ -10,7 +10,10 @@ pub async fn execute(url: String) -> Result<()> {
     let mut cfg = mgr.load_v2_or_bail()?;
 
     let initial_len = cfg.references.len();
-    cfg.references.retain(|u| u != &url);
+    cfg.references.retain(|entry| match entry {
+        ReferenceEntry::Simple(u) => u != &url,
+        ReferenceEntry::WithMetadata(rm) => rm.remote != url,
+    });
 
     if cfg.references.len() == initial_len {
         println!("{}: Reference not found: {}", "Error".red(), url);

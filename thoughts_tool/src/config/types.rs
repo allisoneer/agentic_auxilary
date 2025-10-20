@@ -343,6 +343,119 @@ mod tests {
         );
         assert!(deserialized.last_updated.is_some());
     }
+
+    #[test]
+    fn test_reference_entry_deserialize_simple() {
+        let json = r#""git@github.com:org/repo.git""#;
+        let entry: ReferenceEntry = serde_json::from_str(json).unwrap();
+        assert!(matches!(entry, ReferenceEntry::Simple(_)));
+        if let ReferenceEntry::Simple(url) = entry {
+            assert_eq!(url, "git@github.com:org/repo.git");
+        }
+    }
+
+    #[test]
+    fn test_reference_entry_deserialize_with_metadata() {
+        let json = r#"{"remote": "https://github.com/org/repo.git", "description": "Test repo"}"#;
+        let entry: ReferenceEntry = serde_json::from_str(json).unwrap();
+        match entry {
+            ReferenceEntry::WithMetadata(rm) => {
+                assert_eq!(rm.remote, "https://github.com/org/repo.git");
+                assert_eq!(rm.description.as_deref(), Some("Test repo"));
+            }
+            _ => panic!("Expected WithMetadata"),
+        }
+    }
+
+    #[test]
+    fn test_reference_entry_deserialize_with_metadata_no_description() {
+        let json = r#"{"remote": "https://github.com/org/repo.git"}"#;
+        let entry: ReferenceEntry = serde_json::from_str(json).unwrap();
+        match entry {
+            ReferenceEntry::WithMetadata(rm) => {
+                assert_eq!(rm.remote, "https://github.com/org/repo.git");
+                assert_eq!(rm.description, None);
+            }
+            _ => panic!("Expected WithMetadata"),
+        }
+    }
+
+    #[test]
+    fn test_reference_entry_mixed_array() {
+        let json = r#"[
+            "git@github.com:org/ref1.git",
+            {"remote": "https://github.com/org/ref2.git", "description": "Ref 2"}
+        ]"#;
+        let entries: Vec<ReferenceEntry> = serde_json::from_str(json).unwrap();
+        assert_eq!(entries.len(), 2);
+
+        // First should be Simple
+        assert!(matches!(entries[0], ReferenceEntry::Simple(_)));
+
+        // Second should be WithMetadata
+        match &entries[1] {
+            ReferenceEntry::WithMetadata(rm) => {
+                assert_eq!(rm.remote, "https://github.com/org/ref2.git");
+                assert_eq!(rm.description.as_deref(), Some("Ref 2"));
+            }
+            _ => panic!("Expected WithMetadata"),
+        }
+    }
+
+    #[test]
+    fn test_repo_config_v2_with_reference_entries() {
+        let json = r#"{
+            "version": "2.0",
+            "mount_dirs": {},
+            "context_mounts": [],
+            "references": [
+                "git@github.com:org/ref1.git",
+                {"remote": "https://github.com/org/ref2.git", "description": "Reference 2"}
+            ]
+        }"#;
+
+        let config: RepoConfigV2 = serde_json::from_str(json).unwrap();
+        assert_eq!(config.version, "2.0");
+        assert_eq!(config.references.len(), 2);
+
+        // Verify first reference (simple)
+        assert!(matches!(config.references[0], ReferenceEntry::Simple(_)));
+
+        // Verify second reference (with metadata)
+        match &config.references[1] {
+            ReferenceEntry::WithMetadata(rm) => {
+                assert_eq!(rm.description.as_deref(), Some("Reference 2"));
+            }
+            _ => panic!("Expected WithMetadata"),
+        }
+    }
+
+    #[test]
+    fn test_cross_variant_duplicate_detection() {
+        use crate::config::validation::canonical_reference_key;
+        use std::collections::HashSet;
+
+        let entries = vec![
+            ReferenceEntry::Simple("git@github.com:User/Repo.git".to_string()),
+            ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/user/repo".to_string(),
+                description: Some("Same repo".into()),
+            }),
+        ];
+
+        let mut keys = HashSet::new();
+        for e in &entries {
+            let url = match e {
+                ReferenceEntry::Simple(s) => s.as_str(),
+                ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+            };
+            let key = canonical_reference_key(url).unwrap();
+            keys.insert(key);
+        }
+
+        // Both variants should normalize to the same canonical key
+        assert_eq!(keys.len(), 1);
+    }
 }
 
 // New v2 config types
@@ -395,6 +508,20 @@ pub struct ContextMount {
     pub sync: SyncStrategy,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceMount {
+    pub remote: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ReferenceEntry {
+    Simple(String),
+    WithMetadata(ReferenceMount),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoConfigV2 {
     pub version: String, // "2.0"
@@ -405,5 +532,5 @@ pub struct RepoConfigV2 {
     #[serde(default)]
     pub context_mounts: Vec<ContextMount>,
     #[serde(default)]
-    pub references: Vec<String>, // raw URLs only
+    pub references: Vec<ReferenceEntry>,
 }

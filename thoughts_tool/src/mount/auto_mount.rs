@@ -67,7 +67,8 @@ pub async fn update_active_mounts() -> Result<()> {
         desired_targets.push((space, m, false));
     }
 
-    for url in &desired.references {
+    for rm in &desired.references {
+        let url = &rm.remote;
         let (org, repo) = match extract_org_repo_from_url(url) {
             Ok(x) => x,
             Err(e) => {
