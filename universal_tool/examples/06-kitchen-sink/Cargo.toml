@@ -6,7 +6,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-universal-tool-core = { version = "0.2.0", path = "../../universal-tool-core", features = ["cli", "rest", "mcp"] }
+universal-tool-core = { version = "0.2.3", path = "../../universal-tool-core", features = ["cli", "rest", "mcp"] }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 axum = "0.7"

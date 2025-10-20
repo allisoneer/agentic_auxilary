@@ -72,6 +72,21 @@ RUST_LOG=gpt5_reasoner=debug make test
 
 All tools support verbose and normal output variants for their make commands (e.g., `make test-normal`, `make test-verbose`).
 
+## README version sync (xtask)
+
+- Run locally to update README versions:
+```bash
+cargo run -p xtask -- readme-sync
+```
+- Dry run (prints updated README content to stdout, does not write file):
+```bash
+cargo run -p xtask -- readme-sync --dry-run
+```
+- Strict mode (fail on malformed markers or unknown crates):
+```bash
+AUTODEPS_STRICT=1 cargo run -p xtask -- readme-sync
+```
+
 ## Code Style Guidelines
 
 Rules on comment annotations:

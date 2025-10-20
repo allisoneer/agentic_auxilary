@@ -57,18 +57,24 @@ cd gpt5_reasoner && make build
 cargo install thoughts-tool
 ```
 
+<!-- Note: Content between BEGIN:autodeps and END:autodeps is auto-generated. Manual edits inside will be overwritten. -->
+
 ### Use universal_tool in your project
+<!-- BEGIN:autodeps {"crates":["universal-tool-core","universal-tool-macros"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-universal-tool-core = "0.2.1"
-universal-tool-macros = "0.1.4"
+universal-tool-core = "0.2.3"
+universal-tool-macros = "0.1.6"
 ```
+<!-- END:autodeps -->
 
 ### Use claudecode in your project
+<!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
 claudecode = "0.1.4"
 ```
+<!-- END:autodeps -->
 
 ### Install gpt5_reasoner
 ```bash

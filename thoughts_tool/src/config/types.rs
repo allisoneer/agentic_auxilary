@@ -429,6 +429,33 @@ mod tests {
             _ => panic!("Expected WithMetadata"),
         }
     }
+
+    #[test]
+    fn test_cross_variant_duplicate_detection() {
+        use crate::config::validation::canonical_reference_key;
+        use std::collections::HashSet;
+
+        let entries = vec![
+            ReferenceEntry::Simple("git@github.com:User/Repo.git".to_string()),
+            ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/user/repo".to_string(),
+                description: Some("Same repo".into()),
+            }),
+        ];
+
+        let mut keys = HashSet::new();
+        for e in &entries {
+            let url = match e {
+                ReferenceEntry::Simple(s) => s.as_str(),
+                ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+            };
+            let key = canonical_reference_key(url).unwrap();
+            keys.insert(key);
+        }
+
+        // Both variants should normalize to the same canonical key
+        assert_eq!(keys.len(), 1);
+    }
 }
 
 // New v2 config types
