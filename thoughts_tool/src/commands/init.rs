@@ -95,6 +95,45 @@ pub async fn execute(force: bool) -> Result<()> {
         create_symlink(&context_relative, &context_link)?;
         create_symlink(&references_relative, &references_link)?;
 
+        // Inject Claude Code permissions (worktree)
+        {
+            match crate::utils::claude_settings::inject_additional_directories(&repo_root) {
+                Ok(summary) => {
+                    if !summary.warn_conflicting_denies.is_empty() {
+                        eprintln!(
+                            "{}: Some allow rules may be shadowed by deny rules: {:?}",
+                            "Warning".yellow(),
+                            summary.warn_conflicting_denies
+                        );
+                    }
+                    let new_items =
+                        summary.added_additional_dirs.len() + summary.added_allow_rules.len();
+                    if new_items > 0 {
+                        eprintln!(
+                            "{}: Updated Claude Code permissions ({} new item{})",
+                            "Success".green(),
+                            new_items,
+                            if new_items == 1 { "" } else { "s" }
+                        );
+                        eprintln!("  {}", summary.settings_path.display());
+                    } else {
+                        eprintln!(
+                            "{}: Claude Code permissions already present; no changes needed",
+                            "Info".cyan()
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{}: Failed to update Claude Code settings: {}",
+                        "Warning".yellow(),
+                        e
+                    );
+                    eprintln!("Proceeding without updating .claude/settings.local.json");
+                }
+            }
+        }
+
         eprintln!("{}: Worktree initialization complete!", "Success".green());
         eprintln!("The worktree now shares mounts with the main repository.");
         eprintln!("\nCreated workspace symlinks:");
@@ -264,6 +303,45 @@ pub async fn execute(force: bool) -> Result<()> {
                 "Run {} manually to set up mounts",
                 "thoughts mount update".cyan()
             );
+        }
+    }
+
+    // Inject Claude Code permissions (regular repo)
+    {
+        match crate::utils::claude_settings::inject_additional_directories(&repo_root) {
+            Ok(summary) => {
+                if !summary.warn_conflicting_denies.is_empty() {
+                    println!(
+                        "{}: Some allow rules may be shadowed by deny rules: {:?}",
+                        "Warning".yellow(),
+                        summary.warn_conflicting_denies
+                    );
+                }
+                let new_items =
+                    summary.added_additional_dirs.len() + summary.added_allow_rules.len();
+                if new_items > 0 {
+                    println!(
+                        "{} Updated Claude Code permissions ({} new item{})",
+                        "✓".green(),
+                        new_items,
+                        if new_items == 1 { "" } else { "s" }
+                    );
+                    println!("  {}", summary.settings_path.display());
+                } else {
+                    println!(
+                        "{} Claude Code permissions already present; no changes needed",
+                        "Info".cyan()
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "{}: Failed to update Claude Code settings: {}",
+                    "Warning".yellow(),
+                    e
+                );
+                eprintln!("Proceeding without updating .claude/settings.local.json");
+            }
         }
     }
 
