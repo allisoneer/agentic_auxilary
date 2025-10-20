@@ -8,6 +8,7 @@ members = [
     "universal_tool/universal-tool-integration-tests",
     "pr_comments",
     "gpt5_reasoner",
+    "xtask",
 ]
 exclude = [
     "universal_tool/examples",
