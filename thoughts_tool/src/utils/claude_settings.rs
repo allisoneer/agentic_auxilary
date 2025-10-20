@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use colored::Colorize;
 use serde_json::{Value, json};
@@ -144,6 +144,14 @@ pub fn inject_additional_directories(repo_root: &Path) -> Result<InjectionSummar
             .with_context(|| format!("Failed to write {:?}", settings_path))?;
     }
 
+    // Best-effort prune at end of operation to keep directory tidy
+    if let Err(e) = prune_malformed_backups(&settings_path, 3) {
+        eprintln!(
+            "{}: Failed to prune malformed Claude backups: {}",
+            "Warning".yellow(),
+            e
+        );
+    }
     Ok(InjectionSummary {
         settings_path,
         added_additional_dirs,
@@ -200,6 +208,14 @@ fn read_or_init_settings(settings_path: &Path) -> Result<ReadOutcome> {
                 "Warning".yellow(),
                 malformed.display()
             );
+            // Best-effort prune after quarantine
+            if let Err(e) = prune_malformed_backups(settings_path, 3) {
+                eprintln!(
+                    "{}: Failed to prune malformed Claude backups: {}",
+                    "Warning".yellow(),
+                    e
+                );
+            }
             Ok(ReadOutcome {
                 value: json!({}),
                 had_valid_json: false,
@@ -247,6 +263,45 @@ fn collect_conflicting_denies(permissions: &Value, allow_set: &HashSet<String>) 
         }
     }
     conflicts
+}
+
+fn prune_malformed_backups(settings_path: &Path, keep: usize) -> Result<usize> {
+    let dir = settings_path
+        .parent()
+        .ok_or_else(|| anyhow!("Missing parent dir for settings"))?;
+    let prefix = "settings.local.json.malformed.";
+    let suffix = ".bak";
+    let mut entries: Vec<(u64, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {:?}", dir))? {
+        let p = entry?.path();
+        let Some(name_os) = p.file_name() else {
+            continue;
+        };
+        let name = name_os.to_string_lossy();
+        if !name.starts_with(prefix) || !name.ends_with(suffix) {
+            continue;
+        }
+        let ts_str = &name[prefix.len()..name.len() - suffix.len()];
+        if let Ok(ts) = ts_str.parse::<u64>() {
+            entries.push((ts, p));
+        }
+    }
+    // Sort newest first
+    entries.sort_by_key(|(ts, _)| *ts);
+    entries.reverse();
+    let mut deleted = 0usize;
+    for (_, p) in entries.into_iter().skip(keep) {
+        match fs::remove_file(&p) {
+            Ok(_) => deleted += 1,
+            Err(e) => eprintln!(
+                "{}: Failed to remove old malformed backup {}: {}",
+                "Warning".yellow(),
+                p.display(),
+                e
+            ),
+        }
+    }
+    Ok(deleted)
 }
 
 #[cfg(test)]
@@ -380,5 +435,88 @@ mod tests {
         let add_dirs_strs: Vec<&str> = add_dirs.iter().filter_map(|v| v.as_str()).collect();
         assert_eq!(add_dirs_strs.len(), 1);
         assert!(add_dirs_strs[0].ends_with("/.thoughts-data"));
+    }
+
+    #[test]
+    fn prunes_to_last_three_malformed_backups() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        let settings = repo.join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // Create 5 malformed backups with increasing timestamps
+        for ts in [100, 200, 300, 400, 500] {
+            let p = settings.with_extension(format!("json.malformed.{}.bak", ts));
+            fs::write(&p, b"{}").unwrap();
+        }
+
+        let deleted = super::prune_malformed_backups(&settings, 3).unwrap();
+        assert_eq!(deleted, 2);
+
+        let kept: Vec<u64> = fs::read_dir(settings.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| {
+                let name = e.unwrap().file_name().to_string_lossy().into_owned();
+                if let Some(s) = name
+                    .strip_prefix("settings.local.json.malformed.")
+                    .and_then(|s| s.strip_suffix(".bak"))
+                {
+                    s.parse::<u64>().ok()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(kept.len(), 3);
+        assert!(kept.contains(&300) && kept.contains(&400) && kept.contains(&500));
+    }
+
+    #[test]
+    fn ignores_non_numeric_malformed_backups() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        let settings = repo.join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+
+        // Badly named file should be ignored by prune
+        let bad = settings.with_extension("json.malformed.bad.bak");
+        fs::write(&bad, b"{}").unwrap();
+
+        let deleted = super::prune_malformed_backups(&settings, 3).unwrap();
+        assert_eq!(deleted, 0);
+        assert!(bad.exists());
+    }
+
+    #[test]
+    fn quarantine_then_prune_leaves_three() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        fs::create_dir_all(repo.join(".thoughts-data")).unwrap();
+
+        // Corrupt settings multiple times to force quarantine
+        for _ in 0..5 {
+            let settings = repo.join(".claude").join("settings.local.json");
+            fs::create_dir_all(settings.parent().unwrap()).unwrap();
+            fs::write(&settings, "not-json").unwrap();
+            let _ = inject_additional_directories(repo).unwrap();
+        }
+
+        // Count malformed backups (should be <= 3)
+        let dir = repo.join(".claude");
+        let count = fs::read_dir(&dir)
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .ok()
+                    .and_then(|x| {
+                        x.file_name()
+                            .to_str()
+                            .map(|s| s.contains("settings.local.json.malformed."))
+                    })
+                    .unwrap_or(false)
+            })
+            .count();
+        assert!(count <= 3);
     }
 }
