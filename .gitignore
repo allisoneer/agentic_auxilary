@@ -30,3 +30,9 @@ Thumbs.db
 
 # temporary git ignore for a directory I don't need in git
 /thoughts
+
+# Claude settings backup (managed by thoughts)
+/.claude/settings.local.json.bak
+
+# Claude settings quarantine backups (auto-pruned)
+/.claude/settings.local.json.malformed.*.bak
