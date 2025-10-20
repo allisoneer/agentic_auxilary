@@ -78,8 +78,30 @@ Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML gro
 
 ## 8) Testing Strategy and Debugging Tips
 - Run: make test (silent; warnings fail via cargo-smart.sh)
-- Env-dependent tests serialized via serial_test; follow pattern.
 - Debug logs: RUST_LOG=gpt5_reasoner=debug to see optimizer raw output, fence stats, token counts.
+
+### 8.1) Tests that mutate process-global state (env, cwd)
+
+- Always use serial_test named lock: `#[serial(env)]`
+- Never stack multiple EnvGuard sets in one test. Prefer separate tests or tightly scoped blocks.
+- Use shared utilities from `crate::test_support::{EnvGuard, DirGuard}`
+  - `EnvGuard::set("VAR", "value")` / `EnvGuard::remove("VAR")`
+  - `DirGuard::set(tempdir.path())`
+- Note: `std::env::set_var`/`remove_var` are `unsafe` in Rust because they can cause data races. The shared guards handle this correctly and are safe when used with `#[serial(env)]` which prevents concurrent execution.
+- Example:
+
+```rust
+use serial_test::serial;
+use crate::test_support::{EnvGuard, DirGuard};
+
+#[test]
+#[serial(env)]
+fn my_env_test() {
+    let _g = EnvGuard::set("MY_FLAG", "1");
+    assert_eq!(std::env::var("MY_FLAG").unwrap(), "1");
+}
+```
+
 - Template debugging:
   - Look for "Template validation failed" retries and marker diagnostics
   - Reproduce tricky outputs as parser unit tests
