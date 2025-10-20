@@ -33,31 +33,56 @@ pub async fn execute(force: bool) -> Result<()> {
             return Err(anyhow!("Main repository must be initialized first"));
         }
 
-        // Check if already initialized
-        if worktree_thoughts_data.exists() && !force && worktree_thoughts_data.is_symlink() {
-            eprintln!("{}: Worktree already initialized", "Info".cyan());
-            let target = fs::read_link(&worktree_thoughts_data)
-                .unwrap_or_else(|_| PathBuf::from("<invalid>"));
-            eprintln!("  .thoughts-data -> {}", target.display());
-            return Ok(());
+        // Idempotent check-and-act for worktree .thoughts-data symlink
+        let mut had_errors = false;
+        match ensure_symlink_abs_target(&worktree_thoughts_data, &main_thoughts_data, force) {
+            Ok(SymlinkOutcome::Created) => {
+                eprintln!(
+                    "{}: Created .thoughts-data symlink to main repository",
+                    "Success".green()
+                );
+            }
+            Ok(SymlinkOutcome::AlreadyCorrect) => {
+                eprintln!("{}: .thoughts-data symlink already correct", "Info".cyan());
+            }
+            Ok(SymlinkOutcome::Fixed) => {
+                eprintln!(
+                    "{}: Fixed .thoughts-data symlink to main repository",
+                    "Success".green()
+                );
+            }
+            Ok(SymlinkOutcome::NeedsForce { current_target }) => {
+                had_errors = true;
+                eprintln!(
+                    "{}: .thoughts-data symlink points to {} but should point to {}",
+                    "Error".red(),
+                    current_target.display(),
+                    main_thoughts_data.display()
+                );
+                eprintln!(
+                    "Re-run with {} to update the symlink safely.",
+                    "--force".cyan()
+                );
+            }
+            Ok(SymlinkOutcome::NonSymlinkExists) => {
+                had_errors = true;
+                eprintln!(
+                    "{}: .thoughts-data exists but is not a symlink",
+                    "Error".red()
+                );
+                eprintln!(
+                    "Please remove/rename it manually (not removed automatically to avoid data loss)."
+                );
+            }
+            Err(e) => {
+                had_errors = true;
+                eprintln!(
+                    "{}: Failed to ensure .thoughts-data symlink: {}",
+                    "Error".red(),
+                    e
+                );
+            }
         }
-
-        // Clean up if forcing
-        if force && worktree_thoughts_data.exists() {
-            fs::remove_file(&worktree_thoughts_data).with_context(|| {
-                format!("Failed to remove existing symlink: {worktree_thoughts_data:?}")
-            })?;
-        }
-
-        // Create the symlink: .thoughts-data -> main repo's .thoughts-data
-        create_symlink(
-            &main_thoughts_data.to_string_lossy(),
-            &worktree_thoughts_data,
-        )?;
-        eprintln!(
-            "{}: Created .thoughts-data symlink to main repository",
-            "Success".green()
-        );
 
         // Get mount dirs from config to create workspace symlinks
         let repo_config_manager = RepoConfigManager::new(get_control_repo_root(&repo_root)?);
@@ -81,19 +106,69 @@ pub async fn execute(force: bool) -> Result<()> {
         let context_relative = format!(".thoughts-data/{}", mount_dirs.context);
         let references_relative = format!(".thoughts-data/{}", mount_dirs.references);
 
-        // Remove existing symlinks if forcing
-        if force {
-            for path in [&thoughts_link, &context_link, &references_link] {
-                if path.exists() && path.is_symlink() {
-                    fs::remove_file(path)
-                        .with_context(|| format!("Failed to remove existing symlink: {path:?}"))?;
+        // Idempotent workspace symlinks (relative links to .thoughts-data/*)
+        for (name, link, rel, abs_target) in [
+            (
+                &mount_dirs.thoughts,
+                &thoughts_link,
+                &thoughts_relative,
+                main_thoughts_data.join(&mount_dirs.thoughts),
+            ),
+            (
+                &mount_dirs.context,
+                &context_link,
+                &context_relative,
+                main_thoughts_data.join(&mount_dirs.context),
+            ),
+            (
+                &mount_dirs.references,
+                &references_link,
+                &references_relative,
+                main_thoughts_data.join(&mount_dirs.references),
+            ),
+        ] {
+            match ensure_symlink_rel_target(link, rel, &abs_target, force) {
+                Ok(SymlinkOutcome::Created) => {
+                    eprintln!("{}: Created {} -> {}", "Success".green(), name, rel);
+                }
+                Ok(SymlinkOutcome::AlreadyCorrect) => {
+                    eprintln!("{}: {} symlink already correct", "Info".cyan(), name);
+                }
+                Ok(SymlinkOutcome::Fixed) => {
+                    eprintln!("{}: Fixed {} symlink", "Success".green(), name);
+                }
+                Ok(SymlinkOutcome::NeedsForce { current_target }) => {
+                    had_errors = true;
+                    eprintln!(
+                        "{}: {} symlink points to {} but should be {}",
+                        "Error".red(),
+                        name,
+                        current_target.display(),
+                        rel
+                    );
+                    eprintln!(
+                        "Re-run with {} to update the symlink safely.",
+                        "--force".cyan()
+                    );
+                }
+                Ok(SymlinkOutcome::NonSymlinkExists) => {
+                    had_errors = true;
+                    eprintln!("{}: {} exists but is not a symlink", "Error".red(), name);
+                    eprintln!(
+                        "Please remove/rename it manually (not removed automatically to avoid data loss)."
+                    );
+                }
+                Err(e) => {
+                    had_errors = true;
+                    eprintln!(
+                        "{}: Failed to ensure {} symlink: {}",
+                        "Error".red(),
+                        name,
+                        e
+                    );
                 }
             }
         }
-
-        create_symlink(&thoughts_relative, &thoughts_link)?;
-        create_symlink(&context_relative, &context_link)?;
-        create_symlink(&references_relative, &references_link)?;
 
         // Inject Claude Code permissions (worktree)
         {
@@ -134,6 +209,24 @@ pub async fn execute(force: bool) -> Result<()> {
             }
         }
 
+        // Ensure gitignore has backup patterns
+        let _ = ensure_gitignore_entry(
+            &repo_root,
+            "/.claude/settings.local.json.bak",
+            Some("Claude settings backup (managed by thoughts)"),
+        );
+        let _ = ensure_gitignore_entry(
+            &repo_root,
+            "/.claude/settings.local.json.malformed.*.bak",
+            Some("Claude settings quarantine backups (auto-pruned)"),
+        );
+
+        if had_errors {
+            // Return a genuine error after best-effort injection/gitignore updates
+            return Err(anyhow!(
+                "One or more symlinks require --force or manual cleanup"
+            ));
+        }
         eprintln!("{}: Worktree initialization complete!", "Success".green());
         eprintln!("The worktree now shares mounts with the main repository.");
         eprintln!("\nCreated workspace symlinks:");
@@ -168,54 +261,6 @@ pub async fn execute(force: bool) -> Result<()> {
         }
     };
 
-    // Check for existing symlinks
-    let thoughts_link = repo_root.join(&mount_dirs.thoughts);
-    let context_link = repo_root.join(&mount_dirs.context);
-    let references_link = repo_root.join(&mount_dirs.references);
-
-    if !force {
-        let mut existing = vec![];
-        if thoughts_link.exists() {
-            existing.push((&mount_dirs.thoughts, &thoughts_link));
-        }
-        if context_link.exists() {
-            existing.push((&mount_dirs.context, &context_link));
-        }
-        if references_link.exists() {
-            existing.push((&mount_dirs.references, &references_link));
-        }
-
-        if !existing.is_empty() {
-            eprintln!(
-                "{}: Repository already has thoughts directories:",
-                "Error".red()
-            );
-            for (name, path) in existing {
-                if path.is_symlink() {
-                    let target = fs::read_link(path).unwrap_or_else(|_| PathBuf::from("<invalid>"));
-                    eprintln!("  {} -> {}", name, target.display());
-                } else {
-                    eprintln!("  {} (not a symlink)", name);
-                }
-            }
-            eprintln!("\nUse {} to reinitialize.", "--force".cyan());
-            std::process::exit(1);
-        }
-    }
-
-    // Validate that paths are not regular files/directories
-    for (name, path) in [
-        (&mount_dirs.thoughts, &thoughts_link),
-        (&mount_dirs.context, &context_link),
-        (&mount_dirs.references, &references_link),
-    ] {
-        if path.exists() && !path.is_symlink() {
-            eprintln!("{}: {} exists but is not a symlink", "Error".red(), name);
-            eprintln!("Please remove it manually or use {}", "--force".cyan());
-            std::process::exit(1);
-        }
-    }
-
     // Create the actual thoughts directory structure
     let thoughts_dir = repo_root.join(".thoughts-data");
     ensure_dir(&thoughts_dir)?;
@@ -228,24 +273,80 @@ pub async fn execute(force: bool) -> Result<()> {
     ensure_dir(&context_target_dir)?;
     ensure_dir(&references_target_dir)?;
 
-    // Remove existing symlinks if forcing
-    if force {
-        for path in [&thoughts_link, &context_link, &references_link] {
-            if path.exists() && path.is_symlink() {
-                fs::remove_file(path)
-                    .with_context(|| format!("Failed to remove existing symlink: {path:?}"))?;
-            }
-        }
-    }
+    // Resolve symlink targets and ensure idempotently
+    let thoughts_link = repo_root.join(&mount_dirs.thoughts);
+    let context_link = repo_root.join(&mount_dirs.context);
+    let references_link = repo_root.join(&mount_dirs.references);
 
-    // Create symlinks with relative paths
+    let mut had_errors = false;
+
+    // Create or validate symlinks with relative targets
     let thoughts_relative = format!(".thoughts-data/{}", mount_dirs.thoughts);
     let context_relative = format!(".thoughts-data/{}", mount_dirs.context);
     let references_relative = format!(".thoughts-data/{}", mount_dirs.references);
 
-    create_symlink(&thoughts_relative, &thoughts_link)?;
-    create_symlink(&context_relative, &context_link)?;
-    create_symlink(&references_relative, &references_link)?;
+    for (name, link, rel, abs_target) in [
+        (
+            &mount_dirs.thoughts,
+            &thoughts_link,
+            &thoughts_relative,
+            thoughts_target_dir.clone(),
+        ),
+        (
+            &mount_dirs.context,
+            &context_link,
+            &context_relative,
+            context_target_dir.clone(),
+        ),
+        (
+            &mount_dirs.references,
+            &references_link,
+            &references_relative,
+            references_target_dir.clone(),
+        ),
+    ] {
+        match ensure_symlink_rel_target(link, rel, &abs_target, force) {
+            Ok(SymlinkOutcome::Created) => {
+                println!("{} Created {} -> {}", "✓".green(), name, rel);
+            }
+            Ok(SymlinkOutcome::AlreadyCorrect) => {
+                println!("{} {} symlink already correct", "Info".cyan(), name);
+            }
+            Ok(SymlinkOutcome::Fixed) => {
+                println!("{} Fixed {} symlink", "✓".green(), name);
+            }
+            Ok(SymlinkOutcome::NeedsForce { current_target }) => {
+                had_errors = true;
+                eprintln!(
+                    "{}: {} symlink points to {} but should be {}",
+                    "Error".red(),
+                    name,
+                    current_target.display(),
+                    rel
+                );
+                eprintln!(
+                    "Re-run with {} to update the symlink safely.",
+                    "--force".cyan()
+                );
+            }
+            Ok(SymlinkOutcome::NonSymlinkExists) => {
+                had_errors = true;
+                eprintln!("{}: {} exists but is not a symlink", "Error".red(), name);
+                eprintln!(
+                    "Please remove/rename it manually (not removed automatically to avoid data loss)."
+                );
+            }
+            Err(e) => {
+                had_errors = true;
+                eprintln!(
+                    "{}: Failed to ensure {} symlink: {}",
+                    "Error".red(),
+                    name,
+                    e
+                );
+            }
+        }
+    }
 
     // Add to .gitignore - only the data directory needs to be ignored!
     // The symlinks themselves can be tracked by git
@@ -254,6 +355,17 @@ pub async fn execute(force: bool) -> Result<()> {
         "/.thoughts-data",
         Some("Thoughts data directory (created by thoughts init)"),
     )?;
+    // Also ensure Claude backup patterns (best-effort; ignore errors)
+    let _ = ensure_gitignore_entry(
+        &repo_root,
+        "/.claude/settings.local.json.bak",
+        Some("Claude settings backup (managed by thoughts)"),
+    );
+    let _ = ensure_gitignore_entry(
+        &repo_root,
+        "/.claude/settings.local.json.malformed.*.bak",
+        Some("Claude settings quarantine backups (auto-pruned)"),
+    );
 
     // Create README files if directories are empty
     create_readme_if_empty(
@@ -345,6 +457,11 @@ pub async fn execute(force: bool) -> Result<()> {
         }
     }
 
+    if had_errors {
+        return Err(anyhow!(
+            "One or more symlinks require --force or manual cleanup"
+        ));
+    }
     // Success message
     println!("\n{} Successfully initialized thoughts!", "✓".green());
     println!("\nCreated directory structure:");
@@ -415,4 +532,91 @@ fn create_readme_if_empty(dir: &Path, title: &str, content: &str) -> Result<()> 
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+enum SymlinkOutcome {
+    Created,
+    AlreadyCorrect,
+    Fixed,
+    NeedsForce { current_target: PathBuf },
+    NonSymlinkExists,
+}
+
+/// Ensure that `link` is a symlink pointing to the absolute `abs_target`.
+/// If incorrect and `force` is true, fix it. If force is false, return NeedsForce.
+/// Never delete non-symlinks.
+fn ensure_symlink_abs_target(
+    link: &Path,
+    abs_target: &Path,
+    force: bool,
+) -> Result<SymlinkOutcome> {
+    if !link.exists() {
+        create_symlink(&abs_target.to_string_lossy(), link)?;
+        return Ok(SymlinkOutcome::Created);
+    }
+    let meta = fs::symlink_metadata(link)?;
+    if !meta.file_type().is_symlink() {
+        return Ok(SymlinkOutcome::NonSymlinkExists);
+    }
+    // Compare resolved targets; fall back to literal compare on failure
+    let current = fs::read_link(link).unwrap_or_default();
+    let resolved_link = fs::canonicalize(link);
+    let resolved_expected = fs::canonicalize(abs_target);
+    let is_correct = match (resolved_link, resolved_expected) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => current == abs_target, // fallback
+    };
+    if is_correct {
+        return Ok(SymlinkOutcome::AlreadyCorrect);
+    }
+    if force {
+        fs::remove_file(link)?;
+        create_symlink(&abs_target.to_string_lossy(), link)?;
+        Ok(SymlinkOutcome::Fixed)
+    } else {
+        Ok(SymlinkOutcome::NeedsForce {
+            current_target: current,
+        })
+    }
+}
+
+/// Ensure that `link` points to the relative target string `rel_target`.
+/// For correctness check, we prefer resolved path equality against `abs_target`,
+/// falling back to literal link text equality with `rel_target`.
+fn ensure_symlink_rel_target(
+    link: &Path,
+    rel_target: &str,
+    abs_target: &Path,
+    force: bool,
+) -> Result<SymlinkOutcome> {
+    if !link.exists() {
+        create_symlink(rel_target, link)?;
+        return Ok(SymlinkOutcome::Created);
+    }
+    let meta = fs::symlink_metadata(link)?;
+    if !meta.file_type().is_symlink() {
+        return Ok(SymlinkOutcome::NonSymlinkExists);
+    }
+    let current = fs::read_link(link).unwrap_or_default();
+
+    let resolved_link = fs::canonicalize(link);
+    let resolved_expected = fs::canonicalize(abs_target);
+    let is_correct = match (resolved_link, resolved_expected) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => current == PathBuf::from(rel_target),
+    };
+
+    if is_correct {
+        return Ok(SymlinkOutcome::AlreadyCorrect);
+    }
+    if force {
+        fs::remove_file(link)?;
+        create_symlink(rel_target, link)?;
+        Ok(SymlinkOutcome::Fixed)
+    } else {
+        Ok(SymlinkOutcome::NeedsForce {
+            current_target: current,
+        })
+    }
 }
