@@ -79,11 +79,12 @@ pub fn walk_up_to_boundary(
 #[cfg(test)]
 mod pre_validation_tests {
     use super::*;
+    use crate::test_support::DirGuard;
     use std::fs;
     use tempfile::TempDir;
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn test_to_abs_string_makes_relative_absolute() {
         let rel = "foo/bar/baz.txt";
         let abs = to_abs_string(rel);
@@ -98,7 +99,7 @@ mod pre_validation_tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn test_normalize_paths_in_place_skips_embedded() {
         let mut files = vec![
             FileMeta {
@@ -116,7 +117,7 @@ mod pre_validation_tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn test_dedup_files_in_place_across_rel_abs() {
         let td = TempDir::new().unwrap();
         let file = td.path().join("dup.rs");
@@ -124,8 +125,7 @@ mod pre_validation_tests {
 
         let abs = file.to_string_lossy().to_string();
 
-        let orig_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(td.path()).unwrap();
+        let _dir = DirGuard::set(td.path());
 
         let mut files = vec![
             FileMeta {
@@ -140,8 +140,6 @@ mod pre_validation_tests {
 
         normalize_paths_in_place(&mut files);
         dedup_files_in_place(&mut files);
-
-        std::env::set_current_dir(orig_dir).unwrap();
 
         assert_eq!(
             files.len(),

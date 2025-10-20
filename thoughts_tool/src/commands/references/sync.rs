@@ -25,7 +25,9 @@ pub async fn execute() -> Result<()> {
     let mut skipped_count = 0;
     let mut invalid_count = 0;
 
-    for url in &ds.references {
+    for rm in &ds.references {
+        let url = &rm.remote;
+
         if let Err(e) = validate_reference_url(url) {
             println!(
                 "{} Skipping invalid reference: {}\n{}",
@@ -65,12 +67,13 @@ pub async fn execute() -> Result<()> {
         let default_path = RepoMappingManager::get_default_clone_path(url)?;
 
         match clone_repository(&CloneOptions {
-            url: url.clone(),
+            url: url.to_string(),
             target_path: default_path.clone(),
             branch: None,
         }) {
             Ok(_) => {
-                mapping_mgr.add_mapping(url.clone(), default_path, true)?;
+                // Add mapping
+                mapping_mgr.add_mapping(url.to_string(), default_path, true)?;
                 println!("{} Cloned {}", "✓".green(), url);
                 cloned_count += 1;
                 let _ = mapping_mgr.update_sync_time(url);
