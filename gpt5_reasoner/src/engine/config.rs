@@ -7,32 +7,8 @@ pub fn select_optimizer_model(optimizer_model: Option<String>) -> String {
 #[cfg(test)]
 mod model_selection_tests {
     use super::*;
+    use crate::test_support::EnvGuard;
     use serial_test::serial;
-
-    struct EnvGuard {
-        key: &'static str,
-        prev: Option<String>,
-    }
-    impl EnvGuard {
-        fn set(key: &'static str, val: &str) -> Self {
-            let prev = std::env::var(key).ok();
-            unsafe { std::env::set_var(key, val) };
-            Self { key, prev }
-        }
-        fn remove(key: &'static str) -> Self {
-            let prev = std::env::var(key).ok();
-            unsafe { std::env::remove_var(key) };
-            Self { key, prev }
-        }
-    }
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match &self.prev {
-                Some(v) => unsafe { std::env::set_var(self.key, v) },
-                None => unsafe { std::env::remove_var(self.key) },
-            }
-        }
-    }
 
     #[test]
     #[serial(env)]
