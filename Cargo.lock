@@ -389,6 +389,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
+name = "camino"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "276a59bf2b2c967788139340c9f0c5b12d7fd6630315c15c217e559de85d2609"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e35af189006b9c0f00a064685c727031e3ed2d8020f7ba284d78cc2671bd36ea"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1067,7 +1099,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core 0.2.3",
+ "universal-tool-core",
  "walkdir",
 ]
 
@@ -1995,7 +2027,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core 0.2.0",
+ "universal-tool-core",
  "url",
 ]
 
@@ -2659,6 +2691,10 @@ name = "semver"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "serde"
@@ -3048,7 +3084,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core 0.2.3",
+ "universal-tool-core",
  "which",
 ]
 
@@ -3358,32 +3394,6 @@ checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "universal-tool-core"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80dddcdac50e34482f89a7ab2f6fc4d204b96bc3d018961ceefd4c55cb5465f2"
-dependencies = [
- "async-trait",
- "atty",
- "clap",
- "clap_complete",
- "console",
- "csv",
- "dialoguer",
- "indicatif",
- "rmcp",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "serde_yaml",
- "tabled",
- "thiserror 2.0.16",
- "tokio",
- "tokio-util",
- "universal-tool-macros 0.1.2",
-]
-
-[[package]]
-name = "universal-tool-core"
 version = "0.2.3"
 dependencies = [
  "async-trait",
@@ -3406,7 +3416,7 @@ dependencies = [
  "tokio-util",
  "tower",
  "tower-http",
- "universal-tool-macros 0.1.6",
+ "universal-tool-macros",
  "utoipa",
  "utoipa-swagger-ui",
 ]
@@ -3418,20 +3428,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "universal-tool-core 0.2.3",
- "universal-tool-macros 0.1.6",
-]
-
-[[package]]
-name = "universal-tool-macros"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a7bcc71b7db7b18d1152be6f89aee94d01ea45cabe0e45da58cd525ceda8be5"
-dependencies = [
- "darling 0.20.11",
- "proc-macro2",
- "quote",
- "syn 2.0.106",
+ "universal-tool-core",
+ "universal-tool-macros",
 ]
 
 [[package]]
@@ -4064,6 +4062,18 @@ name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cargo_metadata",
+ "clap",
+ "regex",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "yansi"

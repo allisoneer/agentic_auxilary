@@ -1,0 +1,63 @@
+name: README Sync
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  readme-sync:
+    name: Sync README versions
+    runs-on: ubuntu-latest
+    # Only run on PRs labeled "release"
+    if: ${{ github.event_name == 'pull_request' && contains(toJson(github.event.pull_request.labels), '"name":"release"') }}
+    # Don't block releases if something goes wrong
+    continue-on-error: true
+    concurrency:
+      group: readme-sync-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Sync README
+        id: sync
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          cargo run -p xtask -- readme-sync
+          if git diff --quiet --exit-code; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit changes
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "readme-sync[bot]"
+          git config user.email "readme-sync[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore(readme): sync dependency versions [skip ci]"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:${GITHUB_HEAD_REF}

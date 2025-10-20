@@ -377,6 +377,21 @@ impl RepoConfigManager {
         self.save_v2(&default_config)?;
         Ok(default_config)
     }
+
+    /// Soft validation for v2 configuration returning warnings only
+    pub fn validate_v2_soft(&self, cfg: &RepoConfigV2) -> Vec<String> {
+        let mut warnings = Vec::new();
+        for r in &cfg.references {
+            let url = match r {
+                ReferenceEntry::Simple(s) => s.as_str(),
+                ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+            };
+            if let Err(e) = crate::config::validation::validate_reference_url(url) {
+                warnings.push(format!("Invalid reference '{}': {}", url, e));
+            }
+        }
+        warnings
+    }
 }
 
 #[cfg(test)]
@@ -744,5 +759,29 @@ mod tests {
             ds.references[0].description.as_deref(),
             Some("Important reference repository")
         );
+    }
+
+    #[test]
+    fn test_validate_v2_soft_handles_both_variants() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".into(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![
+                ReferenceEntry::Simple("https://github.com/org/repo".into()),
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "git@github.com:org/repo.git:docs".into(), // invalid: subpath
+                    description: None,
+                }),
+            ],
+        };
+
+        let warnings = mgr.validate_v2_soft(&cfg);
+        assert_eq!(warnings.len(), 1, "Expected one invalid reference warning");
+        assert!(warnings[0].contains("git@github.com:org/repo.git:docs"));
     }
 }

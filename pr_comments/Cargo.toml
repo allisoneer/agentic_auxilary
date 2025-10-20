@@ -8,11 +8,13 @@ license = "MIT"
 repository = "https://github.com/allisoneer/agentic_auxilary"
 homepage = "https://github.com/allisoneer/agentic_auxilary"
 readme = "README.md"
+keywords = ["github", "pull-requests", "comments", "cli", "mcp"]
+categories = ["command-line-utilities", "development-tools"]
 
 
 [dependencies]
 # Universal tool framework
-universal-tool-core = { version = "0.2.0", features = ["cli", "mcp"] }
+universal-tool-core = { version = "0.2.3", path = "../universal_tool/universal-tool-core", features = ["cli", "mcp"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
