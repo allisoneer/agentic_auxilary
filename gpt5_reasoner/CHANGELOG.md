@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.2] - 2025-10-20
+
+### ⛰️  Features
+- *(gpt5_reasoner)* Add automatic CLAUDE.md discovery and injection
+
+### 🐛 Bug Fixes
+- *(gpt5_reasoner)* Resolve macOS symlink mismatch in CLAUDE.md auto-injection
+- *(gpt5_reasoner)* Resolve test race conditions in env/cwd mutations
+- *(gpt5_reasoner)* Resolve macOS symlink canonicalization in DirGuard test
+
+### 📚 Documentation
+- Align root documentation and build targets for all 5 tools
+
+### 🚜 Refactor
+- *(gpt5_reasoner)* Extract lib.rs into focused engine modules
 ## [0.3.1] - 2025-10-16
 
 ### ⚙️  Miscellaneous
