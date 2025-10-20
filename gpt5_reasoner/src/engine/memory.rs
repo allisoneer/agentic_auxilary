@@ -121,51 +121,10 @@ pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
 #[cfg(test)]
 mod claude_injection_tests {
     use super::*;
+    use crate::test_support::{DirGuard, EnvGuard};
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
-
-    struct DirGuard {
-        prev: std::path::PathBuf,
-    }
-    impl DirGuard {
-        fn set(to: &std::path::Path) -> Self {
-            let prev = std::env::current_dir().unwrap();
-            let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
-            std::env::set_current_dir(&to_canonical).unwrap();
-            Self { prev }
-        }
-    }
-    impl Drop for DirGuard {
-        fn drop(&mut self) {
-            std::env::set_current_dir(&self.prev).unwrap();
-        }
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        prev: Option<String>,
-    }
-    impl EnvGuard {
-        fn set(key: &'static str, val: &str) -> Self {
-            let prev = std::env::var(key).ok();
-            unsafe { std::env::set_var(key, val) };
-            Self { key, prev }
-        }
-        fn remove(key: &'static str) -> Self {
-            let prev = std::env::var(key).ok();
-            unsafe { std::env::remove_var(key) };
-            Self { key, prev }
-        }
-    }
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match &self.prev {
-                Some(v) => unsafe { std::env::set_var(self.key, v) },
-                None => unsafe { std::env::remove_var(self.key) },
-            }
-        }
-    }
 
     #[test]
     fn test_is_ancestor_basic() {
@@ -212,7 +171,7 @@ mod claude_injection_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_auto_inject_order_and_dedup() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -255,7 +214,7 @@ mod claude_injection_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_auto_inject_skips_outside_cwd() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -279,20 +238,36 @@ mod claude_injection_tests {
 
     #[test]
     #[serial(env)]
-    fn test_injection_enabled_from_env() {
-        let _g1 = EnvGuard::remove("INJECT_CLAUDE_MD");
+    fn test_env_gate_unset_is_true() {
+        let _g = EnvGuard::remove("INJECT_CLAUDE_MD");
         assert!(injection_enabled_from_env());
+    }
 
-        let _g2 = EnvGuard::set("INJECT_CLAUDE_MD", "1");
+    #[test]
+    #[serial(env)]
+    fn test_env_gate_1_is_true() {
+        let _g = EnvGuard::set("INJECT_CLAUDE_MD", "1");
         assert!(injection_enabled_from_env());
+    }
 
-        let _g3 = EnvGuard::set("INJECT_CLAUDE_MD", "true");
+    #[test]
+    #[serial(env)]
+    fn test_env_gate_true_is_true() {
+        let _g = EnvGuard::set("INJECT_CLAUDE_MD", "true");
         assert!(injection_enabled_from_env());
+    }
 
-        let _g4 = EnvGuard::set("INJECT_CLAUDE_MD", "0");
+    #[test]
+    #[serial(env)]
+    fn test_env_gate_0_is_false() {
+        let _g = EnvGuard::set("INJECT_CLAUDE_MD", "0");
         assert!(!injection_enabled_from_env());
+    }
 
-        let _g5 = EnvGuard::set("INJECT_CLAUDE_MD", "false");
+    #[test]
+    #[serial(env)]
+    fn test_env_gate_false_is_false() {
+        let _g = EnvGuard::set("INJECT_CLAUDE_MD", "false");
         assert!(!injection_enabled_from_env());
     }
 }
@@ -301,49 +276,13 @@ mod claude_injection_tests {
 mod claude_injection_integration_tests {
     use super::*;
     use crate::template::inject_files;
+    use crate::test_support::{DirGuard, EnvGuard};
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
 
-    struct DirGuard {
-        prev: std::path::PathBuf,
-    }
-    impl DirGuard {
-        fn set(to: &std::path::Path) -> Self {
-            let prev = std::env::current_dir().unwrap();
-            let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
-            std::env::set_current_dir(&to_canonical).unwrap();
-            Self { prev }
-        }
-    }
-    impl Drop for DirGuard {
-        fn drop(&mut self) {
-            std::env::set_current_dir(&self.prev).unwrap();
-        }
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        prev: Option<String>,
-    }
-    impl EnvGuard {
-        fn set(key: &'static str, val: &str) -> Self {
-            let prev = std::env::var(key).ok();
-            unsafe { std::env::set_var(key, val) };
-            Self { key, prev }
-        }
-    }
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match &self.prev {
-                Some(v) => unsafe { std::env::set_var(self.key, v) },
-                None => unsafe { std::env::remove_var(self.key) },
-            }
-        }
-    }
-
     #[tokio::test]
-    #[serial]
+    #[serial(env)]
     async fn test_e2e_template_injection_with_discovered_claude() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -382,7 +321,7 @@ mod claude_injection_integration_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_env_gate_disables_injection() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -416,29 +355,13 @@ mod claude_injection_integration_tests {
 #[cfg(test)]
 mod claude_injection_edge_tests {
     use super::*;
+    use crate::test_support::DirGuard;
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
 
-    struct DirGuard {
-        prev: std::path::PathBuf,
-    }
-    impl DirGuard {
-        fn set(to: &std::path::Path) -> Self {
-            let prev = std::env::current_dir().unwrap();
-            let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
-            std::env::set_current_dir(&to_canonical).unwrap();
-            Self { prev }
-        }
-    }
-    impl Drop for DirGuard {
-        fn drop(&mut self) {
-            std::env::set_current_dir(&self.prev).unwrap();
-        }
-    }
-
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_multiple_subtrees() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -475,7 +398,7 @@ mod claude_injection_edge_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_file_in_cwd_only() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -496,7 +419,7 @@ mod claude_injection_edge_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_no_input_files_no_injection() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -510,7 +433,7 @@ mod claude_injection_edge_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_dedup_when_user_passed_claude() {
         let td = TempDir::new().unwrap();
         let root = td.path();
@@ -539,7 +462,7 @@ mod claude_injection_edge_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env)]
     fn test_skips_plan_structure() {
         let td = TempDir::new().unwrap();
         let root = td.path();
