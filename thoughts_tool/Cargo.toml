@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-tool"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Flexible thought management using filesystem mounts for git repositories"
@@ -35,7 +35,7 @@ atomicwrites = "0.4"
 colored = "2"
 regex = "1"
 schemars = "0.8"
-universal-tool-core = { version = "0.2.2", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+universal-tool-core = { version = "0.2.3", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
 
 # Platform-specific dependencies
 [target.'cfg(unix)'.dependencies]
