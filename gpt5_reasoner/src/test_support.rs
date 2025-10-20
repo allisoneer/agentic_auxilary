@@ -151,7 +151,17 @@ mod tests {
         {
             let _gd = DirGuard::set(td.path());
             let got = std::env::current_dir().unwrap();
-            assert!(got.starts_with(td.path()));
+            // On macOS, /var is a symlink to /private/var. DirGuard::set canonicalizes
+            // the target path before setting cwd, so current_dir() returns the canonical
+            // path. Canonicalize the tempdir too to avoid a lexical mismatch.
+            let td_canonical = std::fs::canonicalize(td.path()).unwrap();
+            assert!(
+                got.starts_with(&td_canonical),
+                "cwd {} should be within canonicalized tempdir {} (raw tempdir: {})",
+                got.display(),
+                td_canonical.display(),
+                td.path().display()
+            );
         }
         assert_eq!(std::env::current_dir().unwrap(), orig);
     }
