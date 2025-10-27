@@ -20,7 +20,10 @@ pub async fn execute(url: String) -> Result<()> {
         anyhow::bail!("Reference not found");
     }
 
-    mgr.save_v2(&cfg)?;
+    let warnings = mgr.save_v2_validated(&cfg)?;
+    for w in warnings {
+        eprintln!("Warning: {}", w);
+    }
 
     println!("{} Removed reference: {}", "✓".green(), url);
     println!(

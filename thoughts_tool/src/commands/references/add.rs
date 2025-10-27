@@ -100,7 +100,10 @@ pub async fn execute(input: String) -> Result<()> {
     // Append URL to config after passing all validation
     cfg.references
         .push(ReferenceEntry::Simple(final_url.clone()));
-    mgr.save_v2(&cfg)?;
+    let warnings = mgr.save_v2_validated(&cfg)?;
+    for w in warnings {
+        eprintln!("Warning: {}", w);
+    }
 
     println!("{} Added reference: {}", "✓".green(), final_url);
     if let Some(lp) = local_path_for_mapping {
