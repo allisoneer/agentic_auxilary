@@ -1,7 +1,7 @@
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
 use crate::mount::MountSpace;
-use anyhow::{Result, bail};
+use anyhow::Result;
 use colored::Colorize;
 use std::env;
 
@@ -27,26 +27,21 @@ pub async fn execute(mount_name: String) -> Result<()> {
 
     println!("{} mount '{}'...", "Removing".yellow(), mount_name);
 
-    // Check if this is a context mount
-    if let Some(mut config) = repo_manager.load()? {
-        let initial_len = config.requires.len();
-        config.requires.retain(|r| r.mount_path != mount_name);
-
-        if config.requires.len() < initial_len {
-            repo_manager.save(&config)?;
-            println!("✓ Removed mount '{mount_name}'");
-
-            // Automatically update active mounts (unmount if needed)
-            crate::mount::auto_mount::update_active_mounts().await?;
-        } else {
-            bail!(
-                "Mount '{}' not found in repository configuration",
-                mount_name
-            );
-        }
-    } else {
-        bail!("No repository configuration found");
+    let mut cfg = repo_manager.ensure_v2_default()?;
+    let before = cfg.context_mounts.len();
+    cfg.context_mounts.retain(|m| m.mount_path != mount_name);
+    if cfg.context_mounts.len() == before {
+        println!("No mount named '{}' found", mount_name);
+        return Ok(());
     }
+    let warnings = repo_manager.save_v2_validated(&cfg)?;
+    for w in warnings {
+        eprintln!("Warning: {}", w);
+    }
+    println!("✓ Removed mount '{}'", mount_name);
+
+    // Automatically update active mounts (unmount if needed)
+    crate::mount::auto_mount::update_active_mounts().await?;
 
     Ok(())
 }

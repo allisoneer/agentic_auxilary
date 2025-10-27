@@ -1,6 +1,5 @@
 use crate::config::validation::sanitize_mount_name;
-use crate::config::{MountDirs, RepoConfig, RequiredMount};
-use crate::config::{RepoConfigManager, RepoMappingManager, SyncStrategy};
+use crate::config::{ContextMount, RepoConfigManager, RepoMappingManager, SyncStrategy};
 use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url, is_git_repo};
 use crate::utils::paths::expand_path;
 use anyhow::{Context, Result, bail};
@@ -11,7 +10,7 @@ pub async fn execute(
     path: PathBuf,
     mount_path: Option<String>,
     sync: SyncStrategy,
-    description: Option<String>,
+    _description: Option<String>,
 ) -> Result<()> {
     println!("{} mount configuration...", "Adding".green());
 
@@ -123,32 +122,37 @@ pub async fn execute(
 
     // Add to repository config at .thoughts/config.json
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?.to_path_buf();
-    let repo_manager = RepoConfigManager::new(repo_root);
-    let mut config = repo_manager.load()?.unwrap_or_else(|| RepoConfig {
-        version: "1.0".to_string(),
-        mount_dirs: MountDirs::default(),
-        requires: vec![],
-        rules: vec![],
-    });
+    let mgr = RepoConfigManager::new(repo_root);
+    let was_v1 = matches!(mgr.peek_config_version()?, Some(v) if v == "1.0");
+    let mut cfg = mgr.ensure_v2_default()?; // may migrate
 
-    // Check for duplicates in requires
-    if config.requires.iter().any(|r| r.mount_path == mount_name) {
+    // Check duplicates
+    if cfg
+        .context_mounts
+        .iter()
+        .any(|m| m.mount_path == mount_name)
+    {
         bail!("Mount '{}' already exists", mount_name);
     }
 
-    let required_mount = RequiredMount {
+    // Add mount
+    cfg.context_mounts.push(ContextMount {
         remote: url,
-        mount_path: mount_name.clone(),
         subpath,
-        description: description.unwrap_or_else(|| format!("Repository mount for {mount_name}")),
-        optional: false,      // v2 removes optional concept
-        override_rules: None, // v2 removes override_rules concept
+        mount_path: mount_name.clone(),
         sync,
-    };
-    config.requires.push(required_mount);
-    repo_manager.save(&config)?;
-    println!("✓ Added repository mount '{mount_name}'");
-    // Note: Personal mounts are deprecated in v2
+    });
+
+    // Validate and save
+    let warnings = mgr.save_v2_validated(&cfg)?;
+    for w in warnings {
+        eprintln!("Warning: {}", w);
+    }
+
+    println!("✓ Added repository mount '{}'", mount_name);
+    if was_v1 {
+        eprintln!("Upgraded to v2 config. See MIGRATION_V1_TO_V2.md");
+    }
 
     // Automatically update active mounts
     crate::mount::auto_mount::update_active_mounts().await?;

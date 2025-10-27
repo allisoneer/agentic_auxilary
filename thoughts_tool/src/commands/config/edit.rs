@@ -26,9 +26,22 @@ pub async fn execute() -> Result<()> {
 
     // Validate after editing
     let repo_root = get_control_repo_root(&env::current_dir()?)?;
-    let repo_manager = RepoConfigManager::new(repo_root);
-    repo_manager.load()?;
-    println!("{} Repository configuration is valid", "✓".green());
+    let mgr = RepoConfigManager::new(repo_root);
+    match mgr.peek_config_version()? {
+        Some(v) if v == "1.0" => {
+            mgr.load()?; // v1 parse triggers validation
+            println!("✓ Saved and validated v1 configuration");
+        }
+        Some(_) => {
+            let cfg = mgr.load_v2_or_bail()?;
+            let warnings = mgr.save_v2_validated(&cfg)?;
+            for w in warnings {
+                eprintln!("Warning: {}", w);
+            }
+            println!("✓ Saved and validated v2 configuration");
+        }
+        None => bail!("No configuration found after edit"),
+    }
 
     // Update mounts after config change
     println!("\n{} active mounts...", "Updating".cyan());

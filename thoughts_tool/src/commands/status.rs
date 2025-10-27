@@ -43,13 +43,26 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     println!();
 
     // Configuration status
+    let ver = repo_manager
+        .peek_config_version()?
+        .unwrap_or_else(|| "none".to_string());
+    println!(
+        "Config format: {}",
+        if ver == "1.0" {
+            "v1"
+        } else if ver == "2.0" {
+            "v2"
+        } else {
+            "none"
+        }
+    );
     if let Some(ds) = &desired
         && ds.was_v1
     {
         println!("  {}: Using v1 configuration (legacy)", "Note".yellow());
         println!("  Personal mounts are deprecated and ignored");
-        println!();
     }
+    println!();
 
     // Mount status
     println!("{}", "Mounts:".bold());
