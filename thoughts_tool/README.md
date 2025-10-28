@@ -199,10 +199,21 @@ The configuration file (`.thoughts/config.json`) defines:
 
 ### Migration from v1
 
-If you have an existing v1 configuration, it will be automatically mapped:
-- Mounts with `sync: none` or paths starting with `references/` become references
-- Other mounts become context mounts
-- Personal mounts are deprecated and ignored (warning displayed)
+**Automatic migration happens on the first write operation** (e.g., `thoughts init`, `thoughts mount add`):
+
+- V1 configs are automatically converted to v2 format
+- A timestamped backup is created if you have non-empty mounts or rules (`.thoughts/config.v1.bak-*.json`)
+- Migration rules:
+  - Mounts with `sync: none` or paths starting with `references/` → become references
+  - Other mounts → become context mounts
+  - Rules field → dropped (preserved in backup only)
+- One-line message confirms migration with link to full guide
+
+You can also explicitly migrate with:
+```bash
+thoughts config migrate-to-v2 --dry-run  # Preview
+thoughts config migrate-to-v2 --yes      # Execute
+```
 
 For detailed migration instructions, see [MIGRATION_V1_TO_V2.md](./MIGRATION_V1_TO_V2.md).
 

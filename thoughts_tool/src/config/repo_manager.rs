@@ -62,6 +62,7 @@ impl RepoConfigManager {
         Self { repo_root }
     }
 
+    /// Load v1 configuration. Prefer using `load_desired_state()` or `ensure_v2_default()` for new code.
     pub fn load(&self) -> Result<Option<RepoConfig>> {
         let config_path = paths::get_repo_config_path(&self.repo_root);
         if !config_path.exists() {
@@ -77,6 +78,7 @@ impl RepoConfigManager {
         Ok(Some(config))
     }
 
+    /// Save v1 configuration. Prefer using `save_v2_validated()` for new code.
     pub fn save(&self, config: &RepoConfig) -> Result<()> {
         self.validate(config)?;
 
@@ -98,6 +100,7 @@ impl RepoConfigManager {
         Ok(())
     }
 
+    /// Ensure v1 default configuration. Prefer using `ensure_v2_default()` for new code.
     pub fn ensure_default(&self) -> Result<RepoConfig> {
         if let Some(config) = self.load()? {
             return Ok(config);

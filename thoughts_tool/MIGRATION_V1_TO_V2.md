@@ -24,67 +24,106 @@ Thoughts Tool v2 introduces a cleaner three-space architecture that replaces the
 
 ## Automatic Migration
 
-The tool automatically handles v1 configurations:
+**As of v2.0, the tool automatically migrates v1 configurations to v2 on any write operation.**
+
+When you run commands like `thoughts init`, `thoughts mount add`, or `thoughts references add` on a v1 repository, the tool will:
+
+1. **Automatically migrate** your configuration to v2 format
+2. **Create a timestamped backup** (only if you have non-empty mounts or rules)
+   - Backup location: `.thoughts/config.v1.bak-YYYYMMDD-HHMMSS.json`
+   - Preserves your original v1 config including any `rules` field
+3. **Show a one-line message** confirming the migration
+4. **Continue with your requested command**
+
+### What Gets Migrated
+
 - Mounts with `sync: none` → become references
 - Mounts with paths starting with `references/` → become references
 - All other mounts → become context mounts
-- Personal mounts → ignored (warning displayed)
+- Custom `mount_dirs.repository` → becomes `mount_dirs.context`
+- Descriptions → preserved where applicable
+- **Rules field** → dropped (not supported in v2, but saved in backup)
 
-## Manual Migration Steps
+### Migration Message
 
-### 1. Review Your Current Configuration
-
-Check your existing v1 config:
-```bash
-thoughts config show
+After migration, you'll see:
+```
+Upgraded to v2 config. A v1 backup was created if non-empty. See MIGRATION_V1_TO_V2.md
 ```
 
-### 2. Identify Mount Types
+This message appears only once per repository during the first write operation after migration.
 
-Categorize your existing mounts:
-- Work repositories → Configure as thoughts_mount
-- Team documentation → Keep as context mounts
-- Reference code → Move to references list
+## Manual Migration (Optional)
 
-### 3. Create v2 Configuration
+In most cases, automatic migration is sufficient. However, if you want explicit control:
 
-Example v2 configuration:
-```json
-{
-  "version": "2.0",
-  "thoughts_mount": {
-    "remote": "git@github.com:yourname/work-thoughts.git",
-    "sync": "auto"
-  },
-  "context_mounts": [
-    {
-      "remote": "https://github.com/team/docs.git",
-      "mount_path": "team-docs",
-      "sync": "auto"
-    }
-  ],
-  "references": [
-    "https://github.com/rust-lang/rust",
-    "https://github.com/tokio-rs/tokio"
-  ]
-}
-```
-
-### 4. Re-initialize Your Repository
-
-After creating v2 config:
-```bash
-thoughts init --force
-```
-
-This creates the new three-symlink structure.
-
-### 5. Update Mounts
+### Using the Migrate Command
 
 ```bash
-thoughts mount update
-thoughts sync --all
+# Preview what will be migrated (dry-run)
+thoughts config migrate-to-v2 --dry-run
+
+# Perform migration with confirmation
+thoughts config migrate-to-v2 --yes
 ```
+
+The explicit migrate command provides:
+- Summary of what will be migrated
+- Control over timing of migration
+- Same backup behavior as automatic migration
+
+### Manual Steps (Advanced)
+
+If you prefer to manually create a v2 config:
+
+1. **Review Your Current Configuration**
+   ```bash
+   thoughts config show
+   ```
+
+2. **Backup Your v1 Config** (optional, done automatically)
+   ```bash
+   cp .thoughts/config.json .thoughts/config.v1.backup.json
+   ```
+
+3. **Create v2 Configuration**
+
+   Example v2 configuration:
+   ```json
+   {
+     "version": "2.0",
+     "mount_dirs": {
+       "thoughts": "thoughts",
+       "context": "context",
+       "references": "references"
+     },
+     "thoughts_mount": {
+       "remote": "git@github.com:yourname/work-thoughts.git",
+       "sync": "auto"
+     },
+     "context_mounts": [
+       {
+         "remote": "https://github.com/team/docs.git",
+         "mount_path": "team-docs",
+         "sync": "auto"
+       }
+     ],
+     "references": [
+       "https://github.com/rust-lang/rust",
+       "https://github.com/tokio-rs/tokio"
+     ]
+   }
+   ```
+
+4. **Validate Configuration**
+   ```bash
+   thoughts config validate
+   ```
+
+5. **Re-initialize Your Repository**
+   ```bash
+   thoughts init
+   ```
 
 ## Migration Examples
 
@@ -176,14 +215,39 @@ A: Personal mounts are deprecated. Re-add them as context mounts or configure a 
 A: Optional mounts are removed. All configured mounts are now required.
 
 ### Q: Can I still use v1 config?
-A: Yes, v1 configs work through automatic migration, but consider updating to v2 format.
+A: Yes, but v1 configs are automatically migrated to v2 on the first write operation. Read-only operations continue to work with v1.
+
+### Q: What happens to my rules field?
+A: The `rules` field is not supported in v2 and will be dropped during migration. If you have rules defined, they will be preserved in the backup file (`.thoughts/config.v1.bak-*.json`).
 
 ### Q: How do I set up my personal workspace?
 A: Add a thoughts_mount to your repository config pointing to your work repository.
 
+## Rollback
+
+If you need to rollback to v1 after migration:
+
+1. Find your backup file:
+   ```bash
+   ls -la .thoughts/config.v1.bak-*
+   ```
+
+2. Restore the backup:
+   ```bash
+   cp .thoughts/config.v1.bak-YYYYMMDD-HHMMSS.json .thoughts/config.json
+   ```
+
+3. Verify configuration:
+   ```bash
+   thoughts config show
+   ```
+
+Note: Rollback should only be necessary in rare cases. The v2 format is fully backward compatible for read operations.
+
 ## Need Help?
 
 If you encounter issues during migration:
-1. Check the warning messages for specific guidance
-2. Run `thoughts mount list` to see current mount status
+1. Check for backup files in `.thoughts/config.v1.bak-*.json`
+2. Run `thoughts config show` to see current configuration
 3. Use `thoughts config validate` to check configuration syntax
+4. Review migration messages for specific guidance
