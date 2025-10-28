@@ -153,44 +153,8 @@ impl RepoConfigManager {
 
         // Fallback: v1 mapping (legacy RepoConfig)
         let v1: RepoConfig = serde_json::from_str(&raw)?;
-        // Map to v2-like DesiredState
-        let defaults = MountDirsV2::default();
-        let mut context_mounts = vec![];
-        let mut references = vec![];
-
-        for req in v1.requires {
-            let is_ref =
-                req.mount_path.starts_with("references/") || req.sync == SyncStrategy::None;
-            if is_ref {
-                references.push(ReferenceMount {
-                    remote: req.remote,
-                    description: Some(req.description), // PRESERVE v1 description
-                });
-            } else {
-                context_mounts.push(ContextMount {
-                    remote: req.remote,
-                    subpath: req.subpath,
-                    mount_path: req.mount_path,
-                    sync: if req.sync == SyncStrategy::None {
-                        SyncStrategy::Auto // guardrail; never none for context
-                    } else {
-                        req.sync
-                    },
-                });
-            }
-        }
-
-        Ok(Some(DesiredState {
-            mount_dirs: MountDirsV2 {
-                thoughts: defaults.thoughts,
-                context: v1.mount_dirs.repository, // keep existing "context" name
-                references: defaults.references,
-            },
-            thoughts_mount: None, // requires explicit config in v2
-            context_mounts,
-            references,
-            was_v1: true,
-        }))
+        let ds = self.map_v1_to_desired_state(&v1);
+        Ok(Some(ds))
     }
 
     fn validate(&self, config: &RepoConfig) -> Result<()> {
@@ -292,6 +256,49 @@ impl RepoConfigManager {
     }
 
     /// Load v2 config or error if it doesn't exist
+    fn map_v1_to_desired_state(&self, v1: &RepoConfig) -> DesiredState {
+        // Map to v2-like DesiredState
+        let defaults = MountDirsV2::default();
+        let mut context_mounts = vec![];
+        let mut references = vec![];
+
+        for req in &v1.requires {
+            let is_ref =
+                req.mount_path.starts_with("references/") || req.sync == SyncStrategy::None;
+            if is_ref {
+                references.push(ReferenceMount {
+                    remote: req.remote.clone(),
+                    description: Some(req.description.clone()),
+                });
+            } else {
+                context_mounts.push(ContextMount {
+                    remote: req.remote.clone(),
+                    subpath: req.subpath.clone(),
+                    mount_path: req.mount_path.clone(),
+                    // guardrail; never none for context
+                    sync: if req.sync == SyncStrategy::None {
+                        SyncStrategy::Auto
+                    } else {
+                        req.sync
+                    },
+                });
+            }
+        }
+
+        DesiredState {
+            mount_dirs: MountDirsV2 {
+                thoughts: defaults.thoughts,
+                context: v1.mount_dirs.repository.clone(), // keep existing "context" name
+                references: defaults.references,
+            },
+            thoughts_mount: None, // requires explicit config in v2
+            context_mounts,
+            references,
+            was_v1: true,
+        }
+    }
+
+    /// Load v2 config or error if it doesn't exist
     pub fn load_v2_or_bail(&self) -> Result<RepoConfigV2> {
         let config_path = paths::get_repo_config_path(&self.repo_root);
         if !config_path.exists() {
@@ -345,9 +352,9 @@ impl RepoConfigManager {
                 return serde_json::from_str(&raw).context("Failed to parse v2 configuration");
             }
 
-            // v1 path: parse full v1 to decide backup necessity
+            // v1 path: parse full v1 once, then map without re-reading
             let v1: RepoConfig = serde_json::from_str(&raw)?;
-            let ds = self.load_desired_state()?.expect("desired state available");
+            let ds = self.map_v1_to_desired_state(&v1);
 
             // Backup only if meaningful content present
             let needs_backup =
@@ -475,9 +482,37 @@ impl RepoConfigManager {
         let mut warnings = Vec::new();
         let mut seen_mount_paths = std::collections::HashSet::new();
         for cm in &cfg.context_mounts {
+            // uniqueness
             if !seen_mount_paths.insert(&cm.mount_path) {
                 anyhow::bail!("Duplicate context mount path: {}", cm.mount_path);
             }
+
+            // mount_path validation
+            let mp = cm.mount_path.trim();
+            if mp.is_empty() {
+                anyhow::bail!("Context mount path cannot be empty");
+            }
+            if mp == "." || mp == ".." {
+                anyhow::bail!("Context mount path cannot be '.' or '..'");
+            }
+            if mp.contains('/') || mp.contains('\\') {
+                anyhow::bail!(
+                    "Context mount path must be a single path segment (got {})",
+                    cm.mount_path
+                );
+            }
+            let m = &cfg.mount_dirs;
+            if mp == m.thoughts || mp == m.context || mp == m.references {
+                anyhow::bail!(
+                    "Context mount path '{}' cannot conflict with configured mount_dirs names ('{}', '{}', '{}')",
+                    cm.mount_path,
+                    m.thoughts,
+                    m.context,
+                    m.references
+                );
+            }
+
+            // remote validity
             self.validate_remote(&cm.remote)?;
             if matches!(cm.sync, SyncStrategy::None) {
                 warnings.push(format!(
@@ -1304,5 +1339,211 @@ mod tests {
         // Verify file was written
         let config_path = paths::get_repo_config_path(&temp_dir.path());
         assert!(config_path.exists());
+    }
+
+    #[test]
+    fn test_ensure_v2_default_migrates_v1_without_panic() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        // Create v1 config with one context mount and one reference
+        let v1_config = RepoConfig {
+            version: "1.0".to_string(),
+            mount_dirs: MountDirs {
+                repository: "mycontext".to_string(),
+                personal: "personal".to_string(),
+            },
+            requires: vec![
+                RequiredMount {
+                    remote: "git@github.com:org/context-repo.git".to_string(),
+                    mount_path: "docs".to_string(),
+                    subpath: Some("content".to_string()),
+                    description: "Documentation".to_string(),
+                    optional: false,
+                    override_rules: None,
+                    sync: SyncStrategy::Auto,
+                },
+                RequiredMount {
+                    remote: "git@github.com:org/ref-repo.git".to_string(),
+                    mount_path: "references/ref".to_string(),
+                    subpath: None,
+                    description: "Reference repo".to_string(),
+                    optional: true,
+                    override_rules: None,
+                    sync: SyncStrategy::None,
+                },
+            ],
+            rules: vec![],
+        };
+
+        // Save v1 config
+        mgr.save(&v1_config).unwrap();
+
+        // Call ensure_v2_default() - should migrate without panic
+        let v2_config = mgr.ensure_v2_default().unwrap();
+
+        // Verify migration succeeded
+        assert_eq!(v2_config.version, "2.0");
+        assert_eq!(v2_config.mount_dirs.context, "mycontext");
+        assert_eq!(v2_config.context_mounts.len(), 1);
+        assert_eq!(v2_config.context_mounts[0].mount_path, "docs");
+        assert_eq!(
+            v2_config.context_mounts[0].subpath,
+            Some("content".to_string())
+        );
+        assert_eq!(v2_config.references.len(), 1);
+
+        // Verify config file was updated to v2
+        let ds = mgr.load_desired_state().unwrap().unwrap();
+        assert!(!ds.was_v1); // Now it's v2 on disk
+        assert_eq!(ds.context_mounts.len(), 1);
+        assert_eq!(ds.references.len(), 1);
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_empty_context_mount_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![ContextMount {
+                remote: "git@github.com:org/repo.git".to_string(),
+                subpath: None,
+                mount_path: "  ".to_string(), // whitespace-only
+                sync: SyncStrategy::Auto,
+            }],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_dot_context_mount_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![ContextMount {
+                remote: "git@github.com:org/repo.git".to_string(),
+                subpath: None,
+                mount_path: ".".to_string(),
+                sync: SyncStrategy::Auto,
+            }],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("cannot be '.' or '..'")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_dotdot_context_mount_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![ContextMount {
+                remote: "git@github.com:org/repo.git".to_string(),
+                subpath: None,
+                mount_path: "..".to_string(),
+                sync: SyncStrategy::Auto,
+            }],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("cannot be '.' or '..'")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_slash_in_context_mount_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![ContextMount {
+                remote: "git@github.com:org/repo.git".to_string(),
+                subpath: None,
+                mount_path: "sub/path".to_string(),
+                sync: SyncStrategy::Auto,
+            }],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("single path segment")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_backslash_in_context_mount_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![ContextMount {
+                remote: "git@github.com:org/repo.git".to_string(),
+                subpath: None,
+                mount_path: "sub\\path".to_string(),
+                sync: SyncStrategy::Auto,
+            }],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("single path segment")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_accepts_valid_context_mount_path() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![ContextMount {
+                remote: "git@github.com:org/repo.git".to_string(),
+                subpath: None,
+                mount_path: "docs".to_string(),
+                sync: SyncStrategy::Auto,
+            }],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_ok());
+        let warnings = result.unwrap();
+        assert_eq!(warnings.len(), 0);
     }
 }

@@ -199,7 +199,7 @@ The configuration file (`.thoughts/config.json`) defines:
 
 ### Migration from v1
 
-**Automatic migration happens on the first write operation** (e.g., `thoughts init`, `thoughts mount add`):
+**Automatic migration happens on the first write operation** (e.g., `thoughts init`, `thoughts mount add`, `thoughts references add`):
 
 - V1 configs are automatically converted to v2 format
 - A timestamped backup is created if you have non-empty mounts or rules (`.thoughts/config.v1.bak-*.json`)

@@ -27,7 +27,7 @@ pub async fn execute(mount_name: String) -> Result<()> {
 
     println!("{} mount '{}'...", "Removing".yellow(), mount_name);
 
-    let mut cfg = repo_manager.ensure_v2_default()?;
+    let mut cfg = repo_manager.load_v2_or_bail()?;
     let before = cfg.context_mounts.len();
     cfg.context_mounts.retain(|m| m.mount_path != mount_name);
     if cfg.context_mounts.len() == before {
