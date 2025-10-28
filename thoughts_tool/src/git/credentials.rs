@@ -17,6 +17,11 @@ pub fn ssh_credentials_cb(
     username_from_url: Option<&str>,
     allowed: CredentialType,
 ) -> Result<Cred, Error> {
+    // Phase 1 of SSH auth (libgit2): if requested, provide the username first
+    if allowed.contains(CredentialType::USERNAME) {
+        return Cred::username(default_username(username_from_url));
+    }
+
     if allowed.contains(CredentialType::SSH_KEY) {
         let username = default_username(username_from_url);
 
@@ -162,5 +167,22 @@ mod tests {
     #[test]
     fn test_default_username_defaults_to_git() {
         assert_eq!(default_username(None), "git");
+    }
+
+    #[test]
+    fn test_username_credential_with_provided_username() {
+        let allowed = CredentialType::USERNAME;
+        let res = ssh_credentials_cb("ssh://example.com/org/repo", Some("alice"), allowed);
+        assert!(res.is_ok(), "Expected USERNAME credential to be handled");
+    }
+
+    #[test]
+    fn test_username_credential_defaults_to_git() {
+        let allowed = CredentialType::USERNAME;
+        let res = ssh_credentials_cb("ssh://example.com/org/repo", None, allowed);
+        assert!(
+            res.is_ok(),
+            "Expected USERNAME credential to default to 'git'"
+        );
     }
 }
