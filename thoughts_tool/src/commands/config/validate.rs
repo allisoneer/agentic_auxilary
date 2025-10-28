@@ -13,11 +13,17 @@ pub async fn execute() -> Result<()> {
         None => {
             anyhow::bail!("No repository configuration found. Run 'thoughts init' first.")
         }
-        Some(v) if v == "1.0" => {
-            mgr.load()?; // will validate v1 or error
-            println!("{}", "✓".green());
-            println!("{} v1 configuration is valid", "✓".green());
-        }
+        Some(v) if v == "1.0" => match mgr.load()? {
+            Some(_) => {
+                println!("{}", "✓".green());
+                println!("{} v1 configuration is valid", "✓".green());
+            }
+            None => {
+                anyhow::bail!(
+                    "Repository configuration was removed during validation. Please retry."
+                );
+            }
+        },
         Some(_) => {
             let cfg = mgr.load_v2_or_bail()?;
             let warnings = mgr.validate_v2_hard(&cfg)?;

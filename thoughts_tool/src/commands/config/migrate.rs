@@ -29,7 +29,9 @@ pub async fn execute(args: MigrateArgs) -> Result<()> {
     }
 
     // Summarize migration
-    let ds = mgr.load_desired_state()?.expect("present after peek");
+    let ds = mgr
+        .load_desired_state()?
+        .ok_or_else(|| anyhow!("Configuration was deleted during migration"))?;
     println!("This will migrate your config to v2:");
     println!("  - context mounts: {}", ds.context_mounts.len());
     println!("  - references: {}", ds.references.len());
