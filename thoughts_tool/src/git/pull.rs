@@ -1,5 +1,6 @@
+use crate::git::credentials::configure_default_git_credentials;
 use anyhow::{Context, Result};
-use git2::{AnnotatedCommit, FetchOptions, Repository};
+use git2::{AnnotatedCommit, FetchOptions, RemoteCallbacks, Repository};
 use std::path::Path;
 
 /// Fast-forward-only pull of the current branch from remote_name (default "origin")
@@ -19,8 +20,12 @@ pub fn pull_ff_only(repo_path: &Path, remote_name: &str, branch: Option<&str>) -
         remote = remote_name
     );
 
+    // Configure fetch options with shared SSH/HTTPS credentials
     let mut fo = FetchOptions::new();
-    // TODO(2): credentials/providers if needed in the future
+    let mut callbacks = RemoteCallbacks::new();
+    configure_default_git_credentials(&mut callbacks);
+    fo.remote_callbacks(callbacks);
+
     remote
         .fetch(&[&refspec], Some(&mut fo), None)
         .with_context(|| "Fetch failed")?;
