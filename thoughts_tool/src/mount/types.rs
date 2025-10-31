@@ -162,6 +162,14 @@ impl MountSpace {
             } else {
                 anyhow::bail!("Invalid reference format: {}", input)
             }
+        } else if let Some(rest) = input.strip_prefix("context/") {
+            if rest.is_empty() {
+                anyhow::bail!(
+                    "Invalid context mount name '{}': missing mount path after 'context/'",
+                    input
+                );
+            }
+            Ok(MountSpace::Context(rest.to_string()))
         } else {
             // Assume it's a context mount
             Ok(MountSpace::Context(input.to_string()))
@@ -292,5 +300,20 @@ mod tests {
             }
             .is_read_only()
         );
+    }
+
+    #[test]
+    fn test_mount_space_parse_context_prefix_normalization() {
+        let ms_prefixed = MountSpace::parse("context/api-docs").unwrap();
+        assert_eq!(ms_prefixed, MountSpace::Context("api-docs".to_string()));
+
+        let ms_plain = MountSpace::parse("api-docs").unwrap();
+        assert_eq!(ms_plain, MountSpace::Context("api-docs".to_string()));
+
+        // Both should produce the same normalized result
+        assert_eq!(ms_prefixed, ms_plain);
+
+        // Empty after prefix should error
+        assert!(MountSpace::parse("context/").is_err());
     }
 }

@@ -175,6 +175,9 @@ enum ConfigCommands {
 
     /// Validate configuration
     Validate,
+
+    /// Migrate v1 configuration to v2
+    MigrateToV2(commands::config::migrate::MigrateArgs),
 }
 
 #[derive(Subcommand)]
@@ -298,6 +301,7 @@ async fn main() -> Result<()> {
             ConfigCommands::Show { json } => commands::config::show::execute(json).await,
             ConfigCommands::Edit {} => commands::config::edit::execute().await,
             ConfigCommands::Validate => commands::config::validate::execute().await,
+            ConfigCommands::MigrateToV2(args) => commands::config::migrate::execute(args).await,
         },
         Commands::References { command } => match command {
             ReferenceCommands::Add { url } => commands::references::add::execute(url).await,

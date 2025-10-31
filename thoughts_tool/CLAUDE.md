@@ -83,6 +83,37 @@ The application supports both Linux (mergerfs) and macOS (fuse-t) through:
   - `context_mounts` - Team-shared documentation
   - `references` - External code repository URLs
 
+#### Configuration API Guidelines (v2 Preferred)
+
+**For new code, always prefer v2 APIs:**
+
+Write operations:
+- ✅ Use `ensure_v2_default()` instead of `ensure_default()`
+- ✅ Use `save_v2_validated()` instead of `save_v2()` or `save()`
+- ✅ Always validate with `validate_v2_hard()` before saving
+
+Read operations:
+- ✅ Use `load_desired_state()` for version-agnostic reads
+- ✅ Use `load_v2_or_bail()` when v2 is required
+- ⚠️ Use `load()` only for v1-specific operations (deprecated)
+
+Version detection:
+- ✅ Use `peek_config_version()` for lightweight version checks
+
+Migration pattern for commands:
+```rust
+let was_v1 = matches!(mgr.peek_config_version()?, Some(v) if v == "1.0");
+let mut cfg = mgr.ensure_v2_default()?; // auto-migrates if needed
+// ... modify cfg ...
+let warnings = mgr.save_v2_validated(&cfg)?;
+for w in warnings { eprintln!("Warning: {}", w); }
+if was_v1 {
+    eprintln!("Upgraded to v2 config. See MIGRATION_V1_TO_V2.md");
+}
+```
+
+**V1 APIs are maintained for backward compatibility but should not be used in new code.**
+
 ### Testing Strategy
 - Unit tests embedded in modules (`#[cfg(test)]`)
 - Integration tests in `/tests/` directory requiring `THOUGHTS_INTEGRATION_TESTS=1`

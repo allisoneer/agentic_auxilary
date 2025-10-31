@@ -1,29 +1,22 @@
-use crate::config::{MountDirs, RepoConfig, RepoConfigManager};
+use crate::config::RepoConfigManager;
 use crate::git::utils::get_current_control_repo_root;
-use anyhow::{Context, Result};
+use crate::utils::paths;
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
 
 pub async fn execute() -> Result<()> {
     let repo_root = get_current_control_repo_root().context("Not in a git repository")?;
 
-    let manager = RepoConfigManager::new(repo_root);
+    let mgr = RepoConfigManager::new(repo_root.clone());
 
-    if manager.load()?.is_some() {
-        eprintln!("{}: Repository already has a configuration", "Error".red());
-        eprintln!("Edit it with: {}", "thoughts config edit".cyan());
-        std::process::exit(1);
+    let config_path = paths::get_repo_config_path(&repo_root);
+    if config_path.exists() {
+        bail!("Repository already has a configuration\nEdit it with: thoughts config edit");
     }
 
-    let config = RepoConfig {
-        version: "1.0".to_string(),
-        mount_dirs: MountDirs::default(),
-        requires: vec![],
-        rules: vec![],
-    };
-
-    manager.save(&config)?;
+    let _ = mgr.ensure_v2_default()?;
     println!(
-        "{} Created repository configuration at .thoughts/config.json",
+        "{} Created v2 repository configuration at .thoughts/config.json",
         "✓".green()
     );
 
