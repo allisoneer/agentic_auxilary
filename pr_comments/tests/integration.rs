@@ -32,6 +32,7 @@ async fn test_model_serialization() {
         updated_at: "2024-01-01T00:00:00Z".to_string(),
         html_url: "https://github.com/owner/repo/pull/1#discussion_r123".to_string(),
         pull_request_review_id: Some(456),
+        in_reply_to_id: None,
     };
 
     let json = serde_json::to_string(&comment).unwrap();
