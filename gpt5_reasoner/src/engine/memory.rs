@@ -58,7 +58,10 @@ pub fn auto_inject_claude_memories(
             if p.exists() && p.is_dir() {
                 if is_ancestor(&cwd, p) {
                     if seen_dirs.insert(p.to_path_buf()) {
-                        tracing::debug!("Seeded parent_dirs with explicit directory: {}", p.display());
+                        tracing::debug!(
+                            "Seeded parent_dirs with explicit directory: {}",
+                            p.display()
+                        );
                         parent_dirs.push(p.to_path_buf());
                     }
                 } else {
@@ -577,8 +580,14 @@ mod claude_directory_seeding_tests {
         assert_eq!(count, 2, "root and docs CLAUDE.md should be injected");
         assert_eq!(files.len(), 2);
         let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
-        let root_idx = names.iter().position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/docs/")).unwrap();
-        let docs_idx = names.iter().position(|n| n.ends_with("/docs/CLAUDE.md")).unwrap();
+        let root_idx = names
+            .iter()
+            .position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/docs/"))
+            .unwrap();
+        let docs_idx = names
+            .iter()
+            .position(|n| n.ends_with("/docs/CLAUDE.md"))
+            .unwrap();
         assert!(root_idx < docs_idx, "root-to-leaf ordering must hold");
     }
 
@@ -642,8 +651,20 @@ mod claude_directory_seeding_tests {
         let count = auto_inject_claude_memories(&mut files, Some(&dirs));
         assert_eq!(count, 2, "root and docs memories injected once each");
         let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
-        assert_eq!(names.iter().filter(|n| n.ends_with("/docs/CLAUDE.md")).count(), 1);
-        assert_eq!(names.iter().filter(|n| n.ends_with("/CLAUDE.md") && !n.contains("/docs/")).count(), 1);
+        assert_eq!(
+            names
+                .iter()
+                .filter(|n| n.ends_with("/docs/CLAUDE.md"))
+                .count(),
+            1
+        );
+        assert_eq!(
+            names
+                .iter()
+                .filter(|n| n.ends_with("/CLAUDE.md") && !n.contains("/docs/"))
+                .count(),
+            1
+        );
     }
 
     // 5) Nested Directories Test: multiple explicit directories in same tree
@@ -684,9 +705,18 @@ mod claude_directory_seeding_tests {
         let count = auto_inject_claude_memories(&mut files, Some(&dirs));
         assert_eq!(count, 3, "root, sub, nested should be injected");
         let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
-        let root_idx = names.iter().position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/sub/")).unwrap();
-        let sub_idx = names.iter().position(|n| n.ends_with("/sub/CLAUDE.md")).unwrap();
-        let nested_idx = names.iter().position(|n| n.ends_with("/sub/nested/CLAUDE.md")).unwrap();
+        let root_idx = names
+            .iter()
+            .position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/sub/"))
+            .unwrap();
+        let sub_idx = names
+            .iter()
+            .position(|n| n.ends_with("/sub/CLAUDE.md"))
+            .unwrap();
+        let nested_idx = names
+            .iter()
+            .position(|n| n.ends_with("/sub/nested/CLAUDE.md"))
+            .unwrap();
         assert!(root_idx < sub_idx && sub_idx < nested_idx);
     }
 
