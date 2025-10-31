@@ -4,6 +4,7 @@ use colored::Colorize;
 
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
+use crate::utils::paths;
 
 #[derive(Args)]
 pub struct MigrateArgs {
@@ -17,11 +18,18 @@ pub struct MigrateArgs {
 }
 
 pub async fn execute(args: MigrateArgs) -> Result<()> {
-    let mgr = RepoConfigManager::new(get_control_repo_root(&std::env::current_dir()?)?);
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
+    let mgr = RepoConfigManager::new(repo_root.clone());
 
+    // Explicitly check for existence to distinguish "no file" from "missing version"
+    let config_path = paths::get_repo_config_path(&repo_root);
+    if !config_path.exists() {
+        anyhow::bail!("No repository configuration found. Run 'thoughts config create' first.");
+    }
+
+    // Treat None (no version field) and "1.0" as legacy v1; only early-exit if already v2
     match mgr.peek_config_version()? {
-        None => return Err(anyhow!("No repository configuration found.")),
-        Some(v) if v != "1.0" => {
+        Some(v) if v == "2.0" => {
             println!("Already on v2. No action taken.");
             return Ok(());
         }
