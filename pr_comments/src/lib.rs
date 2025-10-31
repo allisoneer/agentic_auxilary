@@ -15,10 +15,39 @@ pub struct PrComments {
 }
 
 impl PrComments {
+    fn get_token() -> Result<Option<String>> {
+        // 1) Check environment variables first (explicit override)
+        if let Ok(t) = std::env::var("GH_TOKEN").or_else(|_| std::env::var("GITHUB_TOKEN")) {
+            tracing::debug!("Using GitHub token from environment");
+            return Ok(Some(t));
+        }
+
+        // 2) Try gh-config (hosts.yml → keyring)
+        match gh_config::Hosts::load() {
+            Ok(hosts) => match hosts.retrieve_token(gh_config::GITHUB_COM) {
+                Ok(Some(t)) => {
+                    tracing::debug!("Using GitHub token from gh-config");
+                    Ok(Some(t))
+                }
+                Ok(None) => {
+                    tracing::debug!("No token found in gh-config");
+                    Ok(None)
+                }
+                Err(e) => {
+                    tracing::debug!("gh-config token retrieval failed: {}", e);
+                    Ok(None)
+                }
+            },
+            Err(e) => {
+                tracing::debug!("gh-config unavailable: {}", e);
+                Ok(None)
+            }
+        }
+    }
+
     pub fn new() -> Result<Self> {
         let git_info = git::get_git_info().context("Failed to get git information")?;
-
-        let token = std::env::var("GITHUB_TOKEN").ok();
+        let token = Self::get_token()?;
 
         Ok(Self {
             owner: git_info.owner,
@@ -28,7 +57,7 @@ impl PrComments {
     }
 
     pub fn with_repo(owner: String, repo: String) -> Self {
-        let token = std::env::var("GITHUB_TOKEN").ok();
+        let token = Self::get_token().ok().flatten();
         Self { owner, repo, token }
     }
 
@@ -132,7 +161,19 @@ impl PrComments {
             description = "Include resolved review comments (defaults to false)"
         )]
         include_resolved: Option<bool>,
-        #[universal_tool_param(description = "Limit the number of comments returned (optional)")]
+        #[universal_tool_param(
+            description = "Include replies to top-level comments (defaults to true)"
+        )]
+        include_replies: Option<bool>,
+        #[universal_tool_param(
+            description = "Filter by top-level author login; includes all replies under matching parents"
+        )]
+        author: Option<String>,
+        #[universal_tool_param(
+            description = "Number of filtered comments to skip before returning results"
+        )]
+        offset: Option<usize>,
+        #[universal_tool_param(description = "Limit the number of filtered comments returned")]
         limit: Option<usize>,
     ) -> Result<ReviewCommentList, ToolError> {
         let pr = self
@@ -144,26 +185,31 @@ impl PrComments {
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
                 .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
-        let mut comments = client
-            .get_review_comments(pr, include_resolved)
+        let comments = client
+            .get_review_comments(
+                pr,
+                include_resolved,
+                include_replies,
+                author.as_deref(),
+                offset,
+                limit,
+            )
             .await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
                     ToolError::new(
                         ErrorCode::PermissionDenied,
-                        format!("{}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.", msg)
+                        format!(
+                            "{}\n\nHint: For private repositories, ensure your token has the 'repo' scope.",
+                            msg
+                        )
                     )
                 } else {
                     ToolError::new(ErrorCode::ExternalServiceError, msg)
                 }
             })?;
 
-        if let Some(n) = limit
-            && comments.len() > n
-        {
-            comments.truncate(n);
-        }
         Ok(ReviewCommentList { comments })
     }
 
@@ -177,6 +223,13 @@ impl PrComments {
         &self,
         #[universal_tool_param(description = "PR number (auto-detected if not provided)")]
         pr_number: Option<u64>,
+        #[universal_tool_param(description = "Filter by author login")] author: Option<String>,
+        #[universal_tool_param(
+            description = "Number of filtered comments to skip before returning results"
+        )]
+        offset: Option<usize>,
+        #[universal_tool_param(description = "Limit the number of filtered comments returned")]
+        limit: Option<usize>,
     ) -> Result<IssueCommentList, ToolError> {
         let pr = self
             .get_pr_number(pr_number)
@@ -188,14 +241,17 @@ impl PrComments {
                 .map_err(|e| ToolError::new(ErrorCode::Internal, e.to_string()))?;
 
         let comments = client
-            .get_issue_comments(pr)
+            .get_issue_comments(pr, author.as_deref(), offset, limit)
             .await
             .map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
                     ToolError::new(
                         ErrorCode::PermissionDenied,
-                        format!("{}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.", msg)
+                        format!(
+                            "{}\n\nHint: For private repositories, ensure your token has the 'repo' scope.",
+                            msg
+                        )
                     )
                 } else {
                     ToolError::new(ErrorCode::ExternalServiceError, msg)

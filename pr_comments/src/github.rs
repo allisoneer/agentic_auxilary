@@ -75,11 +75,13 @@ impl GitHubClient {
                 )
             })?;
 
-        // Get review comments (code comments) - always include all for this method
-        let review_comments = self.get_review_comments(pr_number, Some(true)).await?;
+        // Get all review comments (include resolved, include replies)
+        let review_comments = self
+            .get_review_comments(pr_number, Some(true), Some(true), None, None, None)
+            .await?;
 
-        // Get issue comments (discussion comments)
-        let issue_comments = self.get_issue_comments(pr_number).await?;
+        // Get all issue comments
+        let issue_comments = self.get_issue_comments(pr_number, None, None, None).await?;
 
         Ok(AllComments {
             pr_number,
@@ -94,11 +96,38 @@ impl GitHubClient {
         &self,
         pr_number: u64,
         include_resolved: Option<bool>,
+        include_replies: Option<bool>,
+        author: Option<&str>,
+        offset: Option<usize>,
+        limit: Option<usize>,
     ) -> Result<Vec<ReviewComment>> {
-        // First, fetch all review comments using REST API
-        let mut all_comments = Vec::new();
-        let mut page = 1u32;
+        // Quick return for limit=0
+        if matches!(limit, Some(0)) {
+            return Ok(vec![]);
+        }
 
+        let include_resolved = include_resolved.unwrap_or(false);
+        let include_replies = include_replies.unwrap_or(true);
+
+        // Preload resolution map only if filtering resolved
+        let resolution_map = if !include_resolved {
+            Some(self.get_review_thread_resolution_status(pr_number).await?)
+        } else {
+            None
+        };
+
+        use std::collections::HashSet;
+
+        let mut results: Vec<ReviewComment> = Vec::new();
+        let mut passing_parents: HashSet<u64> = HashSet::new();
+        let mut skip_remaining = offset.unwrap_or(0);
+        let take_limit = limit.unwrap_or(usize::MAX);
+
+        // Track thread context for page-local completion
+        let mut current_thread_parent: Option<u64> = None;
+        let mut finish_thread_on_page: Option<u64> = None;
+
+        let mut page = 1u32;
         loop {
             let response = self
                 .client
@@ -120,34 +149,106 @@ impl GitHubClient {
                 break;
             }
 
-            all_comments.extend(response.items.into_iter().map(ReviewComment::from));
+            for raw in response.items {
+                let c = ReviewComment::from(raw);
+
+                // Filter 1: Resolution
+                if let Some(map) = resolution_map.as_ref()
+                    && let Some(&is_resolved) = map.get(&c.id)
+                    && is_resolved
+                {
+                    continue;
+                }
+
+                let is_reply = c.in_reply_to_id.is_some();
+                let parent_id = c.in_reply_to_id;
+
+                // Filter 2: Replies
+                if !include_replies && is_reply {
+                    continue;
+                }
+
+                // Filter 3: Author (thread-scoped)
+                let mut keep = true;
+                if let Some(author_login) = author {
+                    if !is_reply {
+                        // Top-level must match author
+                        keep = c.user == author_login;
+                        if keep {
+                            passing_parents.insert(c.id);
+                        }
+                    } else {
+                        // Reply: include iff parent passed filter
+                        keep = parent_id
+                            .map(|pid| passing_parents.contains(&pid))
+                            .unwrap_or(false);
+                    }
+                }
+
+                if !keep {
+                    if !is_reply && author.is_some() {
+                        current_thread_parent = None;
+                    }
+                    continue;
+                }
+
+                // Track thread context
+                if !is_reply {
+                    current_thread_parent = Some(c.id);
+                }
+
+                // Filter 4: Offset/limit with counters
+                if skip_remaining > 0 {
+                    skip_remaining -= 1;
+                    continue;
+                }
+
+                if results.len() < take_limit {
+                    results.push(c);
+                } else if let (Some(pid), Some(finish_parent)) = (parent_id, finish_thread_on_page)
+                {
+                    // Finishing replies for specific parent on this page
+                    if pid == finish_parent {
+                        results.push(c);
+                    }
+                } else if let (Some(cur_parent), true) = (current_thread_parent, include_replies) {
+                    // Hit limit; start page-local thread completion
+                    if finish_thread_on_page.is_none() {
+                        finish_thread_on_page = Some(cur_parent);
+                    }
+                    if is_reply && parent_id == Some(cur_parent) {
+                        results.push(c);
+                    }
+                }
+            }
+
+            // Stop after this page if finishing thread or hit limit
+            if finish_thread_on_page.is_some() || results.len() >= take_limit {
+                break;
+            }
+
             page += 1;
         }
 
-        // If include_resolved is None or false, filter out resolved comments
-        let include_resolved = include_resolved.unwrap_or(false);
-        if !include_resolved && !all_comments.is_empty() {
-            // Fetch resolution status via GraphQL
-            let resolution_map = self.get_review_thread_resolution_status(pr_number).await?;
-
-            // Filter out resolved comments
-            all_comments.retain(|comment| {
-                // If we don't have resolution info for a comment, include it by default
-                // If we do have info and it's resolved, exclude it
-                resolution_map
-                    .get(&comment.id)
-                    .map(|&is_resolved| !is_resolved)
-                    .unwrap_or(true)
-            });
-        }
-
-        Ok(all_comments)
+        Ok(results)
     }
 
-    pub async fn get_issue_comments(&self, pr_number: u64) -> Result<Vec<IssueComment>> {
-        let mut comments = Vec::new();
-        let mut page = 1u32;
+    pub async fn get_issue_comments(
+        &self,
+        pr_number: u64,
+        author: Option<&str>,
+        offset: Option<usize>,
+        limit: Option<usize>,
+    ) -> Result<Vec<IssueComment>> {
+        if matches!(limit, Some(0)) {
+            return Ok(vec![]);
+        }
 
+        let mut results = Vec::new();
+        let mut skip_remaining = offset.unwrap_or(0);
+        let take_limit = limit.unwrap_or(usize::MAX);
+
+        let mut page = 1u32;
         loop {
             let response = self
                 .client
@@ -169,12 +270,34 @@ impl GitHubClient {
                 break;
             }
 
-            comments.extend(response.items.into_iter().map(IssueComment::from));
+            for raw in response.items {
+                let c = IssueComment::from(raw);
 
+                // Author filter
+                if let Some(a) = author
+                    && c.user != a
+                {
+                    continue;
+                }
+
+                // Offset/limit
+                if skip_remaining > 0 {
+                    skip_remaining -= 1;
+                    continue;
+                }
+
+                if results.len() < take_limit {
+                    results.push(c);
+                }
+            }
+
+            if results.len() >= take_limit {
+                break;
+            }
             page += 1;
         }
 
-        Ok(comments)
+        Ok(results)
     }
 
     pub async fn list_prs(&self, state: Option<String>) -> Result<Vec<PrSummary>> {
