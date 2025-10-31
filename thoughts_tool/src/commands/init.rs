@@ -245,21 +245,17 @@ pub async fn execute(force: bool) -> Result<()> {
 
     // Load or create repository configuration
     let repo_config_manager = RepoConfigManager::new(repo_root.clone());
-    let config = repo_config_manager
-        .ensure_default()
+    let was_v1 = matches!(repo_config_manager.peek_config_version()?, Some(v) if v == "1.0");
+    let cfg_v2 = repo_config_manager
+        .ensure_v2_default()
         .context("Failed to create repository configuration")?;
+    let mount_dirs = cfg_v2.mount_dirs.clone();
 
-    // Get v2 mount dirs - either from desired state or from v1 config defaults
-    let mount_dirs = if let Some(desired) = repo_config_manager.load_desired_state()? {
-        desired.mount_dirs
-    } else {
-        // Use v1 defaults that will map to v2
-        crate::config::MountDirsV2 {
-            thoughts: "thoughts".into(),
-            context: config.mount_dirs.repository.clone(),
-            references: "references".into(),
-        }
-    };
+    if was_v1 {
+        println!(
+            "Upgraded to v2 config. A v1 backup was created if non-empty. See MIGRATION_V1_TO_V2.md"
+        );
+    }
 
     // Create the actual thoughts directory structure
     let thoughts_dir = repo_root.join(".thoughts-data");
