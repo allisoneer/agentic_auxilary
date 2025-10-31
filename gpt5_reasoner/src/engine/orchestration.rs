@@ -48,7 +48,7 @@ pub async fn gpt5_reasoner_impl(
 
     // NEW: CLAUDE.md auto-injection (default-on; can be disabled by env)
     if injection_enabled_from_env() {
-        let injected = auto_inject_claude_memories(&mut files);
+        let injected = auto_inject_claude_memories(&mut files, directories.as_deref());
         if injected > 0 {
             // Dedup again in case user passed CLAUDE.md explicitly
             let before = files.len();
