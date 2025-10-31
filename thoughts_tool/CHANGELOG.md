@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.7] - 2025-10-31
+
+### ⛰️  Features
+- *(thoughts_tool)* Add USERNAME credential type for SSH authentication
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Add SSH authentication for references sync operations
+- *(thoughts_tool)* Address remaining PR #50 CodeRabbit comments
 ## [0.3.6] - 2025-10-20
 ## [0.3.5] - 2025-10-20
 
