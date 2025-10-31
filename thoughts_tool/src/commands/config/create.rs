@@ -1,7 +1,7 @@
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_current_control_repo_root;
 use crate::utils::paths;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
 
 pub async fn execute() -> Result<()> {
@@ -11,9 +11,7 @@ pub async fn execute() -> Result<()> {
 
     let config_path = paths::get_repo_config_path(&repo_root);
     if config_path.exists() {
-        eprintln!("{}: Repository already has a configuration", "Error".red());
-        eprintln!("Edit it with: {}", "thoughts config edit".cyan());
-        std::process::exit(1);
+        bail!("Repository already has a configuration\nEdit it with: thoughts config edit");
     }
 
     let _ = mgr.ensure_v2_default()?;

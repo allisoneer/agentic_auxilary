@@ -12,24 +12,22 @@ pub async fn execute(mount_name: String) -> Result<()> {
     // Parse to MountSpace for validation
     let mount_space = MountSpace::parse(&mount_name)?;
 
-    // Only context mounts can be removed
-    match mount_space {
-        MountSpace::Context(_) => {
-            // Proceed with removal
-        }
+    // Only context mounts can be removed; extract normalized name
+    let target_name = match mount_space {
+        MountSpace::Context(ref name) => name.clone(),
         MountSpace::Thoughts => {
             anyhow::bail!("Cannot remove the thoughts mount");
         }
         MountSpace::Reference { .. } => {
             anyhow::bail!("Use 'thoughts references remove' to remove references");
         }
-    }
+    };
 
     println!("{} mount '{}'...", "Removing".yellow(), mount_name);
 
     let mut cfg = repo_manager.load_v2_or_bail()?;
     let before = cfg.context_mounts.len();
-    cfg.context_mounts.retain(|m| m.mount_path != mount_name);
+    cfg.context_mounts.retain(|m| m.mount_path != target_name);
     if cfg.context_mounts.len() == before {
         println!("No mount named '{}' found", mount_name);
         return Ok(());
