@@ -1,5 +1,5 @@
 use crate::engine::paths::{is_ancestor, to_abs_string, walk_up_to_boundary};
-use crate::types::FileMeta;
+use crate::types::{DirectoryMeta, FileMeta};
 
 pub fn memory_files_in_dir(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
@@ -24,7 +24,10 @@ pub fn injection_enabled_from_env() -> bool {
     }
 }
 
-pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
+pub fn auto_inject_claude_memories(
+    files: &mut Vec<FileMeta>,
+    directories: Option<&[DirectoryMeta]>,
+) -> usize {
     let cwd_raw = match std::env::current_dir() {
         Ok(c) => c,
         Err(e) => {
@@ -47,6 +50,33 @@ pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
     let mut parent_dirs = Vec::<std::path::PathBuf>::new();
     let mut seen_dirs = std::collections::HashSet::<std::path::PathBuf>::new();
 
+    // NEW: Seed from explicitly requested directories first
+    if let Some(dirs) = directories {
+        for d in dirs {
+            let abs = to_abs_string(&d.directory_path);
+            let p = std::path::Path::new(&abs);
+            if p.exists() && p.is_dir() {
+                if is_ancestor(&cwd, p) {
+                    if seen_dirs.insert(p.to_path_buf()) {
+                        tracing::debug!("Seeded parent_dirs with explicit directory: {}", p.display());
+                        parent_dirs.push(p.to_path_buf());
+                    }
+                } else {
+                    tracing::debug!(
+                        "Skipping explicit directory outside cwd boundary: {}",
+                        p.display()
+                    );
+                }
+            } else {
+                tracing::debug!(
+                    "Skipping explicit directory that does not exist or is not a dir: {}",
+                    p.display()
+                );
+            }
+        }
+    }
+
+    // Existing: seed from parent dirs of input files (skipping plan_structure.md)
     for f in files.iter() {
         if f.filename == "plan_structure.md" {
             continue;
@@ -62,7 +92,9 @@ pub fn auto_inject_claude_memories(files: &mut Vec<FileMeta>) -> usize {
     }
 
     if parent_dirs.is_empty() {
-        tracing::debug!("No file parents under cwd boundary; skipping CLAUDE.md injection");
+        tracing::debug!(
+            "No explicit directories or file parents under cwd boundary; skipping CLAUDE.md injection"
+        );
         return 0;
     }
 
@@ -193,7 +225,7 @@ mod claude_injection_tests {
             description: "code".into(),
         }];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 3);
         assert_eq!(files.len(), 4);
 
@@ -231,7 +263,7 @@ mod claude_injection_tests {
             description: "external".into(),
         }];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 0);
         assert_eq!(files.len(), 1);
     }
@@ -298,7 +330,7 @@ mod claude_injection_integration_tests {
             description: "impl".into(),
         }];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 1, "should inject root CLAUDE.md");
 
         let xml = r#"<context>
@@ -339,7 +371,7 @@ mod claude_injection_integration_tests {
 
         // Simulate pipeline behavior - check env gate before calling
         let count = if injection_enabled_from_env() {
-            auto_inject_claude_memories(&mut files)
+            auto_inject_claude_memories(&mut files, None)
         } else {
             0
         };
@@ -392,7 +424,7 @@ mod claude_injection_edge_tests {
             },
         ];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 3, "root, a, b memories");
         assert_eq!(files.len(), 5);
     }
@@ -413,7 +445,7 @@ mod claude_injection_edge_tests {
             description: "code".into(),
         }];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 1);
         assert!(files[1].filename.ends_with("CLAUDE.md"));
     }
@@ -428,7 +460,7 @@ mod claude_injection_edge_tests {
         let _g = DirGuard::set(root);
 
         let mut files = vec![];
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 0);
     }
 
@@ -456,7 +488,7 @@ mod claude_injection_edge_tests {
             },
         ];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 1);
         assert_eq!(files.len(), 3);
     }
@@ -475,7 +507,211 @@ mod claude_injection_edge_tests {
             description: "embedded".into(),
         }];
 
-        let count = auto_inject_claude_memories(&mut files);
+        let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 0, "plan_structure.md has no real parent");
+    }
+}
+
+#[cfg(test)]
+mod claude_directory_seeding_tests {
+    use super::*;
+    use crate::test_support::DirGuard;
+    use crate::types::DirectoryMeta;
+    use serial_test::serial;
+    use std::fs;
+    use tempfile::TempDir;
+
+    // 1) Regression: Zero-file directory should inject CLAUDE.md
+    #[test]
+    #[serial(env)]
+    fn test_dir_seeding_injects_when_no_files_match() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(docs.join("CLAUDE.md"), "docs").unwrap();
+        fs::write(docs.join("README.md"), "readme").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: docs.to_string_lossy().to_string(),
+            description: "docs".into(),
+            extensions: Some(vec!["rs".into()]), // expansion would yield zero if used
+            recursive: false,
+            include_hidden: false,
+            max_files: crate::types::default_max_files(),
+        }];
+
+        let mut files: Vec<FileMeta> = vec![]; // simulate zero expanded files
+        let count = auto_inject_claude_memories(&mut files, Some(&dirs));
+        assert_eq!(count, 1, "should inject docs/CLAUDE.md despite zero files");
+        assert_eq!(files.len(), 1);
+        assert!(files[0].filename.ends_with("docs/CLAUDE.md"));
+    }
+
+    // 2) Ancestor Chain Test: explicit directory + ancestor CLAUDE.md
+    #[test]
+    #[serial(env)]
+    fn test_explicit_dir_ancestor_chain_order() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        fs::write(docs.join("CLAUDE.md"), "docs").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: docs.to_string_lossy().to_string(),
+            description: "docs".into(),
+            extensions: None,
+            recursive: false,
+            include_hidden: false,
+            max_files: crate::types::default_max_files(),
+        }];
+
+        let mut files: Vec<FileMeta> = vec![];
+        let count = auto_inject_claude_memories(&mut files, Some(&dirs));
+        assert_eq!(count, 2, "root and docs CLAUDE.md should be injected");
+        assert_eq!(files.len(), 2);
+        let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
+        let root_idx = names.iter().position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/docs/")).unwrap();
+        let docs_idx = names.iter().position(|n| n.ends_with("/docs/CLAUDE.md")).unwrap();
+        assert!(root_idx < docs_idx, "root-to-leaf ordering must hold");
+    }
+
+    // 3) CWD Boundary Test: explicit directory outside CWD
+    #[test]
+    #[serial(env)]
+    fn test_explicit_dir_outside_cwd_no_injection() {
+        let td_a = TempDir::new().unwrap();
+        let td_b = TempDir::new().unwrap();
+        let root_a = td_a.path();
+        let root_b = td_b.path();
+        let docs_b = root_b.join("docs");
+        std::fs::create_dir_all(&docs_b).unwrap();
+        fs::write(docs_b.join("CLAUDE.md"), "bdocs").unwrap();
+
+        let _g = DirGuard::set(root_a);
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: docs_b.to_string_lossy().to_string(),
+            description: "external docs".into(),
+            extensions: None,
+            recursive: false,
+            include_hidden: false,
+            max_files: crate::types::default_max_files(),
+        }];
+
+        let mut files: Vec<FileMeta> = vec![];
+        let count = auto_inject_claude_memories(&mut files, Some(&dirs));
+        assert_eq!(count, 0, "outside-cwd explicit directories must be ignored");
+        assert_eq!(files.len(), 0);
+    }
+
+    // 4) Overlap Dedup: same directory as file parent and explicit
+    #[test]
+    #[serial(env)]
+    fn test_overlap_explicit_and_file_parent_dedup() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        fs::write(docs.join("CLAUDE.md"), "docs").unwrap();
+        fs::write(docs.join("code.rs"), "fn x() {}").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let dirs = vec![DirectoryMeta {
+            directory_path: docs.to_string_lossy().to_string(),
+            description: "docs".into(),
+            extensions: None,
+            recursive: false,
+            include_hidden: false,
+            max_files: crate::types::default_max_files(),
+        }];
+
+        let mut files = vec![FileMeta {
+            filename: docs.join("code.rs").to_string_lossy().to_string(),
+            description: "code".into(),
+        }];
+
+        let count = auto_inject_claude_memories(&mut files, Some(&dirs));
+        assert_eq!(count, 2, "root and docs memories injected once each");
+        let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
+        assert_eq!(names.iter().filter(|n| n.ends_with("/docs/CLAUDE.md")).count(), 1);
+        assert_eq!(names.iter().filter(|n| n.ends_with("/CLAUDE.md") && !n.contains("/docs/")).count(), 1);
+    }
+
+    // 5) Nested Directories Test: multiple explicit directories in same tree
+    #[test]
+    #[serial(env)]
+    fn test_multiple_explicit_nested_dirs_injection_order() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+        let sub = root.join("sub");
+        let nested = sub.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(root.join("CLAUDE.md"), "root").unwrap();
+        fs::write(sub.join("CLAUDE.md"), "sub").unwrap();
+        fs::write(nested.join("CLAUDE.md"), "nested").unwrap();
+
+        let _g = DirGuard::set(root);
+
+        let dirs = vec![
+            DirectoryMeta {
+                directory_path: sub.to_string_lossy().to_string(),
+                description: "sub".into(),
+                extensions: None,
+                recursive: false,
+                include_hidden: false,
+                max_files: crate::types::default_max_files(),
+            },
+            DirectoryMeta {
+                directory_path: nested.to_string_lossy().to_string(),
+                description: "nested".into(),
+                extensions: None,
+                recursive: false,
+                include_hidden: false,
+                max_files: crate::types::default_max_files(),
+            },
+        ];
+
+        let mut files: Vec<FileMeta> = vec![];
+        let count = auto_inject_claude_memories(&mut files, Some(&dirs));
+        assert_eq!(count, 3, "root, sub, nested should be injected");
+        let names: Vec<_> = files.iter().map(|f| f.filename.clone()).collect();
+        let root_idx = names.iter().position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/sub/")).unwrap();
+        let sub_idx = names.iter().position(|n| n.ends_with("/sub/CLAUDE.md")).unwrap();
+        let nested_idx = names.iter().position(|n| n.ends_with("/sub/nested/CLAUDE.md")).unwrap();
+        assert!(root_idx < sub_idx && sub_idx < nested_idx);
+    }
+
+    // 6) Defensive: Nonexistent directory path
+    #[test]
+    #[serial(env)]
+    fn test_nonexistent_explicit_directory_ignored() {
+        let td = TempDir::new().unwrap();
+        let root = td.path();
+
+        let _g = DirGuard::set(root);
+
+        let nonexistent = root.join("nope");
+        let dirs = vec![DirectoryMeta {
+            directory_path: nonexistent.to_string_lossy().to_string(),
+            description: "nope".into(),
+            extensions: None,
+            recursive: false,
+            include_hidden: false,
+            max_files: crate::types::default_max_files(),
+        }];
+
+        let mut files: Vec<FileMeta> = vec![];
+        let count = auto_inject_claude_memories(&mut files, Some(&dirs));
+        assert_eq!(count, 0);
+        assert!(files.is_empty());
     }
 }
