@@ -21,6 +21,7 @@ tokio = { version = "1", features = ["full"] }
 
 # GitHub API client
 octocrab = "0.41"
+gh-config = "0.5.1"
 
 # Git operations
 git2 = { version = "0.18", features = ["vendored-openssl"] }
