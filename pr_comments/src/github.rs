@@ -119,12 +119,18 @@ impl GitHubClient {
         use std::collections::HashSet;
 
         let mut results: Vec<ReviewComment> = Vec::new();
-        let mut passing_parents: HashSet<u64> = HashSet::new();
+        let mut passing_parents: HashSet<u64> = HashSet::new(); // author-filter passing top-levels
+
+        // NEW: Track parents that were offset-skipped vs. actually included.
+        // - skipped_parents: Parents skipped by offset; their replies must not leak through.
+        // - included_parents: Parents actually added to results; only these can have replies shown.
+        let mut skipped_parents: HashSet<u64> = HashSet::new();
+        let mut included_parents: HashSet<u64> = HashSet::new();
+
         let mut skip_remaining = offset.unwrap_or(0);
         let take_limit = limit.unwrap_or(usize::MAX);
 
-        // Track thread context for page-local completion
-        let mut current_thread_parent: Option<u64> = None;
+        // Intentional page-local thread completion: finish replies on current page only.
         let mut finish_thread_on_page: Option<u64> = None;
 
         let mut page = 1u32;
@@ -152,7 +158,7 @@ impl GitHubClient {
             for raw in response.items {
                 let c = ReviewComment::from(raw);
 
-                // Filter 1: Resolution
+                // Filter 1: Resolution (unchanged)
                 if let Some(map) = resolution_map.as_ref()
                     && let Some(&is_resolved) = map.get(&c.id)
                     && is_resolved
@@ -163,60 +169,85 @@ impl GitHubClient {
                 let is_reply = c.in_reply_to_id.is_some();
                 let parent_id = c.in_reply_to_id;
 
-                // Filter 2: Replies
+                // Filter 2: Replies flag (unchanged)
                 if !include_replies && is_reply {
                     continue;
                 }
 
-                // Filter 3: Author (thread-scoped)
+                // Filter 3: Author (thread-scoped) - unchanged semantics
                 let mut keep = true;
                 if let Some(author_login) = author {
                     if !is_reply {
-                        // Top-level must match author
                         keep = c.user == author_login;
                         if keep {
+                            // NOTE: This records that the parent passed author filter.
+                            // It does NOT mean it was included in results.
                             passing_parents.insert(c.id);
                         }
                     } else {
-                        // Reply: include iff parent passed filter
+                        // Replies pass author filter iff their parent passed.
                         keep = parent_id
                             .map(|pid| passing_parents.contains(&pid))
                             .unwrap_or(false);
                     }
                 }
-
                 if !keep {
-                    if !is_reply && author.is_some() {
-                        current_thread_parent = None;
-                    }
+                    // No state updates for excluded items beyond author semantics.
                     continue;
                 }
 
-                // Track thread context
-                if !is_reply {
-                    current_thread_parent = Some(c.id);
+                // NEW: Reply gating BEFORE offset/limit
+                // Ensures replies only appear if their parent is actually included in results,
+                // and replies to offset-skipped parents do NOT count toward the offset.
+                if is_reply {
+                    if let Some(pid) = parent_id {
+                        // If parent was offset-skipped, silently drop this reply.
+                        if skipped_parents.contains(&pid) {
+                            continue;
+                        }
+                        // If parent hasn't been included yet (and we're not finishing it), drop reply.
+                        if !included_parents.contains(&pid) && finish_thread_on_page != Some(pid) {
+                            continue;
+                        }
+                    } else {
+                        // Defensive: replies must have a parent
+                        continue;
+                    }
                 }
 
-                // Filter 4: Offset/limit with counters
+                // Filter 4: Offset handling
                 if skip_remaining > 0 {
                     skip_remaining -= 1;
+                    if !is_reply {
+                        // Track this parent so its replies cannot leak through the offset.
+                        skipped_parents.insert(c.id);
+                    }
                     continue;
                 }
 
+                // Limit handling + results insertion
                 if results.len() < take_limit {
-                    results.push(c);
-                } else if let (Some(pid), Some(finish_parent)) = (parent_id, finish_thread_on_page)
+                    // We can still take items; insert and update included-parent state.
+                    results.push(c.clone());
+                    if !is_reply {
+                        included_parents.insert(c.id);
+                    }
+                    continue;
+                }
+
+                // Over limit: page-local thread completion for replies only,
+                // and only if the parent was actually included in results.
+                // This is intentional: we do NOT fetch additional pages to complete threads.
+                if include_replies
+                    && is_reply
+                    && let Some(pid) = parent_id
+                    && included_parents.contains(&pid)
                 {
-                    // Finishing replies for specific parent on this page
-                    if pid == finish_parent {
-                        results.push(c);
-                    }
-                } else if let (Some(cur_parent), true) = (current_thread_parent, include_replies) {
-                    // Hit limit; start page-local thread completion
                     if finish_thread_on_page.is_none() {
-                        finish_thread_on_page = Some(cur_parent);
+                        // Activate completion ONLY for a parent already in results.
+                        finish_thread_on_page = Some(pid);
                     }
-                    if is_reply && parent_id == Some(cur_parent) {
+                    if finish_thread_on_page == Some(pid) {
                         results.push(c);
                     }
                 }
@@ -433,5 +464,118 @@ impl GitHubClient {
         }
 
         Ok(comment_resolution_map)
+    }
+}
+
+// Test helper module - public for integration tests
+pub mod test_helpers {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    #[derive(Debug, Clone)]
+    pub struct FilterParams<'a> {
+        pub include_resolved: bool,
+        pub include_replies: bool,
+        pub author: Option<&'a str>,
+        pub offset: Option<usize>,
+        pub limit: Option<usize>,
+        // For tests that want to simulate resolution filtering:
+        pub resolved_ids: HashMap<u64, bool>, // id -> is_resolved
+    }
+
+    // Pure in-memory pipeline that mirrors get_review_comments logic.
+    pub fn apply_filters(mut comments: Vec<ReviewComment>, p: FilterParams) -> Vec<ReviewComment> {
+        let mut results: Vec<ReviewComment> = Vec::new();
+        let mut passing_parents: HashSet<u64> = HashSet::new();
+        let mut skipped_parents: HashSet<u64> = HashSet::new();
+        let mut included_parents: HashSet<u64> = HashSet::new();
+        let mut finish_thread_on_page: Option<u64> = None;
+
+        let mut skip_remaining = p.offset.unwrap_or(0);
+        let take_limit = p.limit.unwrap_or(usize::MAX);
+
+        for c in comments.drain(..) {
+            // Filter 1: Resolution
+            if !p.include_resolved
+                && let Some(&is_resolved) = p.resolved_ids.get(&c.id)
+                && is_resolved
+            {
+                continue;
+            }
+
+            let is_reply = c.in_reply_to_id.is_some();
+            let parent_id = c.in_reply_to_id;
+
+            // Filter 2: Replies flag
+            if !p.include_replies && is_reply {
+                continue;
+            }
+
+            // Filter 3: Author (thread-scoped)
+            let mut keep = true;
+            if let Some(login) = p.author {
+                if !is_reply {
+                    keep = c.user == login;
+                    if keep {
+                        passing_parents.insert(c.id);
+                    }
+                } else {
+                    keep = parent_id
+                        .map(|pid| passing_parents.contains(&pid))
+                        .unwrap_or(false);
+                }
+            }
+            if !keep {
+                continue;
+            }
+
+            // Reply gating before offset/limit
+            if is_reply {
+                if let Some(pid) = parent_id {
+                    if skipped_parents.contains(&pid) {
+                        continue;
+                    }
+                    if !included_parents.contains(&pid) && finish_thread_on_page != Some(pid) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // Offset
+            if skip_remaining > 0 {
+                skip_remaining -= 1;
+                if !is_reply {
+                    skipped_parents.insert(c.id);
+                }
+                continue;
+            }
+
+            // Limit + insertion
+            if results.len() < take_limit {
+                if !is_reply {
+                    included_parents.insert(c.id);
+                }
+                results.push(c);
+                continue;
+            }
+
+            // Over limit: page-local thread completion
+            if p.include_replies
+                && is_reply
+                && let Some(pid) = parent_id
+                && included_parents.contains(&pid)
+            {
+                if finish_thread_on_page.is_none() {
+                    finish_thread_on_page = Some(pid);
+                }
+                if finish_thread_on_page == Some(pid) {
+                    results.push(c);
+                }
+            }
+        }
+
+        results
     }
 }
