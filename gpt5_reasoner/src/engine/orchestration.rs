@@ -203,10 +203,7 @@ pub async fn gpt5_reasoner_impl(
                 let empty_kind = crate::logging::log_chat_response("executor", &resp, duration);
 
                 // Extract content option
-                let content_opt = resp
-                    .choices
-                    .first()
-                    .and_then(|c| c.message.content.clone());
+                let content_opt = resp.choices.first().and_then(|c| c.message.content.clone());
 
                 // Determine if content is effectively empty
                 let is_effectively_empty = match &content_opt {
