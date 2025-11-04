@@ -99,7 +99,7 @@ async fn run_cli(args: Args) -> Result<()> {
             include_resolved,
             limit,
         } => match tool
-            .get_review_comments(pr, Some(include_resolved), limit)
+            .get_review_comments(pr, Some(include_resolved), None, None, None, limit)
             .await
         {
             Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
@@ -108,7 +108,8 @@ async fn run_cli(args: Args) -> Result<()> {
                 std::process::exit(1);
             }
         },
-        Commands::IssueComments { pr } => match tool.get_issue_comments(pr).await {
+        Commands::IssueComments { pr } => match tool.get_issue_comments(pr, None, None, None).await
+        {
             Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
             Err(e) => {
                 eprintln!("Error: {}", e);
