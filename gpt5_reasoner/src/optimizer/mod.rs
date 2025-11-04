@@ -103,16 +103,36 @@ pub async fn call_optimizer(
                 let duration = start.elapsed();
                 tracing::debug!("Optimizer API succeeded in {:?}", duration);
 
-                let content = resp
-                    .choices
-                    .first()
-                    .and_then(|c| c.message.content.clone())
-                    .ok_or_else(|| {
-                        ReasonerError::Template("Optimizer returned empty content".into())
-                    })?;
+                // NEW: log response metadata + classify emptiness
+                let empty_kind = crate::logging::log_chat_response("optimizer", &resp, duration);
+                if let Some(kind) = empty_kind {
+                    // Optimizer: warn, but do NOT error (preserve downstream template retry)
+                    crate::logging::log_empty_warning("optimizer", kind, &resp);
+                }
 
-                tracing::debug!("Optimizer response length: {} chars", content.len());
-                return Ok(content);
+                // Existing content extraction
+                let content_opt = resp.choices.first().and_then(|c| c.message.content.clone());
+
+                match content_opt {
+                    None => {
+                        // Maintain existing behavior: Template error triggers validation retry loops upstream
+                        return Err(ReasonerError::Template(
+                            "Optimizer returned empty content (None)".into(),
+                        ));
+                    }
+                    Some(content) => {
+                        // NEW: warn if empty or whitespace-only, but still return Ok(content)
+                        if content.trim().is_empty() {
+                            tracing::warn!(
+                                "Optimizer returned empty/whitespace content (len={})",
+                                content.len()
+                            );
+                        } else {
+                            tracing::debug!("Optimizer response length: {} chars", content.len());
+                        }
+                        return Ok(content);
+                    }
+                }
             }
             Err(e) => {
                 let retryable = crate::errors::is_retryable_app_level(&e);

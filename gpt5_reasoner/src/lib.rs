@@ -10,6 +10,9 @@ pub use types::*;
 pub mod engine;
 pub use engine::gpt5_reasoner_impl;
 
+// NEW: logging utilities
+mod logging; // not public; used internally via crate::logging
+
 #[cfg(test)]
 pub mod test_support;
 
