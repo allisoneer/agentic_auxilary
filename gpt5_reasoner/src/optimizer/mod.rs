@@ -111,10 +111,7 @@ pub async fn call_optimizer(
                 }
 
                 // Existing content extraction
-                let content_opt = resp
-                    .choices
-                    .first()
-                    .and_then(|c| c.message.content.clone());
+                let content_opt = resp.choices.first().and_then(|c| c.message.content.clone());
 
                 match content_opt {
                     None => {

@@ -1,6 +1,6 @@
 // gpt5_reasoner/src/logging.rs
-use std::time::Duration;
 use async_openai::types::CreateChatCompletionResponse;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy)]
 pub enum EmptyContentKind {
@@ -22,7 +22,9 @@ impl std::fmt::Display for EmptyContentKind {
 }
 
 /// Classify empty content scenarios using the first choice (typical single-choice usage).
-pub fn classify_empty_chat_content(resp: &CreateChatCompletionResponse) -> Option<EmptyContentKind> {
+pub fn classify_empty_chat_content(
+    resp: &CreateChatCompletionResponse,
+) -> Option<EmptyContentKind> {
     if resp.choices.is_empty() {
         return Some(EmptyContentKind::NoChoices);
     }
@@ -161,6 +163,9 @@ mod tests {
         assert_eq!(EmptyContentKind::NoChoices.to_string(), "no_choices");
         assert_eq!(EmptyContentKind::NoContent.to_string(), "none_content");
         assert_eq!(EmptyContentKind::EmptyString.to_string(), "empty_string");
-        assert_eq!(EmptyContentKind::WhitespaceOnly.to_string(), "whitespace_only");
+        assert_eq!(
+            EmptyContentKind::WhitespaceOnly.to_string(),
+            "whitespace_only"
+        );
     }
 }
