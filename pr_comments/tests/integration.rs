@@ -32,6 +32,7 @@ async fn test_model_serialization() {
         updated_at: "2024-01-01T00:00:00Z".to_string(),
         html_url: "https://github.com/owner/repo/pull/1#discussion_r123".to_string(),
         pull_request_review_id: Some(456),
+        in_reply_to_id: None,
     };
 
     let json = serde_json::to_string(&comment).unwrap();
@@ -93,5 +94,155 @@ mod resolution_tests {
         let data = response.data.unwrap();
         assert_eq!(data.repository.pull_request.review_threads.nodes.len(), 1);
         assert!(data.repository.pull_request.review_threads.nodes[0].is_resolved);
+    }
+}
+
+#[cfg(test)]
+mod filter_pipeline_tests {
+    use pr_comments::github::test_helpers::{FilterParams, apply_filters};
+    use pr_comments::models::ReviewComment;
+    use std::collections::HashMap;
+
+    fn rc_top(id: u64, user: &str) -> ReviewComment {
+        ReviewComment {
+            id,
+            user: user.into(),
+            body: format!("P{}", id),
+            path: "a.rs".into(),
+            line: Some(1),
+            side: Some("RIGHT".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: "2025-01-01T00:00:00Z".into(),
+            html_url: format!("https://x/{id}"),
+            pull_request_review_id: None,
+            in_reply_to_id: None,
+        }
+    }
+
+    fn rc_reply(id: u64, user: &str, parent: u64) -> ReviewComment {
+        ReviewComment {
+            id,
+            user: user.into(),
+            body: format!("R{}", id),
+            path: "a.rs".into(),
+            line: Some(1),
+            side: Some("RIGHT".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: "2025-01-01T00:00:00Z".into(),
+            html_url: format!("https://x/{id}"),
+            pull_request_review_id: None,
+            in_reply_to_id: Some(parent),
+        }
+    }
+
+    fn p(
+        include_resolved: bool,
+        include_replies: bool,
+        author: Option<&str>,
+        offset: usize,
+        limit: usize,
+    ) -> FilterParams<'_> {
+        FilterParams {
+            include_resolved,
+            include_replies,
+            author,
+            offset: Some(offset),
+            limit: Some(limit),
+            resolved_ids: HashMap::new(),
+        }
+    }
+
+    fn ids(xs: &[ReviewComment]) -> Vec<u64> {
+        xs.iter().map(|c| c.id).collect()
+    }
+
+    // T1 - Bug #1 Reproduction (Offset Skips Parent)
+    // Data: [P1(alice), R1(bob→P1), P2(alice)]
+    // Params: include_replies=true, author="alice", offset=1
+    // Expected: [P2] (R1 must NOT appear)
+    #[test]
+    fn offset_skips_parent_replies_do_not_leak() {
+        let data = vec![
+            rc_top(1, "alice"),
+            rc_reply(11, "bob", 1),
+            rc_top(2, "alice"),
+        ];
+        let out = apply_filters(data, p(false, true, Some("alice"), 1, 100));
+        assert_eq!(ids(&out), vec![2], "reply R11 should not appear without P1");
+    }
+
+    // T2 - Bug #3 Reproduction (Limit at Parent)
+    // Data: [P1, R1, P2, R2]
+    // Params: include_replies=true, limit=2
+    // Expected: [P1, R1] (R2 must NOT appear, P2 not in results)
+    #[test]
+    fn limit_boundary_does_not_start_completion_without_parent_in_results() {
+        let data = vec![
+            rc_top(1, "u"),
+            rc_reply(11, "v", 1),
+            rc_top(2, "u"),
+            rc_reply(22, "w", 2),
+        ];
+        let out = apply_filters(data, p(true, true, None, 0, 2));
+        assert_eq!(ids(&out), vec![1, 11]);
+    }
+
+    // T3 - Thread Completion (Limit Mid-Thread)
+    // Data: [P1, R1, R2, P2]
+    // Params: include_replies=true, limit=1
+    // Expected: [P1, R1, R2] (finish replies to P1 on page)
+    #[test]
+    fn page_local_thread_completion_includes_all_replies_for_included_parent() {
+        let data = vec![
+            rc_top(1, "a"),
+            rc_reply(11, "b", 1),
+            rc_reply(12, "c", 1),
+            rc_top(2, "d"),
+        ];
+        let out = apply_filters(data, p(true, true, None, 0, 1));
+        assert_eq!(ids(&out), vec![1, 11, 12]);
+    }
+
+    // T4 - Multiple Skipped Parents (HashSet Validation)
+    // Data: [P1, R1, P2, R2, P3, R3, P4]
+    // Params: include_replies=true, offset=3
+    // Expected: [P4] (R1, R2, R3 must NOT appear)
+    #[test]
+    fn multiple_parents_skipped_by_offset_block_all_their_replies() {
+        let data = vec![
+            rc_top(1, "a"),
+            rc_reply(11, "x", 1),
+            rc_top(2, "b"),
+            rc_reply(22, "y", 2),
+            rc_top(3, "c"),
+            rc_reply(33, "z", 3),
+            rc_top(4, "d"),
+        ];
+        let out = apply_filters(data, p(true, true, None, 3, 100));
+        assert_eq!(ids(&out), vec![4]);
+    }
+
+    // T5 - include_replies=false Unchanged
+    // Data: [P1, R1, P2]
+    // Params: include_replies=false, offset=1
+    // Expected: [P2]
+    #[test]
+    fn include_replies_false_preserved() {
+        let data = vec![rc_top(1, "u"), rc_reply(11, "v", 1), rc_top(2, "w")];
+        let out = apply_filters(data, p(true, false, None, 1, 100));
+        assert_eq!(ids(&out), vec![2]);
+    }
+
+    // T6 - Page-Local Boundary (Intentional Behavior)
+    // Data: Page1: [P1, R1], Page2: [R2(→P1)]
+    // Params: include_replies=true, limit=1
+    // Expected: [P1, R1] (R2 from page2 NOT fetched)
+    // Simulate by only feeding page1 entries to the pure helper.
+    #[test]
+    fn page_local_completion_does_not_fetch_next_page() {
+        let page1 = vec![rc_top(1, "u"), rc_reply(11, "v", 1)];
+        let out = apply_filters(page1, p(true, true, None, 0, 1));
+        assert_eq!(ids(&out), vec![1, 11]);
+        // R2 on a later page would not be fetched/added.
     }
 }
