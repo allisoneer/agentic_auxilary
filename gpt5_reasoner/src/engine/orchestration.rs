@@ -199,17 +199,55 @@ pub async fn gpt5_reasoner_impl(
                 let duration = start.elapsed();
                 tracing::debug!("GPT-5 API succeeded in {:?}", duration);
 
-                let content = resp
-                    .choices
-                    .first()
-                    .and_then(|c| c.message.content.clone())
-                    .ok_or_else(|| {
-                        ToolError::new(
-                            universal_tool_core::error::ErrorCode::ExecutionFailed,
-                            "GPT-5 returned empty content",
-                        )
-                    })?;
+                // NEW: log response metadata + classify emptiness
+                let empty_kind = crate::logging::log_chat_response("executor", &resp, duration);
 
+                // Extract content option
+                let content_opt = resp.choices.first().and_then(|c| c.message.content.clone());
+
+                // Determine if content is effectively empty
+                let is_effectively_empty = match &content_opt {
+                    None => true,
+                    Some(s) if s.is_empty() => true,
+                    Some(s) if s.trim().is_empty() => true,
+                    _ => false,
+                };
+
+                if is_effectively_empty {
+                    // Warn with specific classification if available
+                    if let Some(kind) = empty_kind {
+                        crate::logging::log_empty_warning("executor", kind, &resp);
+                    } else {
+                        tracing::warn!("Executor received empty content (unclassified)");
+                    }
+
+                    // NEW: Treat as retryable anomaly once, then return helpful error
+                    if attempt < GPT5_RETRIES {
+                        tracing::warn!(
+                            "Empty response from GPT-5; retrying once (attempt {} of {})",
+                            attempt + 2,
+                            GPT5_RETRIES + 1
+                        );
+                        continue;
+                    }
+
+                    // Final failure after retry
+                    tracing::error!(
+                        "Reasoning model returned no response after {} attempt(s). \
+                         Check logs for response metadata (id, finish_reason, usage). \
+                         Possible causes: content filtering, prompt issues, or API anomaly.",
+                        attempt + 1
+                    );
+                    return Err(ToolError::new(
+                        universal_tool_core::error::ErrorCode::ExecutionFailed,
+                        "Reasoning model returned no response after retry. \
+                         Check logs for response metadata (id, finish_reason, usage). \
+                         Possible causes: content filtering, prompt issues, or API anomaly.",
+                    ));
+                }
+
+                // Non-empty content → success
+                let content = content_opt.expect("guarded by is_effectively_empty=false");
                 return Ok(content);
             }
             Err(e) => {

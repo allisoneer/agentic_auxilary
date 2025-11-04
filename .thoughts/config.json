@@ -1,56 +1,58 @@
 {
-	"version": "2.0",
-	"mount_dirs": {
-		"thoughts": "thoughts",
-		"context": "context",
-		"references": "references"
-	},
-	"thoughts_mount": {
-		"remote": "git@github.com:allisoneer/personal_thoughts.git",
-		"subpath": "projects/agentic_auxilary_thoughts",
-		"sync": "auto"
-	},
-	"context_mounts": [
-		{
-			"remote": "git@github.com:allisoneer/personal_thoughts.git",
-			"subpath": "projects/universal_tool",
-			"mount_path": "universal_tool",
-			"sync": "auto"
-		},
-		{
-			"remote": "git@github.com:allisoneer/personal_thoughts.git",
-			"subpath": "projects/thoughts_tool",
-			"mount_path": "thoughts_tool",
-			"sync": "auto"
-		},
-		{
-			"remote": "git@github.com:allisoneer/personal_thoughts.git",
-			"subpath": "projects/agentic_auxilary",
-			"mount_path": "general",
-			"sync": "auto"
-		},
-		{
-			"remote": "git@github.com:allisoneer/personal_thoughts.git",
-			"subpath": "projects/claudecode_rs",
-			"mount_path": "claudecode_rs",
-			"sync": "auto"
-		}
-	],
-	"references": [
-		"git@github.com:seanmonstar/reqwest.git",
-		"git@github.com:XAMPPRocky/octocrab.git",
-		"git@github.com:obmarg/cynic.git",
-		"git@github.com:letmutex/htmd.git",
-		"git@github.com:zurawiki/tiktoken-rs.git",
-		"git@github.com:BurntSushi/ripgrep.git",
-		"git@github.com:anthropics/claude-code-action.git",
-		"git@github.com:Vrtgs/thirtyfour.git",
-		"git@github.com:64bit/async-openai.git",
-		"git@github.com:modelcontextprotocol/rust-sdk.git",
-		"https://github.com/modelcontextprotocol/modelcontextprotocol.git",
-		"https://github.com/modelcontextprotocol/python-sdk.git",
-		"https://github.com/modelcontextprotocol/typescript-sdk.git",
-		"https://github.com/allisoneer/cocoz.git"
-	]
+  "version": "2.0",
+  "mount_dirs": {
+    "thoughts": "thoughts",
+    "context": "context",
+    "references": "references"
+  },
+  "thoughts_mount": {
+    "remote": "git@github.com:allisoneer/personal_thoughts.git",
+    "subpath": "projects/agentic_auxilary_thoughts",
+    "sync": "auto"
+  },
+  "context_mounts": [
+    {
+      "remote": "git@github.com:allisoneer/personal_thoughts.git",
+      "subpath": "projects/universal_tool",
+      "mount_path": "universal_tool",
+      "sync": "auto"
+    },
+    {
+      "remote": "git@github.com:allisoneer/personal_thoughts.git",
+      "subpath": "projects/thoughts_tool",
+      "mount_path": "thoughts_tool",
+      "sync": "auto"
+    },
+    {
+      "remote": "git@github.com:allisoneer/personal_thoughts.git",
+      "subpath": "projects/agentic_auxilary",
+      "mount_path": "general",
+      "sync": "auto"
+    },
+    {
+      "remote": "git@github.com:allisoneer/personal_thoughts.git",
+      "subpath": "projects/claudecode_rs",
+      "mount_path": "claudecode_rs",
+      "sync": "auto"
+    }
+  ],
+  "references": [
+    "git@github.com:seanmonstar/reqwest.git",
+    "git@github.com:XAMPPRocky/octocrab.git",
+    "git@github.com:obmarg/cynic.git",
+    "git@github.com:letmutex/htmd.git",
+    "git@github.com:zurawiki/tiktoken-rs.git",
+    "git@github.com:BurntSushi/ripgrep.git",
+    "git@github.com:anthropics/claude-code-action.git",
+    "git@github.com:Vrtgs/thirtyfour.git",
+    "git@github.com:64bit/async-openai.git",
+    "git@github.com:modelcontextprotocol/rust-sdk.git",
+    "https://github.com/modelcontextprotocol/modelcontextprotocol.git",
+    "https://github.com/modelcontextprotocol/python-sdk.git",
+    "https://github.com/modelcontextprotocol/typescript-sdk.git",
+    "https://github.com/allisoneer/cocoz.git",
+    "git@github.com:allisoneer/gwt.git",
+    "https://github.com/siketyan/gh-config-rs.git"
+  ]
 }
 
