@@ -1,0 +1,41 @@
+[package]
+name = "anthropic_client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Anthropic API client for Rust with prompt caching support"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+categories = ["api-bindings"]
+keywords = ["anthropic", "claude", "llm", "client"]
+
+[features]
+default = []
+streaming = [] # placeholder for future SSE
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls-tls"], default-features = false }
+backoff = "0.4"
+chrono = { workspace = true, features = ["serde"] }
+bytes = "1.0"
+futures = "0.3"
+
+[dev-dependencies]
+wiremock = "0.6"
+proptest = "1.6"
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"
+pedantic = "warn"
+nursery = "warn"
