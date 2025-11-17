@@ -1,6 +1,6 @@
 //! Model listing example showing how to list available models.
 
-use anthropic_client::{AnthropicConfig, Client};
+use anthropic_async::{AnthropicConfig, Client};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

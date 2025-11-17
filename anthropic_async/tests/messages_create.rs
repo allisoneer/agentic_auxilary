@@ -1,4 +1,4 @@
-use anthropic_client::{
+use anthropic_async::{
     AnthropicConfig, Client,
     types::{common::*, messages::*},
 };
@@ -92,7 +92,7 @@ async fn test_ttl_ordering_validation() {
 
     let err = client.messages().create(req).await.unwrap_err();
     match err {
-        anthropic_client::AnthropicError::Config(msg) => {
+        anthropic_async::AnthropicError::Config(msg) => {
             assert!(msg.contains("TTL ordering"));
         }
         _ => panic!("Expected Config error"),

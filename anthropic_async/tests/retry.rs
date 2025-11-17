@@ -1,4 +1,4 @@
-use anthropic_client::{AnthropicConfig, Client, types::messages::*};
+use anthropic_async::{AnthropicConfig, Client, types::messages::*};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wiremock::matchers::{method, path};
@@ -143,7 +143,7 @@ async fn test_non_retryable_400() {
 
     let err = client.messages().create(request).await.unwrap_err();
     match err {
-        anthropic_client::AnthropicError::Api(obj) => {
+        anthropic_async::AnthropicError::Api(obj) => {
             assert_eq!(obj.message, "Invalid request");
         }
         _ => panic!("Expected Api error"),

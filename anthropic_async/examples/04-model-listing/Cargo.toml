@@ -5,6 +5,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
-anthropic_client = { path = "../.." }
+anthropic-async = { path = "../.." }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"

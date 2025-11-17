@@ -101,7 +101,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "anthropic_client"
+name = "anthropic-async"
 version = "0.1.0"
 dependencies = [
  "anyhow",

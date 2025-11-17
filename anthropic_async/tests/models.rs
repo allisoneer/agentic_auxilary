@@ -1,4 +1,4 @@
-use anthropic_client::{AnthropicConfig, Client};
+use anthropic_async::{AnthropicConfig, Client};
 use serde_json::json;
 use wiremock::matchers::{header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

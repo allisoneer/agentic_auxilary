@@ -8,7 +8,7 @@
 //! - Token counting
 //! - Error handling
 
-use anthropic_client::{
+use anthropic_async::{
     config::BetaFeature,
     types::{common::*, messages::*},
     AnthropicConfig, Client,

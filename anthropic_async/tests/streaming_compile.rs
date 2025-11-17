@@ -1,7 +1,7 @@
 #[cfg(feature = "streaming")]
 #[test]
 fn streaming_feature_compiles() {
-    use anthropic_client::sse::streaming::{Event, EventStream};
+    use anthropic_async::sse::streaming::{Event, EventStream};
 
     // Just ensure types are accessible
     drop(Event::MessageStart);

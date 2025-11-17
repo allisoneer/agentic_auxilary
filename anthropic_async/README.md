@@ -1,10 +1,10 @@
-# anthropic_client
+# anthropic-async
 
 A production-ready Anthropic API client for Rust with prompt caching support.
 
-[![Crates.io](https://img.shields.io/crates/v/anthropic_client.svg)](https://crates.io/crates/anthropic_client)
-[![Documentation](https://docs.rs/anthropic_client/badge.svg)](https://docs.rs/anthropic_client)
-[![License](https://img.shields.io/crates/l/anthropic_client.svg)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/anthropic-async.svg)](https://crates.io/crates/anthropic-async)
+[![Documentation](https://docs.rs/anthropic-async/badge.svg)](https://docs.rs/anthropic-async)
+[![License](https://img.shields.io/crates/l/anthropic-async.svg)](LICENSE)
 
 ## Features
 
@@ -23,13 +23,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-anthropic_client = "0.1.0"
+anthropic-async = "0.1.0"
 ```
 
 ## Quick Start
 
 ```rust
-use anthropic_client::{Client, types::messages::*};
+use anthropic_async::{Client, types::messages::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -90,7 +90,7 @@ let client = Client::with_config(config);
 Reduce costs and latency with prompt caching:
 
 ```rust
-use anthropic_client::types::common::CacheControl;
+use anthropic_async::types::common::CacheControl;
 
 let req = MessagesCreateRequest {
     model: "claude-3-5-sonnet".into(),
@@ -123,7 +123,7 @@ let req = MessagesCreateRequest {
 Enable beta features using the configuration:
 
 ```rust
-use anthropic_client::config::BetaFeature;
+use anthropic_async::config::BetaFeature;
 
 let config = AnthropicConfig::new()
     .with_beta_features([
@@ -171,7 +171,7 @@ See the `examples/` directory for complete examples:
 Run an example:
 
 ```bash
-cargo run --example 01-basic-completion
+cd anthropic_async/examples/01-basic-completion && cargo run
 ```
 
 ## Contributing
