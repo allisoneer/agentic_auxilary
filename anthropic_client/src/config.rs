@@ -1,19 +1,29 @@
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 
+/// Default Anthropic API base URL
 pub const ANTHROPIC_DEFAULT_BASE: &str = "https://api.anthropic.com";
+/// Default Anthropic API version
 pub const ANTHROPIC_VERSION: &str = "2023-06-01";
+/// Header name for Anthropic version
 pub const HDR_ANTHROPIC_VERSION: &str = "anthropic-version";
+/// Header name for Anthropic beta features
 pub const HDR_ANTHROPIC_BETA: &str = "anthropic-beta";
+/// Header name for API key authentication
 pub const HDR_X_API_KEY: &str = "x-api-key";
 
+/// Authentication method for Anthropic API
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnthropicAuth {
+    /// API key authentication
     ApiKey(String),
+    /// Bearer token authentication
     Bearer(String),
+    /// No authentication configured
     None,
 }
 
+/// Configuration for the Anthropic client
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct AnthropicConfig {
@@ -46,35 +56,55 @@ impl Default for AnthropicConfig {
 }
 
 impl AnthropicConfig {
+    /// Creates a new configuration with default settings
+    ///
+    /// Attempts to read authentication from environment variables:
+    /// - `ANTHROPIC_API_KEY` for API key authentication
+    /// - `ANTHROPIC_AUTH_TOKEN` for bearer token authentication
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the API base URL
+    ///
+    /// Default is `https://api.anthropic.com`
     #[must_use]
     pub fn with_api_base(mut self, base: impl Into<String>) -> Self {
         self.api_base = base.into();
         self
     }
 
+    /// Sets the Anthropic API version
+    ///
+    /// Default is `2023-06-01`
     #[must_use]
     pub fn with_version(mut self, v: impl Into<String>) -> Self {
         self.version = v.into();
         self
     }
 
+    /// Sets API key authentication
+    ///
+    /// This will use the `x-api-key` header for authentication.
     #[must_use]
     pub fn with_api_key(mut self, k: impl Into<String>) -> Self {
         self.auth = AnthropicAuth::ApiKey(k.into());
         self
     }
 
+    /// Sets bearer token authentication
+    ///
+    /// This will use the `Authorization: Bearer` header for authentication.
     #[must_use]
     pub fn with_bearer(mut self, t: impl Into<String>) -> Self {
         self.auth = AnthropicAuth::Bearer(t.into());
         self
     }
 
+    /// Sets custom beta feature strings
+    ///
+    /// These will be sent in the `anthropic-beta` header as a comma-separated list.
     #[must_use]
     pub fn with_beta<I, S>(mut self, beta: I) -> Self
     where
@@ -85,6 +115,7 @@ impl AnthropicConfig {
         self
     }
 
+    /// Returns the configured API base URL
     #[must_use]
     pub fn api_base(&self) -> &str {
         &self.api_base
@@ -105,6 +136,9 @@ impl AnthropicConfig {
         }
     }
 
+    /// Sets beta features using the `BetaFeature` enum
+    ///
+    /// This is a type-safe alternative to [`with_beta`](Self::with_beta).
     #[must_use]
     pub fn with_beta_features<I: IntoIterator<Item = BetaFeature>>(mut self, features: I) -> Self {
         self.beta = features.into_iter().map(Into::<String>::into).collect();
@@ -112,9 +146,17 @@ impl AnthropicConfig {
     }
 }
 
+/// Configuration trait for the Anthropic client
+///
+/// Implement this trait to provide custom authentication and API configuration.
 pub trait Config: Send + Sync {
+    /// Returns HTTP headers to include in requests
     fn headers(&self) -> HeaderMap;
+
+    /// Constructs the full URL for an API endpoint
     fn url(&self, path: &str) -> String;
+
+    /// Returns query parameters to include in requests
     fn query(&self) -> Vec<(&str, &str)>;
 
     /// Validates that authentication credentials are present.
@@ -166,11 +208,18 @@ impl Config for AnthropicConfig {
     }
 }
 
+/// Known Anthropic beta features
+///
+/// See the [Anthropic API documentation](https://docs.anthropic.com/en/api) for details on each feature.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BetaFeature {
+    /// Prompt caching (2024-07-31)
     PromptCaching20240731,
+    /// Extended cache TTL (2025-04-11)
     ExtendedCacheTtl20250411,
+    /// Token counting (2024-11-01)
     TokenCounting20241101,
+    /// Custom beta feature string
     Other(String),
 }
 

@@ -7,11 +7,15 @@ use crate::{
     types::models::{Model, ModelsListResponse},
 };
 
+/// API resource for the `/v1/models` endpoints
+///
+/// Provides methods to list and retrieve model information.
 pub struct Models<'c, C: Config> {
     client: &'c Client<C>,
 }
 
 impl<'c, C: Config> Models<'c, C> {
+    /// Creates a new Models resource
     pub const fn new(client: &'c Client<C>) -> Self {
         Self { client }
     }
@@ -39,6 +43,7 @@ impl<'c, C: Config> Models<'c, C> {
 }
 
 impl<C: Config> crate::Client<C> {
+    /// Returns the Models API resource
     #[must_use]
     pub const fn models(&self) -> Models<'_, C> {
         Models::new(self)
