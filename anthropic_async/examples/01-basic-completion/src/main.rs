@@ -5,7 +5,7 @@
 //! - Sending a basic message
 //! - Receiving and displaying the response
 
-use anthropic_client::{types::messages::*, AnthropicConfig, Client};
+use anthropic_async::{types::messages::*, AnthropicConfig, Client};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -2,14 +2,14 @@
 #![deny(clippy::all)]
 #![deny(missing_docs)]
 
-//! # `anthropic_client`
+//! # `anthropic-async`
 //!
 //! A production-ready Anthropic API client for Rust with prompt caching support.
 //!
 //! ## Quick Start
 //!
 //! ```no_run
-//! use anthropic_client::{Client, types::messages::*};
+//! use anthropic_async::{Client, types::messages::*};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = Client::new();

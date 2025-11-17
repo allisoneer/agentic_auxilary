@@ -9,7 +9,7 @@ members = [
     "pr_comments",
     "gpt5_reasoner",
     "xtask",
-    "anthropic_client",
+    "anthropic_async",
 ]
 exclude = [
     "universal_tool/examples",

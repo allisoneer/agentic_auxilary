@@ -1,4 +1,4 @@
-use anthropic_client::{AnthropicConfig, Client, types::messages::*};
+use anthropic_async::{AnthropicConfig, Client, types::messages::*};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
