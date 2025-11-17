@@ -1,23 +1,36 @@
 use serde::{Deserialize, Serialize};
 
+/// Cache time-to-live for prompt caching
+///
+/// See the [Anthropic prompt caching documentation](https://docs.anthropic.com/en/docs/prompt-caching)
+/// for details on caching behavior.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CacheTtl {
+    /// 5-minute cache TTL
     #[serde(rename = "5m")]
     FiveMinutes,
+    /// 1-hour cache TTL
     #[serde(rename = "1h")]
     OneHour,
 }
 
+/// Cache control configuration for content blocks
+///
+/// Used to enable prompt caching on specific content blocks. When mixing TTLs in a single request,
+/// 1-hour cache entries must appear before 5-minute entries.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CacheControl {
+    /// Cache type (currently only "ephemeral" is supported)
     #[serde(rename = "type")]
-    pub kind: String, // "ephemeral"
+    pub kind: String,
+    /// Time-to-live for the cache entry
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ttl: Option<CacheTtl>,
 }
 
 impl CacheControl {
+    /// Creates an ephemeral cache control with 5-minute TTL
     #[must_use]
     pub fn ephemeral_5m() -> Self {
         Self {
@@ -26,6 +39,7 @@ impl CacheControl {
         }
     }
 
+    /// Creates an ephemeral cache control with 1-hour TTL
     #[must_use]
     pub fn ephemeral_1h() -> Self {
         Self {
@@ -34,6 +48,7 @@ impl CacheControl {
         }
     }
 
+    /// Creates an ephemeral cache control with default TTL (5 minutes)
     #[must_use]
     pub fn ephemeral() -> Self {
         Self {
@@ -57,11 +72,18 @@ pub fn validate_mixed_ttl_order(block_ttls: impl IntoIterator<Item = CacheTtl>) 
     true
 }
 
+/// Token usage information for a request/response
+///
+/// Includes cache-related token counts when prompt caching is used.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Usage {
+    /// Number of input tokens processed
     pub input_tokens: Option<u64>,
+    /// Number of output tokens generated
     pub output_tokens: Option<u64>,
+    /// Number of tokens used to create cache entries
     pub cache_creation_input_tokens: Option<u64>,
+    /// Number of tokens read from cache
     pub cache_read_input_tokens: Option<u64>,
 }
 

@@ -1,0 +1,10 @@
+[package]
+name = "example-04-model-listing"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anthropic_client = { path = "../.." }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
