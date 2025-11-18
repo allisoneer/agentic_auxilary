@@ -10,7 +10,7 @@
 
 use anthropic_async::{
     config::BetaFeature,
-    types::{common::*, messages::*},
+    types::{common::*, content::*, messages::*, ModelListParams},
     AnthropicConfig, Client,
 };
 
@@ -26,27 +26,27 @@ async fn main() -> anyhow::Result<()> {
 
     // List models
     println!("Available models:");
-    let models = client.models().list(&()).await?;
+    let models = client.models().list(&ModelListParams::default()).await?;
     for model in &models.data {
         println!("  - {}", model.id);
     }
 
     // Count tokens first
-    let system_content = vec![ContentBlock::Text {
+    let system_content = SystemParam::Blocks(vec![TextBlockParam {
         text: "You are a helpful AI assistant with expertise in software development.".into(),
+        kind: "text".into(),
         cache_control: Some(CacheControl::ephemeral_1h()),
-    }];
+    }]);
 
     let count_req = MessageTokensCountRequest {
         model: "claude-3-5-sonnet".into(),
         system: Some(system_content.clone()),
-        messages: vec![Message {
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
-                text: "What are the benefits of Rust for systems programming?".into(),
-                cache_control: None,
-            }],
+            content: "What are the benefits of Rust for systems programming?".into(),
         }],
+        tools: None,
+        tool_choice: None,
     };
 
     let token_count = client.messages().count_tokens(count_req).await?;
@@ -67,14 +67,20 @@ async fn main() -> anyhow::Result<()> {
             model: "claude-3-5-sonnet".into(),
             max_tokens: 256,
             system: Some(system_content.clone()),
-            messages: vec![Message {
+            messages: vec![MessageParam {
                 role: MessageRole::User,
-                content: vec![ContentBlock::Text {
+                content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
                     text: (*question).to_string(),
                     cache_control: Some(CacheControl::ephemeral_5m()),
-                }],
+                }]),
             }],
             temperature: Some(0.3),
+            stop_sequences: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+            tools: None,
+            tool_choice: None,
         };
 
         let response = client.messages().create(request).await?;
@@ -83,7 +89,8 @@ async fn main() -> anyhow::Result<()> {
         println!("Response: ");
         for block in &response.content {
             match block {
-                ContentBlock::Text { text, .. } => println!("{text}"),
+                ContentBlock::Text { text } => println!("{text}"),
+                ContentBlock::ToolUse { name, .. } => println!("[Tool: {name}]"),
             }
         }
 
