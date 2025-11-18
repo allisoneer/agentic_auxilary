@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -28,7 +28,7 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
         .output()?;
 
     // Run thoughts init in main repo
-    Command::cargo_bin("thoughts")?
+    cargo_bin_cmd!("thoughts")
         .current_dir(&main_repo)
         .arg("init")
         .assert()
@@ -61,7 +61,7 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Run thoughts init in worktree
-    Command::cargo_bin("thoughts")?
+    cargo_bin_cmd!("thoughts")
         .current_dir(&worktree)
         .arg("init")
         .assert()
@@ -129,7 +129,7 @@ fn test_worktree_requires_main_init() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     // Try to init worktree without main initialized
-    Command::cargo_bin("thoughts")?
+    cargo_bin_cmd!("thoughts")
         .current_dir(&worktree)
         .arg("init")
         .assert()
@@ -166,7 +166,7 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
         .output()?;
 
     // Run thoughts init in main repo
-    Command::cargo_bin("thoughts")?
+    cargo_bin_cmd!("thoughts")
         .current_dir(&main_repo)
         .arg("init")
         .assert()
@@ -199,7 +199,7 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Run thoughts init in worktree (this should NOT create a config in the worktree)
-    Command::cargo_bin("thoughts")?
+    cargo_bin_cmd!("thoughts")
         .current_dir(&worktree)
         .arg("init")
         .assert()
@@ -222,7 +222,7 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Verify that config show from worktree also works
-    Command::cargo_bin("thoughts")?
+    cargo_bin_cmd!("thoughts")
         .current_dir(&worktree)
         .args(["config", "show"])
         .assert()

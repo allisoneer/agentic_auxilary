@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -18,16 +18,14 @@ fn init_twice_returns_ok() {
         .unwrap();
 
     // First run
-    Command::cargo_bin("thoughts")
-        .unwrap()
+    cargo_bin_cmd!("thoughts")
         .current_dir(td.path())
         .arg("init")
         .assert()
         .success();
 
     // Second run should also succeed (idempotent)
-    Command::cargo_bin("thoughts")
-        .unwrap()
+    cargo_bin_cmd!("thoughts")
         .current_dir(td.path())
         .arg("init")
         .assert()
@@ -50,8 +48,7 @@ fn incorrect_symlink_requires_force() {
         .unwrap();
 
     // First init creates correct symlinks
-    Command::cargo_bin("thoughts")
-        .unwrap()
+    cargo_bin_cmd!("thoughts")
         .current_dir(td.path())
         .arg("init")
         .assert()
@@ -66,8 +63,7 @@ fn incorrect_symlink_requires_force() {
     }
 
     // Second init without --force should fail
-    Command::cargo_bin("thoughts")
-        .unwrap()
+    cargo_bin_cmd!("thoughts")
         .current_dir(td.path())
         .arg("init")
         .assert()
@@ -90,8 +86,7 @@ fn gitignore_includes_backup_patterns() {
         .unwrap();
 
     // Run init
-    Command::cargo_bin("thoughts")
-        .unwrap()
+    cargo_bin_cmd!("thoughts")
         .current_dir(td.path())
         .arg("init")
         .assert()
