@@ -9,7 +9,7 @@
 //! ## Quick Start
 //!
 //! ```no_run
-//! use anthropic_async::{Client, types::messages::*};
+//! use anthropic_async::{Client, types::{content::*, messages::*}};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = Client::new();
@@ -17,15 +17,16 @@
 //! let req = MessagesCreateRequest {
 //!     model: "claude-3-5-sonnet".into(),
 //!     max_tokens: 100,
-//!     messages: vec![Message {
+//!     messages: vec![MessageParam {
 //!         role: MessageRole::User,
-//!         content: vec![ContentBlock::Text {
-//!             text: "Hello!".into(),
-//!             cache_control: None,
-//!         }],
+//!         content: "Hello!".into(),
 //!     }],
 //!     system: None,
 //!     temperature: None,
+//!     stop_sequences: None,
+//!     top_p: None,
+//!     top_k: None,
+//!     metadata: None,
 //! };
 //!
 //! let response = client.messages().create(req).await?;

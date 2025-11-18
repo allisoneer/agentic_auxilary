@@ -110,6 +110,7 @@ dependencies = [
  "backoff",
  "bytes",
  "chrono",
+ "derive_builder",
  "futures",
  "proptest",
  "reqwest",

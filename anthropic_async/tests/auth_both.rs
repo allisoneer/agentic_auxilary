@@ -10,7 +10,7 @@ async fn test_both_auth_sends_both_headers() {
         .and(path("/v1/models"))
         .and(header_exists("x-api-key"))
         .and(header("authorization", "Bearer t123"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"data":[]}"#))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"data":[],"has_more":false}"#))
         .mount(&server)
         .await;
 

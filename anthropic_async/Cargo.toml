@@ -25,6 +25,7 @@ backoff = { version = "0.4", features = ["tokio", "futures"] }
 chrono = { workspace = true, features = ["serde"] }
 bytes = "1.0"
 futures = "0.3"
+derive_builder = "0.20"
 
 [dev-dependencies]
 wiremock = "0.6"

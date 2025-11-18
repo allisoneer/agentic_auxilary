@@ -1,6 +1,6 @@
 use anthropic_async::{
     AnthropicConfig, Client,
-    types::{common::*, messages::*},
+    types::{common::*, content::*, messages::*},
 };
 use serde_json::json;
 use wiremock::matchers::{header, header_exists, method, path};
@@ -36,18 +36,22 @@ async fn test_messages_create_with_caching() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet".into(),
         max_tokens: 64,
-        system: Some(vec![ContentBlock::Text {
-            text: "You are helpful".into(),
-            cache_control: Some(CacheControl::ephemeral_1h()),
-        }]),
-        messages: vec![Message {
+        system: Some(SystemParam::Blocks(vec![TextBlockParam::with_cache_control(
+            "You are helpful",
+            CacheControl::ephemeral_1h(),
+        )])),
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
+            content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
                 text: "Hello".into(),
                 cache_control: Some(CacheControl::ephemeral_5m()),
-            }],
+            }]),
         }],
         temperature: None,
+        stop_sequences: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
     };
 
     let cfg = AnthropicConfig::new()
@@ -71,18 +75,22 @@ async fn test_ttl_ordering_validation() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet".into(),
         max_tokens: 64,
-        system: Some(vec![ContentBlock::Text {
-            text: "System".into(),
-            cache_control: Some(CacheControl::ephemeral_5m()), // 5m first
-        }]),
-        messages: vec![Message {
+        system: Some(SystemParam::Blocks(vec![TextBlockParam::with_cache_control(
+            "System",
+            CacheControl::ephemeral_5m(), // 5m first
+        )])),
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
+            content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
                 text: "User".into(),
                 cache_control: Some(CacheControl::ephemeral_1h()), // 1h after 5m = invalid
-            }],
+            }]),
         }],
         temperature: None,
+        stop_sequences: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
     };
 
     let cfg = AnthropicConfig::new()

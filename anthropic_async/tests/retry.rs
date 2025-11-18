@@ -1,4 +1,4 @@
-use anthropic_async::{AnthropicConfig, Client, types::messages::*};
+use anthropic_async::{AnthropicConfig, Client, types::{content::*, messages::*}};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wiremock::matchers::{method, path};
@@ -45,14 +45,15 @@ async fn test_retry_on_429_then_success() {
         model: "claude".into(),
         max_tokens: 10,
         system: None,
-        messages: vec![Message {
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
-                text: "test".into(),
-                cache_control: None,
-            }],
+            content: "test".into(),
         }],
         temperature: None,
+        stop_sequences: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
     };
 
     let response = client.messages().create(request).await.unwrap();
@@ -99,14 +100,15 @@ async fn test_529_overloaded_retry() {
         model: "claude".into(),
         max_tokens: 10,
         system: None,
-        messages: vec![Message {
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
-                text: "test".into(),
-                cache_control: None,
-            }],
+            content: "test".into(),
         }],
         temperature: None,
+        stop_sequences: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
     };
 
     let response = client.messages().create(request).await.unwrap();
@@ -139,6 +141,10 @@ async fn test_non_retryable_400() {
         system: None,
         messages: vec![],
         temperature: None,
+        stop_sequences: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
     };
 
     let err = client.messages().create(request).await.unwrap_err();
