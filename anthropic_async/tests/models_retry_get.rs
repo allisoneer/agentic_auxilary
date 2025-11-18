@@ -53,6 +53,7 @@ async fn test_models_get_retries_on_500_then_success() {
                 ResponseTemplate::new(200).set_body_json(json!({
                     "id": "claude-foo",
                     "created_at": "2024-06-01T12:00:00Z",
+                    "display_name": "Claude Foo",
                     "type": "model"
                 }))
             }

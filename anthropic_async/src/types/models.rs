@@ -7,8 +7,8 @@ pub struct Model {
     pub id: String,
     /// When the model was created
     pub created_at: chrono::DateTime<chrono::Utc>,
-    /// Optional display name for the model
-    pub display_name: Option<String>,
+    /// Display name for the model
+    pub display_name: String,
     /// Type of resource (always "model")
     #[serde(rename = "type")]
     pub kind: String,
@@ -20,7 +20,7 @@ pub struct ModelsListResponse {
     /// List of models
     pub data: Vec<Model>,
     /// Whether there are more models available
-    pub has_more: Option<bool>,
+    pub has_more: bool,
     /// ID of the first model in the list
     pub first_id: Option<String>,
     /// ID of the last model in the list

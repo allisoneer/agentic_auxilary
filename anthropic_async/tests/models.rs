@@ -46,6 +46,7 @@ async fn test_models_get() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": "claude-3-5-sonnet",
             "created_at": "2024-06-01T12:00:00Z",
+            "display_name": "Claude 3.5 Sonnet",
             "type": "model"
         })))
         .mount(&server)

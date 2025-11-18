@@ -3,8 +3,9 @@ use crate::{
     config::Config,
     error::AnthropicError,
     types::common::validate_mixed_ttl_order,
+    types::content::{ContentBlockParam, MessageContentParam, SystemParam},
     types::messages::{
-        ContentBlock, MessageTokensCountRequest, MessageTokensCountResponse, MessagesCreateRequest,
+        MessageTokensCountRequest, MessageTokensCountResponse, MessagesCreateRequest,
         MessagesCreateResponse,
     },
 };
@@ -38,12 +39,12 @@ impl<'c, C: Config> Messages<'c, C> {
         // Validate TTL ordering across system+messages content blocks
         let mut ttls = Vec::new();
 
-        if let Some(system) = &req.system {
-            for block in system {
-                if let ContentBlock::Text {
-                    cache_control: Some(cc),
-                    ..
-                } = block
+        // Scan system blocks
+        if let Some(system) = &req.system
+            && let SystemParam::Blocks(blocks) = system
+        {
+            for tb in blocks {
+                if let Some(cc) = &tb.cache_control
                     && let Some(ttl) = &cc.ttl
                 {
                     ttls.push(ttl.clone());
@@ -51,15 +52,18 @@ impl<'c, C: Config> Messages<'c, C> {
             }
         }
 
+        // Scan message blocks
         for message in &req.messages {
-            for block in &message.content {
-                if let ContentBlock::Text {
-                    cache_control: Some(cc),
-                    ..
-                } = block
-                    && let Some(ttl) = &cc.ttl
-                {
-                    ttls.push(ttl.clone());
+            if let MessageContentParam::Blocks(blocks) = &message.content {
+                for block in blocks {
+                    if let ContentBlockParam::Text {
+                        cache_control: Some(cc),
+                        ..
+                    } = block
+                        && let Some(ttl) = &cc.ttl
+                    {
+                        ttls.push(ttl.clone());
+                    }
                 }
             }
         }
@@ -67,6 +71,37 @@ impl<'c, C: Config> Messages<'c, C> {
         if !validate_mixed_ttl_order(ttls) {
             return Err(AnthropicError::Config(
                 "Invalid cache_control TTL ordering: 1h must precede 5m".into(),
+            ));
+        }
+
+        // Validate sampling parameters
+        if let Some(t) = req.temperature
+            && !(0.0..=1.0).contains(&t)
+        {
+            return Err(AnthropicError::Config(format!(
+                "Invalid temperature {t}: must be in [0.0, 1.0]"
+            )));
+        }
+
+        if let Some(p) = req.top_p
+            && (!(0.0..=1.0).contains(&p) || p == 0.0)
+        {
+            return Err(AnthropicError::Config(format!(
+                "Invalid top_p {p}: must be in (0.0, 1.0]"
+            )));
+        }
+
+        if let Some(k) = req.top_k
+            && k < 1
+        {
+            return Err(AnthropicError::Config(format!(
+                "Invalid top_k {k}: must be >= 1"
+            )));
+        }
+
+        if req.max_tokens == 0 {
+            return Err(AnthropicError::Config(
+                "max_tokens must be greater than 0".into(),
             ));
         }
 

@@ -1,56 +1,40 @@
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-use super::common::{CacheControl, Usage};
-
-/// Role of a message in a conversation
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MessageRole {
-    /// User message
-    User,
-    /// Assistant message
-    Assistant,
-}
-
-/// Content block within a message
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ContentBlock {
-    /// Text content block
-    Text {
-        /// The text content
-        text: String,
-        /// Optional cache control for prompt caching
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<CacheControl>,
-    },
-    // Future extensibility: ToolUse, ToolResult, Image, Document...
-}
-
-/// A message in a conversation
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Message {
-    /// Role of the message
-    pub role: MessageRole,
-    /// Content blocks in the message
-    pub content: Vec<ContentBlock>,
-}
+use super::common::{Metadata, Usage};
+use super::content::{ContentBlock, MessageParam, MessageRole, SystemParam};
 
 /// Request to create a message
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder, Default)]
+#[builder(setter(into, strip_option), default)]
 pub struct MessagesCreateRequest {
     /// Model to use for generation
+    #[builder(default)]
     pub model: String,
     /// Maximum tokens to generate
+    #[builder(default)]
     pub max_tokens: u32,
     /// Optional system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<Vec<ContentBlock>>,
+    pub system: Option<SystemParam>,
     /// Conversation messages
-    pub messages: Vec<Message>,
+    #[builder(default)]
+    pub messages: Vec<MessageParam>,
     /// Optional temperature for sampling
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
+    /// Optional stop sequences
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_sequences: Option<Vec<String>>,
+    /// Optional nucleus sampling parameter
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    /// Optional top-k sampling parameter
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<u32>,
+    /// Optional metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Metadata>,
 }
 
 /// Response from creating a message
@@ -82,9 +66,9 @@ pub struct MessageTokensCountRequest {
     pub model: String,
     /// Optional system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<Vec<ContentBlock>>,
+    pub system: Option<SystemParam>,
     /// Conversation messages
-    pub messages: Vec<Message>,
+    pub messages: Vec<MessageParam>,
 }
 
 /// Response from counting tokens
@@ -97,28 +81,71 @@ pub struct MessageTokensCountResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::content::{ContentBlockParam, MessageContentParam};
 
     #[test]
-    fn content_block_text_ser() {
-        let cb = ContentBlock::Text {
-            text: "hello".into(),
-            cache_control: None,
+    fn message_request_ser() {
+        let req = MessagesCreateRequest {
+            model: "claude-3-5-sonnet-20241022".into(),
+            max_tokens: 128,
+            system: None,
+            messages: vec![MessageParam {
+                role: MessageRole::User,
+                content: "Hello".into(),
+            }],
+            temperature: None,
+            stop_sequences: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
         };
-        let s = serde_json::to_string(&cb).unwrap();
-        assert!(s.contains(r#""type":"text""#));
-        assert!(s.contains(r#""text":"hello""#));
-        assert!(!s.contains("cache_control"));
+        let s = serde_json::to_string(&req).unwrap();
+        assert!(s.contains(r#""model":"claude-3-5-sonnet-20241022""#));
+        assert!(s.contains(r#""max_tokens":128"#));
+        assert!(s.contains(r#""Hello""#));
     }
 
     #[test]
-    fn message_role_ser() {
-        assert_eq!(
-            serde_json::to_string(&MessageRole::User).unwrap(),
-            r#""user""#
-        );
-        assert_eq!(
-            serde_json::to_string(&MessageRole::Assistant).unwrap(),
-            r#""assistant""#
-        );
+    fn message_request_with_system_string() {
+        let req = MessagesCreateRequest {
+            model: "claude-3-5-sonnet-20241022".into(),
+            max_tokens: 128,
+            system: Some("You are helpful".into()),
+            messages: vec![MessageParam {
+                role: MessageRole::User,
+                content: "Hello".into(),
+            }],
+            temperature: None,
+            stop_sequences: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+        };
+        let s = serde_json::to_string(&req).unwrap();
+        assert!(s.contains(r#""system":"You are helpful""#));
+    }
+
+    #[test]
+    fn message_request_with_blocks() {
+        let req = MessagesCreateRequest {
+            model: "claude-3-5-sonnet-20241022".into(),
+            max_tokens: 128,
+            system: None,
+            messages: vec![MessageParam {
+                role: MessageRole::User,
+                content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
+                    text: "Block content".into(),
+                    cache_control: None,
+                }]),
+            }],
+            temperature: Some(0.7),
+            stop_sequences: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+        };
+        let s = serde_json::to_string(&req).unwrap();
+        assert!(s.contains(r#""Block content""#));
+        assert!(s.contains(r#""temperature":0.7"#));
     }
 }

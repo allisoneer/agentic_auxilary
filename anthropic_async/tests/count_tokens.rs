@@ -1,4 +1,4 @@
-use anthropic_async::{AnthropicConfig, Client, types::messages::*};
+use anthropic_async::{AnthropicConfig, Client, types::{content::*, messages::*}};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -17,12 +17,9 @@ async fn test_count_tokens() {
     let req = MessageTokensCountRequest {
         model: "claude-3-5-haiku".into(),
         system: None,
-        messages: vec![Message {
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
-                text: "Count my tokens".into(),
-                cache_control: None,
-            }],
+            content: "Count my tokens".into(),
         }],
     };
 

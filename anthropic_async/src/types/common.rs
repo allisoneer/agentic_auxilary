@@ -72,6 +72,16 @@ pub fn validate_mixed_ttl_order(block_ttls: impl IntoIterator<Item = CacheTtl>) 
     true
 }
 
+/// Metadata for requests
+///
+/// Used to pass additional information about the request.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct Metadata {
+    /// User ID for tracking purposes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+}
+
 /// Token usage information for a request/response
 ///
 /// Includes cache-related token counts when prompt caching is used.
