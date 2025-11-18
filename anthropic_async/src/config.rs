@@ -46,6 +46,8 @@ impl Default for AnthropicConfig {
     fn default() -> Self {
         let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
         let bearer = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
+        let api_base = std::env::var("ANTHROPIC_BASE_URL")
+            .unwrap_or_else(|_| ANTHROPIC_DEFAULT_BASE.into());
 
         let auth = match (api_key, bearer) {
             (Some(k), Some(t)) => AnthropicAuth::Both {
@@ -58,7 +60,7 @@ impl Default for AnthropicConfig {
         };
 
         Self {
-            api_base: ANTHROPIC_DEFAULT_BASE.into(),
+            api_base,
             version: ANTHROPIC_VERSION.into(),
             auth,
             beta: vec![],
@@ -69,9 +71,10 @@ impl Default for AnthropicConfig {
 impl AnthropicConfig {
     /// Creates a new configuration with default settings
     ///
-    /// Attempts to read authentication from environment variables:
+    /// Attempts to read from environment variables:
     /// - `ANTHROPIC_API_KEY` for API key authentication
     /// - `ANTHROPIC_AUTH_TOKEN` for bearer token authentication
+    /// - `ANTHROPIC_BASE_URL` for custom API base URL (defaults to `https://api.anthropic.com`)
     #[must_use]
     pub fn new() -> Self {
         Self::default()
