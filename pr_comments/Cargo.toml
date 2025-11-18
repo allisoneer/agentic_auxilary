@@ -1,6 +1,6 @@
 [package]
 name = "pr_comments"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Fetch GitHub PR comments via CLI and MCP"
@@ -21,6 +21,7 @@ tokio = { version = "1", features = ["full"] }
 
 # GitHub API client
 octocrab = "0.41"
+gh-config = "0.5.1"
 
 # Git operations
 git2 = { version = "0.18", features = ["vendored-openssl"] }
