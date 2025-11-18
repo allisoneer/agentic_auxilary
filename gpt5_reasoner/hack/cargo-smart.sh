@@ -16,7 +16,8 @@ shift || true
 
 # Temp file for output
 TEMP_OUTPUT=$(mktemp)
-trap "rm -f $TEMP_OUTPUT" EXIT
+readonly TEMP_OUTPUT
+trap 'rm -f -- "$TEMP_OUTPUT"' EXIT
 
 TARGET_NAME="gpt5_reasoner"
 
