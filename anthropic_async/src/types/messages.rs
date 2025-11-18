@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::common::{Metadata, Usage};
 use super::content::{ContentBlock, MessageParam, MessageRole, SystemParam};
+use super::tools::{Tool, ToolChoice};
 
 /// Request to create a message
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder, Default)]
@@ -35,6 +36,12 @@ pub struct MessagesCreateRequest {
     /// Optional metadata
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Metadata>,
+    /// Optional tools for Claude to use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    /// Optional tool choice strategy
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<ToolChoice>,
 }
 
 /// Response from creating a message
@@ -69,6 +76,12 @@ pub struct MessageTokensCountRequest {
     pub system: Option<SystemParam>,
     /// Conversation messages
     pub messages: Vec<MessageParam>,
+    /// Optional tools for Claude to use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    /// Optional tool choice strategy
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<ToolChoice>,
 }
 
 /// Response from counting tokens
@@ -98,6 +111,8 @@ mod tests {
             top_p: None,
             top_k: None,
             metadata: None,
+            tools: None,
+            tool_choice: None,
         };
         let s = serde_json::to_string(&req).unwrap();
         assert!(s.contains(r#""model":"claude-3-5-sonnet-20241022""#));
@@ -120,6 +135,8 @@ mod tests {
             top_p: None,
             top_k: None,
             metadata: None,
+            tools: None,
+            tool_choice: None,
         };
         let s = serde_json::to_string(&req).unwrap();
         assert!(s.contains(r#""system":"You are helpful""#));
@@ -143,6 +160,8 @@ mod tests {
             top_p: None,
             top_k: None,
             metadata: None,
+            tools: None,
+            tool_choice: None,
         };
         let s = serde_json::to_string(&req).unwrap();
         assert!(s.contains(r#""Block content""#));

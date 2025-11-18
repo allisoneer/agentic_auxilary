@@ -24,6 +24,8 @@ async fn test_temperature_validation_below_range() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -58,6 +60,8 @@ async fn test_temperature_validation_above_range() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -92,6 +96,8 @@ async fn test_top_p_validation_zero() {
         top_p: Some(0.0), // Invalid: must be > 0.0
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -125,6 +131,8 @@ async fn test_top_p_validation_above_range() {
         top_p: Some(1.5), // Invalid: above 1.0
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -159,6 +167,8 @@ async fn test_top_k_validation_zero() {
         top_p: None,
         top_k: Some(0), // Invalid: must be >= 1
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -193,6 +203,8 @@ async fn test_max_tokens_validation_zero() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -276,6 +288,8 @@ async fn test_valid_parameters_accepted() {
         top_p: Some(0.9), // Valid
         top_k: Some(10), // Valid
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let response = client.messages().create(req).await.unwrap();

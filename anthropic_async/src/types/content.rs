@@ -2,6 +2,42 @@ use serde::{Deserialize, Serialize};
 
 use super::common::CacheControl;
 
+/// Image source for multimodal content
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ImageSource {
+    /// Base64-encoded image data
+    Base64 {
+        /// Media type (e.g., "image/png")
+        media_type: String,
+        /// Base64-encoded image data
+        data: String,
+    },
+    /// Image URL
+    Url {
+        /// URL to the image
+        url: String,
+    },
+}
+
+/// Document source for multimodal content
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DocumentSource {
+    /// Base64-encoded document data
+    Base64 {
+        /// Media type (e.g., "application/pdf")
+        media_type: String,
+        /// Base64-encoded document data
+        data: String,
+    },
+    /// Document URL
+    Url {
+        /// URL to the document
+        url: String,
+    },
+}
+
 /// Role of a message in a conversation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -30,7 +66,36 @@ pub enum ContentBlockParam {
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
-    // Phase 3/4: ToolResult, Image, Document will be added here
+    /// Tool result block
+    ToolResult {
+        /// ID of the tool use that this is responding to
+        tool_use_id: String,
+        /// Optional result content
+        #[serde(skip_serializing_if = "Option::is_none")]
+        content: Option<String>,
+        /// Whether this is an error result
+        #[serde(skip_serializing_if = "Option::is_none")]
+        is_error: Option<bool>,
+        /// Optional cache control for prompt caching
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
+    /// Image content block
+    Image {
+        /// Image source (base64 or URL)
+        source: ImageSource,
+        /// Optional cache control for prompt caching
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
+    /// Document content block
+    Document {
+        /// Document source (base64 or URL)
+        source: DocumentSource,
+        /// Optional cache control for prompt caching
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
 }
 
 // Response-side content blocks
@@ -47,7 +112,15 @@ pub enum ContentBlock {
         /// The text content
         text: String,
     },
-    // Phase 3: ToolUse will be added here
+    /// Tool use block
+    ToolUse {
+        /// Tool use ID
+        id: String,
+        /// Tool name
+        name: String,
+        /// Tool input as JSON value
+        input: serde_json::Value,
+    },
 }
 
 /// System prompt parameter

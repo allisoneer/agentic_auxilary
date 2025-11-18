@@ -27,6 +27,8 @@
 //!     top_p: None,
 //!     top_k: None,
 //!     metadata: None,
+//!     tools: None,
+//!     tool_choice: None,
 //! };
 //!
 //! let response = client.messages().create(req).await?;
@@ -45,6 +47,9 @@
 
 /// HTTP client implementation
 pub mod client;
+/// Test support utilities (for use in tests)
+#[doc(hidden)]
+pub mod test_support;
 /// Configuration types for the client
 pub mod config;
 /// Error types
