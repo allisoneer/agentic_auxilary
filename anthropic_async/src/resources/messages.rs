@@ -56,13 +56,28 @@ impl<'c, C: Config> Messages<'c, C> {
         for message in &req.messages {
             if let MessageContentParam::Blocks(blocks) = &message.content {
                 for block in blocks {
-                    if let ContentBlockParam::Text {
-                        cache_control: Some(cc),
-                        ..
-                    } = block
-                        && let Some(ttl) = &cc.ttl
-                    {
-                        ttls.push(ttl.clone());
+                    match block {
+                        ContentBlockParam::Text {
+                            cache_control: Some(cc),
+                            ..
+                        }
+                        | ContentBlockParam::Image {
+                            cache_control: Some(cc),
+                            ..
+                        }
+                        | ContentBlockParam::Document {
+                            cache_control: Some(cc),
+                            ..
+                        }
+                        | ContentBlockParam::ToolResult {
+                            cache_control: Some(cc),
+                            ..
+                        } => {
+                            if let Some(ttl) = &cc.ttl {
+                                ttls.push(ttl.clone());
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
