@@ -13,8 +13,10 @@ all: check test build
 
 # Silent versions (default) - smart output with fail-fast
 check:
-	@echo "━━━ Checking anthropic_async ━━━"
-	@./hack/cargo-smart.sh clippy
+	@echo "Checking code formatting..."
+	@cargo fmt -- --check
+	@echo "Running clippy..."
+	@./hack/cargo-smart.sh clippy --all-features --all-targets
 
 test:
 	@echo "━━━ Testing anthropic_async ━━━"

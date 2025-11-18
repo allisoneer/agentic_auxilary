@@ -1,4 +1,5 @@
 use anthropic_async::{
+    AnthropicConfig, Client,
     types::{
         common::CacheControl,
         content::{
@@ -7,7 +8,6 @@ use anthropic_async::{
         },
         messages::MessagesCreateRequest,
     },
-    AnthropicConfig, Client,
 };
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

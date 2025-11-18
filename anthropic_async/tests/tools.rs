@@ -131,7 +131,7 @@ fn tool_use_response_deserialization() {
             assert_eq!(name, "weather");
             assert_eq!(input["city"], "Paris");
         }
-        _ => panic!("Expected ToolUse variant"),
+        ContentBlock::Text { .. } => panic!("Expected ToolUse variant"),
     }
 }
 
@@ -169,7 +169,7 @@ fn tool_use_parsing() {
     }
 
     let input = serde_json::json!({ "message": "hello" });
-    let action = schema::try_parse_tool_use::<TestActions>("Echo", input).unwrap();
+    let action = schema::try_parse_tool_use::<TestActions>("Echo", &input).unwrap();
 
     match action {
         TestActions::Echo { message } => {

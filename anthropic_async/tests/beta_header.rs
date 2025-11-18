@@ -1,4 +1,4 @@
-use anthropic_async::{{AnthropicConfig, Client, types::ModelListParams, config::BetaFeature}};
+use anthropic_async::{AnthropicConfig, Client, config::BetaFeature, types::ModelListParams};
 use wiremock::matchers::{header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -27,5 +27,9 @@ async fn test_beta_header_propagation() {
         ]);
 
     let client = Client::with_config(cfg);
-    let _ = client.models().list(&ModelListParams::default()).await.unwrap();
+    let _ = client
+        .models()
+        .list(&ModelListParams::default())
+        .await
+        .unwrap();
 }
