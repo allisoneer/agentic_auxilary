@@ -52,6 +52,8 @@ async fn test_messages_create_with_caching() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let cfg = AnthropicConfig::new()
@@ -91,6 +93,8 @@ async fn test_ttl_ordering_validation() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let cfg = AnthropicConfig::new()

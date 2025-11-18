@@ -21,6 +21,8 @@ async fn test_count_tokens() {
             role: MessageRole::User,
             content: "Count my tokens".into(),
         }],
+        tools: None,
+        tool_choice: None,
     };
 
     let cfg = AnthropicConfig::new()

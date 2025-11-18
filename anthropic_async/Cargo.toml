@@ -12,6 +12,7 @@ keywords = ["anthropic", "claude", "llm", "client"]
 [features]
 default = []
 streaming = [] # placeholder for future SSE
+schemars = ["dep:schemars"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
@@ -26,12 +27,14 @@ chrono = { workspace = true, features = ["serde"] }
 bytes = "1.0"
 futures = "0.3"
 derive_builder = "0.20"
+schemars = { version = "0.8", optional = true, features = ["derive", "preserve_order"] }
 
 [dev-dependencies]
 wiremock = "0.6"
 proptest = "1.6"
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+serial_test = "3"
 
 [lints.rust]
 warnings = "deny"

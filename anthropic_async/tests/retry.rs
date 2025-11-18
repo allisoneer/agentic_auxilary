@@ -54,6 +54,8 @@ async fn test_retry_on_429_then_success() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let response = client.messages().create(request).await.unwrap();
@@ -109,6 +111,8 @@ async fn test_529_overloaded_retry() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let response = client.messages().create(request).await.unwrap();
@@ -145,6 +149,8 @@ async fn test_non_retryable_400() {
         top_p: None,
         top_k: None,
         metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     let err = client.messages().create(request).await.unwrap_err();
