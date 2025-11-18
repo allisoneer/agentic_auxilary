@@ -1,4 +1,7 @@
-use anthropic_async::{AnthropicConfig, Client, types::{content::*, messages::*}};
+use anthropic_async::{
+    AnthropicConfig, Client,
+    types::{content::*, messages::*},
+};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wiremock::matchers::{method, path};

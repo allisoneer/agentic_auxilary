@@ -1,6 +1,9 @@
-use anthropic_async::{AnthropicConfig, Client, types::{content::*, messages::*}};
-use wiremock::{MockServer, ResponseTemplate, Mock};
+use anthropic_async::{
+    AnthropicConfig, Client,
+    types::{content::*, messages::*},
+};
 use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn test_temperature_validation_below_range() {
@@ -8,7 +11,7 @@ async fn test_temperature_validation_below_range() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -44,7 +47,7 @@ async fn test_temperature_validation_above_range() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -80,7 +83,7 @@ async fn test_top_p_validation_zero() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -115,7 +118,7 @@ async fn test_top_p_validation_above_range() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -151,7 +154,7 @@ async fn test_top_k_validation_zero() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -175,7 +178,7 @@ async fn test_top_k_validation_zero() {
     match err {
         anthropic_async::AnthropicError::Config(msg) => {
             assert!(msg.contains("top_k"));
-            assert!(msg.contains("0"));
+            assert!(msg.contains('0'));
         }
         _ => panic!("Expected Config error"),
     }
@@ -187,7 +190,7 @@ async fn test_max_tokens_validation_zero() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -272,7 +275,7 @@ async fn test_valid_parameters_accepted() {
     let client = Client::with_config(
         AnthropicConfig::new()
             .with_api_key("test")
-            .with_api_base(server.uri())
+            .with_api_base(server.uri()),
     );
 
     let req = MessagesCreateRequest {
@@ -286,7 +289,7 @@ async fn test_valid_parameters_accepted() {
         temperature: Some(0.5), // Valid
         stop_sequences: Some(vec!["END".into()]),
         top_p: Some(0.9), // Valid
-        top_k: Some(10), // Valid
+        top_k: Some(10),  // Valid
         metadata: None,
         tools: None,
         tool_choice: None,

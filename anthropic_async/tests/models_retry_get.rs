@@ -1,4 +1,4 @@
-use anthropic_async::{{AnthropicConfig, Client, types::ModelListParams}};
+use anthropic_async::{AnthropicConfig, Client, types::ModelListParams};
 use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -33,7 +33,11 @@ async fn test_models_list_retries_on_429_then_success() {
         .with_api_key("test");
     let client = Client::with_config(cfg);
 
-    let _ = client.models().list(&ModelListParams::default()).await.unwrap();
+    let _ = client
+        .models()
+        .list(&ModelListParams::default())
+        .await
+        .unwrap();
     assert!(count.load(Ordering::SeqCst) >= 2);
 }
 

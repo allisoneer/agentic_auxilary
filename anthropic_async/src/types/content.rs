@@ -153,7 +153,11 @@ pub struct TextBlockParam {
     /// The text content
     pub text: String,
     /// Type field for serialization (always "text")
-    #[serde(rename = "type", default = "text_type", skip_serializing_if = "is_text")]
+    #[serde(
+        rename = "type",
+        default = "text_type",
+        skip_serializing_if = "is_text"
+    )]
     pub kind: String,
     /// Optional cache control for prompt caching
     #[serde(skip_serializing_if = "Option::is_none")]

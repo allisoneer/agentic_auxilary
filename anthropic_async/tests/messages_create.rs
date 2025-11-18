@@ -36,10 +36,9 @@ async fn test_messages_create_with_caching() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet".into(),
         max_tokens: 64,
-        system: Some(SystemParam::Blocks(vec![TextBlockParam::with_cache_control(
-            "You are helpful",
-            CacheControl::ephemeral_1h(),
-        )])),
+        system: Some(SystemParam::Blocks(vec![
+            TextBlockParam::with_cache_control("You are helpful", CacheControl::ephemeral_1h()),
+        ])),
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
@@ -77,10 +76,12 @@ async fn test_ttl_ordering_validation() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet".into(),
         max_tokens: 64,
-        system: Some(SystemParam::Blocks(vec![TextBlockParam::with_cache_control(
-            "System",
-            CacheControl::ephemeral_5m(), // 5m first
-        )])),
+        system: Some(SystemParam::Blocks(vec![
+            TextBlockParam::with_cache_control(
+                "System",
+                CacheControl::ephemeral_5m(), // 5m first
+            ),
+        ])),
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {

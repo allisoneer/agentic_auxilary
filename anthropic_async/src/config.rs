@@ -46,8 +46,8 @@ impl Default for AnthropicConfig {
     fn default() -> Self {
         let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
         let bearer = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
-        let api_base = std::env::var("ANTHROPIC_BASE_URL")
-            .unwrap_or_else(|_| ANTHROPIC_DEFAULT_BASE.into());
+        let api_base =
+            std::env::var("ANTHROPIC_BASE_URL").unwrap_or_else(|_| ANTHROPIC_DEFAULT_BASE.into());
 
         let auth = match (api_key, bearer) {
             (Some(k), Some(t)) => AnthropicAuth::Both {
@@ -343,7 +343,7 @@ mod tests {
         let cfg = AnthropicConfig::new().with_api_key("bad\nkey");
         match cfg.headers() {
             Err(crate::error::AnthropicError::Config(msg)) => assert!(msg.contains("x-api-key")),
-            other => panic!("Expected Config error, got {:?}", other),
+            other => panic!("Expected Config error, got {other:?}"),
         }
     }
 

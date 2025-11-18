@@ -47,9 +47,6 @@
 
 /// HTTP client implementation
 pub mod client;
-/// Test support utilities (for use in tests)
-#[doc(hidden)]
-pub mod test_support;
 /// Configuration types for the client
 pub mod config;
 /// Error types
@@ -64,6 +61,9 @@ pub mod sse;
 /// Hidden SSE module when streaming is not enabled
 #[cfg(not(feature = "streaming"))]
 pub(crate) mod sse;
+/// Test support utilities (for use in tests)
+#[doc(hidden)]
+pub mod test_support;
 /// Request and response types
 pub mod types;
 

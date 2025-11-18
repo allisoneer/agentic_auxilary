@@ -1,4 +1,4 @@
-use anthropic_async::{{AnthropicConfig, Client, types::ModelListParams}};
+use anthropic_async::{AnthropicConfig, Client, types::ModelListParams};
 use wiremock::matchers::{header, header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -19,5 +19,9 @@ async fn test_both_auth_sends_both_headers() {
         .with_both("k123", "t123");
 
     let client = Client::with_config(cfg);
-    let _ = client.models().list(&ModelListParams::default()).await.unwrap();
+    let _ = client
+        .models()
+        .list(&ModelListParams::default())
+        .await
+        .unwrap();
 }

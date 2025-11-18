@@ -1,3 +1,45 @@
+//! Tool calling support for Anthropic API
+//!
+//! This module provides types for defining tools that Claude can call.
+//!
+//! # Example (with schemars feature)
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "schemars")]
+//! # {
+//! use anthropic_async::types::tools;
+//! use serde::{Serialize, Deserialize};
+//! use schemars::JsonSchema;
+//!
+//! // Define tools as an enum with adjacently tagged format
+//! #[derive(Serialize, Deserialize, JsonSchema)]
+//! #[serde(tag = "action", content = "params")]
+//! enum Actions {
+//!     SendEmail { to: String, subject: String },
+//!     SearchWeb { query: String },
+//! }
+//!
+//! // Generate tool definition from schema
+//! let tool = tools::schema::tool_from_schema::<Actions>(
+//!     "actions",
+//!     Some("Available actions")
+//! );
+//!
+//! // Parse tool use response back to typed enum
+//! # use anthropic_async::types::ContentBlock;
+//! let tool_use = ContentBlock::ToolUse {
+//!     id: "123".into(),
+//!     name: "send_email".into(),
+//!     input: serde_json::json!({ "to": "user@example.com", "subject": "Hello" })
+//! };
+//!
+//! if let ContentBlock::ToolUse { name, input, .. } = tool_use {
+//!     let action = tools::schema::try_parse_tool_use::<Actions>(&name, &input).unwrap();
+//!     // action is now typed as Actions enum
+//! }
+//! # }
+//! ```
+
 use serde::{Deserialize, Serialize};
 
 use super::common::CacheControl;
@@ -57,10 +99,14 @@ impl Default for ToolChoice {
 /// Type-safe tool schema generation (requires schemars feature)
 #[cfg(feature = "schemars")]
 pub mod schema {
-    use super::*;
     use schemars::JsonSchema;
 
-    /// Generate a Tool definition from a type implementing JsonSchema
+    use super::Tool;
+
+    /// Generate a Tool definition from a type implementing `JsonSchema`
+    ///
+    /// # Panics
+    /// Panics if the schema cannot be serialized to JSON (should never happen with valid schemas)
     ///
     /// # Example
     /// ```ignore
@@ -94,7 +140,7 @@ pub mod schema {
     /// Returns error if the input cannot be deserialized to type T
     pub fn try_parse_tool_use<T: serde::de::DeserializeOwned>(
         name: &str,
-        input: serde_json::Value,
+        input: &serde_json::Value,
     ) -> serde_json::Result<T> {
         let wrapped = serde_json::json!({
             "action": name,

@@ -23,7 +23,10 @@ impl<'c, C: Config> Models<'c, C> {
     /// # Errors
     ///
     /// Returns an error if the API request fails or the response cannot be parsed.
-    pub async fn list(&self, params: &ModelListParams) -> Result<ModelsListResponse, AnthropicError> {
+    pub async fn list(
+        &self,
+        params: &ModelListParams,
+    ) -> Result<ModelsListResponse, AnthropicError> {
         self.client.get_with_query("/v1/models", params).await
     }
 

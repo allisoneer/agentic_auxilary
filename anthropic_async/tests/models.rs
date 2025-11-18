@@ -1,4 +1,4 @@
-use anthropic_async::{{AnthropicConfig, Client, types::ModelListParams}};
+use anthropic_async::{AnthropicConfig, Client, types::ModelListParams};
 use serde_json::json;
 use wiremock::matchers::{header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -32,7 +32,11 @@ async fn test_models_list_headers_and_parse() {
         .with_api_key("test");
     let client = Client::with_config(cfg);
 
-    let res = client.models().list(&ModelListParams::default()).await.unwrap();
+    let res = client
+        .models()
+        .list(&ModelListParams::default())
+        .await
+        .unwrap();
     assert_eq!(res.data.len(), 1);
     assert_eq!(res.data[0].id, "claude-3-5-sonnet");
 }
