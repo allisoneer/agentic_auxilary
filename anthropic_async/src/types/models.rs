@@ -26,3 +26,17 @@ pub struct ModelsListResponse {
     /// ID of the last model in the list
     pub last_id: Option<String>,
 }
+
+/// Parameters for listing models
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelListParams {
+    /// Return models after this ID (for pagination)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_id: Option<String>,
+    /// Return models before this ID (for pagination)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_id: Option<String>,
+    /// Maximum number of models to return
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}

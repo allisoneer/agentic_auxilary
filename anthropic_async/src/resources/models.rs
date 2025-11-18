@@ -1,10 +1,8 @@
-use serde::Serialize;
-
 use crate::{
     client::Client,
     config::Config,
     error::AnthropicError,
-    types::models::{Model, ModelsListResponse},
+    types::models::{Model, ModelListParams, ModelsListResponse},
 };
 
 /// API resource for the `/v1/models` endpoints
@@ -20,16 +18,13 @@ impl<'c, C: Config> Models<'c, C> {
         Self { client }
     }
 
-    /// Lists all available models.
+    /// Lists all available models with optional pagination parameters.
     ///
     /// # Errors
     ///
     /// Returns an error if the API request fails or the response cannot be parsed.
-    pub async fn list<Q>(&self, query: &Q) -> Result<ModelsListResponse, AnthropicError>
-    where
-        Q: Serialize + Sync + ?Sized,
-    {
-        self.client.get_with_query("/v1/models", query).await
+    pub async fn list(&self, params: &ModelListParams) -> Result<ModelsListResponse, AnthropicError> {
+        self.client.get_with_query("/v1/models", params).await
     }
 
     /// Gets details for a specific model.
