@@ -23,10 +23,10 @@ pub fn default_backoff() -> backoff::ExponentialBackoff {
 
 /// Determines if an HTTP status code should trigger a retry
 ///
-/// Retries on: 408, 409, 429, 5xx, and 529 (overloaded)
+/// Retries on: 408, 409, 429, and 5xx (529 included implicitly)
 #[must_use]
 pub const fn is_retryable_status(code: u16) -> bool {
-    matches!(code, 408 | 409 | 429 | 500..=599) || code == 529
+    matches!(code, 408 | 409 | 429 | 500..=599)
 }
 
 /// Parses the `Retry-After` or `retry-after-ms` header from the response

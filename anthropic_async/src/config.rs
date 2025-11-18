@@ -19,6 +19,13 @@ pub enum AnthropicAuth {
     ApiKey(String),
     /// Bearer token authentication
     Bearer(String),
+    /// Both API key and bearer token authentication
+    Both {
+        /// API key for x-api-key header
+        api_key: String,
+        /// Bearer token for Authorization header
+        bearer: String,
+    },
     /// No authentication configured
     None,
 }
@@ -41,6 +48,10 @@ impl Default for AnthropicConfig {
         let bearer = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
 
         let auth = match (api_key, bearer) {
+            (Some(k), Some(t)) => AnthropicAuth::Both {
+                api_key: k,
+                bearer: t,
+            },
             (Some(k), None) => AnthropicAuth::ApiKey(k),
             (None, Some(t)) => AnthropicAuth::Bearer(t),
             _ => AnthropicAuth::None,
@@ -102,6 +113,19 @@ impl AnthropicConfig {
         self
     }
 
+    /// Sets both API key and bearer token authentication
+    ///
+    /// This will send both the `x-api-key` and `Authorization: Bearer` headers.
+    /// This matches the behavior of the official Python SDK when both credentials are present.
+    #[must_use]
+    pub fn with_both(mut self, api_key: impl Into<String>, bearer: impl Into<String>) -> Self {
+        self.auth = AnthropicAuth::Both {
+            api_key: api_key.into(),
+            bearer: bearer.into(),
+        };
+        self
+    }
+
     /// Sets custom beta feature strings
     ///
     /// These will be sent in the `anthropic-beta` header as a comma-separated list.
@@ -151,7 +175,11 @@ impl AnthropicConfig {
 /// Implement this trait to provide custom authentication and API configuration.
 pub trait Config: Send + Sync {
     /// Returns HTTP headers to include in requests
-    fn headers(&self) -> HeaderMap;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if header values contain invalid characters.
+    fn headers(&self) -> Result<HeaderMap, crate::error::AnthropicError>;
 
     /// Constructs the full URL for an API endpoint
     fn url(&self, path: &str) -> String;
@@ -168,31 +196,61 @@ pub trait Config: Send + Sync {
 }
 
 impl Config for AnthropicConfig {
-    fn headers(&self) -> HeaderMap {
+    fn headers(&self) -> Result<HeaderMap, crate::error::AnthropicError> {
+        use crate::error::AnthropicError;
+
         let mut h = HeaderMap::new();
 
         h.insert(
             HDR_ANTHROPIC_VERSION,
-            HeaderValue::from_str(&self.version).unwrap(),
+            HeaderValue::from_str(&self.version)
+                .map_err(|_| AnthropicError::Config("Invalid anthropic-version header".into()))?,
         );
 
         if !self.beta.is_empty() {
             let v = self.beta.join(",");
-            h.insert(HDR_ANTHROPIC_BETA, HeaderValue::from_str(&v).unwrap());
+            h.insert(
+                HDR_ANTHROPIC_BETA,
+                HeaderValue::from_str(&v)
+                    .map_err(|_| AnthropicError::Config("Invalid anthropic-beta header".into()))?,
+            );
         }
 
         match &self.auth {
             AnthropicAuth::ApiKey(k) => {
-                h.insert(HDR_X_API_KEY, HeaderValue::from_str(k).unwrap());
+                h.insert(
+                    HDR_X_API_KEY,
+                    HeaderValue::from_str(k)
+                        .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
+                );
             }
             AnthropicAuth::Bearer(t) => {
                 let v = format!("Bearer {t}");
-                h.insert(AUTHORIZATION, HeaderValue::from_str(&v).unwrap());
+                h.insert(
+                    AUTHORIZATION,
+                    HeaderValue::from_str(&v).map_err(|_| {
+                        AnthropicError::Config("Invalid Authorization header".into())
+                    })?,
+                );
+            }
+            AnthropicAuth::Both { api_key, bearer } => {
+                h.insert(
+                    HDR_X_API_KEY,
+                    HeaderValue::from_str(api_key)
+                        .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
+                );
+                let v = format!("Bearer {bearer}");
+                h.insert(
+                    AUTHORIZATION,
+                    HeaderValue::from_str(&v).map_err(|_| {
+                        AnthropicError::Config("Invalid Authorization header".into())
+                    })?,
+                );
             }
             AnthropicAuth::None => {}
         }
 
-        h
+        Ok(h)
     }
 
     fn url(&self, path: &str) -> String {
@@ -241,14 +299,14 @@ mod tests {
     #[test]
     fn test_default_headers_exist() {
         let cfg = AnthropicConfig::new();
-        let h = cfg.headers();
+        let h = cfg.headers().unwrap();
         assert!(h.contains_key(super::HDR_ANTHROPIC_VERSION));
     }
 
     #[test]
     fn auth_api_key_header() {
         let cfg = AnthropicConfig::new().with_api_key("k123");
-        let h = cfg.headers();
+        let h = cfg.headers().unwrap();
         assert!(h.contains_key(HDR_X_API_KEY));
         assert!(!h.contains_key(reqwest::header::AUTHORIZATION));
     }
@@ -256,17 +314,34 @@ mod tests {
     #[test]
     fn auth_bearer_header() {
         let cfg = AnthropicConfig::new().with_bearer("t123");
-        let h = cfg.headers();
+        let h = cfg.headers().unwrap();
         assert!(h.contains_key(reqwest::header::AUTHORIZATION));
         assert!(!h.contains_key(HDR_X_API_KEY));
     }
 
     #[test]
+    fn auth_both_headers() {
+        let cfg = AnthropicConfig::new().with_both("k123", "t123");
+        let h = cfg.headers().unwrap();
+        assert!(h.contains_key(HDR_X_API_KEY));
+        assert!(h.contains_key(reqwest::header::AUTHORIZATION));
+    }
+
+    #[test]
     fn beta_header_join() {
         let cfg = AnthropicConfig::new().with_beta(vec!["a", "b"]);
-        let h = cfg.headers();
+        let h = cfg.headers().unwrap();
         let v = h.get(HDR_ANTHROPIC_BETA).unwrap().to_str().unwrap();
         assert_eq!(v, "a,b");
+    }
+
+    #[test]
+    fn invalid_header_values_error() {
+        let cfg = AnthropicConfig::new().with_api_key("bad\nkey");
+        match cfg.headers() {
+            Err(crate::error::AnthropicError::Config(msg)) => assert!(msg.contains("x-api-key")),
+            other => panic!("Expected Config error, got {:?}", other),
+        }
     }
 
     #[test]

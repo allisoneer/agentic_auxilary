@@ -75,19 +75,16 @@ impl<C: Config> Client<C> {
     }
 
     pub(crate) async fn get<O: DeserializeOwned>(&self, path: &str) -> Result<O, AnthropicError> {
-        let request = self
-            .http
-            .get(self.config.url(path))
-            .headers(self.config.headers())
-            .query(&self.config.query())
-            .build()?;
-
-        let response = self.http.execute(request).await?;
-        let body = response.bytes().await?;
-        let resp: O = serde_json::from_slice(&body).map_err(|e| {
-            AnthropicError::Serde(format!("{}: {}", e, String::from_utf8_lossy(&body)))
-        })?;
-        Ok(resp)
+        let mk = || async {
+            let headers = self.config.headers()?;
+            Ok(self
+                .http
+                .get(self.config.url(path))
+                .headers(headers)
+                .query(&self.config.query())
+                .build()?)
+        };
+        self.execute(mk).await
     }
 
     pub(crate) async fn get_with_query<Q, O>(
@@ -99,20 +96,17 @@ impl<C: Config> Client<C> {
         Q: Serialize + Sync + ?Sized,
         O: DeserializeOwned,
     {
-        let request = self
-            .http
-            .get(self.config.url(path))
-            .headers(self.config.headers())
-            .query(&self.config.query())
-            .query(query)
-            .build()?;
-
-        let response = self.http.execute(request).await?;
-        let body = response.bytes().await?;
-        let resp: O = serde_json::from_slice(&body).map_err(|e| {
-            AnthropicError::Serde(format!("{}: {}", e, String::from_utf8_lossy(&body)))
-        })?;
-        Ok(resp)
+        let mk = || async {
+            let headers = self.config.headers()?;
+            Ok(self
+                .http
+                .get(self.config.url(path))
+                .headers(headers)
+                .query(&self.config.query())
+                .query(query)
+                .build()?)
+        };
+        self.execute(mk).await
     }
 
     pub(crate) async fn post<I, O>(&self, path: &str, body: I) -> Result<O, AnthropicError>
@@ -121,10 +115,11 @@ impl<C: Config> Client<C> {
         O: DeserializeOwned,
     {
         let mk = || async {
+            let headers = self.config.headers()?;
             Ok(self
                 .http
                 .post(self.config.url(path))
-                .headers(self.config.headers())
+                .headers(headers)
                 .query(&self.config.query())
                 .json(&body)
                 .build()?)
