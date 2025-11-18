@@ -17,6 +17,7 @@ pub struct ReviewComment {
     pub updated_at: String,
     pub html_url: String,
     pub pull_request_review_id: Option<u64>,
+    pub in_reply_to_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -173,12 +174,28 @@ impl McpFormatter for ReviewCommentList {
         let _ = writeln!(out, "{}", format_legend());
 
         let grouped = group_by_path(&self.comments);
+
         for (path, comments) in grouped {
             let _ = writeln!(out, "\n{}", path);
+
+            // Build replies map
+            let mut replies_by_parent: std::collections::BTreeMap<u64, Vec<&ReviewComment>> =
+                std::collections::BTreeMap::new();
+            for c in comments.iter().filter(|c| c.in_reply_to_id.is_some()) {
+                if let Some(pid) = c.in_reply_to_id {
+                    replies_by_parent.entry(pid).or_default().push(c);
+                }
+            }
+
+            // Render top-level comments, then their replies
             for c in comments {
+                if c.in_reply_to_id.is_some() {
+                    continue; // replies rendered under their parent
+                }
+
+                // Format top-level comment
                 let side = compress_side(c.side.as_deref());
                 let line_disp = c.line.map(|n| n.to_string()).unwrap_or_else(|| "?".into());
-                // header line for the comment
                 let mut head = format!("  [{} {}] {}", line_disp, side, fmt_user(&c.user));
                 if opts.show_ids {
                     head.push_str(&format!(" #{}", c.id));
@@ -195,10 +212,35 @@ impl McpFormatter for ReviewCommentList {
                     head.push_str(&format!(" @{}", fmt_ts(&c.created_at)));
                 }
                 let _ = writeln!(out, "{}", head);
-
-                // body (preserve fully, indent continuation)
                 let body = indent_multiline(&c.body, "    ");
                 let _ = writeln!(out, "    {}", body);
+
+                // Render replies indented under parent
+                if let Some(replies) = replies_by_parent.get(&c.id) {
+                    for r in replies {
+                        let side_r = compress_side(r.side.as_deref());
+                        let line_r = r.line.map(|n| n.to_string()).unwrap_or_else(|| "?".into());
+                        let mut head_r =
+                            format!("    ↳ [{} {}] {}", line_r, side_r, fmt_user(&r.user));
+                        if opts.show_ids {
+                            head_r.push_str(&format!(" #{}", r.id));
+                        }
+                        if opts.show_review_ids
+                            && let Some(rid) = r.pull_request_review_id
+                        {
+                            head_r.push_str(&format!(" (review:{})", rid));
+                        }
+                        if opts.show_urls {
+                            head_r.push_str(&format!(" {}", r.html_url));
+                        }
+                        if opts.show_dates {
+                            head_r.push_str(&format!(" @{}", fmt_ts(&r.created_at)));
+                        }
+                        let _ = writeln!(out, "{}", head_r);
+                        let body_r = indent_multiline(&r.body, "      ");
+                        let _ = writeln!(out, "      {}", body_r);
+                    }
+                }
             }
         }
         out
@@ -310,6 +352,7 @@ impl From<octocrab::models::pulls::Comment> for ReviewComment {
             updated_at: comment.updated_at.to_rfc3339(),
             html_url: comment.html_url,
             pull_request_review_id: comment.pull_request_review_id.map(|id| id.0),
+            in_reply_to_id: comment.in_reply_to_id.map(|id| id.0),
         }
     }
 }
@@ -453,6 +496,7 @@ mod mcp_format_tests {
             updated_at: "2025-01-01T00:00:00Z".into(),
             html_url: "https://example.com/review/1".into(),
             pull_request_review_id: Some(42),
+            in_reply_to_id: None,
         }
     }
 
