@@ -5,7 +5,10 @@
 //! - Sending a basic message
 //! - Receiving and displaying the response
 
-use anthropic_async::{types::messages::*, AnthropicConfig, Client};
+use anthropic_async::{
+    types::{content::*, messages::*},
+    AnthropicConfig, Client,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,14 +19,17 @@ async fn main() -> anyhow::Result<()> {
         model: "claude-3-5-sonnet".into(),
         max_tokens: 64,
         system: None,
-        messages: vec![Message {
+        messages: vec![MessageParam {
             role: MessageRole::User,
-            content: vec![ContentBlock::Text {
-                text: "Say hello in a creative way".into(),
-                cache_control: None,
-            }],
+            content: "Say hello in a creative way".into(),
         }],
         temperature: Some(0.7),
+        stop_sequences: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
+        tools: None,
+        tool_choice: None,
     };
 
     println!("Sending request to Claude...");
@@ -32,7 +38,8 @@ async fn main() -> anyhow::Result<()> {
     println!("\nClaude's response:");
     for block in &res.content {
         match block {
-            ContentBlock::Text { text, .. } => println!("{text}"),
+            ContentBlock::Text { text } => println!("{text}"),
+            ContentBlock::ToolUse { name, .. } => println!("[Tool call: {name}]"),
         }
     }
 
