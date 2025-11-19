@@ -177,3 +177,39 @@ fn tool_use_parsing() {
         }
     }
 }
+
+#[cfg(feature = "schemars")]
+#[test]
+fn tool_use_parsing_snake_case() {
+    use anthropic_async::types::tools::schema;
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(tag = "action", content = "params", rename_all = "snake_case")]
+    enum Actions {
+        SendEmail { to: String, subject: String },
+        SearchWeb { query: String },
+    }
+
+    // Validate send_email → Actions::SendEmail
+    let input_email = serde_json::json!({ "to": "user@example.com", "subject": "Hello" });
+    let act1: Actions = schema::try_parse_tool_use("send_email", &input_email).unwrap();
+    assert_eq!(
+        act1,
+        Actions::SendEmail {
+            to: "user@example.com".into(),
+            subject: "Hello".into()
+        }
+    );
+
+    // Validate search_web → Actions::SearchWeb
+    let input_search = serde_json::json!({ "query": "rust async runtimes" });
+    let act2: Actions = schema::try_parse_tool_use("search_web", &input_search).unwrap();
+    assert_eq!(
+        act2,
+        Actions::SearchWeb {
+            query: "rust async runtimes".into()
+        }
+    );
+}

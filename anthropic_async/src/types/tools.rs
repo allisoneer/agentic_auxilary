@@ -13,7 +13,7 @@
 //!
 //! // Define tools as an enum with adjacently tagged format
 //! #[derive(Serialize, Deserialize, JsonSchema)]
-//! #[serde(tag = "action", content = "params")]
+//! #[serde(tag = "action", content = "params", rename_all = "snake_case")]
 //! enum Actions {
 //!     SendEmail { to: String, subject: String },
 //!     SearchWeb { query: String },
