@@ -1,5 +1,5 @@
 .PHONY: all check test build check-normal check-verbose test-normal test-verbose build-normal build-verbose \
-        clean fmt fmt-check doc audit outdated help install run
+        clean fmt fmt-check doc audit outdated help install run release
 
 # Default environment variables for silent output
 SILENT_ENV = CARGO_TERM_QUIET=true CARGO_TERM_PROGRESS_WHEN=never CARGO_TERM_VERBOSE=false
