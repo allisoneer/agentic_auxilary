@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-tool"
-version = "0.3.7"
+version = "0.3.8"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Flexible thought management using filesystem mounts for git repositories"
