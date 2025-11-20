@@ -8,6 +8,7 @@ Guidance for Claude Code when working with this repository.
 - `claudecode_rs/` - Rust SDK for programmatically interacting with Claude Code (Rust library)
 - `pr_comments/` - Fetch GitHub PR comments with resolution filtering (CLI + MCP, Rust)
 - `gpt5_reasoner/` - Two-phase GPT-5 prompt optimizer/executor with directory-aware file ingestion (CLI + MCP, Rust)
+- `anthropic_async/` - Asynchronous Anthropic API client for Rust (library)
 - `context/` - Thoughts-based documentation and planning
   - `context/general/` - Root level documents impacting multiple tools/directories in the monorepo
   - `context/thoughts_tool/` - Thoughts-based documents for thoughts_tool
@@ -68,6 +69,14 @@ cd gpt5_reasoner && make build     # Build the project
 
 # Useful during debugging:
 RUST_LOG=gpt5_reasoner=debug make test
+```
+
+### anthropic_async
+```bash
+cd anthropic_async && make all       # Check, test, and build (silent)
+cd anthropic_async && make check     # Run formatting and clippy checks
+cd anthropic_async && make test      # Run tests
+cd anthropic_async && make build     # Build the project
 ```
 
 All tools support verbose and normal output variants for their make commands (e.g., `make test-normal`, `make test-verbose`).

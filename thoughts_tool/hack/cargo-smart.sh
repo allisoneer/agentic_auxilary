@@ -16,7 +16,8 @@ shift || true
 
 # Temp file for output
 TEMP_OUTPUT=$(mktemp)
-trap "rm -f $TEMP_OUTPUT" EXIT
+readonly TEMP_OUTPUT
+trap 'rm -f -- "$TEMP_OUTPUT"' EXIT
 
 # Extract a friendly name from the arguments
 get_target_name() {

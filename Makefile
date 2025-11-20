@@ -6,13 +6,14 @@
 .PHONY: universal-check universal-test universal-build universal-all
 .PHONY: pr-check pr-test pr-build pr-all
 .PHONY: gpt5-check gpt5-test gpt5-build gpt5-all
+.PHONY: anthropic-check anthropic-test anthropic-build anthropic-all
 .PHONY: fmt-all fmt-check-all clean-all status
 
 # Default target
 .DEFAULT_GOAL := help
 
 # Tools to build
-TOOLS := thoughts_tool claudecode_rs universal_tool pr_comments gpt5_reasoner
+TOOLS := thoughts_tool claudecode_rs universal_tool pr_comments gpt5_reasoner anthropic_async
 
 # Colors for output
 RED := \033[0;31m
@@ -45,6 +46,7 @@ check:
 			  universal_tool) alias="universal" ;; \
 			  pr_comments) alias="pr" ;; \
 			  gpt5_reasoner) alias="gpt5" ;; \
+			  anthropic_async) alias="anthropic" ;; \
 			esac; \
 			echo -e "  Run 'make $$alias-check' for details"; \
 			failures=$$((failures + 1)); \
@@ -74,6 +76,7 @@ test:
 			  universal_tool) alias="universal" ;; \
 			  pr_comments) alias="pr" ;; \
 			  gpt5_reasoner) alias="gpt5" ;; \
+			  anthropic_async) alias="anthropic" ;; \
 			esac; \
 			echo -e "  Run 'make $$alias-test' for details"; \
 			failures=$$((failures + 1)); \
@@ -103,6 +106,7 @@ build:
 			  universal_tool) alias="universal" ;; \
 			  pr_comments) alias="pr" ;; \
 			  gpt5_reasoner) alias="gpt5" ;; \
+			  anthropic_async) alias="anthropic" ;; \
 			esac; \
 			echo -e "  Run 'make $$alias-build' for details"; \
 			failures=$$((failures + 1)); \
@@ -224,6 +228,19 @@ gpt5-build:
 
 gpt5-all:
 	@$(MAKE) -C gpt5_reasoner all
+
+# Individual tool targets - anthropic_async
+anthropic-check:
+	@$(MAKE) -C anthropic_async check
+
+anthropic-test:
+	@$(MAKE) -C anthropic_async test
+
+anthropic-build:
+	@$(MAKE) -C anthropic_async build
+
+anthropic-all:
+	@$(MAKE) -C anthropic_async all
 
 # Workspace-wide commands
 fmt-all:
