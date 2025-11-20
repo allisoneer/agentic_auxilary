@@ -88,3 +88,9 @@ changelog_path = "gpt5_reasoner/CHANGELOG.md"
 git_tag_name = "gpt5_reasoner-v{{ version }}"
 release = true
 
+[[package]]
+name = "anthropic-async"
+changelog_path = "anthropic_async/CHANGELOG.md"
+git_tag_name = "anthropic-async-v{{ version }}"
+release = true
+

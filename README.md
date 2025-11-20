@@ -30,6 +30,12 @@ Two-phase prompt optimization tool: optimize with Claude, execute with GPT-5.
 - Configurable optimizer model (default: Claude Sonnet 4.5)
 - Automatic binary file detection and deduplication
 
+### 🧩 [Anthropic Async](anthropic_async/)
+Production-ready asynchronous client for Anthropic's API with prompt caching support.
+- Messages API (create, count tokens) and Models API
+- Retry with exponential backoff, beta feature support
+- Strong typing and examples
+
 ## Quick Start
 
 ```bash
@@ -85,6 +91,14 @@ cargo install gpt5_reasoner
 ```bash
 cargo install pr_comments
 ```
+
+### Use anthropic-async in your project
+<!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
+```toml
+[dependencies]
+anthropic-async = "0.1.0"
+```
+<!-- END:autodeps -->
 
 Quick example (ClaudeCode):
 ```rust
