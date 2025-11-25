@@ -233,17 +233,26 @@ mod claude_injection_tests {
         assert_eq!(files.len(), 4);
 
         let names: Vec<_> = files.iter().map(|f| &f.filename).collect();
+
+        // macOS CI note:
+        // Temp directories resolve under /private/var/folders/<bucket>/<hash>/T/<name>,
+        // and the two-character <bucket> can include 'a' or 'b' (e.g., "ba", "ab").
+        // Unanchored substring checks like contains("a/") or contains("b/") can
+        // falsely match these segments and break the position() lookups. To avoid
+        // this, we anchor with a leading "/" to match directory boundaries.
+        // This matches the anchored style used elsewhere in this file (e.g., lines
+        // ~585 and ~710).
         let root_idx = names
             .iter()
-            .position(|n| n.ends_with("CLAUDE.md") && !n.contains("a/") && !n.contains("b/"))
+            .position(|n| n.ends_with("/CLAUDE.md") && !n.contains("/a/") && !n.contains("/b/"))
             .unwrap();
         let a_idx = names
             .iter()
-            .position(|n| n.ends_with("a/CLAUDE.md"))
+            .position(|n| n.ends_with("/a/CLAUDE.md"))
             .unwrap();
         let b_idx = names
             .iter()
-            .position(|n| n.ends_with("b/CLAUDE.md"))
+            .position(|n| n.ends_with("/b/CLAUDE.md"))
             .unwrap();
         assert!(root_idx < a_idx && a_idx < b_idx);
     }
@@ -550,7 +559,7 @@ mod claude_directory_seeding_tests {
         let count = auto_inject_claude_memories(&mut files, Some(&dirs));
         assert_eq!(count, 1, "should inject docs/CLAUDE.md despite zero files");
         assert_eq!(files.len(), 1);
-        assert!(files[0].filename.ends_with("docs/CLAUDE.md"));
+        assert!(files[0].filename.ends_with("/docs/CLAUDE.md"));
     }
 
     // 2) Ancestor Chain Test: explicit directory + ancestor CLAUDE.md
