@@ -9,6 +9,7 @@ Guidance for Claude Code when working with this repository.
 - `pr_comments/` - Fetch GitHub PR comments with resolution filtering (CLI + MCP, Rust)
 - `gpt5_reasoner/` - Two-phase GPT-5 prompt optimizer/executor with directory-aware file ingestion (CLI + MCP, Rust)
 - `anthropic_async/` - Asynchronous Anthropic API client for Rust (library)
+- `coding_agent_tools/` - Coding agent tools for CLI + MCP (first tool: ls) (Rust CLI + MCP)
 - `context/` - Thoughts-based documentation and planning
   - `context/general/` - Root level documents impacting multiple tools/directories in the monorepo
   - `context/thoughts_tool/` - Thoughts-based documents for thoughts_tool
@@ -22,6 +23,7 @@ Guidance for Claude Code when working with this repository.
 - For claudecode_rs development: See `claudecode_rs/CLAUDE.md`
 - For pr_comments development: See `pr_comments/CLAUDE.md`
 - For gpt5_reasoner development: See `gpt5_reasoner/CLAUDE.md`
+- For coding_agent_tools development: See `coding_agent_tools/CLAUDE.md`
 
 ## Common Commands
 
@@ -77,6 +79,14 @@ cd anthropic_async && make all       # Check, test, and build (silent)
 cd anthropic_async && make check     # Run formatting and clippy checks
 cd anthropic_async && make test      # Run tests
 cd anthropic_async && make build     # Build the project
+```
+
+### coding_agent_tools
+```bash
+cd coding_agent_tools && make all       # Check, test, and build (silent)
+cd coding_agent_tools && make check     # Run formatting and clippy checks
+cd coding_agent_tools && make test      # Run tests
+cd coding_agent_tools && make build     # Build the project
 ```
 
 All tools support verbose and normal output variants for their make commands (e.g., `make test-normal`, `make test-verbose`).
