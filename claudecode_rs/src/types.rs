@@ -41,6 +41,45 @@ impl fmt::Display for OutputFormat {
     }
 }
 
+/// Permission mode for Claude CLI session
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionMode {
+    Default,
+    AcceptEdits,
+    DontAsk,
+    Plan,
+    BypassPermissions,
+}
+
+impl fmt::Display for PermissionMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            PermissionMode::Default => "default",
+            PermissionMode::AcceptEdits => "acceptEdits",
+            PermissionMode::DontAsk => "dontAsk",
+            PermissionMode::Plan => "plan",
+            PermissionMode::BypassPermissions => "bypassPermissions",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+/// Input format for Claude CLI session
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputFormat {
+    Text,
+    StreamJson,
+}
+
+impl fmt::Display for InputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InputFormat::Text => write!(f, "text"),
+            InputFormat::StreamJson => write!(f, "stream-json"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Content {
@@ -369,5 +408,23 @@ mod tests {
         assert!(content.is_text());
         assert_eq!(content.get_text(), Some("Hello, world!"));
         assert!(matches!(content, Content::Text { .. }));
+    }
+
+    #[test]
+    fn test_permission_mode_display() {
+        assert_eq!(PermissionMode::Default.to_string(), "default");
+        assert_eq!(PermissionMode::AcceptEdits.to_string(), "acceptEdits");
+        assert_eq!(PermissionMode::DontAsk.to_string(), "dontAsk");
+        assert_eq!(PermissionMode::Plan.to_string(), "plan");
+        assert_eq!(
+            PermissionMode::BypassPermissions.to_string(),
+            "bypassPermissions"
+        );
+    }
+
+    #[test]
+    fn test_input_format_display() {
+        assert_eq!(InputFormat::Text.to_string(), "text");
+        assert_eq!(InputFormat::StreamJson.to_string(), "stream-json");
     }
 }
