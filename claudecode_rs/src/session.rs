@@ -38,10 +38,14 @@ pub struct Session {
 
 impl Session {
     pub async fn new(config: SessionConfig, process: ProcessHandle) -> Result<Self> {
-        let id = config
-            .session_id
-            .clone()
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        // Determine session ID from explicit_session_id, resume_session_id, or generate new
+        let id = if let Some(ref id) = config.explicit_session_id {
+            id.clone()
+        } else if let Some(ref id) = config.resume_session_id {
+            id.clone()
+        } else {
+            Uuid::new_v4().to_string()
+        };
 
         let (events_tx, events) = match config.output_format {
             OutputFormat::StreamingJson => {

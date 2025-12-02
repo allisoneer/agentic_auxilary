@@ -63,6 +63,7 @@
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod probe;
 pub mod process;
 pub mod session;
 pub mod stream;
@@ -72,10 +73,12 @@ pub mod types;
 pub use client::Client;
 pub use config::{MCPConfig, MCPServer, SessionConfig, SessionConfigBuilder};
 pub use error::{ClaudeError, Result};
+pub use probe::CliCapabilities;
 pub use session::Session;
 pub use types::{
-    AssistantEvent, Content, ErrorEvent, Event, MCPStatus, Message, Model, OutputFormat,
-    Result as ClaudeResult, ResultEvent, ServerToolUse, SystemEvent, Usage,
+    AssistantEvent, Content, ErrorEvent, Event, InputFormat, MCPStatus, Message, Model,
+    OutputFormat, PermissionMode, Result as ClaudeResult, ResultEvent, ServerToolUse, SystemEvent,
+    Usage,
 };
 
 // Version information

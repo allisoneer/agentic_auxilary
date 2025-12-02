@@ -36,6 +36,9 @@ pub enum ClaudeError {
     #[error("Session error: {message}")]
     SessionError { message: String },
 
+    #[error("CLI probe failed: {message}")]
+    ProbeError { message: String },
+
     #[error("IO error: {source}")]
     IoError {
         #[from]
