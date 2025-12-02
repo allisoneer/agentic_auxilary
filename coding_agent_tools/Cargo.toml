@@ -20,7 +20,7 @@ name = "coding_agent_tools"
 path = "src/lib.rs"
 
 [dependencies]
-universal-tool-core = { path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+universal-tool-core = { version = "0.2.3", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
 ignore = "0.4"
 globset = "0.4"
 tokio = { version = "1", features = ["full"] }
