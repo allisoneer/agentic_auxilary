@@ -1,0 +1,38 @@
+[package]
+name = "coding_agent_tools"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Coding agent tools (CLI + MCP). First tool: ls."
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+keywords = ["cli", "mcp", "filesystem", "ls", "ignore"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "coding-agent-tools"
+path = "src/main.rs"
+
+[lib]
+name = "coding_agent_tools"
+path = "src/lib.rs"
+
+[dependencies]
+universal-tool-core = { path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+ignore = "0.4"
+globset = "0.4"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "0.8"
+anyhow = "1"
+thiserror = "1"
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"
+serial_test = "3"

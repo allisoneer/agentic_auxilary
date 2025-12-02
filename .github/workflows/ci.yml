@@ -19,20 +19,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async]
+        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools]
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: 1.89
           components: rustfmt, clippy
           cache: true
-      
+
       - uses: mozilla-actions/sccache-action@v0.0.9
-      
+
       - name: Run tests
         env:
           SCCACHE_GHA_ENABLED: "on"
@@ -46,20 +46,20 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async]
+        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools]
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: 1.89
           components: rustfmt, clippy
           cache: true
-      
+
       - uses: mozilla-actions/sccache-action@v0.0.9
-      
+
       - name: Check formatting
         run: |
           cd ${{ matrix.package }}
