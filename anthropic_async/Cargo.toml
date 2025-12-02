@@ -9,6 +9,9 @@ readme = "README.md"
 categories = ["api-bindings"]
 keywords = ["anthropic", "claude", "llm", "client"]
 
+[package.metadata.dist]
+dist = false
+
 [features]
 default = []
 streaming = [] # placeholder for future SSE

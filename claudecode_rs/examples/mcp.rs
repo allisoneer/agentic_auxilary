@@ -9,11 +9,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut servers = HashMap::new();
     servers.insert(
         "calculator".to_string(),
-        MCPServer {
-            command: "npx".to_string(),
-            args: vec!["@modelcontextprotocol/server-calculator".to_string()],
-            env: None,
-        },
+        MCPServer::stdio(
+            "npx",
+            vec!["@modelcontextprotocol/server-calculator".to_string()],
+        ),
     );
 
     let mcp_config = MCPConfig {

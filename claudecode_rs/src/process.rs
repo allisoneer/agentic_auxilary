@@ -1,4 +1,5 @@
 use crate::error::{ClaudeError, Result};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::BufReader;
@@ -12,10 +13,18 @@ pub struct ProcessHandle {
 }
 
 impl ProcessHandle {
+    /// Spawn a new Claude process with optional environment overlay
+    ///
+    /// # Arguments
+    /// * `claude_path` - Path to the claude executable
+    /// * `args` - Command line arguments
+    /// * `working_dir` - Optional working directory
+    /// * `env_overlay` - Optional environment variables to add/override
     pub async fn spawn(
         claude_path: &Path,
         args: Vec<String>,
         working_dir: Option<&Path>,
+        env_overlay: Option<&HashMap<String, String>>,
     ) -> Result<Self> {
         let mut cmd = Command::new(claude_path);
         cmd.args(&args)
@@ -27,6 +36,16 @@ impl ProcessHandle {
         // Set working directory if specified
         if let Some(dir) = working_dir {
             cmd.current_dir(dir);
+        }
+
+        // Apply environment overlay: inherit current env and add/override with overlay
+        if let Some(env_map) = env_overlay {
+            // Inherit all current environment variables
+            cmd.envs(std::env::vars());
+            // Override/add from the overlay
+            for (k, v) in env_map {
+                cmd.env(k, v);
+            }
         }
 
         let mut child = cmd.spawn().map_err(|e| ClaudeError::SpawnError {
@@ -81,7 +100,22 @@ impl ProcessHandle {
     }
 }
 
+/// Find the Claude executable.
+///
+/// First checks the CLAUDE_PATH environment variable. If set, uses that path
+/// (with tilde expansion). Otherwise, searches PATH for 'claude'.
 pub async fn find_claude_in_path() -> Result<PathBuf> {
+    // Check CLAUDE_PATH environment variable first
+    if let Ok(path_str) = std::env::var("CLAUDE_PATH") {
+        let path = expand_tilde(&path_str);
+        if path.exists() {
+            return Ok(path);
+        } else {
+            return Err(ClaudeError::ClaudeNotFoundAtPath { path });
+        }
+    }
+
+    // Fall back to searching PATH
     tokio::task::spawn_blocking(|| which("claude").map_err(|_| ClaudeError::ClaudeNotFound))
         .await
         .map_err(|_| ClaudeError::SessionError {
@@ -117,5 +151,64 @@ mod tests {
         let path = "relative/path";
         let expanded = expand_tilde(path);
         assert_eq!(expanded.to_string_lossy(), path);
+    }
+
+    #[test]
+    fn test_expand_tilde_with_home() {
+        // Test that tilde expands to home directory
+        if let Some(home) = dirs::home_dir() {
+            let expanded = expand_tilde("~/some/path");
+            assert_eq!(expanded, home.join("some/path"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_find_claude_uses_claude_path_env() {
+        // Create a temp file to use as fake claude binary
+        let temp_dir = std::env::temp_dir();
+        let fake_claude = temp_dir.join("fake_claude_for_test");
+        std::fs::write(&fake_claude, "#!/bin/sh\necho test").unwrap();
+
+        // Set CLAUDE_PATH (unsafe because env vars are process-global)
+        // SAFETY: This is a test that runs in isolation
+        unsafe {
+            std::env::set_var("CLAUDE_PATH", fake_claude.to_str().unwrap());
+        }
+
+        let result = find_claude_in_path().await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), fake_claude);
+
+        // Cleanup
+        // SAFETY: This is a test that runs in isolation
+        unsafe {
+            std::env::remove_var("CLAUDE_PATH");
+        }
+        std::fs::remove_file(&fake_claude).ok();
+    }
+
+    #[tokio::test]
+    async fn test_find_claude_claude_path_not_exists() {
+        // Set CLAUDE_PATH to non-existent path
+        // SAFETY: This is a test that runs in isolation
+        unsafe {
+            std::env::set_var("CLAUDE_PATH", "/nonexistent/path/to/claude");
+        }
+
+        let result = find_claude_in_path().await;
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            ClaudeError::ClaudeNotFoundAtPath { path } => {
+                assert_eq!(path, PathBuf::from("/nonexistent/path/to/claude"));
+            }
+            _ => panic!("Expected ClaudeNotFoundAtPath error"),
+        }
+
+        // Cleanup
+        // SAFETY: This is a test that runs in isolation
+        unsafe {
+            std::env::remove_var("CLAUDE_PATH");
+        }
     }
 }
