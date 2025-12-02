@@ -58,18 +58,21 @@ release = true
 name = "universal-tool-core"
 changelog_path = "universal_tool/CHANGELOG.md"
 git_tag_name = "universal-tool-v{{ version }}"
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "universal-tool-macros"
 changelog_path = "universal_tool/CHANGELOG.md"
 git_tag_name = "universal-tool-macros-v{{ version }}"
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "claudecode"
 changelog_path = "claudecode_rs/CHANGELOG.md"
 git_tag_name = "claudecode-v{{ version }}"
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -92,5 +95,6 @@ release = true
 name = "anthropic-async"
 changelog_path = "anthropic_async/CHANGELOG.md"
 git_tag_name = "anthropic-async-v{{ version }}"
+git_tag_enable = false
 release = true
 
