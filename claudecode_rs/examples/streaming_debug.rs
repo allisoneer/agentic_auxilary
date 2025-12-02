@@ -13,7 +13,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = SessionConfig::builder("Write a haiku about Rust programming")
         .output_format(OutputFormat::StreamingJson)
-        .max_turns(1)
         .verbose(true) // Ensure verbose is on
         .build()?;
 

@@ -24,7 +24,6 @@ async fn test_simple_query() {
 
     let config = SessionConfig::builder("Say 'Hello, Rust!' and nothing else")
         .output_format(OutputFormat::Text)
-        .max_turns(1)
         .build()
         .unwrap();
 
@@ -79,11 +78,10 @@ async fn test_mcp_config() {
     let mut servers = HashMap::new();
     servers.insert(
         "calculator".to_string(),
-        MCPServer {
-            command: "npx".to_string(),
-            args: vec!["@modelcontextprotocol/server-calculator".to_string()],
-            env: None,
-        },
+        MCPServer::stdio(
+            "npx",
+            vec!["@modelcontextprotocol/server-calculator".to_string()],
+        ),
     );
 
     let mcp_config = MCPConfig {
@@ -93,7 +91,6 @@ async fn test_mcp_config() {
     let config = SessionConfig::builder("What is 123 * 456?")
         .mcp_config(mcp_config)
         .output_format(OutputFormat::Json)
-        .max_turns(1)
         .build()
         .unwrap();
 
@@ -119,7 +116,6 @@ async fn test_haiku_model() {
     let config = SessionConfig::builder("Say 'Hello from Haiku!' and nothing else")
         .model(Model::Haiku)
         .output_format(OutputFormat::Text)
-        .max_turns(1)
         .build()
         .unwrap();
 
