@@ -98,3 +98,9 @@ git_tag_name = "anthropic-async-v{{ version }}"
 git_tag_enable = false
 release = true
 
+[[package]]
+name = "coding_agent_tools"
+changelog_path = "coding_agent_tools/CHANGELOG.md"
+git_tag_name = "coding_agent_tools-v{{ version }}"
+release = true
+
