@@ -33,7 +33,7 @@ impl CodingAgentTools {
     /// List files and directories (gitignore-aware)
     #[universal_tool(
         description = "List files and directories. Depth: 0=header only, 1=children (default), 2-10=tree. Filter with show='files'|'dirs'|'all'. Gitignore-aware. For shallow queries, call with same params again for next page.",
-        mcp(read_only = true, idempotent = true, output = "text")
+        mcp(read_only = true, output = "text")
     )]
     pub async fn ls(
         &self,
