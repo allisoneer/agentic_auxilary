@@ -36,6 +36,12 @@ Production-ready asynchronous client for Anthropic's API with prompt caching sup
 - Retry with exponential backoff, beta feature support
 - Strong typing and examples
 
+### 🔧 [Coding Agent Tools](coding_agent_tools/)
+CLI + MCP tools for coding assistants with gitignore-aware directory listing.
+- Dual CLI and MCP interfaces
+- Respects .gitignore and built-in ignore patterns
+- Implicit pagination for large directories
+
 ## Quick Start
 
 ```bash
@@ -90,6 +96,11 @@ cargo install gpt5_reasoner
 ### Install pr_comments
 ```bash
 cargo install pr_comments
+```
+
+### Install coding_agent_tools
+```bash
+cargo install coding_agent_tools
 ```
 
 ### Use anthropic-async in your project
