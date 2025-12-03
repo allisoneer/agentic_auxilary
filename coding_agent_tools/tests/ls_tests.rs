@@ -798,3 +798,243 @@ mod ls_stateful_pagination_tests {
         assert_eq!(out_reset.entries.len(), 150);
     }
 }
+
+// =============================================================================
+// Phase 7: Parallel Pagination and Cache Behavior Tests
+// =============================================================================
+
+mod ls_parallel_and_cache_tests {
+    use coding_agent_tools::CodingAgentTools;
+    use coding_agent_tools::types::Show;
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    fn create_files(root: &Path, count: usize) {
+        for i in 0..count {
+            let name = format!("file_{:04}.txt", i);
+            fs::write(root.join(name), "x").unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn parallel_identical_calls_serialize_and_paginate() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 250);
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Launch two identical ls calls in parallel
+        let (a, b) = tokio::join!(
+            tools.ls(Some(path.clone()), None, None, None, None),
+            tools.ls(Some(path.clone()), None, None, None, None)
+        );
+        let out_a = a.unwrap();
+        let out_b = b.unwrap();
+
+        // Both should return 100 entries (page size for Show::All at depth 1)
+        assert_eq!(out_a.entries.len(), 100);
+        assert_eq!(out_b.entries.len(), 100);
+
+        // Ensure pages are disjoint (one got page 1, other got page 2)
+        let set_a: HashSet<_> = out_a.entries.iter().map(|e| e.path.clone()).collect();
+        let set_b: HashSet<_> = out_b.entries.iter().map(|e| e.path.clone()).collect();
+        assert!(
+            set_a.is_disjoint(&set_b),
+            "Parallel identical calls should return disjoint pages"
+        );
+    }
+
+    #[tokio::test]
+    async fn parallel_different_params_do_not_contend() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 150);
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Launch two ls calls with different params in parallel
+        let (a, b) = tokio::join!(
+            tools.ls(Some(path.clone()), None, None, None, None),
+            tools.ls(Some(path.clone()), None, Some(Show::Files), None, None)
+        );
+        let out_a = a.unwrap();
+        let out_b = b.unwrap();
+
+        // Both should start at first entry (different cache keys)
+        assert_eq!(out_a.entries.first().unwrap().path, "file_0000.txt");
+        assert_eq!(out_b.entries.first().unwrap().path, "file_0000.txt");
+    }
+
+    #[tokio::test]
+    async fn cache_prevents_rescan_between_pages() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 101);
+
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Page 1
+        let out1 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(out1.entries.len(), 100);
+        assert!(out1.has_more);
+
+        // Add a new file after first page (should not appear until cache expires)
+        fs::write(root.join("zzz_new.txt"), "x").unwrap();
+
+        // Page 2 should still be exactly the last original entry (cached)
+        let out2 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(out2.entries.len(), 1);
+        assert_eq!(out2.entries[0].path, "file_0100.txt");
+        assert!(!out2.has_more);
+    }
+
+    #[tokio::test]
+    async fn removal_after_final_page_resets_session() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 150);
+
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Page 1 (100 entries), page 2 (50 entries)
+        let _ = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        let out2 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert!(!out2.has_more, "page 2 should be last page");
+
+        // Next call should restart to page 1 (cache entry was removed)
+        let out3 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(out3.entries.first().unwrap().path, "file_0000.txt");
+    }
+}
+
+mod truncation_sentinel_tests {
+    use coding_agent_tools::types::{TRUNCATION_SENTINEL, encode_truncation_info};
+
+    #[test]
+    fn encode_format_contains_numbers() {
+        let s = encode_truncation_info(100, 250, 100);
+        assert!(s.starts_with(TRUNCATION_SENTINEL));
+        assert!(s.contains("shown=100"));
+        assert!(s.contains("total=250"));
+        assert!(s.contains("page_size=100"));
+    }
+
+    #[test]
+    fn encode_different_values() {
+        let s = encode_truncation_info(50, 1000, 50);
+        assert!(s.contains("shown=50"));
+        assert!(s.contains("total=1000"));
+        assert!(s.contains("page_size=50"));
+    }
+}
+
+mod enhanced_truncation_message_tests {
+    use coding_agent_tools::CodingAgentTools;
+    use std::fs;
+    use std::path::Path;
+    use tempfile::TempDir;
+    use universal_tool_core::mcp::McpFormatter;
+
+    fn create_files(root: &Path, count: usize) {
+        for i in 0..count {
+            let name = format!("file_{:04}.txt", i);
+            fs::write(root.join(name), "x").unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn truncation_message_shows_counts_and_pages_remaining() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 250); // 250 files = 3 pages (100, 100, 50)
+
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Page 1: showing 100 of 250, 2 pages remaining
+        let out1 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        let text1 = out1.mcp_format_text();
+        assert!(
+            text1.contains("showing 100 of 250 entries"),
+            "Expected 'showing 100 of 250 entries' in: {}",
+            text1
+        );
+        assert!(
+            text1.contains("2 pages remaining"),
+            "Expected '2 pages remaining' in: {}",
+            text1
+        );
+        // Should have reminder since >1 page remains
+        assert!(
+            text1.contains("REMINDER"),
+            "Expected REMINDER when >1 page remains in: {}",
+            text1
+        );
+
+        // Page 2: showing 200 of 250, 1 page remaining
+        let out2 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        let text2 = out2.mcp_format_text();
+        assert!(
+            text2.contains("showing 200 of 250 entries"),
+            "Expected 'showing 200 of 250 entries' in: {}",
+            text2
+        );
+        assert!(
+            text2.contains("1 page remaining"),
+            "Expected '1 page remaining' (singular) in: {}",
+            text2
+        );
+        // Should NOT have reminder since only 1 page remains
+        assert!(
+            !text2.contains("REMINDER"),
+            "Should not have REMINDER when only 1 page remains in: {}",
+            text2
+        );
+    }
+
+    #[tokio::test]
+    async fn sentinel_not_visible_in_normal_warnings() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 150);
+
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        let out = tools.ls(Some(path), None, None, None, None).await.unwrap();
+        let text = out.mcp_format_text();
+
+        // The sentinel should not appear in the formatted output
+        assert!(
+            !text.contains("<<<mcp:ls:page_info>>>"),
+            "Sentinel should not be visible in output: {}",
+            text
+        );
+    }
+}

@@ -4,14 +4,13 @@ pub mod types;
 pub mod walker;
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use types::{Depth, LsOutput, Show};
 use universal_tool_core::prelude::*;
 
 #[derive(Clone)]
 pub struct CodingAgentTools {
-    /// Pagination state for MCP (persists across calls when Arc-wrapped)
-    pager: Arc<Mutex<Option<pagination::LastQuery>>>,
+    /// Two-level pagination cache for MCP (persists across calls when Arc-wrapped)
+    pager: Arc<pagination::PaginationCache>,
 }
 
 impl Default for CodingAgentTools {
@@ -23,7 +22,7 @@ impl Default for CodingAgentTools {
 impl CodingAgentTools {
     pub fn new() -> Self {
         Self {
-            pager: Arc::new(Mutex::new(None)),
+            pager: Arc::new(pagination::PaginationCache::new()),
         }
     }
 }
@@ -93,9 +92,10 @@ impl CodingAgentTools {
             include_hidden,
         };
 
-        let result = walker::list(&cfg)?;
+        // Sweep expired cache entries opportunistically
+        self.pager.sweep_expired();
 
-        // Determine pagination
+        // Determine pagination params
         let page_size = pagination::page_size_for(show_val, depth_val);
         let query_key = pagination::make_key(
             &abs_root,
@@ -105,34 +105,48 @@ impl CodingAgentTools {
             &user_ignores,
         );
 
-        // Get offset from pagination state
-        let offset = {
-            let mut pager = self.pager.lock().await;
+        // Acquire per-query lock (level 2), serialize same-param calls
+        let qlock = self.pager.get_or_create(&query_key);
+        let (entries, has_more, warnings, shown, total) = {
+            let mut st = qlock.state.lock().unwrap();
 
-            let same_and_fresh = matches!(
-                pager.as_ref(),
-                Some(last) if last.key == query_key && last.is_fresh()
-            );
-
-            if same_and_fresh {
-                // Same query, advance to next page
-                pager.as_mut().unwrap().advance()
-            } else {
-                // New query or expired - create state and advance to first page offset
-                pager
-                    .insert(pagination::LastQuery::new(query_key, page_size))
-                    .advance()
+            // Fill cache if empty or expired
+            if st.is_empty() || st.is_expired() {
+                let result = walker::list(&cfg)?;
+                st.reset(result.entries, result.warnings, page_size);
             }
+
+            // Compute current page from cached results
+            let offset = st.next_offset;
+            let (page, has_more) = pagination::paginate_slice(&st.results, offset, st.page_size);
+
+            // Advance offset for next call
+            st.next_offset = st.next_offset.saturating_add(st.page_size);
+
+            // Compute counts for truncation message
+            let shown = (offset + page.len()).min(st.results.len());
+            let total = st.results.len();
+
+            (page, has_more, st.warnings.clone(), shown, total)
         };
 
-        // Apply pagination
-        let (paginated_entries, has_more) = pagination::paginate(result.entries, offset, page_size);
+        // Prepare enhanced truncation info using sentinel
+        let mut all_warnings = warnings;
+        if has_more {
+            let encoded = types::encode_truncation_info(shown, total, page_size);
+            all_warnings.insert(0, encoded);
+        }
+
+        // If this was the last page, proactively remove cache entry
+        if !has_more {
+            self.pager.remove_if_same(&query_key, &qlock);
+        }
 
         Ok(LsOutput {
             root: abs_root,
-            entries: paginated_entries,
+            entries,
             has_more,
-            warnings: result.warnings,
+            warnings: all_warnings,
         })
     }
 }
