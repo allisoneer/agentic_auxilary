@@ -707,3 +707,94 @@ mod pagination_integration_tests {
         assert_eq!(page3[0].path, "file_0200.txt");
     }
 }
+
+// =============================================================================
+// Phase 6: Stateful Pagination Integration Tests
+// =============================================================================
+
+mod ls_stateful_pagination_tests {
+    use coding_agent_tools::CodingAgentTools;
+    use coding_agent_tools::types::Show;
+    use std::fs;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    fn create_files(root: &Path, count: usize) {
+        for i in 0..count {
+            let name = format!("file_{:04}.txt", i);
+            fs::write(root.join(name), "x").unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn ls_auto_paginates_across_calls() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 250);
+
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Page 1
+        let out1 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(out1.entries.len(), 100);
+        assert!(out1.has_more, "should have more after first page");
+        assert_eq!(out1.entries.first().unwrap().path, "file_0000.txt");
+        assert_eq!(out1.entries.last().unwrap().path, "file_0099.txt");
+
+        // Page 2 (identical params)
+        let out2 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(out2.entries.len(), 100);
+        assert!(out2.has_more, "should have more after second page");
+        assert_eq!(out2.entries.first().unwrap().path, "file_0100.txt");
+        assert_eq!(out2.entries.last().unwrap().path, "file_0199.txt");
+
+        // Page 3 (identical params)
+        let out3 = tools.ls(Some(path), None, None, None, None).await.unwrap();
+        assert_eq!(out3.entries.len(), 50);
+        assert!(!out3.has_more, "no more pages after last page");
+        assert_eq!(out3.entries.first().unwrap().path, "file_0200.txt");
+        assert_eq!(out3.entries.last().unwrap().path, "file_0249.txt");
+    }
+
+    #[tokio::test]
+    async fn ls_new_params_reset_pagination() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        create_files(root, 150);
+
+        let tools = CodingAgentTools::new();
+        let path = root.to_string_lossy().to_string();
+
+        // Page 1 (default show=all)
+        let _out1 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+
+        // Page 2 (identical params)
+        let out2 = tools
+            .ls(Some(path.clone()), None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(out2.entries.first().unwrap().path, "file_0100.txt");
+
+        // Change param: show=files (filtered mode with page_size=1000) should reset to page 1
+        let out_reset = tools
+            .ls(Some(path), None, Some(Show::Files), None, None)
+            .await
+            .unwrap();
+        assert_eq!(out_reset.entries.first().unwrap().path, "file_0000.txt");
+        assert!(
+            !out_reset.has_more,
+            "all files should fit in one page at page_size=1000"
+        );
+        assert_eq!(out_reset.entries.len(), 150);
+    }
+}

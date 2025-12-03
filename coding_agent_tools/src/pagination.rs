@@ -71,7 +71,7 @@ pub fn make_key(root: &str, depth: u8, show: Show, hidden: bool, ignores: &[Stri
 
 /// Determine the page size based on show mode and depth.
 pub fn page_size_for(show: Show, depth: u8) -> usize {
-    // Deep queries (depth >= 2) are capped, no pagination
+    // Deep queries (depth >= 2) are capped per page but still paginate across calls
     if depth >= 2 {
         MAX_DEEP_ENTRIES
     } else {

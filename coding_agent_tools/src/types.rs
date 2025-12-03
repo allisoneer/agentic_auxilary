@@ -126,7 +126,7 @@ impl McpFormatter for LsOutput {
         if self.has_more {
             let _ = writeln!(
                 out,
-                "(truncated — call again with same params for next page)"
+                "(truncated — call again with same params for next page; for deep trees consider listing a subdirectory or using show='files'|'dirs')"
             );
         }
 
