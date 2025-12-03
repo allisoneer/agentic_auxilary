@@ -20,7 +20,7 @@ enum Commands {
     Ls {
         #[arg(long)]
         path: Option<String>,
-        #[arg(long)]
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=10))]
         depth: Option<u8>,
         #[arg(long, value_parser = ["all", "files", "dirs"])]
         show: Option<String>,
@@ -69,8 +69,14 @@ async fn run_cli_ls(
     // Fresh instance each CLI invocation = no pagination state
     let tools = CodingAgentTools::new();
 
-    let depth = depth.and_then(|d| Depth::new(d).ok());
-    let show = show.and_then(|s| s.parse::<Show>().ok());
+    let depth = depth
+        .map(Depth::new)
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
+    let show = show
+        .map(|s| s.parse::<Show>())
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
     let ignore = if ignore.is_empty() {
         None
     } else {
