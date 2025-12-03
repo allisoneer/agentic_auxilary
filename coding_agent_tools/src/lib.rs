@@ -109,16 +109,19 @@ impl CodingAgentTools {
         let offset = {
             let mut pager = self.pager.lock().await;
 
-            match pager.as_mut() {
-                Some(last) if last.key == query_key && last.is_fresh() => {
-                    // Same query, advance to next page
-                    last.advance()
-                }
-                _ => {
-                    // New query or expired, start from beginning
-                    *pager = Some(pagination::LastQuery::new(query_key, page_size));
-                    0
-                }
+            let same_and_fresh = matches!(
+                pager.as_ref(),
+                Some(last) if last.key == query_key && last.is_fresh()
+            );
+
+            if same_and_fresh {
+                // Same query, advance to next page
+                pager.as_mut().unwrap().advance()
+            } else {
+                // New query or expired - create state and advance to first page offset
+                pager
+                    .insert(pagination::LastQuery::new(query_key, page_size))
+                    .advance()
             }
         };
 
