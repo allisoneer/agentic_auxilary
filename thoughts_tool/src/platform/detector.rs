@@ -96,7 +96,11 @@ fn detect_linux() -> Result<PlatformInfo> {
     // Check for mergerfs
     let (has_mergerfs, mergerfs_version) = check_mergerfs();
     if has_mergerfs {
-        info!("Found mergerfs version: {:?}", mergerfs_version);
+        let version_text = match mergerfs_version {
+            Some(ref version) => version,
+            None => &"unknown".to_string(),
+        };
+        info!("Found mergerfs version: {:}", version_text)
     } else {
         info!("mergerfs not found");
     }
