@@ -3774,7 +3774,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
  "anyhow",
  "assert_cmd",
