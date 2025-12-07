@@ -87,6 +87,81 @@ pub fn canonical_reference_key(url: &str) -> Result<(String, String, String)> {
     Ok((host.to_lowercase(), org.to_lowercase(), repo.to_lowercase()))
 }
 
+// --- MCP HTTPS-only validation helpers ---
+
+/// True if the URL uses SSH schemes we do not support in MCP
+pub fn is_ssh_url(s: &str) -> bool {
+    let s = s.trim();
+    s.starts_with("git@") || s.starts_with("ssh://")
+}
+
+/// True if URL starts with https://
+pub fn is_https_url(s: &str) -> bool {
+    s.trim_start().to_lowercase().starts_with("https://")
+}
+
+/// Validate MCP add_reference input:
+/// - Reject SSH and http://
+/// - Reject subpaths
+/// - Accept GitHub web or clone URLs (https://github.com/org/repo[.git])
+/// - Accept generic https://*.git clone URLs
+pub fn validate_reference_url_https_only(url: &str) -> Result<()> {
+    let url = url.trim();
+
+    // Reject subpaths (URL:subpath)
+    let (base, subpath) = parse_url_and_subpath(url);
+    if subpath.is_some() {
+        bail!(
+            "Cannot add URL with subpath as a reference: {}\n\nReferences are repo-level only.",
+            url
+        );
+    }
+
+    if is_ssh_url(&base) {
+        bail!(
+            "SSH URLs are not supported by the MCP add_reference tool: {}\n\n\
+             Please provide an HTTPS URL, e.g.:\n  https://github.com/org/repo(.git)\n\n\
+             If you must use SSH, run the CLI instead:\n  thoughts references add <git@... or ssh://...>",
+            base
+        );
+    }
+    if !is_https_url(&base) {
+        bail!(
+            "Only HTTPS URLs are supported by the MCP add_reference tool: {}\n\n\
+             Please provide an HTTPS URL, e.g.:\n  https://github.com/org/repo(.git)",
+            base
+        );
+    }
+
+    // Determine host and require either GitHub web/clone, or generic https://*.git
+    let host = get_host_from_url(&base)?;
+    if host == "github.com" {
+        // Ensure org/repo parseability
+        extract_org_repo_from_url(&base).map_err(|e| {
+            anyhow::anyhow!(
+                "Invalid GitHub URL. Expected https://github.com/<org>/<repo>[.git]\nDetails: {}",
+                e
+            )
+        })?;
+        Ok(())
+    } else {
+        // Generic host: must end with .git and parse as org/repo
+        if !base.ends_with(".git") {
+            bail!(
+                "For non-GitHub hosts, please provide an HTTPS clone URL ending with .git:\n  {}",
+                base
+            );
+        }
+        extract_org_repo_from_url(&base).map_err(|e| {
+            anyhow::anyhow!(
+                "Invalid repository URL (expected host/org/repo.git).\nDetails: {}",
+                e
+            )
+        })?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,5 +205,51 @@ mod ref_validation_tests {
         let b = canonical_reference_key("https://github.com/user/repo").unwrap();
         assert_eq!(a, b);
         assert_eq!(a, ("github.com".into(), "user".into(), "repo".into()));
+    }
+}
+
+#[cfg(test)]
+mod mcp_https_validation_tests {
+    use super::*;
+
+    #[test]
+    fn test_https_only_accepts_github_web_and_clone() {
+        assert!(validate_reference_url_https_only("https://github.com/org/repo").is_ok());
+        assert!(validate_reference_url_https_only("https://github.com/org/repo.git").is_ok());
+    }
+
+    #[test]
+    fn test_https_only_accepts_generic_dot_git() {
+        assert!(validate_reference_url_https_only("https://gitlab.com/group/proj.git").is_ok());
+    }
+
+    #[test]
+    fn test_https_only_rejects_ssh_and_http_and_subpath() {
+        assert!(validate_reference_url_https_only("git@github.com:org/repo.git").is_err());
+        assert!(validate_reference_url_https_only("ssh://host/org/repo.git").is_err());
+        assert!(validate_reference_url_https_only("http://github.com/org/repo.git").is_err());
+        assert!(validate_reference_url_https_only("https://github.com/org/repo.git:docs").is_err());
+    }
+
+    #[test]
+    fn test_is_ssh_url_helper() {
+        assert!(is_ssh_url("git@github.com:org/repo.git"));
+        assert!(is_ssh_url("ssh://user@host/repo.git"));
+        assert!(!is_ssh_url("https://github.com/org/repo"));
+        assert!(!is_ssh_url("http://github.com/org/repo"));
+    }
+
+    #[test]
+    fn test_is_https_url_helper() {
+        assert!(is_https_url("https://github.com/org/repo"));
+        assert!(is_https_url("HTTPS://github.com/org/repo")); // case-insensitive
+        assert!(!is_https_url("http://github.com/org/repo"));
+        assert!(!is_https_url("git@github.com:org/repo"));
+    }
+
+    #[test]
+    fn test_https_only_rejects_non_github_without_dot_git() {
+        // Non-GitHub without .git suffix should be rejected
+        assert!(validate_reference_url_https_only("https://gitlab.com/group/proj").is_err());
     }
 }
