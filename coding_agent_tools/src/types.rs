@@ -4,6 +4,50 @@ use schemars::schema::{InstanceType, Metadata, NumberValidation, Schema, SchemaO
 use serde::{Deserialize, Serialize};
 use universal_tool_core::mcp::McpFormatter;
 
+/// Agent type determines the model and behavior characteristics.
+/// - Locator: Fast discovery (haiku), finds WHERE things are
+/// - Analyzer: Deep analysis (sonnet), understands HOW things work
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentType {
+    #[default]
+    Locator,
+    Analyzer,
+}
+
+/// Agent location determines the working context and available tools.
+/// - Codebase: Current repository (code, configs, tests)
+/// - Thoughts: Thought documents in active branch
+/// - References: Cloned reference repositories
+/// - Web: Internet search (no working directory)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentLocation {
+    #[default]
+    Codebase,
+    Thoughts,
+    References,
+    Web,
+}
+
+/// Output from spawn_agent tool - plain text response from the subagent.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AgentOutput {
+    pub text: String,
+}
+
+impl AgentOutput {
+    pub fn new(text: String) -> Self {
+        Self { text }
+    }
+}
+
+impl McpFormatter for AgentOutput {
+    fn mcp_format_text(&self) -> String {
+        self.text.clone()
+    }
+}
+
 /// Depth of directory traversal (0-10).
 /// - 0: Header only (just the directory path)
 /// - 1: Immediate children only (like `ls`)
@@ -208,5 +252,77 @@ impl McpFormatter for LsOutput {
         }
 
         out.trim_end().to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_type_default() {
+        let default = AgentType::default();
+        assert_eq!(default, AgentType::Locator);
+    }
+
+    #[test]
+    fn test_agent_location_default() {
+        let default = AgentLocation::default();
+        assert_eq!(default, AgentLocation::Codebase);
+    }
+
+    #[test]
+    fn test_agent_type_serde_roundtrip() {
+        for agent_type in [AgentType::Locator, AgentType::Analyzer] {
+            let json = serde_json::to_string(&agent_type).unwrap();
+            let deserialized: AgentType = serde_json::from_str(&json).unwrap();
+            assert_eq!(agent_type, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_agent_location_serde_roundtrip() {
+        for location in [
+            AgentLocation::Codebase,
+            AgentLocation::Thoughts,
+            AgentLocation::References,
+            AgentLocation::Web,
+        ] {
+            let json = serde_json::to_string(&location).unwrap();
+            let deserialized: AgentLocation = serde_json::from_str(&json).unwrap();
+            assert_eq!(location, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_agent_type_snake_case_serialization() {
+        assert_eq!(
+            serde_json::to_string(&AgentType::Locator).unwrap(),
+            "\"locator\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentType::Analyzer).unwrap(),
+            "\"analyzer\""
+        );
+    }
+
+    #[test]
+    fn test_agent_location_snake_case_serialization() {
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::Codebase).unwrap(),
+            "\"codebase\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::Thoughts).unwrap(),
+            "\"thoughts\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::References).unwrap(),
+            "\"references\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::Web).unwrap(),
+            "\"web\""
+        );
     }
 }

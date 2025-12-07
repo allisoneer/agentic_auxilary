@@ -21,6 +21,7 @@ path = "src/lib.rs"
 
 [dependencies]
 universal-tool-core = { version = "0.2.3", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+claudecode = { path = "../claudecode_rs" }
 ignore = "0.4"
 globset = "0.4"
 tokio = { version = "1", features = ["full"] }
