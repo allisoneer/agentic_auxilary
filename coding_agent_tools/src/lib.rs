@@ -1,11 +1,13 @@
 pub mod agent;
+pub mod glob;
+pub mod grep;
 pub mod pagination;
 pub mod paths;
 pub mod types;
 pub mod walker;
 
 use std::sync::Arc;
-use types::{AgentOutput, Depth, LsOutput, Show};
+use types::{AgentOutput, Depth, GlobOutput, GrepOutput, LsOutput, OutputMode, Show, SortOrder};
 use universal_tool_core::prelude::*;
 
 #[derive(Clone)]
@@ -241,6 +243,115 @@ impl CodingAgentTools {
         Err(ToolError::internal(
             "Claude session finished without text content",
         ))
+    }
+
+    /// Search the codebase using a regex pattern (gitignore-aware).
+    #[universal_tool(
+        description = "Regex-based search. Modes: files (default), content, count. Stateless pagination via head_limit+offset.",
+        mcp(read_only = true, output = "text")
+    )]
+    pub async fn search_grep(
+        &self,
+        #[universal_tool_param(description = "Regex pattern to search for")] pattern: String,
+        #[universal_tool_param(description = "Directory path (absolute or relative to cwd)")]
+        path: Option<String>,
+        #[universal_tool_param(
+            description = "Output mode: 'files' (default), 'content', or 'count'"
+        )]
+        mode: Option<OutputMode>,
+        #[universal_tool_param(description = "Include-only glob patterns (files to consider)")]
+        globs: Option<Vec<String>>,
+        #[universal_tool_param(description = "Additional glob patterns to ignore (exclude)")]
+        ignore: Option<Vec<String>>,
+        #[universal_tool_param(description = "Include hidden files (default: false)")]
+        include_hidden: Option<bool>,
+        #[universal_tool_param(description = "Case-insensitive matching (default: false)")]
+        case_insensitive: Option<bool>,
+        #[universal_tool_param(
+            description = "Allow '.' to match newlines; patterns may span lines (default: false)"
+        )]
+        multiline: Option<bool>,
+        #[universal_tool_param(description = "Show line numbers in content mode (default: true)")]
+        line_numbers: Option<bool>,
+        #[universal_tool_param(
+            description = "Context lines before and after matches (overridden by context_before/after if provided)"
+        )]
+        context: Option<u32>,
+        #[universal_tool_param(description = "Context lines before match")] context_before: Option<
+            u32,
+        >,
+        #[universal_tool_param(description = "Context lines after match")] context_after: Option<
+            u32,
+        >,
+        #[universal_tool_param(description = "Search binary files as text (default: false)")]
+        include_binary: Option<bool>,
+        #[universal_tool_param(
+            description = "Max results to return (default: 200, capped at 1000)"
+        )]
+        head_limit: Option<usize>,
+        #[universal_tool_param(description = "Skip the first N results (default: 0)")]
+        offset: Option<usize>,
+    ) -> Result<GrepOutput, ToolError> {
+        let path_str = path.unwrap_or_else(|| ".".into());
+        let abs_root = paths::to_abs_string(&path_str);
+        let cfg = grep::GrepConfig {
+            root: abs_root,
+            pattern,
+            mode: mode.unwrap_or_default(),
+            include_globs: globs.unwrap_or_default(),
+            ignore_globs: ignore.unwrap_or_default(),
+            include_hidden: include_hidden.unwrap_or(false),
+            case_insensitive: case_insensitive.unwrap_or(false),
+            multiline: multiline.unwrap_or(false),
+            line_numbers: line_numbers.unwrap_or(true),
+            context,
+            context_before,
+            context_after,
+            include_binary: include_binary.unwrap_or(false),
+            head_limit: head_limit.unwrap_or(200),
+            offset: offset.unwrap_or(0),
+        };
+        grep::run(cfg)
+    }
+
+    /// Match files/directories by glob pattern (gitignore-aware).
+    #[universal_tool(
+        description = "Glob-based path match. Sorting by name (default) or mtime (newest first). Stateless pagination via head_limit+offset.",
+        mcp(read_only = true, output = "text")
+    )]
+    pub async fn search_glob(
+        &self,
+        #[universal_tool_param(description = "Glob pattern to match against (e.g., '**/*.rs')")]
+        pattern: String,
+        #[universal_tool_param(description = "Directory path (absolute or relative to cwd)")]
+        path: Option<String>,
+        #[universal_tool_param(description = "Additional glob patterns to ignore (exclude)")]
+        ignore: Option<Vec<String>>,
+        #[universal_tool_param(description = "Include hidden files (default: false)")]
+        include_hidden: Option<bool>,
+        #[universal_tool_param(
+            description = "Sort order: 'name' (default) or 'mtime' (newest first)"
+        )]
+        sort: Option<SortOrder>,
+        #[universal_tool_param(
+            description = "Max results to return (default: 500, capped at 1000)"
+        )]
+        head_limit: Option<usize>,
+        #[universal_tool_param(description = "Skip the first N results (default: 0)")]
+        offset: Option<usize>,
+    ) -> Result<GlobOutput, ToolError> {
+        let path_str = path.unwrap_or_else(|| ".".into());
+        let abs_root = paths::to_abs_string(&path_str);
+        let cfg = glob::GlobConfig {
+            root: abs_root,
+            pattern,
+            ignore_globs: ignore.unwrap_or_default(),
+            include_hidden: include_hidden.unwrap_or(false),
+            sort: sort.unwrap_or_default(),
+            head_limit: head_limit.unwrap_or(500),
+            offset: offset.unwrap_or(0),
+        };
+        glob::run(cfg)
     }
 }
 

@@ -255,6 +255,142 @@ impl McpFormatter for LsOutput {
     }
 }
 
+// =============================================================================
+// search_grep and search_glob types
+// =============================================================================
+
+/// Output mode for search_grep results.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputMode {
+    /// Return unique file paths containing matches (most token-efficient)
+    #[default]
+    Files,
+    /// Return matching lines with context
+    Content,
+    /// Return total match count only
+    Count,
+}
+
+/// Sort order for search_glob results.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    /// Alphabetical by name (case-insensitive)
+    #[default]
+    Name,
+    /// Newest modification time first
+    Mtime,
+}
+
+/// Footer reminder appended by search tools.
+pub const SEARCH_REMINDER: &str = "REMINDER: You should rarely need to call this repeatedly. If you didn't find \
+what you need, use spawn_agent(type='locator', location='codebase', \
+prompt='describe what you're looking for') instead of issuing more searches.";
+
+/// Output from search_grep tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GrepOutput {
+    /// Root directory searched
+    pub root: String,
+    /// Output mode used
+    pub mode: OutputMode,
+    /// Lines to display (mode-specific):
+    /// - files: relative file paths
+    /// - content: `path:line: content`
+    /// - count: usually empty; see summary
+    pub lines: Vec<String>,
+    /// Whether there are more results beyond head_limit
+    pub has_more: bool,
+    /// Warnings encountered during search (e.g., binary files skipped)
+    pub warnings: Vec<String>,
+    /// Optional summary (e.g., total matches for count mode)
+    pub summary: Option<String>,
+}
+
+impl McpFormatter for GrepOutput {
+    fn mcp_format_text(&self) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+
+        let mode_str = match self.mode {
+            OutputMode::Files => "files",
+            OutputMode::Content => "content",
+            OutputMode::Count => "count",
+        };
+        let _ = writeln!(
+            out,
+            "grep results ({}) in {}/",
+            mode_str,
+            self.root.trim_end_matches('/')
+        );
+
+        for line in &self.lines {
+            let _ = writeln!(out, "  {}", line);
+        }
+
+        if let Some(ref s) = self.summary {
+            let _ = writeln!(out, "{}", s);
+        }
+
+        if self.has_more {
+            let _ = writeln!(
+                out,
+                "(truncated — pass explicit head_limit and offset for next page)"
+            );
+        }
+
+        for w in &self.warnings {
+            let _ = writeln!(out, "Note: {}", w);
+        }
+
+        // Required REMINDER footer on every call
+        let _ = writeln!(out, "{}", SEARCH_REMINDER);
+
+        out.trim_end().to_string()
+    }
+}
+
+/// Output from search_glob tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GlobOutput {
+    /// Root directory searched
+    pub root: String,
+    /// Matched file/directory paths (relative to root)
+    pub entries: Vec<String>,
+    /// Whether there are more results beyond head_limit
+    pub has_more: bool,
+    /// Warnings encountered during search
+    pub warnings: Vec<String>,
+}
+
+impl McpFormatter for GlobOutput {
+    fn mcp_format_text(&self) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+
+        let _ = writeln!(out, "glob results in {}/", self.root.trim_end_matches('/'));
+        for e in &self.entries {
+            let _ = writeln!(out, "  {}", e);
+        }
+
+        if self.has_more {
+            let _ = writeln!(
+                out,
+                "(truncated — pass explicit head_limit and offset for next page)"
+            );
+        }
+
+        for w in &self.warnings {
+            let _ = writeln!(out, "Note: {}", w);
+        }
+
+        let _ = writeln!(out, "{}", SEARCH_REMINDER);
+
+        out.trim_end().to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

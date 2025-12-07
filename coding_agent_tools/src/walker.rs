@@ -69,7 +69,8 @@ pub const BUILTIN_IGNORES: &[&str] = &[
 ];
 
 /// Build a GlobSet from built-in and user patterns.
-fn build_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+/// Public for reuse in grep/glob tools.
+pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
     let mut builder = GlobSetBuilder::new();
     for pattern in BUILTIN_IGNORES
         .iter()
@@ -111,7 +112,7 @@ pub fn list(cfg: &WalkConfig<'_>) -> Result<WalkResult, ToolError> {
         });
     }
 
-    let globset = build_globset(cfg.user_ignores)?;
+    let globset = build_ignore_globset(cfg.user_ignores)?;
 
     // Configure the walker
     let mut builder = WalkBuilder::new(cfg.root);
@@ -244,7 +245,7 @@ mod tests {
 
     #[test]
     fn builtin_ignores_compile() {
-        let gs = build_globset(&[]).unwrap();
+        let gs = build_ignore_globset(&[]).unwrap();
         assert!(gs.is_match("node_modules/foo.js"));
         assert!(gs.is_match("src/target/debug"));
         assert!(!gs.is_match("src/main.rs"));
@@ -252,14 +253,14 @@ mod tests {
 
     #[test]
     fn user_patterns_work() {
-        let gs = build_globset(&["*.log".into(), "dist/".into()]).unwrap();
+        let gs = build_ignore_globset(&["*.log".into(), "dist/".into()]).unwrap();
         assert!(gs.is_match("app.log"));
         assert!(gs.is_match("dist/bundle.js"));
     }
 
     #[test]
     fn invalid_pattern_errors() {
-        let result = build_globset(&["[invalid".into()]);
+        let result = build_ignore_globset(&["[invalid".into()]);
         assert!(result.is_err());
     }
 
