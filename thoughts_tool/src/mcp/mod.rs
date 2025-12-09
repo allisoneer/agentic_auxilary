@@ -4,8 +4,15 @@ use std::fs;
 use universal_tool_core::mcp::{McpFormatter, ServiceExt};
 use universal_tool_core::prelude::*;
 
-use crate::config::RepoConfigManager;
-use crate::config::extract_org_repo_from_url;
+use crate::config::validation::{canonical_reference_key, validate_reference_url_https_only};
+use crate::config::{
+    ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
+    extract_org_repo_from_url,
+};
+use crate::git::utils::get_control_repo_root;
+use crate::mount::auto_mount::update_active_mounts;
+use crate::mount::get_mount_manager;
+use crate::platform::detect_platform;
 use crate::utils::validation::validate_simple_filename;
 use crate::workspace::{ActiveWork, ensure_active_work};
 
@@ -137,6 +144,54 @@ impl McpFormatter for ReferencesList {
                 _ => {
                     out.push_str(&format!("\n{}", rel));
                 }
+            }
+        }
+        out
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AddReferenceOk {
+    pub url: String,
+    pub org: String,
+    pub repo: String,
+    pub mount_path: String,
+    pub mount_target: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mapping_path: Option<String>,
+    pub already_existed: bool,
+    pub config_updated: bool,
+    pub cloned: bool,
+    pub mounted: bool,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
+impl McpFormatter for AddReferenceOk {
+    fn mcp_format_text(&self) -> String {
+        let mut out = String::new();
+        if self.already_existed {
+            out.push_str("✓ Reference already exists (idempotent)\n");
+        } else {
+            out.push_str("✓ Added reference\n");
+        }
+        out.push_str(&format!(
+            "  URL: {}\n  Org/Repo: {}/{}\n  Mount: {}\n  Target: {}",
+            self.url, self.org, self.repo, self.mount_path, self.mount_target
+        ));
+        if let Some(mp) = &self.mapping_path {
+            out.push_str(&format!("\n  Mapping: {}", mp));
+        } else {
+            out.push_str("\n  Mapping: <none>");
+        }
+        out.push_str(&format!(
+            "\n  Config updated: {}\n  Cloned: {}\n  Mounted: {}",
+            self.config_updated, self.cloned, self.mounted
+        ));
+        if !self.warnings.is_empty() {
+            out.push_str("\nWarnings:");
+            for w in &self.warnings {
+                out.push_str(&format!("\n- {}", w));
             }
         }
         out
@@ -293,6 +348,184 @@ impl ThoughtsMcpTools {
 
         Ok(ReferencesList { base, entries })
     }
+
+    /// Add a GitHub repository as a reference and ensure it is cloned and mounted.
+    ///
+    /// Input must be an HTTPS GitHub URL: https://github.com/org/repo or
+    /// https://github.com/org/repo.git. Also accepts generic https://*.git clone URLs.
+    /// SSH URLs (git@…) are rejected. The operation is idempotent and safe to retry;
+    /// first-time clones may take time. Returns details about config changes, clone
+    /// location, and mount status.
+    #[universal_tool(
+        description = "Add a GitHub repository as a reference and ensure it is cloned and mounted. Input must be an HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL. SSH URLs (git@…) are rejected. Idempotent and safe to retry; first-time clones may take time.",
+        mcp(destructive = false, idempotent = true, output = "text")
+    )]
+    pub async fn add_reference(
+        &self,
+        #[universal_tool_param(
+            description = "HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL"
+        )]
+        url: String,
+        #[universal_tool_param(
+            description = "Optional description for why this reference was added"
+        )]
+        description: Option<String>,
+    ) -> Result<AddReferenceOk, ToolError> {
+        let input_url = url.trim().to_string();
+
+        // Validate URL per MCP HTTPS-only rules
+        validate_reference_url_https_only(&input_url)
+            .map_err(|e| ToolError::invalid_input(e.to_string()))?;
+
+        // Parse org/repo; safe after validation
+        let (org, repo) = extract_org_repo_from_url(&input_url)
+            .map_err(|e| ToolError::invalid_input(e.to_string()))?;
+
+        // Resolve repo root and config manager
+        let repo_root = get_control_repo_root(
+            &std::env::current_dir()
+                .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?,
+        )
+        .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+
+        let mgr = RepoConfigManager::new(repo_root.clone());
+        let mut cfg = mgr
+            .ensure_v2_default()
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+
+        // Build existing canonical keys set for duplicate detection
+        let mut existing_keys = std::collections::HashSet::new();
+        for e in &cfg.references {
+            let existing_url = match e {
+                ReferenceEntry::Simple(s) => s.as_str(),
+                ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+            };
+            if let Ok(k) = canonical_reference_key(existing_url) {
+                existing_keys.insert(k);
+            }
+        }
+        let this_key = canonical_reference_key(&input_url)
+            .map_err(|e| ToolError::invalid_input(e.to_string()))?;
+        let already_existed = existing_keys.contains(&this_key);
+
+        // Compute paths for response
+        let ds = mgr
+            .load_desired_state()
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?
+            .ok_or_else(|| {
+                ToolError::new(ErrorCode::NotFound, "No repository configuration found")
+            })?;
+        let mount_path = format!("{}/{}/{}", ds.mount_dirs.references, org, repo);
+        let mount_target = repo_root
+            .join(".thoughts-data")
+            .join(&mount_path)
+            .to_string_lossy()
+            .to_string();
+
+        // Capture pre-sync mapping status
+        let repo_mapping = RepoMappingManager::new()
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+        let pre_mapping = repo_mapping
+            .resolve_url(&input_url)
+            .ok()
+            .flatten()
+            .map(|p| p.to_string_lossy().to_string());
+
+        // Update config if new
+        let mut config_updated = false;
+        let mut warnings: Vec<String> = Vec::new();
+        if !already_existed {
+            if let Some(desc) = description.clone() {
+                cfg.references
+                    .push(ReferenceEntry::WithMetadata(ReferenceMount {
+                        remote: input_url.clone(),
+                        description: if desc.trim().is_empty() {
+                            None
+                        } else {
+                            Some(desc)
+                        },
+                    }));
+            } else {
+                cfg.references
+                    .push(ReferenceEntry::Simple(input_url.clone()));
+            }
+
+            let ws = mgr
+                .save_v2_validated(&cfg)
+                .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+            warnings.extend(ws);
+            config_updated = true;
+        } else if description.is_some() {
+            warnings.push(
+                "Reference already exists; description was not updated (use CLI to modify metadata)"
+                    .to_string(),
+            );
+        }
+
+        // Always attempt to sync clone+mount (best-effort, no rollback)
+        if let Err(e) = update_active_mounts().await {
+            warnings.push(format!("Mount synchronization encountered an error: {}", e));
+        }
+
+        // Post-sync mapping status to infer cloning
+        let repo_mapping_post = RepoMappingManager::new()
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+        let post_mapping = repo_mapping_post
+            .resolve_url(&input_url)
+            .ok()
+            .flatten()
+            .map(|p| p.to_string_lossy().to_string());
+        let cloned = pre_mapping.is_none() && post_mapping.is_some();
+
+        // Determine mounted by listing active mounts
+        let platform =
+            detect_platform().map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+        let mount_manager = get_mount_manager(&platform)
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+        let active = mount_manager
+            .list_mounts()
+            .await
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+        let target_path = std::path::PathBuf::from(&mount_target);
+        let target_canon = std::fs::canonicalize(&target_path).unwrap_or(target_path.clone());
+        let mut mounted = false;
+        for mi in active {
+            let canon = std::fs::canonicalize(&mi.target).unwrap_or(mi.target.clone());
+            if canon == target_canon {
+                mounted = true;
+                break;
+            }
+        }
+
+        // Additional warnings for visibility
+        if post_mapping.is_none() {
+            warnings.push(
+                "Repository was not cloned or mapped. It may be private or network unavailable. \
+                 You can retry or run 'thoughts references sync' via CLI."
+                    .to_string(),
+            );
+        }
+        if !mounted {
+            warnings.push(
+                "Mount is not active. You can retry or run 'thoughts mount update' via CLI."
+                    .to_string(),
+            );
+        }
+
+        Ok(AddReferenceOk {
+            url: input_url,
+            org,
+            repo,
+            mount_path,
+            mount_target,
+            mapping_path: post_mapping,
+            already_existed,
+            config_updated,
+            cloned,
+            mounted,
+            warnings,
+        })
+    }
 }
 
 // MCP server wrapper
@@ -416,5 +649,70 @@ mod tests {
         let text = refs.mcp_format_text();
         assert!(text.contains("org/repo1 — First repo"));
         assert!(text.contains("org/repo2 — Second repo"));
+    }
+
+    #[test]
+    fn test_add_reference_ok_format() {
+        let ok = AddReferenceOk {
+            url: "https://github.com/org/repo".into(),
+            org: "org".into(),
+            repo: "repo".into(),
+            mount_path: "references/org/repo".into(),
+            mount_target: "/abs/.thoughts-data/references/org/repo".into(),
+            mapping_path: Some("/home/user/.thoughts/clones/repo".into()),
+            already_existed: false,
+            config_updated: true,
+            cloned: true,
+            mounted: true,
+            warnings: vec!["note".into()],
+        };
+        let s = ok.mcp_format_text();
+        assert!(s.contains("✓ Added reference"));
+        assert!(s.contains("Org/Repo: org/repo"));
+        assert!(s.contains("Cloned: true"));
+        assert!(s.contains("Mounted: true"));
+        assert!(s.contains("Warnings:\n- note"));
+    }
+
+    #[test]
+    fn test_add_reference_ok_format_already_existed() {
+        let ok = AddReferenceOk {
+            url: "https://github.com/org/repo".into(),
+            org: "org".into(),
+            repo: "repo".into(),
+            mount_path: "references/org/repo".into(),
+            mount_target: "/abs/.thoughts-data/references/org/repo".into(),
+            mapping_path: Some("/home/user/.thoughts/clones/repo".into()),
+            already_existed: true,
+            config_updated: false,
+            cloned: false,
+            mounted: true,
+            warnings: vec![],
+        };
+        let s = ok.mcp_format_text();
+        assert!(s.contains("✓ Reference already exists (idempotent)"));
+        assert!(s.contains("Config updated: false"));
+        assert!(!s.contains("Warnings:"));
+    }
+
+    #[test]
+    fn test_add_reference_ok_format_no_mapping() {
+        let ok = AddReferenceOk {
+            url: "https://github.com/org/repo".into(),
+            org: "org".into(),
+            repo: "repo".into(),
+            mount_path: "references/org/repo".into(),
+            mount_target: "/abs/.thoughts-data/references/org/repo".into(),
+            mapping_path: None,
+            already_existed: false,
+            config_updated: true,
+            cloned: false,
+            mounted: false,
+            warnings: vec!["Clone failed".into()],
+        };
+        let s = ok.mcp_format_text();
+        assert!(s.contains("Mapping: <none>"));
+        assert!(s.contains("Mounted: false"));
+        assert!(s.contains("- Clone failed"));
     }
 }
