@@ -1,40 +1,56 @@
-use crate::git::credentials::configure_default_git_credentials;
 use anyhow::{Context, Result};
-use git2::{AnnotatedCommit, FetchOptions, RemoteCallbacks, Repository};
+use git2::{AnnotatedCommit, Repository};
 use std::path::Path;
+use std::process::Command;
+
+/// Fetch from remote using system git (which uses system SSH, triggers 1Password prompts)
+fn fetch_with_shell_git(repo_path: &Path, remote_name: &str) -> Result<()> {
+    let status = Command::new("git")
+        .current_dir(repo_path)
+        .args(["fetch", remote_name])
+        .status()
+        .context("Failed to spawn git fetch")?;
+
+    if !status.success() {
+        anyhow::bail!("git fetch failed with exit code {:?}", status.code());
+    }
+
+    Ok(())
+}
 
 /// Fast-forward-only pull of the current branch from remote_name (default "origin")
+/// Uses shell git for fetch (to trigger 1Password SSH prompts) and git2 for fast-forward
 pub fn pull_ff_only(repo_path: &Path, remote_name: &str, branch: Option<&str>) -> Result<()> {
-    let repo = Repository::open(repo_path)
-        .with_context(|| format!("Failed to open repository at {}", repo_path.display()))?;
+    // First check if remote exists
+    {
+        let repo = Repository::open(repo_path)
+            .with_context(|| format!("Failed to open repository at {}", repo_path.display()))?;
+        if repo.find_remote(remote_name).is_err() {
+            // No remote - nothing to fetch
+            return Ok(());
+        }
+    }
 
     let branch = branch.unwrap_or("main");
 
-    // Fetch origin/<branch>
-    let mut remote = repo
-        .find_remote(remote_name)
-        .with_context(|| format!("Remote '{}' not found", remote_name))?;
-    let refspec = format!(
-        "refs/heads/{b}:refs/remotes/{remote}/{b}",
-        b = branch,
-        remote = remote_name
-    );
+    // Fetch using shell git (uses system SSH, triggers 1Password)
+    fetch_with_shell_git(repo_path, remote_name).context("Fetch failed")?;
 
-    // Configure fetch options with shared SSH/HTTPS credentials
-    let mut fo = FetchOptions::new();
-    let mut callbacks = RemoteCallbacks::new();
-    configure_default_git_credentials(&mut callbacks);
-    fo.remote_callbacks(callbacks);
+    // Re-open repository to see the fetched refs
+    let repo = Repository::open(repo_path)
+        .with_context(|| format!("Failed to re-open repository at {}", repo_path.display()))?;
 
-    remote
-        .fetch(&[&refspec], Some(&mut fo), None)
-        .with_context(|| "Fetch failed")?;
-
-    // Lookup local and remote refs
-    let fetch_head = repo.find_reference(&format!("refs/remotes/{}/{}", remote_name, branch))?;
+    // Now do the fast-forward using git2
+    let remote_ref = format!("refs/remotes/{}/{}", remote_name, branch);
+    let fetch_head = match repo.find_reference(&remote_ref) {
+        Ok(r) => r,
+        Err(_) => {
+            // Remote branch doesn't exist yet
+            return Ok(());
+        }
+    };
     let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
 
-    // Try a fast-forward
     try_fast_forward(&repo, &format!("refs/heads/{}", branch), &fetch_commit)?;
     Ok(())
 }
@@ -52,9 +68,8 @@ fn try_fast_forward(
         let mut reference = repo.find_reference(local_ref)?;
         reference.set_target(fetch_commit.id(), "Fast-Forward")?;
         repo.set_head(local_ref)?;
-        repo.checkout_head(None)?;
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
         return Ok(());
     }
-    // Non fast-forward - do not merge automatically
     anyhow::bail!("Non fast-forward update required (local changes).")
 }

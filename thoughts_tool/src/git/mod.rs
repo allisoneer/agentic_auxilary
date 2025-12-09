@@ -1,6 +1,7 @@
 pub mod clone;
-pub mod credentials;
+pub mod progress;
 pub mod pull;
+pub mod shell_push;
 pub mod sync;
 pub mod utils;
 
