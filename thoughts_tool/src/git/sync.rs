@@ -1,18 +1,24 @@
-use crate::git::credentials::configure_default_git_credentials;
-use anyhow::Result;
+use crate::git::shell_push::push_current_branch;
+use anyhow::{Context, Result};
 use colored::*;
-use git2::{FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, Signature};
+use git2::{IndexAddOption, Repository, Signature};
 use std::path::Path;
+use std::process::Command;
 
 pub struct GitSync {
     repo: Repository,
+    repo_path: std::path::PathBuf,
     subpath: Option<String>,
 }
 
 impl GitSync {
     pub fn new(repo_path: &Path, subpath: Option<String>) -> Result<Self> {
         let repo = Repository::open(repo_path)?;
-        Ok(Self { repo, subpath })
+        Ok(Self {
+            repo,
+            repo_path: repo_path.to_path_buf(),
+            subpath,
+        })
     }
 
     pub async fn sync(&self, mount_name: &str) -> Result<()> {
@@ -149,31 +155,34 @@ impl GitSync {
         Ok(())
     }
 
+    /// Fetch from remote using shell git (which uses system SSH, triggers 1Password prompts)
+    fn fetch_with_shell_git(&self) -> Result<()> {
+        let status = Command::new("git")
+            .current_dir(&self.repo_path)
+            .args(["fetch", "origin"])
+            .status()
+            .context("Failed to spawn git fetch")?;
+
+        if !status.success() {
+            anyhow::bail!("git fetch failed with exit code {:?}", status.code());
+        }
+
+        Ok(())
+    }
+
     async fn pull_rebase(&self) -> Result<bool> {
         // Check if origin exists
-        let mut remote = match self.repo.find_remote("origin") {
-            Ok(remote) => remote,
-            Err(e) if e.code() == git2::ErrorCode::NotFound => {
-                // No origin remote - this is fine, just can't pull
-                println!(
-                    "    {} No remote 'origin' configured (local-only)",
-                    "Info".dimmed()
-                );
-                return Ok(false);
-            }
-            Err(e) => return Err(e.into()),
-        };
+        if self.repo.find_remote("origin").is_err() {
+            println!(
+                "    {} No remote 'origin' configured (local-only)",
+                "Info".dimmed()
+            );
+            return Ok(false);
+        }
 
-        let refs: Vec<String> = vec![];
-
-        // Set up fetch options with authentication
-        let mut fetch_options = FetchOptions::new();
-        let mut callbacks = RemoteCallbacks::new();
-        configure_default_git_credentials(&mut callbacks);
-        fetch_options.remote_callbacks(callbacks);
-
-        // Fetch with authentication
-        remote.fetch(&refs, Some(&mut fetch_options), None)?;
+        // Fetch using shell git (uses system SSH, triggers 1Password)
+        self.fetch_with_shell_git()
+            .context("Fetch from origin failed")?;
 
         // Get current branch
         let head = self.repo.head()?;
@@ -234,36 +243,19 @@ impl GitSync {
     }
 
     async fn push(&self) -> Result<()> {
-        let mut remote = match self.repo.find_remote("origin") {
-            Ok(remote) => remote,
-            Err(e) if e.code() == git2::ErrorCode::NotFound => {
-                // No origin remote - can't push
-                println!(
-                    "    {} No remote 'origin' configured (local-only)",
-                    "Info".dimmed()
-                );
-                return Ok(()); // Not an error, just skip push
-            }
-            Err(e) => return Err(e.into()),
-        };
+        if self.repo.find_remote("origin").is_err() {
+            println!(
+                "    {} No remote 'origin' configured (local-only)",
+                "Info".dimmed()
+            );
+            return Ok(());
+        }
 
         let head = self.repo.head()?;
         let branch = head.shorthand().unwrap_or("main");
 
-        // Configure push options
-        let mut push_options = PushOptions::new();
-
-        // Shared credentials
-        let mut callbacks = RemoteCallbacks::new();
-        configure_default_git_credentials(&mut callbacks);
-        push_options.remote_callbacks(callbacks);
-
-        // Push
-        remote.push(
-            &[&format!("refs/heads/{branch}:refs/heads/{branch}")],
-            Some(&mut push_options),
-        )?;
-
+        // Use shell git push (triggers 1Password SSH prompts)
+        push_current_branch(&self.repo_path, "origin", branch)?;
         Ok(())
     }
 

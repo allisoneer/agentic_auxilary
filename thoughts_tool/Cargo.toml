@@ -24,6 +24,11 @@ anyhow = "1"
 thiserror = "2"
 dirs = "5"
 git2 = { version = "0.18", features = ["vendored-openssl", "ssh", "https"] }
+gix = { version = "0.68", default-features = false, features = [
+    "blocking-network-client",
+    "worktree-mutation",
+    "interrupt"
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
 chrono = { version = "0.4", features = ["serde"] }

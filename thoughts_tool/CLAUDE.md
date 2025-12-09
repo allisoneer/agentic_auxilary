@@ -125,9 +125,26 @@ if was_v1 {
 1. **Rust Edition**: Uses Rust 2024 edition - ensure compatibility when adding dependencies
 2. **Error Handling**: Uses `anyhow` for application errors and `thiserror` for library errors
 3. **Async Runtime**: Uses `tokio` for async operations with full features
-4. **Git Integration**: Uses `git2` crate for repository operations
+4. **Git Integration**: Hybrid backend - see Git Architecture section below
 5. **Platform Features**: Platform-specific code uses conditional compilation (`#[cfg(target_os = "linux")]`)
 6. **Build Warnings**: Currently suppresses warnings in silent mode (TODO: fix all warnings)
+
+### Git Architecture
+
+The tool uses a hybrid git backend to ensure compatibility with SSH agents like 1Password:
+
+| Operation | Backend | Rationale |
+|-----------|---------|-----------|
+| Clone | gitoxide (`gix`) | Network op via system SSH |
+| Fetch | Shell `git fetch` | Network op via system SSH |
+| Push | Shell `git push` | Network op via system SSH |
+| Stage/Commit/Rebase | git2 | Local ops, proven, low risk |
+| Utils/Discovery | git2 | Local ops, no change needed |
+
+**Why this approach:**
+- **1Password compatibility**: libssh2 (used by git2) doesn't trigger 1Password approval dialogs. System git and gitoxide both use the system SSH client which properly triggers 1Password prompts.
+- **Minimal risk**: Local operations (staging, rebase) remain on proven git2 code.
+- **Worktree support**: Preserved through git2-based detection.
 
 ## Major Dependencies
 
@@ -140,7 +157,8 @@ if was_v1 {
 - **anyhow** - Flexible error handling for applications
 - **thiserror** - Custom error types with automatic From implementations
 - **tokio** - Async runtime with full features
-- **git2** - Git repository operations
+- **git2** - Git local operations (staging, commit, rebase, repo discovery)
+- **gix** - Git clone operations (uses system SSH for 1Password compatibility)
 
 ## Advanced Features
 

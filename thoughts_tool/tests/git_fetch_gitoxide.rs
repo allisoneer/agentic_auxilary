@@ -1,0 +1,284 @@
+//! Integration tests for gitoxide-based fetch operations.
+//! These tests verify that pull_ff_only works correctly with gitoxide fetch + git2 FF.
+//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_fetch_gitoxide
+
+use std::fs;
+use std::process::Command;
+use tempfile::TempDir;
+
+use thoughts_tool::git::pull::pull_ff_only;
+
+#[test]
+fn fetch_and_fast_forward() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    // Create bare remote
+    let remote = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init", "--bare"])
+            .arg(remote.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Create producer repo
+    let producer = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init"])
+            .current_dir(producer.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(producer.path().join("a.txt"), "one").unwrap();
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["add", "."])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "init"
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["branch", "-M", "main"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["push", "-u", "origin", "main"])
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Clone to consumer
+    let consumer = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["clone", remote.path().to_str().unwrap(), "work"])
+            .current_dir(consumer.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Producer adds a new file
+    fs::write(producer.path().join("b.txt"), "two").unwrap();
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["add", "."])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "second"
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["push"])
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Consumer fetches and fast-forwards using our gitoxide-based pull
+    let work = consumer.path().join("work");
+    pull_ff_only(&work, "origin", Some("main")).expect("fetch and ff should succeed");
+
+    // Verify the new file is present
+    assert!(work.join("b.txt").exists());
+    let content = fs::read_to_string(work.join("b.txt")).unwrap();
+    assert_eq!(content, "two");
+}
+
+#[test]
+fn fetch_already_up_to_date() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    // Create bare remote
+    let remote = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init", "--bare"])
+            .arg(remote.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Create and push initial commit
+    let producer = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init"])
+            .current_dir(producer.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(producer.path().join("a.txt"), "one").unwrap();
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["add", "."])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "init"
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["branch", "-M", "main"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(producer.path())
+            .args(["push", "-u", "origin", "main"])
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Clone to consumer
+    let consumer = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["clone", remote.path().to_str().unwrap(), "work"])
+            .current_dir(consumer.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Pull without any new changes - should succeed
+    let work = consumer.path().join("work");
+    pull_ff_only(&work, "origin", Some("main")).expect("pull should succeed when up to date");
+}
+
+#[test]
+fn fetch_with_no_remote_is_ok() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    // Create a local-only repo without origin
+    let repo = TempDir::new().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init"])
+            .current_dir(repo.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(repo.path().join("a.txt"), "local").unwrap();
+    assert!(
+        Command::new("git")
+            .current_dir(repo.path())
+            .args(["add", "."])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .current_dir(repo.path())
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "local"
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    // Pull without origin should succeed (no-op)
+    pull_ff_only(repo.path(), "origin", Some("main")).expect("pull should succeed without remote");
+}
