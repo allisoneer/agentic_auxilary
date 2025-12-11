@@ -2,8 +2,9 @@
 //! These tests verify handling of edge cases like detached HEAD, missing remotes, etc.
 //! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_edge_cases
 
+mod support;
+
 use std::fs;
-use std::process::Command;
 use tempfile::TempDir;
 
 use thoughts_tool::git::pull::pull_ff_only;
@@ -18,57 +19,27 @@ fn detached_head_fetch_noop() {
 
     // Create repo with a commit
     let repo = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(repo.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(repo.path(), &["init"]);
     fs::write(repo.path().join("a.txt"), "a").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "c"
-            ])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(repo.path(), &["add", "."]);
+    support::git_ok(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "c",
+        ],
     );
 
     // Get HEAD SHA
-    let out = Command::new("git")
-        .current_dir(repo.path())
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap();
-    let head = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let head = support::git_stdout(repo.path(), &["rev-parse", "HEAD"]);
 
     // Detach HEAD
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args(["checkout", "--detach", &head])
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(repo.path(), &["checkout", "--detach", &head]);
 
     // pull_ff_only should handle missing remote gracefully
     let result = pull_ff_only(repo.path(), "origin", Some("main"));
@@ -84,38 +55,20 @@ async fn sync_without_remote_is_ok() {
 
     // Create repo without remote
     let repo = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(repo.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(repo.path(), &["init"]);
     fs::write(repo.path().join("a.txt"), "a").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "initial"
-            ])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(repo.path(), &["add", "."]);
+    support::git_ok(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "initial",
+        ],
     );
 
     // Add new file
@@ -126,12 +79,7 @@ async fn sync_without_remote_is_ok() {
     sync.sync("test-mount").await.unwrap();
 
     // Verify the file was committed
-    let out = Command::new("git")
-        .current_dir(repo.path())
-        .args(["show", "--name-only", "--format=", "HEAD"])
-        .output()
-        .unwrap();
-    let files = String::from_utf8_lossy(&out.stdout);
+    let files = support::git_stdout(repo.path(), &["show", "--name-only", "--format=", "HEAD"]);
     assert!(files.contains("b.txt"));
 }
 
@@ -144,14 +92,7 @@ async fn sync_empty_repo_initial_commit() {
 
     // Create empty repo (no commits)
     let repo = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(repo.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(repo.path(), &["init"]);
 
     // Add a file
     fs::write(repo.path().join("first.txt"), "first").unwrap();
@@ -161,13 +102,8 @@ async fn sync_empty_repo_initial_commit() {
     sync.sync("test-mount").await.unwrap();
 
     // Verify commit was created
-    let out = Command::new("git")
-        .current_dir(repo.path())
-        .args(["rev-list", "--count", "HEAD"])
-        .output()
-        .unwrap();
-    assert!(out.status.success());
-    let count: i32 = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
+    let count_str = support::git_stdout(repo.path(), &["rev-list", "--count", "HEAD"]);
+    let count: i32 = count_str.parse().unwrap();
     assert_eq!(count, 1);
 }
 
@@ -180,65 +116,29 @@ fn fetch_no_upstream_branch() {
 
     // Create bare remote with main branch
     let remote = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init", "--bare"])
-            .arg(remote.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(remote.path(), &["init", "--bare", "."]);
 
     // Create local with different branch
     let local = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(local.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(local.path(), &["init"]);
     fs::write(local.path().join("a.txt"), "a").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "init",
+        ],
     );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "init"
-            ])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["branch", "-M", "feature"])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["branch", "-M", "feature"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
     );
 
     // Try to pull main which doesn't exist on remote
@@ -255,40 +155,22 @@ async fn sync_subpath_only_commits_subpath() {
 
     // Create repo with initial commit
     let repo = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(repo.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(repo.path(), &["init"]);
     fs::write(repo.path().join("root.txt"), "root").unwrap();
     fs::create_dir_all(repo.path().join("subdir")).unwrap();
     fs::write(repo.path().join("subdir/sub.txt"), "sub").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(repo.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "initial"
-            ])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(repo.path(), &["add", "."]);
+    support::git_ok(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "initial",
+        ],
     );
 
     // Add files in both locations
@@ -300,21 +182,11 @@ async fn sync_subpath_only_commits_subpath() {
     sync.sync("test-mount").await.unwrap();
 
     // Verify only subpath file was committed
-    let out = Command::new("git")
-        .current_dir(repo.path())
-        .args(["show", "--name-only", "--format=", "HEAD"])
-        .output()
-        .unwrap();
-    let files = String::from_utf8_lossy(&out.stdout);
+    let files = support::git_stdout(repo.path(), &["show", "--name-only", "--format=", "HEAD"]);
     assert!(files.contains("subdir/sub2.txt"));
     assert!(!files.contains("root2.txt"));
 
     // root2.txt should still be unstaged
-    let out = Command::new("git")
-        .current_dir(repo.path())
-        .args(["status", "--porcelain"])
-        .output()
-        .unwrap();
-    let status = String::from_utf8_lossy(&out.stdout);
+    let status = support::git_stdout(repo.path(), &["status", "--porcelain"]);
     assert!(status.contains("root2.txt"));
 }

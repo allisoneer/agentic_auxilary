@@ -2,8 +2,9 @@
 //! These tests verify that clone_repository works correctly with gitoxide.
 //! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_clone_gitoxide
 
+mod support;
+
 use std::fs;
-use std::process::Command;
 use tempfile::TempDir;
 
 use thoughts_tool::git::clone::{CloneOptions, clone_repository};
@@ -14,80 +15,35 @@ fn init_bare_remote_with_commit() -> (TempDir, String) {
     let remote_path = remote_dir.path().to_path_buf();
 
     // Init bare repo
-    assert!(
-        Command::new("git")
-            .arg("init")
-            .arg("--bare")
-            .arg(&remote_path)
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(&remote_path, &["init", "--bare", "."]);
 
     // Create a working repo, add content, push to bare remote
     let work = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .arg("init")
-            .arg(work.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(work.path(), &["init"]);
 
     fs::write(work.path().join("README.md"), "hello").unwrap();
 
-    assert!(
-        Command::new("git")
-            .current_dir(work.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(work.path(), &["add", "."]);
+    support::git_ok(
+        work.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "init",
+        ],
     );
-
-    assert!(
-        Command::new("git")
-            .current_dir(work.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "init"
-            ])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(work.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        work.path(),
+        &["remote", "add", "origin", remote_path.to_str().unwrap()],
     );
-
-    assert!(
-        Command::new("git")
-            .current_dir(work.path())
-            .args(["branch", "-M", "main"])
-            .status()
-            .unwrap()
-            .success()
-    );
-
-    assert!(
-        Command::new("git")
-            .current_dir(work.path())
-            .args(["remote", "add", "origin", remote_path.to_str().unwrap()])
-            .status()
-            .unwrap()
-            .success()
-    );
-
-    assert!(
-        Command::new("git")
-            .current_dir(work.path())
-            .args(["push", "-u", "origin", "HEAD:refs/heads/main"])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(
+        work.path(),
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
     );
 
     (remote_dir, remote_path.to_string_lossy().into())
