@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use git2::{AnnotatedCommit, Repository};
+use git2::{AnnotatedCommit, Repository, StatusOptions};
 use std::path::Path;
 use std::process::Command;
 
@@ -16,6 +16,15 @@ fn fetch_with_shell_git(repo_path: &Path, remote_name: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn worktree_is_dirty(repo: &Repository) -> Result<bool> {
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .exclude_submodules(true);
+    let statuses = repo.statuses(Some(&mut opts))?;
+    Ok(!statuses.is_empty())
 }
 
 /// Fast-forward-only pull of the current branch from remote_name (default "origin")
@@ -65,11 +74,19 @@ fn try_fast_forward(
         return Ok(());
     }
     if analysis.0.is_fast_forward() {
+        // Safety gate: never force-checkout over local changes
+        if worktree_is_dirty(repo)? {
+            anyhow::bail!(
+                "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before pulling."
+            );
+        }
         let mut reference = repo.find_reference(local_ref)?;
         reference.set_target(fetch_commit.id(), "Fast-Forward")?;
         repo.set_head(local_ref)?;
         repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
         return Ok(());
     }
-    anyhow::bail!("Non fast-forward update required (local changes).")
+    anyhow::bail!(
+        "Non fast-forward update required (local and remote have diverged; rebase or merge needed)."
+    )
 }
