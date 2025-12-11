@@ -1,3 +1,5 @@
+mod support;
+
 use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
 use tempfile::TempDir;
@@ -11,11 +13,7 @@ fn init_twice_returns_ok() {
     let td = TempDir::new().unwrap();
 
     // Initialize git repo
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(td.path())
-        .output()
-        .unwrap();
+    support::git_ok(td.path(), &["init"]);
 
     // First run
     cargo_bin_cmd!("thoughts")
@@ -41,11 +39,7 @@ fn incorrect_symlink_requires_force() {
     let td = TempDir::new().unwrap();
 
     // Initialize git repo
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(td.path())
-        .output()
-        .unwrap();
+    support::git_ok(td.path(), &["init"]);
 
     // First init creates correct symlinks
     cargo_bin_cmd!("thoughts")
@@ -79,11 +73,7 @@ fn gitignore_includes_backup_patterns() {
     let td = TempDir::new().unwrap();
 
     // Initialize git repo
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(td.path())
-        .output()
-        .unwrap();
+    support::git_ok(td.path(), &["init"]);
 
     // Run init
     cargo_bin_cmd!("thoughts")

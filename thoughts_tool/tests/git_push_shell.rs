@@ -2,8 +2,9 @@
 //! These tests verify that push_current_branch works correctly via system git.
 //! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_push_shell
 
+mod support;
+
 use std::fs;
-use std::process::Command;
 use tempfile::TempDir;
 
 use thoughts_tool::git::shell_push::push_current_branch;
@@ -17,81 +18,36 @@ fn push_to_bare_remote_with_shell_git() {
 
     // Create bare remote
     let remote = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init", "--bare"])
-            .arg(remote.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(remote.path(), &["init", "--bare", "."]);
 
     // Create local repo with content
     let local = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(local.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(local.path(), &["init"]);
     fs::write(local.path().join("c.txt"), "hello").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "init",
+        ],
     );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "init"
-            ])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["branch", "-M", "main"])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
     );
 
     // Push using our shell-based push
     push_current_branch(local.path(), "origin", "main").expect("push should succeed");
 
     // Verify remote has the ref
-    let out = Command::new("git")
-        .args([
-            "ls-remote",
-            remote.path().to_str().unwrap(),
-            "refs/heads/main",
-        ])
-        .output()
-        .unwrap();
-    assert!(out.status.success());
-    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stdout = support::git_stdout(remote.path(), &["ls-remote", ".", "refs/heads/main"]);
     assert!(stdout.contains("refs/heads/main"));
 }
 
@@ -104,126 +60,61 @@ fn push_additional_commit() {
 
     // Create bare remote
     let remote = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init", "--bare"])
-            .arg(remote.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(remote.path(), &["init", "--bare", "."]);
 
     // Create local repo
     let local = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(local.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(local.path(), &["init"]);
     fs::write(local.path().join("a.txt"), "first").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "first",
+        ],
     );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "first"
-            ])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["branch", "-M", "main"])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
     );
 
     // First push
     push_current_branch(local.path(), "origin", "main").expect("first push should succeed");
 
     // Get first commit SHA
-    let out1 = Command::new("git")
-        .current_dir(local.path())
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap();
-    let first_sha = String::from_utf8_lossy(&out1.stdout).trim().to_string();
+    let first_sha = support::git_stdout(local.path(), &["rev-parse", "HEAD"]);
 
     // Add another commit
     fs::write(local.path().join("b.txt"), "second").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "second"
-            ])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "second",
+        ],
     );
 
     // Get second commit SHA
-    let out2 = Command::new("git")
-        .current_dir(local.path())
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap();
-    let second_sha = String::from_utf8_lossy(&out2.stdout).trim().to_string();
+    let second_sha = support::git_stdout(local.path(), &["rev-parse", "HEAD"]);
 
     // Second push
     push_current_branch(local.path(), "origin", "main").expect("second push should succeed");
 
     // Verify remote has the new commit
-    let out = Command::new("git")
-        .args([
-            "ls-remote",
-            remote.path().to_str().unwrap(),
-            "refs/heads/main",
-        ])
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stdout = support::git_stdout(remote.path(), &["ls-remote", ".", "refs/heads/main"]);
     assert!(stdout.contains(&second_sha));
     assert!(!stdout.contains(&first_sha)); // First SHA no longer at HEAD
 }
@@ -237,65 +128,29 @@ fn push_nothing_to_push_succeeds() {
 
     // Create bare remote
     let remote = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init", "--bare"])
-            .arg(remote.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(remote.path(), &["init", "--bare", "."]);
 
     // Create local repo and push
     let local = TempDir::new().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init"])
-            .current_dir(local.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    support::git_ok(local.path(), &["init"]);
     fs::write(local.path().join("a.txt"), "content").unwrap();
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["add", "."])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "init",
+        ],
     );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args([
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "init"
-            ])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["branch", "-M", "main"])
-            .status()
-            .unwrap()
-            .success()
-    );
-    assert!(
-        Command::new("git")
-            .current_dir(local.path())
-            .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
-            .status()
-            .unwrap()
-            .success()
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
     );
 
     // First push

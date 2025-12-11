@@ -1,6 +1,8 @@
 //! Integration tests for shell git-based fetch operations.
 //! These tests verify that shell_fetch::fetch works correctly with system git.
 
+mod support;
+
 use anyhow::Result;
 use git2::Repository;
 use thoughts_tool::git::shell_fetch;
@@ -48,10 +50,7 @@ fn shell_fetch_fetches_from_local_bare_remote() -> Result<()> {
         upstream.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])?;
 
         // Rename current branch to 'main' using shell git (avoids git2 force-update HEAD issue)
-        std::process::Command::new("git")
-            .current_dir(&upstream_path)
-            .args(["branch", "-M", "main"])
-            .status()?;
+        support::git_ok(&upstream_path, &["branch", "-M", "main"]);
 
         // Add remote pointing to bare and push with shell git
         upstream.remote("origin", bare_path.to_str().unwrap())?;
