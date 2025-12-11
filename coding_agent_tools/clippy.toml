@@ -1,0 +1,5 @@
+# Clippy configuration for coding_agent_tools
+#
+# MCP tools inherently have many parameters since each function parameter
+# becomes an exposed tool parameter. Increase threshold to accommodate this.
+too-many-arguments-threshold = 16

@@ -790,8 +790,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "claudecode",
+ "filetime",
  "globset",
  "ignore",
+ "regex",
  "schemars 0.8.22",
  "serde",
  "serde_json",
