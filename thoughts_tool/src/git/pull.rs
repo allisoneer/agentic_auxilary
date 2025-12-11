@@ -1,31 +1,9 @@
 use anyhow::{Context, Result};
-use git2::{AnnotatedCommit, Repository, StatusOptions};
+use git2::{AnnotatedCommit, Repository};
 use std::path::Path;
-use std::process::Command;
 
-/// Fetch from remote using system git (which uses system SSH, triggers 1Password prompts)
-fn fetch_with_shell_git(repo_path: &Path, remote_name: &str) -> Result<()> {
-    let status = Command::new("git")
-        .current_dir(repo_path)
-        .args(["fetch", remote_name])
-        .status()
-        .context("Failed to spawn git fetch")?;
-
-    if !status.success() {
-        anyhow::bail!("git fetch failed with exit code {:?}", status.code());
-    }
-
-    Ok(())
-}
-
-fn worktree_is_dirty(repo: &Repository) -> Result<bool> {
-    let mut opts = StatusOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .exclude_submodules(true);
-    let statuses = repo.statuses(Some(&mut opts))?;
-    Ok(!statuses.is_empty())
-}
+use crate::git::shell_fetch;
+use crate::git::utils::is_worktree_dirty;
 
 /// Fast-forward-only pull of the current branch from remote_name (default "origin")
 /// Uses shell git for fetch (to trigger 1Password SSH prompts) and git2 for fast-forward
@@ -43,7 +21,13 @@ pub fn pull_ff_only(repo_path: &Path, remote_name: &str, branch: Option<&str>) -
     let branch = branch.unwrap_or("main");
 
     // Fetch using shell git (uses system SSH, triggers 1Password)
-    fetch_with_shell_git(repo_path, remote_name).context("Fetch failed")?;
+    shell_fetch::fetch(repo_path, remote_name).with_context(|| {
+        format!(
+            "Fetch failed for remote '{}' in '{}'",
+            remote_name,
+            repo_path.display()
+        )
+    })?;
 
     // Re-open repository to see the fetched refs
     let repo = Repository::open(repo_path)
@@ -75,7 +59,7 @@ fn try_fast_forward(
     }
     if analysis.0.is_fast_forward() {
         // Safety gate: never force-checkout over local changes
-        if worktree_is_dirty(repo)? {
+        if is_worktree_dirty(repo)? {
             anyhow::bail!(
                 "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before pulling."
             );

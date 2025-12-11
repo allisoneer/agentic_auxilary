@@ -1,9 +1,10 @@
+use crate::git::shell_fetch;
 use crate::git::shell_push::push_current_branch;
+use crate::git::utils::is_worktree_dirty;
 use anyhow::{Context, Result};
 use colored::*;
-use git2::{IndexAddOption, Repository, Signature, StatusOptions};
+use git2::{IndexAddOption, Repository, Signature};
 use std::path::Path;
-use std::process::Command;
 
 pub struct GitSync {
     repo: Repository,
@@ -155,30 +156,6 @@ impl GitSync {
         Ok(())
     }
 
-    /// Fetch from remote using shell git (which uses system SSH, triggers 1Password prompts)
-    fn fetch_with_shell_git(&self) -> Result<()> {
-        let status = Command::new("git")
-            .current_dir(&self.repo_path)
-            .args(["fetch", "origin"])
-            .status()
-            .context("Failed to spawn git fetch")?;
-
-        if !status.success() {
-            anyhow::bail!("git fetch failed with exit code {:?}", status.code());
-        }
-
-        Ok(())
-    }
-
-    fn worktree_is_dirty(&self) -> Result<bool> {
-        let mut opts = StatusOptions::new();
-        opts.include_untracked(true)
-            .recurse_untracked_dirs(true)
-            .exclude_submodules(true);
-        let statuses = self.repo.statuses(Some(&mut opts))?;
-        Ok(!statuses.is_empty())
-    }
-
     async fn pull_rebase(&self) -> Result<bool> {
         // Check if origin exists
         if self.repo.find_remote("origin").is_err() {
@@ -190,8 +167,12 @@ impl GitSync {
         }
 
         // Fetch using shell git (uses system SSH, triggers 1Password)
-        self.fetch_with_shell_git()
-            .context("Fetch from origin failed")?;
+        shell_fetch::fetch(&self.repo_path, "origin").with_context(|| {
+            format!(
+                "Fetch from origin failed for repo '{}'",
+                self.repo_path.display()
+            )
+        })?;
 
         // Get current branch
         let head = self.repo.head()?;
@@ -221,7 +202,7 @@ impl GitSync {
 
         if analysis.0.is_fast_forward() {
             // Safety gate: never force-checkout over local changes
-            if self.worktree_is_dirty()? {
+            if is_worktree_dirty(&self.repo)? {
                 anyhow::bail!(
                     "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before syncing."
                 );

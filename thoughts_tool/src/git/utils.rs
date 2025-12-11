@@ -1,6 +1,6 @@
 use crate::error::ThoughtsError;
 use anyhow::Result;
-use git2::Repository;
+use git2::{Repository, StatusOptions};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
@@ -126,6 +126,16 @@ pub fn get_current_branch(repo_path: &Path) -> Result<String> {
     }
 }
 
+/// Return true if the repository's working tree has any changes (including untracked)
+pub fn is_worktree_dirty(repo: &Repository) -> Result<bool> {
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .exclude_submodules(true);
+    let statuses = repo.statuses(Some(&mut opts))?;
+    Ok(!statuses.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,5 +189,55 @@ mod tests {
         repo.set_head_detached(commit_oid).unwrap();
         let branch = get_current_branch(repo_path).unwrap();
         assert_eq!(branch, "detached");
+    }
+
+    fn initial_commit(repo: &Repository) {
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let tree_id = {
+            let mut idx = repo.index().unwrap();
+            idx.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_id).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap();
+    }
+
+    #[test]
+    fn worktree_dirty_false_when_clean() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        initial_commit(&repo);
+        assert!(!is_worktree_dirty(&repo).unwrap());
+    }
+
+    #[test]
+    fn worktree_dirty_true_for_untracked() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        initial_commit(&repo);
+
+        let fpath = dir.path().join("untracked.txt");
+        std::fs::write(&fpath, "hello").unwrap();
+
+        assert!(is_worktree_dirty(&repo).unwrap());
+    }
+
+    #[test]
+    fn worktree_dirty_true_for_staged() {
+        use std::io::Write;
+        let dir = tempfile::TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        initial_commit(&repo);
+
+        let fpath = dir.path().join("file.txt");
+        {
+            let mut f = std::fs::File::create(&fpath).unwrap();
+            writeln!(f, "content").unwrap();
+        }
+        let mut idx = repo.index().unwrap();
+        idx.add_path(std::path::Path::new("file.txt")).unwrap();
+        idx.write().unwrap();
+
+        assert!(is_worktree_dirty(&repo).unwrap());
     }
 }
