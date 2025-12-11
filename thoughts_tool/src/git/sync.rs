@@ -1,7 +1,7 @@
 use crate::git::shell_push::push_current_branch;
 use anyhow::{Context, Result};
 use colored::*;
-use git2::{IndexAddOption, Repository, Signature};
+use git2::{IndexAddOption, Repository, Signature, StatusOptions};
 use std::path::Path;
 use std::process::Command;
 
@@ -170,6 +170,15 @@ impl GitSync {
         Ok(())
     }
 
+    fn worktree_is_dirty(&self) -> Result<bool> {
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .exclude_submodules(true);
+        let statuses = self.repo.statuses(Some(&mut opts))?;
+        Ok(!statuses.is_empty())
+    }
+
     async fn pull_rebase(&self) -> Result<bool> {
         // Check if origin exists
         if self.repo.find_remote("origin").is_err() {
@@ -211,6 +220,12 @@ impl GitSync {
         }
 
         if analysis.0.is_fast_forward() {
+            // Safety gate: never force-checkout over local changes
+            if self.worktree_is_dirty()? {
+                anyhow::bail!(
+                    "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before syncing."
+                );
+            }
             // Fast-forward
             let mut reference = self.repo.find_reference("HEAD")?;
             reference.set_target(upstream_oid, "Fast-forward")?;

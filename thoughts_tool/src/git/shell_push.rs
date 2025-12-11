@@ -29,7 +29,7 @@ pub fn push_current_branch(repo_path: &Path, remote: &str, branch: &str) -> Resu
 
     let mut cmd = build_push_command(repo_path, remote, branch);
     let mut child = cmd
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .context("Failed to spawn git push")?;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use gix::progress::{Count, NestedProgress, Progress, Unit};
+use gix::progress::{Count, NestedProgress, Progress, StepShared, Unit};
 
 /// A simple inline progress reporter for gitoxide operations.
 /// Shows progress on a single line with carriage return updates.
@@ -15,7 +15,7 @@ pub struct InlineProgress {
 
 struct State {
     last_draw: std::sync::Mutex<Option<Instant>>,
-    current: AtomicUsize,
+    current: StepShared,
     max: AtomicUsize,
     has_max: AtomicBool,
     finished: AtomicBool,
@@ -27,7 +27,7 @@ impl InlineProgress {
             name: name.into(),
             state: Arc::new(State {
                 last_draw: std::sync::Mutex::new(None),
-                current: AtomicUsize::new(0),
+                current: Arc::new(AtomicUsize::new(0)),
                 max: AtomicUsize::new(0),
                 has_max: AtomicBool::new(false),
                 finished: AtomicBool::new(false),
@@ -87,8 +87,8 @@ impl Count for InlineProgress {
     }
 
     fn counter(&self) -> gix::progress::StepShared {
-        // Return a shared counter backed by our atomic
-        Arc::new(self.state.current.load(Ordering::Relaxed).into())
+        // Return the shared counter so external increments affect our state
+        self.state.current.clone()
     }
 }
 
@@ -181,5 +181,14 @@ mod tests {
         p.init(None, None);
         p.inc_by(100);
         p.inc_by(200);
+    }
+
+    #[test]
+    fn counter_is_shared() {
+        use std::sync::atomic::Ordering;
+        let p = InlineProgress::new("t");
+        let c = p.counter();
+        c.fetch_add(5, Ordering::Relaxed);
+        assert_eq!(p.step(), 5);
     }
 }
