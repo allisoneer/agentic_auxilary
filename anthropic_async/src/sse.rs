@@ -693,12 +693,6 @@ pub mod streaming {
     }
 }
 
-// Placeholder when streaming feature is not enabled
-#[cfg(not(feature = "streaming"))]
-pub(crate) mod streaming {
-    // Empty placeholder
-}
-
 #[cfg(all(test, feature = "streaming"))]
 mod tests {
     use super::streaming::*;
