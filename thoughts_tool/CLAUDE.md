@@ -169,6 +169,38 @@ SSH behavior remains unchanged and continues to use the system SSH client for 1P
 THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 make test
 ```
 
+### Known Issue (v0.4.0): Fast-forward pull left staged changes after sync
+
+**Affected version:** v0.4.0
+
+**Symptom:**
+- After `thoughts references sync` or `thoughts sync`, `git status` shows staged changes even though no local edits were made.
+- Root cause: A libgit2 behavior where `checkout_head()` no-ops if called immediately after `set_head()`, leaving the working tree at the old commit while HEAD points to the new commit.
+
+**Fixed in:** v0.4.1+ using `git reset --hard` semantics via libgit2's `reset(Hard)` for atomic ref/index/worktree updates.
+
+**One-time manual fix for affected repositories:**
+
+If on a normal branch (most common):
+```bash
+git reset --hard HEAD
+```
+This updates the index and working tree to match the commit your branch already points to.
+
+If you see "HEAD detached" in `git status`:
+1. Re-attach to your branch:
+   ```bash
+   git checkout <your-branch>
+   ```
+2. Then update your worktree to the branch tip:
+   ```bash
+   git reset --hard HEAD
+   ```
+
+**Notes:**
+- The tool keeps a safety gate (`is_worktree_dirty()`) and will not reset over local changes; commit or stash first.
+- Network operations still use the system `git` client for 1Password SSH compatibility; local operations use libgit2.
+
 ## Major Dependencies
 
 - **clap** - CLI framework with derive macros for argument parsing
