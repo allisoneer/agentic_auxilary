@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.4.1] - 2025-12-15
+
+### 🎨 Styling
+- *(thoughts_tool)* Tidy version reporting in platform detector logs
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Enable HTTPS clones via gix reqwest+rustls transport
+- *(thoughts_tool)* Configure bare repo HEAD in git_fetch integration tests
+- *(thoughts_tool)* Use reset(Hard) for atomic fast-forward updates
 ## [0.4.0] - 2025-12-11
 
 ### ⛰️  Features
