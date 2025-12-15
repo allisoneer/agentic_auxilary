@@ -7,7 +7,9 @@ mod support;
 use std::fs;
 use tempfile::TempDir;
 
+use git2::Repository;
 use thoughts_tool::git::pull::pull_ff_only;
+use thoughts_tool::git::utils::is_worktree_dirty;
 
 #[test]
 fn fetch_and_fast_forward() {
@@ -44,6 +46,17 @@ fn fetch_and_fast_forward() {
     );
     support::git_ok(producer.path(), &["push", "-u", "origin", "main"]);
 
+    // Ensure the bare "server" advertises a valid default branch (HEAD -> refs/heads/main).
+    // Freshly initialized bare repos keep HEAD at refs/heads/master (or user's init.defaultBranch)
+    // and do not update it on push. Real Git servers set HEAD appropriately so clones get a branch
+    // instead of a detached HEAD. Make our fake server behave like a real one.
+    {
+        let bare_repo = Repository::open(remote.path()).expect("open bare remote");
+        bare_repo
+            .set_head("refs/heads/main")
+            .expect("set bare HEAD to main");
+    }
+
     // Clone to consumer
     let consumer = TempDir::new().unwrap();
     support::git_ok(
@@ -76,6 +89,23 @@ fn fetch_and_fast_forward() {
     assert!(work.join("b.txt").exists());
     let content = fs::read_to_string(work.join("b.txt")).unwrap();
     assert_eq!(content, "two");
+
+    // Verify working tree is clean after fast-forward (regression test for v0.4.0 bug)
+    let repo = Repository::open(&work).expect("open consumer repo");
+    assert!(
+        !is_worktree_dirty(&repo).expect("status check failed"),
+        "worktree should be clean after fast-forward"
+    );
+
+    // Verify HEAD matches upstream
+    let head_oid = repo.refname_to_id("HEAD").expect("HEAD oid");
+    let upstream_oid = repo
+        .refname_to_id("refs/remotes/origin/main")
+        .expect("upstream oid");
+    assert_eq!(
+        head_oid, upstream_oid,
+        "HEAD should match upstream after FF"
+    );
 }
 
 #[test]
@@ -113,6 +143,15 @@ fn fetch_already_up_to_date() {
     );
     support::git_ok(producer.path(), &["push", "-u", "origin", "main"]);
 
+    // Ensure the bare "server" advertises a valid default branch (HEAD -> refs/heads/main).
+    // See comment in fetch_and_fast_forward for why this is necessary in test environments.
+    {
+        let bare_repo = Repository::open(remote.path()).expect("open bare remote");
+        bare_repo
+            .set_head("refs/heads/main")
+            .expect("set bare HEAD to main");
+    }
+
     // Clone to consumer
     let consumer = TempDir::new().unwrap();
     support::git_ok(
@@ -123,6 +162,13 @@ fn fetch_already_up_to_date() {
     // Pull without any new changes - should succeed
     let work = consumer.path().join("work");
     pull_ff_only(&work, "origin", Some("main")).expect("pull should succeed when up to date");
+
+    // Verify working tree remains clean when already up to date
+    let repo = Repository::open(&work).expect("open consumer repo");
+    assert!(
+        !is_worktree_dirty(&repo).expect("status check failed"),
+        "worktree should remain clean when already up to date"
+    );
 }
 
 #[test]
