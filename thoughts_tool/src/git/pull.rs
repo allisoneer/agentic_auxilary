@@ -64,10 +64,17 @@ fn try_fast_forward(
                 "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before pulling."
             );
         }
-        let mut reference = repo.find_reference(local_ref)?;
-        reference.set_target(fetch_commit.id(), "Fast-Forward")?;
+        // TODO(3): Migrate to gitoxide when worktree update support is added upstream
+        // (currently marked incomplete in gitoxide README)
+        // Ensure HEAD points to the target branch (avoid detach and ensure proper reflog)
         repo.set_head(local_ref)?;
-        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+        // Atomically move ref, index, and working tree to the fetched commit
+        let obj = repo.find_object(fetch_commit.id(), None)?;
+        repo.reset(
+            &obj,
+            git2::ResetType::Hard,
+            Some(git2::build::CheckoutBuilder::default().force()),
+        )?;
         return Ok(());
     }
     anyhow::bail!(
