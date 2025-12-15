@@ -2,7 +2,7 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use crate::test_support::{EnvGuard, DirGuard};
 //! use serial_test::serial;
 //!
