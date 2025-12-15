@@ -65,6 +65,8 @@ async fn test_multimodal_content_serialization() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let cfg = AnthropicConfig::new()

@@ -5,6 +5,22 @@ use super::common::{Metadata, Usage};
 use super::content::{ContentBlock, MessageParam, MessageRole, SystemParam};
 use super::tools::{Tool, ToolChoice};
 
+/// Output format for structured outputs (beta)
+///
+/// Used to constrain the assistant's response to match a specific JSON schema.
+/// Requires a structured outputs beta header to be enabled via [`BetaFeature`](crate::BetaFeature).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::derive_partial_eq_without_eq)] // serde_json::Value doesn't impl Eq
+pub enum OutputFormat {
+    /// Structured outputs via JSON schema
+    #[serde(rename = "json_schema")]
+    JsonSchema {
+        /// JSON Schema object that the response must conform to
+        schema: serde_json::Value,
+    },
+}
+
 /// Request to create a message
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder, Default)]
 #[builder(setter(into, strip_option), default)]
@@ -42,6 +58,12 @@ pub struct MessagesCreateRequest {
     /// Optional tool choice strategy
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoice>,
+    /// Enable streaming responses; set automatically by `create_stream()`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+    /// Structured outputs: set a JSON schema to constrain assistant outputs (beta)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_format: Option<OutputFormat>,
 }
 
 /// Response from creating a message
@@ -113,11 +135,16 @@ mod tests {
             metadata: None,
             tools: None,
             tool_choice: None,
+            stream: None,
+            output_format: None,
         };
         let s = serde_json::to_string(&req).unwrap();
         assert!(s.contains(r#""model":"claude-3-5-sonnet-20241022""#));
         assert!(s.contains(r#""max_tokens":128"#));
         assert!(s.contains(r#""Hello""#));
+        // stream and output_format should not appear when None
+        assert!(!s.contains("stream"));
+        assert!(!s.contains("output_format"));
     }
 
     #[test]
@@ -137,6 +164,8 @@ mod tests {
             metadata: None,
             tools: None,
             tool_choice: None,
+            stream: None,
+            output_format: None,
         };
         let s = serde_json::to_string(&req).unwrap();
         assert!(s.contains(r#""system":"You are helpful""#));
@@ -162,6 +191,8 @@ mod tests {
             metadata: None,
             tools: None,
             tool_choice: None,
+            stream: None,
+            output_format: None,
         };
         let s = serde_json::to_string(&req).unwrap();
         assert!(s.contains(r#""Block content""#));
