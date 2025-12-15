@@ -10,6 +10,23 @@ use std::sync::Arc;
 use types::{AgentOutput, Depth, GlobOutput, GrepOutput, LsOutput, OutputMode, Show, SortOrder};
 use universal_tool_core::prelude::*;
 
+/// Select the first non-empty (after trimming) text from result.result or result.content.
+/// Prefers `result.result` over `result.content`, but rejects empty/whitespace-only strings.
+fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
+    result
+        .result
+        .as_ref()
+        .filter(|s| !s.trim().is_empty())
+        .cloned()
+        .or_else(|| {
+            result
+                .content
+                .as_ref()
+                .filter(|s| !s.trim().is_empty())
+                .cloned()
+        })
+}
+
 #[derive(Clone)]
 pub struct CodingAgentTools {
     /// Two-level pagination cache for MCP (persists across calls when Arc-wrapped)
@@ -235,13 +252,13 @@ impl CodingAgentTools {
             ));
         }
 
-        // Return plain text output
-        if let Some(text) = result.result.or(result.content) {
+        // Return plain text output (reject empty/whitespace-only strings)
+        if let Some(text) = pick_non_empty_text(&result) {
             return Ok(AgentOutput::new(text));
         }
 
         Err(ToolError::internal(
-            "Claude session finished without text content",
+            "Claude session produced no text output (empty or whitespace-only)",
         ))
     }
 
@@ -367,3 +384,64 @@ impl CodingAgentToolsServer {
 }
 
 universal_tool_core::implement_mcp_server!(CodingAgentToolsServer, tools);
+
+#[cfg(test)]
+mod spawn_agent_filter_tests {
+    use super::*;
+    use claudecode::types::Result as ClaudeResult;
+
+    #[test]
+    fn prefers_content_when_result_is_empty_string() {
+        let r = ClaudeResult {
+            result: Some("".into()),
+            content: Some("ok".into()),
+            ..Default::default()
+        };
+        assert_eq!(pick_non_empty_text(&r).as_deref(), Some("ok"));
+    }
+
+    #[test]
+    fn returns_none_when_both_empty_or_whitespace() {
+        let r1 = ClaudeResult {
+            result: None,
+            content: Some("".into()),
+            ..Default::default()
+        };
+        assert_eq!(pick_non_empty_text(&r1), None);
+
+        let r2 = ClaudeResult {
+            result: None,
+            content: Some("   ".into()),
+            ..Default::default()
+        };
+        assert_eq!(pick_non_empty_text(&r2), None);
+
+        let r3 = ClaudeResult {
+            result: Some("   ".into()),
+            content: None,
+            ..Default::default()
+        };
+        assert_eq!(pick_non_empty_text(&r3), None);
+    }
+
+    #[test]
+    fn returns_text_when_present_in_content() {
+        let r = ClaudeResult {
+            result: None,
+            content: Some("text".into()),
+            ..Default::default()
+        };
+        assert_eq!(pick_non_empty_text(&r).as_deref(), Some("text"));
+    }
+
+    #[test]
+    fn respects_precedence_of_result_over_content() {
+        let r = ClaudeResult {
+            result: Some("  result text  ".into()),
+            content: Some("other".into()),
+            ..Default::default()
+        };
+        // Helper uses trim().is_empty() for emptiness check, but returns original string
+        assert_eq!(pick_non_empty_text(&r).as_deref(), Some("  result text  "));
+    }
+}

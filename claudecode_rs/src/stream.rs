@@ -119,14 +119,20 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> TextParser<R1, R2> {
 
         // Determine if this is an error based on stderr content
         let is_error = !stderr_content.trim().is_empty();
-        let content = if is_error {
-            stderr_content.trim().to_string()
+        let chosen = if is_error {
+            stderr_content.trim()
         } else {
-            stdout_content.trim().to_string()
+            stdout_content.trim()
+        };
+        // Return None for empty/whitespace-only content instead of Some("")
+        let content_opt = if chosen.is_empty() {
+            None
+        } else {
+            Some(chosen.to_string())
         };
 
         Ok(ClaudeResult {
-            content: Some(content),
+            content: content_opt,
             is_error,
             error: if is_error {
                 Some("Process wrote to stderr".to_string())
@@ -135,5 +141,86 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> TextParser<R1, R2> {
             },
             ..Default::default()
         })
+    }
+}
+
+#[cfg(test)]
+mod text_parser_tests {
+    use super::*;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::io::ReadBuf;
+
+    /// Minimal AsyncRead adapter over in-memory bytes for tests
+    struct AsyncCursor {
+        inner: std::io::Cursor<Vec<u8>>,
+    }
+
+    impl AsyncCursor {
+        fn new(data: impl AsRef<[u8]>) -> Self {
+            Self {
+                inner: std::io::Cursor::new(data.as_ref().to_vec()),
+            }
+        }
+    }
+
+    impl Unpin for AsyncCursor {}
+
+    impl AsyncRead for AsyncCursor {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            if self.inner.position() as usize >= self.inner.get_ref().len() {
+                return Poll::Ready(Ok(()));
+            }
+            let mut temp = vec![0u8; buf.remaining()];
+            let n = std::io::Read::read(&mut self.inner, &mut temp[..]).unwrap_or(0);
+            buf.put_slice(&temp[..n]);
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn textparser_empty_stdout_returns_none() {
+        let stdout = AsyncCursor::new(b"");
+        let stderr = AsyncCursor::new(b"");
+        let res = TextParser::new(stdout, stderr).parse().await.unwrap();
+        assert!(!res.is_error);
+        assert!(res.content.is_none());
+    }
+
+    #[tokio::test]
+    async fn textparser_whitespace_stdout_returns_none() {
+        let stdout = AsyncCursor::new(b" \n\t");
+        let stderr = AsyncCursor::new(b"");
+        let res = TextParser::new(stdout, stderr).parse().await.unwrap();
+        assert!(!res.is_error);
+        assert!(res.content.is_none());
+    }
+
+    #[tokio::test]
+    async fn textparser_non_empty_stdout_returns_some() {
+        let stdout = AsyncCursor::new(b"hello");
+        let stderr = AsyncCursor::new(b"");
+        let res = TextParser::new(stdout, stderr).parse().await.unwrap();
+        assert!(!res.is_error);
+        assert_eq!(res.content.as_deref(), Some("hello"));
+    }
+
+    #[tokio::test]
+    async fn textparser_stderr_marks_error_and_returns_stderr() {
+        let stdout = AsyncCursor::new(b"hello");
+        let stderr = AsyncCursor::new(b"boom");
+        let res = TextParser::new(stdout, stderr).parse().await.unwrap();
+        assert!(res.is_error);
+        assert_eq!(res.content.as_deref(), Some("boom"));
+        assert!(
+            res.error
+                .as_deref()
+                .unwrap_or("")
+                .contains("Process wrote to stderr")
+        );
     }
 }
