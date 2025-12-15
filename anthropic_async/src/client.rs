@@ -127,6 +127,42 @@ impl<C: Config> Client<C> {
         self.execute(mk).await
     }
 
+    /// Sends a POST request and returns the raw response for streaming.
+    ///
+    /// This method does not retry on error, as streaming responses cannot be replayed.
+    #[cfg(feature = "streaming")]
+    pub(crate) async fn post_stream<I: Serialize + Send + Sync>(
+        &self,
+        path: &str,
+        body: I,
+    ) -> Result<reqwest::Response, AnthropicError> {
+        // Validate auth before any request
+        self.config.validate_auth()?;
+
+        let headers = self.config.headers()?;
+        let request = self
+            .http
+            .post(self.config.url(path))
+            .headers(headers)
+            .query(&self.config.query())
+            .json(&body)
+            .build()?;
+
+        let response = self
+            .http
+            .execute(request)
+            .await
+            .map_err(AnthropicError::Reqwest)?;
+
+        let status = response.status();
+        if status.is_success() {
+            Ok(response)
+        } else {
+            let bytes = response.bytes().await.map_err(AnthropicError::Reqwest)?;
+            Err(crate::error::deserialize_api_error(status, &bytes))
+        }
+    }
+
     async fn execute<O, M, Fut>(&self, mk: M) -> Result<O, AnthropicError>
     where
         O: DeserializeOwned,

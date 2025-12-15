@@ -29,6 +29,8 @@ async fn test_temperature_validation_below_range() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -65,6 +67,8 @@ async fn test_temperature_validation_above_range() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -101,6 +105,8 @@ async fn test_top_p_validation_zero() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -136,6 +142,8 @@ async fn test_top_p_validation_above_range() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -172,6 +180,8 @@ async fn test_top_k_validation_zero() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -208,6 +218,8 @@ async fn test_max_tokens_validation_zero() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -293,6 +305,8 @@ async fn test_valid_parameters_accepted() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let response = client.messages().create(req).await.unwrap();
