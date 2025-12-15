@@ -1,3 +1,5 @@
+mod support;
+
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use std::fs;
@@ -12,20 +14,11 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize main repository
     fs::create_dir(&main_repo)?;
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&main_repo)
-        .output()?;
+    support::git_ok(&main_repo, &["init"]);
 
     // Configure git for CI environment
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@example.com"])
-        .current_dir(&main_repo)
-        .output()?;
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test User"])
-        .current_dir(&main_repo)
-        .output()?;
+    support::git_ok(&main_repo, &["config", "user.email", "test@example.com"]);
+    support::git_ok(&main_repo, &["config", "user.name", "Test User"]);
 
     // Run thoughts init in main repo
     cargo_bin_cmd!("thoughts")
@@ -35,30 +28,16 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
         .success();
 
     // Create an initial commit (required for worktree)
-    let output = std::process::Command::new("git")
-        .args(["commit", "--allow-empty", "-m", "Initial commit"])
-        .current_dir(&main_repo)
-        .output()?;
-    if !output.status.success() {
-        eprintln!(
-            "Git commit failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err("Failed to create initial commit".into());
-    }
+    support::git_ok(
+        &main_repo,
+        &["commit", "--allow-empty", "-m", "Initial commit"],
+    );
 
     // Create worktree
-    let output = std::process::Command::new("git")
-        .args(["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
-        .current_dir(&main_repo)
-        .output()?;
-    if !output.status.success() {
-        eprintln!(
-            "Git worktree add failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err("Failed to create worktree".into());
-    }
+    support::git_ok(
+        &main_repo,
+        &["worktree", "add", worktree.to_str().unwrap(), "HEAD"],
+    );
 
     // Run thoughts init in worktree
     cargo_bin_cmd!("thoughts")
@@ -87,46 +66,23 @@ fn test_worktree_requires_main_init() -> Result<(), Box<dyn std::error::Error>> 
 
     // Create uninitialized main repo
     fs::create_dir(&main_repo)?;
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&main_repo)
-        .output()?;
+    support::git_ok(&main_repo, &["init"]);
 
     // Configure git for CI environment
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@example.com"])
-        .current_dir(&main_repo)
-        .output()?;
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test User"])
-        .current_dir(&main_repo)
-        .output()?;
+    support::git_ok(&main_repo, &["config", "user.email", "test@example.com"]);
+    support::git_ok(&main_repo, &["config", "user.name", "Test User"]);
 
     // Create an initial commit (required for worktree)
-    let output = std::process::Command::new("git")
-        .args(["commit", "--allow-empty", "-m", "Initial commit"])
-        .current_dir(&main_repo)
-        .output()?;
-    if !output.status.success() {
-        eprintln!(
-            "Git commit failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err("Failed to create initial commit".into());
-    }
+    support::git_ok(
+        &main_repo,
+        &["commit", "--allow-empty", "-m", "Initial commit"],
+    );
 
     // Create worktree
-    let output = std::process::Command::new("git")
-        .args(["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
-        .current_dir(&main_repo)
-        .output()?;
-    if !output.status.success() {
-        eprintln!(
-            "Git worktree add failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err("Failed to create worktree".into());
-    }
+    support::git_ok(
+        &main_repo,
+        &["worktree", "add", worktree.to_str().unwrap(), "HEAD"],
+    );
 
     // Try to init worktree without main initialized
     cargo_bin_cmd!("thoughts")
@@ -150,20 +106,11 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize main repository
     fs::create_dir(&main_repo)?;
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&main_repo)
-        .output()?;
+    support::git_ok(&main_repo, &["init"]);
 
     // Configure git for CI environment
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@example.com"])
-        .current_dir(&main_repo)
-        .output()?;
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test User"])
-        .current_dir(&main_repo)
-        .output()?;
+    support::git_ok(&main_repo, &["config", "user.email", "test@example.com"]);
+    support::git_ok(&main_repo, &["config", "user.name", "Test User"]);
 
     // Run thoughts init in main repo
     cargo_bin_cmd!("thoughts")
@@ -173,30 +120,16 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
         .success();
 
     // Create an initial commit (required for worktree)
-    let output = std::process::Command::new("git")
-        .args(["commit", "--allow-empty", "-m", "Initial commit"])
-        .current_dir(&main_repo)
-        .output()?;
-    if !output.status.success() {
-        eprintln!(
-            "Git commit failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err("Failed to create initial commit".into());
-    }
+    support::git_ok(
+        &main_repo,
+        &["commit", "--allow-empty", "-m", "Initial commit"],
+    );
 
     // Create worktree
-    let output = std::process::Command::new("git")
-        .args(["worktree", "add", worktree.to_str().unwrap(), "HEAD"])
-        .current_dir(&main_repo)
-        .output()?;
-    if !output.status.success() {
-        eprintln!(
-            "Git worktree add failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return Err("Failed to create worktree".into());
-    }
+    support::git_ok(
+        &main_repo,
+        &["worktree", "add", worktree.to_str().unwrap(), "HEAD"],
+    );
 
     // Run thoughts init in worktree (this should NOT create a config in the worktree)
     cargo_bin_cmd!("thoughts")
