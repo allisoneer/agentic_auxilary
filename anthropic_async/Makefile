@@ -16,11 +16,11 @@ check:
 	@echo "Checking code formatting..."
 	@cargo fmt -- --check
 	@echo "Running clippy..."
-	@./hack/cargo-smart.sh clippy --all-features --all-targets
+	@./hack/cargo-smart.sh clippy --all-features --all-targets -- -D warnings
 
 test:
 	@echo "━━━ Testing anthropic_async ━━━"
-	@./hack/cargo-smart.sh test
+	@./hack/cargo-smart.sh test --all-features
 
 build:
 	@echo "━━━ Building anthropic_async ━━━"
@@ -28,20 +28,21 @@ build:
 
 # Normal versions - standard output
 check-normal:
-	cargo clippy
+	cargo fmt -- --check
+	cargo clippy --all-targets --all-features -- -D warnings
 
 test-normal:
-	cargo test
+	cargo test --all-features
 
 build-normal:
 	cargo build
 
 # Verbose versions - extra output
 check-verbose:
-	cargo clippy --verbose
+	cargo clippy --verbose --all-targets --all-features -- -D warnings
 
 test-verbose:
-	cargo test --verbose -- --nocapture
+	cargo test --verbose --all-features -- --nocapture
 
 build-verbose:
 	cargo build --verbose

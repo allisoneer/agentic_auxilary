@@ -14,7 +14,10 @@ all: check test build
 # Silent versions (default) - smart output with fail-fast
 check:
 	@echo "━━━ Checking gpt5_reasoner ━━━"
-	@./hack/cargo-smart.sh clippy
+	@echo "Checking code formatting..."
+	@cargo fmt -- --check
+	@echo "Running clippy..."
+	@./hack/cargo-smart.sh clippy --all-targets -- -D warnings
 
 test:
 	@echo "━━━ Testing gpt5_reasoner ━━━"
@@ -26,7 +29,8 @@ build:
 
 # Normal versions - standard output
 check-normal:
-	cargo clippy
+	cargo fmt -- --check
+	cargo clippy --all-targets -- -D warnings
 
 test-normal:
 	cargo test
@@ -36,7 +40,7 @@ build-normal:
 
 # Verbose versions - extra output
 check-verbose:
-	cargo clippy --verbose
+	cargo clippy --verbose --all-targets -- -D warnings
 
 test-verbose:
 	cargo test --verbose -- --nocapture

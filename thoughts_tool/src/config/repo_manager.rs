@@ -1309,7 +1309,7 @@ mod tests {
         assert!(result.is_err());
 
         // Verify no file was written
-        let config_path = paths::get_repo_config_path(&temp_dir.path());
+        let config_path = paths::get_repo_config_path(temp_dir.path());
         assert!(!config_path.exists());
     }
 
@@ -1337,7 +1337,7 @@ mod tests {
         assert!(warnings[0].contains("sync:None"));
 
         // Verify file was written
-        let config_path = paths::get_repo_config_path(&temp_dir.path());
+        let config_path = paths::get_repo_config_path(temp_dir.path());
         assert!(config_path.exists());
     }
 
