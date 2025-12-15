@@ -8,9 +8,7 @@ use claudecode::config::{MCPConfig, MCPServer};
 use claudecode::types::Model;
 use universal_tool_core::prelude::ToolError;
 
-use super::prompts::{
-    CODEBASE_OVERLAY, REFERENCES_OVERLAY, THOUGHTS_OVERLAY, WEB_OVERLAY, compose_prompt_impl,
-};
+use super::prompts::compose_prompt_impl;
 use crate::types::{AgentLocation, AgentType};
 
 /// Get the model for a given agent type.
@@ -63,20 +61,21 @@ pub fn allowed_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
             "Grep".into(),
             "Glob".into(),
         ],
-        (Analyzer, Web) => vec!["WebSearch".into(), "WebFetch".into()],
+        (Analyzer, Web) => vec![
+            "WebSearch".into(),
+            "WebFetch".into(),
+            "TodoWrite".into(),
+            "Read".into(),
+            "Grep".into(),
+            "Glob".into(),
+            "mcp__coding-agent-tools__ls".into(),
+        ],
     }
 }
 
 /// Compose the system prompt for a given type × location combination.
 pub fn compose_prompt(agent_type: AgentType, location: AgentLocation) -> String {
-    let is_analyzer = matches!(agent_type, AgentType::Analyzer);
-    let overlay = match location {
-        AgentLocation::Codebase => CODEBASE_OVERLAY,
-        AgentLocation::Thoughts => THOUGHTS_OVERLAY,
-        AgentLocation::References => REFERENCES_OVERLAY,
-        AgentLocation::Web => WEB_OVERLAY,
-    };
-    compose_prompt_impl(is_analyzer, overlay)
+    compose_prompt_impl(agent_type, location)
 }
 
 /// Resolve the working directory for a given location.
@@ -240,6 +239,24 @@ mod tests {
         let tools = allowed_tools_for(AgentType::Analyzer, AgentLocation::Web);
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
+    }
+
+    #[test]
+    fn test_allowed_tools_analyzer_web_full_set() {
+        let tools = allowed_tools_for(AgentType::Analyzer, AgentLocation::Web);
+        let expected = [
+            "WebSearch",
+            "WebFetch",
+            "TodoWrite",
+            "Read",
+            "Grep",
+            "Glob",
+            "mcp__coding-agent-tools__ls",
+        ];
+        for t in expected {
+            assert!(tools.contains(&t.to_string()), "missing tool: {t}");
+        }
+        assert_eq!(tools.len(), 7);
     }
 
     #[test]
