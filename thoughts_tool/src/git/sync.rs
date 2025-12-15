@@ -207,11 +207,15 @@ impl GitSync {
                     "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before syncing."
                 );
             }
-            // Fast-forward
-            let mut reference = self.repo.find_reference("HEAD")?;
-            reference.set_target(upstream_oid, "Fast-forward")?;
-            self.repo
-                .checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+            // TODO(3): Migrate to gitoxide when worktree update support is added upstream
+            // (currently marked incomplete in gitoxide README)
+            // Fast-forward: update ref, index, and working tree atomically
+            let obj = self.repo.find_object(upstream_oid, None)?;
+            self.repo.reset(
+                &obj,
+                git2::ResetType::Hard,
+                Some(git2::build::CheckoutBuilder::default().force()),
+            )?;
             return Ok(true);
         }
 
