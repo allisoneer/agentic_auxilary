@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.4.0] - 2025-12-11
+
+### ⛰️  Features
+- *(thoughts_tool)* Migrate network ops to gitoxide and shell git for 1Password SSH compatibility
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Address PR review safety and correctness issues
+- *(thoughts_tool)* Standardize git command handling in tests with helper module
+
+### 🚜 Refactor
+- *(thoughts_tool)* Deduplicate git helper functions
+## [0.3.9] - 2025-12-07
+
+### ⛰️  Features
+- *(thoughts_tool)* Add add_reference MCP tool for HTTPS repo references
 ## [0.3.8] - 2025-11-20
 
 ### ⚙️  Miscellaneous
