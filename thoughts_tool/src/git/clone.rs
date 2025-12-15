@@ -1,8 +1,8 @@
-use crate::git::credentials::configure_default_git_credentials;
 use anyhow::{Context, Result};
 use colored::*;
-use git2::{FetchOptions, Progress, RemoteCallbacks};
 use std::path::PathBuf;
+
+use crate::git::progress::InlineProgress;
 
 pub struct CloneOptions {
     pub url: String,
@@ -19,7 +19,7 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
         std::fs::create_dir_all(parent).context("Failed to create clone directory")?;
     }
 
-    // Ensure target doesn't exist or is empty
+    // Ensure target directory is empty
     if options.target_path.exists() {
         let entries = std::fs::read_dir(&options.target_path)?;
         if entries.count() > 0 {
@@ -30,45 +30,37 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
         }
     }
 
-    // Set up clone
-    let mut builder = git2::build::RepoBuilder::new();
-    let mut fetch_opts = FetchOptions::new();
-    let mut callbacks = RemoteCallbacks::new();
-
-    // Configure shared SSH/HTTPS credentials
-    configure_default_git_credentials(&mut callbacks);
-
-    // Keep existing progress callback
-    callbacks.transfer_progress(|stats: Progress| {
-        let received = stats.received_objects();
-        let total = stats.total_objects();
-
-        if total > 0 {
-            let percent = (received as f32 / total as f32) * 100.0;
-            print!(
-                "\r  {}: {}/{} objects ({:.1}%)",
-                "Progress".cyan(),
-                received,
-                total,
-                percent
-            );
-            std::io::Write::flush(&mut std::io::stdout()).ok();
-        }
-        true
-    });
-
-    fetch_opts.remote_callbacks(callbacks);
-    builder.fetch_options(fetch_opts);
-
-    if let Some(branch) = &options.branch {
-        builder.branch(branch);
+    // SAFETY: progress handler is lock-free and alloc-minimal
+    unsafe {
+        gix::interrupt::init_handler(1, || {}).ok();
     }
 
-    // Perform clone
-    builder
-        .clone(&options.url, &options.target_path)
-        .context("Failed to clone repository")?;
+    let url = gix::url::parse(options.url.as_str().into())
+        .with_context(|| format!("Invalid repository URL: {}", options.url))?;
 
-    println!("\n✓ Clone completed successfully");
+    let mut prepare =
+        gix::prepare_clone(url, &options.target_path).context("Failed to prepare clone")?;
+
+    if let Some(branch) = &options.branch {
+        prepare = prepare
+            .with_ref_name(Some(branch.as_str()))
+            .context("Failed to set target branch")?;
+    }
+
+    let (mut checkout, _fetch_outcome) = prepare
+        .fetch_then_checkout(
+            InlineProgress::new("progress"),
+            &gix::interrupt::IS_INTERRUPTED,
+        )
+        .context("Fetch failed")?;
+
+    let (_repo, _outcome) = checkout
+        .main_worktree(
+            InlineProgress::new("checkout"),
+            &gix::interrupt::IS_INTERRUPTED,
+        )
+        .context("Checkout failed")?;
+
+    println!("\n{} Clone completed successfully", "✓".green());
     Ok(())
 }

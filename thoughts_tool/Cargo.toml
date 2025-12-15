@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-tool"
-version = "0.3.9"
+version = "0.4.1"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Flexible thought management using filesystem mounts for git repositories"
@@ -23,7 +23,13 @@ serde_json = "1"
 anyhow = "1"
 thiserror = "2"
 dirs = "5"
-git2 = { version = "0.18", features = ["vendored-openssl"] }
+git2 = { version = "0.18", features = ["vendored-openssl", "ssh", "https"] }
+gix = { version = "0.68", default-features = false, features = [
+    "blocking-network-client",
+    "worktree-mutation",
+    "interrupt",
+    "blocking-http-transport-reqwest-rust-tls"
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
 chrono = { version = "0.4", features = ["serde"] }

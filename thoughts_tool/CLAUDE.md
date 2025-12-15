@@ -125,9 +125,81 @@ if was_v1 {
 1. **Rust Edition**: Uses Rust 2024 edition - ensure compatibility when adding dependencies
 2. **Error Handling**: Uses `anyhow` for application errors and `thiserror` for library errors
 3. **Async Runtime**: Uses `tokio` for async operations with full features
-4. **Git Integration**: Uses `git2` crate for repository operations
+4. **Git Integration**: Hybrid backend - see Git Architecture section below
 5. **Platform Features**: Platform-specific code uses conditional compilation (`#[cfg(target_os = "linux")]`)
 6. **Build Warnings**: Currently suppresses warnings in silent mode (TODO: fix all warnings)
+
+### Git Architecture
+
+The tool uses a hybrid git backend to ensure compatibility with SSH agents like 1Password:
+
+| Operation | Backend | Rationale |
+|-----------|---------|-----------|
+| Clone | gitoxide (`gix`) | Network op via system SSH |
+| Fetch | Shell `git fetch` | Network op via system SSH |
+| Push | Shell `git push` | Network op via system SSH |
+| Stage/Commit/Rebase | git2 | Local ops, proven, low risk |
+| Utils/Discovery | git2 | Local ops, no change needed |
+
+**Why this approach:**
+- **1Password compatibility**: libssh2 (used by git2) doesn't trigger 1Password approval dialogs. System git and gitoxide both use the system SSH client which properly triggers 1Password prompts.
+- **Minimal risk**: Local operations (staging, rebase) remain on proven git2 code.
+- **Worktree support**: Preserved through git2-based detection.
+
+### Git HTTP Backend
+
+HTTPS clone operations use gitoxide (`gix`) with the `blocking-http-transport-reqwest-rust-tls` feature.
+
+**Rationale:**
+- Pure Rust HTTP stack: reqwest + rustls (no curl, no OpenSSL)
+- Cross-platform stability with no system dependencies
+- Consistent with `anthropic_async` HTTP client configuration
+
+SSH behavior remains unchanged and continues to use the system SSH client for 1Password agent compatibility.
+
+### Test Environment Variables
+
+| Variable | Purpose | When Set |
+|----------|---------|----------|
+| `THOUGHTS_INTEGRATION_TESTS=1` | Enables integration tests (file:// clone tests) | CI PR runs, local dev |
+| `THOUGHTS_NETWORK_TESTS=1` | Enables network-dependent tests (HTTPS clones) | Nightly CI only |
+
+**Running all tests locally:**
+```bash
+THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 make test
+```
+
+### Known Issue (v0.4.0): Fast-forward pull left staged changes after sync
+
+**Affected version:** v0.4.0
+
+**Symptom:**
+- After `thoughts references sync` or `thoughts sync`, `git status` shows staged changes even though no local edits were made.
+- Root cause: A libgit2 behavior where `checkout_head()` no-ops if called immediately after `set_head()`, leaving the working tree at the old commit while HEAD points to the new commit.
+
+**Fixed in:** v0.4.1+ using `git reset --hard` semantics via libgit2's `reset(Hard)` for atomic ref/index/worktree updates.
+
+**One-time manual fix for affected repositories:**
+
+If on a normal branch (most common):
+```bash
+git reset --hard HEAD
+```
+This updates the index and working tree to match the commit your branch already points to.
+
+If you see "HEAD detached" in `git status`:
+1. Re-attach to your branch:
+   ```bash
+   git checkout <your-branch>
+   ```
+2. Then update your worktree to the branch tip:
+   ```bash
+   git reset --hard HEAD
+   ```
+
+**Notes:**
+- The tool keeps a safety gate (`is_worktree_dirty()`) and will not reset over local changes; commit or stash first.
+- Network operations still use the system `git` client for 1Password SSH compatibility; local operations use libgit2.
 
 ## Major Dependencies
 
@@ -140,7 +212,8 @@ if was_v1 {
 - **anyhow** - Flexible error handling for applications
 - **thiserror** - Custom error types with automatic From implementations
 - **tokio** - Async runtime with full features
-- **git2** - Git repository operations
+- **git2** - Git local operations (staging, commit, rebase, repo discovery)
+- **gix** - Git clone operations (uses system SSH for 1Password compatibility)
 
 ## Advanced Features
 

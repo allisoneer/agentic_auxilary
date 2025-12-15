@@ -96,7 +96,10 @@ fn detect_linux() -> Result<PlatformInfo> {
     // Check for mergerfs
     let (has_mergerfs, mergerfs_version) = check_mergerfs();
     if has_mergerfs {
-        info!("Found mergerfs version: {:?}", mergerfs_version);
+        info!(
+            "Found mergerfs version: {}",
+            mergerfs_version.as_deref().unwrap_or("unknown")
+        );
     } else {
         info!("mergerfs not found");
     }
@@ -226,13 +229,19 @@ fn detect_macos() -> Result<PlatformInfo> {
     // Check for FUSE-T
     let (has_fuse_t, fuse_t_version) = check_fuse_t();
     if has_fuse_t {
-        info!("Found FUSE-T version: {:?}", fuse_t_version);
+        info!(
+            "Found FUSE-T version: {}",
+            fuse_t_version.as_deref().unwrap_or("unknown")
+        );
     }
 
     // Check for macFUSE
     let (has_macfuse, macfuse_version) = check_macfuse();
     if has_macfuse {
-        info!("Found macFUSE version: {:?}", macfuse_version);
+        info!(
+            "Found macFUSE version: {}",
+            macfuse_version.as_deref().unwrap_or("unknown")
+        );
     }
 
     // Check for unionfs-fuse
@@ -242,7 +251,10 @@ fn detect_macos() -> Result<PlatformInfo> {
         .find_map(|binary| which::which(binary).ok());
     let has_unionfs = unionfs_path.is_some();
     if has_unionfs {
-        info!("Found unionfs at: {:?}", unionfs_path);
+        info!(
+            "Found unionfs at: {}",
+            unionfs_path.as_ref().unwrap().display()
+        );
     }
 
     let macos_info = MacOSInfo {
