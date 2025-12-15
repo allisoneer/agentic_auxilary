@@ -7,6 +7,7 @@ mod support;
 use std::fs;
 use tempfile::TempDir;
 
+use git2::Repository;
 use thoughts_tool::git::pull::pull_ff_only;
 
 #[test]
@@ -43,6 +44,17 @@ fn fetch_and_fast_forward() {
         &["remote", "add", "origin", remote.path().to_str().unwrap()],
     );
     support::git_ok(producer.path(), &["push", "-u", "origin", "main"]);
+
+    // Ensure the bare "server" advertises a valid default branch (HEAD -> refs/heads/main).
+    // Freshly initialized bare repos keep HEAD at refs/heads/master (or user's init.defaultBranch)
+    // and do not update it on push. Real Git servers set HEAD appropriately so clones get a branch
+    // instead of a detached HEAD. Make our fake server behave like a real one.
+    {
+        let bare_repo = Repository::open(remote.path()).expect("open bare remote");
+        bare_repo
+            .set_head("refs/heads/main")
+            .expect("set bare HEAD to main");
+    }
 
     // Clone to consumer
     let consumer = TempDir::new().unwrap();
@@ -112,6 +124,15 @@ fn fetch_already_up_to_date() {
         &["remote", "add", "origin", remote.path().to_str().unwrap()],
     );
     support::git_ok(producer.path(), &["push", "-u", "origin", "main"]);
+
+    // Ensure the bare "server" advertises a valid default branch (HEAD -> refs/heads/main).
+    // See comment in fetch_and_fast_forward for why this is necessary in test environments.
+    {
+        let bare_repo = Repository::open(remote.path()).expect("open bare remote");
+        bare_repo
+            .set_head("refs/heads/main")
+            .expect("set bare HEAD to main");
+    }
 
     // Clone to consumer
     let consumer = TempDir::new().unwrap();
