@@ -146,6 +146,29 @@ The tool uses a hybrid git backend to ensure compatibility with SSH agents like 
 - **Minimal risk**: Local operations (staging, rebase) remain on proven git2 code.
 - **Worktree support**: Preserved through git2-based detection.
 
+### Git HTTP Backend
+
+HTTPS clone operations use gitoxide (`gix`) with the `blocking-http-transport-reqwest-rust-tls` feature.
+
+**Rationale:**
+- Pure Rust HTTP stack: reqwest + rustls (no curl, no OpenSSL)
+- Cross-platform stability with no system dependencies
+- Consistent with `anthropic_async` HTTP client configuration
+
+SSH behavior remains unchanged and continues to use the system SSH client for 1Password agent compatibility.
+
+### Test Environment Variables
+
+| Variable | Purpose | When Set |
+|----------|---------|----------|
+| `THOUGHTS_INTEGRATION_TESTS=1` | Enables integration tests (file:// clone tests) | CI PR runs, local dev |
+| `THOUGHTS_NETWORK_TESTS=1` | Enables network-dependent tests (HTTPS clones) | Nightly CI only |
+
+**Running all tests locally:**
+```bash
+THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 make test
+```
+
 ## Major Dependencies
 
 - **clap** - CLI framework with derive macros for argument parsing

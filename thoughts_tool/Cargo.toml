@@ -27,7 +27,8 @@ git2 = { version = "0.18", features = ["vendored-openssl", "ssh", "https"] }
 gix = { version = "0.68", default-features = false, features = [
     "blocking-network-client",
     "worktree-mutation",
-    "interrupt"
+    "interrupt",
+    "blocking-http-transport-reqwest-rust-tls"
 ] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
