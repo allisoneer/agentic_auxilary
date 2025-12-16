@@ -7,7 +7,7 @@ check:
 	@echo "Checking code formatting..."
 	@./hack/cargo-smart.sh fmt-check
 	@echo "Running clippy..."
-	@./hack/cargo-smart.sh clippy --all-targets
+	@./hack/cargo-smart.sh clippy --all-targets -- -D warnings
 
 test:
 	@./hack/cargo-smart.sh test
@@ -18,7 +18,7 @@ build:
 # Normal output versions
 check-normal:
 	cargo fmt -- --check
-	cargo clippy --all-targets
+	cargo clippy --all-targets -- -D warnings
 
 test-normal:
 	cargo test
@@ -28,7 +28,8 @@ build-normal:
 
 # Verbose versions
 check-verbose:
-	cargo clippy --all-targets --verbose
+	cargo fmt -- --check
+	cargo clippy --all-targets --verbose -- -D warnings
 
 test-verbose:
 	cargo test --verbose -- --nocapture

@@ -53,6 +53,8 @@ async fn main() -> anyhow::Result<()> {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     println!("Sending multimodal request with image and document...");

@@ -18,8 +18,8 @@ check:
 	@echo "Checking code formatting..."
 	@./hack/cargo-smart.sh fmt-check --all
 	@echo "Running clippy..."
-	@./hack/cargo-smart.sh clippy -p universal-tool-core --all-features
-	@./hack/cargo-smart.sh clippy -p universal-tool-macros --all-features
+	@./hack/cargo-smart.sh clippy -p universal-tool-core --all-features --all-targets -- -D warnings
+	@./hack/cargo-smart.sh clippy -p universal-tool-macros --all-features --all-targets -- -D warnings
 	@echo "Verifying: universal-tool-macros has no [dev-dependencies] (guard against circular deps)..."
 	@! grep -q '^\[dev-dependencies\]' universal-tool-macros/Cargo.toml || (echo "ERROR: universal-tool-macros must not define [dev-dependencies]. Use universal-tool-integration-tests crate."; exit 1)
 	@echo ""
@@ -45,7 +45,7 @@ build:
 # Normal versions - standard output
 check-normal:
 	cargo fmt --all -- --check
-	cargo clippy -p 'universal-tool-*' --all-features
+	cargo clippy -p 'universal-tool-*' --all-features --all-targets -- -D warnings
 	@! grep -q '^\[dev-dependencies\]' universal-tool-macros/Cargo.toml || (echo "ERROR: universal-tool-macros must not define [dev-dependencies]. Use universal-tool-integration-tests crate."; exit 1)
 	@$(MAKE) check-examples-normal
 
@@ -59,7 +59,8 @@ build-normal:
 
 # Verbose versions - extra output
 check-verbose:
-	cargo clippy -p 'universal-tool-*' --all-features --verbose
+	cargo fmt --all -- --check
+	cargo clippy -p 'universal-tool-*' --all-features --all-targets --verbose -- -D warnings
 	@$(MAKE) check-examples-verbose
 
 test-verbose:
@@ -136,7 +137,7 @@ check-examples:
 	@set -e; \
 	for example in examples/*/; do \
 		if [ -f "$$example/Cargo.toml" ]; then \
-			./hack/cargo-smart.sh clippy --manifest-path "$$example/Cargo.toml" || exit 1; \
+			./hack/cargo-smart.sh clippy --manifest-path "$$example/Cargo.toml" --all-targets -- -D warnings || exit 1; \
 		fi \
 	done
 
@@ -145,7 +146,7 @@ check-examples-normal:
 	@for example in examples/*/; do \
 		if [ -f "$$example/Cargo.toml" ]; then \
 			echo "Checking $$example..."; \
-			cargo clippy --manifest-path "$$example/Cargo.toml"; \
+			cargo clippy --manifest-path "$$example/Cargo.toml" --all-targets -- -D warnings; \
 		fi \
 	done
 
@@ -154,7 +155,7 @@ check-examples-verbose:
 	@for example in examples/*/; do \
 		if [ -f "$$example/Cargo.toml" ]; then \
 			echo "Checking $$example..."; \
-			cargo clippy --manifest-path "$$example/Cargo.toml" --verbose; \
+			cargo clippy --manifest-path "$$example/Cargo.toml" --all-targets --verbose -- -D warnings; \
 		fi \
 	done
 

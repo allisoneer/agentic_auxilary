@@ -50,6 +50,8 @@ async fn main() -> anyhow::Result<()> {
         tool_choice: Some(ToolChoice::Auto {
             disable_parallel_tool_use: None,
         }),
+        stream: None,
+        output_format: None,
     };
 
     println!("Sending request with tool definitions...");
