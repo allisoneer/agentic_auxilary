@@ -29,6 +29,8 @@
 //!     metadata: None,
 //!     tools: None,
 //!     tool_choice: None,
+//!     stream: None,
+//!     output_format: None,
 //! };
 //!
 //! let response = client.messages().create(req).await?;
@@ -70,6 +72,16 @@ pub mod types;
 pub use crate::client::Client;
 pub use crate::config::{AnthropicAuth, AnthropicConfig, BetaFeature};
 pub use crate::error::{AnthropicError, ApiErrorObject};
+
+/// Streaming types (requires `streaming` feature)
+#[cfg(feature = "streaming")]
+pub mod streaming {
+    pub use crate::sse::streaming::{
+        Accumulator, ContentBlockDeltaData, ContentBlockStartData, Event, EventError, EventStream,
+        MessageDeltaPayload, MessageDeltaUsage, MessageStartPayload, MessageStartUsage, SSEDecoder,
+        SseFrame, event_stream_from_response,
+    };
+}
 
 /// Prelude module for convenient imports
 pub mod prelude {

@@ -164,7 +164,7 @@ mod pre_validation_tests {
     fn test_precheck_files_non_utf8_fails_fast() {
         let td = TempDir::new().unwrap();
         let p = td.path().join("bin.dat");
-        fs::write(&p, &[0xFF, 0xFE, 0xFD]).unwrap();
+        fs::write(&p, [0xFF, 0xFE, 0xFD]).unwrap();
         let files = vec![FileMeta {
             filename: p.to_string_lossy().to_string(),
             description: "bin".into(),

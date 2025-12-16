@@ -53,6 +53,8 @@ async fn test_messages_create_with_caching() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let cfg = AnthropicConfig::new()
@@ -96,6 +98,8 @@ async fn test_ttl_ordering_validation() {
         metadata: None,
         tools: None,
         tool_choice: None,
+        stream: None,
+        output_format: None,
     };
 
     let cfg = AnthropicConfig::new()
