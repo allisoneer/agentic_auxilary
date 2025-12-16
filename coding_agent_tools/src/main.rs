@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use coding_agent_tools::{CodingAgentTools, CodingAgentToolsServer};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use universal_tool_core::mcp::ServiceExt;
@@ -30,7 +31,20 @@ enum Commands {
         hidden: bool,
     },
     /// Run as MCP server
-    Mcp,
+    Mcp {
+        /// Expose the 'ls' tool (if any tool flags set, only flagged tools are exposed)
+        #[arg(long)]
+        ls: bool,
+        /// Expose the 'spawn_agent' tool
+        #[arg(long)]
+        spawn_agent: bool,
+        /// Expose the 'search_grep' tool
+        #[arg(long)]
+        search_grep: bool,
+        /// Expose the 'search_glob' tool
+        #[arg(long)]
+        search_glob: bool,
+    },
 }
 
 #[tokio::main]
@@ -46,7 +60,12 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Commands::Mcp => run_mcp_server().await,
+        Commands::Mcp {
+            ls,
+            spawn_agent,
+            search_grep,
+            search_glob,
+        } => run_mcp_server(ls, spawn_agent, search_grep, search_glob).await,
         Commands::Ls {
             path,
             depth,
@@ -90,11 +109,37 @@ async fn run_cli_ls(
     Ok(())
 }
 
-async fn run_mcp_server() -> Result<()> {
+async fn run_mcp_server(
+    ls: bool,
+    spawn_agent: bool,
+    search_grep: bool,
+    search_glob: bool,
+) -> Result<()> {
     eprintln!("Starting coding_agent_tools MCP Server");
 
+    // Backwards-compat: no flags => expose all tools (allowlist = None)
+    let allowlist = if ls || spawn_agent || search_grep || search_glob {
+        let mut set = HashSet::new();
+        if ls {
+            set.insert("ls".to_string());
+        }
+        if spawn_agent {
+            set.insert("spawn_agent".to_string());
+        }
+        if search_grep {
+            set.insert("search_grep".to_string());
+        }
+        if search_glob {
+            set.insert("search_glob".to_string());
+        }
+        Some(set)
+    } else {
+        None
+    };
+
     // Same instance for all MCP calls = pagination state persists
-    let server = CodingAgentToolsServer::new(Arc::new(CodingAgentTools::new()));
+    let server =
+        CodingAgentToolsServer::with_allowlist(Arc::new(CodingAgentTools::new()), allowlist);
     let transport = universal_tool_core::mcp::stdio();
     let service = server.serve(transport).await?;
     service.waiting().await?;
