@@ -221,8 +221,8 @@ impl CodingAgentTools {
         // Working directory resolution (may be None for web)
         let working_dir = agent::resolve_working_dir(location)?;
 
-        // Build MCP config
-        let mcp_config = agent::build_mcp_config(location);
+        // Build MCP config with enabled tools for CLI flag propagation
+        let mcp_config = agent::build_mcp_config(location, &enabled_tools);
 
         // Build session config
         let mut builder = SessionConfig::builder(query)
@@ -233,7 +233,8 @@ impl CodingAgentTools {
             .tools(builtin_tools) // controls built-in tools in schema
             .allowed_tools(enabled_tools.clone()) // auto-approve enabled tools (built-in + MCP)
             .disallowed_tools(disallowed_mcp) // hide unwanted MCP tools from our server
-            .mcp_config(mcp_config);
+            .mcp_config(mcp_config)
+            .strict_mcp_config(true); // prevent inheritance of global MCP tools
 
         if let Some(dir) = working_dir {
             builder = builder.working_dir(dir);
@@ -383,18 +384,239 @@ impl CodingAgentTools {
     }
 }
 
-// MCP server wrapper
+use std::collections::HashSet;
+
+// MCP server wrapper with optional tool allowlist
 pub struct CodingAgentToolsServer {
     tools: Arc<CodingAgentTools>,
+    /// None => expose all tools (backwards compatible);
+    /// Some(set) => only expose tools whose names are in the set.
+    allowlist: Option<HashSet<String>>,
 }
 
 impl CodingAgentToolsServer {
     pub fn new(tools: Arc<CodingAgentTools>) -> Self {
-        Self { tools }
+        Self {
+            tools,
+            allowlist: None,
+        }
+    }
+
+    pub fn with_allowlist(
+        tools: Arc<CodingAgentTools>,
+        allowlist: Option<HashSet<String>>,
+    ) -> Self {
+        // Normalize empty set to None (treat as "all")
+        let normalized = match allowlist {
+            Some(set) if set.is_empty() => None,
+            other => other,
+        };
+        Self {
+            tools,
+            allowlist: normalized,
+        }
     }
 }
 
-universal_tool_core::implement_mcp_server!(CodingAgentToolsServer, tools);
+// Manual ServerHandler implementation with tool filtering
+impl universal_tool_core::mcp::ServerHandler for CodingAgentToolsServer {
+    async fn initialize(
+        &self,
+        _params: universal_tool_core::mcp::InitializeRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::InitializeResult, universal_tool_core::mcp::McpError>
+    {
+        Ok(universal_tool_core::mcp::InitializeResult {
+            server_info: universal_tool_core::mcp::Implementation {
+                name: "CodingAgentToolsServer".to_string(),
+                title: env!("CARGO_PKG_NAME").to_string().into(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                website_url: None,
+                icons: None,
+            },
+            capabilities: universal_tool_core::mcp::ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+            ..Default::default()
+        })
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<universal_tool_core::mcp::PaginatedRequestParam>,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::ListToolsResult, universal_tool_core::mcp::McpError> {
+        let all_defs = self.tools.get_mcp_tools();
+        // Filter by allowlist if set
+        let filtered_defs = match &self.allowlist {
+            None => all_defs,
+            Some(set) => all_defs
+                .into_iter()
+                .filter(|j| {
+                    j.get("name")
+                        .and_then(|v| v.as_str())
+                        .map(|n| set.contains(n))
+                        .unwrap_or(false)
+                })
+                .collect(),
+        };
+        let tools = universal_tool_core::mcp::convert_tool_definitions(filtered_defs);
+        Ok(universal_tool_core::mcp::ListToolsResult::with_all_items(
+            tools,
+        ))
+    }
+
+    async fn call_tool(
+        &self,
+        request: universal_tool_core::mcp::CallToolRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::CallToolResult, universal_tool_core::mcp::McpError> {
+        // Runtime check: deny calls to disallowed tools
+        if let Some(set) = &self.allowlist
+            && !set.contains(&*request.name)
+        {
+            return Ok(universal_tool_core::mcp::CallToolResult::error(vec![
+                universal_tool_core::mcp::Content::text(format!(
+                    "Tool '{}' not enabled on server",
+                    request.name
+                )),
+            ]));
+        }
+        // Dispatch to underlying handler
+        match self
+            .tools
+            .handle_mcp_call_mcp(
+                &request.name,
+                universal_tool_core::mcp::JsonValue::Object(request.arguments.unwrap_or_default()),
+            )
+            .await
+        {
+            Ok(result) => {
+                Ok(universal_tool_core::mcp::IntoCallToolResult::into_call_tool_result(result))
+            }
+            Err(e) => Ok(universal_tool_core::mcp::CallToolResult::error(vec![
+                universal_tool_core::mcp::Content::text(format!("Error: {}", e)),
+            ])),
+        }
+    }
+
+    // Default implementations for other required methods
+    async fn ping(
+        &self,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<(), universal_tool_core::mcp::McpError> {
+        Ok(())
+    }
+
+    async fn complete(
+        &self,
+        _request: universal_tool_core::mcp::CompleteRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::CompleteResult, universal_tool_core::mcp::McpError> {
+        Err(universal_tool_core::mcp::McpError::invalid_request(
+            "Method not implemented",
+            None,
+        ))
+    }
+
+    async fn set_level(
+        &self,
+        _request: universal_tool_core::mcp::SetLevelRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<(), universal_tool_core::mcp::McpError> {
+        Ok(())
+    }
+
+    async fn get_prompt(
+        &self,
+        _request: universal_tool_core::mcp::GetPromptRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::GetPromptResult, universal_tool_core::mcp::McpError> {
+        Err(universal_tool_core::mcp::McpError::invalid_request(
+            "Method not implemented",
+            None,
+        ))
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<universal_tool_core::mcp::PaginatedRequestParam>,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::ListPromptsResult, universal_tool_core::mcp::McpError>
+    {
+        Ok(universal_tool_core::mcp::ListPromptsResult {
+            prompts: vec![],
+            next_cursor: None,
+        })
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<universal_tool_core::mcp::PaginatedRequestParam>,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::ListResourcesResult, universal_tool_core::mcp::McpError>
+    {
+        Ok(universal_tool_core::mcp::ListResourcesResult {
+            resources: vec![],
+            next_cursor: None,
+        })
+    }
+
+    async fn list_resource_templates(
+        &self,
+        _request: Option<universal_tool_core::mcp::PaginatedRequestParam>,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<
+        universal_tool_core::mcp::ListResourceTemplatesResult,
+        universal_tool_core::mcp::McpError,
+    > {
+        Ok(universal_tool_core::mcp::ListResourceTemplatesResult {
+            resource_templates: vec![],
+            next_cursor: None,
+        })
+    }
+
+    async fn read_resource(
+        &self,
+        _request: universal_tool_core::mcp::ReadResourceRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<universal_tool_core::mcp::ReadResourceResult, universal_tool_core::mcp::McpError>
+    {
+        Err(universal_tool_core::mcp::McpError::invalid_request(
+            "Method not implemented",
+            None,
+        ))
+    }
+
+    async fn subscribe(
+        &self,
+        _request: universal_tool_core::mcp::SubscribeRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<(), universal_tool_core::mcp::McpError> {
+        Err(universal_tool_core::mcp::McpError::invalid_request(
+            "Method not implemented",
+            None,
+        ))
+    }
+
+    async fn unsubscribe(
+        &self,
+        _request: universal_tool_core::mcp::UnsubscribeRequestParam,
+        _context: universal_tool_core::mcp::RequestContext<universal_tool_core::mcp::RoleServer>,
+    ) -> Result<(), universal_tool_core::mcp::McpError> {
+        Err(universal_tool_core::mcp::McpError::invalid_request(
+            "Method not implemented",
+            None,
+        ))
+    }
+}
+
+// TODO(2): Consider adding allowlist/filtering support to universal_tool_core's implement_mcp_server!
+// macro or ServerHandler trait. The manual impl above replaces the macro to add filtering, but
+// this pattern could be generalized. Think about the best API design - perhaps:
+// - implement_mcp_server!(MyServer, tools, allowlist: my_allowlist_field)
+// - Or a separate trait/wrapper like FilteredServerHandler
+// - Or a builder pattern for the macro-generated impl
 
 #[cfg(test)]
 mod spawn_agent_filter_tests {
@@ -454,5 +676,90 @@ mod spawn_agent_filter_tests {
         };
         // Helper uses trim().is_empty() for emptiness check, but returns original string
         assert_eq!(pick_non_empty_text(&r).as_deref(), Some("  result text  "));
+    }
+}
+
+#[cfg(test)]
+mod server_allowlist_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn list_tools_filters_by_allowlist() {
+        let tools = Arc::new(CodingAgentTools::new());
+        let mut set = HashSet::new();
+        set.insert("ls".to_string());
+        set.insert("search_glob".to_string());
+        let server = CodingAgentToolsServer::with_allowlist(tools.clone(), Some(set));
+
+        let all_defs = server.tools.get_mcp_tools();
+        // Filter using same logic as list_tools
+        let filtered: Vec<_> = all_defs
+            .into_iter()
+            .filter(|j| {
+                j.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|n| server.allowlist.as_ref().unwrap().contains(n))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        let names: Vec<_> = filtered
+            .iter()
+            .filter_map(|j| j.get("name").and_then(|v| v.as_str()))
+            .collect();
+
+        assert!(names.contains(&"ls"));
+        assert!(names.contains(&"search_glob"));
+        assert!(!names.contains(&"spawn_agent"));
+        assert!(!names.contains(&"search_grep"));
+    }
+
+    #[test]
+    fn allowlist_none_exposes_all() {
+        let tools = Arc::new(CodingAgentTools::new());
+        let server = CodingAgentToolsServer::with_allowlist(tools.clone(), None);
+
+        let all_defs = server.tools.get_mcp_tools();
+        assert_eq!(all_defs.len(), 4); // ls, spawn_agent, search_grep, search_glob
+    }
+
+    #[test]
+    fn empty_set_normalizes_to_none() {
+        let tools = Arc::new(CodingAgentTools::new());
+        let server = CodingAgentToolsServer::with_allowlist(tools, Some(HashSet::new()));
+        assert!(server.allowlist.is_none());
+    }
+
+    #[test]
+    fn new_constructor_has_no_allowlist() {
+        let tools = Arc::new(CodingAgentTools::new());
+        let server = CodingAgentToolsServer::new(tools);
+        assert!(server.allowlist.is_none());
+    }
+
+    #[test]
+    fn single_tool_allowlist() {
+        let tools = Arc::new(CodingAgentTools::new());
+        let mut set = HashSet::new();
+        set.insert("spawn_agent".to_string());
+        let server = CodingAgentToolsServer::with_allowlist(tools.clone(), Some(set));
+
+        let all_defs = server.tools.get_mcp_tools();
+        let filtered: Vec<_> = all_defs
+            .into_iter()
+            .filter(|j| {
+                j.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|n| server.allowlist.as_ref().unwrap().contains(n))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered[0].get("name").and_then(|v| v.as_str()),
+            Some("spawn_agent")
+        );
     }
 }
