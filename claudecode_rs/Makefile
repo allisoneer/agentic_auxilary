@@ -52,6 +52,7 @@ build-normal:
 # Verbose output variants
 .PHONY: check-verbose
 check-verbose:
+	cargo fmt -- --check
 	cargo clippy --verbose --all-targets --all-features -- -D warnings
 
 .PHONY: test-verbose

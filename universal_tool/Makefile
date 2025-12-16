@@ -59,6 +59,7 @@ build-normal:
 
 # Verbose versions - extra output
 check-verbose:
+	cargo fmt --all -- --check
 	cargo clippy -p 'universal-tool-*' --all-features --all-targets --verbose -- -D warnings
 	@$(MAKE) check-examples-verbose
 
