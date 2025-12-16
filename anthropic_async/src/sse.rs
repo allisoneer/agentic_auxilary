@@ -120,6 +120,7 @@ pub mod streaming {
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
     #[serde(tag = "type", rename_all = "snake_case")]
     #[allow(clippy::derive_partial_eq_without_eq)] // ContentBlock doesn't impl Eq
+    #[non_exhaustive]
     pub enum Event {
         /// Message creation started
         MessageStart {
@@ -161,6 +162,14 @@ pub mod streaming {
         Error {
             /// Error details
             error: EventError,
+        },
+        /// Forward-compatible catch-all for unknown event types
+        #[serde(skip)]
+        Unknown {
+            /// Raw event type string received
+            event_type: String,
+            /// Raw data payload
+            data: String,
         },
     }
 
@@ -294,9 +303,11 @@ pub mod streaming {
     impl Event {
         /// Parse an SSE frame into a typed Event
         ///
+        /// Unknown event types return `Ok(Event::Unknown { .. })` for forward compatibility.
+        ///
         /// # Errors
         ///
-        /// Returns an error if the event type is unrecognized or the data cannot be parsed.
+        /// Returns an error if event data cannot be parsed for a known event type.
         pub fn from_frame(frame: &SseFrame) -> Result<Self, AnthropicError> {
             let event_type = frame.event.as_deref().unwrap_or("message");
 
@@ -349,10 +360,11 @@ pub mod streaming {
                     })
                 }
                 _ => {
-                    // Unknown event type, try to parse as generic message or skip
-                    Err(AnthropicError::Serde(format!(
-                        "Unknown event type: {event_type}"
-                    )))
+                    // Forward-compatible: return Unknown event instead of error
+                    Ok(Self::Unknown {
+                        event_type: event_type.to_string(),
+                        data: frame.data.clone(),
+                    })
                 }
             }
         }
@@ -511,8 +523,8 @@ pub mod streaming {
                         _ => {}
                     }
                 }
-                Event::ContentBlockStop { .. } | Event::Ping => {
-                    // Block complete or keep-alive, nothing to do
+                Event::ContentBlockStop { .. } | Event::Ping | Event::Unknown { .. } => {
+                    // Block complete, keep-alive, or unknown event - nothing to do
                 }
                 Event::MessageDelta { delta, usage } => {
                     if let Some(reason) = &delta.stop_reason {
@@ -616,6 +628,8 @@ pub mod streaming {
     ///
     /// This function converts the response body into a stream of parsed events.
     /// The stream owns the response and will close the connection when dropped.
+    ///
+    /// Unknown event types are yielded as `Event::Unknown` for forward compatibility.
     #[must_use]
     pub fn event_stream_from_response(response: reqwest::Response) -> EventStream {
         use futures::StreamExt;
@@ -625,51 +639,24 @@ pub mod streaming {
         Box::pin(futures::stream::unfold(
             (byte_stream, SSEDecoder::new(), Vec::<SseFrame>::new()),
             |(mut stream, mut decoder, mut pending_frames)| async move {
-                // First, drain any pending frames
+                // Drain pending frames first
                 if let Some(frame) = pending_frames.pop() {
-                    match Event::from_frame(&frame) {
-                        Ok(event) => {
-                            return Some((Ok(event), (stream, decoder, pending_frames)));
-                        }
-                        Err(e) => {
-                            // Skip unknown event types, don't error
-                            if e.to_string().contains("Unknown event type") {
-                                return Some((
-                                    Err(e), // or could skip by recursing
-                                    (stream, decoder, pending_frames),
-                                ));
-                            }
-                            return Some((Err(e), (stream, decoder, pending_frames)));
-                        }
-                    }
+                    let parsed = Event::from_frame(&frame);
+                    return Some((parsed, (stream, decoder, pending_frames)));
                 }
 
-                // Get next chunk
                 loop {
                     match stream.next().await {
                         Some(Ok(chunk)) => {
                             let mut frames = decoder.push(&chunk);
-                            frames.reverse(); // So we can pop from the end
+                            frames.reverse();
                             pending_frames = frames;
 
                             if let Some(frame) = pending_frames.pop() {
-                                match Event::from_frame(&frame) {
-                                    Ok(event) => {
-                                        return Some((
-                                            Ok(event),
-                                            (stream, decoder, pending_frames),
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        // For unknown event types, continue to next frame
-                                        if e.to_string().contains("Unknown event type") {
-                                            continue;
-                                        }
-                                        return Some((Err(e), (stream, decoder, pending_frames)));
-                                    }
-                                }
+                                let parsed = Event::from_frame(&frame);
+                                return Some((parsed, (stream, decoder, pending_frames)));
                             }
-                            // No complete frames yet, get more data
+                            // Else loop to get more data
                         }
                         Some(Err(e)) => {
                             return Some((
@@ -678,11 +665,9 @@ pub mod streaming {
                             ));
                         }
                         None => {
-                            // Stream ended, flush decoder and ignore errors on final frame
-                            if let Some(frame) = decoder.flush()
-                                && let Ok(event) = Event::from_frame(&frame)
-                            {
-                                return Some((Ok(event), (stream, decoder, pending_frames)));
+                            if let Some(frame) = decoder.flush() {
+                                let parsed = Event::from_frame(&frame);
+                                return Some((parsed, (stream, decoder, pending_frames)));
                             }
                             return None;
                         }
