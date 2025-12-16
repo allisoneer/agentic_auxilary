@@ -237,16 +237,17 @@ fn event_mapping_ping() {
 fn event_mapping_unknown_event_type() {
     let frame = SseFrame {
         event: Some("future_event_type".to_string()),
-        data: r#"{"type":"future_event_type"}"#.to_string(),
+        data: r#"{"type":"future_event_type","foo":"bar"}"#.to_string(),
     };
-    let result = Event::from_frame(&frame);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Unknown event type")
-    );
+    let event = Event::from_frame(&frame).unwrap();
+    match event {
+        Event::Unknown { event_type, data } => {
+            assert_eq!(event_type, "future_event_type");
+            assert!(data.contains("future_event_type"));
+            assert!(data.contains("foo"));
+        }
+        _ => panic!("Expected Event::Unknown"),
+    }
 }
 
 // =============================================================================
@@ -484,6 +485,39 @@ fn accumulator_handles_ping_events() {
     // Ping should be ignored
     let result = acc.apply(&Event::Ping).unwrap();
     assert!(result.is_none());
+}
+
+#[test]
+fn accumulator_ignores_unknown_events() {
+    let mut acc = Accumulator::new();
+
+    // message_start
+    acc.apply(&Event::MessageStart {
+        message: MessageStartPayload {
+            id: "msg_unknown".to_string(),
+            kind: "message".to_string(),
+            role: MessageRole::Assistant,
+            model: "claude".to_string(),
+            content: vec![],
+            stop_reason: None,
+            stop_sequence: None,
+            usage: None,
+        },
+    })
+    .unwrap();
+
+    // Unknown event in the middle should be ignored (no-op)
+    let res = acc
+        .apply(&Event::Unknown {
+            event_type: "some_new_event".to_string(),
+            data: r#"{"type":"some_new_event"}"#.to_string(),
+        })
+        .unwrap();
+    assert!(res.is_none());
+
+    // message_stop should still work
+    let res = acc.apply(&Event::MessageStop).unwrap();
+    assert!(res.is_some());
 }
 
 #[test]
