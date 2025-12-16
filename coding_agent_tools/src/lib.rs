@@ -207,7 +207,16 @@ impl CodingAgentTools {
         // Compose configuration
         let model = agent::model_for(agent_type);
         let system_prompt = agent::compose_prompt(agent_type, location);
-        let allowed_tools = agent::allowed_tools_for(agent_type, location);
+        let enabled_tools = agent::enabled_tools_for(agent_type, location);
+
+        // Split enabled tools into built-in vs MCP
+        let (builtin_tools, _mcp_tools): (Vec<String>, Vec<String>) = enabled_tools
+            .iter()
+            .cloned()
+            .partition(|t| !t.starts_with("mcp__"));
+
+        // Compute MCP tools to disallow from our own server
+        let disallowed_mcp = agent::disallowed_mcp_tools_for(&enabled_tools, location);
 
         // Working directory resolution (may be None for web)
         let working_dir = agent::resolve_working_dir(location)?;
@@ -221,7 +230,9 @@ impl CodingAgentTools {
             .output_format(OutputFormat::Text)
             .permission_mode(PermissionMode::DontAsk)
             .system_prompt(system_prompt)
-            .allowed_tools(allowed_tools)
+            .tools(builtin_tools) // controls built-in tools in schema
+            .allowed_tools(enabled_tools.clone()) // auto-approve enabled tools (built-in + MCP)
+            .disallowed_tools(disallowed_mcp) // hide unwanted MCP tools from our server
             .mcp_config(mcp_config);
 
         if let Some(dir) = working_dir {
