@@ -40,6 +40,7 @@ build-normal:
 
 # Verbose versions - extra output
 check-verbose:
+	cargo fmt -- --check
 	cargo clippy --verbose --all-targets -- -D warnings
 
 test-verbose:
