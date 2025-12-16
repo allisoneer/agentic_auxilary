@@ -7,7 +7,7 @@ pub mod config;
 pub mod prompts;
 
 pub use config::{
-    allowed_tools_for, build_mcp_config, compose_prompt, model_for, require_binaries_for_location,
-    resolve_working_dir,
+    CODING_AGENT_TOOLS_MCP, build_mcp_config, compose_prompt, disallowed_mcp_tools_for,
+    enabled_tools_for, model_for, require_binaries_for_location, resolve_working_dir,
 };
 pub use prompts::{ANALYZER_BASE_PROMPT, LOCATOR_BASE_PROMPT};

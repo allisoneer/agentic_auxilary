@@ -21,8 +21,20 @@ pub fn model_for(agent_type: AgentType) -> Model {
     }
 }
 
-/// Get the allowed tools for a given type × location combination.
-pub fn allowed_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
+/// Public constant listing all MCP tool IDs exported by the 'coding-agent-tools' server.
+///
+/// NOTE: We only ever disallow tools from our own server here; tools from other
+/// MCP servers (e.g., 'thoughts_tool') are not blocked by this module.
+pub const CODING_AGENT_TOOLS_MCP: &[&str] = &[
+    "mcp__coding-agent-tools__ls",
+    "mcp__coding-agent-tools__spawn_agent",
+    "mcp__coding-agent-tools__search_grep",
+    "mcp__coding-agent-tools__search_glob",
+];
+
+/// Get the enabled tools for a given type × location combination.
+/// This list includes both built-in tools and MCP tools (prefixed with "mcp__").
+pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
     use AgentLocation::*;
     use AgentType::*;
 
@@ -71,6 +83,25 @@ pub fn allowed_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
             "mcp__coding-agent-tools__ls".into(),
         ],
     }
+}
+
+/// Compute MCP tools to disallow for a given enabled tool list and location.
+///
+/// Behavior:
+/// - Only considers our own 'coding-agent-tools' server tools (see CODING_AGENT_TOOLS_MCP)
+/// - Returns all server tools that are NOT present in the enabled list
+///   (defense-in-depth and ensures 'ls' is only visible when explicitly enabled)
+/// - Ignores other MCP servers' tools (e.g., thoughts_tool)
+pub fn disallowed_mcp_tools_for(enabled: &[String], _location: AgentLocation) -> Vec<String> {
+    use std::collections::HashSet;
+
+    let enabled_set: HashSet<&str> = enabled.iter().map(|s| s.as_str()).collect();
+
+    CODING_AGENT_TOOLS_MCP
+        .iter()
+        .filter(|tool| !enabled_set.contains(*tool))
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 /// Compose the system prompt for a given type × location combination.
@@ -198,8 +229,8 @@ mod tests {
     }
 
     #[test]
-    fn test_allowed_tools_locator_codebase() {
-        let tools = allowed_tools_for(AgentType::Locator, AgentLocation::Codebase);
+    fn test_enabled_tools_locator_codebase() {
+        let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Codebase);
         assert!(tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
         assert!(tools.contains(&"Grep".to_string()));
         assert!(tools.contains(&"Glob".to_string()));
@@ -207,8 +238,8 @@ mod tests {
     }
 
     #[test]
-    fn test_allowed_tools_analyzer_codebase() {
-        let tools = allowed_tools_for(AgentType::Analyzer, AgentLocation::Codebase);
+    fn test_enabled_tools_analyzer_codebase() {
+        let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Codebase);
         assert!(tools.contains(&"Read".to_string())); // Analyzer can read
         assert!(tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
         assert!(tools.contains(&"Grep".to_string()));
@@ -216,34 +247,34 @@ mod tests {
     }
 
     #[test]
-    fn test_allowed_tools_locator_thoughts() {
-        let tools = allowed_tools_for(AgentType::Locator, AgentLocation::Thoughts);
+    fn test_enabled_tools_locator_thoughts() {
+        let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Thoughts);
         assert!(tools.contains(&"mcp__thoughts__list_active_documents".to_string()));
         assert!(!tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
     }
 
     #[test]
-    fn test_allowed_tools_locator_references() {
-        let tools = allowed_tools_for(AgentType::Locator, AgentLocation::References);
+    fn test_enabled_tools_locator_references() {
+        let tools = enabled_tools_for(AgentType::Locator, AgentLocation::References);
         assert!(tools.contains(&"mcp__thoughts__list_references".to_string()));
     }
 
     #[test]
-    fn test_allowed_tools_locator_web() {
-        let tools = allowed_tools_for(AgentType::Locator, AgentLocation::Web);
+    fn test_enabled_tools_locator_web() {
+        let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Web);
         assert_eq!(tools, vec!["WebSearch".to_string()]);
     }
 
     #[test]
-    fn test_allowed_tools_analyzer_web() {
-        let tools = allowed_tools_for(AgentType::Analyzer, AgentLocation::Web);
+    fn test_enabled_tools_analyzer_web() {
+        let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
     }
 
     #[test]
-    fn test_allowed_tools_analyzer_web_full_set() {
-        let tools = allowed_tools_for(AgentType::Analyzer, AgentLocation::Web);
+    fn test_enabled_tools_analyzer_web_full_set() {
+        let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
         let expected = [
             "WebSearch",
             "WebFetch",
@@ -257,6 +288,46 @@ mod tests {
             assert!(tools.contains(&t.to_string()), "missing tool: {t}");
         }
         assert_eq!(tools.len(), 7);
+    }
+
+    #[test]
+    fn test_disallowed_mcp_tools_locator_codebase() {
+        let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Codebase);
+        let disallowed = disallowed_mcp_tools_for(&enabled, AgentLocation::Codebase);
+
+        // Should disallow recursion/search tools but not ls
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__spawn_agent".to_string()));
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__search_grep".to_string()));
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__search_glob".to_string()));
+        assert!(!disallowed.contains(&"mcp__coding-agent-tools__ls".to_string()));
+    }
+
+    #[test]
+    fn test_disallowed_mcp_tools_locator_thoughts_blocks_all_coding_agent_tools() {
+        let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Thoughts);
+        let disallowed = disallowed_mcp_tools_for(&enabled, AgentLocation::Thoughts);
+
+        // Since 'ls' is not enabled at Thoughts location, all coding-agent-tools MCP should be disallowed
+        for t in CODING_AGENT_TOOLS_MCP {
+            assert!(
+                disallowed.contains(&t.to_string()),
+                "missing in disallowed: {t}"
+            );
+        }
+        assert_eq!(disallowed.len(), CODING_AGENT_TOOLS_MCP.len());
+    }
+
+    #[test]
+    fn test_disallowed_mcp_tools_analyzer_web_allows_ls() {
+        let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
+        let disallowed = disallowed_mcp_tools_for(&enabled, AgentLocation::Web);
+
+        // Analyzer+Web has ls enabled, so only spawn_agent/search_* should be disallowed
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__spawn_agent".to_string()));
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__search_grep".to_string()));
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__search_glob".to_string()));
+        assert!(!disallowed.contains(&"mcp__coding-agent-tools__ls".to_string()));
+        assert_eq!(disallowed.len(), 3);
     }
 
     #[test]
@@ -326,7 +397,7 @@ mod tests {
                 AgentLocation::References,
                 AgentLocation::Web,
             ] {
-                let tools = allowed_tools_for(agent_type, location);
+                let tools = enabled_tools_for(agent_type, location);
                 assert!(
                     !tools.is_empty(),
                     "No tools for {:?} + {:?}",
