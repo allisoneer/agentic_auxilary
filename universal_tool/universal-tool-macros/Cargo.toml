@@ -1,6 +1,6 @@
 [package]
 name = "universal-tool-macros"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Procedural macros for Universal Tool Framework - generate CLI, REST, and MCP interfaces"
