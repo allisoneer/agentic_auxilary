@@ -192,6 +192,7 @@ impl CodingAgentTools {
     ) -> Result<AgentOutput, ToolError> {
         use claudecode::client::Client;
         use claudecode::config::SessionConfig;
+        use claudecode::mcp::validate::{ValidateOptions, ensure_valid_mcp_config};
         use claudecode::types::{OutputFormat, PermissionMode};
 
         let agent_type = agent_type.unwrap_or_default();
@@ -200,9 +201,6 @@ impl CodingAgentTools {
         if query.trim().is_empty() {
             return Err(ToolError::invalid_input("Query cannot be empty"));
         }
-
-        // Early validation for required binaries
-        agent::require_binaries_for_location(location)?;
 
         // Compose configuration
         let model = agent::model_for(agent_type);
@@ -223,6 +221,21 @@ impl CodingAgentTools {
 
         // Build MCP config with enabled tools for CLI flag propagation
         let mcp_config = agent::build_mcp_config(location, &enabled_tools);
+
+        // Validate MCP servers before launching (spawn, handshake, tools/list)
+        let opts = ValidateOptions::default();
+        ensure_valid_mcp_config(&mcp_config, &opts)
+            .await
+            .map_err(|e| {
+                let mut details = String::new();
+                for (name, err) in &e.errors {
+                    details.push_str(&format!("  {}: {}\n", name, err));
+                }
+                ToolError::internal(format!(
+                    "spawn_agent unavailable: MCP config validation failed.\n{}",
+                    details
+                ))
+            })?;
 
         // Build session config
         let mut builder = SessionConfig::builder(query)
