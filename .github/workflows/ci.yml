@@ -95,6 +95,22 @@ jobs:
           command: check ${{ matrix.checks }}
         continue-on-error: ${{ matrix.checks == 'advisories' }}
 
+  root-sync:
+    name: Root Sync Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+
+      - name: Check Makefile sync
+        run: cargo run -p xtask -- makefile-sync --check
+
   nightly-integration:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Nightly Integration ${{ matrix.package }} on ${{ matrix.os }}

@@ -36,6 +36,12 @@ Production-ready asynchronous client for Anthropic's API with prompt caching sup
 - Retry with exponential backoff, beta feature support
 - Strong typing and examples
 
+### 💬 [PR Comments](pr_comments/)
+Fetch GitHub PR comments with resolution filtering.
+- CLI + MCP support
+- Filter by author, state, and resolution
+- Useful for code review analytics and CI reporting
+
 ### 🔧 [Coding Agent Tools](coding_agent_tools/)
 CLI + MCP tools for coding assistants with gitignore-aware directory listing.
 - Dual CLI and MCP interfaces
