@@ -12,10 +12,11 @@ use rmcp::{
 };
 use std::{
     collections::{HashMap, HashSet},
+    process::Stdio,
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{process::Command, sync::Semaphore, time::timeout};
+use tokio::{io::AsyncReadExt, process::Command, sync::Mutex, sync::Semaphore, time::timeout};
 
 // === Configuration ===
 
@@ -101,6 +102,13 @@ pub enum McpServerValidationError {
     },
     #[error("Server not configured: {0}")]
     ServerNotConfigured(String),
+    #[error("Validation task panicked: {message}")]
+    TaskPanicked { message: String },
+    #[error("Validation timed out after {after:?}")]
+    OverallTimeout {
+        after: Duration,
+        stderr_tail: Option<String>,
+    },
 }
 
 /// Result of validating a single MCP server.
@@ -179,31 +187,37 @@ pub async fn validate_mcp_config(
     opts: &ValidateOptions,
 ) -> McpValidationReport {
     let semaphore = Arc::new(Semaphore::new(opts.parallelism));
-    let mut handles = Vec::new();
+    let mut handles: Vec<(String, tokio::task::JoinHandle<McpServerResult>)> = Vec::new();
 
     for (name, server) in &config.mcp_servers {
-        let name = name.clone();
+        let name_outer = name.clone();
+        let name_inner = name.clone();
         let server = server.clone();
         let opts = opts.clone();
         let sem = semaphore.clone();
 
         let handle = tokio::spawn(async move {
             let _permit = sem.acquire().await;
-            let result = validate_single_server(&name, &server, &opts).await;
-            (name, result)
+            validate_single_server(&name_inner, &server, &opts).await
         });
-        handles.push(handle);
+        handles.push((name_outer, handle));
     }
 
     let mut servers = HashMap::new();
-    for handle in handles {
+    for (name, handle) in handles {
         match handle.await {
-            Ok((name, result)) => {
+            Ok(result) => {
                 servers.insert(name, result);
             }
             Err(e) => {
-                // JoinError - task panicked
+                // Task panicked or was cancelled - preserve server entry
                 tracing::error!("Server validation task panicked: {e}");
+                servers.insert(
+                    name,
+                    McpServerResult::Err(McpServerValidationError::TaskPanicked {
+                        message: e.to_string(),
+                    }),
+                );
             }
         }
     }
@@ -525,7 +539,25 @@ async fn validate_stdio_server(
     env: Option<&HashMap<String, String>>,
     opts: &ValidateOptions,
 ) -> Result<McpServerValidationSuccess, McpServerValidationError> {
-    let start = Instant::now();
+    // Test-only panic injection to validate panic-safe aggregation
+    #[cfg(test)]
+    if command == "__panic__" {
+        panic!("intentional test panic for aggregator");
+    }
+
+    // Helper to snapshot stderr tail from shared buffer
+    async fn snapshot_tail(buf: &Option<Arc<Mutex<Vec<u8>>>>) -> Option<String> {
+        if let Some(b) = buf {
+            let data = b.lock().await.clone();
+            if data.is_empty() {
+                None
+            } else {
+                Some(String::from_utf8_lossy(&data).to_string())
+            }
+        } else {
+            None
+        }
+    }
 
     // Build the command
     let mut cmd = Command::new(command);
@@ -537,50 +569,131 @@ async fn validate_stdio_server(
         }
     }
 
-    // Create transport - TokioChildProcess::new takes a Command
-    let transport = TokioChildProcess::new(cmd).map_err(|e| McpServerValidationError::SpawnIo {
-        message: format!("Failed to spawn '{command}': {e}"),
-        stderr_tail: None,
-    })?;
-
-    // Perform handshake using the unit type () as a minimal client service
-    // The .serve() method is from ServiceExt trait
-    let handshake_result = timeout(opts.handshake_timeout, ().serve(transport))
-        .await
-        .map_err(|_| McpServerValidationError::HandshakeTimeout(opts.handshake_timeout))?
-        .map_err(|e| McpServerValidationError::HandshakeProtocol {
-            message: format!("{e}"),
-            stderr_tail: None,
-        })?;
-
-    let handshake_ms = start.elapsed().as_millis() as u64;
-
-    // Get server info - peer_info() returns Option<&ServerInfo>
-    let server_info = handshake_result.peer_info().cloned().ok_or_else(|| {
-        McpServerValidationError::HandshakeProtocol {
-            message: "Server info not available after handshake".to_string(),
-            stderr_tail: None,
+    // Spawn with stderr piped when capturing
+    let (transport, stderr_opt) = {
+        let mut builder = TokioChildProcess::builder(cmd);
+        if opts.capture_stderr {
+            builder = builder.stderr(Stdio::piped());
         }
-    })?;
+        builder
+            .spawn()
+            .map_err(|e| McpServerValidationError::SpawnIo {
+                message: format!("Failed to spawn '{command}': {e}"),
+                stderr_tail: None,
+            })?
+    };
 
-    // List tools with timeout
-    let tools_start = Instant::now();
-    let tools = timeout(opts.tools_list_timeout, handshake_result.list_all_tools())
-        .await
-        .map_err(|_| McpServerValidationError::ToolsListTimeout(opts.tools_list_timeout))?
-        .map_err(|e| McpServerValidationError::ToolsListError(format!("{e}")))?;
-    let tools_list_ms = tools_start.elapsed().as_millis() as u64;
+    // Background stderr reader with bounded buffer
+    let stderr_tail_buf: Option<Arc<Mutex<Vec<u8>>>> = if opts.capture_stderr {
+        if let Some(mut stderr) = stderr_opt {
+            let buf = Arc::new(Mutex::new(Vec::with_capacity(std::cmp::min(
+                1024,
+                opts.max_stderr_bytes,
+            ))));
+            let buf_clone = buf.clone();
+            let cap = opts.max_stderr_bytes;
+            tokio::spawn(async move {
+                let mut chunk = vec![0u8; 1024];
+                loop {
+                    match stderr.read(&mut chunk).await {
+                        Ok(0) => break, // EOF
+                        Ok(n) => {
+                            let mut guard = buf_clone.lock().await;
+                            guard.extend_from_slice(&chunk[..n]);
+                            // Keep only the last `cap` bytes (tail)
+                            if guard.len() > cap {
+                                let start = guard.len() - cap;
+                                guard.drain(..start);
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+            Some(buf)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
-    // Cleanup: cancel the service
-    let _ = handshake_result.cancel().await;
+    // Inner validation future: handshake + tools list
+    let inner = {
+        let stderr_buf = stderr_tail_buf.clone();
+        async move {
+            let start = Instant::now();
 
-    Ok(McpServerValidationSuccess {
-        info: server_info,
-        tools,
-        handshake_ms,
-        tools_list_ms,
-        transport: TransportType::Stdio,
-    })
+            // Perform handshake with timeout
+            let handshake_result = match timeout(opts.handshake_timeout, ().serve(transport)).await
+            {
+                Err(_) => {
+                    return Err(McpServerValidationError::HandshakeTimeout(
+                        opts.handshake_timeout,
+                    ));
+                }
+                Ok(Ok(svc)) => svc,
+                Ok(Err(e)) => {
+                    let tail = snapshot_tail(&stderr_buf).await;
+                    return Err(McpServerValidationError::HandshakeProtocol {
+                        message: format!("{e}"),
+                        stderr_tail: tail,
+                    });
+                }
+            };
+            let handshake_ms = start.elapsed().as_millis() as u64;
+
+            // Get server info
+            let server_info = match handshake_result.peer_info().cloned() {
+                Some(info) => info,
+                None => {
+                    let tail = snapshot_tail(&stderr_buf).await;
+                    return Err(McpServerValidationError::HandshakeProtocol {
+                        message: "Server info not available after handshake".to_string(),
+                        stderr_tail: tail,
+                    });
+                }
+            };
+
+            // List tools with timeout (no stderr_tail here by design)
+            let tools_start = Instant::now();
+            let tools = match timeout(opts.tools_list_timeout, handshake_result.list_all_tools())
+                .await
+            {
+                Err(_) => {
+                    return Err(McpServerValidationError::ToolsListTimeout(
+                        opts.tools_list_timeout,
+                    ));
+                }
+                Ok(Ok(tools)) => tools,
+                Ok(Err(e)) => return Err(McpServerValidationError::ToolsListError(format!("{e}"))),
+            };
+            let tools_list_ms = tools_start.elapsed().as_millis() as u64;
+
+            // Cleanup: cancel the service
+            let _ = handshake_result.cancel().await;
+
+            Ok(McpServerValidationSuccess {
+                info: server_info,
+                tools,
+                handshake_ms,
+                tools_list_ms,
+                transport: TransportType::Stdio,
+            })
+        }
+    };
+
+    // Overall timeout wrapper captures stderr on timeout
+    match timeout(opts.overall_timeout, inner).await {
+        Ok(result) => result,
+        Err(_) => {
+            let tail = snapshot_tail(&stderr_tail_buf).await;
+            Err(McpServerValidationError::OverallTimeout {
+                after: opts.overall_timeout,
+                stderr_tail: tail,
+            })
+        }
+    }
 }
 
 /// Validate an HTTP MCP server.
@@ -747,5 +860,120 @@ mod tests {
             suggestions: HashMap::new(),
         };
         assert!(!report.all_ok());
+    }
+
+    #[tokio::test]
+    async fn test_panicked_task_is_reported() {
+        use crate::config::{MCPConfig, MCPServer};
+
+        let mut cfg = MCPConfig {
+            mcp_servers: HashMap::new(),
+        };
+        cfg.mcp_servers.insert(
+            "panic_server".to_string(),
+            MCPServer::Stdio {
+                command: "__panic__".into(),
+                args: vec![],
+                env: None,
+            },
+        );
+
+        let opts = ValidateOptions::default();
+        let report = validate_mcp_config(&cfg, &opts).await;
+
+        let entry = report.servers.get("panic_server").expect("entry missing");
+        match entry {
+            McpServerResult::Err(McpServerValidationError::TaskPanicked { message }) => {
+                assert!(
+                    message.to_lowercase().contains("panic"),
+                    "message={message}"
+                );
+            }
+            other => panic!("expected TaskPanicked, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stderr_capture_on_handshake_failure() {
+        use crate::config::{MCPConfig, MCPServer};
+
+        let cmd = "sh";
+        let args = vec![
+            "-c".to_string(),
+            "echo boom 1>&2; sleep 0.05; exit 1".to_string(),
+        ];
+        let mut cfg = MCPConfig {
+            mcp_servers: HashMap::new(),
+        };
+        cfg.mcp_servers.insert(
+            "bad".to_string(),
+            MCPServer::Stdio {
+                command: cmd.into(),
+                args,
+                env: None,
+            },
+        );
+
+        let opts = ValidateOptions {
+            handshake_timeout: Duration::from_secs(2),
+            overall_timeout: Duration::from_secs(3),
+            capture_stderr: true,
+            max_stderr_bytes: 1024,
+            ..Default::default()
+        };
+
+        let report = validate_mcp_config(&cfg, &opts).await;
+        let err = match report.servers.get("bad").unwrap() {
+            McpServerResult::Err(e) => e.clone(),
+            other => panic!("expected error, got {other:?}"),
+        };
+
+        match err {
+            McpServerValidationError::HandshakeProtocol { stderr_tail, .. } => {
+                let tail = stderr_tail.expect("expected captured stderr");
+                assert!(tail.contains("boom"), "stderr_tail={tail}");
+            }
+            other => panic!("expected HandshakeProtocol, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_overall_timeout() {
+        use crate::config::{MCPConfig, MCPServer};
+
+        let cmd = "sh";
+        let args = vec!["-c".to_string(), "sleep 5".to_string()];
+        let mut cfg = MCPConfig {
+            mcp_servers: HashMap::new(),
+        };
+        cfg.mcp_servers.insert(
+            "slow".to_string(),
+            MCPServer::Stdio {
+                command: cmd.into(),
+                args,
+                env: None,
+            },
+        );
+
+        let opts = ValidateOptions {
+            handshake_timeout: Duration::from_secs(5),
+            tools_list_timeout: Duration::from_secs(5),
+            overall_timeout: Duration::from_millis(100),
+            capture_stderr: true,
+            ..Default::default()
+        };
+
+        let report = validate_mcp_config(&cfg, &opts).await;
+        let err = match report.servers.get("slow").unwrap() {
+            McpServerResult::Err(e) => e.clone(),
+            other => panic!("expected error, got {other:?}"),
+        };
+
+        match err {
+            McpServerValidationError::OverallTimeout { after, .. } => {
+                assert_eq!(after, Duration::from_millis(100));
+            }
+            other => panic!("expected OverallTimeout, got {other:?}"),
+        }
     }
 }
