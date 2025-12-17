@@ -1,6 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+## [0.2.0] - 2025-12-16
+
+### ⚙️  Miscellaneous
+- *(build)* Standardize Makefile targets for local/CI parity
+- *(build)* Add fmt check to check-verbose targets across all Makefiles
+
+### ⛰️  Features
+- *(anthropic_async)* Add streaming, structured outputs, and tool enhancements
+- *(anthropic_async)* Add forward-compatible Unknown event handling for SSE streams
+
+### 🚜 Refactor
+- *(anthropic_async)* Deduplicate validation and remove unused placeholder
 ## [0.1.0] - 2025-11-20
 
 ### ⚙️  Miscellaneous

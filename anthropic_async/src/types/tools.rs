@@ -57,6 +57,12 @@ pub struct Tool {
     /// Optional cache control for prompt caching
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
+    /// Enable strict mode for tool input validation (beta)
+    ///
+    /// When enabled, tool inputs must exactly match the schema with no additional properties.
+    /// Requires a structured outputs beta header to be enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strict: Option<bool>,
 }
 
 /// Tool choice strategy
@@ -131,6 +137,7 @@ pub mod schema {
             description: description.map(std::string::ToString::to_string),
             input_schema: schema_value,
             cache_control: None,
+            strict: None,
         }
     }
 
@@ -203,11 +210,14 @@ mod tests {
                 }
             }),
             cache_control: None,
+            strict: None,
         };
         let s = serde_json::to_string(&tool).unwrap();
         assert!(s.contains(r#""name":"calculator""#));
         assert!(s.contains(r#""description":"Math tool""#));
         assert!(s.contains(r#""input_schema""#));
+        // strict should not appear when None
+        assert!(!s.contains("strict"));
     }
 
     #[cfg(feature = "schemars")]

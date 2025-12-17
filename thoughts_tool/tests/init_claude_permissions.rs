@@ -11,7 +11,7 @@ fn worktree_additional_directory_and_relative_rules_are_injected() {
     let worktree = td.path().join("worktree");
 
     // Create main repo structure with .thoughts-data
-    fs::create_dir_all(&main_repo.join(".thoughts-data")).unwrap();
+    fs::create_dir_all(main_repo.join(".thoughts-data")).unwrap();
 
     // Create worktree
     fs::create_dir_all(&worktree).unwrap();

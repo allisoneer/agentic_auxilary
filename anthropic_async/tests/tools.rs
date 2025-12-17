@@ -17,11 +17,14 @@ fn tool_serialization() {
             "required": ["city"]
         }),
         cache_control: None,
+        strict: None,
     };
     let s = serde_json::to_string(&tool).unwrap();
     assert!(s.contains(r#""name":"get_weather""#));
     assert!(s.contains(r#""description":"Get weather for a city""#));
     assert!(s.contains(r#""input_schema""#));
+    // strict should not appear when None
+    assert!(!s.contains("strict"));
 }
 
 #[test]
@@ -57,6 +60,7 @@ fn message_request_with_tools() {
             }
         }),
         cache_control: None,
+        strict: None,
     };
 
     let req = MessagesCreateRequest {
@@ -76,6 +80,8 @@ fn message_request_with_tools() {
         tool_choice: Some(ToolChoice::Auto {
             disable_parallel_tool_use: None,
         }),
+        stream: None,
+        output_format: None,
     };
 
     let s = serde_json::to_string(&req).unwrap();
@@ -86,9 +92,11 @@ fn message_request_with_tools() {
 
 #[test]
 fn tool_result_content_block() {
+    use anthropic_async::types::content::ToolResultContent;
+
     let tool_result = ContentBlockParam::ToolResult {
         tool_use_id: "tool_123".into(),
-        content: Some("Result content".into()),
+        content: Some(ToolResultContent::String("Result content".into())),
         is_error: Some(false),
         cache_control: None,
     };
