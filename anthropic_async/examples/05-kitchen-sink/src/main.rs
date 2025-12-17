@@ -81,6 +81,8 @@ async fn main() -> anyhow::Result<()> {
             metadata: None,
             tools: None,
             tool_choice: None,
+            stream: None,
+            output_format: None,
         };
 
         let response = client.messages().create(request).await?;

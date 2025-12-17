@@ -2,6 +2,55 @@ use serde::{Deserialize, Serialize};
 
 use super::common::CacheControl;
 
+/// Content for tool results
+///
+/// Can be either a simple string or an array of content blocks.
+/// Tool results can contain text or images, but not nested tool results.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ToolResultContent {
+    /// Simple string content
+    String(String),
+    /// Array of content blocks (text or image)
+    Blocks(Vec<ToolResultContentBlock>),
+}
+
+/// Content block for tool results
+///
+/// Tool results can contain text or images, but not other tool results.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToolResultContentBlock {
+    /// Text content block
+    Text {
+        /// The text content
+        text: String,
+        /// Optional cache control for prompt caching
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
+    /// Image content block
+    Image {
+        /// Image source (base64 or URL)
+        source: ImageSource,
+        /// Optional cache control for prompt caching
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
+}
+
+impl From<&str> for ToolResultContent {
+    fn from(s: &str) -> Self {
+        Self::String(s.to_string())
+    }
+}
+
+impl From<String> for ToolResultContent {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
 /// Image source for multimodal content
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -70,9 +119,9 @@ pub enum ContentBlockParam {
     ToolResult {
         /// ID of the tool use that this is responding to
         tool_use_id: String,
-        /// Optional result content
+        /// Optional result content (string or array of content blocks)
         #[serde(skip_serializing_if = "Option::is_none")]
-        content: Option<String>,
+        content: Option<ToolResultContent>,
         /// Whether this is an error result
         #[serde(skip_serializing_if = "Option::is_none")]
         is_error: Option<bool>,

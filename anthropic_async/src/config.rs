@@ -280,6 +280,12 @@ pub enum BetaFeature {
     ExtendedCacheTtl20250411,
     /// Token counting (2024-11-01)
     TokenCounting20241101,
+    /// Structured outputs (2025-09-17) — Python SDK version
+    StructuredOutputs20250917,
+    /// Structured outputs (2025-11-13) — TypeScript SDK version (recommended)
+    StructuredOutputs20251113,
+    /// Alias to the latest structured outputs beta (currently 2025-11-13)
+    StructuredOutputsLatest,
     /// Custom beta feature string
     Other(String),
 }
@@ -290,6 +296,10 @@ impl From<BetaFeature> for String {
             BetaFeature::PromptCaching20240731 => "prompt-caching-2024-07-31".into(),
             BetaFeature::ExtendedCacheTtl20250411 => "extended-cache-ttl-2025-04-11".into(),
             BetaFeature::TokenCounting20241101 => "token-counting-2024-11-01".into(),
+            BetaFeature::StructuredOutputs20250917 => "structured-outputs-2025-09-17".into(),
+            BetaFeature::StructuredOutputs20251113 | BetaFeature::StructuredOutputsLatest => {
+                "structured-outputs-2025-11-13".into()
+            }
             BetaFeature::Other(s) => s,
         }
     }
