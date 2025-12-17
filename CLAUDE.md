@@ -24,6 +24,7 @@ Guidance for Claude Code when working with this repository.
 - For pr_comments development: See `pr_comments/CLAUDE.md`
 - For gpt5_reasoner development: See `gpt5_reasoner/CLAUDE.md`
 - For coding_agent_tools development: See `coding_agent_tools/CLAUDE.md`
+- TODO(2): Add `anthropic_async/CLAUDE.md` (file currently missing)
 
 ## Common Commands
 
