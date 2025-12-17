@@ -145,48 +145,9 @@ pub fn resolve_working_dir(location: AgentLocation) -> Result<Option<PathBuf>, T
     }
 }
 
-/// Check if a binary exists in PATH.
-fn bin_in_path(cmd: &str) -> bool {
-    if let Some(paths) = env::var_os("PATH") {
-        for p in env::split_paths(&paths) {
-            let candidate = p.join(cmd);
-            if candidate.is_file() {
-                return true;
-            }
-            #[cfg(windows)]
-            {
-                for ext in ["exe", "cmd", "bat"] {
-                    let with_ext = candidate.with_extension(ext);
-                    if with_ext.is_file() {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Verify required binaries exist for a given location.
-/// - coding-agent-tools is always required
-/// - thoughts_tool is required for thoughts/references locations
-pub fn require_binaries_for_location(location: AgentLocation) -> Result<(), ToolError> {
-    if !bin_in_path("coding-agent-tools") {
-        return Err(ToolError::internal(
-            "Required binary 'coding-agent-tools' not found in PATH. Please build and install it, or add it to PATH.",
-        ));
-    }
-    if matches!(
-        location,
-        AgentLocation::Thoughts | AgentLocation::References
-    ) && !bin_in_path("thoughts_tool")
-    {
-        return Err(ToolError::internal(
-            "Required binary 'thoughts_tool' not found in PATH for thoughts/references location. Please install it or add it to PATH.",
-        ));
-    }
-    Ok(())
-}
+// NOTE: Binary existence checks (bin_in_path, require_binaries_for_location) have been removed.
+// MCP server validation now happens via claudecode::mcp::validate in spawn_agent, which provides
+// better error messages with stderr capture and actual handshake verification.
 
 /// Map enabled MCP tools to CLI flags for the coding-agent-tools server.
 /// Returns flags like `["--ls"]` when `mcp__coding-agent-tools__ls` is in the enabled list.

@@ -63,6 +63,7 @@
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod mcp;
 pub mod probe;
 pub mod process;
 pub mod session;
