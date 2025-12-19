@@ -1,0 +1,134 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "cd *": "allow",
+      "ls *": "allow",
+      "find *": "allow",
+      "cat *": "allow",
+      "grep *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "tree *": "allow",
+      "jq *": "allow",
+      "gh *": "allow",
+      "pwd": "allow",
+      "which *": "allow",
+      "cargo check *": "allow",
+      "cargo test *": "allow",
+      "cargo run *": "allow",
+      "cargo clippy *": "allow",
+      "cargo fmt *": "allow",
+      "cargo tree": "allow",
+      "cargo metadata": "allow",
+      "cargo --version": "allow",
+      "cargo build *": "allow",
+      "cargo expand *": "allow",
+      "rustc --version": "allow",
+      "rustup show": "allow",
+      "make *": "allow",
+      "just *": "allow",
+      "git status": "allow",
+      "git add *": "allow",
+      "git log *": "allow",
+      "git diff *": "allow",
+      "git branch": "allow",
+      "git remote -v": "allow",
+      "git show *": "allow",
+      "git blame *": "allow",
+      "git grep *": "allow",
+      "aws s3 ls*": "allow",
+      "aws ec2 describe-*": "allow",
+      "aws lambda list-*": "allow",
+      "aws cloudformation describe-*": "allow",
+      "aws --version": "allow",
+      "aws configure list": "allow",
+      "tofu validate *": "allow",
+      "tofu plan *": "allow",
+      "tofu fmt *": "allow",
+      "tfsec *": "allow",
+      "rg *": "allow"
+    }
+  },
+  "tools": {
+    "*": false,
+    "bash": true,
+    "edit": true,
+    "write": true,
+    "read": true,
+    "todowrite": true,
+    "todoread": true,
+    "thoughts_*": true,
+    "reasoning_model_*": true,
+    "tools_*": true
+  },
+  "agent": {
+    "normal": {
+      "prompt": "{file:./.opencode/sysprompt.md}",
+      "mode": "primary"
+    },
+    "no_edit": {
+      "prompt": "{file:./.opencode/sysprompt.md}",
+      "mode": "primary",
+      "tools": {
+        "edit": false,
+        "write": false
+      }
+    },
+    "build": {
+      "disable": true
+    },
+    "plan": {
+      "disable": true
+    },
+    "general": {
+      "disable": true
+    },
+    "explore": {
+      "disable": true
+    }
+  },
+  "mcp": {
+    "thoughts": {
+      "type": "local",
+      "command": [
+        "thoughts",
+        "mcp"
+      ],
+      "enabled": true,
+    },
+    "reasoning_model": {
+      "type": "local",
+      "command": [
+        "gpt5_reasoner",
+        "mcp"
+      ],
+      "enabled": true,
+    },
+    "tools": {
+      "type": "local",
+      "command": [
+        "coding-agent-tools",
+        "mcp"
+      ],
+      "enabled": true,
+    }
+  },
+  "provider": {
+    "anthropic": {
+      "models": {
+        "claude-opus-4-5": {
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 36000,
+            },
+          },
+        },
+      },
+    },
+  }
+}
+
