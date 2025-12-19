@@ -32,6 +32,7 @@ pub const CODING_AGENT_TOOLS_MCP: &[&str] = &[
     "mcp__coding-agent-tools__search_glob",
 ];
 
+//TODO(0): Is this the best way to manage this list?
 /// Get the enabled tools for a given type × location combination.
 /// This list includes both built-in tools and MCP tools (prefixed with "mcp__").
 pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
@@ -45,21 +46,24 @@ pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
             "Glob".into(),
         ],
         (Locator, Thoughts) => vec![
+            "mcp__coding-agent-tools__ls".into(),
             "mcp__thoughts__list_active_documents".into(),
             "Grep".into(),
             "Glob".into(),
         ],
         (Locator, References) => vec![
+            "mcp__coding-agent-tools__ls".into(),
             "mcp__thoughts__list_references".into(),
             "Grep".into(),
             "Glob".into(),
         ],
-        (Locator, Web) => vec!["WebSearch".into()],
+        (Locator, Web) => vec!["WebSearch".into(), "WebFetch".into()],
         (Analyzer, Codebase) => vec![
             "Read".into(),
             "mcp__coding-agent-tools__ls".into(),
             "Grep".into(),
             "Glob".into(),
+            "TodoWrite".into(),
         ],
         (Analyzer, Thoughts) => vec![
             "Read".into(),
@@ -72,6 +76,7 @@ pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
             "mcp__thoughts__list_references".into(),
             "Grep".into(),
             "Glob".into(),
+            "TodoWrite".into(),
         ],
         (Analyzer, Web) => vec![
             "WebSearch".into(),
@@ -109,6 +114,8 @@ pub fn compose_prompt(agent_type: AgentType, location: AgentLocation) -> String 
     compose_prompt_impl(agent_type, location)
 }
 
+//TODO(0): I don't think I really need to modify location? I think we can spawn all at root level
+//and let them go. Just with proper instructions for where they should look and such.
 /// Resolve the working directory for a given location.
 /// Returns None for Web (no working directory needed).
 pub fn resolve_working_dir(location: AgentLocation) -> Result<Option<PathBuf>, ToolError> {
@@ -192,7 +199,7 @@ pub fn build_mcp_config(location: AgentLocation, enabled_tools: &[String]) -> MC
     ) {
         servers.insert(
             "thoughts".to_string(),
-            MCPServer::stdio("thoughts_tool", vec!["mcp".to_string()]),
+            MCPServer::stdio("thoughts", vec!["mcp".to_string()]),
         );
     }
 
