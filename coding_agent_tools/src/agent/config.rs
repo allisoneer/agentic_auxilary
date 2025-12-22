@@ -65,12 +65,14 @@ pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
         ],
         (Analyzer, Thoughts) => vec![
             "Read".into(),
+            "mcp__coding-agent-tools__ls".into(),
             "mcp__thoughts__list_active_documents".into(),
             "Grep".into(),
             "Glob".into(),
         ],
         (Analyzer, References) => vec![
             "Read".into(),
+            "mcp__coding-agent-tools__ls".into(),
             "mcp__thoughts__list_references".into(),
             "Grep".into(),
             "Glob".into(),
@@ -211,6 +213,27 @@ mod tests {
     fn test_enabled_tools_locator_references() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::References);
         assert!(tools.contains(&"mcp__thoughts__list_references".to_string()));
+    }
+
+    #[test]
+    fn test_enabled_tools_analyzer_thoughts_has_ls() {
+        let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Thoughts);
+        assert!(tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
+        assert!(tools.contains(&"mcp__thoughts__list_active_documents".to_string()));
+        assert!(tools.contains(&"Read".to_string()));
+        assert!(tools.contains(&"Grep".to_string()));
+        assert!(tools.contains(&"Glob".to_string()));
+    }
+
+    #[test]
+    fn test_enabled_tools_analyzer_references_has_ls() {
+        let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::References);
+        assert!(tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
+        assert!(tools.contains(&"mcp__thoughts__list_references".to_string()));
+        assert!(tools.contains(&"Read".to_string()));
+        assert!(tools.contains(&"Grep".to_string()));
+        assert!(tools.contains(&"Glob".to_string()));
+        assert!(tools.contains(&"TodoWrite".to_string()));
     }
 
     #[test]
@@ -370,6 +393,24 @@ mod tests {
         let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
         let flags = coding_agent_tools_flags(&enabled);
         // Analyzer+Web has mcp__coding-agent-tools__ls enabled
+        assert!(flags.contains(&"--ls".to_string()));
+        assert_eq!(flags.len(), 1);
+    }
+
+    #[test]
+    fn test_coding_agent_tools_flags_analyzer_thoughts() {
+        let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::Thoughts);
+        let flags = coding_agent_tools_flags(&enabled);
+        // Analyzer+Thoughts has mcp__coding-agent-tools__ls enabled
+        assert!(flags.contains(&"--ls".to_string()));
+        assert_eq!(flags.len(), 1);
+    }
+
+    #[test]
+    fn test_coding_agent_tools_flags_analyzer_references() {
+        let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::References);
+        let flags = coding_agent_tools_flags(&enabled);
+        // Analyzer+References has mcp__coding-agent-tools__ls enabled
         assert!(flags.contains(&"--ls".to_string()));
         assert_eq!(flags.len(), 1);
     }
