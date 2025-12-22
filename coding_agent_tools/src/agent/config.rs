@@ -1,12 +1,9 @@
 //! Mapping utilities for agent configuration.
 
 use std::collections::HashMap;
-use std::env;
-use std::path::PathBuf;
 
 use claudecode::config::{MCPConfig, MCPServer};
 use claudecode::types::Model;
-use universal_tool_core::prelude::ToolError;
 
 use super::prompts::compose_prompt_impl;
 use crate::types::{AgentLocation, AgentType};
@@ -32,7 +29,8 @@ pub const CODING_AGENT_TOOLS_MCP: &[&str] = &[
     "mcp__coding-agent-tools__search_glob",
 ];
 
-//TODO(0): Is this the best way to manage this list?
+// TODO(2): Intentional explicit match for clarity and compile-time exhaustiveness.
+// We keep the hardcoded mapping to avoid accidental tool exposure and ensure deterministic tests.
 /// Get the enabled tools for a given type × location combination.
 /// This list includes both built-in tools and MCP tools (prefixed with "mcp__").
 pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
@@ -112,44 +110,6 @@ pub fn disallowed_mcp_tools_for(enabled: &[String], _location: AgentLocation) ->
 /// Compose the system prompt for a given type × location combination.
 pub fn compose_prompt(agent_type: AgentType, location: AgentLocation) -> String {
     compose_prompt_impl(agent_type, location)
-}
-
-//TODO(0): I don't think I really need to modify location? I think we can spawn all at root level
-//and let them go. Just with proper instructions for where they should look and such.
-/// Resolve the working directory for a given location.
-/// Returns None for Web (no working directory needed).
-pub fn resolve_working_dir(location: AgentLocation) -> Result<Option<PathBuf>, ToolError> {
-    match location {
-        AgentLocation::Codebase => {
-            let cwd = env::current_dir().map_err(|e| {
-                ToolError::internal(format!("Failed to resolve current working directory: {e}"))
-            })?;
-            Ok(Some(cwd))
-        }
-        AgentLocation::Thoughts => {
-            let base = env::var("THOUGHTS_BASE").unwrap_or_else(|_| "./context".to_string());
-            let path = PathBuf::from(base);
-            if !path.exists() {
-                return Err(ToolError::invalid_input(format!(
-                    "Thoughts base directory does not exist: {}",
-                    path.display()
-                )));
-            }
-            Ok(Some(path))
-        }
-        AgentLocation::References => {
-            let base = env::var("REFERENCES_BASE").unwrap_or_else(|_| "./references".to_string());
-            let path = PathBuf::from(base);
-            if !path.exists() {
-                return Err(ToolError::invalid_input(format!(
-                    "References base directory does not exist: {}",
-                    path.display()
-                )));
-            }
-            Ok(Some(path))
-        }
-        AgentLocation::Web => Ok(None),
-    }
 }
 
 // NOTE: Binary existence checks (bin_in_path, require_binaries_for_location) have been removed.
@@ -256,10 +216,7 @@ mod tests {
     #[test]
     fn test_enabled_tools_locator_web() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Web);
-        assert_eq!(
-            tools,
-            vec!["WebSearch".to_string(), "WebFetch".to_string()]
-        );
+        assert_eq!(tools, vec!["WebSearch".to_string(), "WebFetch".to_string()]);
     }
 
     #[test]
@@ -337,21 +294,6 @@ mod tests {
         let prompt = compose_prompt(AgentType::Analyzer, AgentLocation::Web);
         assert!(prompt.contains("understanding HOW"));
         assert!(prompt.contains("WebFetch"));
-    }
-
-    #[test]
-    fn test_resolve_working_dir_codebase() {
-        let result = resolve_working_dir(AgentLocation::Codebase);
-        assert!(result.is_ok());
-        let path = result.unwrap();
-        assert!(path.is_some());
-    }
-
-    #[test]
-    fn test_resolve_working_dir_web() {
-        let result = resolve_working_dir(AgentLocation::Web);
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
     }
 
     #[test]
