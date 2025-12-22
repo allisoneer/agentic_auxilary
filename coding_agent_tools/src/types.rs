@@ -259,27 +259,25 @@ impl McpFormatter for LsOutput {
 // search_grep and search_glob types
 // =============================================================================
 
-/// Output mode for search_grep results.
+/// Output mode for search_grep results: 'files' (default, returns unique file paths - most
+/// token-efficient), 'content' (returns matching lines with context), or 'count' (returns
+/// total match count only).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputMode {
-    /// Return unique file paths containing matches (most token-efficient)
     #[default]
     Files,
-    /// Return matching lines with context
     Content,
-    /// Return total match count only
     Count,
 }
 
-/// Sort order for search_glob results.
+/// Sort order for search_glob results: 'name' (default, alphabetical case-insensitive) or
+/// 'mtime' (newest modification time first).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SortOrder {
-    /// Alphabetical by name (case-insensitive)
     #[default]
     Name,
-    /// Newest modification time first
     Mtime,
 }
 
