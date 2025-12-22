@@ -228,6 +228,9 @@ enum WorkCommands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Detect MCP mode before initializing tracing
+    let is_mcp = matches!(cli.command, Commands::Mcp);
+
     // Initialize logging
     let log_level = match (cli.quiet, cli.verbose) {
         (true, _) => "error",
@@ -236,18 +239,27 @@ async fn main() -> Result<()> {
         (false, _) => "trace",
     };
 
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level)),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_thread_names(false),
-        )
-        .init();
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level));
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false);
+
+    if is_mcp {
+        // Critical: route logs to stderr in MCP mode to keep stdout clean for JSON-RPC
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer.with_writer(std::io::stderr))
+            .init();
+    } else {
+        // Non-MCP: preserve existing stdout logging
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .init();
+    }
 
     info!("Starting thoughts v{}", env!("CARGO_PKG_VERSION"));
 
