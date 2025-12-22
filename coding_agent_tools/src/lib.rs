@@ -216,9 +216,6 @@ impl CodingAgentTools {
         // Compute MCP tools to disallow from our own server
         let disallowed_mcp = agent::disallowed_mcp_tools_for(&enabled_tools, location);
 
-        // Working directory resolution (may be None for web)
-        let working_dir = agent::resolve_working_dir(location)?;
-
         // Build MCP config with enabled tools for CLI flag propagation
         let mcp_config = agent::build_mcp_config(location, &enabled_tools);
 
@@ -238,7 +235,7 @@ impl CodingAgentTools {
             })?;
 
         // Build session config
-        let mut builder = SessionConfig::builder(query)
+        let builder = SessionConfig::builder(query)
             .model(model)
             .output_format(OutputFormat::Text)
             .permission_mode(PermissionMode::DontAsk)
@@ -248,10 +245,6 @@ impl CodingAgentTools {
             .disallowed_tools(disallowed_mcp) // hide unwanted MCP tools from our server
             .mcp_config(mcp_config)
             .strict_mcp_config(true); // prevent inheritance of global MCP tools
-
-        if let Some(dir) = working_dir {
-            builder = builder.working_dir(dir);
-        }
 
         let config = builder
             .build()

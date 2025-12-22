@@ -50,9 +50,6 @@ What NOT to do:
 
 pub const CODEBASE_OVERLAY: &str = r#"
 Context: Local codebase (current repository).
-Tools to use by type:
-- locator: mcp__coding-agent-tools__ls, Grep, Glob
-- analyzer: Read, mcp__coding-agent-tools__ls, Grep, Glob
 
 Guidelines:
 - Prefer relative paths from repo root
@@ -62,9 +59,6 @@ Guidelines:
 pub const THOUGHTS_OVERLAY: &str = r#"
 Context: Thought documents (active branch).
 Working directory: THOUGHTS_BASE env or ./context.
-Tools to use by type:
-- locator: mcp__thoughts__list_active_documents, Grep, Glob
-- analyzer: Read, mcp__thoughts__list_active_documents, Grep, Glob
 
 Guidelines:
 - Use list_active_documents to identify thought docs, then grep/glob/read within the base
@@ -74,9 +68,6 @@ Guidelines:
 pub const REFERENCES_OVERLAY: &str = r#"
 Context: Reference repositories (mirrored into local filesystem).
 Working directory: REFERENCES_BASE env or ./references.
-Tools to use by type:
-- locator: mcp__thoughts__list_references, Grep, Glob
-- analyzer: Read, mcp__thoughts__list_references, Grep, Glob
 
 CRITICAL: Reference Directory Structure
 - list_references returns lines like `{org}/{repo}`.
@@ -94,9 +85,6 @@ Guidelines:
 
 pub const WEB_OVERLAY: &str = r#"
 Context: The web.
-Tools to use by type:
-- locator: WebSearch
-- analyzer: WebSearch, WebFetch
 
 Guidelines:
 - Analyze the query, craft strategic searches, and fetch only promising results
@@ -640,11 +628,18 @@ mod tests {
     }
 
     #[test]
-    fn test_all_overlays_contain_tools() {
-        assert!(CODEBASE_OVERLAY.contains("mcp__coding-agent-tools__ls"));
-        assert!(THOUGHTS_OVERLAY.contains("mcp__thoughts__list_active_documents"));
-        assert!(REFERENCES_OVERLAY.contains("mcp__thoughts__list_references"));
-        assert!(WEB_OVERLAY.contains("WebSearch"));
+    fn test_overlays_do_not_list_tools_by_type() {
+        // Overlays should not redundantly list tools; tool exposure comes from schema
+        assert!(!CODEBASE_OVERLAY.contains("Tools to use by type"));
+        assert!(!THOUGHTS_OVERLAY.contains("Tools to use by type"));
+        assert!(!REFERENCES_OVERLAY.contains("Tools to use by type"));
+        assert!(!WEB_OVERLAY.contains("Tools to use by type"));
+
+        // Still provide contextual guidance
+        assert!(CODEBASE_OVERLAY.contains("Context: Local codebase"));
+        assert!(THOUGHTS_OVERLAY.contains("Context: Thought documents"));
+        assert!(REFERENCES_OVERLAY.contains("Context: Reference repositories"));
+        assert!(WEB_OVERLAY.contains("Context: The web"));
     }
 
     #[test]
