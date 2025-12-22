@@ -244,7 +244,7 @@ mod tests {
     fn test_enabled_tools_locator_thoughts() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Thoughts);
         assert!(tools.contains(&"mcp__thoughts__list_active_documents".to_string()));
-        assert!(!tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
+        assert!(tools.contains(&"mcp__coding-agent-tools__ls".to_string()));
     }
 
     #[test]
@@ -256,7 +256,10 @@ mod tests {
     #[test]
     fn test_enabled_tools_locator_web() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Web);
-        assert_eq!(tools, vec!["WebSearch".to_string()]);
+        assert_eq!(
+            tools,
+            vec!["WebSearch".to_string(), "WebFetch".to_string()]
+        );
     }
 
     #[test]
@@ -297,18 +300,16 @@ mod tests {
     }
 
     #[test]
-    fn test_disallowed_mcp_tools_locator_thoughts_blocks_all_coding_agent_tools() {
+    fn test_disallowed_mcp_tools_locator_thoughts_allows_ls() {
         let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Thoughts);
         let disallowed = disallowed_mcp_tools_for(&enabled, AgentLocation::Thoughts);
 
-        // Since 'ls' is not enabled at Thoughts location, all coding-agent-tools MCP should be disallowed
-        for t in CODING_AGENT_TOOLS_MCP {
-            assert!(
-                disallowed.contains(&t.to_string()),
-                "missing in disallowed: {t}"
-            );
-        }
-        assert_eq!(disallowed.len(), CODING_AGENT_TOOLS_MCP.len());
+        // Locator+Thoughts has ls enabled, so only spawn_agent/search_* should be disallowed
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__spawn_agent".to_string()));
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__search_grep".to_string()));
+        assert!(disallowed.contains(&"mcp__coding-agent-tools__search_glob".to_string()));
+        assert!(!disallowed.contains(&"mcp__coding-agent-tools__ls".to_string()));
+        assert_eq!(disallowed.len(), 3);
     }
 
     #[test]
@@ -417,8 +418,9 @@ mod tests {
     fn test_coding_agent_tools_flags_locator_thoughts() {
         let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Thoughts);
         let flags = coding_agent_tools_flags(&enabled);
-        // Locator+Thoughts has no coding-agent-tools MCP tools
-        assert!(flags.is_empty());
+        // Locator+Thoughts has mcp__coding-agent-tools__ls enabled
+        assert!(flags.contains(&"--ls".to_string()));
+        assert_eq!(flags.len(), 1);
     }
 
     #[test]
