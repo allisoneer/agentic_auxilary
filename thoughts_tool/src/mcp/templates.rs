@@ -7,6 +7,8 @@ pub const REQUIREMENTS_TEMPLATE_MD: &str = include_str!("templates/requirements_
 pub const PR_DESCRIPTION_TEMPLATE_MD: &str = include_str!("templates/pr_description_template.md");
 
 // Guidance strings (kept short; in-code by design)
+//TODO(0): I want these to be more instruction-oriented and guide the model more than just
+//recommendations.
 pub const RESEARCH_GUIDANCE: &str = "Before you write your research document, make sure you actually have researched enough. Make sure there isn't anything else you can figure out by exploring more.";
 pub const PLAN_GUIDANCE: &str = "";
 pub const REQUIREMENTS_GUIDANCE: &str = "";
