@@ -187,7 +187,7 @@ Neither category is inherently better—the right choice depends on context. Pre
 
 **Write the Document:**
 
-1. Read `context/general/research_template.md` to follow the exact structure and tone.
+1. Call `thoughts_get_template` with `template=research` to get the exact structure and tone.
 
 2. Write the document using `thoughts_write_document`:
 
