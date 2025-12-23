@@ -65,19 +65,20 @@
     "todoread": true,
     "thoughts_*": true,
     "reasoning_model_*": true,
-    "tools_*": true
+    "tools_*": true,
+    "pr_comments_*": true
   },
   "agent": {
-    "normal": {
+    "Normal": {
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
-    "no_edit": {
+    "Auto Accept Edits": {
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary",
-      "tools": {
-        "edit": false,
-        "write": false
+      "permission": {
+        "edit": "allow",
+        "write": "allow"
       }
     },
     "build": {
@@ -114,6 +115,14 @@
       "type": "local",
       "command": [
         "coding-agent-tools",
+        "mcp"
+      ],
+      "enabled": true
+    },
+    "pr_comments": {
+      "type": "local",
+      "command": [
+        "pr_comments",
         "mcp"
       ],
       "enabled": true
