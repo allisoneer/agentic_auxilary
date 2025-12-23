@@ -4,6 +4,8 @@ use std::fs;
 use universal_tool_core::mcp::{McpFormatter, ServiceExt};
 use universal_tool_core::prelude::*;
 
+mod templates;
+
 use crate::config::validation::{canonical_reference_key, validate_reference_url_https_only};
 use crate::config::{
     ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
@@ -40,6 +42,42 @@ impl DocumentType {
             DocumentType::Research => "research",
             DocumentType::Plan => "plans",
             DocumentType::Artifact => "artifacts",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TemplateType {
+    Research,
+    Plan,
+    Requirements,
+    PrDescription,
+}
+
+impl TemplateType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            TemplateType::Research => "research",
+            TemplateType::Plan => "plan",
+            TemplateType::Requirements => "requirements",
+            TemplateType::PrDescription => "pr_description",
+        }
+    }
+    pub fn content(&self) -> &'static str {
+        match self {
+            TemplateType::Research => templates::RESEARCH_TEMPLATE_MD,
+            TemplateType::Plan => templates::PLAN_TEMPLATE_MD,
+            TemplateType::Requirements => templates::REQUIREMENTS_TEMPLATE_MD,
+            TemplateType::PrDescription => templates::PR_DESCRIPTION_TEMPLATE_MD,
+        }
+    }
+    pub fn guidance(&self) -> &'static str {
+        match self {
+            TemplateType::Research => templates::RESEARCH_GUIDANCE,
+            TemplateType::Plan => templates::PLAN_GUIDANCE,
+            TemplateType::Requirements => templates::REQUIREMENTS_GUIDANCE,
+            TemplateType::PrDescription => templates::PR_DESCRIPTION_GUIDANCE,
         }
     }
 }
@@ -195,6 +233,23 @@ impl McpFormatter for AddReferenceOk {
             }
         }
         out
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct TemplateResponse {
+    pub template_type: TemplateType,
+}
+
+impl McpFormatter for TemplateResponse {
+    fn mcp_format_text(&self) -> String {
+        let ty = self.template_type.label();
+        let content = self.template_type.content();
+        let guidance = self.template_type.guidance();
+        format!(
+            "Here is the {} template:\n\n```markdown\n{}\n```\n\n{}",
+            ty, content, guidance
+        )
     }
 }
 
@@ -526,6 +581,23 @@ impl ThoughtsMcpTools {
             warnings,
         })
     }
+
+    /// Get a compile-time embedded document template with usage guidance.
+    #[universal_tool(
+        description = "Return a compile-time embedded template (research, plan, requirements, pr_description) with usage guidance",
+        mcp(read_only = true, idempotent = true, output = "text")
+    )]
+    pub async fn get_template(
+        &self,
+        #[universal_tool_param(
+            description = "Which template to fetch (research, plan, requirements, pr_description)"
+        )]
+        template: TemplateType,
+    ) -> Result<TemplateResponse, ToolError> {
+        Ok(TemplateResponse {
+            template_type: template,
+        })
+    }
 }
 
 // MCP server wrapper
@@ -714,5 +786,41 @@ mod tests {
         assert!(s.contains("Mapping: <none>"));
         assert!(s.contains("Mounted: false"));
         assert!(s.contains("- Clone failed"));
+    }
+
+    #[test]
+    fn test_template_response_format_research() {
+        let resp = TemplateResponse {
+            template_type: TemplateType::Research,
+        };
+        let s = resp.mcp_format_text();
+        assert!(s.starts_with("Here is the research template:"));
+        assert!(s.contains("```markdown"));
+        // spot-check content from the research template
+        assert!(s.contains("# Research: [Topic]"));
+        // research guidance presence
+        assert!(s.contains("Before you write your research document"));
+    }
+
+    #[test]
+    fn test_template_variants_non_empty() {
+        let all = [
+            TemplateType::Research,
+            TemplateType::Plan,
+            TemplateType::Requirements,
+            TemplateType::PrDescription,
+        ];
+        for t in all {
+            assert!(
+                !t.content().trim().is_empty(),
+                "Embedded content unexpectedly empty for {:?}",
+                t
+            );
+            assert!(
+                !t.label().trim().is_empty(),
+                "Label unexpectedly empty for {:?}",
+                t
+            );
+        }
     }
 }
