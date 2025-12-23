@@ -39,7 +39,7 @@
       "git show *": "allow",
       "git blame *": "allow",
       "git grep *": "allow",
-      "aws s3 ls*": "allow",
+      "aws s3 ls *": "allow",
       "aws ec2 describe-*": "allow",
       "aws lambda list-*": "allow",
       "aws cloudformation describe-*": "allow",
