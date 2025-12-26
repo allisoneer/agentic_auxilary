@@ -19,14 +19,14 @@
 
 ## What we ARE Doing
 
-[An explicit list of goals for the plan. What the "end state" of the repo will look like after the plan is written, if it's finished succesfully]
+[An explicit list of goals for the plan. What the "end state" of the repo will look like after the plan is written, if it's finished successfully]
 
 ## Implementation Approach
 
 [High-level strategy and reasoning]
 
 ## Testing Strategy
-[ A list of task specific testing strategies that will be required to ensure a clean and happy
+[ A list of task-specific testing strategies that will be required to ensure a clean and happy
 codebase that reaches the goals defined above. Should include all sections, and explicitly state
 why unit, integration, or manual testing aren't required if they are deemed not to be ]
 
@@ -71,8 +71,8 @@ verification, then they should be added here ]
 ### Success Criteria:
 
 #### Automated Verification:
-[ A relevant list of automatically executable verification that determistically displays that this
-phase was succesful ]
+[ A relevant list of automatically executable verification that deterministically displays that this
+phase was successful ]
 - [ ] Unit tests pass: `just test-rust`
 - [ ] Type checking passes: `npm run typecheck`
 - [ ] Linting passes: `just check`
@@ -124,8 +124,8 @@ verification, then they should be added here ]
 
 ---
 
-## Leftover outliers or outstanding quetsions
+## Leftover outliers or outstanding questions
 
-[ Is there anything that isn't fully fleshed out? Anything left to question? Do we succesfully
+[ Is there anything that isn't fully fleshed out? Anything left to question? Do we successfully
 reach the intended goal expressed at the beginning over the course of all phases? Can say "None"
 if none. ]
