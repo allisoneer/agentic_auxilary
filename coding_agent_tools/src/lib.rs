@@ -170,6 +170,8 @@ impl CodingAgentTools {
         })
     }
 
+    //TODO(0): I want to make this description way more intstrunction-oriented before we merge
+    //this.
     /// Spawn an opinionated Claude subagent (locator | analyzer) in a specific location.
     #[universal_tool(
         description = "Spawn an opinionated Claude subagent to perform discovery or deep analysis across codebase, thoughts, references, or the web. Returns a single text response; no side effects.",
