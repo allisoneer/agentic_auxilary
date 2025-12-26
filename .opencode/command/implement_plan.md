@@ -26,7 +26,7 @@ $ARGUMENTS
 
 **Load Related Context:**
 1. If the plan filename ends with `_implementation.md`, read the sibling `{pair_base}_requirements.md`. Warn if not found but continue.
-2. Call `thoughts_list_active_documents` filtered to `doc_type == "artifact"` with filename starting `plan_{basename}_`. Read any artifacts to understand prior progress.
+2. Call `thoughts_list_active_documents` filtered to `doc_type == "artifacts"` with filename starting `plan_{basename}_`. Read any artifacts to understand prior progress.
 3. Read all files referenced in the plan.
 
 **Create Implementation Todo List:**

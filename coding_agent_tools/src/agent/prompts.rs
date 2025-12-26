@@ -251,7 +251,7 @@ pub const STRATEGY_LOCATOR_THOUGHTS: &str = r#"
 
 ### Step 1: MCP-First Discovery
 - Call `mcp__thoughts__list_active_documents` to enumerate docs in active branch
-- Filter results by doc_type: "plan", "research", "artifact"
+- Filter results by doc_type: "plans", "research", "artifacts"
 - Match filenames against topic keywords
 
 ### Step 2: Categorize by doc_type
