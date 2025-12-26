@@ -5,6 +5,8 @@ description: Commit Changes
 
 You are tasked with creating git commits for the changes made during this session.
 
+**User message (if any):** $ARGUMENTS
+
 ## Process:
 
 1. **Think about what changed:**
