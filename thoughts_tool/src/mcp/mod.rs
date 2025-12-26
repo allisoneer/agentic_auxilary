@@ -805,7 +805,7 @@ mod tests {
         // spot-check content from the research template
         assert!(s.contains("# Research: [Topic]"));
         // research guidance presence
-        assert!(s.contains("Before you write your research document"));
+        assert!(s.contains("Stop. Before writing this document"));
     }
 
     #[test]
