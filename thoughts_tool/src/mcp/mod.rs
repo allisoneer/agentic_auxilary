@@ -40,6 +40,8 @@ impl DocumentType {
     // TODO(1): API asymmetry - subdir_name() returns plural ("plans", "artifacts") but
     // serde serialization uses singular ("plan", "artifact"). This causes list_active_documents
     // to return doc_type values that don't match input parameter values, breaking client filtering.
+    // When fixing: also update prompts in coding_agent_tools/src/agent/prompts.rs and
+    // .opencode/command/*.md back to singular forms.
     // See: thoughts/active/.../research/doc_type_asymmetry_analysis.md
     fn subdir_name(&self) -> &'static str {
         match self {
