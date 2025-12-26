@@ -26,7 +26,7 @@ You are tasked with generating a comprehensive pull request description followin
 
 4. **Gather comprehensive PR information:**
    - Get the full PR diff: `gh pr diff {number}`
-   - If you get an error about no default remote repository, instruct the user to run `gh repo set-default` and select the appropriate repository
+   - If you see the error "No default remote repository has been set", instruct the user to run `gh repo set-default` and select the appropriate repository
    - Get commit history: `gh pr view {number} --json commits`
    - Review the base branch: `gh pr view {number} --json baseRefName`
    - Get PR metadata: `gh pr view {number} --json url,title,number,state`
