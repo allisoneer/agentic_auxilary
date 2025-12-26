@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch",
+      "Bash(git status)",
+      "Bash(git log:*)",
+      "Bash(cargo test:*)",
+      "mcp__tools__ls",
+      "mcp__linear-server__list_teams"
+    ],
+    "deny": [
+      "Bash(rm:*)"
+    ]
+  }
+}
