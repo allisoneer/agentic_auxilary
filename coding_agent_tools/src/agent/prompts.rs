@@ -61,7 +61,7 @@ Context: Thought documents (active branch).
 Working directory: THOUGHTS_BASE env or ./context.
 
 Guidelines:
-- Use list_active_documents to identify thought docs, then grep/glob/read within the base
+- Use mcp__thoughts__list_active_documents to identify thought docs, then grep/glob/read within the base
 - Keep citations and paths relative to the thoughts base
 "#;
 
@@ -70,7 +70,7 @@ Context: Reference repositories (mirrored into local filesystem).
 Working directory: REFERENCES_BASE env or ./references.
 
 CRITICAL: Reference Directory Structure
-- list_references returns lines like `{org}/{repo}`.
+- mcp__thoughts__list_references returns lines like `{org}/{repo}`.
 - Actual files live at `references/{org}/{repo}/...`.
 
 Examples:
