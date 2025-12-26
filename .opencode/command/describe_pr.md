@@ -6,6 +6,8 @@ description: Generate a PR Description
 
 You are tasked with generating a comprehensive pull request description following the repository's standard template.
 
+**User message (if any):** $ARGUMENTS
+
 ## Steps to follow:
 
 1. **Get the PR description template:**
