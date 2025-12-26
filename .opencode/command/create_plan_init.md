@@ -38,12 +38,10 @@ The research document passed into this command contains file:line references and
 
 Use `todowrite` to plan your agent calls. Be specific about what each agent will investigate.
 
-Launch agents concurrently using `tools_spawn_agent` with these agent_type and location pairs:
+Launch agents concurrently using `tools_spawn_agent`:
 
-- `locator`, `codebase`: Find additional code, configs, or tests related to the task.
-- `analyzer`, `codebase`: (spawn 1-3) Deep dive into specific subsystems mentioned in the research. Each should focus on a distinct area.
-- `analyzer`, `references`: (1 per selected reference) Examine for relevant patterns and constraints.
-- `analyzer`, `web`: When external documentation is needed to understand libraries or APIs.
+- Spawn 1-3 codebase analyzers for distinct subsystems mentioned in the research.
+- Spawn 1 analyzer per selected reference.
 
 **Good example todos** (informed by research document):
 - "Spawn analyzer for src/services/auth.rs:45-120 to understand token validation flow"

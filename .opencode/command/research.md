@@ -66,17 +66,12 @@ Each todo should be actionable and specific enough that you know exactly what to
 
 ## Spawn Parallel Agents
 
-Launch agents concurrently (in parallel) and wait for all to complete. Use `tools_spawn_agent` with these agent_type and location parameter pairs:
+Launch agents concurrently (in parallel) using `tools_spawn_agent`:
 
-- `locator`, `codebase`: Find where related files, components, tests, configs, and docs live.
-- `analyzer`, `codebase`: Each focuses on a distinct subsystem or layer to extract facts (interfaces, invariants, configs).
-- `analyzer`, `references`: (1 per selected reference) Extract relevant patterns or constraints from external codebases.
-- `analyzer`, `web`: For understanding external concepts, library behavior, API details, or best practices when the information isn't available locally as references. Great for deep dives into documentation, specs, or community knowledge. Cite URLs and quote relevant lines.
-- `locator`, `web`: For discovering what external resources, documentation, or tools exist on a topic.
-
-**Optional** (only if you found potentially useful thoughts documents in Step 1):
-- `locator`, `thoughts`
-- `analyzer`, `thoughts`
+- Start with a locator to map the landscape.
+- Spawn 1-3 analyzers for distinct subsystems or layers.
+- Spawn 1 analyzer per selected reference.
+- Use `location=thoughts` only if Step 1 found relevant existing documents.
 
 **Guidance**:
 - Be specific about directories and what to extract. Request file:line references.

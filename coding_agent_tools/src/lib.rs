@@ -170,11 +170,36 @@ impl CodingAgentTools {
         })
     }
 
-    //TODO(0): I want to make this description way more intstrunction-oriented before we merge
-    //this.
     /// Spawn an opinionated Claude subagent (locator | analyzer) in a specific location.
     #[universal_tool(
-        description = "Spawn an opinionated Claude subagent to perform discovery or deep analysis across codebase, thoughts, references, or the web. Returns a single text response; no side effects.",
+        description = "Spawn a Claude subagent for discovery or deep analysis. Returns a single text response; no side effects.
+
+Agent types:
+- locator (haiku): Finds WHERE things are. Fast, shallow discovery via grep/glob/ls. Returns file paths grouped by purpose. Cannot read file contents deeply.
+- analyzer (sonnet): Explains HOW things work. Reads files, traces data flow, provides technical analysis. Must cite file:line for all claims.
+
+Locations:
+- codebase: Current repository. Paths are repo-relative.
+- thoughts: Active branch documents (research/plans/artifacts). Uses list_active_documents for discovery.
+- references: Cloned reference repos. Paths start with references/{org}/{repo}/.
+- web: Internet search. Returns URLs with quotes and source attribution.
+
+When to use:
+- Use locator when you need to find files/resources but don't yet know where they are.
+- Use analyzer when you need to understand implementation details or extract specific information with citations.
+- Use thoughts/references locations when the answer likely exists in existing documentation or external examples.
+- Use web when you need external documentation, API references, or information not in the codebase.
+
+When NOT to use:
+- If you already know the file path, use Read directly.
+- If you need a simple directory listing, use ls.
+- For pattern matching in known locations, use search_grep or search_glob.
+- This tool cannot write files or make changes.
+
+Usage notes:
+- Provide clear, specific queries. The subagent is stateless and receives no prior context.
+- Locator returns locations only; use analyzer or Read for content.
+- Multiple spawn_agent calls can run in parallel for independent queries.",
         mcp(read_only = true, output = "text")
     )]
     pub async fn spawn_agent(
