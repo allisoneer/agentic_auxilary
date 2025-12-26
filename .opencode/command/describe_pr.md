@@ -20,7 +20,7 @@ You are tasked with generating a comprehensive pull request description followin
    - Ask the user which PR they want to describe
 
 3. **Check for existing description (MCP):**
-   - Call `thoughts_list_active_documents` and filter `doc_type = "artifact"` with filename `pr_{number}_description.md`
+   - Call `thoughts_list_active_documents` and filter `doc_type = "artifacts"` with filename `pr_{number}_description.md`
    - If found, read it and inform user you'll be updating it
    - Consider what has changed since last description
 
