@@ -135,6 +135,7 @@ pub fn expand_tilde(path: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_expand_tilde() {
@@ -163,6 +164,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_find_claude_uses_claude_path_env() {
         // Create a temp file to use as fake claude binary
         let temp_dir = std::env::temp_dir();
@@ -188,6 +190,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_find_claude_claude_path_not_exists() {
         // Set CLAUDE_PATH to non-existent path
         // SAFETY: This is a test that runs in isolation

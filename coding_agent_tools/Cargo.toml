@@ -21,8 +21,10 @@ path = "src/lib.rs"
 
 [dependencies]
 universal-tool-core = { version = "0.2.4", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+claudecode = { version = "0.1.5", path = "../claudecode_rs" }
 ignore = "0.4"
 globset = "0.4"
+regex = "1"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -36,3 +38,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 tempfile = "3"
 serial_test = "3"
+filetime = "0.2"

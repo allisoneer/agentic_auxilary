@@ -56,16 +56,29 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "pr_comments=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     let args = Args::parse();
+
+    // Detect MCP mode before initializing tracing
+    let is_mcp = matches!(args.command, Commands::Mcp);
+
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "pr_comments=info".into());
+
+    let fmt_layer = tracing_subscriber::fmt::layer();
+
+    if is_mcp {
+        // Route all tracing output to stderr in MCP mode to keep stdout clean for JSON-RPC
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer.with_writer(std::io::stderr))
+            .init();
+    } else {
+        // Preserve existing behavior for CLI
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .init();
+    }
 
     match args.command {
         Commands::Mcp => run_mcp_server(args.repo).await,
