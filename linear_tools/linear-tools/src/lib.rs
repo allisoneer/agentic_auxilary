@@ -7,6 +7,7 @@ pub mod test_support;
 
 use cynic::{MutationBuilder, QueryBuilder};
 use http::LinearClient;
+use linear_queries::scalars::DateTimeOrDuration;
 use linear_queries::*;
 use regex::Regex;
 use std::sync::Arc;
@@ -38,6 +39,46 @@ impl LinearTools {
         }
         // Fallback: treat as ID/UUID
         IssueIdentifier::Id(input.to_string())
+    }
+
+    /// Resolve an issue identifier (UUID, ENG-245, or URL) to a UUID.
+    /// For identifiers, queries Linear to find the matching issue.
+    async fn resolve_to_issue_id(
+        &self,
+        client: &LinearClient,
+        input: &str,
+    ) -> Result<String, ToolError> {
+        match self.resolve_issue_id(input) {
+            IssueIdentifier::Id(id) => Ok(id),
+            IssueIdentifier::Identifier(ident) => {
+                // Same pattern used by read_issue
+                let filter = IssueFilter {
+                    title: Some(StringComparator {
+                        contains: Some(ident.clone()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
+                let op = IssuesQuery::build(IssuesArguments {
+                    first: Some(50),
+                    after: None,
+                    filter: Some(filter),
+                });
+                let resp = client.run(op).await.map_err(to_tool_error)?;
+                let data = resp.data.ok_or_else(|| {
+                    ToolError::new(ErrorCode::ExternalServiceError, "No data returned")
+                })?;
+                let issue = data
+                    .issues
+                    .nodes
+                    .into_iter()
+                    .find(|i| i.identifier == ident)
+                    .ok_or_else(|| {
+                        ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
+                    })?;
+                Ok(issue.id.inner().to_string())
+            }
+        }
     }
 }
 
@@ -82,6 +123,7 @@ impl LinearTools {
         cli(name = "search", alias = "s"),
         mcp(read_only = true, output = "text")
     )]
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_issues(
         &self,
         #[universal_tool_param(description = "Text to search in title")] query: Option<String>,
@@ -89,6 +131,20 @@ impl LinearTools {
             description = "Filter by priority (1=Urgent, 2=High, 3=Normal, 4=Low)"
         )]
         priority: Option<i32>,
+        #[universal_tool_param(description = "Workflow state ID (UUID)")] state_id: Option<String>,
+        #[universal_tool_param(description = "Assignee user ID (UUID)")] assignee_id: Option<
+            String,
+        >,
+        #[universal_tool_param(description = "Team ID (UUID)")] team_id: Option<String>,
+        #[universal_tool_param(description = "Project ID (UUID)")] project_id: Option<String>,
+        #[universal_tool_param(description = "Only issues created after this ISO 8601 date")]
+        created_after: Option<String>,
+        #[universal_tool_param(description = "Only issues created before this ISO 8601 date")]
+        created_before: Option<String>,
+        #[universal_tool_param(description = "Only issues updated after this ISO 8601 date")]
+        updated_after: Option<String>,
+        #[universal_tool_param(description = "Only issues updated before this ISO 8601 date")]
+        updated_before: Option<String>,
         #[universal_tool_param(description = "Page size (default 50, max 100)")] first: Option<i32>,
         #[universal_tool_param(description = "Pagination cursor")] after: Option<String>,
     ) -> Result<models::SearchResult, ToolError> {
@@ -104,6 +160,48 @@ impl LinearTools {
         if let Some(p) = priority {
             filter.priority = Some(NullableNumberComparator {
                 eq: Some(p as f64),
+                ..Default::default()
+            });
+        }
+        if let Some(id) = state_id {
+            filter.state = Some(WorkflowStateFilter {
+                id: Some(IdComparator {
+                    eq: Some(cynic::Id::new(id)),
+                }),
+            });
+        }
+        if let Some(id) = assignee_id {
+            filter.assignee = Some(NullableUserFilter {
+                id: Some(IdComparator {
+                    eq: Some(cynic::Id::new(id)),
+                }),
+            });
+        }
+        if let Some(id) = team_id {
+            filter.team = Some(TeamFilter {
+                id: Some(IdComparator {
+                    eq: Some(cynic::Id::new(id)),
+                }),
+            });
+        }
+        if let Some(id) = project_id {
+            filter.project = Some(NullableProjectFilter {
+                id: Some(IdComparator {
+                    eq: Some(cynic::Id::new(id)),
+                }),
+            });
+        }
+        if created_after.is_some() || created_before.is_some() {
+            filter.created_at = Some(DateComparator {
+                gte: created_after.map(DateTimeOrDuration),
+                lte: created_before.map(DateTimeOrDuration),
+                ..Default::default()
+            });
+        }
+        if updated_after.is_some() || updated_before.is_some() {
+            filter.updated_at = Some(DateComparator {
+                gte: updated_after.map(DateTimeOrDuration),
+                lte: updated_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
         }
@@ -237,6 +335,7 @@ impl LinearTools {
         cli(name = "create", alias = "c"),
         mcp(read_only = false, output = "text")
     )]
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_issue(
         &self,
         #[universal_tool_param(description = "Team ID (UUID) to create the issue in")]
@@ -252,8 +351,20 @@ impl LinearTools {
             String,
         >,
         #[universal_tool_param(description = "Project ID (UUID)")] project_id: Option<String>,
+        #[universal_tool_param(description = "Workflow state ID (UUID)")] state_id: Option<String>,
+        #[universal_tool_param(description = "Parent issue ID (UUID) for sub-issues")]
+        parent_id: Option<String>,
+        #[universal_tool_param(description = "Label IDs (UUID). Pass multiple times to add many.")]
+        label_ids: Vec<String>,
     ) -> Result<models::CreateIssueResult, ToolError> {
         let client = LinearClient::new(self.api_key.clone()).map_err(to_tool_error)?;
+
+        // Convert empty Vec to None for the API
+        let label_ids_opt = if label_ids.is_empty() {
+            None
+        } else {
+            Some(label_ids)
+        };
 
         let input = IssueCreateInput {
             team_id,
@@ -262,7 +373,9 @@ impl LinearTools {
             priority,
             assignee_id,
             project_id,
-            ..Default::default()
+            state_id,
+            parent_id,
+            label_ids: label_ids_opt,
         };
 
         let op = IssueCreateMutation::build(IssueCreateArguments { input });
@@ -307,12 +420,14 @@ impl LinearTools {
     )]
     pub async fn add_comment(
         &self,
-        #[universal_tool_param(description = "Issue ID (UUID) to comment on")] issue_id: String,
+        #[universal_tool_param(description = "Issue ID, identifier (e.g., ENG-245), or URL")]
+        issue: String,
         #[universal_tool_param(description = "Comment body (markdown supported)")] body: String,
         #[universal_tool_param(description = "Parent comment ID for replies (UUID)")]
         parent_id: Option<String>,
     ) -> Result<models::CommentResult, ToolError> {
         let client = LinearClient::new(self.api_key.clone()).map_err(to_tool_error)?;
+        let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
 
         let input = CommentCreateInput {
             issue_id,

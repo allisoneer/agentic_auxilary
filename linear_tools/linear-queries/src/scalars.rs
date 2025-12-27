@@ -10,3 +10,14 @@ impl cynic::schema::IsScalar<schema::DateTime> for DateTime {
 }
 
 impl cynic::coercions::CoercesTo<schema::DateTime> for DateTime {}
+
+/// Wrapper for Linear DateTimeOrDuration scalar (used in date comparators)
+/// Accepts ISO 8601 date strings or duration strings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DateTimeOrDuration(pub String);
+
+impl cynic::schema::IsScalar<schema::DateTimeOrDuration> for DateTimeOrDuration {
+    type SchemaType = schema::DateTimeOrDuration;
+}
+
+impl cynic::coercions::CoercesTo<schema::DateTimeOrDuration> for DateTimeOrDuration {}
