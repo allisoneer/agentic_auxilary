@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.3] - 2025-12-27
+
+### ⛰️  Features
+- *(coding_agent_tools)* Add tilde (~) expansion for path arguments
 ## [0.1.2] - 2025-12-27
 
 ### ⛰️  Features
