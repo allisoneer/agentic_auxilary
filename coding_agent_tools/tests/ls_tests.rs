@@ -114,7 +114,7 @@ mod path_tests {
 
     #[test]
     fn path_to_abs_string_makes_absolute() {
-        let abs = to_abs_string("foo/bar");
+        let abs = to_abs_string("foo/bar").unwrap();
         assert!(
             Path::new(&abs).is_absolute(),
             "expected absolute path, got: {}",
@@ -124,7 +124,7 @@ mod path_tests {
 
     #[test]
     fn path_existing_dir_canonicalizes() {
-        let abs = to_abs_string(".");
+        let abs = to_abs_string(".").unwrap();
         assert!(Path::new(&abs).is_absolute());
         // Canonicalized path shouldn't end with /. or /.
         assert!(!abs.ends_with("/."));
@@ -132,7 +132,7 @@ mod path_tests {
 
     #[test]
     fn path_absolute_stays_absolute() {
-        let abs = to_abs_string("/tmp/nonexistent/test/path");
+        let abs = to_abs_string("/tmp/nonexistent/test/path").unwrap();
         assert!(Path::new(&abs).is_absolute());
     }
 }
