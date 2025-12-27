@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.4.3] - 2025-12-27
+
+### ⛰️  Features
+- *(thoughts_tool)* Add get_template MCP tool for compile-time embedded templates
+- *(coding_agent_tools)* Expand spawn_agent description with usage guidance
+
+### 🐛 Bug Fixes
+- *(mcp)* Route tracing to stderr in MCP mode to prevent handshake failures
+- Correct typos and spelling in templates and prompts
+
+### 📚 Documentation
+- *(thoughts_tool)* Add TODO(1) for doc_type API asymmetry issue
+- *(thoughts_tool)* Note prompt updates needed when fixing doc_type asymmetry
 ## [0.4.2] - 2025-12-16
 
 ### ⚙️  Miscellaneous
