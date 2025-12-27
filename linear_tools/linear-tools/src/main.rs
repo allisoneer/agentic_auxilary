@@ -23,6 +23,22 @@ enum Commands {
         #[arg(long)]
         priority: Option<i32>,
         #[arg(long)]
+        state_id: Option<String>,
+        #[arg(long)]
+        assignee_id: Option<String>,
+        #[arg(long)]
+        team_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        created_after: Option<String>,
+        #[arg(long)]
+        created_before: Option<String>,
+        #[arg(long)]
+        updated_after: Option<String>,
+        #[arg(long)]
+        updated_before: Option<String>,
+        #[arg(long)]
         first: Option<i32>,
         #[arg(long)]
         after: Option<String>,
@@ -46,11 +62,17 @@ enum Commands {
         assignee_id: Option<String>,
         #[arg(long)]
         project_id: Option<String>,
+        #[arg(long)]
+        state_id: Option<String>,
+        #[arg(long)]
+        parent_id: Option<String>,
+        #[arg(long = "label-id")]
+        label_ids: Vec<String>,
     },
     /// Add a comment to an issue
     Comment {
         #[arg(long)]
-        issue_id: String,
+        issue: String,
         #[arg(long)]
         body: String,
         #[arg(long)]
@@ -93,15 +115,41 @@ async fn run_cli(args: Args) -> Result<()> {
         Commands::Search {
             query,
             priority,
+            state_id,
+            assignee_id,
+            team_id,
+            project_id,
+            created_after,
+            created_before,
+            updated_after,
+            updated_before,
             first,
             after,
-        } => match tool.search_issues(query, priority, first, after).await {
-            Ok(v) => println!("{}", serde_json::to_string_pretty(&v)?),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+        } => {
+            match tool
+                .search_issues(
+                    query,
+                    priority,
+                    state_id,
+                    assignee_id,
+                    team_id,
+                    project_id,
+                    created_after,
+                    created_before,
+                    updated_after,
+                    updated_before,
+                    first,
+                    after,
+                )
+                .await
+            {
+                Ok(v) => println!("{}", serde_json::to_string_pretty(&v)?),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        },
+        }
         Commands::Read { issue } => match tool.read_issue(issue).await {
             Ok(v) => println!("{}", serde_json::to_string_pretty(&v)?),
             Err(e) => {
@@ -116,6 +164,9 @@ async fn run_cli(args: Args) -> Result<()> {
             priority,
             assignee_id,
             project_id,
+            state_id,
+            parent_id,
+            label_ids,
         } => {
             match tool
                 .create_issue(
@@ -125,6 +176,9 @@ async fn run_cli(args: Args) -> Result<()> {
                     priority,
                     assignee_id,
                     project_id,
+                    state_id,
+                    parent_id,
+                    label_ids,
                 )
                 .await
             {
@@ -136,10 +190,10 @@ async fn run_cli(args: Args) -> Result<()> {
             }
         }
         Commands::Comment {
-            issue_id,
+            issue,
             body,
             parent_id,
-        } => match tool.add_comment(issue_id, body, parent_id).await {
+        } => match tool.add_comment(issue, body, parent_id).await {
             Ok(v) => println!("{}", serde_json::to_string_pretty(&v)?),
             Err(e) => {
                 eprintln!("Error: {}", e);
