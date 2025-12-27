@@ -1,5 +1,5 @@
 use crate::models::{
-    AllComments, GraphQLResponse, IssueComment, PrSummary, PullRequestData, ReviewComment,
+    CommentSourceType, GraphQLResponse, PrSummary, PullRequestData, ReviewComment, Thread,
 };
 use anyhow::Result;
 use octocrab::Octocrab;
@@ -56,40 +56,6 @@ impl GitHubClient {
         }
 
         Ok(None)
-    }
-
-    pub async fn get_all_comments(&self, pr_number: u64) -> Result<AllComments> {
-        // Get PR details
-        let pr = self
-            .client
-            .pulls(&self.owner, &self.repo)
-            .get(pr_number)
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to get PR #{} details for {}/{}: {:?}",
-                    pr_number,
-                    self.owner,
-                    self.repo,
-                    e
-                )
-            })?;
-
-        // Get all review comments (include resolved, include replies)
-        let review_comments = self
-            .get_review_comments(pr_number, Some(true), Some(true), None, None, None)
-            .await?;
-
-        // Get all issue comments
-        let issue_comments = self.get_issue_comments(pr_number, None, None, None).await?;
-
-        Ok(AllComments {
-            pr_number,
-            pr_title: pr.title.unwrap_or_default(),
-            total_comments: review_comments.len() + issue_comments.len(),
-            review_comments,
-            issue_comments,
-        })
     }
 
     pub async fn get_review_comments(
@@ -264,73 +230,6 @@ impl GitHubClient {
         Ok(results)
     }
 
-    pub async fn get_issue_comments(
-        &self,
-        pr_number: u64,
-        author: Option<&str>,
-        offset: Option<usize>,
-        limit: Option<usize>,
-    ) -> Result<Vec<IssueComment>> {
-        if matches!(limit, Some(0)) {
-            return Ok(vec![]);
-        }
-
-        let mut results = Vec::new();
-        let mut skip_remaining = offset.unwrap_or(0);
-        let take_limit = limit.unwrap_or(usize::MAX);
-
-        let mut page = 1u32;
-        loop {
-            let response = self
-                .client
-                .issues(&self.owner, &self.repo)
-                .list_comments(pr_number)
-                .page(page)
-                .per_page(100)
-                .send()
-                .await
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to fetch issue comments for PR #{}: {:?}",
-                        pr_number,
-                        e
-                    )
-                })?;
-
-            if response.items.is_empty() {
-                break;
-            }
-
-            for raw in response.items {
-                let c = IssueComment::from(raw);
-
-                // Author filter
-                if let Some(a) = author
-                    && c.user != a
-                {
-                    continue;
-                }
-
-                // Offset/limit
-                if skip_remaining > 0 {
-                    skip_remaining -= 1;
-                    continue;
-                }
-
-                if results.len() < take_limit {
-                    results.push(c);
-                }
-            }
-
-            if results.len() >= take_limit {
-                break;
-            }
-            page += 1;
-        }
-
-        Ok(results)
-    }
-
     pub async fn list_prs(&self, state: Option<String>) -> Result<Vec<PrSummary>> {
         let state = match state.as_deref() {
             Some("open") => octocrab::params::State::Open,
@@ -380,7 +279,7 @@ impl GitHubClient {
             .collect())
     }
 
-    async fn get_review_thread_resolution_status(
+    pub async fn get_review_thread_resolution_status(
         &self,
         pr_number: u64,
     ) -> Result<HashMap<u64, bool>> {
@@ -464,6 +363,127 @@ impl GitHubClient {
         }
 
         Ok(comment_resolution_map)
+    }
+
+    /// Fetch all review comments for a PR without complex filtering.
+    /// Returns all comments in API order.
+    pub async fn fetch_review_comments(&self, pr_number: u64) -> Result<Vec<ReviewComment>> {
+        let mut results = Vec::new();
+        let mut page = 1u32;
+
+        loop {
+            let response = self
+                .client
+                .pulls(&self.owner, &self.repo)
+                .list_comments(Some(pr_number))
+                .page(page)
+                .per_page(100)
+                .send()
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to fetch review comments for PR #{}: {:?}",
+                        pr_number,
+                        e
+                    )
+                })?;
+
+            if response.items.is_empty() {
+                break;
+            }
+
+            for raw in response.items {
+                results.push(ReviewComment::from(raw));
+            }
+
+            page += 1;
+        }
+
+        Ok(results)
+    }
+
+    /// Build threads from a flat list of comments.
+    /// Groups comments by parent ID; top-level comments become thread parents.
+    pub fn build_threads(
+        &self,
+        comments: Vec<ReviewComment>,
+        resolution_map: &HashMap<u64, bool>,
+    ) -> Vec<Thread> {
+        // Separate parents from replies
+        let mut parents: Vec<ReviewComment> = Vec::new();
+        let mut replies_by_parent: HashMap<u64, Vec<ReviewComment>> = HashMap::new();
+
+        for c in comments {
+            if let Some(parent_id) = c.in_reply_to_id {
+                replies_by_parent.entry(parent_id).or_default().push(c);
+            } else {
+                parents.push(c);
+            }
+        }
+
+        // Build threads
+        parents
+            .into_iter()
+            .map(|parent| {
+                let is_resolved = resolution_map.get(&parent.id).copied().unwrap_or(false);
+                let replies = replies_by_parent.remove(&parent.id).unwrap_or_default();
+                Thread {
+                    parent,
+                    replies,
+                    is_resolved,
+                }
+            })
+            .collect()
+    }
+
+    /// Filter threads by resolution status and comment source type.
+    pub fn filter_threads(
+        &self,
+        threads: Vec<Thread>,
+        src: CommentSourceType,
+        include_resolved: bool,
+    ) -> Vec<Thread> {
+        threads
+            .into_iter()
+            .filter(|thread| {
+                // Filter by resolution
+                if !include_resolved && thread.is_resolved {
+                    return false;
+                }
+
+                // Filter by comment source type (based on parent's is_bot)
+                match src {
+                    CommentSourceType::Robot => thread.parent.is_bot,
+                    CommentSourceType::Human => !thread.parent.is_bot,
+                    CommentSourceType::All => true,
+                }
+            })
+            .collect()
+    }
+
+    /// Reply to an existing review comment on a PR.
+    /// Returns the created comment.
+    pub async fn reply_to_comment(
+        &self,
+        pr_number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<ReviewComment> {
+        let comment = self
+            .client
+            .pulls(&self.owner, &self.repo)
+            .reply_to_comment(pr_number, octocrab::models::CommentId(comment_id), body)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to reply to comment {} on PR #{}: {:?}",
+                    comment_id,
+                    pr_number,
+                    e
+                )
+            })?;
+
+        Ok(ReviewComment::from_review_comment(comment))
     }
 }
 
