@@ -59,7 +59,17 @@ pub struct RepoConfigManager {
 
 impl RepoConfigManager {
     pub fn new(repo_root: PathBuf) -> Self {
-        Self { repo_root }
+        // Ensure absolute path at construction (defense-in-depth)
+        let abs = if repo_root.is_absolute() {
+            repo_root
+        } else {
+            std::fs::canonicalize(&repo_root).unwrap_or_else(|_| {
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(&repo_root)
+            })
+        };
+        Self { repo_root: abs }
     }
 
     /// Load v1 configuration. Prefer using `load_desired_state()` or `ensure_v2_default()` for new code.

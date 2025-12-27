@@ -30,46 +30,61 @@ pub async fn execute(recent: Option<usize>) -> Result<()> {
         .resolve_mount(&mount)
         .context("Thoughts mount not cloned")?;
 
-    let active_dir = thoughts_root.join("active");
     let completed_dir = thoughts_root.join("completed");
 
-    // List active work
+    // List active work: scan root-level directories (new structure) and active/ (legacy)
+    // Skip 'completed' directory and any other non-work directories
     println!("{}", "Active Work:".bold());
-    if active_dir.exists() {
-        let mut entries: Vec<_> = fs::read_dir(&active_dir)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .collect();
 
-        entries.sort_by_key(|e| e.file_name());
+    // Collect entries from root level (new structure)
+    let mut all_entries: Vec<_> = Vec::new();
+    for entry in fs::read_dir(&thoughts_root)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        // Skip completed dir, active symlink/dir, and hidden files
+        if path.is_dir() && name != "completed" && name != "active" && !name.starts_with('.') {
+            all_entries.push(entry);
+        }
+    }
 
-        if entries.is_empty() {
-            println!("  {}", "No active work".dimmed());
-        } else {
-            for entry in entries {
-                let name = entry.file_name();
-                let manifest_path = entry.path().join("manifest.json");
-
-                // Try to read and display started_at if manifest exists
-                if manifest_path.exists()
-                    && let Ok(content) = fs::read_to_string(&manifest_path)
-                    && let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content)
-                    && let Some(started_at) = manifest.get("started_at").and_then(|v| v.as_str())
-                {
-                    println!(
-                        "  - {} (started: {})",
-                        name.to_string_lossy().green(),
-                        started_at
-                    );
-                    continue;
-                }
-
-                // Fallback if manifest doesn't exist or can't be read
-                println!("  - {}", name.to_string_lossy().green());
+    // Also check active/ directory for pre-migration work (if it's a real directory, not symlink)
+    let active_dir = thoughts_root.join("active");
+    if active_dir.exists() && active_dir.is_dir() && !active_dir.is_symlink() {
+        for entry in fs::read_dir(&active_dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                all_entries.push(entry);
             }
         }
+    }
+
+    all_entries.sort_by_key(|e| e.file_name());
+
+    if all_entries.is_empty() {
+        println!("  {}", "No active work".dimmed());
     } else {
-        println!("  {}", "No active directory".dimmed());
+        for entry in all_entries {
+            let name = entry.file_name();
+            let manifest_path = entry.path().join("manifest.json");
+
+            // Try to read and display started_at if manifest exists
+            if manifest_path.exists()
+                && let Ok(content) = fs::read_to_string(&manifest_path)
+                && let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(started_at) = manifest.get("started_at").and_then(|v| v.as_str())
+            {
+                println!(
+                    "  - {} (started: {})",
+                    name.to_string_lossy().green(),
+                    started_at
+                );
+                continue;
+            }
+
+            // Fallback if manifest doesn't exist or can't be read
+            println!("  - {}", name.to_string_lossy().green());
+        }
     }
 
     println!();

@@ -40,7 +40,14 @@ pub async fn execute() -> Result<()> {
         branch.clone()
     };
 
-    let active_dir = thoughts_root.join("active").join(&dir_name);
+    // Look for work directory (new structure first, then fallback to active/ for pre-migration)
+    let mut active_dir = thoughts_root.join(&dir_name);
+    if !active_dir.exists() {
+        let legacy = thoughts_root.join("active").join(&dir_name);
+        if legacy.exists() {
+            active_dir = legacy;
+        }
+    }
 
     if !active_dir.exists() {
         anyhow::bail!(

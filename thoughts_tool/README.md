@@ -342,10 +342,10 @@ thoughts_tool/
 The work commands help organize your documentation by branch or week:
 
 ```bash
-# On feature branch - creates thoughts/active/my-feature/
+# On feature branch - creates thoughts/my-feature/
 thoughts work init
 
-# On main branch - creates thoughts/active/2025_week_04/
+# On main branch - creates thoughts/2025-W04/
 thoughts work init
 
 # Complete work - moves to thoughts/completed/2025-01-15_to_2025-01-22_my-feature/

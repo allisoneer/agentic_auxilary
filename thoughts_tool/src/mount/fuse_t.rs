@@ -335,6 +335,20 @@ impl MountManager for FuseTManager {
             });
         }
 
+        // Validate absolute paths (defense-in-depth)
+        if !target.is_absolute() {
+            return Err(ThoughtsError::MountOperationFailed {
+                message: format!("Mount target must be absolute: {}", target.display()),
+            });
+        }
+        for source in sources {
+            if !source.is_absolute() {
+                return Err(ThoughtsError::MountOperationFailed {
+                    message: format!("Mount source must be absolute: {}", source.display()),
+                });
+            }
+        }
+
         // Ensure all source directories exist
         for source in sources {
             if !source.exists() {
@@ -385,41 +399,49 @@ impl MountManager for FuseTManager {
             if output.status.success() {
                 info!("Successfully mounted in {:?}", duration);
 
-                // Verify mount succeeded
-                sleep(Duration::from_millis(500)).await; // macOS needs more time
-                if self.is_mounted(target).await? {
-                    // Store mount state for macOS
-                    #[cfg(target_os = "macos")]
-                    {
-                        if let Err(e) = self
-                            .store_mount_state(sources, target, options, &cmd_path, &args)
-                            .await
+                // Verify mount succeeded with bounded polling (3s max, 100ms intervals)
+                let deadline = Instant::now() + Duration::from_secs(3);
+                loop {
+                    if self.is_mounted(target).await? {
+                        // Store mount state for macOS
+                        #[cfg(target_os = "macos")]
                         {
-                            warn!("Failed to store mount state: {}", e);
-                        }
-                    }
-                    return Ok(());
-                } else {
-                    warn!("Mount command succeeded but mount not found");
-                    // Show diagnostic mount output for the target
-                    if let Ok(out) = tokio::process::Command::new(MOUNT_CMD).output().await {
-                        if out.status.success() {
-                            let out_str = String::from_utf8_lossy(&out.stdout);
-                            let target_str = target.display().to_string();
-                            let relevant: Vec<&str> = out_str
-                                .lines()
-                                .filter(|l| l.contains(" on ") && l.contains(&target_str))
-                                .collect();
-
-                            if !relevant.is_empty() {
-                                warn!(
-                                    "Mount verification diagnostics for {}:\n    {}",
-                                    target.display(),
-                                    relevant.join("\n    ")
-                                );
+                            if let Err(e) = self
+                                .store_mount_state(sources, target, options, &cmd_path, &args)
+                                .await
+                            {
+                                warn!("Failed to store mount state: {}", e);
                             }
                         }
+                        return Ok(());
                     }
+                    if Instant::now() >= deadline {
+                        warn!(
+                            "Mount command succeeded but target '{}' not visible after 3s polling",
+                            target.display()
+                        );
+                        // Show diagnostic mount output for the target
+                        if let Ok(out) = tokio::process::Command::new(MOUNT_CMD).output().await {
+                            if out.status.success() {
+                                let out_str = String::from_utf8_lossy(&out.stdout);
+                                let target_str = target.display().to_string();
+                                let relevant: Vec<&str> = out_str
+                                    .lines()
+                                    .filter(|l| l.contains(" on ") && l.contains(&target_str))
+                                    .collect();
+
+                                if !relevant.is_empty() {
+                                    warn!(
+                                        "Mount verification diagnostics for {}:\n    {}",
+                                        target.display(),
+                                        relevant.join("\n    ")
+                                    );
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    sleep(Duration::from_millis(100)).await;
                 }
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);

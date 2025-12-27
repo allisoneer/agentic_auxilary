@@ -252,6 +252,20 @@ impl MountManager for MergerfsManager {
             });
         }
 
+        // Validate absolute paths (defense-in-depth)
+        if !target.is_absolute() {
+            return Err(ThoughtsError::MountOperationFailed {
+                message: format!("Mount target must be absolute: {}", target.display()),
+            });
+        }
+        for source in sources {
+            if !source.is_absolute() {
+                return Err(ThoughtsError::MountOperationFailed {
+                    message: format!("Mount source must be absolute: {}", source.display()),
+                });
+            }
+        }
+
         // Ensure all source directories exist
         for source in sources {
             if !source.exists() {
@@ -301,12 +315,20 @@ impl MountManager for MergerfsManager {
             if output.status.success() {
                 info!("Successfully mounted in {:?}", duration);
 
-                // Verify mount succeeded
-                sleep(Duration::from_millis(100)).await;
-                if self.is_mounted(target).await? {
-                    return Ok(());
-                } else {
-                    warn!("Mount command succeeded but mount not found");
+                // Verify mount succeeded with bounded polling (3s max, 100ms intervals)
+                let deadline = Instant::now() + Duration::from_secs(3);
+                loop {
+                    if self.is_mounted(target).await? {
+                        return Ok(());
+                    }
+                    if Instant::now() >= deadline {
+                        warn!(
+                            "Mount command succeeded but target '{}' not visible after 3s polling",
+                            target.display()
+                        );
+                        break;
+                    }
+                    sleep(Duration::from_millis(100)).await;
                 }
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
