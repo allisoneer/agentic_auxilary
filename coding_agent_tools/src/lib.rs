@@ -74,7 +74,10 @@ impl CodingAgentTools {
 
         // Resolve path
         let path_str = path.unwrap_or_else(|| ".".into());
-        let abs_root = paths::to_abs_string(&path_str);
+        let abs_root = match paths::to_abs_string(&path_str) {
+            Ok(s) => s,
+            Err(msg) => return Err(ToolError::invalid_input(msg)),
+        };
         let root_path = Path::new(&abs_root);
 
         // Validate root path exists and is a directory
@@ -355,7 +358,10 @@ Usage notes:
         offset: Option<usize>,
     ) -> Result<GrepOutput, ToolError> {
         let path_str = path.unwrap_or_else(|| ".".into());
-        let abs_root = paths::to_abs_string(&path_str);
+        let abs_root = match paths::to_abs_string(&path_str) {
+            Ok(s) => s,
+            Err(msg) => return Err(ToolError::invalid_input(msg)),
+        };
         let cfg = grep::GrepConfig {
             root: abs_root,
             pattern,
@@ -403,7 +409,10 @@ Usage notes:
         offset: Option<usize>,
     ) -> Result<GlobOutput, ToolError> {
         let path_str = path.unwrap_or_else(|| ".".into());
-        let abs_root = paths::to_abs_string(&path_str);
+        let abs_root = match paths::to_abs_string(&path_str) {
+            Ok(s) => s,
+            Err(msg) => return Err(ToolError::invalid_input(msg)),
+        };
         let cfg = glob::GlobConfig {
             root: abs_root,
             pattern,
