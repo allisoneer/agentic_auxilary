@@ -7,9 +7,22 @@ use crate::mount::MountResolver;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-pub async fn execute() -> Result<()> {
+pub async fn execute(allow_main: bool) -> Result<()> {
     let code_root = find_repo_root(&std::env::current_dir()?)?;
     let branch = get_current_branch(&code_root)?;
+
+    // Main branch protection: refuse to init on main/master unless explicitly allowed
+    let main_like = branch == "main" || branch == "master";
+    let env_ok = std::env::var("THOUGHTS_ALLOW_MAIN")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if main_like && !(allow_main || env_ok) {
+        anyhow::bail!(
+            "Refusing to initialize work on '{}' branch without explicit override.\n\
+             Re-run with --allow-main or set THOUGHTS_ALLOW_MAIN=1.",
+            branch
+        );
+    }
 
     let mgr = RepoConfigManager::new(get_control_repo_root(&std::env::current_dir()?)?);
     let ds = mgr.load_desired_state()?.ok_or_else(|| {
@@ -40,8 +53,8 @@ pub async fn execute() -> Result<()> {
         branch.clone()
     };
 
-    // Create work directory structure
-    let base = thoughts_root.join("active").join(&dir_name);
+    // Create work directory structure (no 'active/' layer)
+    let base = thoughts_root.join(&dir_name);
 
     if base.exists() {
         println!(
