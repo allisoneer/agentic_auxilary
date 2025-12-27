@@ -4,6 +4,50 @@ use schemars::schema::{InstanceType, Metadata, NumberValidation, Schema, SchemaO
 use serde::{Deserialize, Serialize};
 use universal_tool_core::mcp::McpFormatter;
 
+/// Agent type determines the model and behavior characteristics.
+/// - Locator: Fast discovery (haiku), finds WHERE things are
+/// - Analyzer: Deep analysis (sonnet), understands HOW things work
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentType {
+    #[default]
+    Locator,
+    Analyzer,
+}
+
+/// Agent location determines the working context and available tools.
+/// - Codebase: Current repository (code, configs, tests)
+/// - Thoughts: Thought documents in active branch
+/// - References: Cloned reference repositories
+/// - Web: Internet search (no working directory)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentLocation {
+    #[default]
+    Codebase,
+    Thoughts,
+    References,
+    Web,
+}
+
+/// Output from spawn_agent tool - plain text response from the subagent.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AgentOutput {
+    pub text: String,
+}
+
+impl AgentOutput {
+    pub fn new(text: String) -> Self {
+        Self { text }
+    }
+}
+
+impl McpFormatter for AgentOutput {
+    fn mcp_format_text(&self) -> String {
+        self.text.clone()
+    }
+}
+
 /// Depth of directory traversal (0-10).
 /// - 0: Header only (just the directory path)
 /// - 1: Immediate children only (like `ls`)
@@ -208,5 +252,211 @@ impl McpFormatter for LsOutput {
         }
 
         out.trim_end().to_string()
+    }
+}
+
+// =============================================================================
+// search_grep and search_glob types
+// =============================================================================
+
+/// Output mode for search_grep results: 'files' (default, returns unique file paths - most
+/// token-efficient), 'content' (returns matching lines with context), or 'count' (returns
+/// total match count only).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputMode {
+    #[default]
+    Files,
+    Content,
+    Count,
+}
+
+/// Sort order for search_glob results: 'name' (default, alphabetical case-insensitive) or
+/// 'mtime' (newest modification time first).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    #[default]
+    Name,
+    Mtime,
+}
+
+/// Footer reminder appended by search tools.
+pub const SEARCH_REMINDER: &str = "REMINDER: You should rarely need to call this repeatedly. If you didn't find \
+what you need, use spawn_agent(type='locator', location='codebase', \
+prompt='describe what you're looking for') instead of issuing more searches.";
+
+/// Output from search_grep tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GrepOutput {
+    /// Root directory searched
+    pub root: String,
+    /// Output mode used
+    pub mode: OutputMode,
+    /// Lines to display (mode-specific):
+    /// - files: relative file paths
+    /// - content: `path:line: content`
+    /// - count: usually empty; see summary
+    pub lines: Vec<String>,
+    /// Whether there are more results beyond head_limit
+    pub has_more: bool,
+    /// Warnings encountered during search (e.g., binary files skipped)
+    pub warnings: Vec<String>,
+    /// Optional summary (e.g., total matches for count mode)
+    pub summary: Option<String>,
+}
+
+impl McpFormatter for GrepOutput {
+    fn mcp_format_text(&self) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+
+        let mode_str = match self.mode {
+            OutputMode::Files => "files",
+            OutputMode::Content => "content",
+            OutputMode::Count => "count",
+        };
+        let _ = writeln!(
+            out,
+            "grep results ({}) in {}/",
+            mode_str,
+            self.root.trim_end_matches('/')
+        );
+
+        for line in &self.lines {
+            let _ = writeln!(out, "  {}", line);
+        }
+
+        if let Some(ref s) = self.summary {
+            let _ = writeln!(out, "{}", s);
+        }
+
+        if self.has_more {
+            let _ = writeln!(
+                out,
+                "(truncated — pass explicit head_limit and offset for next page)"
+            );
+        }
+
+        for w in &self.warnings {
+            let _ = writeln!(out, "Note: {}", w);
+        }
+
+        // Required REMINDER footer on every call
+        let _ = writeln!(out, "{}", SEARCH_REMINDER);
+
+        out.trim_end().to_string()
+    }
+}
+
+/// Output from search_glob tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GlobOutput {
+    /// Root directory searched
+    pub root: String,
+    /// Matched file/directory paths (relative to root)
+    pub entries: Vec<String>,
+    /// Whether there are more results beyond head_limit
+    pub has_more: bool,
+    /// Warnings encountered during search
+    pub warnings: Vec<String>,
+}
+
+impl McpFormatter for GlobOutput {
+    fn mcp_format_text(&self) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+
+        let _ = writeln!(out, "glob results in {}/", self.root.trim_end_matches('/'));
+        for e in &self.entries {
+            let _ = writeln!(out, "  {}", e);
+        }
+
+        if self.has_more {
+            let _ = writeln!(
+                out,
+                "(truncated — pass explicit head_limit and offset for next page)"
+            );
+        }
+
+        for w in &self.warnings {
+            let _ = writeln!(out, "Note: {}", w);
+        }
+
+        let _ = writeln!(out, "{}", SEARCH_REMINDER);
+
+        out.trim_end().to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_type_default() {
+        let default = AgentType::default();
+        assert_eq!(default, AgentType::Locator);
+    }
+
+    #[test]
+    fn test_agent_location_default() {
+        let default = AgentLocation::default();
+        assert_eq!(default, AgentLocation::Codebase);
+    }
+
+    #[test]
+    fn test_agent_type_serde_roundtrip() {
+        for agent_type in [AgentType::Locator, AgentType::Analyzer] {
+            let json = serde_json::to_string(&agent_type).unwrap();
+            let deserialized: AgentType = serde_json::from_str(&json).unwrap();
+            assert_eq!(agent_type, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_agent_location_serde_roundtrip() {
+        for location in [
+            AgentLocation::Codebase,
+            AgentLocation::Thoughts,
+            AgentLocation::References,
+            AgentLocation::Web,
+        ] {
+            let json = serde_json::to_string(&location).unwrap();
+            let deserialized: AgentLocation = serde_json::from_str(&json).unwrap();
+            assert_eq!(location, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_agent_type_snake_case_serialization() {
+        assert_eq!(
+            serde_json::to_string(&AgentType::Locator).unwrap(),
+            "\"locator\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentType::Analyzer).unwrap(),
+            "\"analyzer\""
+        );
+    }
+
+    #[test]
+    fn test_agent_location_snake_case_serialization() {
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::Codebase).unwrap(),
+            "\"codebase\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::Thoughts).unwrap(),
+            "\"thoughts\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::References).unwrap(),
+            "\"references\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AgentLocation::Web).unwrap(),
+            "\"web\""
+        );
     }
 }

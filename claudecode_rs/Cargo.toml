@@ -17,6 +17,7 @@ dist = false
 [dependencies]
 # Core async runtime
 tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 
 # Async traits and utilities
 futures = "0.3"
@@ -47,6 +48,11 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 # Low-level system calls (for interrupt signal)
 libc = "0.2"
 
+# MCP validation
+rmcp = { version = "0.6.4", features = ["client", "transport-child-process"] }
+num_cpus = "1.16"
+
 [dev-dependencies]
 tokio-test = "0.4"
 tracing-subscriber = "0.3"
+serial_test = "3.2"

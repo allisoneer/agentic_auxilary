@@ -1,6 +1,11 @@
+---
+description: Commit Changes
+---
 # Commit Changes
 
 You are tasked with creating git commits for the changes made during this session.
+
+**User message (if any):** $ARGUMENTS
 
 ## Process:
 
@@ -30,7 +35,10 @@ You are tasked with creating git commits for the changes made during this sessio
    
    [optional footer(s)]
    ```
-   - Scope is optional but recommended (e.g., `thoughts_tool`, `universal_tool`, `claudecode_rs`)
+   - Scope is optional and cosmetic—it appears in changelogs for readability but doesn't affect routing
+   - Changelog entries are routed to packages based on file paths changed, not the scope value
+   - For tool-specific changes, use the directory name as scope (e.g., `thoughts_tool`, `gpt5_reasoner`)
+   - For cross-cutting changes, use generic scopes like `build`, `deps`, `ci`, or omit the scope entirely
    - Description should be imperative mood, lowercase, no period
    - Body explains WHY, not what (the diff shows what)
    - Footer can include `BREAKING CHANGE:` for major version bumps
@@ -75,4 +83,4 @@ Consumers must update their parsing logic.
 - Group related changes together
 - Keep commits focused and atomic when possible
 - Use conventional commits to enable automated versioning
-- The scope should match the package name when changes are package-specific
+- For tool-specific scopes, use directory names (e.g., `thoughts_tool`); file paths determine changelog routing
