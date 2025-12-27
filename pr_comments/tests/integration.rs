@@ -24,6 +24,7 @@ async fn test_model_serialization() {
     let comment = ReviewComment {
         id: 123,
         user: "testuser".to_string(),
+        is_bot: false,
         body: "Test comment".to_string(),
         path: "src/main.rs".to_string(),
         line: Some(42),
@@ -38,6 +39,7 @@ async fn test_model_serialization() {
     let json = serde_json::to_string(&comment).unwrap();
     let parsed: ReviewComment = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.id, comment.id);
+    assert_eq!(parsed.is_bot, comment.is_bot);
 }
 
 // Additional integration tests would require mocking GitHub API
@@ -107,6 +109,7 @@ mod filter_pipeline_tests {
         ReviewComment {
             id,
             user: user.into(),
+            is_bot: false,
             body: format!("P{}", id),
             path: "a.rs".into(),
             line: Some(1),
@@ -123,6 +126,7 @@ mod filter_pipeline_tests {
         ReviewComment {
             id,
             user: user.into(),
+            is_bot: false,
             body: format!("R{}", id),
             path: "a.rs".into(),
             line: Some(1),
@@ -244,5 +248,172 @@ mod filter_pipeline_tests {
         let out = apply_filters(page1, p(true, true, None, 0, 1));
         assert_eq!(ids(&out), vec![1, 11]);
         // R2 on a later page would not be fetched/added.
+    }
+}
+
+#[cfg(test)]
+mod thread_tests {
+    use pr_comments::models::{CommentSourceType, ReviewComment, Thread};
+    use std::collections::HashMap;
+
+    fn make_comment(id: u64, user: &str, is_bot: bool, in_reply_to: Option<u64>) -> ReviewComment {
+        ReviewComment {
+            id,
+            user: user.into(),
+            is_bot,
+            body: format!("Comment {}", id),
+            path: "src/lib.rs".into(),
+            line: Some(10),
+            side: Some("RIGHT".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: "2025-01-01T00:00:00Z".into(),
+            html_url: format!("https://example.com/{}", id),
+            pull_request_review_id: None,
+            in_reply_to_id: in_reply_to,
+        }
+    }
+
+    fn build_threads(
+        comments: Vec<ReviewComment>,
+        resolution_map: &HashMap<u64, bool>,
+    ) -> Vec<Thread> {
+        let mut parents: Vec<ReviewComment> = Vec::new();
+        let mut replies_by_parent: HashMap<u64, Vec<ReviewComment>> = HashMap::new();
+
+        for c in comments {
+            if let Some(parent_id) = c.in_reply_to_id {
+                replies_by_parent.entry(parent_id).or_default().push(c);
+            } else {
+                parents.push(c);
+            }
+        }
+
+        parents
+            .into_iter()
+            .map(|parent| {
+                let is_resolved = resolution_map.get(&parent.id).copied().unwrap_or(false);
+                let replies = replies_by_parent.remove(&parent.id).unwrap_or_default();
+                Thread {
+                    parent,
+                    replies,
+                    is_resolved,
+                }
+            })
+            .collect()
+    }
+
+    fn filter_threads(
+        threads: Vec<Thread>,
+        src: CommentSourceType,
+        include_resolved: bool,
+    ) -> Vec<Thread> {
+        threads
+            .into_iter()
+            .filter(|thread| {
+                if !include_resolved && thread.is_resolved {
+                    return false;
+                }
+                match src {
+                    CommentSourceType::Robot => thread.parent.is_bot,
+                    CommentSourceType::Human => !thread.parent.is_bot,
+                    CommentSourceType::All => true,
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn build_threads_groups_replies_under_parent() {
+        let comments = vec![
+            make_comment(1, "alice", false, None),      // parent
+            make_comment(2, "bob", false, Some(1)),     // reply to 1
+            make_comment(3, "charlie", false, Some(1)), // reply to 1
+            make_comment(4, "dave", false, None),       // another parent
+        ];
+        let res_map = HashMap::new();
+        let threads = build_threads(comments, &res_map);
+
+        assert_eq!(threads.len(), 2);
+        assert_eq!(threads[0].parent.id, 1);
+        assert_eq!(threads[0].replies.len(), 2);
+        assert_eq!(threads[1].parent.id, 4);
+        assert_eq!(threads[1].replies.len(), 0);
+    }
+
+    #[test]
+    fn filter_threads_by_resolution() {
+        let comments = vec![
+            make_comment(1, "alice", false, None),
+            make_comment(2, "bob", false, None),
+        ];
+        let mut res_map = HashMap::new();
+        res_map.insert(1, true); // thread 1 is resolved
+        res_map.insert(2, false); // thread 2 is not resolved
+
+        let threads = build_threads(comments, &res_map);
+        let filtered = filter_threads(threads, CommentSourceType::All, false);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].parent.id, 2);
+    }
+
+    #[test]
+    fn filter_threads_include_resolved() {
+        let comments = vec![
+            make_comment(1, "alice", false, None),
+            make_comment(2, "bob", false, None),
+        ];
+        let mut res_map = HashMap::new();
+        res_map.insert(1, true);
+        res_map.insert(2, false);
+
+        let threads = build_threads(comments, &res_map);
+        let filtered = filter_threads(threads, CommentSourceType::All, true);
+
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn filter_threads_by_robot() {
+        let comments = vec![
+            make_comment(1, "coderabbit[bot]", true, None), // bot
+            make_comment(2, "alice", false, None),          // human
+        ];
+        let res_map = HashMap::new();
+
+        let threads = build_threads(comments, &res_map);
+        let filtered = filter_threads(threads, CommentSourceType::Robot, false);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].parent.id, 1);
+    }
+
+    #[test]
+    fn filter_threads_by_human() {
+        let comments = vec![
+            make_comment(1, "coderabbit[bot]", true, None), // bot
+            make_comment(2, "alice", false, None),          // human
+        ];
+        let res_map = HashMap::new();
+
+        let threads = build_threads(comments, &res_map);
+        let filtered = filter_threads(threads, CommentSourceType::Human, false);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].parent.id, 2);
+    }
+
+    #[test]
+    fn filter_threads_all_includes_both() {
+        let comments = vec![
+            make_comment(1, "coderabbit[bot]", true, None), // bot
+            make_comment(2, "alice", false, None),          // human
+        ];
+        let res_map = HashMap::new();
+
+        let threads = build_threads(comments, &res_map);
+        let filtered = filter_threads(threads, CommentSourceType::All, false);
+
+        assert_eq!(filtered.len(), 2);
     }
 }
