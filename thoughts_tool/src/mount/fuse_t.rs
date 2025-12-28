@@ -8,7 +8,9 @@ use super::manager::MountManager;
 use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
-use crate::platform::common::{MOUNT_RETRY_DELAY, MOUNT_TIMEOUT, UNMOUNT_TIMEOUT};
+use crate::platform::common::{
+    MOUNT_RETRY_DELAY, MOUNT_TIMEOUT, MOUNT_VERIFY_TIMEOUT, UNMOUNT_TIMEOUT,
+};
 use crate::platform::detector::MacOSInfo;
 use crate::platform::macos::{DEFAULT_MOUNT_OPTIONS, DEFAULT_VOLUME_NAME, DISKUTIL_CMD, MOUNT_CMD};
 
@@ -335,6 +337,20 @@ impl MountManager for FuseTManager {
             });
         }
 
+        // Validate absolute paths (defense-in-depth)
+        if !target.is_absolute() {
+            return Err(ThoughtsError::MountOperationFailed {
+                message: format!("Mount target must be absolute: {}", target.display()),
+            });
+        }
+        for source in sources {
+            if !source.is_absolute() {
+                return Err(ThoughtsError::MountOperationFailed {
+                    message: format!("Mount source must be absolute: {}", source.display()),
+                });
+            }
+        }
+
         // Ensure all source directories exist
         for source in sources {
             if !source.exists() {
@@ -385,9 +401,15 @@ impl MountManager for FuseTManager {
             if output.status.success() {
                 info!("Successfully mounted in {:?}", duration);
 
-                // Verify mount succeeded
-                sleep(Duration::from_millis(500)).await; // macOS needs more time
-                if self.is_mounted(target).await? {
+                // Verify mount appears using shared polling helper
+                let verified = utils::verify_with_polling(
+                    || async { self.is_mounted(target).await },
+                    MOUNT_VERIFY_TIMEOUT,
+                    Duration::from_millis(100),
+                )
+                .await?;
+
+                if verified {
                     // Store mount state for macOS
                     #[cfg(target_os = "macos")]
                     {
@@ -400,8 +422,12 @@ impl MountManager for FuseTManager {
                     }
                     return Ok(());
                 } else {
-                    warn!("Mount command succeeded but mount not found");
-                    // Show diagnostic mount output for the target
+                    warn!(
+                        "Mount command succeeded but target '{}' not visible after {}s polling",
+                        target.display(),
+                        MOUNT_VERIFY_TIMEOUT.as_secs()
+                    );
+                    // Existing diagnostics: filtered mount output for the target
                     if let Ok(out) = tokio::process::Command::new(MOUNT_CMD).output().await {
                         if out.status.success() {
                             let out_str = String::from_utf8_lossy(&out.stdout);
@@ -410,7 +436,6 @@ impl MountManager for FuseTManager {
                                 .lines()
                                 .filter(|l| l.contains(" on ") && l.contains(&target_str))
                                 .collect();
-
                             if !relevant.is_empty() {
                                 warn!(
                                     "Mount verification diagnostics for {}:\n    {}",
@@ -420,6 +445,12 @@ impl MountManager for FuseTManager {
                             }
                         }
                     }
+
+                    // Return immediately with distinct error (do not fall through)
+                    return Err(ThoughtsError::MountVerificationTimeout {
+                        target: target.to_path_buf(),
+                        timeout_secs: MOUNT_VERIFY_TIMEOUT.as_secs(),
+                    });
                 }
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);

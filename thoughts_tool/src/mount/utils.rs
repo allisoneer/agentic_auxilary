@@ -114,6 +114,38 @@ pub fn normalize_mount_path(path: &Path) -> Result<std::path::PathBuf> {
     }
 }
 
+/// Poll an async check until it returns true or times out.
+/// Returns:
+/// - Ok(true) if the check succeeded within the timeout
+/// - Ok(false) if the timeout elapsed without success
+/// - Err(e) if the check returned an error
+pub async fn verify_with_polling<F, Fut>(
+    mut check: F,
+    timeout: std::time::Duration,
+    interval: std::time::Duration,
+) -> Result<bool>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<bool>>,
+{
+    use std::time::Instant;
+    use tokio::time::sleep;
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match check().await {
+            Ok(true) => return Ok(true),
+            Ok(false) => {
+                if Instant::now() >= deadline {
+                    return Ok(false);
+                }
+                sleep(interval).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +217,69 @@ mod tests {
                 .await
                 .is_ok()
         );
+    }
+
+    #[tokio::test]
+    async fn test_verify_with_polling_eventually_true() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        use std::time::Duration;
+
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let counter_closure = {
+            let counter = counter.clone();
+            move || {
+                let counter = counter.clone();
+                async move {
+                    let n = counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(n >= 3) // true on 4th call
+                }
+            }
+        };
+
+        let ok = super::verify_with_polling(
+            counter_closure,
+            Duration::from_millis(300),
+            Duration::from_millis(5),
+        )
+        .await
+        .unwrap();
+        assert!(ok, "should become true before timeout");
+    }
+
+    #[tokio::test]
+    async fn test_verify_with_polling_times_out() {
+        use std::time::Duration;
+
+        let ok = super::verify_with_polling(
+            || async { Ok(false) },
+            Duration::from_millis(50),
+            Duration::from_millis(10),
+        )
+        .await
+        .unwrap();
+        assert!(!ok, "should time out and return Ok(false)");
+    }
+
+    #[tokio::test]
+    async fn test_verify_with_polling_error_propagates() {
+        use crate::error::ThoughtsError;
+        use std::time::Duration;
+
+        let err = super::verify_with_polling(
+            || async {
+                Err(ThoughtsError::MountOperationFailed {
+                    message: "boom".into(),
+                })
+            },
+            Duration::from_millis(50),
+            Duration::from_millis(10),
+        )
+        .await
+        .expect_err("expected error");
+        assert!(format!("{err}").contains("boom"));
     }
 }

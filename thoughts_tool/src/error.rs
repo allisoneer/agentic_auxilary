@@ -18,6 +18,9 @@ pub enum ThoughtsError {
     #[error("Mount operation failed: {message}")]
     MountOperationFailed { message: String },
 
+    #[error("Mount verification timed out: target {target} not visible after {timeout_secs}s")]
+    MountVerificationTimeout { target: PathBuf, timeout_secs: u64 },
+
     #[error("Command timeout: {command} timed out after {timeout_secs} seconds")]
     CommandTimeout { command: String, timeout_secs: u64 },
 

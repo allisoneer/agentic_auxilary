@@ -4,13 +4,65 @@ use chrono::Datelike;
 use serde_json::json;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tracing::debug;
 
 use crate::config::{Mount, RepoConfigManager};
 use crate::git::utils::{
     find_repo_root, get_control_repo_root, get_current_branch, get_remote_url,
 };
 use crate::mount::MountResolver;
+
+/// Legacy format (read-side compatibility): "YYYY_week_WW"
+/// Used only for migration of existing directories created with old format.
+fn legacy_iso_week_dir() -> String {
+    let now = chrono::Utc::now().date_naive();
+    let iso = now.iso_week();
+    format!("{}_week_{:02}", iso.year(), iso.week())
+}
+
+/// Migrate from `thoughts/active/*` structure to `thoughts/*`.
+///
+/// Moves directories from active/ to the root and creates a compatibility
+/// symlink `active -> .` for backward compatibility.
+fn migrate_active_layer(thoughts_root: &Path) -> Result<()> {
+    let active = thoughts_root.join("active");
+
+    // Check if active is a real directory (not already a symlink)
+    if active.exists() && active.is_dir() && !active.is_symlink() {
+        debug!("Migrating active/ layer at {}", thoughts_root.display());
+
+        // Move all directories from active/ to thoughts_root
+        for entry in std::fs::read_dir(&active)? {
+            let entry = entry?;
+            let p = entry.path();
+            if p.is_dir() {
+                let name = entry.file_name();
+                let newp = thoughts_root.join(&name);
+                if !newp.exists() {
+                    std::fs::rename(&p, &newp).with_context(|| {
+                        format!("Failed to move {} to {}", p.display(), newp.display())
+                    })?;
+                    debug!("Migrated {} -> {}", p.display(), newp.display());
+                }
+            }
+        }
+
+        // Create compatibility symlink active -> .
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs as unixfs;
+            // Only remove if it's now empty
+            if std::fs::read_dir(&active)?.next().is_none() {
+                let _ = std::fs::remove_dir(&active);
+                if unixfs::symlink(".", &active).is_ok() {
+                    debug!("Created compatibility symlink: active -> .");
+                }
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Paths for the current active work directory
 #[derive(Debug, Clone)]
@@ -65,8 +117,35 @@ fn current_work_dir_name() -> Result<String> {
 /// Ensure active work directory exists with subdirs and manifest
 pub fn ensure_active_work() -> Result<ActiveWork> {
     let thoughts_root = resolve_thoughts_root()?;
+
+    // Migrate from thoughts/active/* to thoughts/* if needed
+    migrate_active_layer(&thoughts_root)?;
+
     let dir_name = current_work_dir_name()?;
-    let base = thoughts_root.join("active").join(&dir_name);
+    let mut base = thoughts_root.join(&dir_name);
+
+    // Legacy read-side fallback: check thoughts/active/{dir} if new path doesn't exist
+    // (for unmigrated repositories or symlink compatibility)
+    if !base.exists() {
+        let legacy_active = thoughts_root.join("active").join(&dir_name);
+        if legacy_active.exists() {
+            base = legacy_active;
+        }
+    }
+
+    // Legacy read-side fallback for main/master: check old week format if new doesn't exist
+    if !base.exists() {
+        let legacy = legacy_iso_week_dir();
+        let legacy_base = thoughts_root.join(&legacy);
+        if legacy_base.exists() {
+            base = legacy_base;
+        }
+        // Also check under active/ for old week format
+        let legacy_active_base = thoughts_root.join("active").join(&legacy);
+        if !base.exists() && legacy_active_base.exists() {
+            base = legacy_active_base;
+        }
+    }
 
     // Create structure if missing
     if !base.exists() {

@@ -252,6 +252,20 @@ impl MountManager for MergerfsManager {
             });
         }
 
+        // Validate absolute paths (defense-in-depth)
+        if !target.is_absolute() {
+            return Err(ThoughtsError::MountOperationFailed {
+                message: format!("Mount target must be absolute: {}", target.display()),
+            });
+        }
+        for source in sources {
+            if !source.is_absolute() {
+                return Err(ThoughtsError::MountOperationFailed {
+                    message: format!("Mount source must be absolute: {}", source.display()),
+                });
+            }
+        }
+
         // Ensure all source directories exist
         for source in sources {
             if !source.exists() {
@@ -301,12 +315,43 @@ impl MountManager for MergerfsManager {
             if output.status.success() {
                 info!("Successfully mounted in {:?}", duration);
 
-                // Verify mount succeeded
-                sleep(Duration::from_millis(100)).await;
-                if self.is_mounted(target).await? {
+                // Verify mount appears using shared polling helper
+                let verified = utils::verify_with_polling(
+                    || async { self.is_mounted(target).await },
+                    MOUNT_VERIFY_TIMEOUT,
+                    Duration::from_millis(100),
+                )
+                .await?;
+
+                if verified {
                     return Ok(());
                 } else {
-                    warn!("Mount command succeeded but mount not found");
+                    warn!(
+                        "Mount command succeeded but target '{}' not visible after {}s polling",
+                        target.display(),
+                        MOUNT_VERIFY_TIMEOUT.as_secs()
+                    );
+                    // Diagnostics: dump relevant /proc/mounts lines for parity with macOS
+                    if let Ok(content) = tokio::fs::read_to_string(PROC_MOUNTS).await {
+                        let target_str = target.display().to_string();
+                        let relevant: Vec<&str> = content
+                            .lines()
+                            .filter(|l| l.contains(&target_str) || l.contains(MERGERFS_FSTYPE))
+                            .collect();
+                        if !relevant.is_empty() {
+                            warn!(
+                                "Mount verification diagnostics for {}:\n    {}",
+                                target.display(),
+                                relevant.join("\n    ")
+                            );
+                        }
+                    }
+
+                    // Return immediately with distinct error (do not fall through)
+                    return Err(ThoughtsError::MountVerificationTimeout {
+                        target: target.to_path_buf(),
+                        timeout_secs: MOUNT_VERIFY_TIMEOUT.as_secs(),
+                    });
                 }
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);

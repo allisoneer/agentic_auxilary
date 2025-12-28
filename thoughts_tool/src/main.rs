@@ -135,6 +135,9 @@ enum MountCommands {
         #[command(subcommand)]
         command: MountDebugCommands,
     },
+
+    /// Show active mount status (currently mounted filesystems)
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -204,7 +207,11 @@ enum ReferenceCommands {
 #[derive(Subcommand)]
 enum WorkCommands {
     /// Initialize a new work directory based on current branch/week
-    Init,
+    Init {
+        /// Allow initialization on main/master branch (normally disallowed)
+        #[arg(long)]
+        allow_main: bool,
+    },
 
     /// Mark current work as complete and archive it
     Complete,
@@ -307,6 +314,7 @@ async fn main() -> Result<()> {
                     commands::mount::debug::remount::execute(mount_name).await
                 }
             },
+            MountCommands::Status => commands::mount::status::execute().await,
         },
         Commands::Config { command } => match command {
             ConfigCommands::Create => commands::config::create::execute().await,
@@ -322,7 +330,7 @@ async fn main() -> Result<()> {
             ReferenceCommands::Sync => commands::references::sync::execute().await,
         },
         Commands::Work { command } => match command {
-            WorkCommands::Init => commands::work::init::execute().await,
+            WorkCommands::Init { allow_main } => commands::work::init::execute(allow_main).await,
             WorkCommands::Complete => commands::work::complete::execute().await,
             WorkCommands::List { recent } => commands::work::list::execute(recent).await,
             WorkCommands::Open { subdir } => {
