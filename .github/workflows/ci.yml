@@ -21,8 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools]
+        os: &oses [ubuntu-latest, macos-latest]
+        package: &packages [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools, linear_tools]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools]
+        package: *packages
     steps:
       - uses: actions/checkout@v5
         with:
@@ -118,8 +118,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        package: [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools]
+        os: *oses
+        package: *packages
     steps:
       - uses: actions/checkout@v5
         with:
