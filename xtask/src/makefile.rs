@@ -39,6 +39,7 @@ fn default_aliases() -> BTreeMap<String, String> {
         ("gpt5_reasoner".into(), "gpt5".into()),
         ("anthropic_async".into(), "anthropic".into()),
         ("coding_agent_tools".into(), "coding".into()),
+        ("linear_tools".into(), "linear".into()),
     ])
 }
 

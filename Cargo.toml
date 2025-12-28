@@ -11,6 +11,10 @@ members = [
     "xtask",
     "anthropic_async",
     "coding_agent_tools",
+    # Linear tools crates
+    "linear_tools/linear-schema",
+    "linear_tools/linear-queries",
+    "linear_tools/linear-tools",
 ]
 exclude = [
     "universal_tool/examples",

@@ -346,46 +346,28 @@ impl Session {
     /// Send interrupt signal to the Claude process
     ///
     /// On Unix systems, this sends SIGINT which allows graceful shutdown.
-    /// On Windows, this falls back to kill() as SIGINT cannot be sent programmatically.
     pub async fn interrupt(&mut self) -> Result<()> {
-        #[cfg(unix)]
+        if let Some(process) = self.process.lock().await.as_mut()
+            && let Some(pid) = process.id()
         {
-            if let Some(process) = self.process.lock().await.as_mut()
-                && let Some(pid) = process.id()
-            {
-                // Send SIGINT for graceful shutdown
-                unsafe {
-                    let result = libc::kill(pid as i32, libc::SIGINT);
-                    if result == 0 {
-                        return Ok(());
-                    } else {
-                        return Err(ClaudeError::SessionError {
-                            message: format!(
-                                "Failed to send interrupt signal: {}",
-                                std::io::Error::last_os_error()
-                            ),
-                        });
-                    }
+            // Send SIGINT for graceful shutdown
+            unsafe {
+                let result = libc::kill(pid as i32, libc::SIGINT);
+                if result == 0 {
+                    return Ok(());
+                } else {
+                    return Err(ClaudeError::SessionError {
+                        message: format!(
+                            "Failed to send interrupt signal: {}",
+                            std::io::Error::last_os_error()
+                        ),
+                    });
                 }
             }
-            Err(ClaudeError::SessionError {
-                message: "Process not found or already terminated".to_string(),
-            })
         }
-
-        #[cfg(windows)]
-        {
-            // Windows doesn't support sending SIGINT programmatically
-            // Fall back to kill() which won't trigger graceful shutdown
-            return self.kill().await;
-        }
-
-        #[cfg(not(any(unix, windows)))]
-        {
-            return Err(ClaudeError::SessionError {
-                message: "Interrupt not supported on this platform".to_string(),
-            });
-        }
+        Err(ClaudeError::SessionError {
+            message: "Process not found or already terminated".to_string(),
+        })
     }
 
     /// Get the session ID

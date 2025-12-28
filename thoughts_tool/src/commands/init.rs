@@ -503,18 +503,8 @@ pub async fn execute(force: bool) -> Result<()> {
 }
 
 fn create_symlink(target: &str, link: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(target, link)
-            .with_context(|| format!("Failed to create symlink {link:?} -> {target}"))?;
-    }
-
-    #[cfg(windows)]
-    {
-        std::os::windows::fs::symlink_dir(target, link)
-            .with_context(|| format!("Failed to create symlink {:?} -> {}", link, target))?;
-    }
-
+    std::os::unix::fs::symlink(target, link)
+        .with_context(|| format!("Failed to create symlink {link:?} -> {target}"))?;
     Ok(())
 }
 
