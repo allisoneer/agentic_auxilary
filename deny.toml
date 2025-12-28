@@ -58,6 +58,18 @@ skip = [
     { name = "windows_x86_64_msvc" },
 ]
 
+[graph]
+# Limit analysis to supported platforms to avoid Windows-only crates polluting the graph
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]
+all-features = false
+# TODO(3): After verifying platform filtering, remove Windows-specific skip entries
+# in [bans.skip] that were only needed due to Windows crates being analyzed.
+
 [sources]
 # Warn for crates from unknown registries
 unknown-registry = "warn"

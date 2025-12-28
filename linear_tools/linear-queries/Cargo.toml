@@ -8,7 +8,7 @@ repository = "https://github.com/allisoneer/agentic_auxilary"
 
 [dependencies]
 cynic = { version = "3.4.3", features = ["rkyv"] }
-linear-schema = { path = "../linear-schema" }
+linear-schema = { path = "../linear-schema", version = "0.1.0" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
