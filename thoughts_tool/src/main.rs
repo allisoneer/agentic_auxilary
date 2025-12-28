@@ -1,5 +1,7 @@
 #[cfg(not(unix))]
-compile_error!("thoughts only supports Unix-like platforms (Linux/macOS). Windows is not supported.");
+compile_error!(
+    "thoughts only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
