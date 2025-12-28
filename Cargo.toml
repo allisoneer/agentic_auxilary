@@ -11,6 +11,9 @@ members = [
     "xtask",
     "anthropic_async",
     "coding_agent_tools",
+    "claude/claude-auth",
+    "claude/claude-core",
+    "claude/claude-ui-makepad",
 ]
 exclude = [
     "universal_tool/examples",
