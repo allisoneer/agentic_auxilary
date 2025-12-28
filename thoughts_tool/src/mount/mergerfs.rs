@@ -315,20 +315,43 @@ impl MountManager for MergerfsManager {
             if output.status.success() {
                 info!("Successfully mounted in {:?}", duration);
 
-                // Verify mount succeeded with bounded polling (3s max, 100ms intervals)
-                let deadline = Instant::now() + Duration::from_secs(3);
-                loop {
-                    if self.is_mounted(target).await? {
-                        return Ok(());
+                // Verify mount appears using shared polling helper
+                let verified = utils::verify_with_polling(
+                    || async { self.is_mounted(target).await },
+                    MOUNT_VERIFY_TIMEOUT,
+                    Duration::from_millis(100),
+                )
+                .await?;
+
+                if verified {
+                    return Ok(());
+                } else {
+                    warn!(
+                        "Mount command succeeded but target '{}' not visible after {}s polling",
+                        target.display(),
+                        MOUNT_VERIFY_TIMEOUT.as_secs()
+                    );
+                    // Diagnostics: dump relevant /proc/mounts lines for parity with macOS
+                    if let Ok(content) = tokio::fs::read_to_string(PROC_MOUNTS).await {
+                        let target_str = target.display().to_string();
+                        let relevant: Vec<&str> = content
+                            .lines()
+                            .filter(|l| l.contains(&target_str) || l.contains(MERGERFS_FSTYPE))
+                            .collect();
+                        if !relevant.is_empty() {
+                            warn!(
+                                "Mount verification diagnostics for {}:\n    {}",
+                                target.display(),
+                                relevant.join("\n    ")
+                            );
+                        }
                     }
-                    if Instant::now() >= deadline {
-                        warn!(
-                            "Mount command succeeded but target '{}' not visible after 3s polling",
-                            target.display()
-                        );
-                        break;
-                    }
-                    sleep(Duration::from_millis(100)).await;
+
+                    // Return immediately with distinct error (do not fall through)
+                    return Err(ThoughtsError::MountVerificationTimeout {
+                        target: target.to_path_buf(),
+                        timeout_secs: MOUNT_VERIFY_TIMEOUT.as_secs(),
+                    });
                 }
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
