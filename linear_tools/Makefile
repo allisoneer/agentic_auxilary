@@ -5,64 +5,74 @@ all: check test build
 
 check:
 	@echo "Checking code formatting..."
-	@./hack/cargo-smart.sh fmt-check
+	@./hack/cargo-smart.sh fmt-check --manifest-path linear-schema/Cargo.toml
+	@./hack/cargo-smart.sh fmt-check --manifest-path linear-queries/Cargo.toml
+	@./hack/cargo-smart.sh fmt-check --manifest-path linear-tools/Cargo.toml
 	@echo "Running clippy..."
-	@./hack/cargo-smart.sh clippy --all-targets -- -D warnings
+	@./hack/cargo-smart.sh clippy -p linear-schema -p linear-queries -p linear-tools --all-targets -- -D warnings
 
 test:
-	@./hack/cargo-smart.sh test
+	@./hack/cargo-smart.sh test -p linear-schema -p linear-queries -p linear-tools
 
 build:
-	@./hack/cargo-smart.sh build
+	@./hack/cargo-smart.sh build -p linear-schema -p linear-queries -p linear-tools
 
 # Normal output versions
 check-normal:
-	cargo fmt --all -- --check
-	cargo clippy --all-targets -- -D warnings
+	cargo fmt --manifest-path linear-schema/Cargo.toml -- --check
+	cargo fmt --manifest-path linear-queries/Cargo.toml -- --check
+	cargo fmt --manifest-path linear-tools/Cargo.toml -- --check
+	cargo clippy -p linear-schema -p linear-queries -p linear-tools --all-targets -- -D warnings
 
 test-normal:
-	cargo test
+	cargo test -p linear-schema -p linear-queries -p linear-tools
 
 build-normal:
-	cargo build
+	cargo build -p linear-schema -p linear-queries -p linear-tools
 
 # Verbose versions
 check-verbose:
-	cargo fmt --all -- --check
-	cargo clippy --all-targets --verbose -- -D warnings
+	cargo fmt --manifest-path linear-schema/Cargo.toml -- --check
+	cargo fmt --manifest-path linear-queries/Cargo.toml -- --check
+	cargo fmt --manifest-path linear-tools/Cargo.toml -- --check
+	cargo clippy -p linear-schema -p linear-queries -p linear-tools --all-targets --verbose -- -D warnings
 
 test-verbose:
-	cargo test --verbose -- --nocapture
+	cargo test -p linear-schema -p linear-queries -p linear-tools --verbose -- --nocapture
 
 build-verbose:
-	cargo build --verbose
+	cargo build -p linear-schema -p linear-queries -p linear-tools --verbose
 
 # Other targets
 fmt:
-	cargo fmt --all
+	cargo fmt --manifest-path linear-schema/Cargo.toml
+	cargo fmt --manifest-path linear-queries/Cargo.toml
+	cargo fmt --manifest-path linear-tools/Cargo.toml
 
 fmt-check:
-	cargo fmt --all -- --check
+	cargo fmt --manifest-path linear-schema/Cargo.toml -- --check
+	cargo fmt --manifest-path linear-queries/Cargo.toml -- --check
+	cargo fmt --manifest-path linear-tools/Cargo.toml -- --check
 
 clean:
 	cargo clean
 
 doc:
-	cargo doc --no-deps --open
+	cargo doc -p linear-schema -p linear-queries -p linear-tools --no-deps --open
 
 audit:
-	cargo audit
+	cargo audit -p linear-schema -p linear-queries -p linear-tools
 
 outdated:
-	cargo outdated
+	cargo outdated -p linear-schema -p linear-queries -p linear-tools
 
 # Installation
 install:
-	cargo install --path .
+	cargo install --path linear-tools
 
 # Development
 run:
-	cargo run --
+	cargo run -p linear-tools --
 
 help:
 	@echo "Available targets:"
