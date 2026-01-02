@@ -13,6 +13,20 @@ use regex::Regex;
 use std::sync::Arc;
 use universal_tool_core::prelude::*;
 
+/// Parse identifier "ENG-245" from plain text or URL; normalize to uppercase.
+/// Returns (team_key, number) if a valid identifier is found.
+fn parse_identifier(input: &str) -> Option<(String, i32)> {
+    let upper = input.to_uppercase();
+    let re = Regex::new(r"([A-Z]{2,10})-(\d{1,10})").unwrap();
+    if let Some(caps) = re.captures(&upper) {
+        let key = caps.get(1)?.as_str().to_string();
+        let num_str = caps.get(2)?.as_str();
+        let number: i32 = num_str.parse().ok()?;
+        return Some((key, number));
+    }
+    None
+}
+
 #[derive(Clone)]
 pub struct LinearTools {
     api_key: Option<String>,
@@ -26,16 +40,9 @@ impl LinearTools {
     }
 
     fn resolve_issue_id(&self, input: &str) -> IssueIdentifier {
-        // URL pattern: .../issue/ENG-123...
-        let url_re = Regex::new(r"/issue/([A-Z]{2,10}-\d+)").unwrap();
-        if let Some(caps) = url_re.captures(input) {
-            let ident = caps.get(1).unwrap().as_str().to_string();
-            return IssueIdentifier::Identifier(ident);
-        }
-        // Identifier pattern: ENG-123
-        let ident_re = Regex::new(r"^[A-Z]{2,10}-\d+$").unwrap();
-        if ident_re.is_match(input) {
-            return IssueIdentifier::Identifier(input.to_string());
+        // Try to parse as identifier (handles lowercase and URLs)
+        if let Some((key, number)) = parse_identifier(input) {
+            return IssueIdentifier::Identifier(format!("{}-{}", key, number));
         }
         // Fallback: treat as ID/UUID
         IssueIdentifier::Id(input.to_string())
@@ -51,16 +58,25 @@ impl LinearTools {
         match self.resolve_issue_id(input) {
             IssueIdentifier::Id(id) => Ok(id),
             IssueIdentifier::Identifier(ident) => {
-                // Same pattern used by read_issue
+                let (team_key, number) = parse_identifier(&ident).ok_or_else(|| {
+                    ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
+                })?;
                 let filter = IssueFilter {
-                    title: Some(StringComparator {
-                        contains: Some(ident.clone()),
+                    team: Some(TeamFilter {
+                        key: Some(StringComparator {
+                            eq: Some(team_key),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
+                    number: Some(NumberComparator {
+                        eq: Some(number as f64),
                         ..Default::default()
                     }),
                     ..Default::default()
                 };
                 let op = IssuesQuery::build(IssuesArguments {
-                    first: Some(50),
+                    first: Some(1),
                     after: None,
                     filter: Some(filter),
                 });
@@ -68,14 +84,9 @@ impl LinearTools {
                 let data = resp.data.ok_or_else(|| {
                     ToolError::new(ErrorCode::ExternalServiceError, "No data returned")
                 })?;
-                let issue = data
-                    .issues
-                    .nodes
-                    .into_iter()
-                    .find(|i| i.identifier == ident)
-                    .ok_or_else(|| {
-                        ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
-                    })?;
+                let issue = data.issues.nodes.into_iter().next().ok_or_else(|| {
+                    ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
+                })?;
                 Ok(issue.id.inner().to_string())
             }
         }
@@ -182,6 +193,7 @@ impl LinearTools {
                 id: Some(IdComparator {
                     eq: Some(cynic::Id::new(id)),
                 }),
+                ..Default::default()
             });
         }
         if let Some(id) = project_id {
@@ -275,16 +287,26 @@ impl LinearTools {
                     .ok_or_else(|| ToolError::new(ErrorCode::NotFound, "Issue not found"))?
             }
             IssueIdentifier::Identifier(ident) => {
-                // Search by title containing the identifier
+                // Use server-side filtering by team.key + number
+                let (team_key, number) = parse_identifier(&ident).ok_or_else(|| {
+                    ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
+                })?;
                 let filter = IssueFilter {
-                    title: Some(StringComparator {
-                        contains: Some(ident.clone()),
+                    team: Some(TeamFilter {
+                        key: Some(StringComparator {
+                            eq: Some(team_key),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
+                    number: Some(NumberComparator {
+                        eq: Some(number as f64),
                         ..Default::default()
                     }),
                     ..Default::default()
                 };
                 let op = IssuesQuery::build(IssuesArguments {
-                    first: Some(50),
+                    first: Some(1),
                     after: None,
                     filter: Some(filter),
                 });
@@ -292,14 +314,9 @@ impl LinearTools {
                 let data = resp.data.ok_or_else(|| {
                     ToolError::new(ErrorCode::ExternalServiceError, "No data returned")
                 })?;
-                // Find the issue with matching identifier
-                data.issues
-                    .nodes
-                    .into_iter()
-                    .find(|i| i.identifier == ident)
-                    .ok_or_else(|| {
-                        ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
-                    })?
+                data.issues.nodes.into_iter().next().ok_or_else(|| {
+                    ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
+                })?
             }
         };
 
@@ -475,3 +492,34 @@ impl LinearToolsServer {
 }
 
 universal_tool_core::implement_mcp_server!(LinearToolsServer, tools);
+
+#[cfg(test)]
+mod tests {
+    use super::parse_identifier;
+
+    #[test]
+    fn parse_plain_uppercase() {
+        assert_eq!(parse_identifier("ENG-245"), Some(("ENG".into(), 245)));
+    }
+
+    #[test]
+    fn parse_lowercase_normalizes() {
+        assert_eq!(parse_identifier("eng-245"), Some(("ENG".into(), 245)));
+    }
+
+    #[test]
+    fn parse_from_url() {
+        assert_eq!(
+            parse_identifier("https://linear.app/foo/issue/eng-245/slug"),
+            Some(("ENG".into(), 245))
+        );
+    }
+
+    #[test]
+    fn parse_invalid_returns_none() {
+        assert_eq!(parse_identifier("invalid"), None);
+        assert_eq!(parse_identifier("ENG-"), None);
+        assert_eq!(parse_identifier("ENG"), None);
+        assert_eq!(parse_identifier("123-456"), None);
+    }
+}

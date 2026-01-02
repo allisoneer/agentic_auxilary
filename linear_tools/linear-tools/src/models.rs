@@ -3,6 +3,11 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use universal_tool_core::mcp::McpFormatter;
 
+/// Truncate a string to at most `max` characters (UTF-8 safe).
+fn truncate_chars(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IssueSummary {
     pub id: String,
@@ -200,8 +205,9 @@ impl McpFormatter for CommentResult {
         }
         match (&self.comment_id, &self.body) {
             (Some(id), Some(body)) => {
-                let preview = if body.len() > 80 {
-                    format!("{}...", &body[..77])
+                // 80 total, reserve 3 for "..."
+                let preview = if body.chars().count() > 80 {
+                    format!("{}...", truncate_chars(body, 77))
                 } else {
                     body.clone()
                 };
@@ -209,5 +215,29 @@ impl McpFormatter for CommentResult {
             }
             _ => "Comment added".into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_chars;
+
+    #[test]
+    fn truncates_ascii_safely() {
+        let s = "abcdefghijklmnopqrstuvwxyz";
+        assert_eq!(truncate_chars(s, 5), "abcde");
+    }
+
+    #[test]
+    fn truncates_utf8_safely() {
+        let s = "hello 😀😃😄😁"; // multi-byte
+        let truncated = truncate_chars(s, 8);
+        assert_eq!(truncated.chars().count(), 8);
+        assert_eq!(truncated, "hello 😀😃");
+    }
+
+    #[test]
+    fn handles_short_strings() {
+        assert_eq!(truncate_chars("hi", 10), "hi");
     }
 }

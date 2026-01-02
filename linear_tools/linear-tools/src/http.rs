@@ -34,15 +34,21 @@ impl LinearClient {
         Q: serde::de::DeserializeOwned + 'static,
         V: serde::Serialize,
     {
-        // Simple single request without retry - retry logic can be added later if needed
-        let result = self
+        let mut req = self
             .client
             .post(&self.url)
-            .header("Authorization", &self.api_key)
-            .header("Content-Type", "application/json")
-            .run_graphql(op)
-            .await;
+            .header("Content-Type", "application/json");
 
+        // Auto-detect auth header type:
+        // - Personal API key: "lin_api_*" => raw Authorization header
+        // - OAuth2 token: anything else => Bearer token
+        if self.api_key.starts_with("lin_api_") {
+            req = req.header("Authorization", &self.api_key);
+        } else {
+            req = req.bearer_auth(&self.api_key);
+        }
+
+        let result = req.run_graphql(op).await;
         result.map_err(|e| anyhow!(e))
     }
 }
