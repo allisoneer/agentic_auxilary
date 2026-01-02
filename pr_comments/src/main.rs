@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use pr_comments::{PrComments, PrCommentsServer};
+use pr_comments::{PrComments, PrCommentsServer, models::CommentSourceType};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use universal_tool_core::mcp::ServiceExt;
@@ -20,29 +20,29 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Get all comments for a PR
-    All {
+    /// Get review comments (thread-paginated)
+    Comments {
         /// PR number (auto-detected if not provided)
         #[arg(long)]
         pr: Option<u64>,
-    },
-    /// Get review comments (code comments) for a PR
-    ReviewComments {
-        /// PR number (auto-detected if not provided)
-        #[arg(long)]
-        pr: Option<u64>,
+        /// Filter by comment source: robot, human, or all
+        #[arg(long, value_parser = ["robot", "human", "all"])]
+        comment_source_type: Option<String>,
         /// Include resolved review comments (defaults to false)
         #[arg(long)]
         include_resolved: bool,
-        /// Limit the number of comments returned (optional)
-        #[arg(long)]
-        limit: Option<usize>,
     },
-    /// Get issue comments (discussion) for a PR
-    IssueComments {
+    /// Reply to a review comment
+    Reply {
         /// PR number (auto-detected if not provided)
         #[arg(long)]
         pr: Option<u64>,
+        /// ID of the comment to reply to
+        #[arg(long)]
+        comment_id: u64,
+        /// Reply message body
+        #[arg(long)]
+        body: String,
     },
     /// List pull requests in the repository
     ListPrs {
@@ -100,30 +100,42 @@ async fn run_cli(args: Args) -> Result<()> {
 
     // Execute the appropriate command
     match args.command {
-        Commands::All { pr } => match tool.get_all_comments(pr).await {
-            Ok(comments) => println!("{}", serde_json::to_string_pretty(&comments)?),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
-        Commands::ReviewComments {
+        Commands::Comments {
             pr,
+            comment_source_type,
             include_resolved,
-            limit,
-        } => match tool
-            .get_review_comments(pr, Some(include_resolved), None, None, None, limit)
-            .await
-        {
-            Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
+        } => {
+            // Parse comment_source_type string to enum
+            let source_type = match comment_source_type.as_deref() {
+                Some("robot") => Some(CommentSourceType::Robot),
+                Some("human") => Some(CommentSourceType::Human),
+                Some("all") => Some(CommentSourceType::All),
+                None => None,
+                Some(other) => {
+                    eprintln!(
+                        "Error: Invalid comment_source_type '{}'. Must be robot, human, or all.",
+                        other
+                    );
+                    std::process::exit(1);
+                }
+            };
+            match tool
+                .get_comments(pr, source_type, Some(include_resolved))
+                .await
+            {
+                Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             }
-        },
-        Commands::IssueComments { pr } => match tool.get_issue_comments(pr, None, None, None).await
-        {
-            Ok(list) => println!("{}", serde_json::to_string_pretty(&list.comments)?),
+        }
+        Commands::Reply {
+            pr,
+            comment_id,
+            body,
+        } => match tool.add_comment_reply(pr, comment_id, body).await {
+            Ok(comment) => println!("{}", serde_json::to_string_pretty(&comment)?),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
