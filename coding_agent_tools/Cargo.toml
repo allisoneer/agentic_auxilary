@@ -1,6 +1,6 @@
 [package]
 name = "coding_agent_tools"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Coding agent tools (CLI + MCP). First tool: ls."
@@ -20,8 +20,8 @@ name = "coding_agent_tools"
 path = "src/lib.rs"
 
 [dependencies]
-universal-tool-core = { version = "0.2.4", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
-claudecode = { version = "0.1.7", path = "../claudecode_rs" }
+universal-tool-core = { version = "0.2.5", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+claudecode = { version = "0.1.8", path = "../claudecode_rs" }
 ignore = "0.4"
 globset = "0.4"
 regex = "1"

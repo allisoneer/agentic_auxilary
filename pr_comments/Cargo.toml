@@ -1,6 +1,6 @@
 [package]
 name = "pr_comments"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Fetch GitHub PR comments via CLI and MCP"
@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # Universal tool framework
-universal-tool-core = { version = "0.2.4", path = "../universal_tool/universal-tool-core", features = ["cli", "mcp"] }
+universal-tool-core = { version = "0.2.5", path = "../universal_tool/universal-tool-core", features = ["cli", "mcp"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

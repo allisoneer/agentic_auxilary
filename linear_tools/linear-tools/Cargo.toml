@@ -1,6 +1,6 @@
 [package]
 name = "linear-tools"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "Linear issue tools via CLI + MCP"
@@ -17,7 +17,7 @@ name = "linear_tools"
 path = "src/lib.rs"
 
 [dependencies]
-universal-tool-core = { path = "../../universal_tool/universal-tool-core", version = "0.2.4", features = ["cli", "mcp"] }
+universal-tool-core = { path = "../../universal_tool/universal-tool-core", version = "0.2.5", features = ["cli", "mcp"] }
 cynic = { version = "3.12.0", features = ["http-reqwest"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 linear-queries = { path = "../linear-queries", version = "0.1.0" }
