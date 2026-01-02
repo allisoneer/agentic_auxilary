@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.0] - 2026-01-02
+
+### ⛰️  Features
+- *(thoughts_tool)* Implement ENG-234 thoughts improvements
+- *(thoughts_tool)* [**breaking**] Remove --allow-main and lock down main/master branches
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Address PR #82 review comments
+
+### 🚜 Refactor
+- *(thoughts_tool)* Remove redundant integration tests per PR review
 ## [0.4.3] - 2025-12-27
 
 ### ⛰️  Features
