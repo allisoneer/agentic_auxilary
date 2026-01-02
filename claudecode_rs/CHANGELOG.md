@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.8] - 2026-01-02
+
+### ⚙️  Miscellaneous
+- Integrate linear_tools and fix cargo-deny failures
+
+### 🎨 Styling
+- *(claudecode_rs)* Format compile_error macro
 ## [0.1.7] - 2025-12-27
 
 ### ⛰️  Features
