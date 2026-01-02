@@ -1,0 +1,23 @@
+[package]
+name = "claude-ui-makepad"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.dist]
+dist = false
+
+[[bin]]
+name = "claude-client"
+path = "src/main.rs"
+
+[dependencies]
+makepad-widgets = "1.0"
+makepad-code-editor = "1.0"
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+anthropic-async = { path = "../../anthropic_async" }
+claude-auth = { path = "../claude-auth" }
+claude-core = { path = "../claude-core" }
+chrono = "0.4"
