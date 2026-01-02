@@ -5,10 +5,23 @@ use std::fmt::Write as _;
 use std::sync::OnceLock;
 use universal_tool_core::mcp::McpFormatter;
 
+/// Filter for comment source type: robot (bot), human, or all.
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq, clap::ValueEnum,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum CommentSourceType {
+    Robot,
+    Human,
+    #[default]
+    All,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewComment {
     pub id: u64,
     pub user: String,
+    pub is_bot: bool,
     pub body: String,
     pub path: String,
     pub line: Option<u64>,
@@ -18,25 +31,6 @@ pub struct ReviewComment {
     pub html_url: String,
     pub pull_request_review_id: Option<u64>,
     pub in_reply_to_id: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct IssueComment {
-    pub id: u64,
-    pub user: String,
-    pub body: String,
-    pub created_at: String,
-    pub updated_at: Option<String>,
-    pub html_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct AllComments {
-    pub pr_number: u64,
-    pub pr_title: String,
-    pub review_comments: Vec<ReviewComment>,
-    pub issue_comments: Vec<IssueComment>,
-    pub total_comments: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -56,9 +50,13 @@ pub struct ReviewCommentList {
     pub comments: Vec<ReviewComment>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct IssueCommentList {
-    pub comments: Vec<IssueComment>,
+/// A thread of review comments: a parent comment and its replies.
+/// Used internally for pagination (threads stay together).
+#[derive(Debug, Clone)]
+pub struct Thread {
+    pub parent: ReviewComment,
+    pub replies: Vec<ReviewComment>,
+    pub is_resolved: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -247,35 +245,6 @@ impl McpFormatter for ReviewCommentList {
     }
 }
 
-impl McpFormatter for IssueCommentList {
-    fn mcp_format_text(&self) -> String {
-        if self.comments.is_empty() {
-            return "Issue comments: <none>".into();
-        }
-        let opts = FormatOptions::get();
-        let mut out = String::new();
-        let _ = writeln!(out, "{}", fmt_header("Issue comments:"));
-
-        for c in &self.comments {
-            let mut head = format!("  {}", fmt_user(&c.user));
-            if opts.show_ids {
-                head.push_str(&format!(" #{}", c.id));
-            }
-            if opts.show_urls {
-                head.push_str(&format!(" {}", c.html_url));
-            }
-            if opts.show_dates {
-                head.push_str(&format!(" @{}", fmt_ts(&c.created_at)));
-            }
-            let _ = writeln!(out, "{}", head);
-
-            let body = indent_multiline(&c.body, "    ");
-            let _ = writeln!(out, "    {}", body);
-        }
-        out
-    }
-}
-
 impl McpFormatter for PrSummaryList {
     fn mcp_format_text(&self) -> String {
         if self.prs.is_empty() {
@@ -304,46 +273,62 @@ impl McpFormatter for PrSummaryList {
     }
 }
 
-impl McpFormatter for AllComments {
+impl McpFormatter for ReviewComment {
     fn mcp_format_text(&self) -> String {
-        // Compose using the other implementations for consistent display
+        let opts = FormatOptions::get();
         let mut out = String::new();
-        let _ = writeln!(out, "PR #{}: {}", self.pr_number, self.pr_title);
-        let _ = writeln!(
-            out,
-            "Total comments: {} (review: {}, issue: {})",
-            self.total_comments,
-            self.review_comments.len(),
-            self.issue_comments.len()
+
+        let _ = writeln!(out, "{}", fmt_header("Reply posted:"));
+
+        // Format similar to review comment list but for single comment
+        let side = compress_side(self.side.as_deref());
+        let line_disp = self
+            .line
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "?".into());
+        let mut head = format!(
+            "{} [{} {}] {}",
+            self.path,
+            line_disp,
+            side,
+            fmt_user(&self.user)
         );
+        if opts.show_ids {
+            head.push_str(&format!(" #{}", self.id));
+        }
+        if opts.show_review_ids
+            && let Some(rid) = self.pull_request_review_id
+        {
+            head.push_str(&format!(" (review:{})", rid));
+        }
+        if opts.show_urls {
+            head.push_str(&format!(" {}", self.html_url));
+        }
+        if opts.show_dates {
+            head.push_str(&format!(" @{}", fmt_ts(&self.created_at)));
+        }
+        let _ = writeln!(out, "{}", head);
+        let body = indent_multiline(&self.body, "  ");
+        let _ = writeln!(out, "  {}", body);
 
-        // Reviews
-        let r = ReviewCommentList {
-            comments: self.review_comments.clone(),
-        }
-        .mcp_format_text();
-        if !r.is_empty() {
-            let _ = writeln!(out, "\n{}", r);
-        }
-
-        // Issues
-        let i = IssueCommentList {
-            comments: self.issue_comments.clone(),
-        }
-        .mcp_format_text();
-        if !i.is_empty() {
-            let _ = writeln!(out, "\n{}", i);
-        }
-
-        out.trim_end().to_string()
+        out
     }
 }
 
 impl From<octocrab::models::pulls::Comment> for ReviewComment {
     fn from(comment: octocrab::models::pulls::Comment) -> Self {
+        let (user, is_bot) = match comment.user {
+            Some(u) => {
+                // Bot detection: Author.r#type == "Bot" OR login ends with "[bot]"
+                let is_bot = u.r#type == "Bot" || u.login.ends_with("[bot]");
+                (u.login, is_bot)
+            }
+            None => (String::new(), false),
+        };
         Self {
             id: comment.id.0,
-            user: comment.user.map(|u| u.login).unwrap_or_default(),
+            user,
+            is_bot,
             body: comment.body,
             path: comment.path,
             line: comment.line,
@@ -357,15 +342,36 @@ impl From<octocrab::models::pulls::Comment> for ReviewComment {
     }
 }
 
-impl From<octocrab::models::issues::Comment> for IssueComment {
-    fn from(comment: octocrab::models::issues::Comment) -> Self {
+impl ReviewComment {
+    /// Convert from octocrab's ReviewComment type (returned by reply_to_comment).
+    pub fn from_review_comment(comment: octocrab::models::pulls::ReviewComment) -> Self {
+        let (user, is_bot) = match comment.user {
+            Some(u) => {
+                // Bot detection: Author.r#type == "Bot" OR login ends with "[bot]"
+                let is_bot = u.r#type == "Bot" || u.login.ends_with("[bot]");
+                (u.login, is_bot)
+            }
+            None => (String::new(), false),
+        };
+        // Convert Side enum to String
+        let side = comment.side.map(|s| match s {
+            octocrab::models::pulls::Side::Left => "LEFT".to_string(),
+            octocrab::models::pulls::Side::Right => "RIGHT".to_string(),
+            _ => "UNKNOWN".to_string(),
+        });
         Self {
             id: comment.id.0,
-            user: comment.user.login,
-            body: comment.body.unwrap_or_default(),
+            user,
+            is_bot,
+            body: comment.body,
+            path: comment.path,
+            line: comment.line,
+            side,
             created_at: comment.created_at.to_rfc3339(),
-            updated_at: comment.updated_at.map(|dt| dt.to_rfc3339()),
+            updated_at: comment.updated_at.to_rfc3339(),
             html_url: comment.html_url.to_string(),
+            pull_request_review_id: comment.pull_request_review_id.map(|id| id.0),
+            in_reply_to_id: comment.in_reply_to_id.map(|id| id.0),
         }
     }
 }
@@ -488,6 +494,7 @@ mod mcp_format_tests {
         ReviewComment {
             id: 1,
             user: user.into(),
+            is_bot: false,
             body: body.into(),
             path: path.into(),
             line,
@@ -497,17 +504,6 @@ mod mcp_format_tests {
             html_url: "https://example.com/review/1".into(),
             pull_request_review_id: Some(42),
             in_reply_to_id: None,
-        }
-    }
-
-    fn sample_issue(user: &str, body: &str) -> IssueComment {
-        IssueComment {
-            id: 10,
-            user: user.into(),
-            body: body.into(),
-            created_at: "2025-01-01T00:00:00Z".into(),
-            updated_at: None,
-            html_url: "https://example.com/issue/10".into(),
         }
     }
 
@@ -571,25 +567,6 @@ mod mcp_format_tests {
     }
 
     #[test]
-    fn format_issue_comment_list_basic() {
-        unsafe {
-            std::env::remove_var("PR_COMMENTS_EXTRAS");
-        }
-        let list = IssueCommentList {
-            comments: vec![
-                sample_issue("charlie", "Hello\nWorld"),
-                sample_issue("", "No user"),
-            ],
-        };
-        let text = list.mcp_format_text();
-        assert!(text.contains("Issue comments:"));
-        assert!(text.contains("charlie"));
-        assert!(text.contains("<unknown>"));
-        assert!(text.contains("Hello"));
-        assert!(text.contains("World"));
-    }
-
-    #[test]
     fn format_pr_summary_list_basic() {
         unsafe {
             std::env::remove_var("PR_COMMENTS_EXTRAS");
@@ -611,22 +588,6 @@ mod mcp_format_tests {
         assert!(text.contains("#123 open — Fix bug"));
         assert!(!text.contains("comments=")); // counts off by default
         assert!(!text.contains("(by ")); // author off by default
-    }
-
-    #[test]
-    fn format_all_comments_composes() {
-        let ac = AllComments {
-            pr_number: 5,
-            pr_title: "Great PR".into(),
-            review_comments: vec![sample_review("a.rs", Some(1), Some("RIGHT"), "u", "b")],
-            issue_comments: vec![sample_issue("v", "c")],
-            total_comments: 2,
-        };
-        let text = ac.mcp_format_text();
-        assert!(text.contains("PR #5: Great PR"));
-        assert!(text.contains("Total comments: 2 (review: 1, issue: 1)"));
-        assert!(text.contains("Review comments:"));
-        assert!(text.contains("Issue comments:"));
     }
 
     #[test]
