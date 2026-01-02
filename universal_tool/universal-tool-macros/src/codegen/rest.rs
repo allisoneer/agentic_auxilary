@@ -71,12 +71,18 @@ fn generate_create_rest_router(router: &RouterDef, module_name: &syn::Ident) -> 
         .iter()
         .map(|tool| generate_tool_route(tool, module_name));
 
-    // TODO(2): Apply base_path from router metadata to prefix all routes
-    // Currently routes are generated without the base_path prefix
-    let _prefix = router.metadata.base_path.as_deref().unwrap_or("/api");
+    // Compute prefix precedence: rest_config.prefix > base_path > "/api"
+    let prefix: String = router
+        .metadata
+        .rest_config
+        .as_ref()
+        .and_then(|c| c.prefix.as_ref())
+        .cloned()
+        .or_else(|| router.metadata.base_path.clone())
+        .unwrap_or_else(|| "/api".to_string());
 
     quote! {
-        /// Creates an axum::Router with routes for all tools
+        /// Creates an axum::Router with routes for all tools, nested under configured prefix.
         ///
         /// This is an associated function that takes the application state as an Arc.
         /// Usage: `let app = MyStruct::create_rest_router(Arc::new(my_instance));`
@@ -85,8 +91,13 @@ fn generate_create_rest_router(router: &RouterDef, module_name: &syn::Ident) -> 
         pub fn create_rest_router(state: ::std::sync::Arc<Self>) -> ::universal_tool_core::rest::Router {
             use ::universal_tool_core::rest::{Router, response::IntoResponse};
 
+            // Inner API with all routes; state is provided by the outer router
+            let api = Router::new()
+                #( #routes )*;
+
+            // Apply prefix via nesting, then attach state at the outer level
             Router::new()
-                #( #routes )*
+                .nest(#prefix, api)
                 .with_state(state)
         }
     }
