@@ -73,26 +73,28 @@ pub fn parse_router(attr: TokenStream, item: TokenStream) -> syn::Result<TokenSt
     // It provides the best user experience - users enable features in one place and
     // everything "just works".
 
-    // Only generate CLI code if the cli feature is enabled on THIS crate
-    let cli_methods = if cfg!(feature = "cli") {
+    // Only generate CLI code if the cli feature is enabled AND router has cli(...) attribute
+    let cli_methods = if cfg!(feature = "cli") && router_def.metadata.cli_config.is_some() {
         crate::codegen::cli::generate_cli_methods(&router_def)
     } else {
         TokenStream::new() // Use new() instead of quote! {}
     };
 
-    // Only generate MCP code if the mcp feature is enabled on THIS crate
-    let mcp_methods = if cfg!(feature = "mcp") {
+    // Only generate MCP code if the mcp feature is enabled AND router has mcp(...) attribute
+    let mcp_methods = if cfg!(feature = "mcp") && router_def.metadata.mcp_config.is_some() {
         crate::codegen::mcp::generate_mcp_methods(&router_def)
     } else {
         TokenStream::new()
     };
 
     // For REST, we need to handle module generation separately
-    let (rest_module, rest_methods) = if cfg!(feature = "rest") {
-        crate::codegen::rest::generate_rest_methods_split(&router_def)
-    } else {
-        (TokenStream::new(), TokenStream::new())
-    };
+    // Only generate REST code if the rest feature is enabled AND router has rest(...) attribute
+    let (rest_module, rest_methods) =
+        if cfg!(feature = "rest") && router_def.metadata.rest_config.is_some() {
+            crate::codegen::rest::generate_rest_methods_split(&router_def)
+        } else {
+            (TokenStream::new(), TokenStream::new())
+        };
 
     // Strip universal_tool_param attributes from the impl block before returning
     let mut cleaned_impl_block = impl_block.clone();
@@ -320,6 +322,13 @@ fn parse_impl_to_router(impl_block: &ItemImpl, router_attr: RouterAttr) -> syn::
                     .unwrap_or_default(),
                 standard_global_args: c.standard_global_args.unwrap_or(false),
             }),
+            mcp_config: router_attr.mcp.map(|m| crate::model::RouterMcpConfig {
+                name: m.name,
+                version: m.version,
+            }),
+            rest_config: router_attr
+                .rest
+                .map(|r| crate::model::RouterRestConfig { prefix: r.prefix }),
         },
     })
 }
