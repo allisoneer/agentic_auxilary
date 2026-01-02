@@ -60,6 +60,11 @@
 //! }
 //! ```
 
+#[cfg(not(unix))]
+compile_error!(
+    "claudecode_rs only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 pub mod client;
 pub mod config;
 pub mod error;

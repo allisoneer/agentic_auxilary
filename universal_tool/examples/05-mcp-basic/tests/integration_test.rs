@@ -10,7 +10,7 @@ use universal_tool_core::prelude::*;
 #[derive(Clone)]
 struct TestTextTools;
 
-#[universal_tool_router]
+#[universal_tool_router(mcp())]
 impl TestTextTools {
     #[universal_tool(description = "Count words in text")]
     async fn count_words(&self, text: String) -> Result<usize, ToolError> {
