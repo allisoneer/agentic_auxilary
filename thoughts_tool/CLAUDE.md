@@ -227,7 +227,7 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - No duplicate FUSE mounts or manual cleanup required
 
 ### Three-Space Architecture
-- **Thoughts Space**: Single git repository for personal work, organized by branch/week
+- **Thoughts Space**: Single git repository for personal work, organized by branch
 - **Context Space**: Multiple team-shared repositories, each in its own subdirectory
 - **References Space**: Read-only external repositories, auto-organized by org/repo
 
@@ -239,7 +239,8 @@ The tool now fully supports git worktrees through automatic detection and smart 
 
 ### Work Organization
 - Branch-based directories for feature work
-- ISO week-based directories for main branch work
+- Main/master branches are locked down (must create feature branch first)
+- Legacy weekly directories (YYYY-WWW) auto-archived to completed/ on first run
 - Automatic directory structure with research/, plans/, artifacts/
 - Work completion moves to dated directories
 
@@ -254,3 +255,13 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - Pattern matching ensures exhaustive handling
 - Automatic org/repo extraction for references
 - Clean separation between CLI strings and internal types
+
+## Manual Verification Checklist — Branch Protection & Weekly Auto-Archive
+
+1. Run `thoughts work init` on main → should fail with standardized message
+2. Run `thoughts work init` on feature branch → should succeed
+3. Run `thoughts work complete` on main → should fail with standardized message
+4. Run `thoughts work list` on main → should succeed (branch-agnostic)
+5. MCP write_document on main → should fail with standardized message
+6. MCP list_active_documents on main → should fail with standardized message
+7. Weekly directories (2025-W01) are auto-archived to completed/

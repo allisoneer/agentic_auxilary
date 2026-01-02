@@ -58,7 +58,7 @@ Guidelines:
 
 pub const THOUGHTS_OVERLAY: &str = r#"
 Context: Thought documents (active branch).
-Working directory: THOUGHTS_BASE env or ./context.
+Working directory: THOUGHTS_BASE env or ./thoughts/<branch_or_week>.
 
 Guidelines:
 - Use mcp__thoughts__list_active_documents to identify thought docs, then grep/glob/read within the base
@@ -251,13 +251,13 @@ pub const STRATEGY_LOCATOR_THOUGHTS: &str = r#"
 
 ### Step 1: MCP-First Discovery
 - Call `mcp__thoughts__list_active_documents` to enumerate docs in active branch
-- Filter results by doc_type: "plans", "research", "artifacts"
+- Filter results by doc_type: "plan", "research", "artifact"
 - Match filenames against topic keywords
 
 ### Step 2: Categorize by doc_type
-- **Plans** (plans/): Implementation plans, design docs
-- **Research** (research/): Investigations, findings, comparisons
-- **Artifacts** (artifacts/): Tickets, specs, generated outputs
+- **plan** (plans/): Implementation plans, design docs
+- **research** (research/): Investigations, findings, comparisons
+- **artifact** (artifacts/): Tickets, specs, generated outputs
 
 ### Fallback Strategy
 - If MCP list doesn't surface expected docs, use Grep/Glob
