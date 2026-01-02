@@ -1,13 +1,22 @@
 # CLAUDE.md - pr_comments Tool
 
 ## Overview
-The pr_comments tool fetches GitHub PR comments with support for filtering by resolution status on review comments.
+The pr_comments tool fetches GitHub PR review comments with support for filtering by resolution status and comment source type, and can reply to review comments.
 
 ## Key Implementation Details
 - Uses hybrid REST + GraphQL approach for resolution filtering
-- Only `get_review_comments` supports resolution filtering
-- Default behavior: show only unresolved comments (breaking change in v0.2.0)
-- `get_all_comments` always includes all review comments regardless of resolution
+- Default behavior: show only unresolved comments
+- Supports bot detection via `is_bot` field on comments
+- Thread-level pagination (parent + replies stay together)
+- Replies are auto-prefixed with AI identifier
+
+## Available Tools (3 total)
+
+| Tool | Description |
+|------|-------------|
+| `get_comments` | Get PR review comments with thread-level pagination |
+| `add_comment_reply` | Reply to a review comment (auto-prefixes with AI identifier) |
+| `list_prs` | List pull requests in the repository |
 
 ## Common Commands
 ```bash
@@ -24,23 +33,42 @@ make build
 make install
 ```
 
-## Testing Resolution Filtering
+## CLI Usage Examples
 ```bash
-# Test with a PR that has resolved comments
-pr_comments review-comments --pr 123  # Shows only unresolved
-pr_comments review-comments --pr 123 --include-resolved  # Shows all
-pr_comments all --pr 123  # Shows all comments (no filtering)
+# Get review comments (thread-paginated, unresolved by default)
+pr_comments comments --pr 123
+
+# Filter by comment source (robot, human, or all)
+pr_comments comments --pr 123 --comment-source-type robot
+
+# Include resolved review comments
+pr_comments comments --pr 123 --include-resolved
+
+# Reply to a review comment
+pr_comments reply --comment-id 12345 --body "Thanks for the feedback!"
+
+# List PRs
+pr_comments list-prs --state open
 ```
+
+## Pagination
+
+Comments are paginated at the thread level. Default page size is 10 threads. Configure via:
+```bash
+export PR_COMMENTS_PAGE_SIZE=20
+```
+
+In MCP mode, repeated calls with the same parameters return the next page. Cache expires after 5 minutes.
 
 ## Architecture Notes
 - GraphQL query runs only when filtering resolved comments (performance optimization)
 - Comment IDs are matched between REST and GraphQL APIs via database_id field
-- Pagination is handled for both REST and GraphQL queries
+- Pagination cache uses 5-minute TTL with two-level locking
 - If a comment isn't found in the GraphQL response, it's included by default (fail-open)
 
 ## MCP Text Output
 
-The pr_comments MCP tool now supports token-efficient text formatting. Set `PR_COMMENTS_EXTRAS` to include optional fields (comma-separated):
+The pr_comments MCP tool supports token-efficient text formatting. Set `PR_COMMENTS_EXTRAS` to include optional fields (comma-separated):
 
 **Supported flags:**
 - `id` or `ids`: Include numeric comment/PR IDs
@@ -59,9 +87,7 @@ export PR_COMMENTS_EXTRAS="id,url,dates,review,counts,author"
 
 ### MCP Tool Output Formats
 
-**get_all_comments**: Returns PR header with totals, grouped review comments (by file path with legend), then issue comments.
-
-**get_review_comments**: Returns grouped review comments by file path with format:
+**get_comments**: Returns grouped review comments by file path with format:
 ```
 Review comments:
 Legend: L = old (LEFT), R = new (RIGHT), - = unknown
@@ -69,17 +95,17 @@ Legend: L = old (LEFT), R = new (RIGHT), - = unknown
 src/lib.rs
   [12 R] alice
     Can you add error handling here?
-  [42 L] bob
+    ↳ [12 R] bob
+      Done, added Result<>
+  [42 L] charlie
     This should use Result<>
 ```
 
-**get_issue_comments**: Returns issue comments with format:
+**add_comment_reply**: Returns the created comment:
 ```
-Issue comments:
-  alice
-    LGTM, merging soon
-  bob
-    Wait, we need to address the validation issue first
+Reply posted:
+src/lib.rs [12 R] ai-bot
+  AI response: Thanks for the feedback!
 ```
 
 **list_prs**: Returns compact PR list:
@@ -108,6 +134,4 @@ Text formatting achieves **50-65% token reduction** compared to JSON by:
 
 ### CLI and REST Behavior
 
-CLI and REST interfaces continue to return JSON. For CLI, list endpoints (review-comments, issue-comments, list-prs) return JSON arrays to maintain backward compatibility.
-
-MCP interface returns formatted text for token efficiency.
+CLI returns JSON for programmatic use. MCP interface returns formatted text for token efficiency.
