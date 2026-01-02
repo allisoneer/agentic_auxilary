@@ -15,6 +15,7 @@ pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
     let dispatch_method = generate_mcp_dispatch_method(router);
     let dispatch_method_mcp = generate_mcp_dispatch_method_mcp(router);
     let tools_method = generate_mcp_tools_method(router);
+    let server_info_method = generate_mcp_server_info_method(router);
 
     quote! {
         impl #struct_type {
@@ -23,6 +24,8 @@ pub fn generate_mcp_methods(router: &RouterDef) -> TokenStream {
             #dispatch_method_mcp
 
             #tools_method
+
+            #server_info_method
         }
     }
 }
@@ -414,6 +417,49 @@ fn generate_tool_schema(tool: &ToolDef) -> TokenStream {
                     "required": required
                 })
             }
+        }
+    }
+}
+
+/// Generates get_mcp_server_info() returning (name, version) with router-level precedence
+fn generate_mcp_server_info_method(router: &RouterDef) -> TokenStream {
+    // Determine default name from struct type last segment
+    let default_name = router
+        .struct_type
+        .segments
+        .last()
+        .map(|s| s.ident.to_string())
+        .unwrap_or_else(|| "tools".to_string());
+
+    // Compute name: RouterMcpConfig.name or default struct name
+    let name_val: String = router
+        .metadata
+        .mcp_config
+        .as_ref()
+        .and_then(|c| c.name.as_ref())
+        .cloned()
+        .unwrap_or(default_name);
+
+    // Compute version tokens:
+    // - If RouterMcpConfig.version set, embed that literal.
+    // - Otherwise, embed env!("CARGO_PKG_VERSION") at use-site crate.
+    let version_tokens: TokenStream = if let Some(cfg) = &router.metadata.mcp_config {
+        if let Some(ver) = &cfg.version {
+            let ver_lit = ver.clone();
+            quote! { #ver_lit.to_string() }
+        } else {
+            quote! { env!("CARGO_PKG_VERSION").to_string() }
+        }
+    } else {
+        quote! { env!("CARGO_PKG_VERSION").to_string() }
+    };
+
+    quote! {
+        /// Returns (server name, server version) for MCP initialize response serverInfo
+        pub fn get_mcp_server_info(&self) -> (String, String) {
+            let name = #name_val.to_string();
+            let version = #version_tokens;
+            (name, version)
         }
     }
 }

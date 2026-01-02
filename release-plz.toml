@@ -104,3 +104,20 @@ changelog_path = "coding_agent_tools/CHANGELOG.md"
 git_tag_name = "coding_agent_tools-v{{ version }}"
 release = true
 
+[[package]]
+name = "linear-schema"
+changelog_path = "linear_tools/CHANGELOG.md"
+git_tag_name = "linear-schema-v{{ version }}"
+release = true
+
+[[package]]
+name = "linear-queries"
+changelog_path = "linear_tools/CHANGELOG.md"
+git_tag_name = "linear-queries-v{{ version }}"
+release = true
+
+[[package]]
+name = "linear-tools"
+changelog_path = "linear_tools/CHANGELOG.md"
+git_tag_name = "linear-tools-v{{ version }}"
+release = true
