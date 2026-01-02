@@ -21,33 +21,55 @@ pub fn find_repo_root(start_path: &Path) -> Result<PathBuf> {
     Ok(workdir.to_path_buf())
 }
 
-/// Check if a directory is a git worktree
+/// Check if a directory is a git worktree (not a submodule)
+///
+/// Worktrees have gitdir paths containing "/worktrees/".
+/// Submodules have gitdir paths containing "/modules/".
 pub fn is_worktree(repo_path: &Path) -> Result<bool> {
-    let _repo = Repository::open(repo_path)?;
-
-    // Check if this is a linked worktree by examining the .git file
     let git_path = repo_path.join(".git");
     if git_path.is_file() {
-        // If .git is a file, it's a worktree
-        debug!("Found .git file, this is a worktree");
-        return Ok(true);
+        let contents = std::fs::read_to_string(&git_path)?;
+        if let Some(gitdir_line) = contents
+            .lines()
+            .find(|l| l.trim_start().starts_with("gitdir:"))
+        {
+            let gitdir = gitdir_line.trim_start_matches("gitdir:").trim();
+            // Worktrees have "/worktrees/" in the path, submodules have "/modules/"
+            let is_worktrees = gitdir.contains("/worktrees/");
+            let is_modules = gitdir.contains("/modules/");
+            if is_worktrees && !is_modules {
+                debug!("Found .git file with worktrees path, this is a worktree");
+                return Ok(true);
+            }
+        }
     }
-
     Ok(false)
 }
 
 /// Get the main repository path for a worktree
+///
+/// Handles both absolute and relative gitdir paths in the .git file.
 pub fn get_main_repo_for_worktree(worktree_path: &Path) -> Result<PathBuf> {
-    let _repo = Repository::open(worktree_path)?;
-
     // For a worktree, we need to find the main repository
     // The .git file in a worktree contains: "gitdir: /path/to/main/.git/worktrees/name"
+    // or a relative path like: "gitdir: ../.git/worktrees/name"
     let git_file = worktree_path.join(".git");
     if git_file.is_file() {
         let contents = std::fs::read_to_string(&git_file)?;
-        if let Some(gitdir_line) = contents.lines().find(|l| l.starts_with("gitdir:")) {
+        if let Some(gitdir_line) = contents
+            .lines()
+            .find(|l| l.trim_start().starts_with("gitdir:"))
+        {
             let gitdir = gitdir_line.trim_start_matches("gitdir:").trim();
-            let gitdir_path = PathBuf::from(gitdir);
+            let mut gitdir_path = PathBuf::from(gitdir);
+
+            // Handle relative paths by resolving against worktree path
+            if !gitdir_path.is_absolute() {
+                gitdir_path = worktree_path.join(&gitdir_path);
+            }
+
+            // Canonicalize to resolve ".." components
+            let gitdir_path = std::fs::canonicalize(&gitdir_path).unwrap_or(gitdir_path);
 
             // Navigate from .git/worktrees/name to the main repo
             if let Some(parent) = gitdir_path.parent()

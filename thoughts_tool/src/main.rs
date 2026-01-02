@@ -140,6 +140,9 @@ enum MountCommands {
         #[command(subcommand)]
         command: MountDebugCommands,
     },
+
+    /// Show active mount status (currently mounted filesystems)
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -208,7 +211,7 @@ enum ReferenceCommands {
 
 #[derive(Subcommand)]
 enum WorkCommands {
-    /// Initialize a new work directory based on current branch/week
+    /// Initialize a new work directory based on current branch
     Init,
 
     /// Mark current work as complete and archive it
@@ -312,6 +315,7 @@ async fn main() -> Result<()> {
                     commands::mount::debug::remount::execute(mount_name).await
                 }
             },
+            MountCommands::Status => commands::mount::status::execute().await,
         },
         Commands::Config { command } => match command {
             ConfigCommands::Create => commands::config::create::execute().await,

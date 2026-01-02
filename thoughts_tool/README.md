@@ -17,7 +17,7 @@ It automatically mounts and syncs git-backed directories, allowing you to access
 - 🔄 **Automatic Git Sync**: Keep your documentation synchronized across repositories
 - 🖥️ **Cross-Platform**: Works on Linux (mergerfs) and macOS (fuse-t)
 - 📚 **Reference Management**: Read-only mounts for external code repositories
-- 🌿 **Branch-Based Work Organization**: Automatic directory structure based on current branch/week
+- 🌿 **Branch-Based Work Organization**: Automatic directory structure based on current branch
 - 🔧 **Repository Integration**: Seamlessly integrates with existing git workflows
 - 🎯 **Worktree Support**: Full support for git worktrees
 - 🚀 **Auto-Mount System**: Automatic mount management for all three spaces
@@ -107,7 +107,7 @@ thoughts sync --all
 ### 6. Start Working
 
 ```bash
-# Initialize a work directory for current branch/week
+# Initialize a work directory for current branch
 thoughts work init
 ```
 
@@ -140,7 +140,7 @@ thoughts [COMMAND] [OPTIONS]
 - `references sync` - Clone missing reference repositories
 
 #### Work Management
-- `work init` - Initialize work directory for current branch/week
+- `work init` - Initialize work directory for current branch
 - `work complete` - Move current work to completed with date range
 - `work list [--recent N]` - List active and completed work directories
 
@@ -224,7 +224,7 @@ The tool organizes all mounts into three distinct spaces:
 
 1. **Thoughts Space** (`thoughts/`)
    - Single git repository for personal work
-   - Organized by branch/week in `active/` and `completed/` directories
+   - Organized by branch name with `completed/` directory for archives
    - Supports subpath mounting for monorepo scenarios
 
 2. **Context Space** (`context/`)
@@ -337,15 +337,25 @@ thoughts_tool/
 
 ## Advanced Features
 
-### Work Organization
+### Branch Protection
 
-The work commands help organize your documentation by branch or week:
+All branch-specific workspace operations are blocked on 'main' and 'master' branches. Create a feature branch first, then re-run:
 
 ```bash
-# On feature branch - creates thoughts/active/my-feature/
+git checkout -b my/feature
 thoughts work init
+```
 
-# On main branch - creates thoughts/active/2025_week_04/
+Legacy weekly directories (e.g., `2025-W01/`) are automatically archived to `completed/` on first run. If a completed item already exists with the same name, a `-migrated` suffix will be used to avoid collisions.
+
+Branch-agnostic commands like `thoughts work list` and `thoughts references list` remain available on main.
+
+### Work Organization
+
+The work commands help organize your documentation by branch:
+
+```bash
+# On feature branch - creates thoughts/my-feature/
 thoughts work init
 
 # Complete work - moves to thoughts/completed/2025-01-15_to_2025-01-22_my-feature/

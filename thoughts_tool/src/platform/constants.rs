@@ -65,4 +65,7 @@ pub mod common {
 
     /// Delay between mount retries
     pub const MOUNT_RETRY_DELAY: Duration = Duration::from_millis(500);
+
+    /// Maximum time to wait for mount visibility after successful mount command
+    pub const MOUNT_VERIFY_TIMEOUT: Duration = Duration::from_secs(3);
 }

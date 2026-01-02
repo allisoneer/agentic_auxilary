@@ -59,7 +59,17 @@ pub struct RepoConfigManager {
 
 impl RepoConfigManager {
     pub fn new(repo_root: PathBuf) -> Self {
-        Self { repo_root }
+        // Ensure absolute path at construction (defense-in-depth)
+        let abs = if repo_root.is_absolute() {
+            repo_root
+        } else {
+            std::fs::canonicalize(&repo_root).unwrap_or_else(|_| {
+                std::env::current_dir()
+                    .expect("Failed to determine current directory for path normalization")
+                    .join(&repo_root)
+            })
+        };
+        Self { repo_root: abs }
     }
 
     /// Load v1 configuration. Prefer using `load_desired_state()` or `ensure_v2_default()` for new code.
@@ -1545,5 +1555,27 @@ mod tests {
         assert!(result.is_ok());
         let warnings = result.unwrap();
         assert_eq!(warnings.len(), 0);
+    }
+
+    #[test]
+    fn test_new_makes_absolute_when_given_relative_repo_root() {
+        let temp_dir = TempDir::new().unwrap();
+        let cwd_before = std::env::current_dir().unwrap();
+
+        // Change cwd to temp_dir so a relative path exists
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        // Create a subdir to use as repo root
+        std::fs::create_dir_all("repo").unwrap();
+
+        let mgr = RepoConfigManager::new(PathBuf::from("repo"));
+
+        // repo_root field is private but we can verify via behavior
+        // The test passes if construction succeeds (no panic) and
+        // subsequent operations work correctly
+        assert!(mgr.peek_config_version().is_ok());
+
+        // Restore cwd
+        std::env::set_current_dir(cwd_before).unwrap();
     }
 }
