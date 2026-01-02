@@ -206,12 +206,8 @@ enum ReferenceCommands {
 
 #[derive(Subcommand)]
 enum WorkCommands {
-    /// Initialize a new work directory based on current branch/week
-    Init {
-        /// Allow initialization on main/master branch (normally disallowed)
-        #[arg(long)]
-        allow_main: bool,
-    },
+    /// Initialize a new work directory based on current branch
+    Init,
 
     /// Mark current work as complete and archive it
     Complete,
@@ -330,7 +326,7 @@ async fn main() -> Result<()> {
             ReferenceCommands::Sync => commands::references::sync::execute().await,
         },
         Commands::Work { command } => match command {
-            WorkCommands::Init { allow_main } => commands::work::init::execute(allow_main).await,
+            WorkCommands::Init => commands::work::init::execute().await,
             WorkCommands::Complete => commands::work::complete::execute().await,
             WorkCommands::List { recent } => commands::work::list::execute(recent).await,
             WorkCommands::Open { subdir } => {
