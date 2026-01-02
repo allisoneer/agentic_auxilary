@@ -81,6 +81,10 @@ pub struct RouterMetadata {
     pub base_path: Option<String>,
     /// CLI configuration
     pub cli_config: Option<RouterCliConfig>,
+    /// MCP configuration (router-level)
+    pub mcp_config: Option<RouterMcpConfig>,
+    /// REST configuration (router-level)
+    pub rest_config: Option<RouterRestConfig>,
 }
 
 /// Router-level CLI configuration.
@@ -94,6 +98,22 @@ pub struct RouterCliConfig {
     pub global_output_formats: Vec<String>,
     /// Whether to add standard global args (--dry-run, --yes, --quiet, --verbose)
     pub standard_global_args: bool,
+}
+
+/// Router-level MCP configuration.
+#[derive(Debug, Default)]
+pub struct RouterMcpConfig {
+    /// MCP server name
+    pub name: Option<String>,
+    /// MCP server version
+    pub version: Option<String>,
+}
+
+/// Router-level REST configuration.
+#[derive(Debug, Default)]
+pub struct RouterRestConfig {
+    /// Base prefix for all REST endpoints
+    pub prefix: Option<String>,
 }
 
 /// Metadata for individual tool methods.
