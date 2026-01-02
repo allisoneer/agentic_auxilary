@@ -1,4 +1,3 @@
-use super::utils::current_iso_week_dir;
 use crate::config::{Mount, RepoConfigManager};
 use crate::git::utils::{find_repo_root, get_control_repo_root, get_current_branch};
 use crate::mount::MountResolver;
@@ -6,8 +5,12 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use std::fs;
+use thoughts_tool::workspace::check_branch_allowed;
 
 pub async fn execute() -> Result<()> {
+    // Enforce lockout and run migration/auto-archive without creating directories
+    check_branch_allowed()?;
+
     let code_root = find_repo_root(&std::env::current_dir()?)?;
     let branch = get_current_branch(&code_root)?;
 
@@ -33,25 +36,13 @@ pub async fn execute() -> Result<()> {
         .resolve_mount(&mount)
         .context("Thoughts mount not cloned")?;
 
-    // Determine expected directory name
-    let dir_name = if branch == "main" || branch == "master" {
-        current_iso_week_dir()
-    } else {
-        branch.clone()
-    };
-
-    // Look for work directory (new structure first, then fallback to active/ for pre-migration)
-    let mut active_dir = thoughts_root.join(&dir_name);
-    if !active_dir.exists() {
-        let legacy = thoughts_root.join("active").join(&dir_name);
-        if legacy.exists() {
-            active_dir = legacy;
-        }
-    }
+    // Use branch name directly - no weekly directories
+    let dir_name = branch.clone();
+    let active_dir = thoughts_root.join(&dir_name);
 
     if !active_dir.exists() {
         anyhow::bail!(
-            "No active work directory found for current branch/week: {}\nExpected: {}",
+            "No active work directory found for current branch: {}\nExpected: {}",
             dir_name,
             active_dir.display()
         );
@@ -78,7 +69,7 @@ pub async fn execute() -> Result<()> {
     let start_date = started_at.format("%Y-%m-%d").to_string();
     let end_date = ended_at.format("%Y-%m-%d").to_string();
 
-    // Build completed directory name with date range (always)
+    // Build completed directory name with date range
     let completed_name = format!("{}_to_{}_{}", start_date, end_date, dir_name);
     let completed_dir = thoughts_root.join("completed").join(&completed_name);
 

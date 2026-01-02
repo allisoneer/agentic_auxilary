@@ -227,7 +227,7 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - No duplicate FUSE mounts or manual cleanup required
 
 ### Three-Space Architecture
-- **Thoughts Space**: Single git repository for personal work, organized by branch/week
+- **Thoughts Space**: Single git repository for personal work, organized by branch
 - **Context Space**: Multiple team-shared repositories, each in its own subdirectory
 - **References Space**: Read-only external repositories, auto-organized by org/repo
 
@@ -239,7 +239,8 @@ The tool now fully supports git worktrees through automatic detection and smart 
 
 ### Work Organization
 - Branch-based directories for feature work
-- ISO week-based directories for main branch work
+- Main/master branches are locked down (must create feature branch first)
+- Legacy weekly directories (YYYY-WWW) auto-archived to completed/ on first run
 - Automatic directory structure with research/, plans/, artifacts/
 - Work completion moves to dated directories
 

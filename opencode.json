@@ -141,5 +141,8 @@
         }
       }
     }
+  },
+  "experimental": {
+    "mcp_timeout": 3600000
   }
 }
