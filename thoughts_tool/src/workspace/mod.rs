@@ -358,6 +358,29 @@ mod branch_lock_tests {
     }
 
     #[test]
+    fn auto_archive_multiple_collision() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+
+        // Pre-existing archived entries that will cause multiple collisions
+        fs::create_dir_all(root.join("completed/2025-W01")).unwrap();
+        fs::create_dir_all(root.join("completed/2025-W01-migrated")).unwrap();
+
+        // Create the weekly dir that should be archived and collide twice
+        fs::create_dir_all(root.join("2025-W01")).unwrap();
+
+        auto_archive_weekly_dirs(root).unwrap();
+
+        // Source should be moved
+        assert!(!root.join("2025-W01").exists());
+        // Original and first migrated remain
+        assert!(root.join("completed/2025-W01").exists());
+        assert!(root.join("completed/2025-W01-migrated").exists());
+        // New archive should be suffixed with -migrated-2
+        assert!(root.join("completed/2025-W01-migrated-2").exists());
+    }
+
+    #[test]
     fn auto_archive_idempotent() {
         let temp = TempDir::new().unwrap();
         let root = temp.path();
