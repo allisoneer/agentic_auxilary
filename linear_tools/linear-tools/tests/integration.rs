@@ -607,3 +607,59 @@ async fn search_issues_with_date_ranges() {
     assert_eq!(res.issues[0].identifier, "ENG-300");
     assert_eq!(res.issues[0].title, "Recent Issue");
 }
+
+#[tokio::test]
+#[serial(env)]
+async fn auth_header_personal_key() {
+    let mut server = Server::new_async().await;
+    let _m = server
+        .mock("POST", "/")
+        .match_header("authorization", "lin_api_abc123")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"data":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#,
+        )
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "lin_api_abc123");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .search_issues(
+            None, None, None, None, None, None, None, None, None, None, None, None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.issues.len(), 0);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn auth_header_oauth_token() {
+    let mut server = Server::new_async().await;
+    let _m = server
+        .mock("POST", "/")
+        .match_header("authorization", "Bearer oauth_token_123")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"data":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#,
+        )
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "oauth_token_123");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .search_issues(
+            None, None, None, None, None, None, None, None, None, None, None, None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.issues.len(), 0);
+}

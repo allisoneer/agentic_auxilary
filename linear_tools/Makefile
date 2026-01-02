@@ -61,7 +61,7 @@ doc:
 	cargo doc -p linear-schema -p linear-queries -p linear-tools --no-deps --open
 
 audit:
-	cargo audit -p linear-schema -p linear-queries -p linear-tools
+	cargo audit
 
 outdated:
 	cargo outdated -p linear-schema -p linear-queries -p linear-tools

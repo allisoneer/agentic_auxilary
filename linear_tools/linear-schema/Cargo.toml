@@ -7,7 +7,7 @@ description = "Cached Linear GraphQL schema for cynic"
 repository = "https://github.com/allisoneer/agentic_auxilary"
 
 [dependencies]
-cynic = { version = "3.4.3", features = ["rkyv"] }
+cynic = { version = "3.12.0", features = ["rkyv"] }
 
 [build-dependencies]
-cynic-codegen = { version = "3.4.3", features = ["rkyv"] }
+cynic-codegen = { version = "3.12.0", features = ["rkyv"] }

@@ -27,6 +27,14 @@ pub struct NullableNumberComparator {
     pub lte: Option<f64>,
 }
 
+#[derive(cynic::InputObject, Clone, Debug, Default)]
+#[cynic(schema = "linear")]
+pub struct NumberComparator {
+    pub eq: Option<f64>,
+    pub gte: Option<f64>,
+    pub lte: Option<f64>,
+}
+
 /// ID comparator for filtering by entity IDs
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear", graphql_type = "IDComparator")]
@@ -57,11 +65,12 @@ pub struct NullableUserFilter {
     pub id: Option<IdComparator>,
 }
 
-/// Filter for team (by ID)
+/// Filter for team (by ID or key)
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct TeamFilter {
     pub id: Option<IdComparator>,
+    pub key: Option<StringComparator>,
 }
 
 /// Filter for nullable project fields (by ID)
@@ -85,4 +94,5 @@ pub struct IssueFilter {
     pub created_at: Option<DateComparator>,
     #[cynic(rename = "updatedAt")]
     pub updated_at: Option<DateComparator>,
+    pub number: Option<NumberComparator>,
 }
