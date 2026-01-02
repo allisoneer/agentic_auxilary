@@ -255,3 +255,13 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - Pattern matching ensures exhaustive handling
 - Automatic org/repo extraction for references
 - Clean separation between CLI strings and internal types
+
+## Manual Verification Checklist — Branch Protection & Weekly Auto-Archive
+
+1. Run `thoughts work init` on main → should fail with standardized message
+2. Run `thoughts work init` on feature branch → should succeed
+3. Run `thoughts work complete` on main → should fail with standardized message
+4. Run `thoughts work list` on main → should succeed (branch-agnostic)
+5. MCP write_document on main → should fail with standardized message
+6. MCP list_active_documents on main → should fail with standardized message
+7. Weekly directories (2025-W01) are auto-archived to completed/
