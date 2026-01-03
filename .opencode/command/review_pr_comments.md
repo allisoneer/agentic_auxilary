@@ -9,7 +9,8 @@ Default behavior (no args):
 - Fetch all unresolved comments on the current PR
 - Triage all threads (actionable, question, context, nit) with severity
 - Spawn 1 sub-agent per actionable/question thread for deep analysis
-- Write a versioned artifact preserving original threads and analysis
+- Assess nits inline (validity, effort, worth addressing) without sub-agents
+- Write a versioned artifact with all threads analyzed and nits categorized as quick-wins/deferred/declined
 - Present reply drafts in the assistant response (not in artifact)
 
 The user can then say "send reply for X" to post a specific reply.
@@ -29,12 +30,12 @@ $ARGUMENTS
 
 Infer user intent from `$ARGUMENTS`. Apply smart defaults if unspecified:
 - Scope: current PR, all unresolved comments, comment_source_type = all
-- Actions: triage all threads; analyze actionable + question threads
-- Output: versioned artifact + reply drafts in response
+- Actions: triage all threads; deep-analyze actionable/question; inline-assess nits
+- Output: versioned artifact (with nits categorized) + reply drafts in response
 
 Recognize common intents:
-- "just triage" → skip deep analysis
-- "analyze everything" → analyze all categories including context/nit
+- "just triage" → skip all analysis (deep and inline), just categorize
+- "analyze everything" → use sub-agents for ALL categories (including nits)
 - "include resolved" → include resolved threads
 - "humans only" / "robots only" → filter by comment_source_type
 - "pr 123" → target specific PR
@@ -98,14 +99,18 @@ Keep this pass lightweight — just categorization, no deep analysis.
 
 ## Select Threads for Analysis
 
-Default: actionable + question threads.
+**Deep analysis (sub-agents):** actionable + question threads.
+**Inline assessment (no sub-agent):** nit + context threads.
+
+All threads get evaluated — the difference is depth, not whether they're analyzed.
 
 Adjustments based on intent:
-- "just triage" → selection is empty (skip analysis)
-- "analyze everything" → include all threads
+- "just triage" → skip all analysis (deep and inline)
+- "analyze everything" → use sub-agents for ALL categories
+- "skip nits" → exclude nit category entirely
 - User narrowed scope (e.g., "only humans") → honor that
 
-Record the selected thread IDs.
+Record selected thread IDs by analysis type.
 
 </step>
 
@@ -113,7 +118,7 @@ Record the selected thread IDs.
 
 ## Deep Analysis with Sub-Agents (1 per Thread)
 
-For each selected thread, spawn a sub-agent using `tools_spawn_agent` with `agent_type=analyzer`.
+For each **actionable/question** thread, spawn a sub-agent using `tools_spawn_agent` with `agent_type=analyzer`.
 
 Each sub-agent receives:
 - The single thread: parent comment + all replies
@@ -131,15 +136,43 @@ Spawn all sub-agents in parallel for efficiency.
 
 </step>
 
+<step name="assess_nits_inline" id="6b">
+
+## Inline Assessment for Nits/Context (No Sub-Agent)
+
+For each **nit/context** thread, perform a quick inline assessment WITHOUT spawning a sub-agent. This is cheaper but still provides actionable information.
+
+For each nit, determine:
+- **validity**: valid | partially-valid | invalid (is the suggestion technically correct?)
+- **worth_addressing**: yes | maybe | no (cost/benefit for this PR)
+- **effort**: trivial | small | medium (how hard to fix?)
+- **one_liner**: Brief rationale (1 sentence max)
+
+Guidelines:
+- "Trivial + valid + yes" = quick win, should fix
+- "Invalid" = politely decline or ignore
+- "Valid but not worth it" = acknowledge, defer to future PR
+- Group by file when multiple nits target the same file
+
+This assessment happens in the main agent's context — no tool calls needed, just reasoning over the comment text.
+
+</step>
+
 <step name="consolidate_results" id="7">
 
-## Consolidate Sub-Agent Results
+## Consolidate All Results
 
-Collect all sub-agent responses.
+Collect:
+1. Sub-agent responses (deep analysis for actionable/question)
+2. Inline assessments (nits/context)
 
-Organize by severity (high → medium → low), then by file path.
+Organize into sections:
+- **Actionable** — by severity (high → medium → low), then by file
+- **Nits: Quick Wins** — valid + worth addressing + trivial/small effort
+- **Nits: Deferred** — valid but not worth addressing in this PR
+- **Nits: Declined** — invalid or not applicable
 
-For threads not selected for analysis, retain just their triage info.
+This grouping makes it easy to batch-fix quick wins and know what to skip.
 
 </step>
 
@@ -154,14 +187,38 @@ Determine artifact filename:
 - Filename: `pr_{number}_review_comments_{N}.md`
 
 Artifact content:
-- Header: PR number, URL, timestamp
+
+### Header
+- PR number, URL, timestamp
 - Triage summary: counts by category and severity
-- Analyzed threads section:
-  - For each: path:line, url, author(s), category/severity
-  - Original thread preserved (all comments with authors)
-  - Analysis: problem, impact, resolution
-- Non-analyzed threads: brief list (id, path:line, category/severity)
-- Footer: Note that reply drafts are in the assistant response
+
+### Actionable Threads (Deep Analysis)
+For each actionable/question thread:
+- path:line, comment_id, author(s), category/severity
+- Original comment (preserve full text)
+- Analysis: problem, impact, resolution
+- Reply draft (if any)
+
+### Nits: Quick Wins
+For each nit worth addressing:
+- path:line, comment_id, author
+- Original comment (full text, use `<details>` if long)
+- Assessment: validity, effort, one-liner rationale
+- Suggested fix (if obvious)
+
+### Nits: Deferred
+For each valid-but-not-now nit:
+- path:line, comment_id
+- One-liner: why deferred
+
+### Nits: Declined
+For each invalid/not-applicable nit:
+- path:line, comment_id
+- One-liner: why declined
+
+### Footer
+- Note that reply drafts are in the assistant response
+- Quick command reference: "send reply for X", "fix quick wins", etc.
 
 Write using `thoughts_write_document` with doc_type="artifact".
 
