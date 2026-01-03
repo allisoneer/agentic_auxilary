@@ -124,3 +124,6 @@ fmt-check-all:
   else
     echo "✓ All tools properly formatted"
   fi
+
+thoughts_sync:
+  thoughts sync
