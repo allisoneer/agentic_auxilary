@@ -6,6 +6,6 @@
 
 ## How to verify it
 
-- [ ] I have ensured `just check && just test` passes
+- [ ] I ran the "check" and "test" recipes via the Just MCP tools (`tools_just_execute`) and they passed
 
 ## Description for the changelog
