@@ -902,7 +902,7 @@ mod server_allowlist_tests {
         let server = CodingAgentToolsServer::with_allowlist(tools.clone(), None);
 
         let all_defs = server.tools.get_mcp_tools();
-        assert_eq!(all_defs.len(), 6); // ls, spawn_agent, search_grep, search_glob, search, execute
+        assert_eq!(all_defs.len(), 6); // ls, spawn_agent, search_grep, search_glob, just_search, just_execute
     }
 
     #[test]

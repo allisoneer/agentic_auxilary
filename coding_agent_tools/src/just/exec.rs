@@ -136,6 +136,21 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    /// Skip test if `just` command is not available
+    macro_rules! skip_if_just_unavailable {
+        () => {
+            if tokio::process::Command::new("just")
+                .arg("--version")
+                .output()
+                .await
+                .is_err()
+            {
+                eprintln!("Skipping test: just not installed");
+                return;
+            }
+        };
+    }
+
     #[test]
     fn value_to_arg_string() {
         assert_eq!(value_to_arg(&json!("hello")).unwrap(), "hello");
@@ -167,16 +182,7 @@ mod tests {
 
     #[tokio::test]
     async fn recipe_not_found_error() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -194,16 +200,7 @@ mod tests {
 
     #[tokio::test]
     async fn defaults_to_root_when_recipe_in_multiple_dirs() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -225,16 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn ambiguous_recipe_not_in_root_errors() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -258,16 +246,7 @@ mod tests {
 
     #[tokio::test]
     async fn missing_required_arg_error() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -290,16 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn successful_execution() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -317,16 +287,7 @@ mod tests {
 
     #[tokio::test]
     async fn non_zero_exit_code() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -344,16 +305,7 @@ mod tests {
 
     #[tokio::test]
     async fn disambiguate_with_dir() {
-        // Skip if just not installed
-        if tokio::process::Command::new("just")
-            .arg("--version")
-            .output()
-            .await
-            .is_err()
-        {
-            eprintln!("Skipping test: just not installed");
-            return;
-        }
+        skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
