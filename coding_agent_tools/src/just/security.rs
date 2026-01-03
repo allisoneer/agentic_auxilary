@@ -21,6 +21,8 @@ impl Default for SecurityValidator {
                 Regex::new(r"`").unwrap(),
                 Regex::new(r"\$\{").unwrap(),
                 Regex::new(r"\.\.").unwrap(),
+                Regex::new(r"[\n\r]").unwrap(), // Block newlines (shell escape vector)
+                Regex::new(r"\x00").unwrap(),   // Block null bytes (string truncation)
             ],
             max_len: 1024,
         }
@@ -143,6 +145,35 @@ mod tests {
         let mut args = HashMap::new();
 
         args.insert("path".into(), json!("../secret"));
+        assert!(v.validate(&args).is_err());
+    }
+
+    #[test]
+    fn blocks_newlines() {
+        let v = SecurityValidator::default();
+        let mut args = HashMap::new();
+
+        // Block \n
+        args.insert("cmd".into(), json!("foo\nbar"));
+        assert!(v.validate(&args).is_err());
+
+        // Block \r
+        args.clear();
+        args.insert("cmd".into(), json!("foo\rbar"));
+        assert!(v.validate(&args).is_err());
+
+        // Block \r\n
+        args.clear();
+        args.insert("cmd".into(), json!("foo\r\nbar"));
+        assert!(v.validate(&args).is_err());
+    }
+
+    #[test]
+    fn blocks_null_bytes() {
+        let v = SecurityValidator::default();
+        let mut args = HashMap::new();
+
+        args.insert("cmd".into(), json!("foo\x00bar"));
         assert!(v.validate(&args).is_err());
     }
 

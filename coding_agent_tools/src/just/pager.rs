@@ -118,7 +118,8 @@ impl PaginationCache {
 
 /// Generate a cache key from query parameters.
 pub fn make_key(dir: &str, query: &str) -> String {
-    format!("dir={}|q={}", dir, query.to_ascii_lowercase())
+    let normalized_dir = dir.trim_end_matches('/');
+    format!("dir={}|q={}", normalized_dir, query.to_ascii_lowercase())
 }
 
 #[cfg(test)]
@@ -137,6 +138,13 @@ mod tests {
         let k1 = make_key("/repo1", "build");
         let k2 = make_key("/repo2", "build");
         assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn make_key_normalizes_trailing_slash() {
+        let k1 = make_key("/repo", "build");
+        let k2 = make_key("/repo/", "build");
+        assert_eq!(k1, k2); // trailing slash normalized
     }
 
     #[test]
