@@ -437,7 +437,7 @@ Usage notes:
         description = "Search justfile recipes by name or docs. Optional dir filter. Same params => next page. Page size: 10.",
         mcp(read_only = true, output = "text")
     )]
-    pub async fn search(
+    pub async fn just_search(
         &self,
         #[universal_tool_param(description = "Search query (substring match on name/docs)")]
         query: Option<String>,
@@ -542,7 +542,7 @@ Usage notes:
         description = "Execute a just recipe. If recipe exists in multiple justfiles, provide dir to disambiguate.",
         mcp(read_only = false, output = "text")
     )]
-    pub async fn execute(
+    pub async fn just_execute(
         &self,
         #[universal_tool_param(description = "Recipe name (e.g., 'check', 'test', 'build')")]
         recipe: String,
