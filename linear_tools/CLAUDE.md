@@ -7,9 +7,9 @@ Linear issue management tools providing MCP + CLI interfaces.
 ## Quick Commands
 
 ```bash
-cd linear_tools && make all      # Check, test, build
-cd linear_tools && make test     # Run tests only
-cd linear_tools && make check    # Format + clippy
+cd linear_tools && just check    # Format + clippy
+cd linear_tools && just test     # Run tests only
+cd linear_tools && just build    # Build the project
 ```
 
 ## Environment Variables

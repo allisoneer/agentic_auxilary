@@ -195,7 +195,7 @@ Neither category is inherently better—the right choice depends on context. Pre
   - Recommendations (2 targeted + 2 comprehensive approaches, each with tradeoffs)
   - Any iteration comments
 
-3. After writing, run `thoughts sync` in bash to sync. Run exactly as written with no additional parameters or flags.
+3. After writing, sync via the Just MCP tools: execute the "thoughts_sync" recipe with `tools_just_execute`. Do not run shell commands directly.
 
 </step>
 

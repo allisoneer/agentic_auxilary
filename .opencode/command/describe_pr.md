@@ -1,5 +1,6 @@
 ---
 description: Generate a PR Description
+agent: Bash
 ---
 
 # Generate PR Description
@@ -41,7 +42,9 @@ You are tasked with generating a comprehensive pull request description followin
 6. **Handle verification requirements:**
    - Look for any checklist items in the "How to verify it" section of the template
    - For each verification step:
-     - If it's a command you can run (like `just check test`, `npm test`, etc.), run it
+     - If it's a recipe you can run, use the Just MCP tools:
+       - Discover available recipes with `tools_just_search` (e.g., search for "check", "test")
+       - Execute recipes with `tools_just_execute` (e.g., run the "check" and "test" recipes)
      - If it passes, mark the checkbox as checked: `- [x]`
      - If it fails, keep it unchecked and note what failed: `- [ ]` with explanation
      - If it requires manual testing (UI interactions, external services), leave unchecked and note for user
@@ -61,7 +64,7 @@ You are tasked with generating a comprehensive pull request description followin
      - `doc_type`: "artifact"
      - `filename`: `pr_{number}_description.md`
      - `content`: completed description from template
-   - Run `thoughts sync` with bash in current directory
+   - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_just_execute`
 
 9. **Update the PR:**
    - After thoughts sync, the file will be at a path in thoughts/active/{branch}/artifacts/

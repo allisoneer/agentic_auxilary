@@ -36,6 +36,11 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Run tests
         env:
           SCCACHE_GHA_ENABLED: "on"
@@ -43,7 +48,7 @@ jobs:
           THOUGHTS_INTEGRATION_TESTS: "1"
         run: |
           cd ${{ matrix.package }}
-          make test-normal
+          OUTPUT_MODE=normal just test
 
   lint:
     name: Lint ${{ matrix.package }}
@@ -64,10 +69,15 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Check formatting
         run: |
           cd ${{ matrix.package }}
-          make fmt-check
+          just fmt-check
       
       - name: Run clippy
         env:
@@ -75,7 +85,7 @@ jobs:
           RUSTC_WRAPPER: "sccache"
         run: |
           cd ${{ matrix.package }}
-          make check-normal
+          just check
 
   security:
     name: Security Audit (${{ matrix.checks }})
@@ -108,8 +118,8 @@ jobs:
           toolchain: stable
           cache: true
 
-      - name: Check Makefile sync
-        run: cargo run -p xtask -- makefile-sync --check
+      - name: Check README sync
+        run: cargo run -p xtask -- readme-sync --check
 
   nightly-integration:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -133,6 +143,11 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Run nightly integration tests (with network)
         env:
           SCCACHE_GHA_ENABLED: "on"
@@ -141,4 +156,4 @@ jobs:
           THOUGHTS_NETWORK_TESTS: "1"
         run: |
           cd ${{ matrix.package }}
-          make test-normal
+          OUTPUT_MODE=normal just test
