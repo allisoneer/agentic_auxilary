@@ -43,13 +43,10 @@ git clone <repository-url>
 cd thoughts_tool
 
 # Build the project
-make build
-
-# Or build with release optimizations
-make release
+just build
 
 # Install globally
-make install
+cargo install --path .
 ```
 
 ## Quick Start
@@ -294,29 +291,25 @@ This ensures:
 ### Building and Testing
 
 ```bash
-# Run all checks, tests, and build
-make all
+# Run checks (fmt + clippy)
+just check
 
-# Run specific components
-make check      # Run clippy
-make test       # Run tests
-make build      # Build the project
+# Run tests
+just test
 
-# Run with verbose output
-make check-verbose
-make test-verbose
-make build-verbose
-
-# Run specific test types
-make test-unit          # Unit tests only
-make test-integration   # Integration tests (requires THOUGHTS_INTEGRATION_TESTS=1)
+# Build the project
+just build
 
 # Format code
-make fmt
+just fmt
 
-# Check dependencies
-make audit      # Security audit
-make outdated   # Check for outdated dependencies
+# Output mode variants
+OUTPUT_MODE=normal just test    # Full cargo output
+OUTPUT_MODE=verbose just test   # Verbose output
+
+# Run specific test types via cargo
+cargo test --lib                              # Unit tests only
+THOUGHTS_INTEGRATION_TESTS=1 just test        # Integration tests included
 ```
 
 ### Project Structure
@@ -331,8 +324,7 @@ thoughts_tool/
 │   ├── platform/     # Platform detection and abstraction
 │   └── utils/        # Utility functions
 ├── tests/            # Integration tests
-├── hack/            # Development utilities
-└── Makefile         # Build automation
+└── justfile         # Build automation
 ```
 
 ## Advanced Features
@@ -433,8 +425,8 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `make test-all`
-5. Format code: `make fmt`
+4. Run tests: `just test`
+5. Format code: `just fmt`
 6. Submit a pull request
 
 ## License

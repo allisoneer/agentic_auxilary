@@ -13,44 +13,20 @@ This is a Rust CLI application called "thoughts" - a flexible thought management
 
 ### Building and Testing
 ```bash
-# Default targets (silent if succeasful)
-make check      # Run formatting and clippy checks
-make test       # Run all tests
-make build      # Build the project
+# Default targets (silent if successful)
+just check      # Run formatting and clippy checks
+just test       # Run all tests
+just build      # Build the project
+just fmt        # Format code
+just fmt-check  # Check formatting
 
-# Normal output versions
-make check-normal
-make test-normal
-make build-normal
+# Output mode variants
+OUTPUT_MODE=normal just test    # Normal output
+OUTPUT_MODE=verbose just test   # Verbose output
 
-# Verbose versions
-make check-verbose
-make test-verbose
-make build-verbose
-
-# Specific test types
-make test-unit          # Unit tests only
-make test-integration   # Integration tests (requires THOUGHTS_INTEGRATION_TESTS=1)
-make test-all          # All tests with all features
-
-# Other useful commands
-make fmt        # Format code
-make fmt-check  # Check formatting
-
-# Development and Maintenance
-make clean      # Clean build artifacts
-make doc        # Build and open documentation
-make audit      # Security vulnerability check
-make outdated   # Check outdated dependencies
-
-# Build Commands
-make release    # Release build
-make install    # Install the application
-make run        # Run the application
-
-# Meta Commands
-make all        # Default target running check, test, build
-make help       # Show all available targets with descriptions
+# Specific test types via cargo
+cargo test --lib                # Unit tests only
+THOUGHTS_INTEGRATION_TESTS=1 just test  # Integration tests included
 ```
 
 ## High-Level Architecture
@@ -166,7 +142,7 @@ SSH behavior remains unchanged and continues to use the system SSH client for 1P
 
 **Running all tests locally:**
 ```bash
-THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 make test
+THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 just test
 ```
 
 ### Known Issue (v0.4.0): Fast-forward pull left staged changes after sync

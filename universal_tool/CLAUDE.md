@@ -11,9 +11,9 @@ Universal Tool Framework (UTF) is a Rust procedural macro library that generates
 ### Building and Testing
 ```bash
 # Default targets (silent if successful)
-make check      # Run formatting and clippy checks
-make test       # Run all tests
-make build      # Build the project
+just check      # Run formatting and clippy checks
+just test       # Run all tests
+just build      # Build the project
 
 # Build entire workspace with all features
 cargo build --workspace --all-features
@@ -147,7 +147,7 @@ All interfaces use unified `ToolError` type with:
 - `universal-tool-integration-tests/tests/` - Integration tests requiring both macros and core
 
 **To add a new integration test:**
-Create test file in `universal_tool/universal-tool-integration-tests/tests/` and run `make test-normal`
+Create test file in `universal_tool/universal-tool-integration-tests/tests/` and run `just test`
 
 ## Important Files to Know
 

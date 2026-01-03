@@ -21,16 +21,16 @@ The pr_comments tool fetches GitHub PR review comments with support for filterin
 ## Common Commands
 ```bash
 # Run tests
-make test
+just test
 
 # Check for linting issues
-make check
+just check
 
 # Build the tool
-make build
+just build
 
-# Install locally
-make install
+# Format code
+just fmt
 ```
 
 ## CLI Usage Examples

@@ -20,7 +20,7 @@ cargo install gpt5_reasoner
 Or build from source:
 ```bash
 cd gpt5_reasoner
-make build
+just build
 ```
 
 ## Usage
@@ -192,17 +192,18 @@ User Prompt + File Metadata
 ## Development
 
 ```bash
-# Run checks
-make check
+# Run checks (fmt + clippy)
+just check
 
 # Run tests
-make test
+just test
 
 # Build
-make build
+just build
 
-# All in one
-make all
+# Output mode variants
+OUTPUT_MODE=normal just test    # Full cargo output
+OUTPUT_MODE=verbose just test   # Verbose output
 ```
 
 ## Breaking Changes from 0.1.0

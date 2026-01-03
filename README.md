@@ -56,16 +56,16 @@ git clone https://github.com/allisoneer/agentic_auxilary
 cd agentic_auxilary
 
 # Build thoughts_tool
-cd thoughts_tool && make build
+cd thoughts_tool && just build
 
 # Build universal_tool
-cd universal_tool && cargo build --workspace
+cd universal_tool && just build
 
 # Build claudecode_rs
-cd claudecode_rs && make build
+cd claudecode_rs && just build
 
 # Build gpt5_reasoner
-cd gpt5_reasoner && make build
+cd gpt5_reasoner && just build
 ```
 
 ## Installation

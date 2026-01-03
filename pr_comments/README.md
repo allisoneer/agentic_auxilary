@@ -6,7 +6,7 @@ A tool to fetch GitHub PR comments and reply to review comments via CLI and MCP 
 
 ```bash
 cd pr_comments
-make install
+cargo install --path .
 ```
 
 ## Usage
