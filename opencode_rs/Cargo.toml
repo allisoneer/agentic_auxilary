@@ -1,0 +1,36 @@
+[package]
+name = "opencode_rs"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Rust SDK for OpenCode (HTTP-first hybrid with SSE streaming)."
+
+[features]
+default = ["http", "sse"]
+http = ["dep:reqwest", "dep:serde_json"]
+sse = ["dep:reqwest-eventsource", "dep:backoff"]
+server = ["tokio/process", "dep:portpicker"]
+cli = ["tokio/process"]
+full = ["http", "sse", "server", "cli"]
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }
+reqwest-eventsource = { version = "0.6", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-util = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", optional = true }
+thiserror = "2"
+url = "2"
+http = "1"
+backoff = { version = "0.4", features = ["tokio"], optional = true }
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+portpicker = { version = "0.1", optional = true }
+futures = "0.3"
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio-test = "0.4"
+anyhow = "1"
+tracing-subscriber = "0.3"
