@@ -22,7 +22,9 @@ pub async fn execute_recipe(
     args_opt: Option<HashMap<String, Value>>,
     repo_root: &str,
 ) -> Result<ExecuteOutput, String> {
-    let all = registry.get_all_recipes(repo_root).await?;
+    // Canonicalize to resolve symlinks (e.g., /var -> /private/var on macOS)
+    let repo_root = paths::to_abs_string(repo_root)?;
+    let all = registry.get_all_recipes(&repo_root).await?;
 
     // Filter by name and visibility
     let mut candidates: Vec<_> = all
@@ -49,7 +51,7 @@ pub async fn execute_recipe(
 
     let chosen_idx = if unique_dirs.len() > 1 && dir_opt.is_none() {
         // No dir specified and multiple candidates - prefer root repo justfile
-        if let Some(idx) = candidates.iter().position(|(d, _)| d == repo_root) {
+        if let Some(idx) = candidates.iter().position(|(d, _)| d == &repo_root) {
             idx
         } else {
             // Recipe not in root, genuine ambiguity
