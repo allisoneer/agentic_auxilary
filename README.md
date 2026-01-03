@@ -81,8 +81,8 @@ cargo install thoughts-tool
 <!-- BEGIN:autodeps {"crates":["universal-tool-core","universal-tool-macros"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-universal-tool-core = "0.2.3"
-universal-tool-macros = "0.1.6"
+universal-tool-core = "0.2.5"
+universal-tool-macros = "0.1.8"
 ```
 <!-- END:autodeps -->
 
@@ -90,7 +90,7 @@ universal-tool-macros = "0.1.6"
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-claudecode = "0.1.4"
+claudecode = "0.1.8"
 ```
 <!-- END:autodeps -->
 
@@ -113,7 +113,7 @@ cargo install coding_agent_tools
 <!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-anthropic-async = "0.1.0"
+anthropic-async = "0.2.0"
 ```
 <!-- END:autodeps -->
 
