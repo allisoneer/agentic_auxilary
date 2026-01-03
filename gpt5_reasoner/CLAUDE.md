@@ -4,11 +4,11 @@
 This file guides contributors and Claude Code on how to work on gpt5_reasoner. It focuses on internals, development workflows, and where to change things. End-user usage, installation, and examples live in README.md. In short: gpt5_reasoner optimizes a task into an XML template (optimizer, configurable model) and then executes it with GPT-5 high reasoning (executor), available via CLI and MCP.
 
 ## 2) Quick Dev Commands and Workflows
-- Default targets (silent, warnings treated as failures via hack/cargo-smart.sh):
-  - make check | make test | make build | make all
+- Default targets (silent, warnings treated as failures):
+  - just check | just test | just build
 - Output variants:
-  - Normal: make check-normal | test-normal | build-normal
-  - Verbose: make check-verbose | test-verbose | build-verbose
+  - Normal: OUTPUT_MODE=normal just test
+  - Verbose: OUTPUT_MODE=verbose just test
 - Cargo equivalents: cargo clippy | cargo test | cargo build
 - Env:
   - OPENROUTER_API_KEY required (OpenRouter)
@@ -77,7 +77,7 @@ Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML gro
 - MCP surface: add methods in impl Gpt5Reasoner; verify schema with examples/print_schema.rs.
 
 ## 8) Testing Strategy and Debugging Tips
-- Run: make test (silent; warnings fail via cargo-smart.sh)
+- Run: just test (silent; warnings fail)
 - Debug logs: RUST_LOG=gpt5_reasoner=debug to see optimizer raw output, fence stats, token counts.
 
 ### 8.1) Tests that mutate process-global state (env, cwd)

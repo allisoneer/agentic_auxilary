@@ -74,7 +74,9 @@ Do NOT run verification yet—that's step 3.
 
 **Run Verification:**
 1. Mark the phase's verification todo as in_progress
-2. Run ALL verification commands from the plan's success criteria for this phase
+2. Run ALL verification steps via the Just MCP tools:
+   - Discover relevant recipes with `tools_just_search`
+   - Execute necessary recipes (e.g., "check", "test") using `tools_just_execute`
 3. Check for regressions (run broader test suite if specified)
 
 **Reflect — Did I Complete Everything?**
