@@ -1,5 +1,6 @@
 ---
 description: Commit Changes
+agent: Bash
 ---
 # Commit Changes
 
