@@ -6,37 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 claudecode_rs is a Rust SDK for programmatically interacting with Claude Code (the Claude CLI). It provides a type-safe, async API to launch Claude sessions, send queries, and handle responses in various formats.
 
-## Common Make Commands
+## Common Commands
 
 ### Quick Commands (Silent by Default)
 ```bash
-make all        # Run check, test, and build (silent)
-make check      # Run formatting and clippy checks
-make test       # Run all tests
-make build      # Build release binary
+just check      # Run formatting and clippy checks
+just test       # Run all tests
+just build      # Build release binary
+just fmt        # Format code
+just fmt-check  # Check formatting
 ```
 
 ### Output Variants
 ```bash
-make test-normal   # Normal output
-make test-verbose  # Verbose output
+OUTPUT_MODE=normal just test   # Normal output
+OUTPUT_MODE=verbose just test  # Verbose output
 ```
 
-### Test Categories
+### Cargo Direct Commands
 ```bash
-make test-unit         # Unit tests only
-make test-integration  # Integration tests only
-make test-ignored      # Run ignored tests
-make test-all          # All tests including ignored
-```
-
-### Development
-```bash
-make fmt          # Format code
-make fmt-check    # Check formatting
-make doc-open     # Generate and open docs
-make audit        # Security audit
-make outdated     # Check dependencies
+cargo test --lib               # Unit tests only (no claude CLI required)
+cargo test -- --ignored        # Run ignored tests
 ```
 
 ## Commands

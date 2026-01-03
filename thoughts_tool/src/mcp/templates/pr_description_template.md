@@ -6,6 +6,6 @@
 
 ## How to verify it
 
-- [ ] I have ensured `make check test` passes
+- [ ] I have ensured `just check && just test` passes
 
 ## Description for the changelog

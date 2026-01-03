@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
 
-pub mod makefile;
 pub mod marker;
 
 #[derive(Parser, Debug)]
@@ -24,16 +23,7 @@ enum Cmd {
         /// Dry-run: print diffable output to stdout but don't write
         #[arg(long)]
         dry_run: bool,
-    },
-    /// Sync Makefile sections (TOOLS, later ALIAS_CASE/TARGETS) from filesystem discovery
-    MakefileSync {
-        /// Path to the Makefile (defaults to repo root Makefile)
-        #[arg(long, default_value = "Makefile")]
-        path: PathBuf,
-        /// Dry-run: print diffable output to stdout but don't write
-        #[arg(long)]
-        dry_run: bool,
-        /// Check mode: fail if Makefile is out of sync (for CI)
+        /// Check mode: fail if README is out of sync (for CI)
         #[arg(long)]
         check: bool,
     },
@@ -46,16 +36,15 @@ fn strict_mode() -> bool {
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.cmd {
-        Cmd::ReadmeSync { path, dry_run } => readme_sync(path, dry_run),
-        Cmd::MakefileSync {
+        Cmd::ReadmeSync {
             path,
             dry_run,
             check,
-        } => makefile::sync(&path, dry_run, check),
+        } => readme_sync(path, dry_run, check),
     }
 }
 
-fn readme_sync(path: PathBuf, dry_run: bool) -> Result<()> {
+fn readme_sync(path: PathBuf, dry_run: bool, check: bool) -> Result<()> {
     let metadata = MetadataCommand::new()
         .no_deps()
         .exec()
@@ -75,6 +64,10 @@ fn readme_sync(path: PathBuf, dry_run: bool) -> Result<()> {
     if !changed {
         eprintln!("[autodeps] No changes needed for {}", path.display());
         return Ok(());
+    }
+
+    if check {
+        anyhow::bail!("README is out of sync. Run `cargo run -p xtask -- readme-sync` to update.");
     }
 
     if dry_run {
