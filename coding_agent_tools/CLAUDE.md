@@ -5,10 +5,10 @@ CLI + MCP tools for coding assistants. Currently implements `ls` tool for gitign
 
 ## Quick Commands
 ```bash
-make all          # Check, test, and build
-make check        # Run formatting and clippy checks
-make test         # Run tests
-make build        # Build the project
+just check        # Run formatting and clippy checks
+just test         # Run tests
+just build        # Build the project
+just fmt          # Format code
 ```
 
 ## Architecture

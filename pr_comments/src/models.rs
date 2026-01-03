@@ -64,7 +64,7 @@ pub struct PrSummaryList {
     pub prs: Vec<PrSummary>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FormatOptions {
     pub show_ids: bool,
     pub show_urls: bool,
@@ -72,6 +72,19 @@ pub struct FormatOptions {
     pub show_review_ids: bool, // pull_request_review_id
     pub show_counts: bool,     // PR list: comment_count, review_comment_count
     pub show_author: bool,     // PR list: author
+}
+
+impl Default for FormatOptions {
+    fn default() -> Self {
+        Self {
+            show_ids: true,
+            show_urls: false,
+            show_dates: false,
+            show_review_ids: false,
+            show_counts: false,
+            show_author: false,
+        }
+    }
 }
 
 // Cache options once per process
@@ -93,6 +106,7 @@ impl FormatOptions {
         {
             match flag.as_str() {
                 "id" | "ids" => opts.show_ids = true,
+                "noid" | "no_ids" => opts.show_ids = false,
                 "url" | "urls" => opts.show_urls = true,
                 "date" | "dates" | "time" | "times" => opts.show_dates = true,
                 "review" | "review_id" | "review_ids" => opts.show_review_ids = true,
@@ -447,7 +461,7 @@ mod format_options_tests {
     fn parses_empty_flags() {
         let o = FormatOptions::from_csv("");
         assert!(
-            !o.show_ids
+            o.show_ids
                 && !o.show_urls
                 && !o.show_dates
                 && !o.show_review_ids
@@ -477,6 +491,22 @@ mod format_options_tests {
                 && o2.show_counts
                 && o2.show_author
         );
+    }
+
+    #[test]
+    fn parses_noid_and_precedence() {
+        let o = FormatOptions::from_csv("noid");
+        assert!(!o.show_ids);
+
+        let o2 = FormatOptions::from_csv("no_ids");
+        assert!(!o2.show_ids);
+
+        // Precedence: last wins
+        let o3 = FormatOptions::from_csv("id,noid");
+        assert!(!o3.show_ids);
+
+        let o4 = FormatOptions::from_csv("noid,id");
+        assert!(o4.show_ids);
     }
 }
 
@@ -563,7 +593,7 @@ mod mcp_format_tests {
         assert!(text.contains("[42 L] bob"));
         assert!(text.contains("Body A"));
         assert!(text.contains("\n    More"));
-        assert!(!text.contains("#1")); // ids are off by default
+        assert!(text.contains("#1")); // ids are ON by default
     }
 
     #[test]
@@ -601,9 +631,9 @@ mod mcp_format_tests {
         assert!(opts.show_counts);
         assert!(opts.show_author);
 
-        // Test default has all disabled
+        // Test default has ids enabled, others disabled
         let default_opts = FormatOptions::from_csv("");
-        assert!(!default_opts.show_ids);
+        assert!(default_opts.show_ids);
         assert!(!default_opts.show_urls);
         assert!(!default_opts.show_dates);
         assert!(!default_opts.show_review_ids);

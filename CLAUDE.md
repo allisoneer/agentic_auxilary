@@ -28,69 +28,37 @@ Guidance for Claude Code when working with this repository.
 
 ## Common Commands
 
-### thoughts_tool
+### All Tools (per-tool directory)
 ```bash
-cd thoughts_tool && make all       # Check, test, and build (silent)
-cd thoughts_tool && make check     # Run formatting and clippy checks
-cd thoughts_tool && make test      # Run tests
-cd thoughts_tool && make build     # Build the project
+cd <tool> && just check     # Run formatting and clippy checks
+cd <tool> && just test      # Run tests
+cd <tool> && just build     # Build the project
+cd <tool> && just fmt       # Format code
 ```
 
-### universal_tool
+### Root-level orchestration
 ```bash
-cd universal_tool && make all       # Check, test, and build (silent)
-cd universal_tool && make check     # Run formatting and clippy checks
-cd universal_tool && make test      # Run tests
-cd universal_tool && make build     # Build the project
-
-# Or using cargo directly
-cd universal_tool && cargo build --workspace --all-features
+just check          # Check all tools
+just test           # Test all tools
+just build          # Build all tools
+just fmt-all        # Format all code
+just fmt-check-all  # Check formatting across all tools
 ```
 
-### claudecode_rs
+### Output modes
 ```bash
-cd claudecode_rs && make all       # Check, test, and build (silent)
-cd claudecode_rs && make check     # Run formatting and clippy checks
-cd claudecode_rs && make test      # Run tests
-cd claudecode_rs && make build     # Build the project
+# Default: minimal (quiet on success, verbose on failure)
+just test
+
+# Normal mode: full cargo output
+OUTPUT_MODE=normal just test
+
+# Verbose mode: extra verbosity flags
+OUTPUT_MODE=verbose just test
+
+# Debugging example
+RUST_LOG=gpt5_reasoner=debug just test
 ```
-
-### pr_comments
-```bash
-cd pr_comments && make all       # Check, test, and build (silent)
-cd pr_comments && make check     # Run formatting and clippy checks
-cd pr_comments && make test      # Run tests
-cd pr_comments && make build     # Build the project
-```
-
-### gpt5_reasoner
-```bash
-cd gpt5_reasoner && make all       # Check, test, and build (silent)
-cd gpt5_reasoner && make check     # Run formatting and clippy checks
-cd gpt5_reasoner && make test      # Run tests
-cd gpt5_reasoner && make build     # Build the project
-
-# Useful during debugging:
-RUST_LOG=gpt5_reasoner=debug make test
-```
-
-### anthropic_async
-```bash
-cd anthropic_async && make all       # Check, test, and build (silent)
-cd anthropic_async && make check     # Run formatting and clippy checks
-cd anthropic_async && make test      # Run tests
-cd anthropic_async && make build     # Build the project
-```
-
-### coding_agent_tools
-```bash
-cd coding_agent_tools && make all       # Check, test, and build (silent)
-cd coding_agent_tools && make check     # Run formatting and clippy checks
-cd coding_agent_tools && make test      # Run tests
-cd coding_agent_tools && make build     # Build the project
-```
-
-All tools support verbose and normal output variants for their make commands (e.g., `make test-normal`, `make test-verbose`).
 
 ## README version sync (xtask)
 
