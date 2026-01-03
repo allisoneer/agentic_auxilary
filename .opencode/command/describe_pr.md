@@ -1,5 +1,6 @@
 ---
 description: Generate a PR Description
+agent: Bash
 ---
 
 # Generate PR Description
