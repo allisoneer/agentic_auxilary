@@ -103,7 +103,7 @@ assistant: [Uses the spawn_agent tool with agent_type=analyzer]
 
 ## Code References
 
-When referencing specific functions or pieces of code include the pattern `file_path:line_number` to allow the user to easily navigate to the source code location. IMPORTANTLY, use a relative file path from current directory ANYTIME it makes sense to (almost always, unless relative path would start with `../`).
+When referencing specific functions or pieces of code include the pattern `file_path:line_number` to allow the user to easily navigate to the source code location. IMPORTANTLY, use a relative file path from current directory ANYTIME it makes sense to (almost always, unless relative path would start with `../`). Always write complete paths—never abbreviate with ellipsis (...) like `src/.../file.ts`.
 
 <example>
 user: Where are errors from the client handled?
