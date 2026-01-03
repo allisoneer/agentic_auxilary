@@ -44,6 +44,12 @@ enum Commands {
         /// Expose the 'search_glob' tool
         #[arg(long)]
         search_glob: bool,
+        /// Expose the 'search' (just recipes) tool
+        #[arg(long)]
+        search: bool,
+        /// Expose the 'execute' (just recipes) tool
+        #[arg(long)]
+        execute: bool,
     },
 }
 
@@ -65,7 +71,9 @@ async fn main() -> Result<()> {
             spawn_agent,
             search_grep,
             search_glob,
-        } => run_mcp_server(ls, spawn_agent, search_grep, search_glob).await,
+            search,
+            execute,
+        } => run_mcp_server(ls, spawn_agent, search_grep, search_glob, search, execute).await,
         Commands::Ls {
             path,
             depth,
@@ -114,11 +122,13 @@ async fn run_mcp_server(
     spawn_agent: bool,
     search_grep: bool,
     search_glob: bool,
+    search: bool,
+    execute: bool,
 ) -> Result<()> {
     eprintln!("Starting coding_agent_tools MCP Server");
 
     // Backwards-compat: no flags => expose all tools (allowlist = None)
-    let allowlist = if ls || spawn_agent || search_grep || search_glob {
+    let allowlist = if ls || spawn_agent || search_grep || search_glob || search || execute {
         let mut set = HashSet::new();
         if ls {
             set.insert("ls".to_string());
@@ -131,6 +141,12 @@ async fn run_mcp_server(
         }
         if search_glob {
             set.insert("search_glob".to_string());
+        }
+        if search {
+            set.insert("search".to_string());
+        }
+        if execute {
+            set.insert("execute".to_string());
         }
         Some(set)
     } else {
