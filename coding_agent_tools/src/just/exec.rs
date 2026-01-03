@@ -123,7 +123,9 @@ fn value_to_arg(v: &Value) -> Result<String, String> {
         Value::String(s) => Ok(s.clone()),
         Value::Number(n) => Ok(n.to_string()),
         Value::Bool(b) => Ok(b.to_string()),
-        _ => Err(format!("Unsupported argument type: {}", v)),
+        Value::Array(_) => Err("Arrays are only supported for variadic (*) parameters".to_string()),
+        Value::Null => Err("Null values are not supported; use empty string instead".to_string()),
+        Value::Object(_) => Err("Object arguments are not supported".to_string()),
     }
 }
 
@@ -152,10 +154,15 @@ mod tests {
     }
 
     #[test]
-    fn value_to_arg_rejects_complex() {
-        assert!(value_to_arg(&json!({"key": "value"})).is_err());
-        assert!(value_to_arg(&json!(["a", "b"])).is_err());
-        assert!(value_to_arg(&json!(null)).is_err());
+    fn value_to_arg_rejects_complex_with_clear_messages() {
+        let obj_err = value_to_arg(&json!({"key": "value"})).unwrap_err();
+        assert!(obj_err.contains("Object"));
+
+        let arr_err = value_to_arg(&json!(["a", "b"])).unwrap_err();
+        assert!(arr_err.contains("variadic"));
+
+        let null_err = value_to_arg(&json!(null)).unwrap_err();
+        assert!(null_err.contains("empty string"));
     }
 
     #[tokio::test]

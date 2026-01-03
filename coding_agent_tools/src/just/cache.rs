@@ -34,7 +34,10 @@ impl JustRegistry {
 
     /// Refresh the list of discovered justfiles.
     pub async fn refresh(&self, repo_root: &str) -> Result<(), String> {
-        let paths = find_justfiles(repo_root)?;
+        let root = repo_root.to_string();
+        let paths = tokio::task::spawn_blocking(move || find_justfiles(&root))
+            .await
+            .map_err(|e| format!("spawn_blocking failed: {e}"))??;
         let mut inner = self.inner.lock().unwrap();
         inner.last_paths = paths;
         Ok(())
@@ -62,9 +65,13 @@ impl JustRegistry {
         let mut results = Vec::new();
 
         for jf in paths {
-            let mtime = std::fs::metadata(&jf.path)
-                .and_then(|m| m.modified())
-                .map_err(|e| format!("stat failed for {}: {e}", jf.path))?;
+            let path_clone = jf.path.clone();
+            let mtime = tokio::task::spawn_blocking(move || {
+                std::fs::metadata(&path_clone).and_then(|m| m.modified())
+            })
+            .await
+            .map_err(|e| format!("spawn_blocking failed: {e}"))?
+            .map_err(|e| format!("stat failed for {}: {e}", jf.path))?;
 
             let need_parse = {
                 let inner = self.inner.lock().unwrap();
