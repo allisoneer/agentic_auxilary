@@ -73,10 +73,8 @@ verification, then they should be added here ]
 #### Automated Verification:
 [ A relevant list of automatically executable verification that deterministically displays that this
 phase was successful ]
-- [ ] Unit tests pass: `just test-rust`
-- [ ] Type checking passes: `npm run typecheck`
-- [ ] Linting passes: `just check`
-- [ ] Integration tests pass: `just test`
+- [ ] Linting/format checks pass (run the "check" recipe via `tools_just_execute`; discover available recipes with `tools_just_search`)
+- [ ] Tests pass (run the "test" recipe via `tools_just_execute`; discover additional test recipes with `tools_just_search` if needed)
 
 #### Manual Verification:
 [ Only include if manual verification is required or useful for any given phase. ]

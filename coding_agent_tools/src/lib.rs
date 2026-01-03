@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod glob;
 pub mod grep;
+pub mod just;
 pub mod pagination;
 pub mod paths;
 pub mod types;
@@ -31,6 +32,10 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
 pub struct CodingAgentTools {
     /// Two-level pagination cache for MCP (persists across calls when Arc-wrapped)
     pager: Arc<pagination::PaginationCache>,
+    /// Cache for parsed justfile recipes
+    just_registry: Arc<just::JustRegistry>,
+    /// Pagination cache for just search results
+    just_pager: Arc<just::pager::PaginationCache>,
 }
 
 impl Default for CodingAgentTools {
@@ -43,6 +48,8 @@ impl CodingAgentTools {
     pub fn new() -> Self {
         Self {
             pager: Arc::new(pagination::PaginationCache::new()),
+            just_registry: Arc::new(just::JustRegistry::new()),
+            just_pager: Arc::new(just::pager::PaginationCache::new()),
         }
     }
 }
@@ -424,6 +431,138 @@ Usage notes:
         };
         glob::run(cfg)
     }
+
+    /// Search justfile recipes by name or docs.
+    #[universal_tool(
+        description = "Search justfile recipes by name or docs. Optional dir filter. Same params => next page. Page size: 10.",
+        mcp(read_only = true, output = "text")
+    )]
+    pub async fn just_search(
+        &self,
+        #[universal_tool_param(description = "Search query (substring match on name/docs)")]
+        query: Option<String>,
+        #[universal_tool_param(description = "Directory filter (repo-relative or absolute)")]
+        dir: Option<String>,
+    ) -> Result<just::SearchOutput, ToolError> {
+        just::ensure_just_available()
+            .await
+            .map_err(ToolError::internal)?;
+
+        let repo_root = paths::to_abs_string(".").map_err(ToolError::internal)?;
+        let q = query.unwrap_or_default();
+        let dir_filter = dir
+            .as_ref()
+            .map(|d| paths::to_abs_string(d))
+            .transpose()
+            .map_err(ToolError::internal)?;
+
+        self.just_pager.sweep_expired();
+        let key = just::pager::make_key(dir_filter.as_deref().unwrap_or(&repo_root), &q);
+        let qlock = self.just_pager.get_or_create(&key);
+
+        // Check if we need to refresh - do this without holding lock across await
+        let needs_refresh = {
+            let st = qlock.state.lock().unwrap();
+            st.is_empty() || st.is_expired()
+        };
+
+        // Fetch recipes if needed (outside lock)
+        if needs_refresh {
+            let all = self
+                .just_registry
+                .get_all_recipes(&repo_root)
+                .await
+                .map_err(ToolError::internal)?;
+
+            let filtered: Vec<_> = all
+                .into_iter()
+                .filter(|(recipe_dir, r)| {
+                    let dir_ok = dir_filter
+                        .as_ref()
+                        .map(|f| recipe_dir.starts_with(f))
+                        .unwrap_or(true);
+                    let visible = !r.is_private && !r.is_mcp_hidden;
+                    let q_ok = q.is_empty()
+                        || r.name
+                            .to_ascii_lowercase()
+                            .contains(&q.to_ascii_lowercase())
+                        || r.doc
+                            .as_ref()
+                            .map(|d| d.to_ascii_lowercase().contains(&q.to_ascii_lowercase()))
+                            .unwrap_or(false);
+                    dir_ok && visible && q_ok
+                })
+                .map(|(d, r)| {
+                    let params = r
+                        .params
+                        .iter()
+                        .map(|p| {
+                            if p.kind == just::parser::ParamKind::Star {
+                                format!("{}*", p.name)
+                            } else if p.has_default {
+                                format!("{}?", p.name)
+                            } else {
+                                p.name.clone()
+                            }
+                        })
+                        .collect();
+                    just::SearchItem {
+                        recipe: r.name,
+                        dir: d,
+                        doc: r.doc,
+                        params,
+                    }
+                })
+                .collect();
+
+            // Reacquire lock to update state
+            let mut st = qlock.state.lock().unwrap();
+            st.reset(filtered);
+        }
+
+        // Paginate (separate lock acquisition)
+        let (items, has_more) = {
+            let mut st = qlock.state.lock().unwrap();
+            let offset = st.next_offset;
+            let end = (offset + just::pager::PAGE_SIZE).min(st.results.len());
+            let page = st.results[offset..end].to_vec();
+            st.next_offset = end;
+            let has_more = end < st.results.len();
+            (page, has_more)
+        };
+
+        if !has_more {
+            self.just_pager.remove_if_same(&key, &qlock);
+        }
+        Ok(just::SearchOutput { items, has_more })
+    }
+
+    /// Execute a just recipe.
+    #[universal_tool(
+        description = "Execute a just recipe. Defaults to root justfile if no dir specified. Only disambiguate if recipe not in root.",
+        mcp(read_only = false, output = "text")
+    )]
+    pub async fn just_execute(
+        &self,
+        #[universal_tool_param(description = "Recipe name (e.g., 'check', 'test', 'build')")]
+        recipe: String,
+        #[universal_tool_param(
+            description = "Directory containing the justfile (optional; defaults to root if recipe exists there)"
+        )]
+        dir: Option<String>,
+        #[universal_tool_param(
+            description = "Arguments keyed by parameter name; star params accept arrays"
+        )]
+        args: Option<std::collections::HashMap<String, serde_json::Value>>,
+    ) -> Result<just::ExecuteOutput, ToolError> {
+        just::ensure_just_available()
+            .await
+            .map_err(ToolError::internal)?;
+        let repo_root = paths::to_abs_string(".").map_err(ToolError::internal)?;
+        just::exec::execute_recipe(&self.just_registry, &recipe, dir, args, &repo_root)
+            .await
+            .map_err(ToolError::internal)
+    }
 }
 
 use std::collections::HashSet;
@@ -763,7 +902,7 @@ mod server_allowlist_tests {
         let server = CodingAgentToolsServer::with_allowlist(tools.clone(), None);
 
         let all_defs = server.tools.get_mcp_tools();
-        assert_eq!(all_defs.len(), 4); // ls, spawn_agent, search_grep, search_glob
+        assert_eq!(all_defs.len(), 6); // ls, spawn_agent, search_grep, search_glob, just_search, just_execute
     }
 
     #[test]
