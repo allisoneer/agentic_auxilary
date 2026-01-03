@@ -71,7 +71,8 @@ In MCP mode, repeated calls with the same parameters return the next page. Cache
 The pr_comments MCP tool supports token-efficient text formatting. Set `PR_COMMENTS_EXTRAS` to include optional fields (comma-separated):
 
 **Supported flags:**
-- `id` or `ids`: Include numeric comment/PR IDs
+- `id` or `ids`: Include numeric comment IDs (default: ON)
+- `noid` or `no_ids`: Disable numeric comment IDs
 - `url` or `urls`: Include HTML URLs
 - `date`, `dates`, `time`, or `times`: Include created_at/updated_at timestamps
 - `review`, `review_id`, or `review_ids`: Include pull_request_review_id for review comments
@@ -83,7 +84,7 @@ The pr_comments MCP tool supports token-efficient text formatting. Set `PR_COMME
 export PR_COMMENTS_EXTRAS="id,url,dates,review,counts,author"
 ```
 
-**Default behavior** (no env var set): Minimal output with only essential fields (user, path, line, body).
+**Default behavior** (no env var set): Minimal output with essential fields (user, path, line, body) plus comment IDs.
 
 ### MCP Tool Output Formats
 
@@ -93,18 +94,18 @@ Review comments:
 Legend: L = old (LEFT), R = new (RIGHT), - = unknown
 
 src/lib.rs
-  [12 R] alice
+  [12 R] alice #12345678
     Can you add error handling here?
-    ↳ [12 R] bob
+    ↳ [12 R] bob #12345680
       Done, added Result<>
-  [42 L] charlie
+  [42 L] charlie #12345681
     This should use Result<>
 ```
 
 **add_comment_reply**: Returns the created comment:
 ```
 Reply posted:
-src/lib.rs [12 R] ai-bot
+src/lib.rs [12 R] ai-bot #22334455
   AI response: Thanks for the feedback!
 ```
 
