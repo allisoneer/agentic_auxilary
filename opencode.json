@@ -53,7 +53,8 @@
       "thoughts sync": "allow"
     },
     "edit": "ask",
-    "write": "ask"
+    "write": "ask",
+    "external_directory": "ask"
   },
   "tools": {
     "*": false,
