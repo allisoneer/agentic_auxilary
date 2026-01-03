@@ -12,6 +12,9 @@ use std::collections::HashMap;
 use tokio::process::Command;
 
 /// Execute a recipe by name, with optional directory disambiguation and arguments.
+///
+/// When no dir is specified, defaults to the root repository's justfile if the recipe exists there.
+/// Only errors for ambiguity if recipe is not in root AND exists in multiple subdirectories.
 pub async fn execute_recipe(
     registry: &JustRegistry,
     recipe_name: &str,
@@ -35,27 +38,36 @@ pub async fn execute_recipe(
 
     if candidates.is_empty() {
         return Err(format!(
-            "Recipe '{}' not found or not exposed. Use search(query='{}') to discover available recipes.",
+            "Recipe '{}' not found or not exposed. Use just_search(query='{}') to discover available recipes.",
             recipe_name, recipe_name
         ));
     }
 
-    // Check for ambiguity
+    // Select recipe: prefer root dir if no dir specified and multiple exist
     let unique_dirs: std::collections::HashSet<_> =
         candidates.iter().map(|(d, _)| d.as_str()).collect();
-    if unique_dirs.len() > 1 {
-        let dirs_list = unique_dirs
-            .into_iter()
-            .map(|d| format!("  - {}", d))
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(format!(
-            "Recipe '{}' exists in multiple directories:\n{}\nSpecify dir parameter to disambiguate.",
-            recipe_name, dirs_list
-        ));
-    }
 
-    let (chosen_dir, recipe) = candidates.remove(0);
+    let chosen_idx = if unique_dirs.len() > 1 && dir_opt.is_none() {
+        // No dir specified and multiple candidates - prefer root repo justfile
+        if let Some(idx) = candidates.iter().position(|(d, _)| d == repo_root) {
+            idx
+        } else {
+            // Recipe not in root, genuine ambiguity
+            let dirs_list = unique_dirs
+                .into_iter()
+                .map(|d| format!("  - {}", d))
+                .collect::<Vec<_>>()
+                .join("\n");
+            return Err(format!(
+                "Recipe '{}' not in root justfile and exists in multiple directories:\n{}\nSpecify dir parameter to disambiguate.",
+                recipe_name, dirs_list
+            ));
+        }
+    } else {
+        0
+    };
+
+    let (chosen_dir, recipe) = candidates.swap_remove(chosen_idx);
 
     // Validate args
     let args = args_opt.unwrap_or_default();
@@ -172,7 +184,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ambiguous_recipe_error_lists_dirs() {
+    async fn defaults_to_root_when_recipe_in_multiple_dirs() {
         // Skip if just not installed
         if tokio::process::Command::new("just")
             .arg("--version")
@@ -187,18 +199,52 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
-        // Create same recipe in two directories
+        // Create same recipe in root and subdirectory
         fs::write(root.join("justfile"), "check:\n    echo root").unwrap();
         fs::create_dir(root.join("sub")).unwrap();
         fs::write(root.join("sub/justfile"), "check:\n    echo sub").unwrap();
 
         let registry = JustRegistry::new();
+        // No dir specified - should default to root
+        let result = execute_recipe(&registry, "check", None, None, root.to_str().unwrap()).await;
+
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.success);
+        assert!(output.stdout.contains("root"));
+    }
+
+    #[tokio::test]
+    async fn ambiguous_recipe_not_in_root_errors() {
+        // Skip if just not installed
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        // Create recipe only in subdirectories, NOT in root
+        fs::write(root.join("justfile"), "other:\n    echo other").unwrap();
+        fs::create_dir(root.join("sub1")).unwrap();
+        fs::write(root.join("sub1/justfile"), "check:\n    echo sub1").unwrap();
+        fs::create_dir(root.join("sub2")).unwrap();
+        fs::write(root.join("sub2/justfile"), "check:\n    echo sub2").unwrap();
+
+        let registry = JustRegistry::new();
+        // No dir specified, recipe not in root - should error
         let result = execute_recipe(&registry, "check", None, None, root.to_str().unwrap()).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
+        assert!(err.contains("not in root"));
         assert!(err.contains("multiple directories"));
-        assert!(err.contains("check"));
     }
 
     #[tokio::test]

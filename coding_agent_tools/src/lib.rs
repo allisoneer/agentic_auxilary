@@ -539,7 +539,7 @@ Usage notes:
 
     /// Execute a just recipe.
     #[universal_tool(
-        description = "Execute a just recipe. If recipe exists in multiple justfiles, provide dir to disambiguate.",
+        description = "Execute a just recipe. Defaults to root justfile if no dir specified. Only disambiguate if recipe not in root.",
         mcp(read_only = false, output = "text")
     )]
     pub async fn just_execute(
@@ -547,7 +547,7 @@ Usage notes:
         #[universal_tool_param(description = "Recipe name (e.g., 'check', 'test', 'build')")]
         recipe: String,
         #[universal_tool_param(
-            description = "Directory containing the justfile (from search results)"
+            description = "Directory containing the justfile (optional; defaults to root if recipe exists there)"
         )]
         dir: Option<String>,
         #[universal_tool_param(
