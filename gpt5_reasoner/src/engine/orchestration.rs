@@ -392,6 +392,7 @@ pub async fn gpt5_reasoner_impl(
                                         None,
                                         files.len(),
                                     );
+                                    // TODO(3): Use ErrorCode::IoError instead of internal() for better error semantics
                                     return Err(ToolError::internal(e.to_string()));
                                 }
                             }
