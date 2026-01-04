@@ -12,6 +12,8 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 universal-tool-core = { version = "0.2.5", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+thoughts-tool = { path = "../thoughts_tool" }
+agentic_logging = { path = "../agentic_logging" }
 async-openai = "0.29.3"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
