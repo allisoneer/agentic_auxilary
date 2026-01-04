@@ -40,6 +40,7 @@ pub struct ProjectSettings {
     pub extra: serde_json::Value,
 }
 
+// TODO(3): Derive PartialEq on ModelRef, Project, ProjectSettings, UpdateProjectRequest for testing convenience
 /// Reference to a model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

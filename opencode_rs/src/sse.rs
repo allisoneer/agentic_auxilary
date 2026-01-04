@@ -15,7 +15,7 @@ use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 
 /// Options for SSE subscription.
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct SseOptions {
     /// Channel capacity (default: 256).
     pub capacity: usize,
