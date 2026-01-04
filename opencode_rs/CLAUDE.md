@@ -9,6 +9,7 @@ opencode_rs is a Rust SDK for OpenCode (HTTP-first hybrid with SSE streaming). I
 ## Common Commands
 
 ### Quick Commands (Silent by Default)
+
 ```bash
 just check      # Run formatting and clippy checks (warnings are failures)
 just test       # Run all tests
@@ -18,12 +19,14 @@ just fmt-check  # Check formatting
 ```
 
 ### Output Variants
+
 ```bash
 OUTPUT_MODE=normal just test   # Normal cargo output
 OUTPUT_MODE=verbose just test  # Verbose output
 ```
 
 ### Cargo Direct Commands
+
 ```bash
 cargo test --lib               # Unit tests only
 cargo test -- --ignored        # Run ignored tests if present
@@ -42,6 +45,7 @@ From Cargo.toml:
 - full = ["http", "sse", "server", "cli"]
 
 Examples:
+
 ```bash
 cargo build --features full
 cargo test --features http

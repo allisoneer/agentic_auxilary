@@ -2,6 +2,9 @@
 //!
 //! This module provides the core HTTP client and resource API modules.
 
+// TODO(2): Add encode_path_segment() helper and apply to all path parameter interpolations
+// across sessions, messages, parts, providers, pty, mcp, and project modules (~38 call sites)
+
 use crate::error::{OpencodeError, Result};
 use reqwest::{Client as ReqClient, Method, Response};
 use serde::de::DeserializeOwned;
@@ -47,6 +50,7 @@ impl HttpClient {
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built.
+    // TODO(3): Add User-Agent header (e.g., "opencode-rs/{VERSION}") for API identification
     pub fn new(cfg: HttpConfig) -> Result<Self> {
         let inner = ReqClient::builder()
             .timeout(cfg.timeout)

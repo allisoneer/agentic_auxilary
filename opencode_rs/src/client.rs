@@ -195,6 +195,10 @@ impl Client {
 
     /// Simple helper to create session and send a text prompt.
     ///
+    /// Note: This method returns immediately after sending the prompt.
+    /// The AI response will arrive asynchronously via SSE events.
+    /// Use [`subscribe_session`] to receive the response.
+    ///
     /// # Errors
     ///
     /// Returns an error if session creation or prompt fails.
@@ -317,6 +321,7 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
+    // TODO(3): Add integration tests with mocked HTTP/SSE backends for Client API methods
     use super::*;
 
     #[test]
