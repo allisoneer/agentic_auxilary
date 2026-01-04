@@ -11,6 +11,7 @@ members = [
     "xtask",
     "anthropic_async",
     "coding_agent_tools",
+    "agentic_logging",
     # Linear tools crates
     "linear_tools/linear-schema",
     "linear_tools/linear-queries",

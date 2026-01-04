@@ -45,7 +45,19 @@ impl Gpt5Reasoner {
             description = r#"Type of the output you desire. An enum with either "plan" or "reasoning" as options. Reasoning is perfect for anytime you need to ask a question or consider something deeply. "plan" is useful for writing fully-fledged implementation plans given a certain desire and context."#
         )]
         prompt_type: PromptType,
+        #[universal_tool_param(
+            description = "When PromptType::Plan, optional filename to write directly into thoughts/{branch}/plans/. If set, returns the repo-relative path of the created file instead of the content."
+        )]
+        output_filename: Option<String>,
     ) -> std::result::Result<String, ToolError> {
-        gpt5_reasoner_impl(prompt, files, directories, None, prompt_type).await
+        gpt5_reasoner_impl(
+            prompt,
+            files,
+            directories,
+            None,
+            prompt_type,
+            output_filename,
+        )
+        .await
     }
 }
