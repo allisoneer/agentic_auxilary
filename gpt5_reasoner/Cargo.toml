@@ -1,6 +1,6 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.4.6"
+version = "0.5.0"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
@@ -12,6 +12,8 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 universal-tool-core = { version = "0.2.5", path = "../universal_tool/universal-tool-core", features = ["mcp"] }
+thoughts-tool = { version = "0.6.0", path = "../thoughts_tool" }
+agentic_logging = { version = "0.1.0", path = "../agentic_logging" }
 async-openai = "0.29.3"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

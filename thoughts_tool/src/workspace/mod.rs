@@ -154,6 +154,7 @@ pub struct ActiveWork {
     pub research: PathBuf,
     pub plans: PathBuf,
     pub artifacts: PathBuf,
+    pub logs: PathBuf,
 }
 
 /// Resolve thoughts root via configured thoughts_mount
@@ -224,6 +225,7 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
         fs::create_dir_all(base.join("plans")).context("Failed to create plans directory")?;
         fs::create_dir_all(base.join("artifacts"))
             .context("Failed to create artifacts directory")?;
+        fs::create_dir_all(base.join("logs")).context("Failed to create logs directory")?;
 
         // Create manifest.json atomically
         let source_repo = get_remote_url(&code_root).unwrap_or_else(|_| "unknown".to_string());
@@ -239,7 +241,7 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
             .with_context(|| format!("Failed to write manifest at {}", manifest_path.display()))?;
     } else {
         // Ensure subdirs exist even if base exists
-        for sub in ["research", "plans", "artifacts"] {
+        for sub in ["research", "plans", "artifacts", "logs"] {
             let subdir = base.join(sub);
             if !subdir.exists() {
                 fs::create_dir_all(&subdir)
@@ -269,6 +271,7 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
         research: base.join("research"),
         plans: base.join("plans"),
         artifacts: base.join("artifacts"),
+        logs: base.join("logs"),
     })
 }
 

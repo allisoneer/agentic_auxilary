@@ -2,6 +2,7 @@ pub mod agent;
 pub mod glob;
 pub mod grep;
 pub mod just;
+mod logging;
 pub mod pagination;
 pub mod paths;
 pub mod types;
@@ -79,25 +80,45 @@ impl CodingAgentTools {
     ) -> Result<LsOutput, ToolError> {
         use std::path::Path;
 
+        // Start logging context
+        let log_ctx = logging::ToolLogCtx::start("ls");
+        let req_json = serde_json::json!({
+            "path": &path,
+            "depth": depth.map(|d| d.as_u8()),
+            "show": show.map(|s| format!("{:?}", s).to_lowercase()),
+            "ignore": &ignore,
+            "hidden": hidden,
+        });
+
         // Resolve path
         let path_str = path.unwrap_or_else(|| ".".into());
         let abs_root = match paths::to_abs_string(&path_str) {
             Ok(s) => s,
-            Err(msg) => return Err(ToolError::invalid_input(msg)),
+            Err(msg) => {
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
+                return Err(ToolError::invalid_input(msg));
+            }
         };
         let root_path = Path::new(&abs_root);
 
         // Validate root path exists and is a directory
         if !root_path.exists() {
-            return Err(ToolError::invalid_input(format!(
-                "Path does not exist: {}",
-                abs_root
-            )));
+            let error_msg = format!("Path does not exist: {}", abs_root);
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                None,
+                None,
+            );
+            return Err(ToolError::invalid_input(error_msg));
         }
 
         // Handle file path: return header with warning
         if root_path.is_file() {
-            return Ok(LsOutput {
+            let output = LsOutput {
                 root: abs_root,
                 entries: vec![],
                 has_more: false,
@@ -105,7 +126,14 @@ impl CodingAgentTools {
                     "Path is a file, not a directory. Use the 'read' tool to view file contents."
                         .into(),
                 ],
+            };
+            let summary = serde_json::json!({
+                "entries": 0,
+                "has_more": false,
+                "is_file": true,
             });
+            log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+            return Ok(output);
         }
 
         // Configure walker
@@ -142,8 +170,22 @@ impl CodingAgentTools {
 
             // Fill cache if empty or expired
             if st.is_empty() || st.is_expired() {
-                let result = walker::list(&cfg)?;
-                st.reset(result.entries, result.warnings, page_size);
+                match walker::list(&cfg) {
+                    Ok(result) => st.reset(result.entries, result.warnings, page_size),
+                    Err(e) => {
+                        drop(st);
+                        log_ctx.finish(
+                            req_json,
+                            None,
+                            false,
+                            Some(e.to_string()),
+                            None,
+                            None,
+                            None,
+                        );
+                        return Err(e);
+                    }
+                }
             }
 
             // Compute current page from cached results
@@ -172,12 +214,23 @@ impl CodingAgentTools {
             self.pager.remove_if_same(&query_key, &qlock);
         }
 
-        Ok(LsOutput {
+        let output = LsOutput {
             root: abs_root,
             entries,
             has_more,
             warnings: all_warnings,
-        })
+        };
+
+        // Log success with summary
+        let summary = serde_json::json!({
+            "entries": output.entries.len(),
+            "has_more": output.has_more,
+            "shown": shown,
+            "total": total,
+        });
+        log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+
+        Ok(output)
     }
 
     /// Spawn an opinionated Claude subagent (locator | analyzer) in a specific location.
@@ -232,10 +285,27 @@ Usage notes:
         use claudecode::mcp::validate::{ValidateOptions, ensure_valid_mcp_config};
         use claudecode::types::{OutputFormat, PermissionMode};
 
+        // Start logging context
+        let log_ctx = logging::ToolLogCtx::start("spawn_agent");
         let agent_type = agent_type.unwrap_or_default();
         let location = location.unwrap_or_default();
 
+        let req_json = serde_json::json!({
+            "agent_type": format!("{:?}", agent_type).to_lowercase(),
+            "location": format!("{:?}", location).to_lowercase(),
+            "query": &query,
+        });
+
         if query.trim().is_empty() {
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some("Query cannot be empty".into()),
+                None,
+                None,
+                None,
+            );
             return Err(ToolError::invalid_input("Query cannot be empty"));
         }
 
@@ -258,18 +328,26 @@ Usage notes:
 
         // Validate MCP servers before launching (spawn, handshake, tools/list)
         let opts = ValidateOptions::default();
-        ensure_valid_mcp_config(&mcp_config, &opts)
-            .await
-            .map_err(|e| {
-                let mut details = String::new();
-                for (name, err) in &e.errors {
-                    details.push_str(&format!("  {}: {}\n", name, err));
-                }
-                ToolError::internal(format!(
-                    "spawn_agent unavailable: MCP config validation failed.\n{}",
-                    details
-                ))
-            })?;
+        if let Err(e) = ensure_valid_mcp_config(&mcp_config, &opts).await {
+            let mut details = String::new();
+            for (name, err) in &e.errors {
+                details.push_str(&format!("  {}: {}\n", name, err));
+            }
+            let error_msg = format!(
+                "spawn_agent unavailable: MCP config validation failed.\n{}",
+                details
+            );
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                Some(model.to_string()),
+                None,
+            );
+            return Err(ToolError::internal(error_msg));
+        }
 
         // Build session config
         let builder = SessionConfig::builder(query)
@@ -283,38 +361,107 @@ Usage notes:
             .mcp_config(mcp_config)
             .strict_mcp_config(true); // prevent inheritance of global MCP tools
 
-        let config = builder
-            .build()
-            .map_err(|e| ToolError::internal(format!("Failed to build session config: {e}")))?;
+        let config = match builder.build() {
+            Ok(c) => c,
+            Err(e) => {
+                let error_msg = format!("Failed to build session config: {e}");
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(ToolError::internal(error_msg));
+            }
+        };
 
         // Ensure 'claude' binary exists
-        let client = Client::new().await.map_err(|e| {
-            ToolError::internal(format!(
-                "Claude CLI not found or not runnable: {e}. Ensure 'claude' is installed and available in PATH."
-            ))
-        })?;
+        let client = match Client::new().await {
+            Ok(c) => c,
+            Err(e) => {
+                let error_msg = format!(
+                    "Claude CLI not found or not runnable: {e}. Ensure 'claude' is installed and available in PATH."
+                );
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(ToolError::internal(error_msg));
+            }
+        };
 
-        let result = client
-            .launch_and_wait(config)
-            .await
-            .map_err(|e| ToolError::internal(format!("Failed to run Claude session: {e}")))?;
+        let result = match client.launch_and_wait(config).await {
+            Ok(r) => r,
+            Err(e) => {
+                let error_msg = format!("Failed to run Claude session: {e}");
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(ToolError::internal(error_msg));
+            }
+        };
 
         if result.is_error {
-            return Err(ToolError::internal(
-                result
-                    .error
-                    .unwrap_or_else(|| "Claude session returned an error".into()),
-            ));
+            let error_msg = result
+                .error
+                .clone()
+                .unwrap_or_else(|| "Claude session returned an error".into());
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                Some(model.to_string()),
+                None,
+            );
+            return Err(ToolError::internal(error_msg));
         }
 
         // Return plain text output (reject empty/whitespace-only strings)
         if let Some(text) = pick_non_empty_text(&result) {
+            // Write markdown response file and capture timestamp for consistent logging
+            let (response_file, completed_at) = log_ctx
+                .write_markdown_response(&text)
+                .map(|(f, ts)| (Some(f), Some(ts)))
+                .unwrap_or((None, None));
+            log_ctx.finish(
+                req_json,
+                response_file,
+                true,
+                None,
+                None,
+                Some(model.to_string()),
+                completed_at,
+            );
             return Ok(AgentOutput::new(text));
         }
 
-        Err(ToolError::internal(
-            "Claude session produced no text output (empty or whitespace-only)",
-        ))
+        let error_msg = "Claude session produced no text output (empty or whitespace-only)";
+        log_ctx.finish(
+            req_json,
+            None,
+            false,
+            Some(error_msg.into()),
+            None,
+            Some(model.to_string()),
+            None,
+        );
+        Err(ToolError::internal(error_msg))
     }
 
     /// Search the codebase using a regex pattern (gitignore-aware).
@@ -364,10 +511,33 @@ Usage notes:
         #[universal_tool_param(description = "Skip the first N results (default: 0)")]
         offset: Option<usize>,
     ) -> Result<GrepOutput, ToolError> {
+        // Start logging context
+        let log_ctx = logging::ToolLogCtx::start("search_grep");
+        let req_json = serde_json::json!({
+            "pattern": &pattern,
+            "path": &path,
+            "mode": mode.map(|m| format!("{:?}", m).to_lowercase()),
+            "globs": &globs,
+            "ignore": &ignore,
+            "include_hidden": include_hidden,
+            "case_insensitive": case_insensitive,
+            "multiline": multiline,
+            "line_numbers": line_numbers,
+            "context": context,
+            "context_before": context_before,
+            "context_after": context_after,
+            "include_binary": include_binary,
+            "head_limit": head_limit,
+            "offset": offset,
+        });
+
         let path_str = path.unwrap_or_else(|| ".".into());
         let abs_root = match paths::to_abs_string(&path_str) {
             Ok(s) => s,
-            Err(msg) => return Err(ToolError::invalid_input(msg)),
+            Err(msg) => {
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
+                return Err(ToolError::invalid_input(msg));
+            }
         };
         let cfg = grep::GrepConfig {
             root: abs_root,
@@ -386,7 +556,22 @@ Usage notes:
             head_limit: head_limit.unwrap_or(200),
             offset: offset.unwrap_or(0),
         };
-        grep::run(cfg)
+
+        match grep::run(cfg) {
+            Ok(output) => {
+                let summary = serde_json::json!({
+                    "lines": output.lines.len(),
+                    "mode": format!("{:?}", output.mode).to_lowercase(),
+                    "has_more": output.has_more,
+                });
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+                Ok(output)
+            }
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+                Err(e)
+            }
+        }
     }
 
     /// Match files/directories by glob pattern (gitignore-aware).
@@ -415,10 +600,25 @@ Usage notes:
         #[universal_tool_param(description = "Skip the first N results (default: 0)")]
         offset: Option<usize>,
     ) -> Result<GlobOutput, ToolError> {
+        // Start logging context
+        let log_ctx = logging::ToolLogCtx::start("search_glob");
+        let req_json = serde_json::json!({
+            "pattern": &pattern,
+            "path": &path,
+            "ignore": &ignore,
+            "include_hidden": include_hidden,
+            "sort": sort.map(|s| format!("{:?}", s).to_lowercase()),
+            "head_limit": head_limit,
+            "offset": offset,
+        });
+
         let path_str = path.unwrap_or_else(|| ".".into());
         let abs_root = match paths::to_abs_string(&path_str) {
             Ok(s) => s,
-            Err(msg) => return Err(ToolError::invalid_input(msg)),
+            Err(msg) => {
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
+                return Err(ToolError::invalid_input(msg));
+            }
         };
         let cfg = glob::GlobConfig {
             root: abs_root,
@@ -429,7 +629,21 @@ Usage notes:
             head_limit: head_limit.unwrap_or(500),
             offset: offset.unwrap_or(0),
         };
-        glob::run(cfg)
+
+        match glob::run(cfg) {
+            Ok(output) => {
+                let summary = serde_json::json!({
+                    "entries": output.entries.len(),
+                    "has_more": output.has_more,
+                });
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+                Ok(output)
+            }
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+                Err(e)
+            }
+        }
     }
 
     /// Search justfile recipes by name or docs.
@@ -444,17 +658,42 @@ Usage notes:
         #[universal_tool_param(description = "Directory filter (repo-relative or absolute)")]
         dir: Option<String>,
     ) -> Result<just::SearchOutput, ToolError> {
-        just::ensure_just_available()
-            .await
-            .map_err(ToolError::internal)?;
+        // Start logging context
+        let log_ctx = logging::ToolLogCtx::start("just_search");
+        let req_json = serde_json::json!({
+            "query": &query,
+            "dir": &dir,
+        });
 
-        let repo_root = paths::to_abs_string(".").map_err(ToolError::internal)?;
+        if let Err(e) = just::ensure_just_available().await {
+            let error_msg = e.to_string();
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                None,
+                None,
+            );
+            return Err(ToolError::internal(error_msg));
+        }
+
+        let repo_root = match paths::to_abs_string(".") {
+            Ok(r) => r,
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
+                return Err(ToolError::internal(e));
+            }
+        };
         let q = query.unwrap_or_default();
-        let dir_filter = dir
-            .as_ref()
-            .map(|d| paths::to_abs_string(d))
-            .transpose()
-            .map_err(ToolError::internal)?;
+        let dir_filter = match dir.as_ref().map(|d| paths::to_abs_string(d)).transpose() {
+            Ok(f) => f,
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
+                return Err(ToolError::internal(e));
+            }
+        };
 
         self.just_pager.sweep_expired();
         let key = just::pager::make_key(dir_filter.as_deref().unwrap_or(&repo_root), &q);
@@ -468,11 +707,22 @@ Usage notes:
 
         // Fetch recipes if needed (outside lock)
         if needs_refresh {
-            let all = self
-                .just_registry
-                .get_all_recipes(&repo_root)
-                .await
-                .map_err(ToolError::internal)?;
+            let all = match self.just_registry.get_all_recipes(&repo_root).await {
+                Ok(r) => r,
+                Err(e) => {
+                    let error_msg = e.to_string();
+                    log_ctx.finish(
+                        req_json,
+                        None,
+                        false,
+                        Some(error_msg.clone()),
+                        None,
+                        None,
+                        None,
+                    );
+                    return Err(ToolError::internal(error_msg));
+                }
+            };
 
             let filtered: Vec<_> = all
                 .into_iter()
@@ -534,7 +784,17 @@ Usage notes:
         if !has_more {
             self.just_pager.remove_if_same(&key, &qlock);
         }
-        Ok(just::SearchOutput { items, has_more })
+
+        let output = just::SearchOutput { items, has_more };
+
+        // Log success with summary
+        let summary = serde_json::json!({
+            "items": output.items.len(),
+            "has_more": output.has_more,
+        });
+        log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+
+        Ok(output)
     }
 
     /// Execute a just recipe.
@@ -555,13 +815,61 @@ Usage notes:
         )]
         args: Option<std::collections::HashMap<String, serde_json::Value>>,
     ) -> Result<just::ExecuteOutput, ToolError> {
-        just::ensure_just_available()
-            .await
-            .map_err(ToolError::internal)?;
-        let repo_root = paths::to_abs_string(".").map_err(ToolError::internal)?;
-        just::exec::execute_recipe(&self.just_registry, &recipe, dir, args, &repo_root)
-            .await
-            .map_err(ToolError::internal)
+        // Start logging context
+        let log_ctx = logging::ToolLogCtx::start("just_execute");
+        let req_json = serde_json::json!({
+            "recipe": &recipe,
+            "dir": &dir,
+            "args": &args,
+        });
+
+        if let Err(e) = just::ensure_just_available().await {
+            let error_msg = e.to_string();
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                None,
+                None,
+            );
+            return Err(ToolError::internal(error_msg));
+        }
+
+        let repo_root = match paths::to_abs_string(".") {
+            Ok(r) => r,
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
+                return Err(ToolError::internal(e));
+            }
+        };
+
+        match just::exec::execute_recipe(&self.just_registry, &recipe, dir, args, &repo_root).await
+        {
+            Ok(output) => {
+                let summary = serde_json::json!({
+                    "exit_code": output.exit_code,
+                    "stdout_lines": output.stdout.lines().count(),
+                    "stderr_lines": output.stderr.lines().count(),
+                });
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+                Ok(output)
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    None,
+                    None,
+                );
+                Err(ToolError::internal(error_msg))
+            }
+        }
     }
 }
 

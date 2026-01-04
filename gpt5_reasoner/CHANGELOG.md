@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.0] - 2026-01-04
+
+### ⚙️  Miscellaneous
+- Address PR review nits
+- Address additional PR review nits
+
+### ⛰️  Features
+- *(gpt5_reasoner)* Add output_filename param and logging integration
+
+### 🐛 Bug Fixes
+- *(deps)* Add explicit versions to path dependencies for cargo-deny
+- *(gpt5_reasoner)* Complete JSONL logging for all execution paths
+- Fix
+
+### 🚜 Refactor
+- *(gpt5_reasoner)* Remove unnecessary clone calls
+
+### 🧪 Testing
+- Add logging integration tests and output_filename docs
 ## [0.4.6] - 2026-01-03
 
 ### 🚜 Refactor
