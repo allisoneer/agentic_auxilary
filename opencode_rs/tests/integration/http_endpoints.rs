@@ -1,6 +1,9 @@
 //! HTTP endpoint integration tests.
 //!
 //! Tests that verify typed HTTP responses against a live opencode server.
+//!
+//! TODO(3): Add error case tests (invalid session IDs, malformed payloads, missing fields)
+//! to verify error responses deserialize correctly.
 
 use super::{create_test_client, should_run};
 use opencode_rs::types::message::{PromptPart, PromptRequest};
