@@ -862,7 +862,7 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "agentic_logging",
  "anyhow",
@@ -2508,7 +2508,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "agentic_logging",
  "async-openai",
@@ -5227,7 +5227,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "agentic_logging",
  "anyhow",
