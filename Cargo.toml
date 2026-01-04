@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "thoughts_tool",
     "claudecode_rs",
+    "opencode_rs",
     "universal_tool/universal-tool-core",
     "universal_tool/universal-tool-macros",
     "universal_tool/universal-tool-integration-tests",

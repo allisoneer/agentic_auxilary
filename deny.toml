@@ -15,6 +15,7 @@ allow = [
     "MPL-2.0",       # Mozilla Public License (weak copyleft, used by colored and option-ext)
     "ISC",           # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
     "CDLA-Permissive-2.0",  # Community Data License Agreement for webpki-roots certificate data (CCADB)
+    "Unlicense",  # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
 ]
 # Confidence threshold for license detection (0.0-1.0)
 confidence-threshold = 0.93

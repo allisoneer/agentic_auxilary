@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: &oses [ubuntu-latest, macos-latest]
-        package: &packages [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools, linear_tools]
+        package: &packages [thoughts_tool, universal_tool, claudecode_rs, pr_comments, gpt5_reasoner, anthropic_async, coding_agent_tools, linear_tools, opencode_rs]
     steps:
       - uses: actions/checkout@v5
         with:
