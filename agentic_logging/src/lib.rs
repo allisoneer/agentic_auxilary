@@ -203,6 +203,19 @@ mod tests {
     use serial_test::serial;
     use std::io::Read;
 
+    /// RAII guard that removes an environment variable on drop.
+    /// Ensures cleanup even if a test panics.
+    struct EnvGuard(&'static str);
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: Tests using this guard run with #[serial] to prevent concurrent env access
+            unsafe {
+                std::env::remove_var(self.0);
+            }
+        }
+    }
+
     #[test]
     fn test_call_timer_generates_uuid() {
         let timer = CallTimer::start();
@@ -222,6 +235,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_logging_disabled_env_var() {
+        // Guard ensures cleanup even if assertions fail
+        let _guard = EnvGuard("AGENTIC_LOGGING_DISABLED");
+
         // SAFETY: serial_test ensures no concurrent env access
         unsafe {
             // Test with various values
@@ -367,6 +383,7 @@ mod tests {
         unsafe {
             std::env::set_var("AGENTIC_LOGGING_DISABLED", "1");
         }
+        let _guard = EnvGuard("AGENTIC_LOGGING_DISABLED");
 
         let temp = tempfile::tempdir().unwrap();
         let writer = LogWriter::new(temp.path());
@@ -401,11 +418,7 @@ mod tests {
         // No files should be created
         let entries: Vec<_> = std::fs::read_dir(temp.path()).unwrap().collect();
         assert!(entries.is_empty());
-
-        // SAFETY: Tests run single-threaded with --test-threads=1 or are isolated
-        unsafe {
-            std::env::remove_var("AGENTIC_LOGGING_DISABLED");
-        }
+        // Guard automatically removes env var on drop
     }
 
     #[test]
