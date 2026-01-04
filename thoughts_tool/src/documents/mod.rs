@@ -37,6 +37,7 @@ impl DocumentType {
     /// Returns the plural directory name (for physical directory paths).
     /// Note: serde serialization uses singular forms ("plan", "artifact", "research", "log"),
     /// while physical directories are plural ("plans", "artifacts", "research", "logs").
+    /// This matches conventional filesystem naming while keeping API values consistent.
     pub fn subdir_name(&self) -> &'static str {
         match self {
             DocumentType::Research => "research",
@@ -259,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn test_document_type_serialize_singular() {
+    fn test_document_type_serialize() {
         let plan = DocumentType::Plan;
         let serialized = serde_json::to_string(&plan).unwrap();
         assert_eq!(serialized, "\"plan\"");

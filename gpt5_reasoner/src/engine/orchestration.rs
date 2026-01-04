@@ -49,6 +49,8 @@ pub async fn gpt5_reasoner_impl(
                       files_count: usize| {
         if let Some(ref w) = writer {
             let (completed_at, duration_ms) = timer.finish();
+            // TODO(2): Consider truncating large payloads (prompt, directories) to reduce log
+            // bloat. Tradeoff: full content is valuable for debugging failures.
             let request_json = serde_json::json!({
                 "prompt_type": format!("{:?}", prompt_type).to_lowercase(),
                 "prompt": prompt,

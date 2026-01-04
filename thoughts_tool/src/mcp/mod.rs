@@ -265,7 +265,7 @@ impl ThoughtsMcpTools {
     ) -> Result<WriteDocumentOk, ToolError> {
         let timer = CallTimer::start();
         let req_json = serde_json::json!({
-            "doc_type": format!("{:?}", doc_type).to_lowercase(),
+            "doc_type": doc_type.singular_label(),
             "filename": &filename,
         });
 
