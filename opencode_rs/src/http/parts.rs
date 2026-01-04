@@ -4,6 +4,7 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
+use crate::types::api::UpdatePartResponse;
 use reqwest::Method;
 
 /// Parts API client.
@@ -47,7 +48,7 @@ impl PartsApi {
         message_id: &str,
         part_id: &str,
         body: &serde_json::Value,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<UpdatePartResponse> {
         self.http
             .request_json(
                 Method::PATCH,

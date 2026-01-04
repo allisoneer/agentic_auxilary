@@ -4,6 +4,7 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
+use crate::types::api::{CommandResponse, PromptResponse, ShellResponse};
 use crate::types::message::{CommandRequest, Message, PromptRequest, ShellRequest};
 use reqwest::Method;
 
@@ -24,7 +25,7 @@ impl MessagesApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn prompt(&self, session_id: &str, req: &PromptRequest) -> Result<serde_json::Value> {
+    pub async fn prompt(&self, session_id: &str, req: &PromptRequest) -> Result<PromptResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -77,7 +78,7 @@ impl MessagesApi {
         &self,
         session_id: &str,
         req: &PromptRequest,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<PromptResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -93,11 +94,7 @@ impl MessagesApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn command(
-        &self,
-        session_id: &str,
-        req: &CommandRequest,
-    ) -> Result<serde_json::Value> {
+    pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -113,7 +110,7 @@ impl MessagesApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn shell(&self, session_id: &str, req: &ShellRequest) -> Result<serde_json::Value> {
+    pub async fn shell(&self, session_id: &str, req: &ShellRequest) -> Result<ShellResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -174,7 +171,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result["status"], "ok");
+        assert_eq!(result.status, Some("ok".to_string()));
     }
 
     #[tokio::test]
@@ -244,7 +241,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result["messageId"], "m123");
+        assert_eq!(result.message_id, Some("m123".to_string()));
     }
 
     #[tokio::test]
@@ -277,7 +274,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result["status"], "executed");
+        assert_eq!(result.status, Some("executed".to_string()));
     }
 
     #[tokio::test]
@@ -310,7 +307,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result["status"], "running");
+        assert_eq!(result.status, Some("running".to_string()));
     }
 
     // ==================== Error Case Tests ====================

@@ -81,3 +81,61 @@ pub struct ProviderConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_type: Option<String>,
 }
+
+/// Lightweight config info with commonly-used typed fields.
+///
+/// This provides typed access to frequently-used config fields while
+/// preserving unknown fields via flatten. Use this when you need quick
+/// access to common config values without full Config.Info typing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigInfoLite {
+    /// Default model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Small model for lightweight tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub small_model: Option<String>,
+    /// Default agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_agent: Option<String>,
+    /// Share setting ("manual" | "auto" | "disabled").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub share: Option<String>,
+    /// MCP configuration (complex type, kept as Value).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<serde_json::Value>,
+    /// Additional config fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_info_lite_deserialize() {
+        let json = r#"{
+            "model": "claude-3-opus",
+            "smallModel": "claude-3-haiku",
+            "defaultAgent": "code",
+            "share": "manual",
+            "otherField": "preserved"
+        }"#;
+        let config: ConfigInfoLite = serde_json::from_str(json).unwrap();
+        assert_eq!(config.model, Some("claude-3-opus".to_string()));
+        assert_eq!(config.small_model, Some("claude-3-haiku".to_string()));
+        assert_eq!(config.default_agent, Some("code".to_string()));
+        assert_eq!(config.share, Some("manual".to_string()));
+        assert_eq!(config.extra.get("otherField").unwrap(), "preserved");
+    }
+
+    #[test]
+    fn test_config_info_lite_minimal() {
+        let json = r#"{}"#;
+        let config: ConfigInfoLite = serde_json::from_str(json).unwrap();
+        assert!(config.model.is_none());
+        assert!(config.small_model.is_none());
+    }
+}

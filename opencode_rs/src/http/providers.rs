@@ -4,6 +4,7 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
+use crate::types::api::{OAuthCallbackResponse, SetAuthResponse};
 use crate::types::provider::{
     OAuthAuthorizeResponse, OAuthCallbackRequest, Provider, ProviderAuth, SetAuthRequest,
 };
@@ -23,24 +24,10 @@ impl ProvidersApi {
 
     /// List available providers.
     ///
-    /// Returns the raw provider response (structure may vary by OpenCode version).
-    ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<serde_json::Value> {
-        self.http.request_json(Method::GET, "/provider", None).await
-    }
-
-    /// List available providers as typed objects.
-    ///
-    /// Note: This may fail if the server returns a different structure.
-    /// Use `list()` for the raw response if you encounter parsing errors.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the request fails or response cannot be parsed.
-    pub async fn list_typed(&self) -> Result<Vec<Provider>> {
+    pub async fn list(&self) -> Result<Vec<Provider>> {
         self.http.request_json(Method::GET, "/provider", None).await
     }
 
@@ -79,7 +66,7 @@ impl ProvidersApi {
         &self,
         provider_id: &str,
         req: &OAuthCallbackRequest,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<OAuthCallbackResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -99,7 +86,7 @@ impl ProvidersApi {
         &self,
         provider_id: &str,
         req: &SetAuthRequest,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<SetAuthResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(Method::PUT, &format!("/auth/{}", provider_id), Some(body))

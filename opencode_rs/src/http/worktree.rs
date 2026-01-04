@@ -24,7 +24,7 @@ impl WorktreeApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn create(&self, req: &CreateWorktreeRequest) -> Result<serde_json::Value> {
+    pub async fn create(&self, req: &CreateWorktreeRequest) -> Result<Worktree> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(Method::POST, "/experimental/worktree", Some(body))

@@ -93,7 +93,7 @@ pub enum Part {
         filename: Option<String>,
         /// File source info.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        source: Option<serde_json::Value>,
+        source: Option<FilePartSource>,
     },
     /// Tool invocation.
     Tool {
@@ -193,7 +193,7 @@ pub enum Part {
         attempt: u32,
         /// Error that caused retry.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        error: Option<serde_json::Value>,
+        error: Option<crate::types::error::APIError>,
     },
     /// Compaction marker.
     Compaction {
@@ -235,18 +235,240 @@ pub struct AgentSource {
     pub end: i64,
 }
 
-/// State of a tool execution.
+// ==================== FilePartSource ====================
+
+/// Text range within a file part source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ToolState {
-    /// Execution status.
+pub struct FilePartSourceText {
+    /// The text content.
+    pub value: String,
+    /// Start offset in file.
+    pub start: i64,
+    /// End offset in file.
+    pub end: i64,
+}
+
+/// Source information for a file part (internally tagged by "type").
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum FilePartSource {
+    /// File source.
+    #[serde(rename = "file")]
+    File {
+        /// Text range.
+        text: FilePartSourceText,
+        /// File path.
+        path: String,
+        /// Additional fields.
+        #[serde(flatten)]
+        extra: serde_json::Value,
+    },
+    /// Symbol source (from LSP).
+    #[serde(rename = "symbol")]
+    Symbol {
+        /// Text range.
+        text: FilePartSourceText,
+        /// File path.
+        path: String,
+        /// LSP range (kept as Value for now).
+        range: serde_json::Value,
+        /// Symbol name.
+        name: String,
+        /// Symbol kind (LSP SymbolKind).
+        kind: i64,
+        /// Additional fields.
+        #[serde(flatten)]
+        extra: serde_json::Value,
+    },
+    /// MCP resource source.
+    #[serde(rename = "resource")]
+    Resource {
+        /// Text range.
+        text: FilePartSourceText,
+        /// MCP client name.
+        #[serde(rename = "clientName")]
+        client_name: String,
+        /// Resource URI.
+        uri: String,
+        /// Additional fields.
+        #[serde(flatten)]
+        extra: serde_json::Value,
+    },
+    /// Unknown source type (forward compatibility).
+    #[serde(other)]
+    Unknown,
+}
+
+// ==================== ToolState ====================
+
+/// Tool execution time (start only).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolTimeStart {
+    /// Start timestamp (ms).
+    pub start: i64,
+}
+
+/// Tool execution time range.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolTimeRange {
+    /// Start timestamp (ms).
+    pub start: i64,
+    /// End timestamp (ms).
+    pub end: i64,
+    /// Compacted timestamp if applicable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compacted: Option<i64>,
+}
+
+/// Tool state when pending execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolStatePending {
+    /// Status field (always "pending").
     pub status: String,
+    /// Tool input arguments.
+    pub input: serde_json::Value,
+    /// Raw input string.
+    pub raw: String,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Tool state when running.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolStateRunning {
+    /// Status field (always "running").
+    pub status: String,
+    /// Tool input arguments.
+    pub input: serde_json::Value,
+    /// Display title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Additional metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+    /// Execution time.
+    pub time: ToolTimeStart,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Tool state when completed successfully.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolStateCompleted {
+    /// Status field (always "completed").
+    pub status: String,
+    /// Tool input arguments.
+    pub input: serde_json::Value,
     /// Tool output.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output: Option<serde_json::Value>,
-    /// Error message if failed.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub output: String,
+    /// Display title.
+    pub title: String,
+    /// Additional metadata.
+    pub metadata: serde_json::Value,
+    /// Execution time range.
+    pub time: ToolTimeRange,
+    /// File attachments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<serde_json::Value>>,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Tool state when errored.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolStateError {
+    /// Status field (always "error").
+    pub status: String,
+    /// Tool input arguments.
+    pub input: serde_json::Value,
+    /// Error message.
+    pub error: String,
+    /// Additional metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+    /// Execution time range.
+    pub time: ToolTimeRange,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// State of a tool execution (untagged enum with Unknown fallback).
+///
+/// Variant order matters for untagged enums - most specific variants with more
+/// required fields must come first to avoid less specific variants matching early.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ToolState {
+    /// Tool completed successfully.
+    Completed(ToolStateCompleted),
+    /// Tool encountered an error.
+    Error(ToolStateError),
+    /// Tool is currently running.
+    Running(ToolStateRunning),
+    /// Tool is pending execution.
+    Pending(ToolStatePending),
+    /// Unknown state (forward compatibility).
+    Unknown(serde_json::Value),
+}
+
+impl ToolState {
+    /// Get the status string for this tool state.
+    pub fn status(&self) -> &str {
+        match self {
+            ToolState::Pending(s) => &s.status,
+            ToolState::Running(s) => &s.status,
+            ToolState::Completed(s) => &s.status,
+            ToolState::Error(s) => &s.status,
+            ToolState::Unknown(_) => "unknown",
+        }
+    }
+
+    /// Get the output if the tool completed successfully.
+    pub fn output(&self) -> Option<&str> {
+        match self {
+            ToolState::Completed(s) => Some(&s.output),
+            _ => None,
+        }
+    }
+
+    /// Get the error message if the tool errored.
+    pub fn error(&self) -> Option<&str> {
+        match self {
+            ToolState::Error(s) => Some(&s.error),
+            _ => None,
+        }
+    }
+
+    /// Check if the tool is pending.
+    pub fn is_pending(&self) -> bool {
+        matches!(self, ToolState::Pending(_))
+    }
+
+    /// Check if the tool is running.
+    pub fn is_running(&self) -> bool {
+        matches!(self, ToolState::Running(_))
+    }
+
+    /// Check if the tool completed successfully.
+    pub fn is_completed(&self) -> bool {
+        matches!(self, ToolState::Completed(_))
+    }
+
+    /// Check if the tool errored.
+    pub fn is_error(&self) -> bool {
+        matches!(self, ToolState::Error(_))
+    }
 }
 
 /// Token usage information.
@@ -406,5 +628,144 @@ mod tests {
         let json = r#"{"type":"future-part-type","data":"whatever"}"#;
         let part: Part = serde_json::from_str(json).unwrap();
         assert!(matches!(part, Part::Unknown));
+    }
+
+    // ==================== ToolState Tests ====================
+
+    #[test]
+    fn test_tool_state_pending() {
+        let json = r#"{
+            "status": "pending",
+            "input": {"file": "test.rs"},
+            "raw": "read test.rs"
+        }"#;
+        let state: ToolState = serde_json::from_str(json).unwrap();
+        assert!(state.is_pending());
+        assert_eq!(state.status(), "pending");
+        assert!(state.output().is_none());
+    }
+
+    #[test]
+    fn test_tool_state_running() {
+        let json = r#"{
+            "status": "running",
+            "input": {"file": "test.rs"},
+            "title": "Reading file",
+            "time": {"start": 1234567890}
+        }"#;
+        let state: ToolState = serde_json::from_str(json).unwrap();
+        assert!(state.is_running());
+        assert_eq!(state.status(), "running");
+    }
+
+    #[test]
+    fn test_tool_state_completed() {
+        let json = r#"{
+            "status": "completed",
+            "input": {"file": "test.rs"},
+            "output": "file contents here",
+            "title": "Read test.rs",
+            "metadata": {},
+            "time": {"start": 1234567890, "end": 1234567900}
+        }"#;
+        let state: ToolState = serde_json::from_str(json).unwrap();
+        assert!(state.is_completed());
+        assert_eq!(state.status(), "completed");
+        assert_eq!(state.output(), Some("file contents here"));
+    }
+
+    #[test]
+    fn test_tool_state_error() {
+        let json = r#"{
+            "status": "error",
+            "input": {"file": "missing.rs"},
+            "error": "File not found",
+            "time": {"start": 1234567890, "end": 1234567900}
+        }"#;
+        let state: ToolState = serde_json::from_str(json).unwrap();
+        assert!(state.is_error());
+        assert_eq!(state.status(), "error");
+        assert_eq!(state.error(), Some("File not found"));
+    }
+
+    #[test]
+    fn test_tool_state_unknown() {
+        let json = r#"{
+            "status": "future-status",
+            "someField": "someValue"
+        }"#;
+        let state: ToolState = serde_json::from_str(json).unwrap();
+        assert!(matches!(state, ToolState::Unknown(_)));
+        assert_eq!(state.status(), "unknown");
+    }
+
+    // ==================== FilePartSource Tests ====================
+
+    #[test]
+    fn test_file_part_source_file() {
+        let json = r#"{
+            "type": "file",
+            "text": {"value": "content", "start": 0, "end": 100},
+            "path": "/src/main.rs"
+        }"#;
+        let source: FilePartSource = serde_json::from_str(json).unwrap();
+        assert!(matches!(source, FilePartSource::File { path, .. } if path == "/src/main.rs"));
+    }
+
+    #[test]
+    fn test_file_part_source_symbol() {
+        let json = r#"{
+            "type": "symbol",
+            "text": {"value": "fn main()", "start": 10, "end": 20},
+            "path": "/src/main.rs",
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 5, "character": 1}},
+            "name": "main",
+            "kind": 12
+        }"#;
+        let source: FilePartSource = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(source, FilePartSource::Symbol { name, kind, .. } if name == "main" && kind == 12)
+        );
+    }
+
+    #[test]
+    fn test_file_part_source_resource() {
+        let json = r#"{
+            "type": "resource",
+            "text": {"value": "resource content", "start": 0, "end": 50},
+            "clientName": "my-mcp-server",
+            "uri": "resource://data/file.txt"
+        }"#;
+        let source: FilePartSource = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(source, FilePartSource::Resource { client_name, uri, .. } 
+            if client_name == "my-mcp-server" && uri == "resource://data/file.txt")
+        );
+    }
+
+    #[test]
+    fn test_file_part_source_unknown() {
+        let json = r#"{
+            "type": "future-source",
+            "data": "whatever"
+        }"#;
+        let source: FilePartSource = serde_json::from_str(json).unwrap();
+        assert!(matches!(source, FilePartSource::Unknown));
+    }
+
+    #[test]
+    fn test_file_part_source_with_extra_fields() {
+        let json = r#"{
+            "type": "file",
+            "text": {"value": "content", "start": 0, "end": 100},
+            "path": "/src/main.rs",
+            "newField": "preserved"
+        }"#;
+        let source: FilePartSource = serde_json::from_str(json).unwrap();
+        if let FilePartSource::File { extra, .. } = source {
+            assert_eq!(extra.get("newField").unwrap(), "preserved");
+        } else {
+            panic!("Expected FilePartSource::File");
+        }
     }
 }
