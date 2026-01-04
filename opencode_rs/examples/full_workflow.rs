@@ -143,10 +143,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let diff = client.sessions().diff(&session.id).await?;
     println!("   Files changed: {}", diff.files.len());
     if !diff.diff.is_empty() {
-        println!(
-            "   Diff preview: {}...",
-            &diff.diff[..diff.diff.len().min(100)]
-        );
+        let preview: String = diff.diff.chars().take(100).collect();
+        println!("   Diff preview: {}...", preview);
     }
 
     // Step 9: Get todos

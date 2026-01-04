@@ -335,7 +335,8 @@ async fn test_message_parts_typed() {
             // Parts should deserialize to typed enum variants
             match part {
                 opencode_rs::types::Part::Text { text, .. } => {
-                    println!("  Text part: {}...", &text[..text.len().min(50)]);
+                    let preview: String = text.chars().take(50).collect();
+                    println!("  Text part: {}...", preview);
                 }
                 opencode_rs::types::Part::Tool { tool, state, .. } => {
                     println!(
