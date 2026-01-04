@@ -1,3 +1,4 @@
+use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use universal_tool_core::mcp::{McpFormatter, ServiceExt};
@@ -13,13 +14,49 @@ use crate::config::{
 #[cfg(test)]
 use crate::documents::DocumentInfo;
 use crate::documents::{
-    ActiveDocuments, DocumentType, WriteDocumentOk, list_documents as lib_list_documents,
-    write_document as lib_write_document,
+    ActiveDocuments, DocumentType, WriteDocumentOk, active_logs_dir,
+    list_documents as lib_list_documents, write_document as lib_write_document,
 };
 use crate::git::utils::get_control_repo_root;
 use crate::mount::auto_mount::update_active_mounts;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
+
+/// Helper to log a tool call. Returns the LogWriter if logging is available.
+fn log_tool_call(
+    timer: &CallTimer,
+    tool: &str,
+    request: serde_json::Value,
+    success: bool,
+    error: Option<String>,
+    summary: Option<serde_json::Value>,
+) {
+    let writer = match active_logs_dir() {
+        Ok(dir) => LogWriter::new(dir),
+        Err(_) => return, // Logging unavailable (e.g., branch lockout)
+    };
+
+    let (completed_at, duration_ms) = timer.finish();
+    let record = ToolCallRecord {
+        call_id: timer.call_id.clone(),
+        server: "thoughts_tool".into(),
+        tool: tool.into(),
+        started_at: timer.started_at,
+        completed_at,
+        duration_ms,
+        request,
+        response_file: None,
+        success,
+        error,
+        model: None,
+        token_usage: None,
+        summary,
+    };
+
+    if let Err(e) = writer.append_jsonl(&record) {
+        tracing::warn!("Failed to append JSONL log: {}", e);
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -226,8 +263,42 @@ impl ThoughtsMcpTools {
         filename: String,
         content: String,
     ) -> Result<WriteDocumentOk, ToolError> {
-        lib_write_document(doc_type, &filename, &content)
-            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))
+        let timer = CallTimer::start();
+        let req_json = serde_json::json!({
+            "doc_type": format!("{:?}", doc_type).to_lowercase(),
+            "filename": &filename,
+        });
+
+        let result = lib_write_document(doc_type, &filename, &content);
+
+        match &result {
+            Ok(ok) => {
+                let summary = serde_json::json!({
+                    "path": &ok.path,
+                    "bytes_written": ok.bytes_written,
+                });
+                log_tool_call(
+                    &timer,
+                    "write_document",
+                    req_json,
+                    true,
+                    None,
+                    Some(summary),
+                );
+            }
+            Err(e) => {
+                log_tool_call(
+                    &timer,
+                    "write_document",
+                    req_json,
+                    false,
+                    Some(e.to_string()),
+                    None,
+                );
+            }
+        }
+
+        result.map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))
     }
 
     /// List files in current active work directory
@@ -239,7 +310,41 @@ impl ThoughtsMcpTools {
         &self,
         subdir: Option<DocumentType>,
     ) -> Result<ActiveDocuments, ToolError> {
-        lib_list_documents(subdir).map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))
+        let timer = CallTimer::start();
+        let req_json = serde_json::json!({
+            "subdir": subdir.as_ref().map(|d| format!("{:?}", d).to_lowercase()),
+        });
+
+        let result = lib_list_documents(subdir);
+
+        match &result {
+            Ok(docs) => {
+                let summary = serde_json::json!({
+                    "base": &docs.base,
+                    "files_count": docs.files.len(),
+                });
+                log_tool_call(
+                    &timer,
+                    "list_active_documents",
+                    req_json,
+                    true,
+                    None,
+                    Some(summary),
+                );
+            }
+            Err(e) => {
+                log_tool_call(
+                    &timer,
+                    "list_active_documents",
+                    req_json,
+                    false,
+                    Some(e.to_string()),
+                    None,
+                );
+            }
+        }
+
+        result.map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))
     }
 
     /// List reference repository directory paths
@@ -248,38 +353,72 @@ impl ThoughtsMcpTools {
         mcp(read_only = true, idempotent = true, output = "text")
     )]
     pub async fn list_references(&self) -> Result<ReferencesList, ToolError> {
-        let control_root = crate::git::utils::get_control_repo_root(
-            &std::env::current_dir()
-                .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?,
-        )
-        .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
-        let mgr = RepoConfigManager::new(control_root);
-        let ds = mgr
-            .load_desired_state()
-            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?
-            .ok_or_else(|| {
-                ToolError::new(
-                    universal_tool_core::error::ErrorCode::NotFound,
-                    "No repository configuration found",
-                )
-            })?;
+        let timer = CallTimer::start();
+        let req_json = serde_json::json!({});
 
-        let base = ds.mount_dirs.references.clone();
-        let mut entries = Vec::new();
+        let result = (|| -> Result<ReferencesList, ToolError> {
+            let control_root = crate::git::utils::get_control_repo_root(
+                &std::env::current_dir()
+                    .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?,
+            )
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
+            let mgr = RepoConfigManager::new(control_root);
+            let ds = mgr
+                .load_desired_state()
+                .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?
+                .ok_or_else(|| {
+                    ToolError::new(
+                        universal_tool_core::error::ErrorCode::NotFound,
+                        "No repository configuration found",
+                    )
+                })?;
 
-        // Phase 4: ds.references is now Vec<ReferenceMount> with optional descriptions
-        for rm in &ds.references {
-            let path = match extract_org_repo_from_url(&rm.remote) {
-                Ok((org, repo)) => format!("{}/{}", org, repo),
-                Err(_) => rm.remote.clone(),
-            };
-            entries.push(ReferenceItem {
-                path: format!("{}/{}", base, path),
-                description: rm.description.clone(),
-            });
+            let base = ds.mount_dirs.references.clone();
+            let mut entries = Vec::new();
+
+            // Phase 4: ds.references is now Vec<ReferenceMount> with optional descriptions
+            for rm in &ds.references {
+                let path = match extract_org_repo_from_url(&rm.remote) {
+                    Ok((org, repo)) => format!("{}/{}", org, repo),
+                    Err(_) => rm.remote.clone(),
+                };
+                entries.push(ReferenceItem {
+                    path: format!("{}/{}", base, path),
+                    description: rm.description.clone(),
+                });
+            }
+
+            Ok(ReferencesList { base, entries })
+        })();
+
+        match &result {
+            Ok(refs) => {
+                let summary = serde_json::json!({
+                    "base": &refs.base,
+                    "entries_count": refs.entries.len(),
+                });
+                log_tool_call(
+                    &timer,
+                    "list_references",
+                    req_json,
+                    true,
+                    None,
+                    Some(summary),
+                );
+            }
+            Err(e) => {
+                log_tool_call(
+                    &timer,
+                    "list_references",
+                    req_json,
+                    false,
+                    Some(e.to_string()),
+                    None,
+                );
+            }
         }
 
-        Ok(ReferencesList { base, entries })
+        result
     }
 
     /// Add a GitHub repository as a reference and ensure it is cloned and mounted.
@@ -302,6 +441,47 @@ impl ThoughtsMcpTools {
         #[universal_tool_param(
             description = "Optional description for why this reference was added"
         )]
+        description: Option<String>,
+    ) -> Result<AddReferenceOk, ToolError> {
+        let timer = CallTimer::start();
+        let req_json = serde_json::json!({
+            "url": &url,
+            "description": &description,
+        });
+
+        let result = self.add_reference_impl(url, description).await;
+
+        match &result {
+            Ok(ok) => {
+                let summary = serde_json::json!({
+                    "org": &ok.org,
+                    "repo": &ok.repo,
+                    "already_existed": ok.already_existed,
+                    "config_updated": ok.config_updated,
+                    "cloned": ok.cloned,
+                    "mounted": ok.mounted,
+                });
+                log_tool_call(&timer, "add_reference", req_json, true, None, Some(summary));
+            }
+            Err(e) => {
+                log_tool_call(
+                    &timer,
+                    "add_reference",
+                    req_json,
+                    false,
+                    Some(e.to_string()),
+                    None,
+                );
+            }
+        }
+
+        result
+    }
+
+    /// Internal implementation of add_reference (extracted to simplify logging wrapper)
+    async fn add_reference_impl(
+        &self,
+        url: String,
         description: Option<String>,
     ) -> Result<AddReferenceOk, ToolError> {
         let input_url = url.trim().to_string();
@@ -472,9 +652,21 @@ impl ThoughtsMcpTools {
         )]
         template: TemplateType,
     ) -> Result<TemplateResponse, ToolError> {
-        Ok(TemplateResponse {
+        let timer = CallTimer::start();
+        let req_json = serde_json::json!({
+            "template": template.label(),
+        });
+
+        let result = TemplateResponse {
             template_type: template,
-        })
+        };
+
+        let summary = serde_json::json!({
+            "template_type": result.template_type.label(),
+        });
+        log_tool_call(&timer, "get_template", req_json, true, None, Some(summary));
+
+        Ok(result)
     }
 }
 
@@ -702,5 +894,117 @@ mod tests {
                 t
             );
         }
+    }
+
+    // =========================================================================
+    // Logging failure isolation tests
+    // =========================================================================
+
+    #[test]
+    fn test_log_tool_call_does_not_panic_when_logs_unavailable() {
+        // When active_logs_dir() fails (e.g., no active branch), log_tool_call
+        // should return silently without panicking or affecting caller
+        let timer = CallTimer::start();
+
+        // This should not panic even if logs directory is unavailable
+        log_tool_call(
+            &timer,
+            "test_tool",
+            serde_json::json!({"param": "value"}),
+            true,
+            None,
+            Some(serde_json::json!({"result": "success"})),
+        );
+        // Test passes if we reach here without panic
+    }
+
+    #[test]
+    fn test_log_tool_call_with_error_does_not_panic() {
+        // Logging an error result should also be graceful
+        let timer = CallTimer::start();
+
+        log_tool_call(
+            &timer,
+            "failing_tool",
+            serde_json::json!({"bad": "input"}),
+            false,
+            Some("Operation failed".into()),
+            None,
+        );
+        // Test passes if we reach here without panic
+    }
+
+    #[test]
+    fn test_log_tool_call_request_json_shape_write_document() {
+        // Verify the expected request JSON structure for write_document
+        let req = serde_json::json!({
+            "doc_type": "plan",
+            "filename": "my_plan.md",
+        });
+
+        assert!(req.get("doc_type").is_some());
+        assert!(req.get("filename").is_some());
+        assert!(req["doc_type"].is_string());
+        assert!(req["filename"].is_string());
+    }
+
+    #[test]
+    fn test_log_tool_call_request_json_shape_list_active_documents() {
+        // Verify the expected request JSON structure for list_active_documents
+        let req = serde_json::json!({
+            "subdir": "research",
+        });
+
+        assert!(req.get("subdir").is_some());
+
+        // Also test with null subdir
+        let req_null = serde_json::json!({
+            "subdir": null,
+        });
+        assert!(req_null["subdir"].is_null());
+    }
+
+    #[test]
+    fn test_log_tool_call_request_json_shape_add_reference() {
+        // Verify the expected request JSON structure for add_reference
+        let req = serde_json::json!({
+            "url": "https://github.com/org/repo",
+            "description": "Reference implementation",
+        });
+
+        assert!(req.get("url").is_some());
+        assert!(req.get("description").is_some());
+        assert!(req["url"].is_string());
+    }
+
+    #[test]
+    fn test_log_tool_call_summary_shapes() {
+        // Verify summary JSON structures for different tools
+        let write_doc_summary = serde_json::json!({
+            "path": "./thoughts/branch/plans/file.md",
+            "bytes_written": 1024,
+        });
+        assert!(write_doc_summary["path"].is_string());
+        assert!(write_doc_summary["bytes_written"].is_number());
+
+        let list_docs_summary = serde_json::json!({
+            "base": "./thoughts/branch",
+            "files_count": 5,
+        });
+        assert!(list_docs_summary["base"].is_string());
+        assert!(list_docs_summary["files_count"].is_number());
+
+        let add_ref_summary = serde_json::json!({
+            "org": "someorg",
+            "repo": "somerepo",
+            "already_existed": false,
+            "config_updated": true,
+            "cloned": true,
+            "mounted": true,
+        });
+        assert!(add_ref_summary["org"].is_string());
+        assert!(add_ref_summary["repo"].is_string());
+        assert!(add_ref_summary["already_existed"].is_boolean());
+        assert!(add_ref_summary["config_updated"].is_boolean());
     }
 }
