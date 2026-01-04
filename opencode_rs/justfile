@@ -12,11 +12,13 @@ default: help
 
 help:
   @echo "Tool commands:"
-  @echo "  just check      # fmt-check + clippy (warnings are failures)"
-  @echo "  just test       # cargo test (counts results)"
-  @echo "  just build      # cargo build (warnings are failures)"
-  @echo "  just fmt        # cargo fmt"
-  @echo "  just fmt-check  # cargo fmt --check"
+  @echo "  just check            # fmt-check + clippy (warnings are failures)"
+  @echo "  just test             # cargo test (counts results)"
+  @echo "  just test-integration # run integration tests (requires OpenCode server)"
+  @echo "  just test-all         # run all tests including integration"
+  @echo "  just build            # cargo build (warnings are failures)"
+  @echo "  just fmt              # cargo fmt"
+  @echo "  just fmt-check        # cargo fmt --check"
 
 fmt:
   cargo fmt
@@ -30,6 +32,15 @@ check:
 
 test:
   {{WRAP}} test
+
+# Run integration tests (requires OPENCODE_INTEGRATION=1 and running OpenCode server)
+test-integration:
+  OPENCODE_INTEGRATION=1 {{WRAP}} test --test integration -- --ignored
+
+# Run all tests including integration (requires running OpenCode server)
+test-all:
+  {{WRAP}} test
+  OPENCODE_INTEGRATION=1 {{WRAP}} test --test integration -- --ignored
 
 build:
   {{WRAP}} build

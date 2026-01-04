@@ -6,15 +6,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    /// Default provider.
+    /// Default provider (can be string or object).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    /// Default model.
+    pub provider: Option<serde_json::Value>,
+    /// Default model (can be string or object).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
+    pub model: Option<serde_json::Value>,
     /// Default agent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<String>,
+    pub agent: Option<serde_json::Value>,
     /// Auto-compaction settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_compact: Option<AutoCompactConfig>,

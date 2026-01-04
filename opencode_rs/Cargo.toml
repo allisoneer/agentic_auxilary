@@ -36,3 +36,24 @@ wiremock = "0.6"
 tokio-test = "0.4"
 anyhow = "1"
 tracing-subscriber = "0.3"
+
+# Examples with feature requirements
+[[example]]
+name = "basic"
+required-features = ["http", "sse"]
+
+[[example]]
+name = "streaming"
+required-features = ["http", "sse"]
+
+[[example]]
+name = "managed_server"
+required-features = ["http", "sse", "server"]
+
+[[example]]
+name = "cli_runner"
+required-features = ["cli"]
+
+[[example]]
+name = "full_workflow"
+required-features = ["http", "sse"]

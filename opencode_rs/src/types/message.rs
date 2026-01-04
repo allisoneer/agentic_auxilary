@@ -347,6 +347,28 @@ pub enum PromptPart {
     },
 }
 
+/// Request to execute a command in a session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandRequest {
+    /// Command to execute.
+    pub command: String,
+    /// Command arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<serde_json::Value>,
+}
+
+/// Request to execute a shell command in a session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellRequest {
+    /// Shell command to execute.
+    pub command: String,
+    /// Model to use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<crate::types::project::ModelRef>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
