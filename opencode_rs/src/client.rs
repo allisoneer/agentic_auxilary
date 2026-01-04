@@ -121,6 +121,78 @@ impl Client {
         crate::http::messages::MessagesApi::new(self.http.clone())
     }
 
+    /// Get the parts API.
+    #[cfg(feature = "http")]
+    pub fn parts(&self) -> crate::http::parts::PartsApi {
+        crate::http::parts::PartsApi::new(self.http.clone())
+    }
+
+    /// Get the permissions API.
+    #[cfg(feature = "http")]
+    pub fn permissions(&self) -> crate::http::permissions::PermissionsApi {
+        crate::http::permissions::PermissionsApi::new(self.http.clone())
+    }
+
+    /// Get the files API.
+    #[cfg(feature = "http")]
+    pub fn files(&self) -> crate::http::files::FilesApi {
+        crate::http::files::FilesApi::new(self.http.clone())
+    }
+
+    /// Get the find API.
+    #[cfg(feature = "http")]
+    pub fn find(&self) -> crate::http::find::FindApi {
+        crate::http::find::FindApi::new(self.http.clone())
+    }
+
+    /// Get the providers API.
+    #[cfg(feature = "http")]
+    pub fn providers(&self) -> crate::http::providers::ProvidersApi {
+        crate::http::providers::ProvidersApi::new(self.http.clone())
+    }
+
+    /// Get the MCP API.
+    #[cfg(feature = "http")]
+    pub fn mcp(&self) -> crate::http::mcp::McpApi {
+        crate::http::mcp::McpApi::new(self.http.clone())
+    }
+
+    /// Get the PTY API.
+    #[cfg(feature = "http")]
+    pub fn pty(&self) -> crate::http::pty::PtyApi {
+        crate::http::pty::PtyApi::new(self.http.clone())
+    }
+
+    /// Get the config API.
+    #[cfg(feature = "http")]
+    pub fn config(&self) -> crate::http::config::ConfigApi {
+        crate::http::config::ConfigApi::new(self.http.clone())
+    }
+
+    /// Get the tools API.
+    #[cfg(feature = "http")]
+    pub fn tools(&self) -> crate::http::tools::ToolsApi {
+        crate::http::tools::ToolsApi::new(self.http.clone())
+    }
+
+    /// Get the project API.
+    #[cfg(feature = "http")]
+    pub fn project(&self) -> crate::http::project::ProjectApi {
+        crate::http::project::ProjectApi::new(self.http.clone())
+    }
+
+    /// Get the worktree API.
+    #[cfg(feature = "http")]
+    pub fn worktree(&self) -> crate::http::worktree::WorktreeApi {
+        crate::http::worktree::WorktreeApi::new(self.http.clone())
+    }
+
+    /// Get the misc API.
+    #[cfg(feature = "http")]
+    pub fn misc(&self) -> crate::http::misc::MiscApi {
+        crate::http::misc::MiscApi::new(self.http.clone())
+    }
+
     /// Simple helper to create session and send a text prompt.
     ///
     /// # Errors
@@ -144,7 +216,18 @@ impl Client {
             .prompt(
                 &session.id,
                 &PromptRequest {
-                    parts: vec![PromptPart::Text { text: text.into() }],
+                    parts: vec![PromptPart::Text {
+                        text: text.into(),
+                        synthetic: None,
+                        ignored: None,
+                        metadata: None,
+                    }],
+                    message_id: None,
+                    model: None,
+                    agent: None,
+                    no_reply: None,
+                    system: None,
+                    variant: None,
                 },
             )
             .await?;

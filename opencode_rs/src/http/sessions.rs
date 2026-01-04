@@ -121,7 +121,11 @@ mod tests {
             .and(body_json(serde_json::json!({})))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "session123",
-                "projectId": "proj1"
+                "projectId": "proj1",
+                "directory": "/path",
+                "title": "New Session",
+                "version": "1.0",
+                "time": {"created": 1234567890, "updated": 1234567890}
             })))
             .mount(&mock_server)
             .await;
@@ -149,7 +153,11 @@ mod tests {
             .and(path("/session/abc123"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "abc123",
-                "title": "Test Session"
+                "projectId": "p1",
+                "directory": "/path",
+                "title": "Test Session",
+                "version": "1.0",
+                "time": {"created": 1234567890, "updated": 1234567890}
             })))
             .mount(&mock_server)
             .await;
@@ -164,7 +172,7 @@ mod tests {
         let sessions = SessionsApi::new(http);
         let session = sessions.get("abc123").await.unwrap();
         assert_eq!(session.id, "abc123");
-        assert_eq!(session.title, Some("Test Session".to_string()));
+        assert_eq!(session.title, "Test Session");
     }
 
     #[tokio::test]
@@ -174,8 +182,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/session"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {"id": "s1"},
-                {"id": "s2"}
+                {"id": "s1", "projectId": "p1", "directory": "/path", "title": "S1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}},
+                {"id": "s2", "projectId": "p1", "directory": "/path", "title": "S2", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
             ])))
             .mount(&mock_server)
             .await;

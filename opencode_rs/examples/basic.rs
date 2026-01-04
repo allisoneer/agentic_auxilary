@@ -29,7 +29,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &PromptRequest {
                 parts: vec![PromptPart::Text {
                     text: "Hello OpenCode! What can you help me with?".into(),
+                    synthetic: None,
+                    ignored: None,
+                    metadata: None,
                 }],
+                message_id: None,
+                model: None,
+                agent: None,
+                no_reply: None,
+                system: None,
+                variant: None,
             },
         )
         .await?;

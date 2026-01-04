@@ -1,4 +1,6 @@
 //! SSE event types for opencode_rs.
+//!
+//! Contains 40 event variants matching OpenCode's server.ts.
 
 use serde::{Deserialize, Serialize};
 
@@ -11,26 +13,44 @@ pub struct GlobalEventEnvelope {
     pub payload: Event,
 }
 
-/// SSE Event from OpenCode server.
+/// SSE Event from OpenCode server (40 variants).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type")]
 pub enum Event {
-    // Server lifecycle
+    // ==================== Server/Instance (4) ====================
     /// Server connection established.
     #[serde(rename = "server.connected")]
     ServerConnected {
         /// Event properties.
+        #[serde(default)]
         properties: serde_json::Value,
     },
 
-    /// Server heartbeat (sent every 30s).
+    /// Server heartbeat (sent periodically).
     #[serde(rename = "server.heartbeat")]
     ServerHeartbeat {
         /// Event properties.
+        #[serde(default)]
         properties: serde_json::Value,
     },
 
-    // Session lifecycle
+    /// Server instance disposed.
+    #[serde(rename = "server.instance.disposed")]
+    ServerInstanceDisposed {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Global disposed.
+    #[serde(rename = "global.disposed")]
+    GlobalDisposed {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Session (8) ====================
     /// Session created.
     #[serde(rename = "session.created")]
     SessionCreated {
@@ -52,24 +72,55 @@ pub enum Event {
         properties: SessionEventProps,
     },
 
-    /// Session became idle (processing complete).
-    #[serde(rename = "session.idle")]
-    SessionIdle {
+    /// Session diff.
+    #[serde(rename = "session.diff")]
+    SessionDiff {
         /// Event properties.
-        properties: SessionEventProps,
+        #[serde(default)]
+        properties: serde_json::Value,
     },
 
-    /// Session encountered an error.
+    /// Session error.
     #[serde(rename = "session.error")]
     SessionError {
         /// Event properties.
         properties: SessionErrorProps,
     },
 
-    // Message events
+    /// Session compacted.
+    #[serde(rename = "session.compacted")]
+    SessionCompacted {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Session status changed.
+    #[serde(rename = "session.status")]
+    SessionStatus {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Session became idle.
+    #[serde(rename = "session.idle")]
+    SessionIdle {
+        /// Event properties.
+        properties: SessionEventProps,
+    },
+
+    // ==================== Messages (4) ====================
     /// Message updated.
     #[serde(rename = "message.updated")]
     MessageUpdated {
+        /// Event properties.
+        properties: MessageEventProps,
+    },
+
+    /// Message removed.
+    #[serde(rename = "message.removed")]
+    MessageRemoved {
         /// Event properties.
         properties: MessageEventProps,
     },
@@ -79,6 +130,213 @@ pub enum Event {
     MessagePartUpdated {
         /// Event properties (boxed to reduce enum size).
         properties: Box<MessagePartEventProps>,
+    },
+
+    /// Message part removed.
+    #[serde(rename = "message.part.removed")]
+    MessagePartRemoved {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== PTY (4) ====================
+    /// PTY created.
+    #[serde(rename = "pty.created")]
+    PtyCreated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// PTY updated.
+    #[serde(rename = "pty.updated")]
+    PtyUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// PTY exited.
+    #[serde(rename = "pty.exited")]
+    PtyExited {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// PTY deleted.
+    #[serde(rename = "pty.deleted")]
+    PtyDeleted {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Permissions (4) ====================
+    /// Permission updated.
+    #[serde(rename = "permission.updated")]
+    PermissionUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Permission replied.
+    #[serde(rename = "permission.replied")]
+    PermissionReplied {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Permission asked.
+    #[serde(rename = "permission.asked")]
+    PermissionAsked {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Permission replied next.
+    #[serde(rename = "permission.replied-next")]
+    PermissionRepliedNext {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Project/Files (4) ====================
+    /// Project updated.
+    #[serde(rename = "project.updated")]
+    ProjectUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// File edited.
+    #[serde(rename = "file.edited")]
+    FileEdited {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// File watcher updated.
+    #[serde(rename = "file.watcher.updated")]
+    FileWatcherUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// VCS branch updated.
+    #[serde(rename = "vcs.branch.updated")]
+    VcsBranchUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== LSP/Tools (4) ====================
+    /// LSP updated.
+    #[serde(rename = "lsp.updated")]
+    LspUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// LSP client diagnostics.
+    #[serde(rename = "lsp.client.diagnostics")]
+    LspClientDiagnostics {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Command executed.
+    #[serde(rename = "command.executed")]
+    CommandExecuted {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// MCP tools changed.
+    #[serde(rename = "mcp.tools.changed")]
+    McpToolsChanged {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Installation (3) ====================
+    /// Installation updated.
+    #[serde(rename = "installation.updated")]
+    InstallationUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Installation update available.
+    #[serde(rename = "installation.update-available")]
+    InstallationUpdateAvailable {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// IDE installed.
+    #[serde(rename = "ide.installed")]
+    IdeInstalled {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== TUI (4) ====================
+    /// TUI prompt append.
+    #[serde(rename = "tui.prompt.append")]
+    TuiPromptAppend {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// TUI command execute.
+    #[serde(rename = "tui.command.execute")]
+    TuiCommandExecute {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// TUI toast show.
+    #[serde(rename = "tui.toast.show")]
+    TuiToastShow {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// TUI session select.
+    #[serde(rename = "tui.session.select")]
+    TuiSessionSelect {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Todo (1) ====================
+    /// Todo updated.
+    #[serde(rename = "todo.updated")]
+    TodoUpdated {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
     },
 
     /// Fallback for unknown event types.
@@ -162,9 +420,20 @@ impl Event {
             Event::SessionIdle { properties } => properties.session_id.as_deref(),
             Event::SessionError { properties } => properties.session_id.as_deref(),
             Event::MessageUpdated { properties } => properties.session_id.as_deref(),
+            Event::MessageRemoved { properties } => properties.session_id.as_deref(),
             Event::MessagePartUpdated { properties } => properties.session_id.as_deref(),
             _ => None,
         }
+    }
+
+    /// Check if this is a heartbeat event.
+    pub fn is_heartbeat(&self) -> bool {
+        matches!(self, Event::ServerHeartbeat { .. })
+    }
+
+    /// Check if this is a connection event.
+    pub fn is_connected(&self) -> bool {
+        matches!(self, Event::ServerConnected { .. })
     }
 }
 
@@ -185,6 +454,7 @@ mod tests {
         let json = r#"{"type":"server.heartbeat","properties":{}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::ServerHeartbeat { .. }));
+        assert!(event.is_heartbeat());
     }
 
     #[test]
@@ -203,5 +473,26 @@ mod tests {
         } else {
             panic!("Expected MessagePartUpdated");
         }
+    }
+
+    #[test]
+    fn test_event_deserialize_pty_created() {
+        let json = r#"{"type":"pty.created","properties":{"id":"pty1"}}"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::PtyCreated { .. }));
+    }
+
+    #[test]
+    fn test_event_deserialize_permission_asked() {
+        let json = r#"{"type":"permission.asked","properties":{"requestId":"r1"}}"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::PermissionAsked { .. }));
+    }
+
+    #[test]
+    fn test_event_deserialize_todo_updated() {
+        let json = r#"{"type":"todo.updated","properties":{}}"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::TodoUpdated { .. }));
     }
 }
