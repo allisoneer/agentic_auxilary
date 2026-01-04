@@ -6,7 +6,8 @@ use crate::error::Result;
 use crate::http::HttpClient;
 use crate::types::api::{OAuthCallbackResponse, SetAuthResponse};
 use crate::types::provider::{
-    OAuthAuthorizeResponse, OAuthCallbackRequest, Provider, ProviderAuth, SetAuthRequest,
+    OAuthAuthorizeResponse, OAuthCallbackRequest, ProviderAuth, ProviderListResponse,
+    SetAuthRequest,
 };
 use reqwest::Method;
 
@@ -24,10 +25,13 @@ impl ProvidersApi {
 
     /// List available providers.
     ///
+    /// Returns a response containing all providers, their default models,
+    /// and which providers are connected/authenticated.
+    ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<Provider>> {
+    pub async fn list(&self) -> Result<ProviderListResponse> {
         self.http.request_json(Method::GET, "/provider", None).await
     }
 

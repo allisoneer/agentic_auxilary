@@ -478,7 +478,7 @@ impl Event {
             Event::SessionDeleted { properties } => Some(&properties.info.id),
             Event::SessionIdle { properties } => Some(&properties.session_id),
             Event::SessionError { properties } => properties.session_id.as_deref(),
-            Event::MessageUpdated { properties } => Some(&properties.info.session_id),
+            Event::MessageUpdated { properties } => properties.info.session_id.as_deref(),
             Event::MessageRemoved { properties } => Some(&properties.session_id),
             Event::MessagePartUpdated { properties } => properties.session_id.as_deref(),
             Event::PermissionAsked { properties } => Some(&properties.request.session_id),

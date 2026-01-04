@@ -9,6 +9,10 @@
 //!   OPENCODE_BASE_URL - Base URL of the OpenCode server (default: http://127.0.0.1:4096)
 //!   OPENCODE_DIRECTORY - Directory context for requests (default: current directory)
 
+// Include submodule tests from integration/ directory
+#[path = "integration/mod.rs"]
+mod typed_tests;
+
 use opencode_rs::ClientBuilder;
 use opencode_rs::types::event::Event;
 use opencode_rs::types::message::{PromptPart, PromptRequest};
@@ -362,19 +366,27 @@ async fn test_providers_list() {
 
     let client = build_client();
 
-    // List providers (raw response)
-    let providers = client
+    // List providers - returns ProviderListResponse with all/default/connected
+    let response = client
         .providers()
         .list()
         .await
         .expect("Failed to list providers");
 
-    // Should have some providers
+    // Should have some providers in the 'all' field
     // Note: List may be empty if no providers are configured
-    for provider in &providers {
+    for provider in &response.all {
         assert!(!provider.id.is_empty(), "Provider should have an ID");
         assert!(!provider.name.is_empty(), "Provider should have a name");
     }
+
+    // The response also includes default models and connected providers
+    println!(
+        "Found {} providers, {} defaults, {} connected",
+        response.all.len(),
+        response.default.len(),
+        response.connected.len()
+    );
 }
 
 /// Test MCP status.
