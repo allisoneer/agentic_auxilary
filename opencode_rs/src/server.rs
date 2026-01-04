@@ -116,7 +116,7 @@ impl ManagedServer {
             .arg("--port")
             .arg(port.to_string())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::inherit()) // Inherit to avoid deadlock; server errors visible to user
             .kill_on_drop(true);
 
         if let Some(dir) = &opts.directory {

@@ -257,9 +257,14 @@ impl CliRunner {
                 if line.trim().is_empty() {
                     continue;
                 }
-                if let Ok(evt) = serde_json::from_str::<CliEvent>(&line) {
-                    if tx.send(evt).is_err() {
-                        break;
+                match serde_json::from_str::<CliEvent>(&line) {
+                    Ok(evt) => {
+                        if tx.send(evt).is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!("Failed to parse CLI event: {e}");
                     }
                 }
             }
