@@ -121,7 +121,7 @@ impl McpApi {
             .request_json(
                 Method::POST,
                 &format!("/mcp/{}/connect", name),
-                Some(serde_json::json!({})),
+                None, // OpenCode API expects no request body
             )
             .await
     }
@@ -136,7 +136,7 @@ impl McpApi {
             .request_json(
                 Method::POST,
                 &format!("/mcp/{}/disconnect", name),
-                Some(serde_json::json!({})),
+                None, // OpenCode API expects no request body
             )
             .await
     }
