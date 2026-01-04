@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.5] - 2026-01-03
+
+### ⛰️  Features
+- *(coding_agent_tools)* Add just recipe search and execute MCP tools
+
+### 🐛 Bug Fixes
+- *(coding_agent_tools)* Default just_execute to root justfile when no dir specified
+- *(coding_agent_tools)* Canonicalize repo_root in execute_recipe for macOS
+- *(coding_agent_tools)* Address PR review comments
+
+### 🚜 Refactor
+- *(build)* Migrate from Makefile to Just build system
+- *(coding_agent_tools)* Rename search/execute to just_search/just_execute
+- *(coding_agent_tools)* Extract test helper macro and fix tool name comment
 ## [0.1.4] - 2026-01-02
 
 ### ⛰️  Features

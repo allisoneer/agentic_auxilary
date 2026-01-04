@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.1] - 2026-01-03
+
+### 🚜 Refactor
+- *(build)* Migrate from Makefile to Just build system
+- Update agent guidance to use MCP Just tools instead of shell commands
 ## [0.5.0] - 2026-01-02
 
 ### ⛰️  Features
