@@ -74,6 +74,8 @@ pub struct SseSubscriber {
 }
 
 impl SseSubscriber {
+    // TODO(3): Accept optional ReqClient to allow connection pool sharing with HttpClient
+
     /// Create a new SSE subscriber.
     pub fn new(
         base_url: String,
