@@ -52,7 +52,92 @@
     "https://github.com/modelcontextprotocol/typescript-sdk.git",
     "https://github.com/allisoneer/cocoz.git",
     "git@github.com:allisoneer/gwt.git",
-    "https://github.com/siketyan/gh-config-rs.git"
+    "https://github.com/siketyan/gh-config-rs.git",
+    "https://github.com/AbdelStark/anthropic-rs.git",
+    "https://github.com/anthropics/anthropic-sdk-python.git",
+    "https://github.com/anthropics/anthropic-sdk-typescript.git",
+    "https://github.com/sst/opencode.git",
+    "https://github.com/humanlayer/humanlayer.git",
+    {
+      "remote": "https://github.com/modelcontextprotocol/servers",
+      "description": "Official MCP servers examples - relevant for thoughts_tool MCP implementation patterns"
+    },
+    {
+      "remote": "https://github.com/anthropics/claude-code",
+      "description": "Main Claude Code repository - essential for understanding Task tool implementation and agent system internals"
+    },
+    {
+      "remote": "https://github.com/VoltAgent/awesome-claude-code-subagents",
+      "description": "Community collection of Claude Code subagent examples and patterns"
+    },
+    {
+      "remote": "https://github.com/allisoneer/zmcp",
+      "description": "Lightweight Zig implementation of Model Context Protocol (MCP) with compile-time validated interfaces, type-safe tool definitions, and automatic schema generation for LLM-to-tool integration"
+    },
+    {
+      "remote": "https://codeberg.org/ziglang/zig.git",
+      "description": "Zig programming language compiler, standard library, and toolchain - a systems programming language emphasizing robustness, optimal performance, and C/C++ interoperability with cross-compilation support"
+    },
+    {
+      "remote": "https://github.com/GitoxideLabs/gitoxide",
+      "description": "Pure Rust git implementation - evaluating as potential replacement for git2/libgit2 to solve SSH agent compatibility issues"
+    },
+    {
+      "remote": "https://github.com/linear/linear",
+      "description": "Linear official monorepo containing GraphQL schema, TypeScript SDK, and codegen tools - essential for understanding the Linear API structure for Rust implementation"
+    },
+    {
+      "remote": "https://github.com/makepad/makepad",
+      "description": "Makepad - MIT-licensed Rust UI framework with Android/Linux support, GPU-accelerated rendering"
+    },
+    {
+      "remote": "https://github.com/moxin-org/moly",
+      "description": "Moly - AI LLM client built with Makepad in pure Rust"
+    },
+    {
+      "remote": "https://github.com/project-robius/robrix",
+      "description": "Robrix - Matrix chat client built with Makepad, has working Android APK releases"
+    },
+    {
+      "remote": "https://github.com/slint-ui/slint",
+      "description": "Slint UI framework - declarative Rust GUI with Android/Linux support (triple-licensed)"
+    },
+    {
+      "remote": "https://github.com/iced-rs/iced",
+      "description": "Iced - MIT-licensed Elm-architecture Rust GUI framework"
+    },
+    {
+      "remote": "https://github.com/heng30/chatbox",
+      "description": "ChatGPT client built with Slint - example of streaming LLM UI in Rust"
+    },
+    {
+      "remote": "https://github.com/mozilla/uniffi-rs",
+      "description": "Mozilla UniFFI - generates Kotlin/Swift bindings from Rust (MPL-2.0)"
+    },
+    {
+      "remote": "https://github.com/moly-ai/aitk",
+      "description": "AI toolkit library used by Moly - contains streaming implementation, ChatController, BotClient abstractions for LLM clients"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/limbo",
+      "description": "Limbo - Turso's SQLite-compatible database written in Rust, evaluating for chat persistence in Claude client"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/turso.git",
+      "description": "Turso database - the branded/production version of Limbo, checking for Rust bindings and crate naming"
+    },
+    {
+      "remote": "https://github.com/rust-lang/rust-analyzer",
+      "description": "Testing add_reference tool from PR"
+    },
+    {
+      "remote": "https://github.com/toolprint/just-mcp",
+      "description": "Just MCP server with three-tier parsing strategy (tree-sitter → CLI → regex) - reference for justfile-to-MCP tool generation"
+    },
+    {
+      "remote": "https://github.com/promptexecution/just-mcp",
+      "description": "Production-ready Just MCP server using CLI wrapper approach - reference for justfile introspection and recipe execution"
+    }
   ]
 }
 
