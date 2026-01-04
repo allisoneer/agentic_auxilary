@@ -90,7 +90,7 @@ universal-tool-macros = "0.1.8"
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-claudecode = "0.1.8"
+claudecode = "0.1.9"
 ```
 <!-- END:autodeps -->
 
@@ -113,7 +113,7 @@ cargo install coding_agent_tools
 <!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-anthropic-async = "0.2.0"
+anthropic-async = "0.2.1"
 ```
 <!-- END:autodeps -->
 
