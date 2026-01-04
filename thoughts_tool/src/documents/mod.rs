@@ -20,7 +20,7 @@ pub enum DocumentType {
     Research,
     Plan,
     Artifact,
-    Logs,
+    Log,
 }
 
 impl DocumentType {
@@ -30,20 +30,20 @@ impl DocumentType {
             DocumentType::Research => &aw.research,
             DocumentType::Plan => &aw.plans,
             DocumentType::Artifact => &aw.artifacts,
-            DocumentType::Logs => &aw.logs,
+            DocumentType::Log => &aw.logs,
         }
     }
 
     /// Returns the plural directory name (for physical directory paths).
     /// Note: serde serialization uses singular forms ("plan", "artifact", "research", "log"),
-    /// while physical directories are plural ("plans", "artifacts", "research", "logs").
+    /// while physical directories use plural forms ("plans", "artifacts", "research", "logs").
     /// This matches conventional filesystem naming while keeping API values consistent.
     pub fn subdir_name(&self) -> &'static str {
         match self {
             DocumentType::Research => "research",
             DocumentType::Plan => "plans",
             DocumentType::Artifact => "artifacts",
-            DocumentType::Logs => "logs",
+            DocumentType::Log => "logs",
         }
     }
 
@@ -53,7 +53,7 @@ impl DocumentType {
             DocumentType::Research => "research",
             DocumentType::Plan => "plan",
             DocumentType::Artifact => "artifact",
-            DocumentType::Logs => "log",
+            DocumentType::Log => "log",
         }
     }
 }
@@ -70,7 +70,7 @@ impl<'de> serde::Deserialize<'de> for DocumentType {
             "research" => Ok(DocumentType::Research),
             "plan" | "plans" => Ok(DocumentType::Plan),
             "artifact" | "artifacts" => Ok(DocumentType::Artifact),
-            "log" | "logs" => Ok(DocumentType::Logs),
+            "log" | "logs" => Ok(DocumentType::Log), // accepts both for backward compat
             other => Err(serde::de::Error::custom(format!(
                 "invalid doc_type '{}'; expected research|plan(s)|artifact(s)|log(s)",
                 other
@@ -221,7 +221,7 @@ mod tests {
         assert!(matches!(artifact, DocumentType::Artifact));
 
         let log: DocumentType = serde_json::from_str("\"log\"").unwrap();
-        assert!(matches!(log, DocumentType::Logs));
+        assert!(matches!(log, DocumentType::Log));
     }
 
     #[test]
@@ -233,7 +233,7 @@ mod tests {
         assert!(matches!(artifacts, DocumentType::Artifact));
 
         let logs: DocumentType = serde_json::from_str("\"logs\"").unwrap();
-        assert!(matches!(logs, DocumentType::Logs));
+        assert!(matches!(logs, DocumentType::Log));
     }
 
     #[test]
@@ -245,10 +245,10 @@ mod tests {
         assert!(matches!(research, DocumentType::Research));
 
         let log: DocumentType = serde_json::from_str("\"LOG\"").unwrap();
-        assert!(matches!(log, DocumentType::Logs));
+        assert!(matches!(log, DocumentType::Log));
 
         let logs: DocumentType = serde_json::from_str("\"LOGS\"").unwrap();
-        assert!(matches!(logs, DocumentType::Logs));
+        assert!(matches!(logs, DocumentType::Log));
     }
 
     #[test]
@@ -269,9 +269,9 @@ mod tests {
         let serialized = serde_json::to_string(&artifact).unwrap();
         assert_eq!(serialized, "\"artifact\"");
 
-        let log = DocumentType::Logs;
+        let log = DocumentType::Log;
         let serialized = serde_json::to_string(&log).unwrap();
-        assert_eq!(serialized, "\"logs\"");
+        assert_eq!(serialized, "\"log\"");
     }
 
     #[test]
@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(DocumentType::Research.subdir_name(), "research");
         assert_eq!(DocumentType::Plan.subdir_name(), "plans");
         assert_eq!(DocumentType::Artifact.subdir_name(), "artifacts");
-        assert_eq!(DocumentType::Logs.subdir_name(), "logs");
+        assert_eq!(DocumentType::Log.subdir_name(), "logs");
     }
 
     #[test]
@@ -287,6 +287,6 @@ mod tests {
         assert_eq!(DocumentType::Research.singular_label(), "research");
         assert_eq!(DocumentType::Plan.singular_label(), "plan");
         assert_eq!(DocumentType::Artifact.singular_label(), "artifact");
-        assert_eq!(DocumentType::Logs.singular_label(), "log");
+        assert_eq!(DocumentType::Log.singular_label(), "log");
     }
 }
