@@ -38,7 +38,10 @@ async fn test_session_crud_typed() {
     match client.sessions().list().await {
         Ok(sessions) => {
             println!("Listed {} sessions", sessions.len());
-            // Session might or might not be in the list depending on timing
+            // Verify structure when sessions exist (can't check specific IDs due to timing)
+            if let Some(first) = sessions.first() {
+                assert!(!first.id.is_empty(), "Session should have ID");
+            }
         }
         Err(e) => {
             // List may fail in some configurations
