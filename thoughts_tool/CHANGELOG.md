@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.6.0] - 2026-01-04
+
+### ⚙️  Miscellaneous
+- Address PR review nits
+
+### ⛰️  Features
+- *(thoughts_tool)* Add documents module with logs category
+- *(thoughts_tool)* Add self-logging for MCP handlers
+
+### 🐛 Bug Fixes
+- *(deps)* Add explicit versions to path dependencies for cargo-deny
+
+### 🚜 Refactor
+- *(thoughts_tool)* Rename DocumentType::Logs to Log for consistency
 ## [0.5.1] - 2026-01-03
 
 ### 🚜 Refactor
