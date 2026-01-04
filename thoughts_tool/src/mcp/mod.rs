@@ -1,6 +1,5 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use universal_tool_core::mcp::{McpFormatter, ServiceExt};
 use universal_tool_core::prelude::*;
 
@@ -11,63 +10,16 @@ use crate::config::{
     ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
     extract_org_repo_from_url,
 };
+#[cfg(test)]
+use crate::documents::DocumentInfo;
+use crate::documents::{
+    ActiveDocuments, DocumentType, WriteDocumentOk, list_documents as lib_list_documents,
+    write_document as lib_write_document,
+};
 use crate::git::utils::get_control_repo_root;
 use crate::mount::auto_mount::update_active_mounts;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
-use crate::utils::validation::validate_simple_filename;
-use crate::workspace::{ActiveWork, ensure_active_work};
-
-// Type definitions
-
-#[derive(Debug, Clone, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum DocumentType {
-    Research,
-    Plan,
-    Artifact,
-}
-
-impl<'de> serde::Deserialize<'de> for DocumentType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let norm = s.trim().to_ascii_lowercase();
-        match norm.as_str() {
-            "research" => Ok(DocumentType::Research),
-            "plan" | "plans" => Ok(DocumentType::Plan),
-            "artifact" | "artifacts" => Ok(DocumentType::Artifact),
-            other => Err(serde::de::Error::custom(format!(
-                "invalid doc_type '{}'; expected research|plan(s)|artifact(s)",
-                other
-            ))),
-        }
-    }
-}
-
-impl DocumentType {
-    fn subdir<'a>(&self, aw: &'a ActiveWork) -> &'a std::path::PathBuf {
-        match self {
-            DocumentType::Research => &aw.research,
-            DocumentType::Plan => &aw.plans,
-            DocumentType::Artifact => &aw.artifacts,
-        }
-    }
-
-    /// Returns the plural directory name (for physical directory paths).
-    /// Note: serde serialization uses singular forms ("plan", "artifact", "research"),
-    /// while physical directories are plural ("plans", "artifacts", "research").
-    /// The custom Deserialize implementation accepts both singular and plural input.
-    fn subdir_name(&self) -> &'static str {
-        match self {
-            DocumentType::Research => "research",
-            DocumentType::Plan => "plans",
-            DocumentType::Artifact => "artifacts",
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -105,14 +57,6 @@ impl TemplateType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct DocumentInfo {
-    pub path: String,
-    pub doc_type: String,
-    pub size: u64,
-    pub modified: String,
-}
-
 // Helper for human-readable sizes
 fn human_size(bytes: u64) -> String {
     match bytes {
@@ -123,13 +67,7 @@ fn human_size(bytes: u64) -> String {
     }
 }
 
-// New result types for MCP text formatting
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct WriteDocumentOk {
-    pub path: String,
-    pub bytes_written: u64,
-}
+// MCP text formatting implementations for library types
 
 impl McpFormatter for WriteDocumentOk {
     fn mcp_format_text(&self) -> String {
@@ -139,12 +77,6 @@ impl McpFormatter for WriteDocumentOk {
             human_size(self.bytes_written)
         )
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ActiveDocuments {
-    pub base: String,
-    pub files: Vec<DocumentInfo>,
 }
 
 impl McpFormatter for ActiveDocuments {
@@ -283,7 +215,7 @@ pub struct ThoughtsMcpTools;
 
 #[universal_tool_router(mcp(name = "thoughts_tool", version = "0.3.0"))]
 impl ThoughtsMcpTools {
-    /// Write markdown to active work directory (research/plans/artifacts)
+    /// Write markdown to active work directory (research/plans/artifacts/logs)
     #[universal_tool(
         description = "Write markdown to the active work directory",
         mcp(destructive = false, output = "text")
@@ -294,38 +226,8 @@ impl ThoughtsMcpTools {
         filename: String,
         content: String,
     ) -> Result<WriteDocumentOk, ToolError> {
-        // Validate filename
-        validate_simple_filename(&filename).map_err(|e| ToolError::invalid_input(e.to_string()))?;
-
-        // Ensure active work exists
-        let aw =
-            ensure_active_work().map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
-
-        // Determine target path
-        let dir = doc_type.subdir(&aw);
-        let target = dir.join(&filename);
-
-        let bytes_written = content.len() as u64;
-
-        // Atomic write
-        let af =
-            atomicwrites::AtomicFile::new(&target, atomicwrites::OverwriteBehavior::AllowOverwrite);
-        af.write(|f| std::io::Write::write_all(f, content.as_bytes()))
-            .map_err(|e| {
-                ToolError::new(ErrorCode::IoError, format!("Failed to write file: {}", e))
-            })?;
-
-        // Return repo-relative path with "./" prefix for clarity (no 'active/' layer)
-        let repo_rel = format!(
-            "./thoughts/{}/{}/{}",
-            aw.dir_name,
-            doc_type.subdir_name(),
-            filename
-        );
-        Ok(WriteDocumentOk {
-            path: repo_rel,
-            bytes_written,
-        })
+        lib_write_document(doc_type, &filename, &content)
+            .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))
     }
 
     /// List files in current active work directory
@@ -337,63 +239,7 @@ impl ThoughtsMcpTools {
         &self,
         subdir: Option<DocumentType>,
     ) -> Result<ActiveDocuments, ToolError> {
-        let aw =
-            ensure_active_work().map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
-
-        // Use "./" prefix for clarity that this is repo-relative (no 'active/' layer)
-        let base = format!("./thoughts/{}", aw.dir_name);
-
-        // Determine which subdirs to scan
-        // Tuple: (singular_label for doc_type output, plural_dirname for paths, PathBuf)
-        let sets: Vec<(&str, &str, std::path::PathBuf)> = match subdir {
-            Some(ref d) => {
-                let singular = match d {
-                    DocumentType::Research => "research",
-                    DocumentType::Plan => "plan",
-                    DocumentType::Artifact => "artifact",
-                };
-                vec![(singular, d.subdir_name(), d.subdir(&aw).clone())]
-            }
-            None => vec![
-                ("research", "research", aw.research.clone()),
-                ("plan", "plans", aw.plans.clone()),
-                ("artifact", "artifacts", aw.artifacts.clone()),
-            ],
-        };
-
-        let mut files = Vec::new();
-        for (singular_label, dirname, dir) in sets {
-            if !dir.exists() {
-                continue;
-            }
-            for entry in fs::read_dir(&dir).map_err(|e| {
-                ToolError::new(
-                    ErrorCode::IoError,
-                    format!("Failed to read dir {}: {}", dir.display(), e),
-                )
-            })? {
-                let entry = entry.map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
-                let meta = entry
-                    .metadata()
-                    .map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))?;
-                if meta.is_file() {
-                    let modified = meta
-                        .modified()
-                        .ok()
-                        .and_then(|t| chrono::DateTime::<chrono::Utc>::from(t).into())
-                        .unwrap_or_else(chrono::Utc::now);
-                    let file_name = entry.file_name().to_string_lossy().to_string();
-                    files.push(DocumentInfo {
-                        path: format!("{}/{}/{}", base, dirname, file_name),
-                        doc_type: singular_label.to_string(),
-                        size: meta.len(),
-                        modified: modified.to_rfc3339(),
-                    });
-                }
-            }
-        }
-
-        Ok(ActiveDocuments { base, files })
+        lib_list_documents(subdir).map_err(|e| ToolError::new(ErrorCode::IoError, e.to_string()))
     }
 
     /// List reference repository directory paths
@@ -703,54 +549,7 @@ mod tests {
         assert!(text.contains("2025-10-15 12:00 UTC"));
     }
 
-    #[test]
-    fn test_document_type_deserialize_singular() {
-        let research: DocumentType = serde_json::from_str("\"research\"").unwrap();
-        assert!(matches!(research, DocumentType::Research));
-
-        let plan: DocumentType = serde_json::from_str("\"plan\"").unwrap();
-        assert!(matches!(plan, DocumentType::Plan));
-
-        let artifact: DocumentType = serde_json::from_str("\"artifact\"").unwrap();
-        assert!(matches!(artifact, DocumentType::Artifact));
-    }
-
-    #[test]
-    fn test_document_type_deserialize_plural() {
-        let plans: DocumentType = serde_json::from_str("\"plans\"").unwrap();
-        assert!(matches!(plans, DocumentType::Plan));
-
-        let artifacts: DocumentType = serde_json::from_str("\"artifacts\"").unwrap();
-        assert!(matches!(artifacts, DocumentType::Artifact));
-    }
-
-    #[test]
-    fn test_document_type_deserialize_case_insensitive() {
-        let plan: DocumentType = serde_json::from_str("\"PLAN\"").unwrap();
-        assert!(matches!(plan, DocumentType::Plan));
-
-        let research: DocumentType = serde_json::from_str("\"Research\"").unwrap();
-        assert!(matches!(research, DocumentType::Research));
-    }
-
-    #[test]
-    fn test_document_type_deserialize_invalid() {
-        let result: Result<DocumentType, _> = serde_json::from_str("\"invalid\"");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("invalid doc_type"));
-    }
-
-    #[test]
-    fn test_document_type_serialize_singular() {
-        let plan = DocumentType::Plan;
-        let serialized = serde_json::to_string(&plan).unwrap();
-        assert_eq!(serialized, "\"plan\"");
-
-        let artifact = DocumentType::Artifact;
-        let serialized = serde_json::to_string(&artifact).unwrap();
-        assert_eq!(serialized, "\"artifact\"");
-    }
+    // Note: DocumentType serde tests are in crate::documents::tests
 
     #[test]
     fn test_references_list_empty() {
