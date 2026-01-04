@@ -380,7 +380,7 @@ pub async fn gpt5_reasoner_impl(
                             // Write plan to plans/ directory
                             match write_document(DocumentType::Plan, name, &content) {
                                 Ok(ok) => {
-                                    returned = ok.path.clone();
+                                    returned = ok.path;
                                 }
                                 Err(e) => {
                                     let msg = format!("stage=write_plan_document: {}", e);
@@ -402,6 +402,10 @@ pub async fn gpt5_reasoner_impl(
                     }
                     PromptType::Reasoning => {
                         // Write response markdown to logs/ daily dir (best-effort)
+                        // TODO(2): timer.finish() is non-idempotent (returns fresh Utc::now() each call).
+                        // The log_record closure also calls timer.finish() at line 57, causing timestamp
+                        // drift between the markdown filename and JSONL log. Refactor to call finish()
+                        // once and pass (completed_at, duration_ms) to log_record as params.
                         if let Some(ref w) = writer {
                             let (completed_at, _) = timer.finish();
                             if let Ok(md_name) =
