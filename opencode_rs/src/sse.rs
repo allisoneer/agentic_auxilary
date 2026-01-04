@@ -258,6 +258,9 @@ impl SseSubscriber {
 
 #[cfg(test)]
 mod tests {
+    // TODO(2): Add tests for session filtering logic (lines 216-219), Last-Event-ID
+    // tracking/resume behavior (lines 208-210, 176-178), and backoff timing (with
+    // tokio time mocking).
     use super::*;
 
     #[test]
