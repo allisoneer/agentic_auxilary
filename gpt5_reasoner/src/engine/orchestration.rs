@@ -58,7 +58,7 @@ pub async fn gpt5_reasoner_impl(
             // TODO(2): Consider truncating large payloads (prompt, directories) to reduce log
             // bloat. Tradeoff: full content is valuable for debugging failures.
             let request_json = serde_json::json!({
-                "prompt_type": format!("{:?}", prompt_type).to_lowercase(),
+                "prompt_type": tool,
                 "prompt": prompt,
                 "directories": directories,
                 "files_count": files_count,
