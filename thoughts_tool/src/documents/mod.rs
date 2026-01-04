@@ -105,7 +105,7 @@ pub struct ActiveDocuments {
 /// Write a document to the active work directory.
 ///
 /// # Arguments
-/// * `doc_type` - The type of document (research, plan, artifact, logs)
+/// * `doc_type` - The type of document (research, plan, artifact, log)
 /// * `filename` - The filename (validated for safety)
 /// * `content` - The content to write
 ///
