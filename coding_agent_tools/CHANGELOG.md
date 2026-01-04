@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.6] - 2026-01-04
+
+### ⛰️  Features
+- *(coding_agent_tools)* Add JSONL logging for all MCP tools
+
+### 🐛 Bug Fixes
+- *(deps)* Add explicit versions to path dependencies for cargo-deny
+- *(coding_agent_tools)* Ensure consistent timestamps between markdown and JSONL logs
 ## [0.1.5] - 2026-01-03
 
 ### ⛰️  Features
