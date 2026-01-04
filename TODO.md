@@ -8,3 +8,4 @@ would need to use rmcp directly for currently.
 - Similar to the last one, a nice QoL would be to re-look at the brand-new thoughts setup experience. How can we make that more streamlined? We should probably
 enforce/require a primary "thoughts" repo, and have an initial setup command that actually populates it with everything it needs. Currently it initializes the old v1
 config and that's just silly. That's not used anywhere anymore.
+- Instead of tracking KB for all the files we should track tokens with tiktoken - Mostly all of the thoughts files do this currently.

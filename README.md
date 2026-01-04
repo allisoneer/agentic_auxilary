@@ -23,6 +23,19 @@ Rust SDK for programmatically interacting with Claude Code CLI.
 - MCP (Model Context Protocol) support
 - Builder pattern configuration
 
+### 📡 [opencode_rs](opencode_rs/)
+Rust SDK for OpenCode: HTTP-first client with SSE streaming and optional managed server/CLI helpers.
+- HTTP endpoints with typed request/response models
+- SSE event subscriptions with backoff and heartbeats
+- Async builder-based client; Unix-only
+- Optional managed server startup (feature: server)
+
+### 🔄 [claude_to_opencode_migration](claude_to_opencode_migration/)
+Python script to migrate Claude Code configuration to OpenCode.
+- Zero-install via uv run (PEP 723 inline deps)
+- Dry-run with unified diffs and timestamped backups
+- Fine-grained flags: agents, commands, permissions, mcp
+
 ### 🧠 [GPT-5 Reasoner](gpt5_reasoner/)
 Two-phase prompt optimization tool: optimize with Claude, execute with GPT-5.
 - Directory-based file discovery with smart filtering
@@ -47,6 +60,12 @@ CLI + MCP tools for coding assistants with gitignore-aware directory listing.
 - Dual CLI and MCP interfaces
 - Respects .gitignore and built-in ignore patterns
 - Implicit pagination for large directories
+
+### 📋 [linear_tools](linear_tools/)
+CLI + MCP tools for Linear issue management.
+- Search and read Linear issues
+- Works as both CLI and MCP server
+- Extra fields via LINEAR_TOOLS_EXTRAS environment variable
 
 ## Quick Start
 
@@ -94,6 +113,20 @@ claudecode = "0.1.9"
 ```
 <!-- END:autodeps -->
 
+### Use opencode_rs in your project
+<!-- BEGIN:autodeps {"crates":["opencode_rs"], "fence":"toml", "header":"[dependencies]"} -->
+```toml
+[dependencies]
+opencode_rs = "0.1.0"
+```
+<!-- END:autodeps -->
+
+### Run claude_to_opencode_migration (no install; via uv)
+```bash
+uv run claude_to_opencode_migration/migrate_claude_to_opencode.py --dry-run
+uv run claude_to_opencode_migration/migrate_claude_to_opencode.py --all
+```
+
 ### Install gpt5_reasoner
 ```bash
 cargo install gpt5_reasoner
@@ -107,6 +140,11 @@ cargo install pr_comments
 ### Install coding_agent_tools
 ```bash
 cargo install coding_agent_tools
+```
+
+### Install linear-tools
+```bash
+cargo install linear-tools
 ```
 
 ### Use anthropic-async in your project
