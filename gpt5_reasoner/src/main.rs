@@ -107,7 +107,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None => None,
             };
 
-            let result = gpt5_reasoner_impl(prompt, files, directories, None, prompt_type).await;
+            // CLI doesn't support output_filename yet, pass None
+            let result =
+                gpt5_reasoner_impl(prompt, files, directories, None, prompt_type, None).await;
 
             match result {
                 Ok(out) => {

@@ -14,7 +14,9 @@ use crate::{
     token::enforce_limit,
     types::{DirectoryMeta, FileMeta, PromptType},
 };
+use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
 use async_openai::types::*;
+use thoughts_tool::{DocumentType, active_logs_dir, write_document};
 use universal_tool_core::prelude::ToolError;
 
 pub async fn gpt5_reasoner_impl(
@@ -23,7 +25,16 @@ pub async fn gpt5_reasoner_impl(
     directories: Option<Vec<DirectoryMeta>>,
     optimizer_model: Option<String>,
     prompt_type: PromptType,
+    output_filename: Option<String>,
 ) -> std::result::Result<String, ToolError> {
+    // Start logging timer
+    let timer = CallTimer::start();
+    let server = "gpt5_reasoner".to_string();
+    let tool = match prompt_type {
+        PromptType::Plan => "plan",
+        PromptType::Reasoning => "reasoning",
+    }
+    .to_string();
     // Expand directories to files BEFORE optimizer sees them
     if let Some(dirs) = directories.as_ref() {
         let mut expanded = expand_directories_to_filemeta(dirs).map_err(ToolError::from)?;
@@ -248,7 +259,75 @@ pub async fn gpt5_reasoner_impl(
 
                 // Non-empty content → success
                 let content = content_opt.expect("guarded by is_effectively_empty=false");
-                return Ok(content);
+
+                // Finish timing and prepare logging
+                let (completed_at, duration_ms) = timer.finish();
+                let model = Some("openai/gpt-5".to_string());
+
+                // Build request JSON for logging
+                let request_json = serde_json::json!({
+                    "prompt_type": format!("{:?}", prompt_type).to_lowercase(),
+                    "prompt": prompt,
+                    "directories": directories,
+                    "files_count": files.len(),
+                    "output_filename": output_filename,
+                });
+
+                // Try to get logs dir for logging (best-effort)
+                let logs_dir = active_logs_dir().ok();
+                let writer = logs_dir.as_ref().map(LogWriter::new);
+
+                let mut response_file = None;
+                let returned: String;
+
+                match prompt_type {
+                    PromptType::Plan => {
+                        if let Some(ref name) = output_filename {
+                            // Write plan to plans/ directory
+                            let ok = write_document(DocumentType::Plan, name, &content)
+                                .map_err(|e| ToolError::internal(e.to_string()))?;
+                            returned = ok.path.clone();
+                        } else {
+                            // Return content directly
+                            returned = content.clone();
+                        }
+                    }
+                    PromptType::Reasoning => {
+                        // Write response markdown to logs/ daily dir
+                        if let Some(ref w) = writer
+                            && let Ok(md_name) =
+                                w.write_markdown_response(completed_at, &timer.call_id, &content)
+                            && !md_name.is_empty()
+                        {
+                            response_file = Some(md_name);
+                        }
+                        returned = content.clone();
+                    }
+                }
+
+                // Append JSONL (best-effort)
+                if let Some(ref w) = writer {
+                    let record = ToolCallRecord {
+                        call_id: timer.call_id.clone(),
+                        server: server.clone(),
+                        tool: tool.clone(),
+                        started_at: timer.started_at,
+                        completed_at,
+                        duration_ms,
+                        request: request_json,
+                        response_file,
+                        success: true,
+                        error: None,
+                        model,
+                        token_usage: None,
+                        summary: None,
+                    };
+                    if let Err(e) = w.append_jsonl(&record) {
+                        tracing::warn!("Failed to append JSONL log: {}", e);
+                    }
+                }
+
+                return Ok(returned);
             }
             Err(e) => {
                 let retryable = crate::errors::is_retryable_app_level(&e);
