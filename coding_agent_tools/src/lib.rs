@@ -95,7 +95,7 @@ impl CodingAgentTools {
         let abs_root = match paths::to_abs_string(&path_str) {
             Ok(s) => s,
             Err(msg) => {
-                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None);
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
                 return Err(ToolError::invalid_input(msg));
             }
         };
@@ -104,7 +104,15 @@ impl CodingAgentTools {
         // Validate root path exists and is a directory
         if !root_path.exists() {
             let error_msg = format!("Path does not exist: {}", abs_root);
-            log_ctx.finish(req_json, None, false, Some(error_msg.clone()), None, None);
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                None,
+                None,
+            );
             return Err(ToolError::invalid_input(error_msg));
         }
 
@@ -124,7 +132,7 @@ impl CodingAgentTools {
                 "has_more": false,
                 "is_file": true,
             });
-            log_ctx.finish(req_json, None, true, None, Some(summary), None);
+            log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
             return Ok(output);
         }
 
@@ -166,7 +174,15 @@ impl CodingAgentTools {
                     Ok(result) => st.reset(result.entries, result.warnings, page_size),
                     Err(e) => {
                         drop(st);
-                        log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None);
+                        log_ctx.finish(
+                            req_json,
+                            None,
+                            false,
+                            Some(e.to_string()),
+                            None,
+                            None,
+                            None,
+                        );
                         return Err(e);
                     }
                 }
@@ -212,7 +228,7 @@ impl CodingAgentTools {
             "shown": shown,
             "total": total,
         });
-        log_ctx.finish(req_json, None, true, None, Some(summary), None);
+        log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
 
         Ok(output)
     }
@@ -288,6 +304,7 @@ Usage notes:
                 Some("Query cannot be empty".into()),
                 None,
                 None,
+                None,
             );
             return Err(ToolError::invalid_input("Query cannot be empty"));
         }
@@ -327,6 +344,7 @@ Usage notes:
                 Some(error_msg.clone()),
                 None,
                 Some(model.to_string()),
+                None,
             );
             return Err(ToolError::internal(error_msg));
         }
@@ -354,6 +372,7 @@ Usage notes:
                     Some(error_msg.clone()),
                     None,
                     Some(model.to_string()),
+                    None,
                 );
                 return Err(ToolError::internal(error_msg));
             }
@@ -373,6 +392,7 @@ Usage notes:
                     Some(error_msg.clone()),
                     None,
                     Some(model.to_string()),
+                    None,
                 );
                 return Err(ToolError::internal(error_msg));
             }
@@ -389,6 +409,7 @@ Usage notes:
                     Some(error_msg.clone()),
                     None,
                     Some(model.to_string()),
+                    None,
                 );
                 return Err(ToolError::internal(error_msg));
             }
@@ -406,14 +427,18 @@ Usage notes:
                 Some(error_msg.clone()),
                 None,
                 Some(model.to_string()),
+                None,
             );
             return Err(ToolError::internal(error_msg));
         }
 
         // Return plain text output (reject empty/whitespace-only strings)
         if let Some(text) = pick_non_empty_text(&result) {
-            // Write markdown response file
-            let response_file = log_ctx.write_markdown_response(&text);
+            // Write markdown response file and capture timestamp for consistent logging
+            let (response_file, completed_at) = log_ctx
+                .write_markdown_response(&text)
+                .map(|(f, ts)| (Some(f), Some(ts)))
+                .unwrap_or((None, None));
             log_ctx.finish(
                 req_json,
                 response_file,
@@ -421,6 +446,7 @@ Usage notes:
                 None,
                 None,
                 Some(model.to_string()),
+                completed_at,
             );
             return Ok(AgentOutput::new(text));
         }
@@ -433,6 +459,7 @@ Usage notes:
             Some(error_msg.into()),
             None,
             Some(model.to_string()),
+            None,
         );
         Err(ToolError::internal(error_msg))
     }
@@ -508,7 +535,7 @@ Usage notes:
         let abs_root = match paths::to_abs_string(&path_str) {
             Ok(s) => s,
             Err(msg) => {
-                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None);
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
                 return Err(ToolError::invalid_input(msg));
             }
         };
@@ -537,11 +564,11 @@ Usage notes:
                     "mode": format!("{:?}", output.mode).to_lowercase(),
                     "has_more": output.has_more,
                 });
-                log_ctx.finish(req_json, None, true, None, Some(summary), None);
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
                 Ok(output)
             }
             Err(e) => {
-                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None);
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
                 Err(e)
             }
         }
@@ -589,7 +616,7 @@ Usage notes:
         let abs_root = match paths::to_abs_string(&path_str) {
             Ok(s) => s,
             Err(msg) => {
-                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None);
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
                 return Err(ToolError::invalid_input(msg));
             }
         };
@@ -609,11 +636,11 @@ Usage notes:
                     "entries": output.entries.len(),
                     "has_more": output.has_more,
                 });
-                log_ctx.finish(req_json, None, true, None, Some(summary), None);
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
                 Ok(output)
             }
             Err(e) => {
-                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None);
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
                 Err(e)
             }
         }
@@ -640,14 +667,22 @@ Usage notes:
 
         if let Err(e) = just::ensure_just_available().await {
             let error_msg = e.to_string();
-            log_ctx.finish(req_json, None, false, Some(error_msg.clone()), None, None);
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                None,
+                None,
+            );
             return Err(ToolError::internal(error_msg));
         }
 
         let repo_root = match paths::to_abs_string(".") {
             Ok(r) => r,
             Err(e) => {
-                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None);
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
                 return Err(ToolError::internal(e));
             }
         };
@@ -655,7 +690,7 @@ Usage notes:
         let dir_filter = match dir.as_ref().map(|d| paths::to_abs_string(d)).transpose() {
             Ok(f) => f,
             Err(e) => {
-                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None);
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
                 return Err(ToolError::internal(e));
             }
         };
@@ -676,7 +711,15 @@ Usage notes:
                 Ok(r) => r,
                 Err(e) => {
                     let error_msg = e.to_string();
-                    log_ctx.finish(req_json, None, false, Some(error_msg.clone()), None, None);
+                    log_ctx.finish(
+                        req_json,
+                        None,
+                        false,
+                        Some(error_msg.clone()),
+                        None,
+                        None,
+                        None,
+                    );
                     return Err(ToolError::internal(error_msg));
                 }
             };
@@ -749,7 +792,7 @@ Usage notes:
             "items": output.items.len(),
             "has_more": output.has_more,
         });
-        log_ctx.finish(req_json, None, true, None, Some(summary), None);
+        log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
 
         Ok(output)
     }
@@ -782,14 +825,22 @@ Usage notes:
 
         if let Err(e) = just::ensure_just_available().await {
             let error_msg = e.to_string();
-            log_ctx.finish(req_json, None, false, Some(error_msg.clone()), None, None);
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                None,
+                None,
+            );
             return Err(ToolError::internal(error_msg));
         }
 
         let repo_root = match paths::to_abs_string(".") {
             Ok(r) => r,
             Err(e) => {
-                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None);
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
                 return Err(ToolError::internal(e));
             }
         };
@@ -802,12 +853,20 @@ Usage notes:
                     "stdout_lines": output.stdout.lines().count(),
                     "stderr_lines": output.stderr.lines().count(),
                 });
-                log_ctx.finish(req_json, None, true, None, Some(summary), None);
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
                 Ok(output)
             }
             Err(e) => {
                 let error_msg = e.to_string();
-                log_ctx.finish(req_json, None, false, Some(error_msg.clone()), None, None);
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    None,
+                    None,
+                );
                 Err(ToolError::internal(error_msg))
             }
         }
