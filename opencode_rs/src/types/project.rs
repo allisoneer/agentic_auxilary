@@ -11,14 +11,21 @@ pub struct Project {
     /// Project name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Project directory path.
-    pub path: String,
+    /// Project directory path (may be `path` or `directory`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Alternative field name for path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
     /// Whether this is the current project.
     #[serde(default)]
     pub current: bool,
     /// Project settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<ProjectSettings>,
+    /// Additional fields from server.
+    #[serde(flatten)]
+    pub extra: Option<serde_json::Value>,
 }
 
 /// Project settings.

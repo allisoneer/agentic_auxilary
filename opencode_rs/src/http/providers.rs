@@ -23,10 +23,24 @@ impl ProvidersApi {
 
     /// List available providers.
     ///
+    /// Returns the raw provider response (structure may vary by OpenCode version).
+    ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<Provider>> {
+    pub async fn list(&self) -> Result<serde_json::Value> {
+        self.http.request_json(Method::GET, "/provider", None).await
+    }
+
+    /// List available providers as typed objects.
+    ///
+    /// Note: This may fail if the server returns a different structure.
+    /// Use `list()` for the raw response if you encounter parsing errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails or response cannot be parsed.
+    pub async fn list_typed(&self) -> Result<Vec<Provider>> {
         self.http.request_json(Method::GET, "/provider", None).await
     }
 

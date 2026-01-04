@@ -8,10 +8,12 @@ use serde::{Deserialize, Serialize};
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
-    /// Project identifier.
-    pub project_id: String,
+    /// Project identifier (may not be present in all responses).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
     /// Working directory for the session.
-    pub directory: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
     /// Parent session ID (for forked sessions).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
@@ -22,17 +24,23 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub share: Option<ShareInfo>,
     /// Session title.
+    #[serde(default)]
     pub title: String,
     /// Session version.
+    #[serde(default)]
     pub version: String,
     /// Timestamps.
-    pub time: SessionTime,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<SessionTime>,
     /// Pending permission.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission: Option<serde_json::Value>,
     /// Revert information.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revert: Option<RevertInfo>,
+    /// Additional fields from server.
+    #[serde(flatten)]
+    pub extra: Option<serde_json::Value>,
 }
 
 /// Session summary with file changes.
@@ -149,14 +157,18 @@ pub struct SessionStatus {
 }
 
 /// Session diff response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDiff {
     /// Diff content.
+    #[serde(default)]
     pub diff: String,
     /// Files changed.
     #[serde(default)]
     pub files: Vec<String>,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: Option<serde_json::Value>,
 }
 
 /// Session todo item.
@@ -192,6 +204,15 @@ mod tests {
         let session: Session = serde_json::from_str(json).unwrap();
         assert_eq!(session.id, "s1");
         assert_eq!(session.title, "Test Session");
+    }
+
+    #[test]
+    fn test_session_minimal() {
+        // Session with only required field (id)
+        let json = r#"{"id": "s1"}"#;
+        let session: Session = serde_json::from_str(json).unwrap();
+        assert_eq!(session.id, "s1");
+        assert!(session.project_id.is_none());
     }
 
     #[test]
