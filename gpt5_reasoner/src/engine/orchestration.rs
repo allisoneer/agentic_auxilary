@@ -37,7 +37,13 @@ pub async fn gpt5_reasoner_impl(
     .to_string();
 
     // Initialize writer early (best-effort)
-    let writer = thoughts_tool::active_logs_dir().ok().map(LogWriter::new);
+    let writer = match thoughts_tool::active_logs_dir() {
+        Ok(dir) => Some(LogWriter::new(dir)),
+        Err(e) => {
+            tracing::debug!("JSONL logging unavailable: {}", e);
+            None
+        }
+    };
 
     // Best-effort JSONL append closure
     // Takes files_count as parameter to avoid capturing `files` (which is mutated later)
