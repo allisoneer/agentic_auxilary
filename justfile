@@ -6,7 +6,7 @@ ci := env("CI", "false")
 output_mode := env("OUTPUT_MODE", if ci == "true" { "normal" } else { "minimal" })
 
 # Tools to operate on (explicit; no autogeneration)
-TOOLS := "anthropic_async claudecode_rs coding_agent_tools gpt5_reasoner linear_tools pr_comments thoughts_tool universal_tool"
+TOOLS := "anthropic_async claudecode_rs coding_agent_tools gpt5_reasoner linear_tools opencode_rs pr_comments thoughts_tool universal_tool"
 
 default: help
 
