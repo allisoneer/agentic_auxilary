@@ -12,8 +12,6 @@
 mod http_endpoints;
 mod server_sse;
 
-use std::time::Duration;
-
 /// Check if integration tests should run.
 pub fn should_run() -> bool {
     std::env::var("OPENCODE_INTEGRATION").is_ok()
@@ -27,8 +25,8 @@ pub fn test_url() -> String {
 /// Create a test client.
 pub async fn create_test_client() -> opencode_rs::Client {
     opencode_rs::Client::builder()
-        .base_url(&test_url())
-        .timeout(Duration::from_secs(30))
+        .base_url(test_url())
+        .timeout_secs(30)
         .build()
         .expect("Failed to create test client")
 }

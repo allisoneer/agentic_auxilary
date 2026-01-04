@@ -92,28 +92,49 @@ pub struct McpActionResponse {
 
 // ==================== Misc API Responses ====================
 
-/// Response from LSP status endpoint.
+/// Status of an LSP server.
+///
+/// The `/lsp` endpoint returns an array of these.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LspStatus {
-    /// LSP servers (structure varies).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub servers: Option<serde_json::Value>,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
+pub struct LspServerStatus {
+    /// Server ID.
+    pub id: String,
+    /// Server name.
+    pub name: String,
+    /// Root directory path (relative to instance directory).
+    pub root: String,
+    /// Connection status.
+    pub status: LspConnectionStatus,
 }
 
-/// Response from formatter status endpoint.
+/// LSP server connection status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LspConnectionStatus {
+    /// Connected and running.
+    Connected,
+    /// Error state.
+    Error,
+    /// Unknown status (forward compatibility).
+    #[serde(other)]
+    Unknown,
+}
+
+/// Status of a formatter.
+///
+/// The `/formatter` endpoint returns an array of these.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FormatterStatus {
+pub struct FormatterInfo {
+    /// Formatter name.
+    pub name: String,
+    /// File extensions this formatter handles.
+    #[serde(default)]
+    pub extensions: Vec<String>,
     /// Whether formatter is enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// Response from OpenAPI doc endpoint.
@@ -211,17 +232,37 @@ mod tests {
     }
 
     #[test]
-    fn test_lsp_status_deserialize() {
-        let json = r#"{"servers":{"rust-analyzer":{"status":"running"}}}"#;
-        let resp: LspStatus = serde_json::from_str(json).unwrap();
-        assert!(resp.servers.is_some());
+    fn test_lsp_server_status_deserialize() {
+        let json = r#"{"id":"ra-1","name":"rust-analyzer","root":"./","status":"connected"}"#;
+        let resp: LspServerStatus = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.id, "ra-1");
+        assert_eq!(resp.name, "rust-analyzer");
+        assert_eq!(resp.status, LspConnectionStatus::Connected);
     }
 
     #[test]
-    fn test_formatter_status_deserialize() {
-        let json = r#"{"enabled":true}"#;
-        let resp: FormatterStatus = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.enabled, Some(true));
+    fn test_lsp_server_status_array_deserialize() {
+        let json = r#"[{"id":"ra-1","name":"rust-analyzer","root":"./","status":"connected"}]"#;
+        let resp: Vec<LspServerStatus> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].name, "rust-analyzer");
+    }
+
+    #[test]
+    fn test_formatter_info_deserialize() {
+        let json = r#"{"name":"rustfmt","extensions":[".rs"],"enabled":true}"#;
+        let resp: FormatterInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.name, "rustfmt");
+        assert!(resp.enabled);
+        assert_eq!(resp.extensions, vec![".rs"]);
+    }
+
+    #[test]
+    fn test_formatter_info_array_deserialize() {
+        let json = r#"[{"name":"rustfmt","extensions":[".rs"],"enabled":true}]"#;
+        let resp: Vec<FormatterInfo> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].name, "rustfmt");
     }
 
     #[test]

@@ -166,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let messages = client.messages().list(&session.id).await?;
     println!("   Total messages: {}", messages.len());
     for msg in &messages {
-        println!("   - {} (parts: {})", msg.role, msg.parts.len());
+        println!("   - {} (parts: {})", msg.role(), msg.parts.len());
     }
 
     // Step 11: Cleanup - delete session

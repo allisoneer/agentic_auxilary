@@ -181,8 +181,14 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/session/s1/message"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {"id": "m1", "role": "user", "parts": []},
-                {"id": "m2", "role": "assistant", "parts": []}
+                {
+                    "info": {"id": "m1", "sessionId": "s1", "role": "user", "time": {"created": 1234567890}},
+                    "parts": []
+                },
+                {
+                    "info": {"id": "m2", "sessionId": "s1", "role": "assistant", "time": {"created": 1234567891}},
+                    "parts": []
+                }
             ])))
             .mount(&mock_server)
             .await;
@@ -197,8 +203,8 @@ mod tests {
         let messages = MessagesApi::new(http);
         let list = messages.list("s1").await.unwrap();
         assert_eq!(list.len(), 2);
-        assert_eq!(list[0].role, "user");
-        assert_eq!(list[1].role, "assistant");
+        assert_eq!(list[0].role(), "user");
+        assert_eq!(list[1].role(), "assistant");
     }
 
     #[tokio::test]

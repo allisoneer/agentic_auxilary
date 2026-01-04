@@ -19,15 +19,15 @@ impl FindApi {
         Self { http }
     }
 
-    /// Search for text in files.
+    /// Search for text in files using ripgrep.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn text(&self, query: &str) -> Result<FindResponse> {
-        let encoded = urlencoding::encode(query);
+    pub async fn text(&self, pattern: &str) -> Result<FindResponse> {
+        let encoded = urlencoding::encode(pattern);
         self.http
-            .request_json(Method::GET, &format!("/find?query={}", encoded), None)
+            .request_json(Method::GET, &format!("/find?pattern={}", encoded), None)
             .await
     }
 

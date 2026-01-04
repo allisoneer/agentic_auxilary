@@ -4,7 +4,7 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::api::{FormatterStatus, LspStatus, OpenApiDoc};
+use crate::types::api::{FormatterInfo, LspServerStatus, OpenApiDoc};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
@@ -65,21 +65,21 @@ impl MiscApi {
             .await
     }
 
-    /// Get LSP status.
+    /// Get LSP server status for all configured LSP servers.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn lsp(&self) -> Result<LspStatus> {
+    pub async fn lsp(&self) -> Result<Vec<LspServerStatus>> {
         self.http.request_json(Method::GET, "/lsp", None).await
     }
 
-    /// Get formatter status.
+    /// Get formatter status for all configured formatters.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn formatter(&self) -> Result<FormatterStatus> {
+    pub async fn formatter(&self) -> Result<Vec<FormatterInfo>> {
         self.http
             .request_json(Method::GET, "/formatter", None)
             .await

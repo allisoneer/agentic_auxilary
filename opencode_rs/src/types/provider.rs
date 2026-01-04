@@ -3,6 +3,23 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Response from the provider list endpoint.
+///
+/// Contains all available providers along with defaults and connection status.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderListResponse {
+    /// All available providers.
+    #[serde(default)]
+    pub all: Vec<Provider>,
+    /// Default model for each provider (provider_id -> model_id).
+    #[serde(default)]
+    pub default: HashMap<String, String>,
+    /// List of connected/authenticated provider IDs.
+    #[serde(default)]
+    pub connected: Vec<String>,
+}
+
 /// Provider source type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

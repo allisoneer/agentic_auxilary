@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 pub struct MessageInfo {
     /// Unique message identifier.
     pub id: String,
-    /// Session ID.
-    pub session_id: String,
+    /// Session ID (may be omitted when context implies it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     /// Message role (user, assistant, system).
     pub role: String,
     /// Message timestamps.
@@ -35,31 +36,38 @@ pub struct MessageTime {
     pub completed: Option<i64>,
 }
 
-/// A message with its parts.
+/// A message with its parts (API response format).
+///
+/// This is the format returned by the message list endpoint.
+/// It contains a nested `info` object and a `parts` array.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MessageWithParts {
-    /// Message info.
-    #[serde(flatten)]
+pub struct Message {
+    /// Message info/metadata.
     pub info: MessageInfo,
     /// Content parts.
     pub parts: Vec<Part>,
 }
 
-/// A message in a session (simplified for list responses).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Message {
-    /// Unique message identifier.
-    pub id: String,
-    /// Message role (user, assistant, system).
-    pub role: String,
-    /// Content parts of the message.
-    pub parts: Vec<Part>,
-    /// Model used to generate the message (if assistant).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
+impl Message {
+    /// Get the message ID.
+    pub fn id(&self) -> &str {
+        &self.info.id
+    }
+
+    /// Get the session ID if present.
+    pub fn session_id(&self) -> Option<&str> {
+        self.info.session_id.as_deref()
+    }
+
+    /// Get the message role.
+    pub fn role(&self) -> &str {
+        &self.info.role
+    }
 }
+
+/// Alias for backward compatibility.
+pub type MessageWithParts = Message;
 
 /// A content part within a message (12 variants).
 #[derive(Debug, Clone, Serialize, Deserialize)]
