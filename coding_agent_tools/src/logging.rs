@@ -3,6 +3,7 @@
 //! Provides a helper context that reduces duplication when logging tool calls
 //! to the thoughts logs directory using agentic_logging.
 
+use agentic_logging::chrono::{DateTime, Utc};
 use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
 use thoughts_tool::active_logs_dir;
 
@@ -39,19 +40,27 @@ impl ToolLogCtx {
         }
     }
 
-    /// Write a markdown response file and return the filename.
+    /// Write a markdown response file and return the filename with timestamp.
+    ///
+    /// Returns the filename and the `completed_at` timestamp used, so callers can
+    /// pass the same timestamp to `finish()` for consistent day-bucket placement.
     ///
     /// Returns None if logging is unavailable or disabled.
-    pub fn write_markdown_response(&self, content: &str) -> Option<String> {
+    pub fn write_markdown_response(&self, content: &str) -> Option<(String, DateTime<Utc>)> {
         let writer = self.writer.as_ref()?;
         let (completed_at, _) = self.timer.finish();
         writer
             .write_markdown_response(completed_at, &self.timer.call_id, content)
             .ok()
             .filter(|s| !s.is_empty())
+            .map(|filename| (filename, completed_at))
     }
 
     /// Finish the logging context and append the JSONL record.
+    ///
+    /// If `completed_at` is provided (e.g., from `write_markdown_response`), it will be
+    /// used for the JSONL record to ensure consistent day-bucket placement. Otherwise,
+    /// a fresh timestamp is captured.
     ///
     /// This is best-effort: errors are logged via tracing but do not fail the call.
     pub fn finish(
@@ -62,12 +71,17 @@ impl ToolLogCtx {
         error: Option<String>,
         summary: Option<serde_json::Value>,
         model: Option<String>,
+        completed_at: Option<DateTime<Utc>>,
     ) {
         let Some(writer) = self.writer else {
             return;
         };
 
-        let (completed_at, duration_ms) = self.timer.finish();
+        // Use provided timestamp for consistency, or capture fresh one
+        let (completed_at, duration_ms) = match completed_at {
+            Some(ts) => (ts, self.timer.elapsed_ms()),
+            None => self.timer.finish(),
+        };
         let record = ToolCallRecord {
             call_id: self.timer.call_id,
             server: self.server,
@@ -114,6 +128,7 @@ mod tests {
             serde_json::json!({"test": true}),
             None,
             true,
+            None,
             None,
             None,
             None,
@@ -370,6 +385,7 @@ mod tests {
             None,
             Some(serde_json::json!({"result": "ok"})),
             None,
+            None,
         );
         // Test passes if we reach here without panic
     }
@@ -384,6 +400,7 @@ mod tests {
             None,
             false, // success = false
             Some("Something went wrong".into()),
+            None,
             None,
             None,
         );
@@ -405,7 +422,7 @@ mod tests {
             None => {
                 // Expected in environments without active branch
             }
-            Some(filename) => {
+            Some((filename, _completed_at)) => {
                 // Valid in environments with active branch
                 assert!(filename.ends_with(".md"));
             }

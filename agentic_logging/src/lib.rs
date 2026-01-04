@@ -8,6 +8,9 @@
 
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use chrono::{DateTime, Utc};
+
+// Re-export chrono types for downstream crates
+pub use chrono;
 use fd_lock::RwLock;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
@@ -113,6 +116,14 @@ impl CallTimer {
         let duration_ms = self.start_instant.elapsed().as_millis();
         (completed_at, duration_ms)
     }
+
+    /// Return the elapsed duration in milliseconds without capturing a new timestamp.
+    ///
+    /// Useful when you need to reuse a previously captured `completed_at` timestamp
+    /// for consistent day-bucket placement.
+    pub fn elapsed_ms(&self) -> u128 {
+        self.start_instant.elapsed().as_millis()
+    }
 }
 
 /// Writer for JSONL log files and markdown response files.
@@ -177,7 +188,6 @@ impl LogWriter {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
-            .read(true)
             .open(&jsonl_path)?;
         let mut lock = RwLock::new(file);
         let mut guard = lock.write()?;
