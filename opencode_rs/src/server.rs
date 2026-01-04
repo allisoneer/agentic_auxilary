@@ -148,7 +148,7 @@ impl ManagedServer {
             if start.elapsed() > deadline {
                 // Fallback: try /doc probe
                 let probe_client = reqwest::Client::new();
-                let doc_url = base_url.join("doc").unwrap();
+                let doc_url = base_url.join("doc")?;
                 match probe_client
                     .get(doc_url)
                     .timeout(Duration::from_millis(500))
