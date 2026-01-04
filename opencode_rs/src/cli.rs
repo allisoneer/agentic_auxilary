@@ -234,7 +234,7 @@ impl CliRunner {
 
         cmd.arg("--").arg(prompt);
         cmd.stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::inherit()) // Inherit stderr to avoid buffer deadlock if CLI writes >64KB
             .kill_on_drop(true);
 
         if let Some(dir) = &opts.directory {

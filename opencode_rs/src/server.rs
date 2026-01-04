@@ -102,6 +102,9 @@ impl ManagedServer {
     /// Returns an error if the server fails to start or doesn't become ready
     /// within the configured timeout.
     pub async fn start(opts: ServerOptions) -> Result<Self> {
+        // Fallback port 4096 matches the default client port in client.rs.
+        // If portpicker fails AND no port is specified, this creates a predictable fallback,
+        // though in practice portpicker rarely fails.
         let port = opts
             .port
             .unwrap_or_else(|| portpicker::pick_unused_port().unwrap_or(4096));
@@ -154,7 +157,7 @@ impl ManagedServer {
                 {
                     Ok(resp) if resp.status().is_success() => break,
                     _ => {
-                        // Kill the child process
+                        // Kill the child process (ignore error if already exited)
                         let _ = child.kill().await;
                         return Err(OpencodeError::ServerTimeout {
                             timeout_ms: opts.startup_timeout_ms,
@@ -203,6 +206,7 @@ impl ManagedServer {
     ///
     /// Returns an error if the server cannot be stopped.
     pub async fn stop(mut self) -> Result<()> {
+        // Errors ignored: process may already be terminated
         let _ = self.child.kill().await;
         let _ = self.child.wait().await;
         Ok(())

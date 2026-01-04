@@ -60,19 +60,32 @@ impl HttpClient {
     }
 
     /// Create from base URL, directory, and optional existing client.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be built.
     pub fn from_parts(
         base_url: url::Url,
         directory: Option<PathBuf>,
         http: Option<ReqClient>,
-    ) -> Self {
-        Self {
-            inner: http.unwrap_or_default(),
+    ) -> Result<Self> {
+        let timeout = Duration::from_secs(300);
+        let inner = match http {
+            Some(client) => client,
+            None => ReqClient::builder()
+                .timeout(timeout)
+                .build()
+                .map_err(|e| OpencodeError::Network(e.to_string()))?,
+        };
+
+        Ok(Self {
+            inner,
             cfg: HttpConfig {
                 base_url: base_url.to_string().trim_end_matches('/').to_string(),
                 directory: directory.map(|p| p.to_string_lossy().to_string()),
-                timeout: Duration::from_secs(300),
+                timeout,
             },
-        }
+        })
     }
 
     /// Get the base URL.

@@ -34,6 +34,7 @@ pub struct Pty {
 
 /// PTY terminal size.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PtySize {
     /// Number of columns.
     pub cols: u16,

@@ -152,10 +152,13 @@ impl SseSubscriber {
         let filter = session_filter;
 
         let task = tokio::spawn(async move {
+            // Note: max_elapsed_time: None means the subscriber will retry indefinitely.
+            // This is intentional for long-lived SSE connections that should reconnect
+            // on any transient network failure.
             let mut backoff = ExponentialBackoff {
                 initial_interval: initial,
                 max_interval: max,
-                max_elapsed_time: None, // Retry forever
+                max_elapsed_time: None,
                 ..ExponentialBackoff::default()
             };
 
@@ -219,6 +222,7 @@ impl SseSubscriber {
                                     }
                                 }
                                 Err(e) => {
+                                    // TODO(3): Consider exposing parse errors via Error event variant or callback
                                     tracing::warn!("Failed to parse SSE event: {}", e);
                                 }
                             }
