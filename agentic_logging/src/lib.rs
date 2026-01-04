@@ -39,6 +39,8 @@ pub struct TokenUsage {
     pub prompt: u32,
     pub completion: u32,
     pub total: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<u32>,
 }
 
 /// A single tool call record for JSONL logging.
@@ -402,11 +404,22 @@ mod tests {
             prompt: 100,
             completion: 50,
             total: 150,
+            reasoning_tokens: Some(7),
         };
         let json = serde_json::to_string(&usage).unwrap();
         assert!(json.contains("\"prompt\":100"));
         assert!(json.contains("\"completion\":50"));
         assert!(json.contains("\"total\":150"));
+        assert!(json.contains("\"reasoning_tokens\":7"));
+
+        let usage_none = TokenUsage {
+            prompt: 1,
+            completion: 2,
+            total: 3,
+            reasoning_tokens: None,
+        };
+        let json_none = serde_json::to_string(&usage_none).unwrap();
+        assert!(!json_none.contains("reasoning_tokens"));
     }
 
     #[test]
