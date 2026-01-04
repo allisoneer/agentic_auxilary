@@ -139,7 +139,7 @@ dependencies = [
 
 [[package]]
 name = "anthropic-async"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "backoff",
@@ -817,7 +817,7 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 
 [[package]]
 name = "claudecode"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
@@ -847,7 +847,7 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -2480,7 +2480,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.4.5"
+version = "0.4.6"
 dependencies = [
  "async-openai",
  "clap",
@@ -3855,7 +3855,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -5197,7 +5197,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "assert_cmd",

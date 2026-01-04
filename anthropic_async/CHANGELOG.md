@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [0.2.1] - 2026-01-03
+
+### 🚜 Refactor
+- *(build)* Migrate from Makefile to Just build system
 ## [0.2.0] - 2025-12-16
 
 ### ⚙️  Miscellaneous

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.2] - 2026-01-03
+
+### ⛰️  Features
+- *(pr_comments)* Default show_ids to true for MCP text output
+
+### 🚜 Refactor
+- *(build)* Migrate from Makefile to Just build system
 ## [0.5.1] - 2026-01-02
 
 ### ⚙️  Miscellaneous
