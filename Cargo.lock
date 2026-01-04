@@ -864,6 +864,7 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 name = "coding_agent_tools"
 version = "0.1.5"
 dependencies = [
+ "agentic_logging",
  "anyhow",
  "clap",
  "claudecode",
@@ -880,6 +881,7 @@ dependencies = [
  "shell-escape",
  "tempfile",
  "thiserror 1.0.69",
+ "thoughts-tool",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5227,6 +5229,7 @@ dependencies = [
 name = "thoughts-tool"
 version = "0.5.1"
 dependencies = [
+ "agentic_logging",
  "anyhow",
  "assert_cmd",
  "async-trait",
