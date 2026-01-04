@@ -85,7 +85,7 @@ pub struct ToolCallRecord {
 /// Check if logging is disabled via environment variable.
 pub fn logging_disabled() -> bool {
     match std::env::var("AGENTIC_LOGGING_DISABLED") {
-        Ok(v) => matches!(v.as_str(), "1" | "true" | "yes" | "on"),
+        Ok(v) => matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on"),
         Err(_) => false,
     }
 }
