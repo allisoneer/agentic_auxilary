@@ -468,12 +468,11 @@ async fn test_vcs_info() {
 
     let client = build_client();
 
-    // Get VCS info
+    // Get VCS info - the .expect() validates we got a successful response
     let vcs = client.misc().vcs().await.expect("Failed to get VCS info");
 
-    // In a git repo, should have branch info
-    // But this could be non-git, so just verify we got a response
-    assert!(vcs.r#type.is_some() || vcs.r#type.is_none());
+    // Log the VCS type for debugging (type is optional as this could be non-git)
+    println!("VCS type: {:?}", vcs.r#type);
 }
 
 /// Test path info.

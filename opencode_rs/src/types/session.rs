@@ -41,7 +41,7 @@ pub struct Session {
     pub revert: Option<RevertInfo>,
     /// Additional fields from server.
     #[serde(flatten)]
-    pub extra: Option<serde_json::Value>,
+    pub extra: serde_json::Value,
 }
 
 /// Session summary with file changes.
@@ -196,7 +196,7 @@ pub struct SessionDiff {
     pub files: Vec<String>,
     /// Additional fields.
     #[serde(flatten)]
-    pub extra: Option<serde_json::Value>,
+    pub extra: serde_json::Value,
 }
 
 /// Session todo item.

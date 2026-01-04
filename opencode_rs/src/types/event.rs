@@ -644,4 +644,6 @@ mod tests {
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::TodoUpdated { .. }));
     }
+
+    // TODO(3): Add tests for GlobalEventEnvelope deserialization and round-trip serialization
 }

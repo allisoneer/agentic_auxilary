@@ -44,14 +44,8 @@ async fn test_sse_session_created_event() {
 
     let client = create_test_client().await;
 
-    // Create a session to trigger session.created event
-    let session = client
-        .sessions()
-        .create(&Default::default())
-        .await
-        .expect("Failed to create session");
-
-    // Subscribe and look for the session.created event
+    // Subscribe FIRST to avoid race condition - we need to be listening
+    // before creating the session to catch the session.created event
     let mut subscription = client
         .subscribe()
         .await
@@ -60,8 +54,36 @@ async fn test_sse_session_created_event() {
     // Skip server.connected
     let _ = timeout(Duration::from_secs(5), subscription.next_event()).await;
 
-    // The session.created event may have already been sent, so we might need to
-    // create another session to see it. For now, just verify we can deserialize.
+    // Now create a session - the event will be captured
+    let session = client
+        .sessions()
+        .create(&Default::default())
+        .await
+        .expect("Failed to create session");
+
+    // Poll for the session.created event
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let mut found_event = false;
+
+    while tokio::time::Instant::now() < deadline {
+        if let Ok(Some(event)) = timeout(Duration::from_secs(1), subscription.next_event()).await {
+            if let Event::SessionCreated { properties } = &event {
+                // Verify the event has typed SessionInfo
+                assert!(
+                    !properties.info.id.is_empty(),
+                    "SessionCreated should have info.id"
+                );
+                assert_eq!(
+                    properties.info.id, session.id,
+                    "SessionCreated info.id should match created session"
+                );
+                found_event = true;
+                break;
+            }
+        }
+    }
+
+    assert!(found_event, "Should have received SessionCreated event");
 
     // Clean up
     let _ = client.sessions().delete(&session.id).await;

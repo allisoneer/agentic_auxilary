@@ -109,7 +109,7 @@ impl OpencodeError {
     pub fn http(status: u16, body_text: &str) -> Self {
         // Try to parse as JSON to extract NamedError fields
         let parsed: Option<serde_json::Value> = serde_json::from_str(body_text).ok();
-        let info = parsed.clone().map(HttpErrorBody::from_json);
+        let info = parsed.map(HttpErrorBody::from_json);
 
         Self::Http {
             status,

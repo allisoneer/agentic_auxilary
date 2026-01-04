@@ -25,11 +25,11 @@ pub struct Project {
     pub settings: Option<ProjectSettings>,
     /// Additional fields from server.
     #[serde(flatten)]
-    pub extra: Option<serde_json::Value>,
+    pub extra: serde_json::Value,
 }
 
 /// Project settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettings {
     /// Default model for this project.

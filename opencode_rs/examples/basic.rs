@@ -44,5 +44,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     println!("Prompt sent successfully!");
+
+    // Clean up session to avoid accumulating dangling sessions
+    client.sessions().delete(&session.id).await?;
+    println!("Session deleted");
+
     Ok(())
 }

@@ -144,6 +144,7 @@ pub struct VcsInfo {
 }
 
 /// Log entry.
+// TODO(3): Consider using enum for `level` field (Debug/Info/Warn/Error) with #[serde(other)] for forward-compat
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogEntry {
