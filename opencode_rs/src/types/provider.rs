@@ -1,6 +1,24 @@
 //! Provider types for opencode_rs.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Provider source type.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ProviderSource {
+    /// From environment variable.
+    Env,
+    /// From config file.
+    Config,
+    /// Custom provider.
+    Custom,
+    /// From API.
+    Api,
+    /// Unknown source (forward compatibility).
+    #[serde(other)]
+    Unknown,
+}
 
 /// A provider configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,17 +27,25 @@ pub struct Provider {
     /// Provider identifier.
     pub id: String,
     /// Provider display name.
+    pub name: String,
+    /// Source of this provider configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    /// Available models for this provider.
+    pub source: Option<ProviderSource>,
+    /// Environment variable names for this provider.
     #[serde(default)]
-    pub models: Vec<Model>,
-    /// Whether this provider is configured.
-    #[serde(default)]
-    pub configured: bool,
-    /// Error message if provider failed to initialize.
+    pub env: Vec<String>,
+    /// API key if set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub key: Option<String>,
+    /// Provider options.
+    #[serde(default)]
+    pub options: HashMap<String, serde_json::Value>,
+    /// Available models for this provider (keyed by model ID).
+    #[serde(default)]
+    pub models: HashMap<String, Model>,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 /// A model available from a provider.

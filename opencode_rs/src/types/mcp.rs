@@ -1,6 +1,7 @@
 //! MCP (Model Context Protocol) types for opencode_rs.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// MCP server status.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +26,7 @@ pub struct McpServer {
     pub args: Vec<String>,
     /// Environment variables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env: Option<serde_json::Value>,
+    pub env: Option<HashMap<String, String>>,
     /// Connection status.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<McpConnectionStatus>,
@@ -81,7 +82,7 @@ pub struct McpAddRequest {
     pub args: Vec<String>,
     /// Environment variables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env: Option<serde_json::Value>,
+    pub env: Option<HashMap<String, String>>,
 }
 
 /// MCP auth start request.

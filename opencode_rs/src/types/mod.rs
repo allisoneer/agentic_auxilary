@@ -2,7 +2,9 @@
 //!
 //! This module contains session, message, event, and other types.
 
+pub mod api;
 pub mod config;
+pub mod error;
 pub mod event;
 pub mod file;
 pub mod mcp;
@@ -14,7 +16,9 @@ pub mod pty;
 pub mod session;
 pub mod tool;
 
+pub use api::*;
 pub use config::*;
+pub use error::*;
 pub use event::*;
 pub use file::*;
 pub use mcp::*;

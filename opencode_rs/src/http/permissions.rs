@@ -4,7 +4,8 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::permission::{Permission, PermissionReplyRequest};
+use crate::types::api::PermissionReplyResponse;
+use crate::types::permission::{PermissionReplyRequest, PermissionRequest};
 use reqwest::Method;
 
 /// Permissions API client.
@@ -24,7 +25,7 @@ impl PermissionsApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<Permission>> {
+    pub async fn list(&self) -> Result<Vec<PermissionRequest>> {
         self.http
             .request_json(Method::GET, "/permission", None)
             .await
@@ -39,7 +40,7 @@ impl PermissionsApi {
         &self,
         request_id: &str,
         reply: &PermissionReplyRequest,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<PermissionReplyResponse> {
         let body = serde_json::to_value(reply)?;
         self.http
             .request_json(

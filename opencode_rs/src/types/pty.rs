@@ -1,6 +1,7 @@
 //! PTY (pseudo-terminal) types for opencode_rs.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// A PTY session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +20,7 @@ pub struct Pty {
     pub cwd: Option<String>,
     /// Environment variables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env: Option<serde_json::Value>,
+    pub env: Option<HashMap<String, String>>,
     /// PTY size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<PtySize>,
@@ -55,7 +56,7 @@ pub struct CreatePtyRequest {
     pub cwd: Option<String>,
     /// Environment variables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env: Option<serde_json::Value>,
+    pub env: Option<HashMap<String, String>>,
     /// Initial terminal size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<PtySize>,

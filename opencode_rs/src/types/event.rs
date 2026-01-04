@@ -2,6 +2,9 @@
 //!
 //! Contains 40 event variants matching OpenCode's server.ts.
 
+use crate::types::error::APIError;
+use crate::types::permission::{PermissionReply, PermissionRequest};
+use crate::types::session::Session;
 use serde::{Deserialize, Serialize};
 
 /// Wrapper for events from /global/event which include directory context.
@@ -54,22 +57,22 @@ pub enum Event {
     /// Session created.
     #[serde(rename = "session.created")]
     SessionCreated {
-        /// Event properties.
-        properties: SessionEventProps,
+        /// Event properties with full session info.
+        properties: SessionInfoProps,
     },
 
     /// Session updated.
     #[serde(rename = "session.updated")]
     SessionUpdated {
-        /// Event properties.
-        properties: SessionEventProps,
+        /// Event properties with full session info.
+        properties: SessionInfoProps,
     },
 
     /// Session deleted.
     #[serde(rename = "session.deleted")]
     SessionDeleted {
-        /// Event properties.
-        properties: SessionEventProps,
+        /// Event properties with full session info.
+        properties: SessionInfoProps,
     },
 
     /// Session diff.
@@ -83,7 +86,7 @@ pub enum Event {
     /// Session error.
     #[serde(rename = "session.error")]
     SessionError {
-        /// Event properties.
+        /// Event properties with typed error.
         properties: SessionErrorProps,
     },
 
@@ -106,23 +109,23 @@ pub enum Event {
     /// Session became idle.
     #[serde(rename = "session.idle")]
     SessionIdle {
-        /// Event properties.
-        properties: SessionEventProps,
+        /// Event properties with session ID.
+        properties: SessionIdleProps,
     },
 
     // ==================== Messages (4) ====================
     /// Message updated.
     #[serde(rename = "message.updated")]
     MessageUpdated {
-        /// Event properties.
-        properties: MessageEventProps,
+        /// Event properties with full message info.
+        properties: MessageUpdatedProps,
     },
 
     /// Message removed.
     #[serde(rename = "message.removed")]
     MessageRemoved {
-        /// Event properties.
-        properties: MessageEventProps,
+        /// Event properties with session and message IDs.
+        properties: MessageRemovedProps,
     },
 
     /// Message part updated (streaming).
@@ -185,25 +188,22 @@ pub enum Event {
     /// Permission replied.
     #[serde(rename = "permission.replied")]
     PermissionReplied {
-        /// Event properties.
-        #[serde(default)]
-        properties: serde_json::Value,
+        /// Event properties with reply info.
+        properties: PermissionRepliedProps,
     },
 
     /// Permission asked.
     #[serde(rename = "permission.asked")]
     PermissionAsked {
-        /// Event properties.
-        #[serde(default)]
-        properties: serde_json::Value,
+        /// Event properties with permission request.
+        properties: PermissionAskedProps,
     },
 
     /// Permission replied next.
     #[serde(rename = "permission.replied-next")]
     PermissionRepliedNext {
-        /// Event properties.
-        #[serde(default)]
-        properties: serde_json::Value,
+        /// Event properties with reply info.
+        properties: PermissionRepliedProps,
     },
 
     // ==================== Project/Files (4) ====================
@@ -344,16 +344,38 @@ pub enum Event {
     Unknown,
 }
 
-/// Properties for session events.
+// ==================== Session Event Properties ====================
+
+/// Properties for session events (created/updated/deleted).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionEventProps {
-    /// Session ID.
-    #[serde(default)]
-    pub session_id: Option<String>,
+pub struct SessionInfoProps {
+    /// Full session info.
+    pub info: Session,
     /// Additional properties.
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+/// Properties for session.idle events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionIdleProps {
+    /// Session ID.
+    pub session_id: String,
+    /// Additional properties.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Error union that can be APIError or unknown value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AssistantError {
+    /// Known API error.
+    Api(APIError),
+    /// Unknown error format (forward compatibility).
+    Unknown(serde_json::Value),
 }
 
 /// Properties for session error events.
@@ -363,24 +385,35 @@ pub struct SessionErrorProps {
     /// Session ID.
     #[serde(default)]
     pub session_id: Option<String>,
-    /// Error message.
+    /// Typed error.
     #[serde(default)]
-    pub error: Option<String>,
+    pub error: Option<AssistantError>,
     /// Additional properties.
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-/// Properties for message events.
+// ==================== Message Event Properties ====================
+
+/// Properties for message.updated events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MessageEventProps {
+pub struct MessageUpdatedProps {
+    /// Full message info.
+    pub info: crate::types::message::MessageInfo,
+    /// Additional properties.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Properties for message.removed events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageRemovedProps {
     /// Session ID.
-    #[serde(default)]
-    pub session_id: Option<String>,
+    pub session_id: String,
     /// Message ID.
-    #[serde(default)]
-    pub message_id: Option<String>,
+    pub message_id: String,
     /// Additional properties.
     #[serde(flatten)]
     pub extra: serde_json::Value,
@@ -410,18 +443,47 @@ pub struct MessagePartEventProps {
     pub extra: serde_json::Value,
 }
 
+// ==================== Permission Event Properties ====================
+
+/// Properties for permission.asked events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionAskedProps {
+    /// The permission request (flattened).
+    #[serde(flatten)]
+    pub request: PermissionRequest,
+}
+
+/// Properties for permission.replied events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionRepliedProps {
+    /// Session ID.
+    pub session_id: String,
+    /// Request ID that was replied to.
+    pub request_id: String,
+    /// The reply given.
+    pub reply: PermissionReply,
+    /// Additional properties.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 impl Event {
     /// Extract session_id if present in this event.
     pub fn session_id(&self) -> Option<&str> {
         match self {
-            Event::SessionCreated { properties } => properties.session_id.as_deref(),
-            Event::SessionUpdated { properties } => properties.session_id.as_deref(),
-            Event::SessionDeleted { properties } => properties.session_id.as_deref(),
-            Event::SessionIdle { properties } => properties.session_id.as_deref(),
+            Event::SessionCreated { properties } => Some(&properties.info.id),
+            Event::SessionUpdated { properties } => Some(&properties.info.id),
+            Event::SessionDeleted { properties } => Some(&properties.info.id),
+            Event::SessionIdle { properties } => Some(&properties.session_id),
             Event::SessionError { properties } => properties.session_id.as_deref(),
-            Event::MessageUpdated { properties } => properties.session_id.as_deref(),
-            Event::MessageRemoved { properties } => properties.session_id.as_deref(),
+            Event::MessageUpdated { properties } => Some(&properties.info.session_id),
+            Event::MessageRemoved { properties } => Some(&properties.session_id),
             Event::MessagePartUpdated { properties } => properties.session_id.as_deref(),
+            Event::PermissionAsked { properties } => Some(&properties.request.session_id),
+            Event::PermissionReplied { properties } => Some(&properties.session_id),
+            Event::PermissionRepliedNext { properties } => Some(&properties.session_id),
             _ => None,
         }
     }
@@ -443,10 +505,19 @@ mod tests {
 
     #[test]
     fn test_event_deserialize_session_created() {
-        let json = r#"{"type":"session.created","properties":{"sessionId":"abc123"}}"#;
+        let json = r#"{
+            "type": "session.created",
+            "properties": {
+                "info": {
+                    "id": "sess-123",
+                    "title": "Test Session",
+                    "version": "1.0"
+                }
+            }
+        }"#;
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::SessionCreated { .. }));
-        assert_eq!(event.session_id(), Some("abc123"));
+        assert_eq!(event.session_id(), Some("sess-123"));
     }
 
     #[test]
@@ -484,9 +555,87 @@ mod tests {
 
     #[test]
     fn test_event_deserialize_permission_asked() {
-        let json = r#"{"type":"permission.asked","properties":{"requestId":"r1"}}"#;
+        let json = r#"{
+            "type": "permission.asked",
+            "properties": {
+                "id": "req-123",
+                "sessionId": "sess-456",
+                "permission": "file.write",
+                "patterns": ["**/*.rs"]
+            }
+        }"#;
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::PermissionAsked { .. }));
+        assert_eq!(event.session_id(), Some("sess-456"));
+    }
+
+    #[test]
+    fn test_event_deserialize_permission_replied() {
+        let json = r#"{
+            "type": "permission.replied",
+            "properties": {
+                "sessionId": "sess-456",
+                "requestId": "req-123",
+                "reply": "always"
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::PermissionReplied { .. }));
+        assert_eq!(event.session_id(), Some("sess-456"));
+    }
+
+    #[test]
+    fn test_event_deserialize_message_updated() {
+        let json = r#"{
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg-123",
+                    "sessionId": "sess-456",
+                    "role": "assistant",
+                    "time": {"created": 1234567890}
+                }
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::MessageUpdated { .. }));
+        assert_eq!(event.session_id(), Some("sess-456"));
+    }
+
+    #[test]
+    fn test_event_deserialize_message_removed() {
+        let json = r#"{
+            "type": "message.removed",
+            "properties": {
+                "sessionId": "sess-456",
+                "messageId": "msg-123"
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::MessageRemoved { .. }));
+        assert_eq!(event.session_id(), Some("sess-456"));
+    }
+
+    #[test]
+    fn test_event_deserialize_session_error() {
+        let json = r#"{
+            "type": "session.error",
+            "properties": {
+                "sessionId": "sess-456",
+                "error": {"message": "Something went wrong", "isRetryable": false}
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        if let Event::SessionError { properties } = &event {
+            assert!(properties.error.is_some());
+            if let Some(AssistantError::Api(err)) = &properties.error {
+                assert_eq!(err.message, "Something went wrong");
+            } else {
+                panic!("Expected APIError");
+            }
+        } else {
+            panic!("Expected SessionError");
+        }
     }
 
     #[test]

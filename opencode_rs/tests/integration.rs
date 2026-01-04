@@ -369,11 +369,12 @@ async fn test_providers_list() {
         .await
         .expect("Failed to list providers");
 
-    // Should have some provider data
-    assert!(
-        providers.is_object() || providers.is_array(),
-        "Should have provider data"
-    );
+    // Should have some providers
+    // Note: List may be empty if no providers are configured
+    for provider in &providers {
+        assert!(!provider.id.is_empty(), "Provider should have an ID");
+        assert!(!provider.name.is_empty(), "Provider should have a name");
+    }
 }
 
 /// Test MCP status.
@@ -509,9 +510,9 @@ async fn test_openapi_doc() {
         .expect("Failed to get OpenAPI doc");
 
     // Should be a valid OpenAPI document
-    assert!(doc.is_object(), "Doc should be a JSON object");
+    assert!(doc.spec.is_object(), "Doc should be a JSON object");
     assert!(
-        doc.get("openapi").is_some() || doc.get("swagger").is_some(),
+        doc.spec.get("openapi").is_some() || doc.spec.get("swagger").is_some(),
         "Should be an OpenAPI/Swagger document"
     );
 }

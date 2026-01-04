@@ -1,5 +1,6 @@
 //! Session types for opencode_rs.
 
+use crate::types::permission::Ruleset;
 use serde::{Deserialize, Serialize};
 
 /// A session in OpenCode.
@@ -32,9 +33,9 @@ pub struct Session {
     /// Timestamps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub time: Option<SessionTime>,
-    /// Pending permission.
+    /// Pending permission ruleset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub permission: Option<serde_json::Value>,
+    pub permission: Option<Ruleset>,
     /// Revert information.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revert: Option<RevertInfo>,
@@ -54,12 +55,39 @@ pub struct SessionSummary {
     pub files: u64,
     /// File diffs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diffs: Option<Vec<serde_json::Value>>,
+    pub diffs: Option<Vec<FileDiffLite>>,
+}
+
+/// Lightweight file diff information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiffLite {
+    /// File path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+    /// Content before changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    /// Content after changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Lines added.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub additions: Option<u64>,
+    /// Lines deleted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deletions: Option<u64>,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 /// Share information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShareInfo {
+    /// Share secret (for editing).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
     /// Share URL.
     pub url: String,
 }
@@ -106,9 +134,9 @@ pub struct CreateSessionRequest {
     /// Optional title for the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    /// Initial permission.
+    /// Initial permission ruleset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub permission: Option<serde_json::Value>,
+    pub permission: Option<Ruleset>,
 }
 
 /// Request to update a session.

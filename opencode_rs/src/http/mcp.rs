@@ -4,6 +4,7 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
+use crate::types::api::McpActionResponse;
 use crate::types::mcp::{
     McpAddRequest, McpAuthCallbackRequest, McpAuthStartRequest, McpAuthStartResponse,
     McpAuthenticateRequest, McpStatus,
@@ -36,7 +37,7 @@ impl McpApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn add(&self, req: &McpAddRequest) -> Result<serde_json::Value> {
+    pub async fn add(&self, req: &McpAddRequest) -> Result<McpActionResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(Method::POST, "/mcp", Some(body))
@@ -68,7 +69,7 @@ impl McpApi {
         &self,
         name: &str,
         req: &McpAuthCallbackRequest,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<McpActionResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -88,7 +89,7 @@ impl McpApi {
         &self,
         name: &str,
         req: &McpAuthenticateRequest,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<McpActionResponse> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
@@ -115,7 +116,7 @@ impl McpApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn connect(&self, name: &str) -> Result<serde_json::Value> {
+    pub async fn connect(&self, name: &str) -> Result<McpActionResponse> {
         self.http
             .request_json(
                 Method::POST,
@@ -130,7 +131,7 @@ impl McpApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn disconnect(&self, name: &str) -> Result<serde_json::Value> {
+    pub async fn disconnect(&self, name: &str) -> Result<McpActionResponse> {
         self.http
             .request_json(
                 Method::POST,

@@ -4,6 +4,7 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
+use crate::types::api::{FormatterStatus, LspStatus, OpenApiDoc};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +70,7 @@ impl MiscApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn lsp(&self) -> Result<serde_json::Value> {
+    pub async fn lsp(&self) -> Result<LspStatus> {
         self.http.request_json(Method::GET, "/lsp", None).await
     }
 
@@ -78,7 +79,7 @@ impl MiscApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn formatter(&self) -> Result<serde_json::Value> {
+    pub async fn formatter(&self) -> Result<FormatterStatus> {
         self.http
             .request_json(Method::GET, "/formatter", None)
             .await
@@ -111,7 +112,7 @@ impl MiscApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn doc(&self) -> Result<serde_json::Value> {
+    pub async fn doc(&self) -> Result<OpenApiDoc> {
         self.http.request_json(Method::GET, "/doc", None).await
     }
 }
