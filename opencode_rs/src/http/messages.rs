@@ -101,7 +101,16 @@ mod tests {
                 &PromptRequest {
                     parts: vec![PromptPart::Text {
                         text: "Hello".to_string(),
+                        synthetic: None,
+                        ignored: None,
+                        metadata: None,
                     }],
+                    message_id: None,
+                    model: None,
+                    agent: None,
+                    no_reply: None,
+                    system: None,
+                    variant: None,
                 },
             )
             .await
