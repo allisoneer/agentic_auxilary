@@ -121,4 +121,12 @@ Store the returned file paths for future reference.
 
 </guidance>
 
+<guidance name="direct_plan_writing">
+
+## Direct Plan Writing (Alternative)
+
+You can pass `output_filename` to `reasoning_model_request` with `prompt_type: "plan"` to write the plan directly into `thoughts/{branch}/plans/`. The tool returns the repo-relative path on success instead of the plan content. This is useful when you want to skip the manual persist step.
+
+</guidance>
+
 </process>
