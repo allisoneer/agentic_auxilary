@@ -397,7 +397,7 @@ pub async fn gpt5_reasoner_impl(
                             }
                         } else {
                             // Return content directly
-                            returned = content.clone();
+                            returned = content;
                         }
                     }
                     PromptType::Reasoning => {
@@ -411,7 +411,7 @@ pub async fn gpt5_reasoner_impl(
                                 response_file = Some(md_name);
                             }
                         }
-                        returned = content.clone();
+                        returned = content;
                     }
                 }
 
