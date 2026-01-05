@@ -21,9 +21,8 @@ pub struct MergerfsManager {
 
 impl MergerfsManager {
     pub fn new() -> Self {
-        // Platform detection already verified mergerfs exists
-        // No need to duplicate the check here
-        let mergerfs_path = PathBuf::from("mergerfs");
+        // Find mergerfs binary path using which
+        let mergerfs_path = which::which("mergerfs").unwrap_or_else(|_| PathBuf::from("mergerfs"));
 
         // Try to find fusermount or fusermount3 for unmounting
         // This is optional - we can fall back to umount if not available
