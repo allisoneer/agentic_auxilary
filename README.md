@@ -117,7 +117,7 @@ claudecode = "0.1.9"
 <!-- BEGIN:autodeps {"crates":["opencode_rs"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-opencode_rs = "0.1.0"
+opencode_rs = "0.1.1"
 ```
 <!-- END:autodeps -->
 
