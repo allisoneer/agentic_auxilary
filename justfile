@@ -127,3 +127,11 @@ fmt-check-all:
 
 thoughts_sync:
   thoughts sync
+
+# Copy a file
+cp src dst:
+  cp "{{src}}" "{{dst}}"
+
+# Create a directory (with parents)
+mkdir path:
+  mkdir -p "{{path}}"
