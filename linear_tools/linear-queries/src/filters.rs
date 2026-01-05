@@ -4,34 +4,44 @@ use linear_schema::linear as schema;
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct StringComparator {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub eq: Option<String>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub contains: Option<String>,
-    #[cynic(rename = "containsIgnoreCase")]
+    #[cynic(rename = "containsIgnoreCase", skip_serializing_if = "Option::is_none")]
     pub contains_ignore_case: Option<String>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct NullableStringComparator {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub eq: Option<String>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub contains: Option<String>,
-    #[cynic(rename = "containsIgnoreCase")]
+    #[cynic(rename = "containsIgnoreCase", skip_serializing_if = "Option::is_none")]
     pub contains_ignore_case: Option<String>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct NullableNumberComparator {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub eq: Option<f64>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub gte: Option<f64>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub lte: Option<f64>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct NumberComparator {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub eq: Option<f64>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub gte: Option<f64>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub lte: Option<f64>,
 }
 
@@ -39,6 +49,7 @@ pub struct NumberComparator {
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear", graphql_type = "IDComparator")]
 pub struct IdComparator {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub eq: Option<cynic::Id>,
 }
 
@@ -46,8 +57,11 @@ pub struct IdComparator {
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct DateComparator {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub eq: Option<DateTimeOrDuration>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub gte: Option<DateTimeOrDuration>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub lte: Option<DateTimeOrDuration>,
 }
 
@@ -55,6 +69,7 @@ pub struct DateComparator {
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct WorkflowStateFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub id: Option<IdComparator>,
 }
 
@@ -62,6 +77,7 @@ pub struct WorkflowStateFilter {
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct NullableUserFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub id: Option<IdComparator>,
 }
 
@@ -69,7 +85,9 @@ pub struct NullableUserFilter {
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct TeamFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub id: Option<IdComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub key: Option<StringComparator>,
 }
 
@@ -77,22 +95,31 @@ pub struct TeamFilter {
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct NullableProjectFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub id: Option<IdComparator>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct IssueFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub title: Option<StringComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub description: Option<NullableStringComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub priority: Option<NullableNumberComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub state: Option<WorkflowStateFilter>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<NullableUserFilter>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamFilter>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub project: Option<NullableProjectFilter>,
-    #[cynic(rename = "createdAt")]
+    #[cynic(rename = "createdAt", skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateComparator>,
-    #[cynic(rename = "updatedAt")]
+    #[cynic(rename = "updatedAt", skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<DateComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub number: Option<NumberComparator>,
 }

@@ -19,7 +19,7 @@ async fn search_issues_auth_failure() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await;
     assert!(res.is_err());
@@ -124,7 +124,7 @@ async fn search_issues_success() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
@@ -524,18 +524,19 @@ async fn search_issues_with_state_filter() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None,
-            None,
+            None,                                  // query
+            None,                                  // include_comments
+            None,                                  // priority
             Some("state-in-progress".to_string()), // state_id
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            None,                                  // assignee_id
+            None,                                  // team_id
+            None,                                  // project_id
+            None,                                  // created_after
+            None,                                  // created_before
+            None,                                  // updated_after
+            None,                                  // updated_before
+            None,                                  // first
+            None,                                  // after
         )
         .await
         .unwrap();
@@ -587,18 +588,19 @@ async fn search_issues_with_date_ranges() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            None,                                     // query
+            None,                                     // include_comments
+            None,                                     // priority
+            None,                                     // state_id
+            None,                                     // assignee_id
+            None,                                     // team_id
+            None,                                     // project_id
             Some("2025-01-01T00:00:00Z".to_string()), // created_after
             Some("2025-01-31T23:59:59Z".to_string()), // created_before
-            None,
-            None,
-            None,
-            None,
+            None,                                     // updated_after
+            None,                                     // updated_before
+            None,                                     // first
+            None,                                     // after
         )
         .await
         .unwrap();
@@ -629,7 +631,7 @@ async fn auth_header_personal_key() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
@@ -657,9 +659,114 @@ async fn auth_header_oauth_token() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
     assert_eq!(res.issues.len(), 0);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn search_issues_full_text_success() {
+    let mut server = Server::new_async().await;
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{
+            "data": {
+              "searchIssues": {
+                "nodes": [{
+                    "id": "uuid-s1",
+                    "identifier": "ENG-777",
+                    "title": "Found via full-text search",
+                    "description": "This issue contains the search term",
+                    "priority": 2.0,
+                    "url": "https://linear.app/test/issue/ENG-777",
+                    "createdAt": "2025-01-01T00:00:00Z",
+                    "updatedAt": "2025-01-02T00:00:00Z",
+                    "team": {"id":"t1","key":"ENG","name":"Engineering"},
+                    "state": {"id":"s1","name":"In Progress","type":"started"},
+                    "assignee": null,
+                    "project": null
+                }],
+                "pageInfo": {"hasNextPage": false, "endCursor": null}
+              }
+            }
+        }"#,
+        )
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .search_issues(
+            Some("search term".to_string()), // query - triggers full-text path
+            Some(true),                      // include_comments
+            None,                            // priority
+            None,                            // state_id
+            None,                            // assignee_id
+            None,                            // team_id
+            None,                            // project_id
+            None,                            // created_after
+            None,                            // created_before
+            None,                            // updated_after
+            None,                            // updated_before
+            Some(10),                        // first
+            None,                            // after
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.issues.len(), 1);
+    assert_eq!(res.issues[0].identifier, "ENG-777");
+    assert_eq!(res.issues[0].title, "Found via full-text search");
+    assert_eq!(res.issues[0].state, Some("In Progress".to_string()));
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn graphql_errors_fail_fast() {
+    let mut server = Server::new_async().await;
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"errors":[{"message":"Some GraphQL error"}]}"#)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .search_issues(
+            Some("anything".into()), // query
+            None,                    // include_comments
+            None,                    // priority
+            None,                    // state_id
+            None,                    // assignee_id
+            None,                    // team_id
+            None,                    // project_id
+            None,                    // created_after
+            None,                    // created_before
+            None,                    // updated_after
+            None,                    // updated_before
+            Some(1),                 // first
+            None,                    // after
+        )
+        .await;
+    assert!(res.is_err(), "Expected failure on GraphQL errors");
+    let err = res.unwrap_err();
+    assert!(
+        err.message.contains("GraphQL errors"),
+        "Error message should contain 'GraphQL errors': {}",
+        err.message
+    );
 }
