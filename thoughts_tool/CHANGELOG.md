@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.7.0] - 2026-01-05
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Store absolute tool paths for Linux mergerfs detection
+- *(thoughts_tool)* Align test stub fusermount state with path presence
 ## [0.6.1] - 2026-01-04
 
 ### ⚙️  Miscellaneous
