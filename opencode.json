@@ -7,7 +7,6 @@
   },
   "tools": {
     "*": false,
-    "bash": false,
     "edit": true,
     "write": true,
     "read": true,
