@@ -190,7 +190,7 @@ fn check_mergerfs() -> (bool, Option<String>) {
                     let version = version_line
                         .split_whitespace()
                         .find(|s| s.chars().any(|c| c.is_ascii_digit()))
-                        .map(|s| s.to_string());
+                        .map(|s| s.strip_prefix('v').unwrap_or(s).to_string());
                     return (true, version);
                 }
             }
@@ -301,6 +301,7 @@ fn check_fuse_t() -> (bool, Option<String>) {
                         .strip_prefix("<string>")
                         .and_then(|s| s.strip_suffix("</string>"))
                     {
+                        let version = version.strip_prefix('v').unwrap_or(version);
                         debug!("Found FUSE-T version: {}", version);
                         return (true, Some(version.to_string()));
                     }
@@ -336,6 +337,7 @@ fn check_macfuse() -> (bool, Option<String>) {
                         .strip_prefix("<string>")
                         .and_then(|s| s.strip_suffix("</string>"))
                     {
+                        let version = version.strip_prefix('v').unwrap_or(version);
                         return (true, Some(version.to_string()));
                     }
                 }
