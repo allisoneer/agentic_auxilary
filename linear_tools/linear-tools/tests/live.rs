@@ -65,7 +65,7 @@ async fn live_create_search_read_comment_archive() {
     let issue_id = issue.id.clone();
 
     // 2) Wait for search indexing
-    sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(2000)).await;
 
     // 3) Search by term
     let search = tools
