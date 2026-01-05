@@ -56,7 +56,7 @@ pub fn get_mount_manager(platform_info: &PlatformInfo) -> Result<Box<dyn MountMa
                     platform: "Linux without FUSE support".to_string(),
                 });
             }
-            Ok(Box::new(MergerfsManager::new()))
+            Ok(Box::new(MergerfsManager::new(info.clone())))
         }
         #[cfg(target_os = "macos")]
         Platform::MacOS(info) => {
@@ -91,7 +91,7 @@ mod tests {
     use crate::platform::detector::MacOSInfo;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use crate::platform::{Platform, PlatformInfo};
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     use std::path::PathBuf;
 
     #[test]
@@ -105,6 +105,8 @@ mod tests {
                 mergerfs_version: Some("2.33.5".to_string()),
                 fuse_available: true,
                 has_fusermount: false, // Testing without fusermount - should still work
+                mergerfs_path: None,
+                fusermount_path: None,
             }),
             arch: "x86_64".to_string(),
         };
@@ -124,6 +126,8 @@ mod tests {
                 mergerfs_version: None,
                 fuse_available: true,
                 has_fusermount: true, // Even with fusermount, can't mount without mergerfs
+                mergerfs_path: None,
+                fusermount_path: Some(PathBuf::from("/bin/fusermount")),
             }),
             arch: "x86_64".to_string(),
         };

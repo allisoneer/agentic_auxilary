@@ -10,27 +10,45 @@ use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
 use crate::platform::common::*;
+use crate::platform::detector::LinuxInfo;
 use crate::platform::linux::*;
 
 pub struct MergerfsManager {
-    /// Path to mergerfs binary (cached)
-    mergerfs_path: PathBuf,
-    /// Path to fusermount binary (cached, if available)
+    /// Path to mergerfs binary (absolute if known)
+    mergerfs_path: Option<PathBuf>,
+    /// Path to fusermount binary (absolute if known)
     fusermount_path: Option<PathBuf>,
 }
 
 impl MergerfsManager {
-    pub fn new() -> Self {
-        // Platform detection already verified mergerfs exists
-        // No need to duplicate the check here
-        let mergerfs_path = PathBuf::from("mergerfs");
+    pub fn new(platform_info: LinuxInfo) -> Self {
+        // Three-tier fallback:
+        // 1) detector-provided paths
+        // 2) which::which()
+        // 3) None
+        let mergerfs_path = platform_info
+            .mergerfs_path
+            .clone()
+            .or_else(|| which::which("mergerfs").ok());
 
-        // Try to find fusermount or fusermount3 for unmounting
-        // This is optional - we can fall back to umount if not available
-        let fusermount_path = which::which("fusermount")
-            .or_else(|_| which::which("fusermount3"))
-            .ok();
+        let fusermount_path = platform_info
+            .fusermount_path
+            .clone()
+            .or_else(|| which::which("fusermount").ok())
+            .or_else(|| which::which("fusermount3").ok());
 
+        Self {
+            mergerfs_path,
+            fusermount_path,
+        }
+    }
+
+    /// Test-only constructor that bypasses fallback detection
+    #[cfg(test)]
+    fn new_without_fallback(
+        mergerfs_path: Option<PathBuf>,
+        fusermount_path: Option<PathBuf>,
+    ) -> Self {
         Self {
             mergerfs_path,
             fusermount_path,
@@ -245,6 +263,14 @@ impl MountManager for MergerfsManager {
         target: &Path,
         options: &MountOptions,
     ) -> Result<()> {
+        // Validate mergerfs path is available (Option-based validation)
+        let mergerfs_path =
+            self.mergerfs_path
+                .as_ref()
+                .ok_or_else(|| ThoughtsError::ToolNotFound {
+                    tool: "mergerfs".to_string(),
+                })?;
+
         // Validate inputs
         if sources.is_empty() {
             return Err(ThoughtsError::MountOperationFailed {
@@ -293,7 +319,7 @@ impl MountManager for MergerfsManager {
         info!("Mounting {} sources to {}", sources.len(), target.display());
         debug!(
             "Mount command: {} {}",
-            self.mergerfs_path.display(),
+            mergerfs_path.display(),
             args.join(" ")
         );
 
@@ -305,7 +331,7 @@ impl MountManager for MergerfsManager {
             }
 
             let start = Instant::now();
-            let output = tokio::process::Command::new(&self.mergerfs_path)
+            let output = tokio::process::Command::new(mergerfs_path)
                 .args(&args)
                 .output()
                 .await?;
@@ -441,12 +467,13 @@ impl MountManager for MergerfsManager {
     }
 
     async fn check_health(&self) -> Result<()> {
-        // Check if mergerfs binary exists and is executable
-        if !self.mergerfs_path.exists() {
-            return Err(ThoughtsError::ToolNotFound {
-                tool: "mergerfs".to_string(),
-            });
-        }
+        // Check if mergerfs path is available (Option-based validation)
+        let mergerfs_path =
+            self.mergerfs_path
+                .as_ref()
+                .ok_or_else(|| ThoughtsError::ToolNotFound {
+                    tool: "mergerfs".to_string(),
+                })?;
 
         // Check if FUSE is available
         if !Path::new("/dev/fuse").exists() {
@@ -456,7 +483,7 @@ impl MountManager for MergerfsManager {
         }
 
         // Try to get version
-        let output = Command::new(&self.mergerfs_path).arg("-V").output()?;
+        let output = Command::new(mergerfs_path).arg("-V").output()?;
 
         if !output.status.success() {
             return Err(ThoughtsError::MountOperationFailed {
@@ -475,7 +502,10 @@ impl MountManager for MergerfsManager {
         options: &MountOptions,
     ) -> String {
         let args = self.build_mount_args(sources, target, options);
-        format!("{} {}", self.mergerfs_path.display(), args.join(" "))
+        match &self.mergerfs_path {
+            Some(p) => format!("{} {}", p.display(), args.join(" ")),
+            None => "<mergerfs not available>".to_string(),
+        }
     }
 }
 
@@ -483,9 +513,22 @@ impl MountManager for MergerfsManager {
 mod tests {
     use super::*;
 
+    fn test_linux_info_stub() -> LinuxInfo {
+        LinuxInfo {
+            distro: "Ubuntu".to_string(),
+            version: "22.04".to_string(),
+            has_mergerfs: true,
+            mergerfs_version: Some("2.33.5".to_string()),
+            fuse_available: true,
+            has_fusermount: false,
+            mergerfs_path: Some(PathBuf::from("/usr/bin/mergerfs")),
+            fusermount_path: None,
+        }
+    }
+
     #[test]
     fn test_build_mount_args() {
-        let manager = MergerfsManager::new();
+        let manager = MergerfsManager::new(test_linux_info_stub());
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/mnt/merged");
         let options = MountOptions {
@@ -504,7 +547,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mount_validation() {
-        let manager = MergerfsManager::new();
+        let manager = MergerfsManager::new(test_linux_info_stub());
         let target = Path::new("/tmp/test_mount");
         let options = MountOptions::default();
 
@@ -516,5 +559,37 @@ mod tests {
         let sources = vec![PathBuf::from("/this/does/not/exist")];
         let result = manager.mount(&sources, target, &options).await;
         assert!(result.is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn test_check_health_tool_missing() {
+        // Use test-only constructor to bypass fallback detection
+        let manager = MergerfsManager::new_without_fallback(None, None);
+        let res = manager.check_health().await;
+        assert!(matches!(res, Err(ThoughtsError::ToolNotFound { .. })));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_manager_stores_absolute_path() {
+        let mut info = test_linux_info_stub();
+        let abs = PathBuf::from("/usr/local/bin/mergerfs");
+        info.mergerfs_path = Some(abs.clone());
+        let manager = MergerfsManager::new(info);
+        assert_eq!(manager.mergerfs_path, Some(abs));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_get_mount_command_when_missing_path() {
+        // Use test-only constructor to bypass fallback detection
+        let manager = MergerfsManager::new_without_fallback(None, None);
+        let cmd = manager.get_mount_command(
+            &[PathBuf::from("/a")],
+            Path::new("/b"),
+            &MountOptions::default(),
+        );
+        assert_eq!(cmd, "<mergerfs not available>");
     }
 }
