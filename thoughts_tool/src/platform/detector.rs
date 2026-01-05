@@ -21,6 +21,9 @@ pub struct LinuxInfo {
     pub mergerfs_version: Option<String>,
     pub fuse_available: bool,
     pub has_fusermount: bool,
+    // Absolute paths captured during detection
+    pub mergerfs_path: Option<PathBuf>,
+    pub fusermount_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,11 +96,13 @@ fn detect_linux() -> Result<PlatformInfo> {
     let (distro, version) = detect_linux_distro();
     info!("Detected Linux distribution: {} {}", distro, version);
 
-    // Check for mergerfs
-    let (has_mergerfs, mergerfs_version) = check_mergerfs();
+    // Check for mergerfs (now returns path and version)
+    let (mergerfs_path, mergerfs_version) = check_mergerfs();
+    let has_mergerfs = mergerfs_path.is_some();
     if has_mergerfs {
         info!(
-            "Found mergerfs version: {}",
+            "Found mergerfs at {} version: {}",
+            mergerfs_path.as_ref().unwrap().display(),
             mergerfs_version.as_deref().unwrap_or("unknown")
         );
     } else {
@@ -112,12 +117,16 @@ fn detect_linux() -> Result<PlatformInfo> {
         info!("FUSE support not detected");
     }
 
-    // Check for fusermount
-    let has_fusermount = which::which("fusermount")
+    // Check for fusermount (capture path)
+    let fusermount_path = which::which("fusermount")
         .or_else(|_| which::which("fusermount3"))
-        .is_ok();
+        .ok();
+    let has_fusermount = fusermount_path.is_some();
     if has_fusermount {
-        info!("fusermount detected");
+        info!(
+            "fusermount detected at {}",
+            fusermount_path.as_ref().unwrap().display()
+        );
     }
 
     let linux_info = LinuxInfo {
@@ -127,6 +136,8 @@ fn detect_linux() -> Result<PlatformInfo> {
         mergerfs_version,
         fuse_available,
         has_fusermount,
+        mergerfs_path,
+        fusermount_path,
     };
 
     Ok(PlatformInfo {
@@ -179,25 +190,26 @@ fn detect_linux_distro() -> (String, String) {
 }
 
 #[cfg(target_os = "linux")]
-fn check_mergerfs() -> (bool, Option<String>) {
+fn check_mergerfs() -> (Option<PathBuf>, Option<String>) {
     match which::which("mergerfs") {
         Ok(path) => {
             debug!("Found mergerfs at: {:?}", path);
-            // Try to get version
-            if let Ok(output) = Command::new("mergerfs").arg("-V").output() {
-                let version_str = String::from_utf8_lossy(&output.stdout);
-                if let Some(version_line) = version_str.lines().next() {
-                    let version = version_line
-                        .split_whitespace()
-                        .find(|s| s.chars().any(|c| c.is_ascii_digit()))
-                        .map(|s| s.to_string());
-                    return (true, version);
-                }
-            }
-            (true, None)
+            let version = Command::new(&path).arg("-V").output().ok().and_then(|out| {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                extract_mergerfs_version(&stdout).or_else(|| extract_mergerfs_version(&stderr))
+            });
+            (Some(path), version)
         }
-        Err(_) => (false, None),
+        Err(_) => (None, None),
     }
+}
+
+#[cfg(target_os = "linux")]
+fn extract_mergerfs_version(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .find(|s| s.chars().any(|c| c.is_ascii_digit()))
+        .map(|tok| tok.trim_start_matches(['v', 'V']).to_string())
 }
 
 #[cfg(target_os = "linux")]
@@ -382,11 +394,36 @@ mod tests {
             mergerfs_version: Some("2.33.5".to_string()),
             fuse_available: true,
             has_fusermount: true,
+            mergerfs_path: Some(PathBuf::from("/usr/bin/mergerfs")),
+            fusermount_path: Some(PathBuf::from("/bin/fusermount")),
         });
         assert_eq!(linux_platform.mount_tool_name(), Some("mergerfs"));
 
         let unsupported = Platform::Unsupported("windows".to_string());
         assert_eq!(unsupported.mount_tool_name(), None);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_extract_mergerfs_version() {
+        // Should strip leading 'v' or 'V'
+        assert_eq!(
+            super::extract_mergerfs_version("mergerfs v2.40.2"),
+            Some("2.40.2".to_string())
+        );
+        assert_eq!(
+            super::extract_mergerfs_version("mergerfs V2.40.2"),
+            Some("2.40.2".to_string())
+        );
+        // Should handle version without 'v' prefix
+        assert_eq!(
+            super::extract_mergerfs_version("mergerfs 2.40.2"),
+            Some("2.40.2".to_string())
+        );
+        // Should return None for text without version-like content
+        assert_eq!(super::extract_mergerfs_version("no version here"), None);
+        // Should handle empty string
+        assert_eq!(super::extract_mergerfs_version(""), None);
     }
 
     #[test]
