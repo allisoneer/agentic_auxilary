@@ -520,7 +520,7 @@ mod tests {
             has_mergerfs: true,
             mergerfs_version: Some("2.33.5".to_string()),
             fuse_available: true,
-            has_fusermount: true,
+            has_fusermount: false,
             mergerfs_path: Some(PathBuf::from("/usr/bin/mergerfs")),
             fusermount_path: None,
         }
