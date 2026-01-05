@@ -17,10 +17,10 @@ pub enum Platform {
 pub struct LinuxInfo {
     pub distro: String,
     pub version: String,
-    pub has_mergerfs: bool,
+    pub mergerfs_path: Option<PathBuf>,
     pub mergerfs_version: Option<String>,
     pub fuse_available: bool,
-    pub has_fusermount: bool,
+    pub fusermount_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +46,7 @@ impl Platform {
     // Used in tests, could be useful for diagnostics
     pub fn can_mount(&self) -> bool {
         match self {
-            Platform::Linux(info) => info.has_mergerfs && info.fuse_available,
+            Platform::Linux(info) => info.mergerfs_path.is_some() && info.fuse_available,
             Platform::MacOS(info) => info.has_fuse_t || info.has_macfuse,
             Platform::Unsupported(_) => false,
         }
@@ -94,15 +94,16 @@ fn detect_linux() -> Result<PlatformInfo> {
     info!("Detected Linux distribution: {} {}", distro, version);
 
     // Check for mergerfs
-    let (has_mergerfs, mergerfs_version) = check_mergerfs();
-    if has_mergerfs {
+    let (mergerfs_path, mergerfs_version) = if let Some((path, version)) = check_mergerfs() {
         info!(
             "Found mergerfs version: {}",
-            mergerfs_version.as_deref().unwrap_or("unknown")
+            version.as_deref().unwrap_or("unknown")
         );
+        (Some(path), version)
     } else {
         info!("mergerfs not found");
-    }
+        (None, None)
+    };
 
     // Check for FUSE support
     let fuse_available = check_fuse_support();
@@ -113,20 +114,20 @@ fn detect_linux() -> Result<PlatformInfo> {
     }
 
     // Check for fusermount
-    let has_fusermount = which::which("fusermount")
+    let fusermount_path = which::which("fusermount")
         .or_else(|_| which::which("fusermount3"))
-        .is_ok();
-    if has_fusermount {
+        .ok();
+    if fusermount_path.is_some() {
         info!("fusermount detected");
     }
 
     let linux_info = LinuxInfo {
         distro,
         version,
-        has_mergerfs,
+        mergerfs_path,
         mergerfs_version,
         fuse_available,
-        has_fusermount,
+        fusermount_path,
     };
 
     Ok(PlatformInfo {
@@ -179,24 +180,25 @@ fn detect_linux_distro() -> (String, String) {
 }
 
 #[cfg(target_os = "linux")]
-fn check_mergerfs() -> (bool, Option<String>) {
+fn check_mergerfs() -> Option<(PathBuf, Option<String>)> {
     match which::which("mergerfs") {
         Ok(path) => {
             debug!("Found mergerfs at: {:?}", path);
             // Try to get version
-            if let Ok(output) = Command::new("mergerfs").arg("-V").output() {
+            let version = if let Ok(output) = Command::new(&path).arg("-V").output() {
                 let version_str = String::from_utf8_lossy(&output.stdout);
-                if let Some(version_line) = version_str.lines().next() {
-                    let version = version_line
+                version_str.lines().next().and_then(|version_line| {
+                    version_line
                         .split_whitespace()
                         .find(|s| s.chars().any(|c| c.is_ascii_digit()))
-                        .map(|s| s.to_string());
-                    return (true, version);
-                }
-            }
-            (true, None)
+                        .map(|s| s.to_string())
+                })
+            } else {
+                None
+            };
+            Some((path, version))
         }
-        Err(_) => (false, None),
+        Err(_) => None,
     }
 }
 
@@ -378,10 +380,10 @@ mod tests {
         let linux_platform = Platform::Linux(LinuxInfo {
             distro: "Ubuntu".to_string(),
             version: "22.04".to_string(),
-            has_mergerfs: true,
+            mergerfs_path: Some(PathBuf::from("/usr/bin/mergerfs")),
             mergerfs_version: Some("2.33.5".to_string()),
             fuse_available: true,
-            has_fusermount: true,
+            fusermount_path: Some(PathBuf::from("/usr/bin/fusermount")),
         });
         assert_eq!(linux_platform.mount_tool_name(), Some("mergerfs"));
 

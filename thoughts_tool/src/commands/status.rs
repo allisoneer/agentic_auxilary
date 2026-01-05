@@ -183,7 +183,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     // Platform info
     let platform_str = match &platform_info.platform {
         crate::platform::Platform::Linux(info) => {
-            if info.has_mergerfs {
+            if info.mergerfs_path.is_some() {
                 format!(
                     "Linux (mergerfs{})",
                     info.mergerfs_version

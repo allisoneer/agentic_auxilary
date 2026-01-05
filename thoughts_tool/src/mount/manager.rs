@@ -46,7 +46,7 @@ pub fn get_mount_manager(platform_info: &PlatformInfo) -> Result<Box<dyn MountMa
     match &platform_info.platform {
         #[cfg(target_os = "linux")]
         Platform::Linux(info) => {
-            if !info.has_mergerfs {
+            if info.mergerfs_path.is_none() {
                 return Err(crate::error::ThoughtsError::ToolNotFound {
                     tool: "mergerfs".to_string(),
                 });
@@ -56,7 +56,7 @@ pub fn get_mount_manager(platform_info: &PlatformInfo) -> Result<Box<dyn MountMa
                     platform: "Linux without FUSE support".to_string(),
                 });
             }
-            Ok(Box::new(MergerfsManager::new()))
+            Ok(Box::new(MergerfsManager::new(info.clone())))
         }
         #[cfg(target_os = "macos")]
         Platform::MacOS(info) => {
@@ -91,7 +91,7 @@ mod tests {
     use crate::platform::detector::MacOSInfo;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use crate::platform::{Platform, PlatformInfo};
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     use std::path::PathBuf;
 
     #[test]
@@ -101,10 +101,10 @@ mod tests {
             platform: Platform::Linux(LinuxInfo {
                 distro: "Ubuntu".to_string(),
                 version: "22.04".to_string(),
-                has_mergerfs: true,
+                mergerfs_path: Some(PathBuf::from("/usr/bin/mergerfs")),
                 mergerfs_version: Some("2.33.5".to_string()),
                 fuse_available: true,
-                has_fusermount: false, // Testing without fusermount - should still work
+                fusermount_path: None, // Testing without fusermount - should still work
             }),
             arch: "x86_64".to_string(),
         };
@@ -120,10 +120,10 @@ mod tests {
             platform: Platform::Linux(LinuxInfo {
                 distro: "Ubuntu".to_string(),
                 version: "22.04".to_string(),
-                has_mergerfs: false,
+                mergerfs_path: None,
                 mergerfs_version: None,
                 fuse_available: true,
-                has_fusermount: true, // Even with fusermount, can't mount without mergerfs
+                fusermount_path: Some(PathBuf::from("/usr/bin/fusermount")), // Even with fusermount, can't mount without mergerfs
             }),
             arch: "x86_64".to_string(),
         };

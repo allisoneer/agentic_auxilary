@@ -10,30 +10,26 @@ use super::types::*;
 use super::utils;
 use crate::error::{Result, ThoughtsError};
 use crate::platform::common::*;
+use crate::platform::detector::LinuxInfo;
 use crate::platform::linux::*;
 
 pub struct MergerfsManager {
-    /// Path to mergerfs binary (cached)
+    /// Path to mergerfs binary
     mergerfs_path: PathBuf,
-    /// Path to fusermount binary (cached, if available)
+    /// Path to fusermount binary (if available)
     fusermount_path: Option<PathBuf>,
 }
 
 impl MergerfsManager {
-    pub fn new() -> Self {
-        // Platform detection already verified mergerfs exists
-        // No need to duplicate the check here
-        let mergerfs_path = PathBuf::from("mergerfs");
-
-        // Try to find fusermount or fusermount3 for unmounting
-        // This is optional - we can fall back to umount if not available
-        let fusermount_path = which::which("fusermount")
-            .or_else(|_| which::which("fusermount3"))
-            .ok();
+    pub fn new(info: LinuxInfo) -> Self {
+        // Use paths from platform detection
+        let mergerfs_path = info
+            .mergerfs_path
+            .expect("MergerfsManager created without mergerfs_path");
 
         Self {
             mergerfs_path,
-            fusermount_path,
+            fusermount_path: info.fusermount_path,
         }
     }
 
@@ -483,9 +479,20 @@ impl MountManager for MergerfsManager {
 mod tests {
     use super::*;
 
+    fn test_linux_info() -> LinuxInfo {
+        LinuxInfo {
+            distro: "Ubuntu".to_string(),
+            version: "22.04".to_string(),
+            mergerfs_path: Some(PathBuf::from("/usr/bin/mergerfs")),
+            mergerfs_version: Some("2.33.5".to_string()),
+            fuse_available: true,
+            fusermount_path: Some(PathBuf::from("/usr/bin/fusermount")),
+        }
+    }
+
     #[test]
     fn test_build_mount_args() {
-        let manager = MergerfsManager::new();
+        let manager = MergerfsManager::new(test_linux_info());
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/mnt/merged");
         let options = MountOptions {
@@ -504,7 +511,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mount_validation() {
-        let manager = MergerfsManager::new();
+        let manager = MergerfsManager::new(test_linux_info());
         let target = Path::new("/tmp/test_mount");
         let options = MountOptions::default();
 
