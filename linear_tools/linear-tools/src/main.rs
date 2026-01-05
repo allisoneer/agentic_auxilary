@@ -21,6 +21,8 @@ enum Commands {
         #[arg(long)]
         query: Option<String>,
         #[arg(long)]
+        include_comments: Option<bool>,
+        #[arg(long)]
         priority: Option<i32>,
         #[arg(long)]
         state_id: Option<String>,
@@ -114,6 +116,7 @@ async fn run_cli(args: Args) -> Result<()> {
     match args.command {
         Commands::Search {
             query,
+            include_comments,
             priority,
             state_id,
             assignee_id,
@@ -129,6 +132,7 @@ async fn run_cli(args: Args) -> Result<()> {
             match tool
                 .search_issues(
                     query,
+                    include_comments,
                     priority,
                     state_id,
                     assignee_id,

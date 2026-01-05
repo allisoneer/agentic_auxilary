@@ -8,6 +8,41 @@ pub struct LinearClient {
     api_key: String,
 }
 
+/// Centralized GraphQL error extraction - fails fast on any errors
+pub fn extract_data<Q>(resp: cynic::GraphQlResponse<Q>) -> Result<Q> {
+    if let Some(errors) = resp.errors
+        && !errors.is_empty()
+    {
+        let mut parts = Vec::new();
+        for e in errors {
+            let path = e.path.unwrap_or_default();
+            let path_str = if path.is_empty() {
+                String::new()
+            } else {
+                let p = path
+                    .into_iter()
+                    .map(|v| match v {
+                        cynic::GraphQlErrorPathSegment::Field(f) => f,
+                        cynic::GraphQlErrorPathSegment::Index(i) => i.to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!(" (path: {})", p)
+            };
+            parts.push(format!("{}{}", e.message, path_str));
+        }
+        return Err(anyhow!(
+            "GraphQL errors from Linear:\n- {}",
+            parts.join("\n- ")
+        ));
+    }
+
+    match resp.data {
+        Some(data) => Ok(data),
+        None => Err(anyhow!("No data returned from Linear")),
+    }
+}
+
 impl LinearClient {
     pub fn new(api_key: Option<String>) -> Result<Self> {
         let api_key = match api_key.or_else(|| std::env::var("LINEAR_API_KEY").ok()) {
