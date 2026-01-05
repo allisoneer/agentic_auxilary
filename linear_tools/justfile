@@ -20,6 +20,7 @@ help:
   @echo "  just build      # build all three crates"
   @echo "  just fmt        # format all crates"
   @echo "  just fmt-check  # check formatting for all crates"
+  @echo "  just test-live  # run live Linear API tests (requires LINEAR_API_KEY and LINEAR_TEST_TEAM_ID)"
 
 fmt:
   cargo fmt --manifest-path linear-schema/Cargo.toml
@@ -40,3 +41,7 @@ test:
 
 build:
   {{WRAP}} build {{PKGS}}
+
+# Run opt-in live tests (ignored by default)
+test-live:
+  LINEAR_LIVE_TESTS=1 {{WRAP}} test -p linear-tools --test live -- --ignored
