@@ -81,9 +81,7 @@ impl LinearTools {
                     filter: Some(filter),
                 });
                 let resp = client.run(op).await.map_err(to_tool_error)?;
-                let data = resp.data.ok_or_else(|| {
-                    ToolError::new(ErrorCode::ExternalServiceError, "No data returned")
-                })?;
+                let data = http::extract_data(resp).map_err(to_tool_error)?;
                 let issue = data.issues.nodes.into_iter().next().ok_or_else(|| {
                     ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
                 })?;
@@ -128,16 +126,23 @@ fn to_tool_error(e: anyhow::Error) -> ToolError {
     mcp(name = "linear-tools", version = "0.1.0")
 )]
 impl LinearTools {
-    /// Search Linear issues with filters
+    /// Search Linear issues with full-text search or filters
     #[universal_tool(
-        description = "Search Linear issues using filters",
+        description = "Search Linear issues using full-text search and/or filters",
         cli(name = "search", alias = "s"),
         mcp(read_only = true, output = "text")
     )]
     #[allow(clippy::too_many_arguments)]
     pub async fn search_issues(
         &self,
-        #[universal_tool_param(description = "Text to search in title")] query: Option<String>,
+        #[universal_tool_param(
+            description = "Full-text search term (searches title, description, and optionally comments)"
+        )]
+        query: Option<String>,
+        #[universal_tool_param(
+            description = "Include comments in full-text search (default: true, only applies when query is provided)"
+        )]
+        include_comments: Option<bool>,
         #[universal_tool_param(
             description = "Filter by priority (1=Urgent, 2=High, 3=Normal, 4=Low)"
         )]
@@ -161,18 +166,16 @@ impl LinearTools {
     ) -> Result<models::SearchResult, ToolError> {
         let client = LinearClient::new(self.api_key.clone()).map_err(to_tool_error)?;
 
+        // Build filters (no title filter - full-text search handles query)
         let mut filter = IssueFilter::default();
-        if let Some(q) = query {
-            filter.title = Some(StringComparator {
-                contains_ignore_case: Some(q),
-                ..Default::default()
-            });
-        }
+        let mut has_filter = false;
+
         if let Some(p) = priority {
             filter.priority = Some(NullableNumberComparator {
                 eq: Some(p as f64),
                 ..Default::default()
             });
+            has_filter = true;
         }
         if let Some(id) = state_id {
             filter.state = Some(WorkflowStateFilter {
@@ -180,6 +183,7 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
+            has_filter = true;
         }
         if let Some(id) = assignee_id {
             filter.assignee = Some(NullableUserFilter {
@@ -187,6 +191,7 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
+            has_filter = true;
         }
         if let Some(id) = team_id {
             filter.team = Some(TeamFilter {
@@ -195,6 +200,7 @@ impl LinearTools {
                 }),
                 ..Default::default()
             });
+            has_filter = true;
         }
         if let Some(id) = project_id {
             filter.project = Some(NullableProjectFilter {
@@ -202,6 +208,7 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
+            has_filter = true;
         }
         if created_after.is_some() || created_before.is_some() {
             filter.created_at = Some(DateComparator {
@@ -209,6 +216,7 @@ impl LinearTools {
                 lte: created_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
+            has_filter = true;
         }
         if updated_after.is_some() || updated_before.is_some() {
             filter.updated_at = Some(DateComparator {
@@ -216,50 +224,93 @@ impl LinearTools {
                 lte: updated_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
+            has_filter = true;
         }
 
-        let op = IssuesQuery::build(IssuesArguments {
-            first: Some(first.unwrap_or(50).clamp(1, 100)),
-            after,
-            filter: Some(filter),
-        });
+        let filter_opt = if has_filter { Some(filter) } else { None };
+        let page_size = Some(first.unwrap_or(50).clamp(1, 100));
+        let q_trimmed = query.as_ref().map(|s| s.trim()).unwrap_or("");
 
-        let resp = client.run(op).await.map_err(to_tool_error)?;
-        let data = resp.data.ok_or_else(|| {
-            ToolError::new(
-                ErrorCode::ExternalServiceError,
-                "No data returned from Linear",
-            )
-        })?;
+        if !q_trimmed.is_empty() {
+            // Full-text search path: searchIssues
+            let op = SearchIssuesQuery::build(SearchIssuesArguments {
+                term: q_trimmed.to_string(),
+                include_comments: Some(include_comments.unwrap_or(true)),
+                first: page_size,
+                after,
+                filter: filter_opt,
+            });
+            let resp = client.run(op).await.map_err(to_tool_error)?;
+            let data = http::extract_data(resp).map_err(to_tool_error)?;
 
-        let issues = data
-            .issues
-            .nodes
-            .into_iter()
-            .map(|i| models::IssueSummary {
-                id: i.id.inner().to_string(),
-                identifier: i.identifier,
-                title: i.title,
-                state: i.state.map(|s| s.name),
-                assignee: i.assignee.map(|u| {
-                    if u.display_name.is_empty() {
-                        u.name
-                    } else {
-                        u.display_name
-                    }
-                }),
-                priority: Some(i.priority as i32),
-                url: Some(i.url),
-                team_key: Some(i.team.key),
-                updated_at: i.updated_at.0,
+            let issues = data
+                .search_issues
+                .nodes
+                .into_iter()
+                .map(|i| models::IssueSummary {
+                    id: i.id.inner().to_string(),
+                    identifier: i.identifier,
+                    title: i.title,
+                    state: Some(i.state.name),
+                    assignee: i.assignee.map(|u| {
+                        if u.display_name.is_empty() {
+                            u.name
+                        } else {
+                            u.display_name
+                        }
+                    }),
+                    priority: Some(i.priority as i32),
+                    url: Some(i.url),
+                    team_key: Some(i.team.key),
+                    updated_at: i.updated_at.0,
+                })
+                .collect();
+
+            Ok(models::SearchResult {
+                issues,
+                has_next_page: data.search_issues.page_info.has_next_page,
+                end_cursor: data.search_issues.page_info.end_cursor,
             })
-            .collect();
+        } else {
+            // Filters-only path: issues query
+            let op = IssuesQuery::build(IssuesArguments {
+                first: page_size,
+                after,
+                filter: filter_opt,
+            });
 
-        Ok(models::SearchResult {
-            issues,
-            has_next_page: data.issues.page_info.has_next_page,
-            end_cursor: data.issues.page_info.end_cursor,
-        })
+            let resp = client.run(op).await.map_err(to_tool_error)?;
+            let data = http::extract_data(resp).map_err(to_tool_error)?;
+
+            let issues = data
+                .issues
+                .nodes
+                .into_iter()
+                .map(|i| models::IssueSummary {
+                    id: i.id.inner().to_string(),
+                    identifier: i.identifier,
+                    title: i.title,
+                    state: i.state.map(|s| s.name),
+                    assignee: i.assignee.map(|u| {
+                        if u.display_name.is_empty() {
+                            u.name
+                        } else {
+                            u.display_name
+                        }
+                    }),
+                    priority: Some(i.priority as i32),
+                    url: Some(i.url),
+                    team_key: Some(i.team.key),
+                    updated_at: i.updated_at.0,
+                })
+                .collect();
+
+            Ok(models::SearchResult {
+                issues,
+                has_next_page: data.issues.page_info.has_next_page,
+                end_cursor: data.issues.page_info.end_cursor,
+            })
+        }
     }
 
     /// Read a single Linear issue
@@ -280,9 +331,7 @@ impl LinearTools {
             IssueIdentifier::Id(id) => {
                 let op = IssueByIdQuery::build(IssueByIdArguments { id });
                 let resp = client.run(op).await.map_err(to_tool_error)?;
-                let data = resp.data.ok_or_else(|| {
-                    ToolError::new(ErrorCode::ExternalServiceError, "No data returned")
-                })?;
+                let data = http::extract_data(resp).map_err(to_tool_error)?;
                 data.issue
                     .ok_or_else(|| ToolError::new(ErrorCode::NotFound, "Issue not found"))?
             }
@@ -311,9 +360,7 @@ impl LinearTools {
                     filter: Some(filter),
                 });
                 let resp = client.run(op).await.map_err(to_tool_error)?;
-                let data = resp.data.ok_or_else(|| {
-                    ToolError::new(ErrorCode::ExternalServiceError, "No data returned")
-                })?;
+                let data = http::extract_data(resp).map_err(to_tool_error)?;
                 data.issues.nodes.into_iter().next().ok_or_else(|| {
                     ToolError::new(ErrorCode::NotFound, format!("Issue {} not found", ident))
                 })?
@@ -397,12 +444,7 @@ impl LinearTools {
 
         let op = IssueCreateMutation::build(IssueCreateArguments { input });
         let resp = client.run(op).await.map_err(to_tool_error)?;
-        let data = resp.data.ok_or_else(|| {
-            ToolError::new(
-                ErrorCode::ExternalServiceError,
-                "No data returned from Linear",
-            )
-        })?;
+        let data = http::extract_data(resp).map_err(to_tool_error)?;
 
         let payload = data.issue_create;
         let issue = payload.issue.map(|i| models::IssueSummary {
@@ -454,12 +496,7 @@ impl LinearTools {
 
         let op = CommentCreateMutation::build(CommentCreateArguments { input });
         let resp = client.run(op).await.map_err(to_tool_error)?;
-        let data = resp.data.ok_or_else(|| {
-            ToolError::new(
-                ErrorCode::ExternalServiceError,
-                "No data returned from Linear",
-            )
-        })?;
+        let data = http::extract_data(resp).map_err(to_tool_error)?;
 
         let payload = data.comment_create;
         let (comment_id, body, created_at) = match payload.comment {
