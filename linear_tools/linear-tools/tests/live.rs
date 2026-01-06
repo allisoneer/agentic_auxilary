@@ -63,6 +63,7 @@ async fn live_create_search_read_comment_archive() {
     let issue = created.issue.expect("issue should be present");
     let ident = issue.identifier.clone();
     let issue_id = issue.id.clone();
+    // TODO(3): Add cleanup guard for test issue on failure (see PR #105 review)
 
     // 2) Wait for search indexing
     sleep(Duration::from_millis(2000)).await;
