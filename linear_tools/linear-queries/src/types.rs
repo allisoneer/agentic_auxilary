@@ -70,3 +70,31 @@ pub struct IssueConnection {
     #[cynic(rename = "pageInfo")]
     pub page_info: PageInfo,
 }
+
+/// IssueSearchResult from searchIssues query - has issue fields directly
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct IssueSearchResult {
+    pub id: cynic::Id,
+    pub identifier: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: f64,
+    pub url: String,
+    #[cynic(rename = "createdAt")]
+    pub created_at: DateTime,
+    #[cynic(rename = "updatedAt")]
+    pub updated_at: DateTime,
+    pub team: Team,
+    pub state: WorkflowState,
+    pub assignee: Option<User>,
+    pub project: Option<Project>,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct IssueSearchPayload {
+    pub nodes: Vec<IssueSearchResult>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
