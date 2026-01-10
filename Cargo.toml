@@ -17,6 +17,10 @@ members = [
     "linear_tools/linear-schema",
     "linear_tools/linear-queries",
     "linear_tools/linear-tools",
+    # Agentic tools family
+    "agentic-tools-core",
+    "agentic-tools-macros",
+    "agentic-tools-mcp",
 ]
 exclude = [
     "universal_tool/examples",

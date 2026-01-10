@@ -1,0 +1,15 @@
+[package]
+name = "agentic-tools-mcp"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "MCP server integration for agentic-tools library family"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[dependencies]
+agentic-tools-core = { path = "../agentic-tools-core" }
+rmcp = { version = "0.6.4", features = ["server", "transport-io"] }
+schemars = "0.8"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
