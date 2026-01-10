@@ -1,5 +1,6 @@
 pub mod http;
 pub mod models;
+pub mod tools;
 
 /// Test support utilities (for use in tests)
 #[doc(hidden)]
@@ -12,6 +13,9 @@ use linear_queries::*;
 use regex::Regex;
 use std::sync::Arc;
 use universal_tool_core::prelude::*;
+
+// Re-export agentic-tools types for MCP server usage
+pub use tools::build_registry;
 
 /// Parse identifier "ENG-245" from plain text or URL; normalize to uppercase.
 /// Returns (team_key, number) if a valid identifier is found.

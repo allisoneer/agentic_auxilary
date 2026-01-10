@@ -1,9 +1,9 @@
+use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use linear_tools::LinearTools;
+use linear_tools::{LinearTools, build_registry};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use universal_tool_core::mcp::ServiceExt;
 
 #[derive(Parser)]
 #[command(name = "linear-tools")]
@@ -210,9 +210,15 @@ async fn run_cli(args: Args) -> Result<()> {
 }
 
 async fn run_mcp_server() -> Result<()> {
-    eprintln!("Starting Linear Tools MCP Server...");
-    let server = linear_tools::LinearToolsServer::new(Arc::new(LinearTools::new()));
-    let transport = universal_tool_core::mcp::stdio();
+    eprintln!("Starting Linear Tools MCP Server (agentic-tools)...");
+
+    // Build the registry and server using agentic-tools
+    let registry = Arc::new(build_registry(Arc::new(LinearTools::new())));
+    let server = RegistryServer::new(registry)
+        .with_info("linear-tools", env!("CARGO_PKG_VERSION"))
+        .with_output_mode(OutputMode::Text);
+
+    let transport = stdio();
     let service = server.serve(transport).await?;
     service.waiting().await?;
     eprintln!("MCP server stopped");

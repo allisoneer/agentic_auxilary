@@ -13,8 +13,13 @@ categories = ["command-line-utilities", "development-tools"]
 
 
 [dependencies]
-# Universal tool framework
+# Universal tool framework (retained for backwards compatibility during migration)
 universal-tool-core = { version = "0.2.5", path = "../universal_tool/universal-tool-core", features = ["cli", "mcp"] }
+
+# Agentic tools framework (new)
+agentic-tools-core = { path = "../agentic-tools-core" }
+agentic-tools-mcp = { path = "../agentic-tools-mcp" }
+futures = "0.3"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
