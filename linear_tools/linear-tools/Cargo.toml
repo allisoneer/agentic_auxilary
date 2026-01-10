@@ -17,7 +17,13 @@ name = "linear_tools"
 path = "src/lib.rs"
 
 [dependencies]
+# Universal tool framework (retained for backwards compatibility during migration)
 universal-tool-core = { path = "../../universal_tool/universal-tool-core", version = "0.2.5", features = ["cli", "mcp"] }
+
+# Agentic tools framework (new)
+agentic-tools-core = { path = "../../agentic-tools-core" }
+agentic-tools-mcp = { path = "../../agentic-tools-mcp" }
+futures = "0.3"
 cynic = { version = "3.12.0", features = ["http-reqwest"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 linear-queries = { path = "../linear-queries", version = "0.1.1" }

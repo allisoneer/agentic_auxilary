@@ -1,0 +1,35 @@
+# Use bash with strict flags
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+# CI/output mode detection
+ci := env("CI", "false")
+output_mode := env("OUTPUT_MODE", if ci == "true" { "normal" } else { "minimal" })
+
+# Wrapper path
+WRAP := "../tools/cargo-wrap.sh"
+
+default: help
+
+help:
+  @echo "Tool commands:"
+  @echo "  just check      # fmt-check + clippy (warnings are failures)"
+  @echo "  just test       # cargo test (counts results)"
+  @echo "  just build      # cargo build (warnings are failures)"
+  @echo "  just fmt        # cargo fmt"
+  @echo "  just fmt-check  # cargo fmt --check"
+
+fmt:
+  cargo fmt
+
+fmt-check:
+  {{WRAP}} fmt-check
+
+check:
+  {{WRAP}} fmt-check
+  {{WRAP}} clippy --all-targets -- -D warnings
+
+test:
+  {{WRAP}} test
+
+build:
+  {{WRAP}} build

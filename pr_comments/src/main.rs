@@ -1,9 +1,9 @@
+use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use pr_comments::{PrComments, PrCommentsServer, models::CommentSourceType};
+use pr_comments::{PrComments, build_registry, models::CommentSourceType};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use universal_tool_core::mcp::ServiceExt;
 
 #[derive(Parser)]
 #[command(name = "pr-comments")]
@@ -155,7 +155,7 @@ async fn run_cli(args: Args) -> Result<()> {
 }
 
 async fn run_mcp_server(repo: Option<String>) -> Result<()> {
-    eprintln!("🚀 Starting PR Comments MCP Server");
+    eprintln!("Starting PR Comments MCP Server (agentic-tools)");
 
     // Create the tool instance
     let tool = if let Some(repo_spec) = repo {
@@ -178,8 +178,13 @@ async fn run_mcp_server(repo: Option<String>) -> Result<()> {
         }
     };
 
-    let server = PrCommentsServer::new(Arc::new(tool));
-    let transport = universal_tool_core::mcp::stdio();
+    // Build the registry and server using agentic-tools
+    let registry = Arc::new(build_registry(Arc::new(tool)));
+    let server = RegistryServer::new(registry)
+        .with_info("pr-comments", env!("CARGO_PKG_VERSION"))
+        .with_output_mode(OutputMode::Text);
+
+    let transport = stdio();
 
     // The serve method will run until the client disconnects
     let service = match server.serve(transport).await {

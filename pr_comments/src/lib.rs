@@ -2,12 +2,16 @@ pub mod git;
 pub mod github;
 pub mod models;
 pub mod pagination;
+pub mod tools;
 
 use anyhow::{Context, Result};
 use models::{CommentSourceType, PrSummaryList, ReviewComment, ReviewCommentList, Thread};
 use pagination::{PaginationCache, make_key, paginate_slice};
 use std::sync::Arc;
 use universal_tool_core::prelude::*;
+
+// Re-export agentic-tools types for MCP server usage
+pub use tools::build_registry;
 
 /// AI response prefix to clearly identify automated replies.
 pub const AI_PREFIX: &str = "\u{1F916} AI response: ";
