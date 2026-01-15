@@ -20,6 +20,101 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentic-mcp"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-mcp",
+ "agentic-tools-registry",
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "agentic-tools-core"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "inventory",
+ "json-patch",
+ "rmcp 0.12.0",
+ "schemars 1.1.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
+name = "agentic-tools-macros"
+version = "0.1.0"
+dependencies = [
+ "darling 0.20.11",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "agentic-tools-mcp"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "futures",
+ "rmcp 0.12.0",
+ "schemars 1.1.0",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "agentic-tools-napi"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-registry",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "once_cell",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "agentic-tools-registry"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "coding_agent_tools",
+ "gpt5_reasoner",
+ "linear-tools",
+ "pr_comments",
+ "serde",
+ "serde_json",
+ "thoughts-mcp-tools",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "agentic-tools-utils"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "agentic_logging"
 version = "0.1.1"
 dependencies = [
@@ -164,7 +259,7 @@ dependencies = [
  "futures",
  "proptest",
  "reqwest",
- "schemars 0.8.22",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -839,7 +934,7 @@ dependencies = [
  "futures",
  "libc",
  "num_cpus",
- "rmcp",
+ "rmcp 0.12.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -864,17 +959,21 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 name = "coding_agent_tools"
 version = "0.1.8"
 dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-mcp",
+ "agentic-tools-utils",
  "agentic_logging",
  "anyhow",
  "clap",
  "claudecode",
  "dirs 6.0.0",
  "filetime",
+ "futures",
  "globset",
  "ignore",
  "once_cell",
  "regex",
- "schemars 0.8.22",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -885,7 +984,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core",
  "walkdir",
 ]
 
@@ -952,6 +1050,15 @@ dependencies = [
  "once_cell",
  "unicode-width 0.2.2",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "convert_case"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -1055,6 +1162,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
+dependencies = [
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
 name = "cynic"
 version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1093,7 +1210,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3136ed6464e975162667c08092fcb54947ce08785fca301162fd614c4dfd974f"
 dependencies = [
- "indexmap 2.12.0",
+ "indexmap",
  "lalrpop-util",
  "logos",
 ]
@@ -1131,6 +1248,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
+dependencies = [
+ "darling_core 0.23.0",
+ "darling_macro 0.23.0",
+]
+
+[[package]]
 name = "darling_core"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1159,6 +1286,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling_core"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
+dependencies = [
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim 0.11.1",
+ "syn 2.0.110",
+]
+
+[[package]]
 name = "darling_macro"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1176,6 +1316,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
  "darling_core 0.21.3",
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
+dependencies = [
+ "darling_core 0.23.0",
  "quote",
  "syn 2.0.110",
 ]
@@ -2510,6 +2661,8 @@ dependencies = [
 name = "gpt5_reasoner"
 version = "0.5.2"
 dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-mcp",
  "agentic_logging",
  "async-openai",
  "clap",
@@ -2517,7 +2670,7 @@ dependencies = [
  "futures",
  "quick-xml",
  "regex",
- "schemars 0.8.22",
+ "schemars 1.1.0",
  "secrecy",
  "serde",
  "serde_json",
@@ -2531,7 +2684,6 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core",
  "walkdir",
 ]
 
@@ -2547,7 +2699,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http",
- "indexmap 2.12.0",
+ "indexmap",
  "slab",
  "tokio",
  "tokio-util",
@@ -2932,17 +3084,6 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
-dependencies = [
- "autocfg",
- "hashbrown 0.12.3",
- "serde",
-]
-
-[[package]]
-name = "indexmap"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6717a8d2a5a929a1a2eb43a12812498ed141a0bcfb7e8f7844fbdbe4303bba9f"
@@ -2983,6 +3124,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc61209c082fbeb19919bee74b176221b27223e27b65d781eb91af24eb1fb46e"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]
@@ -3085,6 +3235,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-patch"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f300e415e2134745ef75f04562dd0145405c2f7fd92065db029ac4b16b57fe90"
+dependencies = [
+ "jsonptr",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "jsonptr"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5a3cc660ba5d72bce0b3bb295bf20847ccbb40fd423f3f05b61273672e561fe"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonwebtoken"
 version = "9.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3141,6 +3313,16 @@ dependencies = [
  "libz-sys",
  "openssl-sys",
  "pkg-config",
+]
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -3204,15 +3386,19 @@ dependencies = [
 name = "linear-tools"
 version = "0.2.0"
 dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-mcp",
+ "agentic-tools-utils",
  "anyhow",
  "chrono",
  "clap",
  "cynic",
+ "futures",
  "linear-queries",
  "mockito",
  "regex",
  "reqwest",
- "schemars 0.8.22",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -3220,7 +3406,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core",
  "url",
 ]
 
@@ -3411,6 +3596,66 @@ dependencies = [
  "serde_urlencoded",
  "similar",
  "tokio",
+]
+
+[[package]]
+name = "napi"
+version = "2.16.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55740c4ae1d8696773c78fdafd5d0e5fe9bc9f1b071c7ba493ba5c413a9184f3"
+dependencies = [
+ "bitflags",
+ "ctor",
+ "napi-derive",
+ "napi-sys",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "napi-build"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d376940fd5b723c6893cd1ee3f33abbfd86acb1cd1ec079f3ab04a2a3bc4d3b1"
+
+[[package]]
+name = "napi-derive"
+version = "2.16.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cbe2585d8ac223f7d34f13701434b9d5f4eb9c332cccce8dee57ea18ab8ab0c"
+dependencies = [
+ "cfg-if",
+ "convert_case",
+ "napi-derive-backend",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "napi-derive-backend"
+version = "1.0.75"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1639aaa9eeb76e91c6ae66da8ce3e89e921cd3885e99ec85f4abacae72fc91bf"
+dependencies = [
+ "convert_case",
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "semver",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "napi-sys"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "427802e8ec3a734331fec1035594a210ce1ff4dc5bc1950530920ab717964ea3"
+dependencies = [
+ "libloading",
 ]
 
 [[package]]
@@ -3792,6 +4037,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pastey"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b867cad97c0791bbd3aaa6472142568c6c9e8f71937e98379f584cfb0cf35bec"
+
+[[package]]
 name = "pem"
 version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3922,13 +4173,17 @@ dependencies = [
 name = "pr_comments"
 version = "0.5.2"
 dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-mcp",
+ "agentic-tools-utils",
  "anyhow",
  "clap",
+ "futures",
  "gh-config",
  "git2",
  "mockito",
  "octocrab",
- "schemars 0.8.22",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "tempfile",
@@ -3936,7 +4191,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core",
  "url",
 ]
 
@@ -3986,7 +4240,7 @@ version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219cb19e96be00ab2e37d6e299658a0cfa83e52429179969b0f0121b4ac46983"
 dependencies = [
- "toml_edit",
+ "toml_edit 0.23.7",
 ]
 
 [[package]]
@@ -4037,12 +4291,12 @@ dependencies = [
 
 [[package]]
 name = "process-wrap"
-version = "8.2.1"
+version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3ef4f2f0422f23a82ec9f628ea2acd12871c81a9362b02c43c1aa86acfc3ba1"
+checksum = "5e5fd83ab7fa55fd06f5e665e3fc52b8bca451c0486b8ea60ad649cd1c10a5da"
 dependencies = [
  "futures",
- "indexmap 2.12.0",
+ "indexmap",
  "nix 0.30.1",
  "tokio",
  "tracing",
@@ -4467,8 +4721,30 @@ dependencies = [
  "futures",
  "paste",
  "pin-project-lite",
+ "rmcp-macros 0.6.4",
+ "schemars 1.1.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "rmcp"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "528d42f8176e6e5e71ea69182b17d1d0a19a6b3b894b564678b74cd7cab13cfa"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "futures",
+ "pastey",
+ "pin-project-lite",
  "process-wrap",
- "rmcp-macros",
+ "rmcp-macros 0.12.0",
  "schemars 1.1.0",
  "serde",
  "serde_json",
@@ -4486,6 +4762,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1827cd98dab34cade0513243c6fe0351f0f0b2c9d6825460bcf45b42804bdda0"
 dependencies = [
  "darling 0.21.3",
+ "proc-macro2",
+ "quote",
+ "serde_json",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "rmcp-macros"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3f81daaa494eb8e985c9462f7d6ce1ab05e5299f48aafd76cdd3d8b060e6f59"
+dependencies = [
+ "darling 0.23.0",
  "proc-macro2",
  "quote",
  "serde_json",
@@ -4679,7 +4968,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
 dependencies = [
  "dyn-clone",
- "indexmap 1.9.3",
  "schemars_derive 0.8.22",
  "serde",
  "serde_json",
@@ -4863,6 +5151,7 @@ version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "ryu",
@@ -4893,6 +5182,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4910,7 +5208,7 @@ version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
 dependencies = [
- "indexmap 2.12.0",
+ "indexmap",
  "itoa",
  "ryu",
  "serde",
@@ -5261,9 +5559,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "thoughts"
+version = "0.7.0"
+dependencies = [
+ "agentic-tools-mcp",
+ "anyhow",
+ "assert_cmd",
+ "chrono",
+ "clap",
+ "colored 2.2.0",
+ "predicates",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thoughts-mcp-tools",
+ "thoughts-tool",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "thoughts-mcp-tools"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "agentic_logging",
+ "anyhow",
+ "chrono",
+ "futures",
+ "schemars 1.1.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "thoughts-tool",
+ "tokio",
+]
+
+[[package]]
 name = "thoughts-tool"
 version = "0.7.0"
 dependencies = [
+ "agentic-tools-core",
  "agentic_logging",
  "anyhow",
  "assert_cmd",
@@ -5273,6 +5610,7 @@ dependencies = [
  "clap",
  "colored 2.2.0",
  "dirs 5.0.1",
+ "futures",
  "git2",
  "gix",
  "glob",
@@ -5281,7 +5619,7 @@ dependencies = [
  "pretty_assertions",
  "regex",
  "rustc_version",
- "schemars 0.8.22",
+ "schemars 1.1.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -5290,7 +5628,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "universal-tool-core",
  "which",
 ]
 
@@ -5461,6 +5798,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.8.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml_datetime 0.6.11",
+ "toml_edit 0.22.27",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22cddaf88f4fbc13c51aebbf5f8eceb5c7c5a9da2ac40a13519eb5b0a0e8f11c"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5471,12 +5829,26 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
+version = "0.22.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_spanned",
+ "toml_datetime 0.6.11",
+ "toml_write",
+ "winnow 0.7.13",
+]
+
+[[package]]
+name = "toml_edit"
 version = "0.23.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6485ef6d0d9b5d0ec17244ff7eb05310113c3f316f2d14200d4de56b3cb98f8d"
 dependencies = [
- "indexmap 2.12.0",
- "toml_datetime",
+ "indexmap",
+ "toml_datetime 0.7.3",
  "toml_parser",
  "winnow 0.7.13",
 ]
@@ -5489,6 +5861,12 @@ checksum = "c0cbe268d35bdb4bb5a56a2de88d0ad0eb70af5384a99d648cd4b3d04039800e"
 dependencies = [
  "winnow 0.7.13",
 ]
+
+[[package]]
+name = "toml_write"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tower"
@@ -5658,6 +6036,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unicode-segmentation"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493"
+
+[[package]]
 name = "unicode-width"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5682,7 +6066,7 @@ dependencies = [
  "csv",
  "dialoguer",
  "indicatif",
- "rmcp",
+ "rmcp 0.6.4",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -5767,7 +6151,7 @@ version = "4.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5afb1a60e207dca502682537fefcfd9921e71d0b83e9576060f09abc6efab23"
 dependencies = [
- "indexmap 2.12.0",
+ "indexmap",
  "serde",
  "serde_json",
  "utoipa-gen",
@@ -6563,6 +6947,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.17",
+ "toml",
 ]
 
 [[package]]

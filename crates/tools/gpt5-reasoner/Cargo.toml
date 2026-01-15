@@ -1,0 +1,52 @@
+[package]
+name = "gpt5_reasoner"
+version = "0.5.2"
+edition = "2024"
+authors = ["Claude <claude@anthropic.com>"]
+description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+keywords = ["gpt-5", "reasoning", "mcp", "cli", "prompt"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+thoughts-tool = { workspace = true }
+agentic_logging = { workspace = true }
+async-openai = "0.29.3"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+schemars = { workspace = true }
+quick-xml = "0.31"
+regex = "1"
+tiktoken-rs = "0.5"
+dotenvy = "0.15"
+thiserror = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures = "0.3"
+secrecy = "0.10"
+walkdir = "2.5"
+
+[lib]
+name = "gpt5_reasoner"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+serial_test = "3"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = true
+napi = false

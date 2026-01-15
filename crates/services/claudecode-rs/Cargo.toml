@@ -1,0 +1,77 @@
+[package]
+name = "claudecode"
+version = "0.1.9"
+edition = "2024"
+authors = ["ClaudeCode-RS Contributors"]
+description = "A Rust SDK for programmatically interacting with Claude Code"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+documentation = "https://docs.rs/claudecode"
+license = "MIT"
+keywords = ["claude", "ai", "sdk", "anthropic"]
+categories = ["api-bindings", "development-tools"]
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# Async traits and utilities
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "2.0"
+
+# Logging
+tracing = "0.1"
+
+# Path and environment handling
+dirs = "5.0"
+which = "6.0"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Temporary file handling for MCP config
+tempfile = "3.10"
+
+# UUID generation for session IDs
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+# Low-level system calls (for interrupt signal)
+libc = "0.2"
+
+# MCP validation
+rmcp = { version = "0.12.0", features = ["client", "transport-child-process"] }
+num_cpus = "1.16"
+
+[dev-dependencies]
+ tokio-test = "0.4"
+ tracing-subscriber = "0.3"
+ serial_test = "3.2"
+
+# Examples
+[[example]]
+name = "claudecode_basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "claudecode_streaming"
+path = "examples/streaming.rs"
+
+
+[package.metadata.repo]
+role = "lib"
+family = "services"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

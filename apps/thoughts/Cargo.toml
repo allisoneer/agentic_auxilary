@@ -1,0 +1,41 @@
+[package]
+name = "thoughts"
+version = "0.7.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "CLI for flexible thought management using filesystem mounts"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+
+[package.metadata.repo]
+role = "app"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[[bin]]
+name = "thoughts"
+path = "src/main.rs"
+
+[dependencies]
+thoughts-tool = { workspace = true }
+thoughts-mcp-tools = { path = "../../crates/tools/thoughts-mcp-tools" }
+agentic-tools-mcp = { workspace = true }
+clap = { workspace = true, features = ["env"] }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+colored = "2"
+tokio = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2.1"
+predicates = "3.1"
+serial_test = "3"

@@ -1,0 +1,27 @@
+{
+  "name": "agentic-tools-napi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "N-API bindings for agentic-tools, enabling TypeScript/JavaScript integration",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "index.node",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "napi build --release && tsc -p tsconfig.json",
+    "build:debug": "napi build && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
