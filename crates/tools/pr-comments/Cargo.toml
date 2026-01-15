@@ -1,0 +1,63 @@
+[package]
+name = "pr_comments"
+version = "0.5.2"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Fetch GitHub PR comments via CLI and MCP"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+keywords = ["github", "pull-requests", "comments", "cli", "mcp"]
+categories = ["command-line-utilities", "development-tools"]
+
+
+[dependencies]
+# Agentic tools framework
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+agentic-tools-utils = { workspace = true }
+futures = "0.3"
+
+# Async runtime
+tokio = { workspace = true }
+
+# GitHub API client
+octocrab = "0.41"
+gh-config = "0.5.1"
+
+# Git operations
+git2 = { version = "0.18", features = ["vendored-openssl"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = "1"
+
+# CLI
+clap = { workspace = true, features = ["env"] }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# URL parsing
+url = "2"
+
+[dev-dependencies]
+# Testing
+mockito = "1"
+tempfile = "3"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = false
+napi = false

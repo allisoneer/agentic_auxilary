@@ -1,0 +1,12 @@
+# Use bash syntax by default
+shell=bash
+
+# Report warnings and above
+severity=warning
+
+# Allow sourcing non-existent files (runtime dependencies)
+exclude=SC1091
+
+# Handle sourced files and relative paths
+external-sources=true
+source-path=SCRIPTDIR

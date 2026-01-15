@@ -1,0 +1,30 @@
+[package]
+name = "thoughts-mcp-tools"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "MCP tool wrappers for thoughts-tool using agentic-tools framework"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = true
+napi = false
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+agentic_logging = { workspace = true }
+thoughts-tool = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# TODO(0): Verify schemars 1.x compatibility across all consumers after migration completes.
+schemars = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+futures = "0.3"
