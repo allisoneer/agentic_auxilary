@@ -57,6 +57,10 @@ skip = [
     { name = "windows_x86_64_gnu" },
     { name = "windows_x86_64_gnullvm" },
     { name = "windows_x86_64_msvc" },
+    # ahash 0.7 is still used transitively by some deps
+    { name = "ahash", version = "0.7" },
+    # base64 0.21 coexists with 0.22 in the ecosystem
+    { name = "base64", version = "0.21" },
 ]
 
 [graph]

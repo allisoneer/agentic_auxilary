@@ -4,26 +4,26 @@ Development tools for enhanced AI agent workflows.
 
 ## Tools
 
-### 🔀 [Thoughts Tool](thoughts_tool/)
+### 🔀 [Thoughts Tool](apps/thoughts/)
 Unified filesystem for organizing documentation across git repositories using mergerfs/fuse-t.
 - Merge multiple repositories into single mountpoint
 - Automatic git synchronization
 - Cross-platform (Linux/macOS)
 
-### 🛠️ [Universal Tool Framework](universal_tool/)
+### 🛠️ [Universal Tool Framework](crates/legacy/universal-tool-core/)
 Write tool logic once, deploy as CLI/REST/MCP without code changes.
 - Zero-overhead code generation
 - Type-safe interfaces
 - Framework agnostic
 
-### 🤖 [ClaudeCode-RS](claudecode_rs/)
+### 🤖 [ClaudeCode-RS](crates/services/claudecode-rs/)
 Rust SDK for programmatically interacting with Claude Code CLI.
 - Type-safe event streaming
 - Async-first API design
 - MCP (Model Context Protocol) support
 - Builder pattern configuration
 
-### 📡 [opencode_rs](opencode_rs/)
+### 📡 [opencode_rs](crates/services/opencode-rs/)
 Rust SDK for OpenCode: HTTP-first client with SSE streaming and optional managed server/CLI helpers.
 - HTTP endpoints with typed request/response models
 - SSE event subscriptions with backoff and heartbeats
@@ -36,32 +36,32 @@ Python script to migrate Claude Code configuration to OpenCode.
 - Dry-run with unified diffs and timestamped backups
 - Fine-grained flags: agents, commands, permissions, mcp
 
-### 🧠 [GPT-5 Reasoner](gpt5_reasoner/)
+### 🧠 [GPT-5 Reasoner](crates/tools/gpt5-reasoner/)
 Two-phase prompt optimization tool: optimize with Claude, execute with GPT-5.
 - Directory-based file discovery with smart filtering
 - Dual CLI and MCP interfaces
 - Configurable optimizer model (default: Claude Sonnet 4.5)
 - Automatic binary file detection and deduplication
 
-### 🧩 [Anthropic Async](anthropic_async/)
+### 🧩 [Anthropic Async](crates/services/anthropic-async/)
 Production-ready asynchronous client for Anthropic's API with prompt caching support.
 - Messages API (create, count tokens) and Models API
 - Retry with exponential backoff, beta feature support
 - Strong typing and examples
 
-### 💬 [PR Comments](pr_comments/)
+### 💬 [PR Comments](crates/tools/pr-comments/)
 Fetch GitHub PR comments with resolution filtering.
 - CLI + MCP support
 - Filter by author, state, and resolution
 - Useful for code review analytics and CI reporting
 
-### 🔧 [Coding Agent Tools](coding_agent_tools/)
+### 🔧 [Coding Agent Tools](crates/tools/coding-agent-tools/)
 CLI + MCP tools for coding assistants with gitignore-aware directory listing.
 - Dual CLI and MCP interfaces
 - Respects .gitignore and built-in ignore patterns
 - Implicit pagination for large directories
 
-### 📋 [linear_tools](linear_tools/)
+### 📋 [linear_tools](crates/linear/tools/)
 CLI + MCP tools for Linear issue management.
 - Search and read Linear issues
 - Works as both CLI and MCP server
@@ -74,17 +74,17 @@ CLI + MCP tools for Linear issue management.
 git clone https://github.com/allisoneer/agentic_auxilary
 cd agentic_auxilary
 
-# Build thoughts_tool
-cd thoughts_tool && just build
+# Build thoughts
+cd apps/thoughts && just build
 
-# Build universal_tool
-cd universal_tool && just build
+# Build universal-tool-core
+cd crates/legacy/universal-tool-core && just build
 
-# Build claudecode_rs
-cd claudecode_rs && just build
+# Build claudecode
+cd crates/services/claudecode-rs && just build
 
 # Build gpt5_reasoner
-cd gpt5_reasoner && just build
+cd crates/tools/gpt5-reasoner && just build
 ```
 
 ## Installation
