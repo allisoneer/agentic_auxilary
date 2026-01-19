@@ -39,8 +39,6 @@ specifics - It could also be caching is broken somehow? Do we have similar TTL c
 instructions ("Showing X out of Y, call again for more") should be solved elegantly at the framework level rather than per-tool. The ls
 tool has good phrasing but pr_comments only partially ported that style. Consider: should agentic-tools-utils pagination module provide
 a standard output formatter? Or should pagination messaging be part of the MCP response schema itself?
-- Update rust-toolchain to whatever latest stable is and fix all the things that pop up by upgrading to a new stable version - Is this
-done?
 - Investigate every single clippy allow and see if there is a better approach than manually defining a clippy allow
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
 - I'd like to probably get to the point where I can add a web search/web fetch tool. I'm thinking probably integratino with exa for the
@@ -154,6 +152,12 @@ false
 And we likely want to be inspired by that. Except we'll probably want "tokens" instead of bytes. And probably some other niceties. We
 can see how we use web fetch/web search currently in the `spawn_agent` tools. We use internal claude code tools for those, and the goal
 will likely be to replace those with our own, and bring them into our whole ecosystem.
+
+Old (probably delete):
+- universal tool could use a re-look at how useful the current CLI fucntionality actually is, and how much we have to re-implement with clap for the standard use cases we have.
+- universal tool could potentially use an ability to modify things at runtime. There is potential to create strong dynamic tool params and types and such that we would need to use rmcp directly for currently.
+- Update rust-toolchain to whatever latest stable is and fix all the things that pop up by upgrading to a new stable version - Is this
+done?
 - The agentic-mcp command line really should do some type of tooling seperation to make permissions handling easier. e.g. the tool names
   shouldn't be root levell. They should be similar to how we had them setup in the old system, with the prefixes in opencode.json
 defined. I'm not sure what categories would be best? Maybe cli_ls for cli-type tools. Then the reasoning model request method I think
@@ -165,8 +169,3 @@ similar tools. This gives the model a stronger chance at calling the right tool 
 `ask_blah` ends up tokenizing to `ask` and `_blah[1...]`. Therefore the tokenizer could choose ask as the token that it wants to choose,
 and have the next token generated having a higher chance at success. I think the `just_search` and `just_execute` are similarly useful
 in this regard.
-
-
-Old (probably delete):
-- universal tool could use a re-look at how useful the current CLI fucntionality actually is, and how much we have to re-implement with clap for the standard use cases we have.
-- universal tool could potentially use an ability to modify things at runtime. There is potential to create strong dynamic tool params and types and such that we would need to use rmcp directly for currently.
