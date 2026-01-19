@@ -4,8 +4,7 @@
 
 use crate::error::Result;
 use crate::types::event::Event;
-use backoff::ExponentialBackoff;
-use backoff::backoff::Backoff;
+use backon::{BackoffBuilder, ExponentialBuilder};
 use futures::StreamExt;
 use reqwest::Client as ReqClient;
 use reqwest_eventsource::{Event as EsEvent, EventSource};
@@ -154,15 +153,16 @@ impl SseSubscriber {
         let filter = session_filter;
 
         let task = tokio::spawn(async move {
-            // Note: max_elapsed_time: None means the subscriber will retry indefinitely.
+            // Note: No max_times means the subscriber will retry indefinitely.
             // This is intentional for long-lived SSE connections that should reconnect
             // on any transient network failure.
-            let mut backoff = ExponentialBackoff {
-                initial_interval: initial,
-                max_interval: max,
-                max_elapsed_time: None,
-                ..ExponentialBackoff::default()
-            };
+            let backoff_builder = ExponentialBuilder::default()
+                .with_min_delay(initial)
+                .with_max_delay(max)
+                .with_factor(2.0)
+                .with_jitter();
+
+            let mut backoff = backoff_builder.build();
 
             loop {
                 if cancel_clone.is_cancelled() {
@@ -182,7 +182,7 @@ impl SseSubscriber {
                     Ok(es) => es,
                     Err(e) => {
                         tracing::warn!("Failed to create EventSource: {:?}", e);
-                        if let Some(delay) = backoff.next_backoff() {
+                        if let Some(delay) = backoff.next() {
                             tokio::select! {
                                 () = tokio::time::sleep(delay) => {}
                                 () = cancel_clone.cancelled() => { return; }
@@ -200,7 +200,8 @@ impl SseSubscriber {
 
                     match event {
                         Ok(EsEvent::Open) => {
-                            backoff.reset();
+                            // Reset backoff on successful connection
+                            backoff = backoff_builder.build();
                             tracing::debug!("SSE connection opened");
                         }
                         Ok(EsEvent::Message(msg)) => {
@@ -238,7 +239,7 @@ impl SseSubscriber {
                 }
 
                 // Apply backoff before reconnecting
-                if let Some(delay) = backoff.next_backoff() {
+                if let Some(delay) = backoff.next() {
                     tracing::debug!("SSE reconnecting after {:?}", delay);
                     tokio::select! {
                         () = tokio::time::sleep(delay) => {}

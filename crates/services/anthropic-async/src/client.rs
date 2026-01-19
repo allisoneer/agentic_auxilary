@@ -1,3 +1,4 @@
+use backon::{ExponentialBuilder, Retryable};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{config::Config, error::AnthropicError, retry};
@@ -10,7 +11,7 @@ use crate::{config::Config, error::AnthropicError, retry};
 pub struct Client<C: Config> {
     http: reqwest::Client,
     config: C,
-    backoff: backoff::ExponentialBackoff,
+    backoff: ExponentialBuilder,
 }
 
 impl Client<crate::config::AnthropicConfig> {
@@ -46,7 +47,7 @@ impl<C: Config> Client<C> {
                 .build()
                 .expect("reqwest client"),
             config,
-            backoff: retry::default_backoff(),
+            backoff: retry::default_backoff_builder(),
         }
     }
 
@@ -63,7 +64,7 @@ impl<C: Config> Client<C> {
     ///
     /// By default, the client uses exponential backoff with jitter.
     #[must_use]
-    pub const fn with_backoff(mut self, backoff: backoff::ExponentialBackoff) -> Self {
+    pub const fn with_backoff(mut self, backoff: ExponentialBuilder) -> Self {
         self.backoff = backoff;
         self
     }
@@ -185,38 +186,24 @@ impl<C: Config> Client<C> {
     {
         let http_client = self.http.clone();
 
-        backoff::future::retry(self.backoff.clone(), || async {
-            let request = mk().await.map_err(backoff::Error::Permanent)?;
+        (|| async {
+            let request = mk().await?;
             let response = http_client
                 .execute(request)
                 .await
-                .map_err(AnthropicError::Reqwest)
-                .map_err(backoff::Error::Permanent)?;
+                .map_err(AnthropicError::Reqwest)?;
 
             let status = response.status();
-            let headers = response.headers().clone();
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(AnthropicError::Reqwest)
-                .map_err(backoff::Error::Permanent)?;
+            let bytes = response.bytes().await.map_err(AnthropicError::Reqwest)?;
 
             if status.is_success() {
                 return Ok(bytes);
             }
 
-            if crate::retry::is_retryable_status(status.as_u16()) {
-                let err = crate::error::deserialize_api_error(status, &bytes);
-                if let Some(retry_after) = crate::retry::parse_retry_after(&headers) {
-                    return Err(backoff::Error::retry_after(err, retry_after));
-                }
-                return Err(backoff::Error::transient(err));
-            }
-
-            Err(backoff::Error::Permanent(
-                crate::error::deserialize_api_error(status, &bytes),
-            ))
+            Err(crate::error::deserialize_api_error(status, &bytes))
         })
+        .retry(self.backoff)
+        .when(AnthropicError::is_retryable)
         .await
     }
 }

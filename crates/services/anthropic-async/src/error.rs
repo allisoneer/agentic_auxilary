@@ -33,11 +33,31 @@ pub struct ApiErrorObject {
     pub request_id: Option<String>,
     /// Error code
     pub code: Option<String>,
+    /// HTTP status code (not serialized, used for retry logic)
+    #[serde(skip)]
+    pub status_code: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ErrorEnvelope {
     error: ApiErrorObject,
+}
+
+impl AnthropicError {
+    /// Determines if this error is retryable
+    ///
+    /// Retryable errors include rate limits (429), timeouts (408),
+    /// conflicts (409), and server errors (5xx).
+    #[must_use]
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Api(obj) => obj
+                .status_code
+                .is_some_and(crate::retry::is_retryable_status),
+            Self::Reqwest(e) => e.is_timeout() || e.is_connect(),
+            Self::Config(_) | Self::Serde(_) => false,
+        }
+    }
 }
 
 /// Maps a serde deserialization error to an `AnthropicError` with context
@@ -54,8 +74,12 @@ pub fn map_deser(e: &serde_json::Error, body: &[u8]) -> AnthropicError {
 /// Attempts to parse the error as JSON, falling back to plain text on failure.
 #[must_use]
 pub fn deserialize_api_error(status: StatusCode, body: &[u8]) -> AnthropicError {
+    let status_code = Some(status.as_u16());
+
     if let Ok(envelope) = serde_json::from_slice::<ErrorEnvelope>(body) {
-        return AnthropicError::Api(envelope.error);
+        let mut error = envelope.error;
+        error.status_code = status_code;
+        return AnthropicError::Api(error);
     }
 
     // Server may return plain text on 5xx
@@ -64,5 +88,6 @@ pub fn deserialize_api_error(status: StatusCode, body: &[u8]) -> AnthropicError 
         message: String::from_utf8_lossy(body).into_owned(),
         request_id: None,
         code: None,
+        status_code,
     })
 }

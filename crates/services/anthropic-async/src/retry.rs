@@ -1,24 +1,23 @@
+use backon::ExponentialBuilder;
 use reqwest::header::HeaderMap;
 use std::time::Duration;
 
-/// Creates the default exponential backoff configuration
+/// Creates the default exponential backoff builder
 ///
 /// Configured with:
 /// - Initial interval: 500ms
 /// - Max interval: 8s
-/// - Max elapsed time: 60s
-/// - Randomization factor: 0.25
-/// - Multiplier: 2.0
+/// - Max times: 20 (~60s total with exponential growth)
+/// - Factor: 2.0
+/// - Jitter enabled
 #[must_use]
-pub fn default_backoff() -> backoff::ExponentialBackoff {
-    backoff::ExponentialBackoff {
-        max_elapsed_time: Some(Duration::from_secs(60)),
-        initial_interval: Duration::from_millis(500),
-        max_interval: Duration::from_secs(8),
-        randomization_factor: 0.25,
-        multiplier: 2.0,
-        ..Default::default()
-    }
+pub fn default_backoff_builder() -> ExponentialBuilder {
+    ExponentialBuilder::default()
+        .with_min_delay(Duration::from_millis(500))
+        .with_max_delay(Duration::from_secs(8))
+        .with_max_times(20)
+        .with_factor(2.0)
+        .with_jitter()
 }
 
 /// Determines if an HTTP status code should trigger a retry

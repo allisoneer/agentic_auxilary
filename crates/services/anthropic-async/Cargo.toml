@@ -25,7 +25,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls-tls"], default-features = false }
-backoff = { version = "0.4", features = ["tokio", "futures"] }
+backon = { version = "1", features = ["tokio-sleep"] }
 chrono = { workspace = true, features = ["serde"] }
 bytes = "1.0"
 futures = "0.3"
