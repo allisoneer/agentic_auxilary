@@ -15,7 +15,7 @@
 //!
 //! // Build registry with allowlist
 //! let config = AgenticToolsConfig {
-//!     allowlist: Some(["ls", "search_grep"].into_iter().map(String::from).collect()),
+//!     allowlist: Some(["cli_ls", "cli_grep"].into_iter().map(String::from).collect()),
 //!     ..Default::default()
 //! };
 //! let filtered = AgenticTools::new(config);
@@ -46,26 +46,31 @@ pub struct AgenticTools;
 
 // Tool name constants for each domain
 const CODING_NAMES: &[&str] = &[
-    "ls",
-    "spawn_agent",
-    "search_grep",
-    "search_glob",
-    "just_search",
-    "just_execute",
+    "cli_ls",
+    "ask_agent",
+    "cli_grep",
+    "cli_glob",
+    "cli_just_search",
+    "cli_just_execute",
 ];
 
-const PR_COMMENTS_NAMES: &[&str] = &["get_comments", "add_comment_reply", "list_prs"];
+const PR_COMMENTS_NAMES: &[&str] = &["gh_get_comments", "gh_add_comment_reply", "gh_get_prs"];
 
-const LINEAR_NAMES: &[&str] = &["search_issues", "read_issue", "create_issue", "add_comment"];
+const LINEAR_NAMES: &[&str] = &[
+    "linear_search_issues",
+    "linear_read_issue",
+    "linear_create_issue",
+    "linear_add_comment",
+];
 
-const GPT5_NAMES: &[&str] = &["request"];
+const GPT5_NAMES: &[&str] = &["ask_reasoning_model"];
 
 const THOUGHTS_NAMES: &[&str] = &[
-    "write_document",
-    "list_active_documents",
-    "list_references",
-    "add_reference",
-    "get_template",
+    "thoughts_write_document",
+    "thoughts_list_documents",
+    "thoughts_list_references",
+    "thoughts_add_reference",
+    "thoughts_get_template",
 ];
 
 impl AgenticTools {
@@ -184,12 +189,12 @@ mod tests {
     #[test]
     fn normalize_allowlist_lowercases() {
         let mut set = HashSet::new();
-        set.insert("LS".to_string());
-        set.insert("Request".to_string());
+        set.insert("CLI_LS".to_string());
+        set.insert("Ask_Reasoning_Model".to_string());
         let normalized = normalize_allowlist(Some(set)).unwrap();
-        assert!(normalized.contains("ls"));
-        assert!(normalized.contains("request"));
-        assert!(!normalized.contains("LS"));
+        assert!(normalized.contains("cli_ls"));
+        assert!(normalized.contains("ask_reasoning_model"));
+        assert!(!normalized.contains("CLI_LS"));
     }
 
     #[test]
@@ -197,10 +202,10 @@ mod tests {
         let mut set = HashSet::new();
         set.insert("".to_string());
         set.insert("   ".to_string());
-        set.insert("ls".to_string());
+        set.insert("cli_ls".to_string());
         let normalized = normalize_allowlist(Some(set)).unwrap();
         assert_eq!(normalized.len(), 1);
-        assert!(normalized.contains("ls"));
+        assert!(normalized.contains("cli_ls"));
     }
 
     #[test]
@@ -226,30 +231,33 @@ mod tests {
         );
 
         // Check some known tools from each domain
-        assert!(reg.contains("ls"), "missing ls from coding_agent_tools");
         assert!(
-            reg.contains("get_comments"),
-            "missing get_comments from pr_comments"
+            reg.contains("cli_ls"),
+            "missing cli_ls from coding_agent_tools"
         );
         assert!(
-            reg.contains("search_issues"),
-            "missing search_issues from linear_tools"
+            reg.contains("gh_get_comments"),
+            "missing gh_get_comments from pr_comments"
         );
         assert!(
-            reg.contains("request"),
-            "missing request from gpt5_reasoner"
+            reg.contains("linear_search_issues"),
+            "missing linear_search_issues from linear_tools"
         );
         assert!(
-            reg.contains("add_reference"),
-            "missing add_reference from thoughts_tool"
+            reg.contains("ask_reasoning_model"),
+            "missing ask_reasoning_model from gpt5_reasoner"
+        );
+        assert!(
+            reg.contains("thoughts_add_reference"),
+            "missing thoughts_add_reference from thoughts_tool"
         );
     }
 
     #[test]
     fn allowlist_filters_to_specific_tools() {
         let mut set = HashSet::new();
-        set.insert("ls".to_string());
-        set.insert("request".to_string());
+        set.insert("cli_ls".to_string());
+        set.insert("ask_reasoning_model".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
             extras: serde_json::json!({}),
@@ -259,16 +267,16 @@ mod tests {
         let names = reg.list_names();
 
         assert_eq!(names.len(), 2);
-        assert!(reg.contains("ls"));
-        assert!(reg.contains("request"));
-        assert!(!reg.contains("search_grep"));
+        assert!(reg.contains("cli_ls"));
+        assert!(reg.contains("ask_reasoning_model"));
+        assert!(!reg.contains("cli_grep"));
     }
 
     #[test]
     fn allowlist_is_case_insensitive() {
         let mut set = HashSet::new();
-        set.insert("LS".to_string());
-        set.insert("REQUEST".to_string());
+        set.insert("CLI_LS".to_string());
+        set.insert("ASK_REASONING_MODEL".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
             extras: serde_json::json!({}),
@@ -277,8 +285,8 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Should find tools despite uppercase allowlist
-        assert!(reg.contains("ls"));
-        assert!(reg.contains("request"));
+        assert!(reg.contains("cli_ls"));
+        assert!(reg.contains("ask_reasoning_model"));
     }
 
     #[test]
@@ -299,7 +307,7 @@ mod tests {
     #[test]
     fn unknown_allowlist_names_are_ignored() {
         let mut set = HashSet::new();
-        set.insert("ls".to_string());
+        set.insert("cli_ls".to_string());
         set.insert("nonexistent_tool".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
@@ -308,8 +316,8 @@ mod tests {
 
         let reg = AgenticTools::new(config);
 
-        // Should only have "ls", ignoring "nonexistent_tool"
+        // Should only have "cli_ls", ignoring "nonexistent_tool"
         assert_eq!(reg.len(), 1);
-        assert!(reg.contains("ls"));
+        assert!(reg.contains("cli_ls"));
     }
 }

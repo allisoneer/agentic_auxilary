@@ -73,7 +73,7 @@ impl SearchIssuesTool {
 impl Tool for SearchIssuesTool {
     type Input = SearchIssuesInput;
     type Output = SearchResult;
-    const NAME: &'static str = "search_issues";
+    const NAME: &'static str = "linear_search_issues";
     const DESCRIPTION: &'static str = "Search Linear issues using full-text search and/or filters";
 
     fn call(
@@ -131,7 +131,7 @@ impl ReadIssueTool {
 impl Tool for ReadIssueTool {
     type Input = ReadIssueInput;
     type Output = IssueDetails;
-    const NAME: &'static str = "read_issue";
+    const NAME: &'static str = "linear_read_issue";
     const DESCRIPTION: &'static str =
         "Read a Linear issue by ID, identifier (e.g., ENG-245), or URL";
 
@@ -199,7 +199,7 @@ impl CreateIssueTool {
 impl Tool for CreateIssueTool {
     type Input = CreateIssueInput;
     type Output = CreateIssueResult;
-    const NAME: &'static str = "create_issue";
+    const NAME: &'static str = "linear_create_issue";
     const DESCRIPTION: &'static str = "Create a new Linear issue in a team";
 
     fn call(
@@ -258,7 +258,7 @@ impl AddCommentTool {
 impl Tool for AddCommentTool {
     type Input = AddCommentInput;
     type Output = CommentResult;
-    const NAME: &'static str = "add_comment";
+    const NAME: &'static str = "linear_add_comment";
     const DESCRIPTION: &'static str = "Add a comment to a Linear issue";
 
     fn call(

@@ -53,7 +53,7 @@ impl LsTool {
 impl Tool for LsTool {
     type Input = LsInput;
     type Output = LsOutput;
-    const NAME: &'static str = "ls";
+    const NAME: &'static str = "cli_ls";
     const DESCRIPTION: &'static str = "List files and directories. Depth: 0=header only, 1=children (default), 2-10=tree. Filter with show='files'|'dirs'|'all'. Gitignore-aware. For shallow queries, call with same params again for next page.";
 
     fn call(
@@ -108,7 +108,7 @@ impl SpawnAgentTool {
 impl Tool for SpawnAgentTool {
     type Input = SpawnAgentInput;
     type Output = AgentOutput;
-    const NAME: &'static str = "spawn_agent";
+    const NAME: &'static str = "ask_agent";
     const DESCRIPTION: &'static str = "Spawn a Claude subagent for discovery or deep analysis. Returns a single text response; no side effects.
 
 Agent types:
@@ -220,7 +220,7 @@ impl SearchGrepTool {
 impl Tool for SearchGrepTool {
     type Input = SearchGrepInput;
     type Output = GrepOutput;
-    const NAME: &'static str = "search_grep";
+    const NAME: &'static str = "cli_grep";
     const DESCRIPTION: &'static str = "Regex-based search. Modes: files (default), content, count. Stateless pagination via head_limit+offset.";
 
     fn call(
@@ -297,7 +297,7 @@ impl SearchGlobTool {
 impl Tool for SearchGlobTool {
     type Input = SearchGlobInput;
     type Output = GlobOutput;
-    const NAME: &'static str = "search_glob";
+    const NAME: &'static str = "cli_glob";
     const DESCRIPTION: &'static str = "Glob-based path match. Sorting by name (default) or mtime (newest first). Stateless pagination via head_limit+offset.";
 
     fn call(
@@ -352,7 +352,7 @@ impl JustSearchTool {
 impl Tool for JustSearchTool {
     type Input = JustSearchInput;
     type Output = just::SearchOutput;
-    const NAME: &'static str = "just_search";
+    const NAME: &'static str = "cli_just_search";
     const DESCRIPTION: &'static str = "Search justfile recipes by name or docs. Optional dir filter. Same params => next page. Page size: 10.";
 
     fn call(
@@ -397,7 +397,7 @@ impl JustExecuteTool {
 impl Tool for JustExecuteTool {
     type Input = JustExecuteInput;
     type Output = just::ExecuteOutput;
-    const NAME: &'static str = "just_execute";
+    const NAME: &'static str = "cli_just_execute";
     const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Only disambiguate if recipe not in root.";
 
     fn call(

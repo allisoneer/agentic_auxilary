@@ -12,10 +12,10 @@
     "read": true,
     "todowrite": true,
     "todoread": true,
-    "thoughts_*": true,
-    "reasoning_model_*": true,
-    "tools_*": true,
-    "pr_comments_*": true
+    "tools_cli_*": true,
+    "tools_ask_*": true,
+    "tools_thoughts_*": true,
+    "tools_gh_*": true
   },
   "agent": {
     "Normal": {
@@ -87,7 +87,7 @@
     },
     "Linear": {
       "permission": {
-        "linear_*": "allow"
+        "tools_linear_*": "allow"
       }
     },
     "build": {
@@ -104,43 +104,10 @@
     }
   },
   "mcp": {
-    "thoughts": {
-      "type": "local",
-      "command": [
-        "thoughts",
-        "mcp"
-      ],
-      "enabled": true
-    },
-    "reasoning_model": {
-      "type": "local",
-      "command": [
-        "gpt5_reasoner",
-        "mcp"
-      ],
-      "enabled": true
-    },
     "tools": {
       "type": "local",
       "command": [
-        "coding-agent-tools",
-        "mcp"
-      ],
-      "enabled": true
-    },
-    "pr_comments": {
-      "type": "local",
-      "command": [
-        "pr_comments",
-        "mcp"
-      ],
-      "enabled": true
-    },
-    "linear": {
-      "type": "local",
-      "command": [
-        "linear-tools",
-        "mcp"
+        "agentic-mcp"
       ],
       "enabled": true
     },

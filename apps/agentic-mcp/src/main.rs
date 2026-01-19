@@ -15,11 +15,11 @@ use std::sync::Arc;
 #[command(name = "agentic-mcp")]
 #[command(about = "Unified MCP server for all agentic-tools", version)]
 struct Args {
-    /// Comma-separated allowlist (case-insensitive). Example: ls,search_grep,request
+    /// Comma-separated allowlist (case-insensitive). Example: cli_ls,cli_grep,ask_reasoning_model
     #[arg(long, value_name = "NAMES")]
     allow: Option<String>,
 
-    /// JSON config file path (supports { "allowlist": ["ls", "search_grep"] })
+    /// JSON config file path (supports { "allowlist": ["cli_ls", "cli_grep"] })
     #[arg(long, value_name = "PATH")]
     config: Option<String>,
 
@@ -30,6 +30,31 @@ struct Args {
     /// Output mode: json | text | dual (default: dual)
     #[arg(long, value_parser = ["json", "text", "dual"])]
     output: Option<String>,
+
+    // Convenience flags for individual tool filtering
+    /// Enable cli_ls tool
+    #[arg(long)]
+    cli_ls: bool,
+
+    /// Enable ask_agent tool
+    #[arg(long)]
+    ask_agent: bool,
+
+    /// Enable cli_grep tool
+    #[arg(long)]
+    cli_grep: bool,
+
+    /// Enable cli_glob tool
+    #[arg(long)]
+    cli_glob: bool,
+
+    /// Enable cli_just_search tool
+    #[arg(long)]
+    cli_just_search: bool,
+
+    /// Enable cli_just_execute tool
+    #[arg(long)]
+    cli_just_execute: bool,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +90,31 @@ fn parse_config(args: &Args) -> AgenticToolsConfig {
         if !set.is_empty() {
             allowlist = Some(set);
         }
+    }
+
+    // Merge convenience flags into allowlist
+    let mut flag_set: HashSet<String> = HashSet::new();
+    if args.cli_ls {
+        flag_set.insert("cli_ls".to_string());
+    }
+    if args.ask_agent {
+        flag_set.insert("ask_agent".to_string());
+    }
+    if args.cli_grep {
+        flag_set.insert("cli_grep".to_string());
+    }
+    if args.cli_glob {
+        flag_set.insert("cli_glob".to_string());
+    }
+    if args.cli_just_search {
+        flag_set.insert("cli_just_search".to_string());
+    }
+    if args.cli_just_execute {
+        flag_set.insert("cli_just_execute".to_string());
+    }
+
+    if !flag_set.is_empty() {
+        allowlist.get_or_insert_with(HashSet::new).extend(flag_set);
     }
 
     AgenticToolsConfig {

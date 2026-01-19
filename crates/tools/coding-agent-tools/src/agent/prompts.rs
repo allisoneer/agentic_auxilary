@@ -61,7 +61,7 @@ Context: Thought documents (active branch).
 Working directory: THOUGHTS_BASE env or ./thoughts/<branch_or_week>.
 
 Guidelines:
-- Use mcp__thoughts__list_active_documents to identify thought docs, then grep/glob/read within the base
+- Use mcp__agentic-mcp__thoughts_list_documents to identify thought docs, then grep/glob/read within the base
 - Keep citations and paths relative to the thoughts base
 "#;
 
@@ -70,7 +70,7 @@ Context: Reference repositories (mirrored into local filesystem).
 Working directory: REFERENCES_BASE env or ./references.
 
 CRITICAL: Reference Directory Structure
-- mcp__thoughts__list_references returns lines like `{org}/{repo}`.
+- mcp__agentic-mcp__thoughts_list_references returns lines like `{org}/{repo}`.
 - Actual files live at `references/{org}/{repo}/...`.
 
 Examples:
@@ -250,7 +250,7 @@ pub const STRATEGY_LOCATOR_THOUGHTS: &str = r#"
 ## Strategy
 
 ### Step 1: MCP-First Discovery
-- Call `mcp__thoughts__list_active_documents` to enumerate docs in active branch
+- Call `mcp__agentic-mcp__thoughts_list_documents` to enumerate docs in active branch
 - Filter results by doc_type: "plan", "research", "artifact"
 - Match filenames against topic keywords
 
@@ -287,7 +287,7 @@ pub const STRATEGY_ANALYZER_THOUGHTS: &str = r#"
 
 ### Step 0: Branch Context Awareness
 - Default to analyzing documents in the active branch only
-- Call `mcp__thoughts__list_active_documents` to find candidates
+- Call `mcp__agentic-mcp__thoughts_list_documents` to find candidates
 - If user requests historical context, ask for confirmation
 
 ### Step 1: Read with Purpose
@@ -352,7 +352,7 @@ pub const STRATEGY_LOCATOR_REFERENCES: &str = r#"
 ## Strategy
 
 ### Step 1: List Available References
-- Call `mcp__thoughts__list_references` to enumerate {org}/{repo} entries
+- Call `mcp__agentic-mcp__thoughts_list_references` to enumerate {org}/{repo} entries
 - Match reference names against topic keywords
 - Select top 2-3 most relevant for focus
 
@@ -399,7 +399,7 @@ pub const STRATEGY_ANALYZER_REFERENCES: &str = r#"
 - Note language/framework context if implied
 
 ### Step 1: Discover and Select
-- Call `mcp__thoughts__list_references` to enumerate references
+- Call `mcp__agentic-mcp__thoughts_list_references` to enumerate references
 - Select top 2-3 most relevant for deep analysis
 - Use ls to verify structure exists
 
