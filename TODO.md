@@ -39,9 +39,24 @@ specifics - It could also be caching is broken somehow? Do we have similar TTL c
 instructions ("Showing X out of Y, call again for more") should be solved elegantly at the framework level rather than per-tool. The ls
 tool has good phrasing but pr_comments only partially ported that style. Consider: should agentic-tools-utils pagination module provide
 a standard output formatter? Or should pagination messaging be part of the MCP response schema itself?
-- Update rust-toolchain to whatever latest stable is and fix all the things that pop up by upgrading to a new stable version
+- Update rust-toolchain to whatever latest stable is and fix all the things that pop up by upgrading to a new stable version - Is this
+done?
 - Investigate every single clippy allow and see if there is a better approach than manually defining a clippy allow
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
+- I'd like to probably get to the point where I can add a web search/web fetch tool. I'm thinking probably integratino with exa for the
+  web search. And then I need to investigate the best potential html->markdown tool. I really like how extensive jina.ai reader API is.
+  I'm unsure if there are adequate local rust libraries that can do similar things as them, or if we'll want to rely on a provider.
+- The agentic-mcp command line really should do some type of tooling seperation to make permissions handling easier. e.g. the tool names
+  shouldn't be root levell. They should be similar to how we had them setup in the old system, with the prefixes in opencode.json
+defined. I'm not sure what categories would be best? Maybe cli_ls for cli-type tools. Then the reasoning model request method I think
+makes sense as `reasoning_model_request` (Kinda it's own standalone). Although I could see benefit in doing that in the same category as
+the sub agents. like `ask_agent` and `ask_reasoning_model` could be the two there? So they are in the same "sub category". It's
+important to both consider how I want to split tools for permissions as well as how the tokenizer will represent tool calls. e.g. I
+don't want have them all start with the same token, but it could be worthwhile to have the same token(s) starting the tool name for
+similar tools. This gives the model a stronger chance at calling the right tool instead of the wrong one at any given time. e.g.
+`ask_blah` ends up tokenizing to `ask` and `_blah[1...]`. Therefore the tokenizer could choose ask as the token that it wants to choose,
+and have the next token generated having a higher chance at success. I think the `just_search` and `just_execute` are similarly useful
+in this regard.
 
 
 Old (probably delete):
