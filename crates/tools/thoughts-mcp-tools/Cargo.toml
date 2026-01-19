@@ -11,7 +11,7 @@ role = "tool-lib"
 family = "tools"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = true
 napi = false
 
