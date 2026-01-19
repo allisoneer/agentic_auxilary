@@ -2,13 +2,13 @@
 
 use crate::context::ToolContext;
 use crate::error::ToolError;
-use crate::fmt::{TextOptions, fallback_text_from_json};
+use crate::fmt::{ErasedFmt, MakeFormatterFallback, TextOptions, fallback_text_from_json};
 use crate::schema::mcp_schema;
 use crate::tool::{Tool, ToolCodec};
 use futures::future::BoxFuture;
 use schemars::Schema;
 use serde_json::Value;
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -87,14 +87,24 @@ impl ToolRegistry {
     /// Tools not found in the registry are silently ignored.
     pub fn subset<'a>(&self, names: impl IntoIterator<Item = &'a str>) -> ToolRegistry {
         let allowed: HashSet<&str> = names.into_iter().collect();
+
+        // Copy the allowed entries into the new map
         let mut map = HashMap::new();
-        let mut by_type = HashMap::new();
         for (k, v) in &self.map {
             if allowed.contains(k.as_str()) {
                 map.insert(k.clone(), v.clone());
-                by_type.insert(v.type_id(), k.clone());
             }
         }
+
+        // Reuse original TypeIds from by_type (don't recompute via trait object
+        // to avoid cross-crate monomorphization issues with TypeId)
+        let mut by_type = HashMap::new();
+        for (type_id, name) in &self.by_type {
+            if allowed.contains(name.as_str()) {
+                by_type.insert(*type_id, name.clone());
+            }
+        }
+
         ToolRegistry { map, by_type }
     }
 
@@ -193,17 +203,51 @@ pub struct ToolRegistryBuilder {
 }
 
 impl ToolRegistryBuilder {
-    /// Register a tool with its codec.
+    /// Register a tool with its codec using fallback formatting (pretty JSON).
     ///
     /// Use `()` as the codec when the tool's Input/Output types
     /// already implement serde and schemars traits.
-    pub fn register<T, C>(mut self, tool: T) -> Self
+    ///
+    /// For tools whose output implements `TextFormat`, use [`register_formatted`]
+    /// to get human-readable text formatting instead of JSON.
+    pub fn register<T, C>(self, tool: T) -> Self
+    where
+        T: Tool + Clone + 'static,
+        C: ToolCodec<T> + MakeFormatterFallback<T> + 'static,
+    {
+        self.register_with_formatter::<T, C>(tool, C::make_formatter_fallback())
+    }
+
+    /// Register a tool with its codec using custom text formatting.
+    ///
+    /// This variant requires the codec to implement `MakeFormatter`, which is
+    /// automatically satisfied for the identity codec `()` when `T::Output: TextFormat`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // For tools with TextFormat on their output:
+    /// let registry = ToolRegistry::builder()
+    ///     .register_formatted::<MyFormattedTool, ()>(MyFormattedTool)
+    ///     .finish();
+    /// ```
+    pub fn register_formatted<T, C>(self, tool: T) -> Self
+    where
+        T: Tool + Clone + 'static,
+        C: ToolCodec<T> + crate::fmt::MakeFormatter<T> + 'static,
+    {
+        self.register_with_formatter::<T, C>(tool, C::make_formatter())
+    }
+
+    /// Internal registration with explicit formatter.
+    fn register_with_formatter<T, C>(mut self, tool: T, fmt: ErasedFmt) -> Self
     where
         T: Tool + Clone + 'static,
         C: ToolCodec<T> + 'static,
     {
         struct Impl<T: Tool + Clone, C: ToolCodec<T>> {
             tool: T,
+            fmt: ErasedFmt,
             _codec: PhantomData<C>,
         }
 
@@ -261,11 +305,13 @@ impl ToolRegistryBuilder {
                 &self,
                 args: Value,
                 ctx: &ToolContext,
-                _text_opts: &TextOptions,
+                text_opts: &TextOptions,
             ) -> BoxFuture<'static, Result<FormattedResult, ToolError>> {
                 let wire_in: Result<C::WireIn, _> = serde_json::from_value(args);
                 let ctx = ctx.clone();
                 let tool = self.tool.clone();
+                let text_opts = text_opts.clone();
+                let fmt = self.fmt;
 
                 match wire_in {
                     Err(e) => Box::pin(async move { Err(ToolError::invalid_input(e.to_string())) }),
@@ -278,10 +324,10 @@ impl ToolRegistryBuilder {
                                 let wired = C::encode(out)?;
                                 let data = serde_json::to_value(&wired)
                                     .map_err(|e| ToolError::internal(e.to_string()))?;
-                                // Use fallback formatting (pretty JSON) as the default.
-                                // Tools that implement TextFormat on their output types
-                                // can provide richer formatting in the future.
-                                let text = Some(fallback_text_from_json(&data));
+                                // Try custom formatter, fallback to pretty JSON
+                                let text = fmt
+                                    .format(&wired as &dyn Any, &data, &text_opts)
+                                    .or_else(|| Some(fallback_text_from_json(&data)));
                                 Ok(FormattedResult { data, text })
                             })
                         }
@@ -296,6 +342,7 @@ impl ToolRegistryBuilder {
 
         let erased: Arc<dyn ErasedTool> = Arc::new(Impl::<T, C> {
             tool,
+            fmt,
             _codec: PhantomData,
         });
         self.items

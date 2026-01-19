@@ -58,6 +58,10 @@ fmt:
 fmt-check:
     {{ exec }}cargo fmt --all -- --check
 
+# Security audit with cargo-deny
+deny:
+    {{ exec }}cargo deny check
+
 # Check justfile formatting
 fmt-check-just:
     @just --fmt --check --unstable

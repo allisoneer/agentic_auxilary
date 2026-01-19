@@ -128,17 +128,16 @@ fn test_server_with_allowlist() {
 fn test_server_output_modes() {
     let registry = create_test_registry();
 
-    // JSON mode
-    let server_json = RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Json);
-    assert!(matches!(server_json.output_mode(), OutputMode::Json));
-
-    // Text mode
+    // Text mode (default)
     let server_text = RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Text);
     assert!(matches!(server_text.output_mode(), OutputMode::Text));
 
-    // Dual mode
-    let server_dual = RegistryServer::new(registry).with_output_mode(OutputMode::Dual);
-    assert!(matches!(server_dual.output_mode(), OutputMode::Dual));
+    // Structured mode
+    let server_structured = RegistryServer::new(registry).with_output_mode(OutputMode::Structured);
+    assert!(matches!(
+        server_structured.output_mode(),
+        OutputMode::Structured
+    ));
 }
 
 #[test]

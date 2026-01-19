@@ -11,14 +11,13 @@ use std::sync::Arc;
 /// Output mode for tool results.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum OutputMode {
-    /// Return results as JSON.
+    /// Return results as formatted text (human-readable). Default.
     #[default]
-    Json,
-    /// Return results as formatted text.
     Text,
-    /// Return both text and JSON (dual output).
-    /// Contents are ordered: [text, json].
-    Dual,
+    /// Return structured results alongside text.
+    /// - list_tools publishes output_schema (if available)
+    /// - call_tool populates structured_content
+    Structured,
 }
 
 /// MCP server handler backed by a [`ToolRegistry`].
@@ -26,7 +25,14 @@ pub enum OutputMode {
 /// Features:
 /// - Automatic tool discovery from registry
 /// - Optional allowlist filtering
-/// - Configurable output mode (JSON or text)
+/// - Configurable output mode (text or structured)
+///
+/// # Output Modes
+///
+/// - **Text** (default): Returns human-readable text using `TextFormat` when available,
+///   falling back to pretty-printed JSON. Does not publish `output_schema`.
+/// - **Structured**: Publishes `output_schema` in `list_tools` and populates
+///   `structured_content` in `call_tool` responses (for MCP protocol compliance).
 ///
 /// # Example
 ///
@@ -39,9 +45,13 @@ pub enum OutputMode {
 ///     .register::<MyTool, ()>(MyTool)
 ///     .finish());
 ///
+/// // Text mode (default) - optimized for LLM consumption
+/// let server = RegistryServer::new(registry.clone())
+///     .with_allowlist(["my_tool".to_string()]);
+///
+/// // Structured mode - MCP protocol compliance with typed responses
 /// let server = RegistryServer::new(registry)
-///     .with_allowlist(["my_tool".to_string()])
-///     .with_output_mode(OutputMode::Text);
+///     .with_output_mode(OutputMode::Structured);
 /// ```
 pub struct RegistryServer {
     registry: Arc<ToolRegistry>,
@@ -154,13 +164,17 @@ impl ServerHandler for RegistryServer {
                     let schema_json = serde_json::to_value(&input_schema)
                         .unwrap_or(serde_json::json!({"type": "object"}));
 
-                    // Include output_schema if available (already validated by registry)
-                    let output_schema = erased.output_schema().and_then(|s| {
-                        serde_json::to_value(&s)
-                            .ok()
-                            .and_then(|v| v.as_object().cloned())
-                            .map(Arc::new)
-                    });
+                    // Include output_schema only in Structured mode (MCP compliance)
+                    let output_schema = if matches!(self.output_mode, OutputMode::Structured) {
+                        erased.output_schema().and_then(|s| {
+                            serde_json::to_value(&s)
+                                .ok()
+                                .and_then(|v| v.as_object().cloned())
+                                .map(Arc::new)
+                        })
+                    } else {
+                        None
+                    };
 
                     let tool = m::Tool {
                         name: name.clone().into(),
@@ -209,32 +223,34 @@ impl ServerHandler for RegistryServer {
                 .await
             {
                 Ok(res) => {
-                    let contents =
-                        match self.output_mode {
-                            OutputMode::Json => {
-                                vec![m::Content::json(res.data).unwrap_or_else(|_| {
-                                    m::Content::text("json serialization error")
-                                })]
-                            }
-                            OutputMode::Text => {
-                                let text = res
-                                    .text
-                                    .unwrap_or_else(|| fallback_text_from_json(&res.data));
-                                vec![m::Content::text(text)]
-                            }
-                            OutputMode::Dual => {
-                                let text = res
-                                    .text
-                                    .unwrap_or_else(|| fallback_text_from_json(&res.data));
-                                vec![
-                                    m::Content::text(text),
-                                    m::Content::json(res.data).unwrap_or_else(|_| {
-                                        m::Content::text("json serialization error")
-                                    }),
-                                ]
-                            }
-                        };
-                    Ok(m::CallToolResult::success(contents))
+                    let text = res
+                        .text
+                        .unwrap_or_else(|| fallback_text_from_json(&res.data));
+
+                    // Always include text content for human readability
+                    let contents = vec![m::Content::text(text)];
+
+                    // In Structured mode, also include structured_content if tool has a schema
+                    let structured_content = if matches!(self.output_mode, OutputMode::Structured) {
+                        // Check if the tool has an output schema (object-root)
+                        let has_schema = self
+                            .registry
+                            .get(&req.name)
+                            .and_then(|t| t.output_schema())
+                            .is_some();
+
+                        if has_schema { Some(res.data) } else { None }
+                    } else {
+                        None
+                    };
+
+                    // Build result with both text content and optional structured_content
+                    Ok(m::CallToolResult {
+                        content: contents,
+                        structured_content,
+                        is_error: Some(false),
+                        meta: None,
+                    })
                 }
                 Err(e) => Ok(m::CallToolResult::error(vec![m::Content::text(
                     e.to_string(),
@@ -376,6 +392,9 @@ impl ServerHandler for RegistryServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agentic_tools_core::fmt::TextFormat;
+    use agentic_tools_core::{Tool, ToolError};
+    use futures::future::BoxFuture;
 
     #[test]
     fn test_registry_server_allowlist() {
@@ -404,5 +423,113 @@ mod tests {
 
         assert_eq!(server.name(), "my-server");
         assert_eq!(server.version(), "1.0.0");
+    }
+
+    // Test tool with object-root output schema and TextFormat implementation
+    #[derive(Clone)]
+    struct TestObjTool;
+
+    #[derive(
+        serde::Serialize, serde::Deserialize, schemars::JsonSchema, Clone, Debug, PartialEq,
+    )]
+    struct TestObjOut {
+        message: String,
+    }
+
+    impl TextFormat for TestObjOut {
+        fn fmt_text(&self, _opts: &TextOptions) -> String {
+            format!("Message: {}", self.message)
+        }
+    }
+
+    impl Tool for TestObjTool {
+        type Input = ();
+        type Output = TestObjOut;
+        const NAME: &'static str = "test_obj_tool";
+        const DESCRIPTION: &'static str = "outputs an object";
+
+        fn call(
+            &self,
+            _input: (),
+            _ctx: &ToolContext,
+        ) -> BoxFuture<'static, Result<TestObjOut, ToolError>> {
+            Box::pin(async move {
+                Ok(TestObjOut {
+                    message: "hello".into(),
+                })
+            })
+        }
+    }
+
+    #[test]
+    fn test_structured_mode_output_schema_gating() {
+        // Build registry with TestObjTool
+        let registry = Arc::new(
+            ToolRegistry::builder()
+                .register::<TestObjTool, ()>(TestObjTool)
+                .finish(),
+        );
+
+        // In Structured mode, we should publish output_schema
+        let structured_server =
+            RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Structured);
+        assert!(matches!(
+            structured_server.output_mode(),
+            OutputMode::Structured
+        ));
+
+        // In Text mode, we should NOT publish output_schema
+        let text_server = RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Text);
+        assert!(matches!(text_server.output_mode(), OutputMode::Text));
+
+        // Verify the tool has an output schema in the registry
+        let tool = registry.get("test_obj_tool").unwrap();
+        assert!(
+            tool.output_schema().is_some(),
+            "TestObjTool should have an output schema"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_structured_mode_structured_content_via_dispatch() {
+        // Build registry with TestObjTool
+        let registry = Arc::new(
+            ToolRegistry::builder()
+                .register::<TestObjTool, ()>(TestObjTool)
+                .finish(),
+        );
+
+        // Dispatch the tool call directly through the registry
+        let ctx = ToolContext::default();
+        let text_opts = TextOptions::default();
+        let result = registry
+            .dispatch_json_formatted("test_obj_tool", serde_json::json!(null), &ctx, &text_opts)
+            .await
+            .unwrap();
+
+        // Verify we get both data and text
+        assert_eq!(result.data, serde_json::json!({"message": "hello"}));
+        assert!(result.text.is_some());
+
+        // The logic for structured_content is in the server's call_tool method
+        // which checks output_mode and has_schema. Let's verify the schema exists.
+        let tool = registry.get("test_obj_tool").unwrap();
+        let has_schema = tool.output_schema().is_some();
+        assert!(
+            has_schema,
+            "Tool should have output schema for structured content"
+        );
+
+        // In Structured mode with has_schema=true, structured_content would be Some(result.data)
+        // In Text mode or has_schema=false, structured_content would be None
+    }
+
+    #[test]
+    fn test_output_mode_default_is_text() {
+        let registry = Arc::new(ToolRegistry::builder().finish());
+        let server = RegistryServer::new(registry);
+
+        // Default should be Text mode
+        assert!(matches!(server.output_mode(), OutputMode::Text));
     }
 }

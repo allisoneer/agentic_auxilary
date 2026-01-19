@@ -27,8 +27,8 @@ struct Args {
     #[arg(long)]
     list_tools: bool,
 
-    /// Output mode: json | text | dual (default: dual)
-    #[arg(long, value_parser = ["json", "text", "dual"])]
+    /// Output mode: text | structured (default: text)
+    #[arg(long, value_parser = ["text", "structured"])]
     output: Option<String>,
 
     // Convenience flags for individual tool filtering
@@ -60,16 +60,19 @@ struct Args {
 #[derive(Deserialize)]
 struct FileConfig {
     allowlist: Option<HashSet<String>>,
+    output: Option<String>,
 }
 
-fn parse_config(args: &Args) -> AgenticToolsConfig {
+fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
     // Parse --config if provided
     let mut allowlist: Option<HashSet<String>> = None;
+    let mut file_output: Option<String> = None;
     if let Some(path) = &args.config {
         match fs::read_to_string(path) {
             Ok(s) => {
                 if let Ok(fc) = serde_json::from_str::<FileConfig>(&s) {
                     allowlist = fc.allowlist;
+                    file_output = fc.output;
                 } else {
                     eprintln!("Warning: Failed to parse config JSON; ignoring");
                 }
@@ -117,10 +120,13 @@ fn parse_config(args: &Args) -> AgenticToolsConfig {
         allowlist.get_or_insert_with(HashSet::new).extend(flag_set);
     }
 
-    AgenticToolsConfig {
-        allowlist,
-        extras: serde_json::json!({}),
-    }
+    (
+        AgenticToolsConfig {
+            allowlist,
+            extras: serde_json::json!({}),
+        },
+        file_output,
+    )
 }
 
 #[tokio::main]
@@ -128,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    let cfg = parse_config(&args);
+    let (cfg, file_output) = parse_config(&args);
     let reg = AgenticTools::new(cfg);
 
     if args.list_tools {
@@ -141,10 +147,12 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let output_mode = match args.output.as_deref() {
-        Some("json") => OutputMode::Json,
-        Some("text") => OutputMode::Text,
-        _ => OutputMode::Dual,
+    let output_mode = match (args.output.as_deref(), file_output.as_deref()) {
+        (Some("structured"), _) => OutputMode::Structured,
+        (Some("text"), _) => OutputMode::Text,
+        (None, Some("structured")) => OutputMode::Structured,
+        (None, Some("text")) => OutputMode::Text,
+        _ => OutputMode::Text, // default
     };
 
     eprintln!(

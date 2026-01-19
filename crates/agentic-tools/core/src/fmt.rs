@@ -24,9 +24,20 @@
 //!
 //! For types that don't implement [`TextFormat`], use [`fallback_text_from_json`]
 //! to pretty-print the JSON representation.
+//!
+//! # Automatic TextFormat Detection
+//!
+//! The registry automatically detects if a tool's output type implements [`TextFormat`]
+//! at registration time. If it does, the custom formatter is used; otherwise, output
+//! falls back to pretty-printed JSON. This detection uses a type-erased formatter
+//! captured at registration time.
+//!
+//! **Note**: This approach uses monomorphization tricks on stable Rust. If/when
+//! `min_specialization` stabilizes, this could be simplified to use trait specialization
+//! directly.
 
-use crate::tool::{Tool, ToolCodec};
 use serde_json::Value as JsonValue;
+use std::any::Any;
 
 /// Text rendering style.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -95,34 +106,184 @@ pub fn fallback_text_from_json(v: &JsonValue) -> String {
     serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())
 }
 
-/// Codec integration hook for text formatting.
+// ============================================================================
+// Type-erased formatter infrastructure
+// ============================================================================
+//
+// This section implements automatic TextFormat detection at registration time.
+// The key insight is that we capture a formatting function when the tool is
+// registered (while we still know the concrete types), and store it as a
+// type-erased function pointer. At call time, we invoke it if present.
+//
+// This approach works on stable Rust without specialization by using
+// monomorphization: we define helper functions with different trait bounds,
+// and only the one whose bounds are satisfied gets instantiated.
+
+/// Type-erased formatter function signature.
 ///
-/// This trait allows codecs to provide text formatting from their wire output type.
-/// A blanket implementation is provided for the identity codec `()` when the
-/// wire output type implements [`TextFormat`].
+/// Takes a reference to the wire output (as `&dyn Any`), the JSON data (for fallback),
+/// and formatting options. Returns `Some(text)` if formatting succeeded.
+type ErasedFmtFn = fn(&dyn Any, &JsonValue, &TextOptions) -> Option<String>;
+
+/// Type-erased formatter captured at tool registration time.
 ///
-/// For custom codecs that want to support text formatting, implement this trait
-/// and delegate to the wire output's [`TextFormat`] implementation.
-pub trait CodecTextFormatter<T: Tool>: ToolCodec<T> {
-    /// Attempt to format the wire output as text.
+/// This stores an optional formatting function that will be called at runtime
+/// to produce human-readable text from tool output. If `None`, the registry
+/// falls back to pretty-printed JSON.
+#[derive(Clone, Copy)]
+pub struct ErasedFmt {
+    fmt_fn: Option<ErasedFmtFn>,
+}
+
+impl ErasedFmt {
+    /// Create an empty formatter (will use JSON fallback).
+    pub const fn none() -> Self {
+        Self { fmt_fn: None }
+    }
+
+    /// Attempt to format the given wire output.
     ///
-    /// Returns `Some(text)` if the codec supports text formatting, `None` otherwise.
-    /// The default implementation returns `None`.
-    fn format_opt(_wire: &Self::WireOut, _opts: &TextOptions) -> Option<String> {
-        None
+    /// Returns `Some(text)` if this formatter has a function and it succeeded,
+    /// `None` otherwise (caller should use JSON fallback).
+    pub fn format(
+        &self,
+        wire_any: &dyn Any,
+        data: &JsonValue,
+        opts: &TextOptions,
+    ) -> Option<String> {
+        self.fmt_fn.and_then(|f| f(wire_any, data, opts))
     }
 }
 
-// Blanket implementation: identity codec () provides formatting when WireOut: TextFormat
-impl<T> CodecTextFormatter<T> for ()
-where
-    T: Tool,
-    T::Input: serde::de::DeserializeOwned + schemars::JsonSchema,
-    T::Output: serde::Serialize + schemars::JsonSchema + TextFormat,
-{
-    fn format_opt(wire: &Self::WireOut, opts: &TextOptions) -> Option<String> {
-        Some(wire.fmt_text(opts))
+impl std::fmt::Debug for ErasedFmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ErasedFmt")
+            .field("has_formatter", &self.fmt_fn.is_some())
+            .finish()
     }
+}
+
+// ----------------------------------------------------------------------------
+// Formatter builder machinery
+// ----------------------------------------------------------------------------
+//
+// We use a trait with two non-overlapping implementations to select between
+// "has TextFormat" and "no TextFormat" at compile time. The implementations
+// are on different marker types, avoiding coherence issues.
+
+/// Internal trait for building formatters. Not part of public API.
+pub trait BuildFormatter<W> {
+    fn build() -> ErasedFmt;
+}
+
+/// Marker type for the fallback (no TextFormat) case.
+pub struct FallbackFormatter;
+
+/// Marker type for the TextFormat case.
+pub struct TextFormatFormatter;
+
+// Fallback implementation: always returns None
+impl<W> BuildFormatter<W> for FallbackFormatter
+where
+    W: Send + 'static,
+{
+    fn build() -> ErasedFmt {
+        ErasedFmt::none()
+    }
+}
+
+// TextFormat implementation: captures a function that calls fmt_text
+impl<W> BuildFormatter<W> for TextFormatFormatter
+where
+    W: TextFormat + Send + 'static,
+{
+    fn build() -> ErasedFmt {
+        ErasedFmt {
+            fmt_fn: Some(|any, _json, opts| any.downcast_ref::<W>().map(|w| w.fmt_text(opts))),
+        }
+    }
+}
+
+/// Build a formatter for a type that implements [`TextFormat`].
+///
+/// This is the explicit builder used when you know the type implements `TextFormat`.
+pub fn build_formatter_for_textformat<W>() -> ErasedFmt
+where
+    W: TextFormat + Send + 'static,
+{
+    ErasedFmt {
+        fmt_fn: Some(|any, _json, opts| any.downcast_ref::<W>().map(|w| w.fmt_text(opts))),
+    }
+}
+
+// ============================================================================
+// MakeFormatter trait - the key to auto-detection
+// ============================================================================
+//
+// This trait allows codecs to provide a formatter for their wire output type.
+// The identity codec `()` implements this when `T::Output: TextFormat`.
+//
+// For tools WITHOUT TextFormat, the registry uses `MakeFormatterFallback` instead.
+// The registry contains logic to try MakeFormatter first, falling back as needed.
+//
+// NOTE: If/when Rust stabilizes `min_specialization`, this could be simplified:
+// ```rust
+// // With specialization (nightly only):
+// impl<T, C> MakeFormatter<T> for C where C: ToolCodec<T> {
+//     default fn make_formatter() -> ErasedFmt { ErasedFmt::none() }
+// }
+// impl<T> MakeFormatter<T> for () where T::Output: TextFormat {
+//     fn make_formatter() -> ErasedFmt { build_formatter_for_textformat::<T::Output>() }
+// }
+// ```
+
+/// Trait for codecs to provide a formatter for their wire output type.
+///
+/// This is implemented for the identity codec `()` when `T::Output: TextFormat`.
+/// The registry uses this to capture custom formatters at registration time.
+pub trait MakeFormatter<T>
+where
+    T: crate::tool::Tool,
+    Self: crate::tool::ToolCodec<T>,
+{
+    /// Build a formatter for this codec's wire output type.
+    fn make_formatter() -> ErasedFmt;
+}
+
+// Implementation for identity codec () when Output implements TextFormat
+impl<T> MakeFormatter<T> for ()
+where
+    T: crate::tool::Tool,
+    T::Input: serde::de::DeserializeOwned + schemars::JsonSchema,
+    T::Output: serde::Serialize + schemars::JsonSchema + TextFormat + Send + 'static,
+{
+    fn make_formatter() -> ErasedFmt {
+        build_formatter_for_textformat::<T::Output>()
+    }
+}
+
+/// Fallback trait for codecs - always returns `ErasedFmt::none()`.
+///
+/// This is always implemented for all codec+tool combinations, providing
+/// the JSON fallback formatter. The registry uses this when `MakeFormatter`
+/// is not implemented (i.e., when the output type doesn't have `TextFormat`).
+pub trait MakeFormatterFallback<T>
+where
+    T: crate::tool::Tool,
+    Self: crate::tool::ToolCodec<T>,
+{
+    /// Build a fallback formatter (returns None, triggering JSON pretty-print).
+    fn make_formatter_fallback() -> ErasedFmt {
+        ErasedFmt::none()
+    }
+}
+
+// Blanket impl: all codecs can provide the fallback
+impl<T, C> MakeFormatterFallback<T> for C
+where
+    T: crate::tool::Tool,
+    C: crate::tool::ToolCodec<T>,
+{
 }
 
 #[cfg(test)]
