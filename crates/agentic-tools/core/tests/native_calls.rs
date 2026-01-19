@@ -3,7 +3,9 @@
 //! These tests verify that tools can be called without JSON serialization
 //! when using the ToolHandle API for cross-crate composition.
 
-use agentic_tools_core::{Tool, ToolCodec, ToolContext, ToolError, ToolHandle, ToolRegistry};
+use agentic_tools_core::{
+    TextFormat, Tool, ToolCodec, ToolContext, ToolError, ToolHandle, ToolRegistry,
+};
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,8 @@ struct EchoInput {
 struct EchoOutput {
     echoed: String,
 }
+
+impl TextFormat for EchoOutput {}
 
 impl Tool for EchoTool {
     type Input = EchoInput;
@@ -55,12 +59,14 @@ struct ComputeInput {
     values: Vec<i32>,
 }
 
-/// Native output type - no serde bounds!
-#[derive(Debug)]
+/// Native output type - now needs Serialize for TextFormat.
+#[derive(Debug, Serialize)]
 struct ComputeOutput {
     sum: i32,
     count: usize,
 }
+
+impl TextFormat for ComputeOutput {}
 
 impl Tool for ComputeTool {
     type Input = ComputeInput;
@@ -93,6 +99,8 @@ struct ComputeWireOut {
     sum: i32,
     count: usize,
 }
+
+impl TextFormat for ComputeWireOut {}
 
 /// Custom codec that converts between wire and native types
 struct ComputeCodec;
@@ -298,6 +306,8 @@ struct FailingInput {
 struct FailingOutput {
     success: bool,
 }
+
+impl TextFormat for FailingOutput {}
 
 impl Tool for FailingTool {
     type Input = FailingInput;

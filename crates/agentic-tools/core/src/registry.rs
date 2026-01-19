@@ -2,13 +2,13 @@
 
 use crate::context::ToolContext;
 use crate::error::ToolError;
-use crate::fmt::{ErasedFmt, MakeFormatterFallback, TextOptions, fallback_text_from_json};
+use crate::fmt::{TextFormat, TextOptions};
 use crate::schema::mcp_schema;
 use crate::tool::{Tool, ToolCodec};
 use futures::future::BoxFuture;
 use schemars::Schema;
 use serde_json::Value;
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -203,55 +203,29 @@ pub struct ToolRegistryBuilder {
 }
 
 impl ToolRegistryBuilder {
-    /// Register a tool with its codec using fallback formatting (pretty JSON).
+    /// Register a tool with its codec.
     ///
     /// Use `()` as the codec when the tool's Input/Output types
     /// already implement serde and schemars traits.
     ///
-    /// For tools whose output implements `TextFormat`, use [`register_formatted`]
-    /// to get human-readable text formatting instead of JSON.
-    pub fn register<T, C>(self, tool: T) -> Self
-    where
-        T: Tool + Clone + 'static,
-        C: ToolCodec<T> + MakeFormatterFallback<T> + 'static,
-    {
-        self.register_with_formatter::<T, C>(tool, C::make_formatter_fallback())
-    }
-
-    /// Register a tool with its codec using custom text formatting.
-    ///
-    /// This variant requires the codec to implement `MakeFormatter`, which is
-    /// automatically satisfied for the identity codec `()` when `T::Output: TextFormat`.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // For tools with TextFormat on their output:
-    /// let registry = ToolRegistry::builder()
-    ///     .register_formatted::<MyFormattedTool, ()>(MyFormattedTool)
-    ///     .finish();
-    /// ```
-    pub fn register_formatted<T, C>(self, tool: T) -> Self
-    where
-        T: Tool + Clone + 'static,
-        C: ToolCodec<T> + crate::fmt::MakeFormatter<T> + 'static,
-    {
-        self.register_with_formatter::<T, C>(tool, C::make_formatter())
-    }
-
-    /// Internal registration with explicit formatter.
-    fn register_with_formatter<T, C>(mut self, tool: T, fmt: ErasedFmt) -> Self
+    /// The tool's output type must implement [`TextFormat`] for human-readable
+    /// formatting. Types can override `fmt_text()` for custom formatting, or
+    /// use the default which produces pretty-printed JSON.
+    pub fn register<T, C>(mut self, tool: T) -> Self
     where
         T: Tool + Clone + 'static,
         C: ToolCodec<T> + 'static,
+        T::Output: TextFormat,
     {
         struct Impl<T: Tool + Clone, C: ToolCodec<T>> {
             tool: T,
-            fmt: ErasedFmt,
             _codec: PhantomData<C>,
         }
 
-        impl<T: Tool + Clone, C: ToolCodec<T>> ErasedTool for Impl<T, C> {
+        impl<T: Tool + Clone, C: ToolCodec<T>> ErasedTool for Impl<T, C>
+        where
+            T::Output: TextFormat,
+        {
             fn name(&self) -> &'static str {
                 T::NAME
             }
@@ -261,14 +235,12 @@ impl ToolRegistryBuilder {
             }
 
             fn input_schema(&self) -> Schema {
-                // Draft 2020-12 + AddNullable + cached
                 mcp_schema::cached_schema_for::<C::WireIn>()
                     .as_ref()
                     .clone()
             }
 
             fn output_schema(&self) -> Option<Schema> {
-                // Only include if root type is object (per MCP spec)
                 match mcp_schema::cached_output_schema_for::<C::WireOut>() {
                     Ok(arc) => Some(arc.as_ref().clone()),
                     Err(_) => None,
@@ -311,7 +283,6 @@ impl ToolRegistryBuilder {
                 let ctx = ctx.clone();
                 let tool = self.tool.clone();
                 let text_opts = text_opts.clone();
-                let fmt = self.fmt;
 
                 match wire_in {
                     Err(e) => Box::pin(async move { Err(ToolError::invalid_input(e.to_string())) }),
@@ -321,14 +292,16 @@ impl ToolRegistryBuilder {
                             let fut = tool.call(native_in, &ctx);
                             Box::pin(async move {
                                 let out = fut.await?;
+                                // Format text from the native output using TextFormat
+                                let text = out.fmt_text(&text_opts);
+                                // Then encode to wire and JSON-serialize for data
                                 let wired = C::encode(out)?;
                                 let data = serde_json::to_value(&wired)
                                     .map_err(|e| ToolError::internal(e.to_string()))?;
-                                // Try custom formatter, fallback to pretty JSON
-                                let text = fmt
-                                    .format(&wired as &dyn Any, &data, &text_opts)
-                                    .or_else(|| Some(fallback_text_from_json(&data)));
-                                Ok(FormattedResult { data, text })
+                                Ok(FormattedResult {
+                                    data,
+                                    text: Some(text),
+                                })
                             })
                         }
                     },
@@ -342,7 +315,6 @@ impl ToolRegistryBuilder {
 
         let erased: Arc<dyn ErasedTool> = Arc::new(Impl::<T, C> {
             tool,
-            fmt,
             _codec: PhantomData,
         });
         self.items
