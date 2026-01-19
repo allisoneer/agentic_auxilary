@@ -49,6 +49,7 @@ check:
 
 test:
     {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
+    just mcp-test
 
 build:
     {{ exec }}cargo build --workspace
@@ -304,3 +305,51 @@ git-files patterns="":
     fi
 
     git --no-pager ls-files -- {{ patterns }}
+
+# ------------------------------------------------------------------------------
+# MCP Inspector Recipes
+# ------------------------------------------------------------------------------
+
+# Interactive MCP Inspector for troubleshooting
+# Usage:
+#   just mcp-inspector              # default: tools/list method
+#   just mcp-inspector resources/list
+mcp-inspector method="tools/list":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build -p agentic-mcp
+    BIN="./target/debug/agentic-mcp"
+    if [ ! -x "$BIN" ]; then
+      echo "agentic-mcp binary not found: $BIN" >&2
+      exit 1
+    fi
+    echo "Launching MCP Inspector with method: {{ method }}"
+    npx -y @modelcontextprotocol/inspector --cli --transport stdio --method "{{ method }}" "$BIN"
+
+# CI-friendly MCP schema validation
+# Builds agentic-mcp and validates with MCP Inspector, failing on any errors
+mcp-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building agentic-mcp..."
+    cargo build -p agentic-mcp
+    BIN="./target/debug/agentic-mcp"
+    
+    echo "Validating schemas with MCP Inspector..."
+    OUTPUT=$(npx -y @modelcontextprotocol/inspector --cli --transport stdio --method tools/list "$BIN" 2>&1) || true
+    
+    # Check for the fatal error pattern
+    if echo "$OUTPUT" | grep -q "Failed to list tools"; then
+      echo "MCP Inspector validation FAILED:"
+      echo "$OUTPUT"
+      exit 1
+    fi
+    
+    # Check for schema errors (nullable without type, etc.)
+    if echo "$OUTPUT" | grep -qi "cannot be used without"; then
+      echo "MCP Inspector found schema errors:"
+      echo "$OUTPUT"
+      exit 1
+    fi
+    
+    echo "MCP schema validation passed"
