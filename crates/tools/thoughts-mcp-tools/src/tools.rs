@@ -61,7 +61,7 @@ pub struct WriteDocumentTool;
 impl Tool for WriteDocumentTool {
     type Input = WriteDocumentInput;
     type Output = WriteDocumentOk;
-    const NAME: &'static str = "write_document";
+    const NAME: &'static str = "thoughts_write_document";
     const DESCRIPTION: &'static str = "Write markdown to the active work directory";
 
     fn call(
@@ -86,7 +86,7 @@ impl Tool for WriteDocumentTool {
                     });
                     log_tool_call(
                         &timer,
-                        "write_document",
+                        "thoughts_write_document",
                         req_json,
                         true,
                         None,
@@ -96,7 +96,7 @@ impl Tool for WriteDocumentTool {
                 Err(e) => {
                     log_tool_call(
                         &timer,
-                        "write_document",
+                        "thoughts_write_document",
                         req_json,
                         false,
                         Some(e.to_string()),
@@ -129,7 +129,7 @@ pub struct ListActiveDocumentsTool;
 impl Tool for ListActiveDocumentsTool {
     type Input = ListActiveDocumentsInput;
     type Output = ActiveDocuments;
-    const NAME: &'static str = "list_active_documents";
+    const NAME: &'static str = "thoughts_list_documents";
     const DESCRIPTION: &'static str = "List files in the current active work directory";
 
     fn call(
@@ -153,7 +153,7 @@ impl Tool for ListActiveDocumentsTool {
                     });
                     log_tool_call(
                         &timer,
-                        "list_active_documents",
+                        "thoughts_list_documents",
                         req_json,
                         true,
                         None,
@@ -163,7 +163,7 @@ impl Tool for ListActiveDocumentsTool {
                 Err(e) => {
                     log_tool_call(
                         &timer,
-                        "list_active_documents",
+                        "thoughts_list_documents",
                         req_json,
                         false,
                         Some(e.to_string()),
@@ -192,7 +192,7 @@ pub struct ListReferencesTool;
 impl Tool for ListReferencesTool {
     type Input = ListReferencesInput;
     type Output = ReferencesList;
-    const NAME: &'static str = "list_references";
+    const NAME: &'static str = "thoughts_list_references";
     const DESCRIPTION: &'static str =
         "List reference repository directory paths (references/org/repo)";
 
@@ -244,7 +244,7 @@ impl Tool for ListReferencesTool {
                     });
                     log_tool_call(
                         &timer,
-                        "list_references",
+                        "thoughts_list_references",
                         req_json,
                         true,
                         None,
@@ -254,7 +254,7 @@ impl Tool for ListReferencesTool {
                 Err(e) => {
                     log_tool_call(
                         &timer,
-                        "list_references",
+                        "thoughts_list_references",
                         req_json,
                         false,
                         Some(e.to_string()),
@@ -289,7 +289,7 @@ pub struct AddReferenceTool;
 impl Tool for AddReferenceTool {
     type Input = AddReferenceInput;
     type Output = AddReferenceOk;
-    const NAME: &'static str = "add_reference";
+    const NAME: &'static str = "thoughts_add_reference";
     const DESCRIPTION: &'static str = "Add a GitHub repository as a reference and ensure it is cloned and mounted. Input must be an HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL. SSH URLs (git@\u{2026}) are rejected. Idempotent and safe to retry; first-time clones may take time.";
 
     fn call(
@@ -319,12 +319,19 @@ impl Tool for AddReferenceTool {
                         "cloned": ok.cloned,
                         "mounted": ok.mounted,
                     });
-                    log_tool_call(&timer, "add_reference", req_json, true, None, Some(summary));
+                    log_tool_call(
+                        &timer,
+                        "thoughts_add_reference",
+                        req_json,
+                        true,
+                        None,
+                        Some(summary),
+                    );
                 }
                 Err(e) => {
                     log_tool_call(
                         &timer,
-                        "add_reference",
+                        "thoughts_add_reference",
                         req_json,
                         false,
                         Some(e.to_string()),
@@ -356,7 +363,7 @@ pub struct GetTemplateTool;
 impl Tool for GetTemplateTool {
     type Input = GetTemplateInput;
     type Output = TemplateResponse;
-    const NAME: &'static str = "get_template";
+    const NAME: &'static str = "thoughts_get_template";
     const DESCRIPTION: &'static str = "Return a compile-time embedded template (research, plan, requirements, pr_description) with usage guidance";
 
     fn call(
@@ -377,7 +384,14 @@ impl Tool for GetTemplateTool {
             let summary = serde_json::json!({
                 "template_type": result.template_type.label(),
             });
-            log_tool_call(&timer, "get_template", req_json, true, None, Some(summary));
+            log_tool_call(
+                &timer,
+                "thoughts_get_template",
+                req_json,
+                true,
+                None,
+                Some(summary),
+            );
 
             Ok(result)
         })

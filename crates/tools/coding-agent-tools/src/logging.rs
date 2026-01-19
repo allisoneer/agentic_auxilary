@@ -340,7 +340,7 @@ mod tests {
         let record = ToolCallRecord {
             call_id: "test-id".into(),
             server: "coding_agent_tools".into(),
-            tool: "ls".into(),
+            tool: "cli_ls".into(),
             started_at: timer.started_at,
             completed_at,
             duration_ms,
@@ -411,7 +411,7 @@ mod tests {
     fn test_write_markdown_response_returns_none_gracefully() {
         // When writer is unavailable, write_markdown_response should return None
         // without panicking or causing errors
-        let ctx = ToolLogCtx::start("spawn_agent");
+        let ctx = ToolLogCtx::start("ask_agent");
 
         // In test environment without active branch, this should return None
         let result = ctx.write_markdown_response("# Large response\n\nSome content here...");

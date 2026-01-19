@@ -72,7 +72,7 @@ impl CodingAgentTools {
         use std::path::Path;
 
         // Start logging context
-        let log_ctx = logging::ToolLogCtx::start("ls");
+        let log_ctx = logging::ToolLogCtx::start("cli_ls");
         let req_json = serde_json::json!({
             "path": &path,
             "depth": depth.map(|d| d.as_u8()),
@@ -237,7 +237,7 @@ impl CodingAgentTools {
         use claudecode::types::{OutputFormat, PermissionMode};
 
         // Start logging context
-        let log_ctx = logging::ToolLogCtx::start("spawn_agent");
+        let log_ctx = logging::ToolLogCtx::start("ask_agent");
         let agent_type = agent_type.unwrap_or_default();
         let location = location.unwrap_or_default();
 
@@ -435,7 +435,7 @@ impl CodingAgentTools {
         offset: Option<usize>,
     ) -> Result<GrepOutput, ToolError> {
         // Start logging context
-        let log_ctx = logging::ToolLogCtx::start("search_grep");
+        let log_ctx = logging::ToolLogCtx::start("cli_grep");
         let req_json = serde_json::json!({
             "pattern": &pattern,
             "path": &path,
@@ -509,7 +509,7 @@ impl CodingAgentTools {
         offset: Option<usize>,
     ) -> Result<GlobOutput, ToolError> {
         // Start logging context
-        let log_ctx = logging::ToolLogCtx::start("search_glob");
+        let log_ctx = logging::ToolLogCtx::start("cli_glob");
         let req_json = serde_json::json!({
             "pattern": &pattern,
             "path": &path,
@@ -561,7 +561,7 @@ impl CodingAgentTools {
         dir: Option<String>,
     ) -> Result<just::SearchOutput, ToolError> {
         // Start logging context
-        let log_ctx = logging::ToolLogCtx::start("just_search");
+        let log_ctx = logging::ToolLogCtx::start("cli_just_search");
         let req_json = serde_json::json!({
             "query": &query,
             "dir": &dir,
@@ -707,7 +707,7 @@ impl CodingAgentTools {
         args: Option<std::collections::HashMap<String, serde_json::Value>>,
     ) -> Result<just::ExecuteOutput, ToolError> {
         // Start logging context
-        let log_ctx = logging::ToolLogCtx::start("just_execute");
+        let log_ctx = logging::ToolLogCtx::start("cli_just_execute");
         let req_json = serde_json::json!({
             "recipe": &recipe,
             "dir": &dir,

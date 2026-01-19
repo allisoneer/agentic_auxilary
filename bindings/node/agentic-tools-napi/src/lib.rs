@@ -64,7 +64,7 @@ static SCHEMA_ENGINE: OnceCell<RwLock<SchemaEngine>> = OnceCell::new();
 /// ```typescript
 /// import { init } from 'agentic-tools-napi';
 /// init('{}'); // Initialize with all tools
-/// init('{"allowlist": ["ls", "search_grep"]}'); // Only specific tools
+/// init('{"allowlist": ["cli_ls", "cli_grep"]}'); // Only specific tools
 /// ```
 #[napi]
 pub fn init(config_json: String) -> Result<()> {
@@ -245,7 +245,7 @@ pub async fn call_tool(name: String, args_json: String) -> Result<ToolCallResult
 /// ```typescript
 /// import { setSchemaPatches } from 'agentic-tools-napi';
 /// setSchemaPatches(JSON.stringify({
-///   "spawn_agent": {
+///   "ask_agent": {
 ///     "properties": {
 ///       "agent_type": {
 ///         "enum": ["locator", "analyzer"]
@@ -353,7 +353,7 @@ pub fn get_tool_names() -> Result<Vec<String>> {
 /// `ToolCallResult` with `text` and `data` (JSON string for LsOutput)
 #[napi]
 pub async fn call_ls(args_json: String) -> Result<ToolCallResult> {
-    call_tool("ls".to_string(), args_json).await
+    call_tool("cli_ls".to_string(), args_json).await
 }
 
 /// Spawn a Claude subagent (typed wrapper).
@@ -367,7 +367,7 @@ pub async fn call_ls(args_json: String) -> Result<ToolCallResult> {
 /// `ToolCallResult` with `text` and `data` (JSON string for AgentOutput)
 #[napi]
 pub async fn call_spawn_agent(args_json: String) -> Result<ToolCallResult> {
-    call_tool("spawn_agent".to_string(), args_json).await
+    call_tool("ask_agent".to_string(), args_json).await
 }
 
 /// Regex-based search (typed wrapper).
@@ -381,7 +381,7 @@ pub async fn call_spawn_agent(args_json: String) -> Result<ToolCallResult> {
 /// `ToolCallResult` with `text` and `data` (JSON string for GrepOutput)
 #[napi]
 pub async fn call_grep(args_json: String) -> Result<ToolCallResult> {
-    call_tool("search_grep".to_string(), args_json).await
+    call_tool("cli_grep".to_string(), args_json).await
 }
 
 /// Glob-based file matching (typed wrapper).
@@ -395,7 +395,7 @@ pub async fn call_grep(args_json: String) -> Result<ToolCallResult> {
 /// `ToolCallResult` with `text` and `data` (JSON string for GlobOutput)
 #[napi]
 pub async fn call_glob(args_json: String) -> Result<ToolCallResult> {
-    call_tool("search_glob".to_string(), args_json).await
+    call_tool("cli_glob".to_string(), args_json).await
 }
 
 /// Search justfile recipes (typed wrapper).
@@ -409,7 +409,7 @@ pub async fn call_glob(args_json: String) -> Result<ToolCallResult> {
 /// `ToolCallResult` with `text` and `data` (JSON string for SearchOutput)
 #[napi]
 pub async fn call_just_search(args_json: String) -> Result<ToolCallResult> {
-    call_tool("just_search".to_string(), args_json).await
+    call_tool("cli_just_search".to_string(), args_json).await
 }
 
 /// Execute a justfile recipe (typed wrapper).
@@ -423,7 +423,7 @@ pub async fn call_just_search(args_json: String) -> Result<ToolCallResult> {
 /// `ToolCallResult` with `text` and `data` (JSON string for ExecuteOutput)
 #[napi]
 pub async fn call_just_execute(args_json: String) -> Result<ToolCallResult> {
-    call_tool("just_execute".to_string(), args_json).await
+    call_tool("cli_just_execute".to_string(), args_json).await
 }
 
 // =============================================================================
@@ -441,5 +441,5 @@ pub async fn call_just_execute(args_json: String) -> Result<ToolCallResult> {
 /// `ToolCallResult` with `text` and `data` (JSON string for reasoning result)
 #[napi]
 pub async fn call_reasoning_request(args_json: String) -> Result<ToolCallResult> {
-    call_tool("request".to_string(), args_json).await
+    call_tool("ask_reasoning_model".to_string(), args_json).await
 }

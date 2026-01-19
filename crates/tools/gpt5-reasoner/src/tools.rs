@@ -52,7 +52,7 @@ pub struct RequestTool;
 impl Tool for RequestTool {
     type Input = RequestInput;
     type Output = String;
-    const NAME: &'static str = "request";
+    const NAME: &'static str = "ask_reasoning_model";
     const DESCRIPTION: &'static str = "Request assistance from a super smart comrade! This is a great tool to use anytime you want to double check something, or get a second opinion. In addition, it can write full plans for you! The tool will automatically optimize the prompt you send it and combine it with any and all context you pass along. It is best practice to pass as much context as possible and to write descriptions for them that accurately reflect the purpose of the files and/or directories of files (in relation to the prompt). Even though the responses from this tool are from an expert, be sure to look over them with a close eye. Better to have 2 experts than 1, right ;)";
 
     fn call(

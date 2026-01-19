@@ -43,7 +43,7 @@ impl GetCommentsTool {
 impl Tool for GetCommentsTool {
     type Input = GetCommentsInput;
     type Output = ReviewCommentList;
-    const NAME: &'static str = "get_comments";
+    const NAME: &'static str = "gh_get_comments";
     const DESCRIPTION: &'static str = "Get PR review comments with thread-level pagination. Repeated calls with same params return next page.";
 
     fn call(
@@ -92,7 +92,7 @@ impl ListPrsTool {
 impl Tool for ListPrsTool {
     type Input = ListPrsInput;
     type Output = PrSummaryList;
-    const NAME: &'static str = "list_prs";
+    const NAME: &'static str = "gh_get_prs";
     const DESCRIPTION: &'static str = "List pull requests in the repository";
 
     fn call(
@@ -141,7 +141,7 @@ impl AddCommentReplyTool {
 impl Tool for AddCommentReplyTool {
     type Input = AddCommentReplyInput;
     type Output = ReviewComment;
-    const NAME: &'static str = "add_comment_reply";
+    const NAME: &'static str = "gh_add_comment_reply";
     const DESCRIPTION: &'static str = "Reply to a PR review comment. Automatically prefixes with AI identifier to clearly mark automated responses.";
 
     fn call(
