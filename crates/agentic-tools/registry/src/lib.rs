@@ -135,9 +135,6 @@ impl AgenticTools {
         // Final allowlist filtering at registry level (authoritative)
         if let Some(set) = allow {
             let names: Vec<&str> = set.iter().map(|s| s.as_str()).collect();
-            if names.is_empty() {
-                return merged;
-            }
             // Warn about unknown tool names in allowlist
             for name in &names {
                 if !merged.contains(name) {
