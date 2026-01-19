@@ -45,7 +45,115 @@ done?
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
 - I'd like to probably get to the point where I can add a web search/web fetch tool. I'm thinking probably integratino with exa for the
   web search. And then I need to investigate the best potential html->markdown tool. I really like how extensive jina.ai reader API is.
-  I'm unsure if there are adequate local rust libraries that can do similar things as them, or if we'll want to rely on a provider.
+  I'm unsure if there are adequate local rust libraries that can do similar things as them, or if we'll want to rely on a provider. The
+  other potential desire here is to look at maybe having something like claude code, where the "Web fetch" is actually a wrapper around
+  a claude haiku call? Where the description for the `WebSearch` tool is like:
+```
+- Fetches content from a specified URL and processes it using an AI model
+- Takes a URL and a prompt as input
+- Fetches the URL content, converts HTML to markdown
+- Processes the content with the prompt using a small, fast model
+- Returns the model's response about the content
+- Use this tool when you need to retrieve and analyze web content
+```
+And it uses haiku with a default prompt to translate by default, or has the optional prompt field for the agent to ask specific
+questions. For both of these tools, we likely want to go and find references for what opencode and claude code both do for these tools.
+Not because we want to copy 1:1, but because we likely want to be inspired by what they do. The output schema of claude code's web fetch
+is:
+```
+{
+type:
+"object"
+
+properties:
+{
+bytes:
+{
+description:
+"Size of the fetched content in bytes"
+
+type:
+"number"
+
+}
+code:
+{
+description:
+"HTTP response code"
+
+type:
+"number"
+
+}
+codeText:
+{
+description:
+"HTTP response code text"
+
+type:
+"string"
+
+}
+result:
+{
+description:
+"Processed result from applying the prompt to the content"
+
+type:
+"string"
+
+}
+durationMs:
+{
+description:
+"Time taken to fetch and process the content"
+
+type:
+"number"
+
+}
+url:
+{
+description:
+"The URL that was fetched"
+
+type:
+"string"
+
+}
+}
+required:
+[
+0:
+"bytes"
+
+1:
+"code"
+
+2:
+"codeText"
+
+3:
+"result"
+
+4:
+"durationMs"
+
+5:
+"url"
+
+]
+$schema:
+"https://json-schema.org/draft/2020-12/schema"
+
+additionalProperties:
+false
+
+}
+```
+And we likely want to be inspired by that. Except we'll probably want "tokens" instead of bytes. And probably some other niceties. We
+can see how we use web fetch/web search currently in the `spawn_agent` tools. We use internal claude code tools for those, and the goal
+will likely be to replace those with our own, and bring them into our whole ecosystem.
 - The agentic-mcp command line really should do some type of tooling seperation to make permissions handling easier. e.g. the tool names
   shouldn't be root levell. They should be similar to how we had them setup in the old system, with the prefixes in opencode.json
 defined. I'm not sure what categories would be best? Maybe cli_ls for cli-type tools. Then the reasoning model request method I think
