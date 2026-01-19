@@ -1,3 +1,7 @@
+# TODO(2): This workflow may be redundant with ci.yml's sync-verify job.
+# If we need broader PR coverage (non-main branches), upgrade to
+# actions-rust-lang/setup-rust-toolchain with cache: true.
+# Otherwise, consider deleting this file entirely.
 name: Verify
 
 on:
