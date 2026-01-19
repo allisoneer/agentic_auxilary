@@ -4,7 +4,7 @@
 //! a full MCP transport layer.
 
 use agentic_tools_core::fmt::TextOptions;
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use agentic_tools_core::{TextFormat, Tool, ToolContext, ToolError, ToolRegistry};
 use agentic_tools_mcp::{OutputMode, RegistryServer};
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
@@ -31,6 +31,8 @@ struct GreetInput {
 struct GreetOutput {
     greeting: String,
 }
+
+impl TextFormat for GreetOutput {}
 
 impl Tool for GreetTool {
     type Input = GreetInput;
@@ -68,6 +70,8 @@ struct CalculateInput {
 struct CalculateOutput {
     result: i32,
 }
+
+impl TextFormat for CalculateOutput {}
 
 impl Tool for CalculateTool {
     type Input = CalculateInput;

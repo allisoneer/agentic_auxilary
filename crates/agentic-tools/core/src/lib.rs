@@ -18,10 +18,7 @@ pub mod tool;
 
 pub use context::ToolContext;
 pub use error::ToolError;
-pub use fmt::{
-    ErasedFmt, MakeFormatter, MakeFormatterFallback, TextFormat, TextOptions, TextStyle,
-    fallback_text_from_json,
-};
+pub use fmt::{ErasedFmt, TextFormat, TextOptions, TextStyle, fallback_text_from_json};
 pub use registry::{FormattedResult, ToolHandle, ToolRegistry, ToolRegistryBuilder};
 pub use schema::{FieldConstraint, SchemaEngine, SchemaTransform};
 pub use tool::{Tool, ToolCodec};
