@@ -16,8 +16,14 @@ use crate::{
 };
 use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
 use agentic_tools_core::ToolError;
-use async_openai::types::*;
+use async_openai::types::chat::{
+    ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,
+    CreateChatCompletionRequestArgs, ReasoningEffort,
+};
 use thoughts_tool::{DocumentType, write_document};
+
+/// The executor model used for final prompt execution.
+const EXECUTOR_MODEL: &str = "openai/gpt-5.2";
 
 pub async fn gpt5_reasoner_impl(
     prompt: String,
@@ -268,7 +274,10 @@ pub async fn gpt5_reasoner_impl(
     const GPT5_RETRIES: usize = 1;
     const GPT5_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
-    tracing::debug!("Executing final prompt with openai/gpt-5 at high reasoning effort");
+    tracing::debug!(
+        "Executing final prompt with {} at xhigh reasoning effort",
+        EXECUTOR_MODEL
+    );
 
     for attempt in 0..=GPT5_RETRIES {
         if attempt > 0 {
@@ -290,9 +299,9 @@ pub async fn gpt5_reasoner_impl(
         };
 
         let req = match CreateChatCompletionRequestArgs::default()
-            .model("openai/gpt-5")
+            .model(EXECUTOR_MODEL)
             .messages([ChatCompletionRequestMessage::User(user_msg)])
-            .reasoning_effort(ReasoningEffort::High)
+            .reasoning_effort(ReasoningEffort::Xhigh)
             .temperature(0.2)
             .build()
         {
@@ -353,7 +362,7 @@ pub async fn gpt5_reasoner_impl(
                         false,
                         Some(format!("stage=empty_response: {}", err_msg)),
                         None,
-                        Some("openai/gpt-5".to_string()),
+                        Some(EXECUTOR_MODEL.to_string()),
                         None,
                         files.len(),
                     );
@@ -388,7 +397,7 @@ pub async fn gpt5_reasoner_impl(
                                         false,
                                         Some(msg),
                                         None,
-                                        Some("openai/gpt-5".to_string()),
+                                        Some(EXECUTOR_MODEL.to_string()),
                                         None,
                                         files.len(),
                                     );
@@ -425,7 +434,7 @@ pub async fn gpt5_reasoner_impl(
                     true,
                     None,
                     response_file,
-                    Some("openai/gpt-5".to_string()),
+                    Some(EXECUTOR_MODEL.to_string()),
                     usage,
                     files.len(),
                 );
@@ -454,7 +463,7 @@ pub async fn gpt5_reasoner_impl(
                     false,
                     Some(msg),
                     None,
-                    Some("openai/gpt-5".to_string()),
+                    Some(EXECUTOR_MODEL.to_string()),
                     None,
                     files.len(),
                 );
@@ -468,7 +477,7 @@ pub async fn gpt5_reasoner_impl(
         false,
         Some("stage=final_unreachable: GPT-5 failed after all retries".to_string()),
         None,
-        Some("openai/gpt-5".to_string()),
+        Some(EXECUTOR_MODEL.to_string()),
         None,
         files.len(),
     );

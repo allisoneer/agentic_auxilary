@@ -2,7 +2,7 @@ pub mod parser;
 pub mod prompts;
 
 use crate::{FileMeta, PromptType, client::OrClient, errors::*};
-use async_openai::types::{
+use async_openai::types::chat::{
     ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
     ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, ReasoningEffort,
 };

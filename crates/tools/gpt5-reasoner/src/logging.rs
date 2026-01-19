@@ -1,6 +1,6 @@
 // crates/tools/gpt5-reasoner/src/logging.rs
 use agentic_logging::TokenUsage;
-use async_openai::types::CreateChatCompletionResponse;
+use async_openai::types::chat::CreateChatCompletionResponse;
 use std::time::Duration;
 
 /// Extract TokenUsage (including optional reasoning_tokens) from an OpenAI chat response.
@@ -47,9 +47,15 @@ pub fn classify_empty_chat_content(
     let first = &resp.choices[0];
     match &first.message.content {
         None => Some(EmptyContentKind::NoContent),
-        Some(s) if s.is_empty() => Some(EmptyContentKind::EmptyString),
-        Some(s) if s.trim().is_empty() => Some(EmptyContentKind::WhitespaceOnly),
-        _ => None,
+        Some(s) => {
+            if s.is_empty() {
+                Some(EmptyContentKind::EmptyString)
+            } else if s.trim().is_empty() {
+                Some(EmptyContentKind::WhitespaceOnly)
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -62,6 +68,7 @@ pub fn log_chat_response(
     // Top-level
     let id = resp.id.clone();
     let model = resp.model.clone();
+    #[allow(deprecated)]
     let system_fingerprint = resp.system_fingerprint.clone().unwrap_or_default();
 
     // Choices and first choice details
@@ -80,20 +87,17 @@ pub fn log_chat_response(
 
     let content_len = first
         .and_then(|c| c.message.content.as_ref())
-        .map(|s| s.len())
+        .map(String::len)
         .unwrap_or(0);
 
     let refusal_len = first
         .and_then(|c| c.message.refusal.as_ref())
-        .map(|s| s.len())
+        .map(String::len)
         .unwrap_or(0);
-
-    // Note: reasoning field not available in async-openai 0.29.3
-    // Would be: c.message.reasoning for GPT-5 internal reasoning trace
 
     let tool_calls_count = first
         .and_then(|c| c.message.tool_calls.as_ref())
-        .map(|v| v.len())
+        .map(Vec::len)
         .unwrap_or(0);
 
     // Usage tokens
@@ -103,7 +107,7 @@ pub fn log_chat_response(
     let total_tokens = usage.map(|u| u.total_tokens).unwrap_or(0);
 
     // Reasoning tokens (GPT-5)
-    let reasoning_tokens = usage
+    let reasoning_tokens: Option<u32> = usage
         .and_then(|u| u.completion_tokens_details.as_ref())
         .and_then(|d| d.reasoning_tokens);
 
@@ -127,7 +131,7 @@ pub fn log_chat_response(
         completion_tokens,
         total_tokens,
         reasoning_tokens
-            .map(|v| v.to_string())
+            .map(|v: u32| v.to_string())
             .unwrap_or_else(|| "n/a".into()),
     );
 
@@ -145,16 +149,17 @@ pub fn log_empty_warning(phase: &str, kind: EmptyContentKind, resp: &CreateChatC
 
     let tool_calls_count = first
         .and_then(|c| c.message.tool_calls.as_ref())
-        .map(|v| v.len())
+        .map(Vec::len)
         .unwrap_or(0);
 
     let usage = resp.usage.as_ref();
     let prompt_tokens = usage.map(|u| u.prompt_tokens).unwrap_or(0);
     let completion_tokens = usage.map(|u| u.completion_tokens).unwrap_or(0);
-    let reasoning_tokens = usage
+    let reasoning_tokens: Option<u32> = usage
         .and_then(|u| u.completion_tokens_details.as_ref())
-        .and_then(|d| d.reasoning_tokens)
-        .map(|v| v.to_string())
+        .and_then(|d| d.reasoning_tokens);
+    let reasoning_tokens_str = reasoning_tokens
+        .map(|v: u32| v.to_string())
         .unwrap_or_else(|| "n/a".into());
 
     tracing::warn!(
@@ -166,7 +171,7 @@ pub fn log_empty_warning(phase: &str, kind: EmptyContentKind, resp: &CreateChatC
         tool_calls_count,
         prompt_tokens,
         completion_tokens,
-        reasoning_tokens
+        reasoning_tokens_str
     );
 }
 
@@ -191,7 +196,7 @@ mod tests {
             "id": "chatcmpl-1",
             "object": "chat.completion",
             "created": 1234567890,
-            "model": "openai/gpt-5",
+            "model": "openai/gpt-5.2",
             "choices": [{
                 "index": 0,
                 "message": { "role": "assistant", "content": "ok" },
@@ -205,8 +210,7 @@ mod tests {
                 "completion_tokens_details": { "reasoning_tokens": 7 }
             }
         });
-        let resp: async_openai::types::CreateChatCompletionResponse =
-            serde_json::from_value(raw).unwrap();
+        let resp: CreateChatCompletionResponse = serde_json::from_value(raw).unwrap();
 
         let usage = extract_token_usage(&resp).expect("usage present");
         assert_eq!(usage.prompt, 10);

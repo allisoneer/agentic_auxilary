@@ -15,7 +15,7 @@ agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 thoughts-tool = { workspace = true }
 agentic_logging = { workspace = true }
-async-openai = "0.29.3"
+async-openai = { version = "0.32", features = ["chat-completion"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
