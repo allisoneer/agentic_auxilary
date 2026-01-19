@@ -161,9 +161,9 @@ Override via:
 ### Executor Model
 The executor processes the full file content with the optimized prompt.
 
-**Fixed**: `openai/gpt-5` (high reasoning effort)
+**Fixed**: `openai/gpt-5.2` (xhigh reasoning effort)
 
-This model is not configurable and always uses `reasoning_effort: high`.
+This model is not configurable and always uses `reasoning_effort: xhigh`.
 
 ### Reasoning Effort
 - Models containing "gpt-5" or "gpt-oss" get `reasoning_effort` set
@@ -180,7 +180,7 @@ User Prompt + File Metadata
          ↓
   File Content Injection
          ↓
-   Executor (GPT-5 high reasoning)
+    Executor (GPT-5.2 xhigh reasoning)
          ↓
       Final Output
 ```

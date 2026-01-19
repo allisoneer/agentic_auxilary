@@ -65,9 +65,8 @@ impl From<ReasonerError> for ToolError {
 /// - JSONDeserialize: Rare parsing glitches that may resolve on retry
 ///
 /// Non-retryable errors:
-/// - ApiError: Library already handled 5xx/429; remaining are typically permanent
 /// - InvalidArgument: Client-side validation errors
-/// - FileSaveError/FileReadError: Local filesystem issues
+/// - Other errors: Assume not retryable (ApiError, file errors, etc.)
 pub fn is_retryable_app_level(e: &async_openai::error::OpenAIError) -> bool {
     use async_openai::error::OpenAIError;
     match e {
@@ -78,17 +77,14 @@ pub fn is_retryable_app_level(e: &async_openai::error::OpenAIError) -> bool {
         OpenAIError::StreamError(_) => true,
 
         // Rare JSON deserialization glitches - defensive retry during unstable period
-        OpenAIError::JSONDeserialize(_) => true,
+        OpenAIError::JSONDeserialize(_, _) => true,
 
-        // Do NOT retry ApiError - library already retried 5xx/429
-        // Anything left is likely permanent (invalid request, insufficient_quota, etc.)
-        OpenAIError::ApiError(_) => false,
-
-        // Client-side validation errors
+        // Client-side validation errors - not retryable
         OpenAIError::InvalidArgument(_) => false,
 
-        // Local file operation errors
-        OpenAIError::FileSaveError(_) | OpenAIError::FileReadError(_) => false,
+        // All other errors (ApiError, file errors, etc.) - assume not retryable
+        // ApiError: library already retried 5xx/429
+        _ => false,
     }
 }
 

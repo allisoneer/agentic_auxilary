@@ -129,7 +129,7 @@ fn tool_call_record_serialization() {
         response_file: Some("test.md".into()),
         success: true,
         error: None,
-        model: Some("openai/gpt-5".into()),
+        model: Some("openai/gpt-5.2".into()),
         token_usage: None,
         summary: None,
     };
@@ -142,7 +142,7 @@ fn tool_call_record_serialization() {
     assert!(json.contains("\"tool\":\"plan\""));
     assert!(json.contains("\"response_file\":\"test.md\""));
     assert!(json.contains("\"success\":true"));
-    assert!(json.contains("\"model\":\"openai/gpt-5\""));
+    assert!(json.contains("\"model\":\"openai/gpt-5.2\""));
 
     // Verify None fields are omitted (skip_serializing_if)
     assert!(!json.contains("\"error\""));

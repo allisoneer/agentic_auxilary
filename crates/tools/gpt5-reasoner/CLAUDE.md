@@ -1,7 +1,7 @@
 # CLAUDE.md — gpt5_reasoner (Developer Guide)
 
 ## 1) Purpose and Scope
-This file guides contributors and Claude Code on how to work on gpt5_reasoner. It focuses on internals, development workflows, and where to change things. End-user usage, installation, and examples live in README.md. In short: gpt5_reasoner optimizes a task into an XML template (optimizer, configurable model) and then executes it with GPT-5 high reasoning (executor), available via CLI and MCP.
+This file guides contributors and Claude Code on how to work on gpt5_reasoner. It focuses on internals, development workflows, and where to change things. End-user usage, installation, and examples live in README.md. In short: gpt5_reasoner optimizes a task into an XML template (optimizer, configurable model) and then executes it with GPT-5.2 xhigh reasoning (executor), available via CLI and MCP.
 
 ## 2) Quick Dev Commands and Workflows
 - Default targets (silent, warnings treated as failures):
@@ -22,11 +22,11 @@ This file guides contributors and Claude Code on how to work on gpt5_reasoner. I
   - Inspect schema: cargo run --example print_schema
 
 ## 3) Architecture Overview and Data Flow
-Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML groups + XML template → inject file contents → token check → executor (GPT-5 high) → result. The optimizer sees filenames/descriptions; the executor sees actual file contents. Directory expansion happens before optimization. Robustness: app-level network retries, template validation retries, strict group marker validation, and token limit enforcement.
+Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML groups + XML template → inject file contents → token check → executor (GPT-5.2 xhigh) → result. The optimizer sees filenames/descriptions; the executor sees actual file contents. Directory expansion happens before optimization. Robustness: app-level network retries, template validation retries, strict group marker validation, and token limit enforcement.
 
 ## 4) Core Modules and Responsibilities
 - src/lib.rs:
-  - gpt5_reasoner_impl: orchestrates the pipeline; expands directories; normalizes and dedups file paths; auto-injects CLAUDE.md memories (env-gated); pre-validates UTF-8; enforces plan guards; selects models; does optimizer validation-retry; injects files; enforces token limits; executes GPT-5 with retry on transport errors.
+  - gpt5_reasoner_impl: orchestrates the pipeline; expands directories; normalizes and dedups file paths; auto-injects CLAUDE.md memories (env-gated); pre-validates UTF-8; enforces plan guards; selects models; does optimizer validation-retry; injects files; enforces token limits; executes GPT-5.2 with retry on transport errors.
 - src/client.rs:
   - OrClient: OpenRouter client loader (OPENROUTER_API_KEY).
 - src/optimizer/mod.rs:
@@ -64,9 +64,9 @@ Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML gro
   - Paths normalized to absolute; dedup after normalize
 - Error handling/retries:
   - Optimizer: app-level retries for transport; validation retry loop for template errors
-  - Executor (GPT-5): app-level single retry for transient failures
+  - Executor (GPT-5.2): app-level single retry for transient failures
 - Token budget: 250k enforced after injection; change TOKEN_LIMIT in token.rs with matching tests.
-- Temperature defaults 0.2; reasoning_effort only for gpt-5/gpt-oss.
+- Temperature defaults 0.2; reasoning_effort: xhigh for executor, high for optimizer gpt-5/gpt-oss models.
 
 ## 7) Typical Changes and Where to Make Them
 - Prompt wording/behavior: edit src/optimizer/prompts/*.md; keep labels (FILE_GROUPING, OPTIMIZED_TEMPLATE) and GROUP markers exact; update lib.rs placeholder if edited.

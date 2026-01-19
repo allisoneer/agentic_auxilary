@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+
+### Breaking Changes
+- **gpt5_reasoner**: Executor model changed from `openai/gpt-5` to `openai/gpt-5.2`
+- **gpt5_reasoner**: Reasoning effort increased from `High` to `Xhigh`
+  - Requires access to `openai/gpt-5.2` on OpenRouter/OpenAI
+  - May increase cost/latency compared to previous configuration
+  - Introduced `EXECUTOR_MODEL` constant to centralize model string
+- **async-openai**: Upgraded to v0.32 with `chat-completion` feature
+
 ## [0.5.2] - 2026-01-05
 
 ### ⚙️  Miscellaneous
