@@ -206,7 +206,7 @@ fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
 }
 
 /// Run the verify command.
-pub fn run(_dry_run: bool, check: bool) -> Result<()> {
+pub fn run(check: bool) -> Result<()> {
     eprintln!("[verify] Loading workspace metadata...");
     let metadata = MetadataCommand::new()
         .no_deps()

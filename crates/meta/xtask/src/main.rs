@@ -44,9 +44,6 @@ enum Cmd {
     },
     /// Verify metadata, policy rules, and generated file freshness
     Verify {
-        /// Dry-run: print what would be checked but skip checks
-        #[arg(long)]
-        dry_run: bool,
         /// Check mode: also verify generated files are up to date
         #[arg(long)]
         check: bool,
@@ -66,7 +63,7 @@ fn main() -> Result<()> {
             check,
         } => readme_sync(path, dry_run, check),
         Cmd::Sync { dry_run, check } => sync::run(dry_run, check),
-        Cmd::Verify { dry_run, check } => verify::run(dry_run, check),
+        Cmd::Verify { check } => verify::run(check),
     }
 }
 
