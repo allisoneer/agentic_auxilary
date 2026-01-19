@@ -78,12 +78,16 @@
         }
       }
     },
-    "Auto Accept Edits": {
+    "Playwright": {
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary",
       "permission": {
-        "edit": "allow",
-        "write": "allow"
+        "playwright_*": "allow"
+      }
+    },
+    "Linear": {
+      "permission": {
+        "linear_*": "allow"
       }
     },
     "build": {
@@ -129,6 +133,22 @@
       "command": [
         "pr_comments",
         "mcp"
+      ],
+      "enabled": true
+    },
+    "linear": {
+      "type": "local",
+      "command": [
+        "linear-tools",
+        "mcp"
+      ],
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
       ],
       "enabled": true
     }
