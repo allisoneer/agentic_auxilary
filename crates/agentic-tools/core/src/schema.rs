@@ -172,7 +172,7 @@ impl SchemaEngine {
 /// - Thread-local caching keyed by TypeId for performance
 pub mod mcp_schema {
     use schemars::generate::SchemaSettings;
-    use schemars::transform::AddNullable;
+    use schemars::transform::{AddNullable, RestrictFormats, Transform};
     use schemars::{JsonSchema, Schema};
     use std::any::TypeId;
     use std::cell::RefCell;
@@ -184,8 +184,57 @@ pub mod mcp_schema {
         static CACHE_FOR_OUTPUT: RefCell<HashMap<TypeId, Result<Arc<Schema>, String>>> = RefCell::new(HashMap::new());
     }
 
+    /// Sanitizes null-only schema branches that AddNullable produces.
+    /// Converts `{"const": null, "nullable": true}` (no type) → `{"type": "null"}`
+    #[derive(Clone, Copy, Default)]
+    struct SanitizeNullBranches;
+
+    impl Transform for SanitizeNullBranches {
+        fn transform(&mut self, schema: &mut Schema) {
+            // Serialize to JSON, sanitize recursively, deserialize back
+            let mut v = serde_json::to_value(&*schema).expect("serialize schema for sanitize");
+            sanitize_null_branches_recursive(&mut v);
+            *schema = Schema::try_from(v).expect("rebuild sanitized schema");
+        }
+    }
+
+    fn sanitize_null_branches_recursive(node: &mut serde_json::Value) {
+        use serde_json::Value as Json;
+        match node {
+            Json::Object(map) => {
+                // Fix pattern: {"const": null, "nullable": true} without "type"
+                let has_nullable_true = map
+                    .get("nullable")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let const_is_null = map.get("const").map(|v| v.is_null()).unwrap_or(false);
+                let has_type = map.contains_key("type");
+
+                if has_nullable_true && const_is_null && !has_type {
+                    map.remove("const");
+                    map.remove("nullable");
+                    map.insert("type".to_string(), Json::String("null".to_string()));
+                }
+
+                // Recurse into all values (covers subschemas at arbitrary keys)
+                for value in map.values_mut() {
+                    sanitize_null_branches_recursive(value);
+                }
+            }
+            Json::Array(arr) => {
+                for elem in arr {
+                    sanitize_null_branches_recursive(elem);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn settings() -> SchemaSettings {
-        SchemaSettings::draft2020_12().with_transform(AddNullable::default())
+        SchemaSettings::draft2020_12()
+            .with_transform(AddNullable::default())
+            .with_transform(RestrictFormats::default())
+            .with_transform(SanitizeNullBranches)
     }
 
     /// Generate a cached schema for type T using Draft 2020-12 + AddNullable.
@@ -403,6 +452,105 @@ mod tests {
             assert!(
                 std::sync::Arc::ptr_eq(&first, &second),
                 "Cached schemas should return the same Arc"
+            );
+        }
+
+        // ====================================================================
+        // SanitizeNullBranches and RestrictFormats transform tests
+        // ====================================================================
+
+        #[allow(dead_code)]
+        #[derive(schemars::JsonSchema, Serialize)]
+        enum TestEnum {
+            A,
+            B,
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct HasOptEnum {
+            e: Option<TestEnum>,
+        }
+
+        #[test]
+        fn test_option_enum_anyof_null_branch_has_type() {
+            let root = mcp_schema::cached_schema_for::<HasOptEnum>();
+            let v = serde_json::to_value(root.as_ref()).unwrap();
+            let any_of = v["properties"]["e"]["anyOf"]
+                .as_array()
+                .expect("Option<Enum> should generate anyOf");
+
+            // There must be a branch with explicit type "null"
+            assert!(
+                any_of
+                    .iter()
+                    .any(|b| b.get("type") == Some(&serde_json::json!("null"))),
+                "anyOf for Option<Enum> must include a branch with type:\"null\""
+            );
+
+            // No branch should have nullable:true without a type
+            for branch in any_of {
+                let has_nullable = branch.get("nullable") == Some(&serde_json::json!(true));
+                let has_type = branch.get("type").is_some() || branch.get("$ref").is_some();
+                assert!(
+                    !has_nullable || has_type,
+                    "No branch may contain nullable:true without a type or $ref"
+                );
+            }
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct Unsigneds {
+            a: u32,
+            b: u64,
+        }
+
+        #[test]
+        fn test_strip_uint_formats() {
+            let root = mcp_schema::cached_schema_for::<Unsigneds>();
+            let v = serde_json::to_value(root.as_ref()).unwrap();
+            let pa = &v["properties"]["a"];
+            let pb = &v["properties"]["b"];
+
+            assert!(
+                pa.get("format").is_none(),
+                "u32 should not include non-standard 'format'"
+            );
+            assert!(
+                pb.get("format").is_none(),
+                "u64 should not include non-standard 'format'"
+            );
+            assert_eq!(
+                pa.get("minimum").and_then(|x| x.as_u64()),
+                Some(0),
+                "u32 minimum must be preserved"
+            );
+            assert_eq!(
+                pb.get("minimum").and_then(|x| x.as_u64()),
+                Some(0),
+                "u64 minimum must be preserved"
+            );
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct HasOptString {
+            s: Option<String>,
+        }
+
+        #[test]
+        fn test_option_string_preserves_nullable() {
+            let root = mcp_schema::cached_schema_for::<HasOptString>();
+            let v = serde_json::to_value(root.as_ref()).unwrap();
+            let s = &v["properties"]["s"];
+
+            assert_eq!(
+                s.get("type"),
+                Some(&serde_json::json!("string")),
+                "Option<String> should have type: string"
+            );
+            assert_eq!(
+                s.get("nullable"),
+                Some(&serde_json::json!(true)),
+                "Option<String> should retain nullable: true"
             );
         }
     }
