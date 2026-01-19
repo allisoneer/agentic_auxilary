@@ -353,7 +353,7 @@ async fn main() -> Result<()> {
             let registry = thoughts_mcp_tools::build_registry();
             let server = RegistryServer::new(Arc::new(registry))
                 .with_info("thoughts", env!("CARGO_PKG_VERSION"))
-                .with_output_mode(OutputMode::Dual);
+                .with_output_mode(OutputMode::Text);
             let transport = stdio();
             let service = server.serve(transport).await?;
             service.waiting().await?;
