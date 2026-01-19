@@ -70,7 +70,7 @@ role = "lib"
 family = "infra"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = true
 napi = false
 

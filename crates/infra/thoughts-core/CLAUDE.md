@@ -247,7 +247,7 @@ The tool now fully supports git worktrees through automatic detection and smart 
 - Path: crates/infra/thoughts-core/
 - Role: lib
 - Family: infra
-- Integrations: mcp=true, logging=true, napi=false
+- Integrations: mcp=false, logging=true, napi=false
 <!-- END:xtask:autogen -->
 
 <!-- BEGIN:xtask:autogen commands -->

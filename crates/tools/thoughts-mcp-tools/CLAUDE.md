@@ -5,7 +5,7 @@
 - Path: crates/tools/thoughts-mcp-tools/
 - Role: tool-lib
 - Family: tools
-- Integrations: mcp=true, logging=true, napi=false
+- Integrations: mcp=false, logging=true, napi=false
 <!-- END:xtask:autogen -->
 
 ## Overview
