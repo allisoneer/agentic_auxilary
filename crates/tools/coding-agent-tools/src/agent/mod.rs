@@ -6,8 +6,5 @@
 pub mod config;
 pub mod prompts;
 
-pub use config::{
-    AGENTIC_MCP_TOOLS, build_mcp_config, compose_prompt, disallowed_mcp_tools_for,
-    enabled_tools_for, model_for,
-};
+pub use config::{build_mcp_config, compose_prompt, enabled_tools_for, model_for};
 pub use prompts::{ANALYZER_BASE_PROMPT, LOCATOR_BASE_PROMPT};
