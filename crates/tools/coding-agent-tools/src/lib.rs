@@ -271,10 +271,7 @@ impl CodingAgentTools {
             .cloned()
             .partition(|t| !t.starts_with("mcp__"));
 
-        // Compute MCP tools to disallow from our own server
-        let disallowed_mcp = agent::disallowed_mcp_tools_for(&enabled_tools, location);
-
-        // Build MCP config with enabled tools for CLI flag propagation
+        // Build MCP config with --allow flag for tool filtering
         let mcp_config = agent::build_mcp_config(location, &enabled_tools);
 
         // Validate MCP servers before launching (spawn, handshake, tools/list)
@@ -308,7 +305,6 @@ impl CodingAgentTools {
             .system_prompt(system_prompt)
             .tools(builtin_tools) // controls built-in tools in schema
             .allowed_tools(enabled_tools.clone()) // auto-approve enabled tools (built-in + MCP)
-            .disallowed_tools(disallowed_mcp) // hide unwanted MCP tools from our server
             .mcp_config(mcp_config)
             .strict_mcp_config(true); // prevent inheritance of global MCP tools
 
