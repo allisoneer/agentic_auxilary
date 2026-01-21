@@ -3,6 +3,7 @@
 //! Each tool delegates to the corresponding method on [`PrComments`].
 
 use crate::PrComments;
+use crate::logging::ToolLogCtx;
 use crate::models::{CommentSourceType, PrSummaryList, ReviewComment, ReviewCommentList};
 use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
 use futures::future::BoxFuture;
@@ -53,14 +54,45 @@ impl Tool for GetCommentsTool {
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let pr_comments = self.pr_comments.clone();
         Box::pin(async move {
-            pr_comments
+            let log = ToolLogCtx::start(Self::NAME);
+
+            let request = serde_json::json!({
+                "pr_number": input.pr_number,
+                "comment_source_type": input.comment_source_type,
+                "include_resolved": input.include_resolved,
+            });
+
+            match pr_comments
                 .get_comments(
                     input.pr_number,
                     input.comment_source_type,
                     input.include_resolved,
                 )
                 .await
-                .map_err(map_anyhow_to_tool_error)
+            {
+                Ok(out) => {
+                    log.finish(
+                        request,
+                        None,
+                        true,
+                        None,
+                        Some(serde_json::json!({
+                            "comments": out.comments.len(),
+                            "shown_threads": out.shown_threads,
+                            "total_threads": out.total_threads,
+                            "has_more": out.has_more,
+                        })),
+                        None,
+                        None,
+                    );
+                    Ok(out)
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    log.finish(request, None, false, Some(msg.clone()), None, None, None);
+                    Err(map_anyhow_to_tool_error(e))
+                }
+            }
         })
     }
 }
@@ -102,10 +134,31 @@ impl Tool for ListPrsTool {
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let pr_comments = self.pr_comments.clone();
         Box::pin(async move {
-            pr_comments
-                .list_prs(input.state)
-                .await
-                .map_err(map_anyhow_to_tool_error)
+            let log = ToolLogCtx::start(Self::NAME);
+
+            let request = serde_json::json!({
+                "state": input.state,
+            });
+
+            match pr_comments.list_prs(input.state).await {
+                Ok(out) => {
+                    log.finish(
+                        request,
+                        None,
+                        true,
+                        None,
+                        Some(serde_json::json!({ "prs": out.prs.len() })),
+                        None,
+                        None,
+                    );
+                    Ok(out)
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    log.finish(request, None, false, Some(msg.clone()), None, None, None);
+                    Err(map_anyhow_to_tool_error(e))
+                }
+            }
         })
     }
 }
@@ -151,10 +204,36 @@ impl Tool for AddCommentReplyTool {
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let pr_comments = self.pr_comments.clone();
         Box::pin(async move {
-            pr_comments
+            let log = ToolLogCtx::start(Self::NAME);
+
+            let request = serde_json::json!({
+                "pr_number": input.pr_number,
+                "comment_id": input.comment_id,
+                "body_len": input.body.len(),
+            });
+
+            match pr_comments
                 .add_comment_reply(input.pr_number, input.comment_id, input.body)
                 .await
-                .map_err(map_anyhow_to_tool_error)
+            {
+                Ok(out) => {
+                    log.finish(
+                        request,
+                        None,
+                        true,
+                        None,
+                        Some(serde_json::json!({ "reply_id": out.id })),
+                        None,
+                        None,
+                    );
+                    Ok(out)
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    log.finish(request, None, false, Some(msg.clone()), None, None, None);
+                    Err(map_anyhow_to_tool_error(e))
+                }
+            }
         })
     }
 }

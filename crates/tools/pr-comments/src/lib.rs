@@ -1,5 +1,6 @@
 pub mod git;
 pub mod github;
+pub mod logging;
 pub mod models;
 pub mod pagination;
 pub mod tools;
@@ -31,6 +32,7 @@ pub struct PrComments {
     repo: String,
     token: Option<String>,
     pager: Arc<PaginationCache<Thread>>,
+    init_error: Option<String>,
 }
 
 impl PrComments {
@@ -83,6 +85,7 @@ impl PrComments {
             repo: git_info.repo,
             token,
             pager: Arc::new(PaginationCache::new()),
+            init_error: None,
         })
     }
 
@@ -93,7 +96,39 @@ impl PrComments {
             repo,
             token,
             pager: Arc::new(PaginationCache::new()),
+            init_error: None,
         }
+    }
+
+    /// Create a disabled instance that will fail fast with a clear error message.
+    /// Used when ambient repo detection fails.
+    pub fn disabled(init_error: String) -> Self {
+        let token = Self::get_token().ok().flatten();
+        Self {
+            owner: String::new(),
+            repo: String::new(),
+            token,
+            pager: Arc::new(PaginationCache::new()),
+            init_error: Some(init_error),
+        }
+    }
+
+    /// Check that repo context is available before making API calls.
+    /// Returns an error with actionable guidance if owner/repo are empty.
+    fn ensure_repo_configured(&self) -> Result<()> {
+        if !self.owner.is_empty() && !self.repo.is_empty() {
+            return Ok(());
+        }
+
+        let mut msg = "invalid argument: pr_comments repository context is not available.\n\
+This tool relies on ambient git repo detection. Run it inside a git checkout with a GitHub remote."
+            .to_string();
+
+        if let Some(e) = &self.init_error {
+            msg.push_str(&format!("\n\nAmbient detection error: {}", e));
+        }
+
+        anyhow::bail!(msg);
     }
 
     async fn get_pr_number(&self, pr_number: Option<u64>) -> Result<u64> {
@@ -153,6 +188,9 @@ impl PrComments {
         comment_source_type: Option<CommentSourceType>,
         include_resolved: Option<bool>,
     ) -> Result<ReviewCommentList> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+
         let pr = self
             .get_pr_number(pr_number)
             .await
@@ -231,6 +269,10 @@ impl PrComments {
             paginate_slice(&state.results, state.next_offset, state.page_size);
         state.next_offset += page_threads.len();
 
+        // Compute pagination metadata
+        let total_threads = state.results.len();
+        let shown_threads = state.next_offset;
+
         // Flatten threads to comments for output
         let comments: Vec<_> = page_threads
             .into_iter()
@@ -241,17 +283,36 @@ impl PrComments {
             })
             .collect();
 
+        // Build pagination message only when there are more pages
+        let message = if has_more {
+            Some(format!(
+                "Showing {} out of {} threads. Call gh_get_comments again for more.",
+                shown_threads, total_threads
+            ))
+        } else {
+            None
+        };
+
         // If no more pages, drop cache entry
         if !has_more {
             drop(state);
             self.pager.remove_if_same(&key, &query_lock);
         }
 
-        Ok(ReviewCommentList { comments })
+        Ok(ReviewCommentList {
+            comments,
+            shown_threads,
+            total_threads,
+            has_more,
+            message,
+        })
     }
 
     /// List pull requests in the repository
     pub async fn list_prs(&self, state: Option<String>) -> Result<PrSummaryList> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+
         let client =
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
                 .context("internal: failed to create GitHub client")?;
@@ -282,6 +343,9 @@ impl PrComments {
             !body.trim().is_empty(),
             "invalid argument: Body cannot be empty"
         );
+
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
 
         let pr = self
             .get_pr_number(pr_number)
@@ -360,5 +424,33 @@ mod tests {
     fn ai_prefix_contains_robot_emoji() {
         // Verify the prefix contains the robot emoji for clear AI identification
         assert!(AI_PREFIX.contains('\u{1F916}')); // 🤖
+    }
+
+    #[test]
+    fn ensure_repo_configured_fails_with_empty_owner_repo() {
+        let disabled = PrComments::disabled("test error".into());
+        let result = disabled.ensure_repo_configured();
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("repository context is not available"),
+            "Error should mention missing repo context"
+        );
+        assert!(
+            err.contains("ambient git repo detection"),
+            "Error should mention ambient detection"
+        );
+        assert!(
+            err.contains("test error"),
+            "Error should include the original init error"
+        );
+    }
+
+    #[test]
+    fn ensure_repo_configured_succeeds_with_valid_repo() {
+        let valid = PrComments::with_repo("owner".into(), "repo".into());
+        let result = valid.ensure_repo_configured();
+        assert!(result.is_ok());
     }
 }

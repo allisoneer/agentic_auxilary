@@ -4,6 +4,7 @@ use crate::models::{
 use anyhow::Result;
 use octocrab::Octocrab;
 use std::collections::HashMap;
+use std::time::Duration;
 
 pub struct GitHubClient {
     client: Octocrab,
@@ -13,16 +14,20 @@ pub struct GitHubClient {
 
 impl GitHubClient {
     pub fn new(owner: String, repo: String, token: Option<String>) -> Result<Self> {
-        let client = if let Some(token) = token {
-            Octocrab::builder()
-                .personal_token(token)
-                .build()
-                .map_err(|e| {
-                    anyhow::anyhow!("Failed to create GitHub client with token: {:?}", e)
-                })?
+        let builder = Octocrab::builder()
+            .set_connect_timeout(Some(Duration::from_secs(10)))
+            .set_read_timeout(Some(Duration::from_secs(30)))
+            .set_write_timeout(Some(Duration::from_secs(30)));
+
+        let builder = if let Some(token) = token {
+            builder.personal_token(token)
         } else {
-            Octocrab::default()
+            builder
         };
+
+        let client = builder
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to create GitHub client: {:?}", e))?;
 
         Ok(Self {
             client,
