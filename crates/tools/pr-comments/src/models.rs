@@ -48,6 +48,17 @@ pub struct PrSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewCommentList {
     pub comments: Vec<ReviewComment>,
+
+    /// Number of threads shown so far (cumulative across pagination calls)
+    pub shown_threads: usize,
+    /// Total number of threads available for this query
+    pub total_threads: usize,
+    /// Whether there are more pages available
+    pub has_more: bool,
+
+    /// Optional pagination hint message (only when has_more=true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 /// A thread of review comments: a parent comment and its replies.
@@ -584,6 +595,10 @@ mod mcp_format_tests {
                 ),
                 sample_review("src/lib.rs", Some(42), Some("LEFT"), "bob", "Body B"),
             ],
+            shown_threads: 2,
+            total_threads: 2,
+            has_more: false,
+            message: None,
         };
         let text = list.fmt_text(&TextOptions::default());
         assert!(text.contains("Review comments:"));
@@ -643,8 +658,57 @@ mod mcp_format_tests {
 
     #[test]
     fn wrapper_serializes_as_object() {
-        let w = ReviewCommentList { comments: vec![] };
+        let w = ReviewCommentList {
+            comments: vec![],
+            shown_threads: 0,
+            total_threads: 0,
+            has_more: false,
+            message: None,
+        };
         let s = serde_json::to_string(&w).unwrap();
         assert!(s.contains("\"comments\""));
+        assert!(s.contains("\"shown_threads\""));
+        assert!(s.contains("\"total_threads\""));
+        assert!(s.contains("\"has_more\""));
+        // message should be omitted when None
+        assert!(!s.contains("\"message\""));
+    }
+
+    #[test]
+    fn pagination_message_only_when_has_more() {
+        // When has_more is false, message should be None
+        let list_complete = ReviewCommentList {
+            comments: vec![],
+            shown_threads: 5,
+            total_threads: 5,
+            has_more: false,
+            message: None,
+        };
+        assert!(list_complete.message.is_none());
+
+        // When has_more is true, message should contain "Showing X out of Y threads"
+        let msg = "Showing 5 out of 15 threads. Call gh_get_comments again for more.".to_string();
+        let list_partial = ReviewCommentList {
+            comments: vec![],
+            shown_threads: 5,
+            total_threads: 15,
+            has_more: true,
+            message: Some(msg.clone()),
+        };
+        assert!(list_partial.message.is_some());
+        let m = list_partial.message.unwrap();
+        assert!(m.contains("Showing 5 out of 15 threads"));
+        assert!(m.contains("Call gh_get_comments again"));
+
+        // Verify message is serialized when present
+        let list_with_msg = ReviewCommentList {
+            comments: vec![],
+            shown_threads: 5,
+            total_threads: 15,
+            has_more: true,
+            message: Some(msg),
+        };
+        let s = serde_json::to_string(&list_with_msg).unwrap();
+        assert!(s.contains("\"message\""));
     }
 }

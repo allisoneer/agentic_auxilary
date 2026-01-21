@@ -12,9 +12,11 @@ Deferred (pending SQLite migration):
 
 - agentic_logging integration for linear-tools and pr_comments. Research completed:
   - Only `linear-tools` needs logging from the linear family (linear-schema and linear-queries are libs without tool methods)
-  - `pr_comments` also needs logging (3 tools)
+  - `pr_comments` also needs logging (3 tools) — NOW IMPLEMENTED with duplicated ToolLogCtx
   - Recommended pattern: simple function-call helper (not ToolLogCtx context pattern)
   - DEFERRED: agentic_logging's file-based primitives (LogWriter, JSONL, day-bucketing, fd-lock) will be obsolete once thoughts moves to SQLite. The ToolCallRecord schema survives but storage layer changes completely.
+  - CLEANUP NEEDED: ToolLogCtx is duplicated in `coding-agent-tools/src/logging.rs` and `pr-comments/src/logging.rs`.
+    When refactoring, move ToolLogCtx to agentic_logging with parameterized server name.
   - Research docs: `thoughts/google_supported_schema/research/agentic_logging_integration_audit.md` and `agentic_logging_extraction_analysis.md`
 
 To plan/design:
@@ -25,6 +27,8 @@ To plan/design:
   - What happens to agentic_logging crate? Becomes thin wrapper over DB writes?
 
 To classify/investigate:
+- Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
+  avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
 - README.md could use a huge refresh. We'll be at the point where we can have all-inclusive instructions for setting up for any repo soon. Would be a lot better than just "Here is a list of tools" if we mentioned how they are used and what they are for and how to do the entire setup.
 - Similar to the last one, a nice QoL would be to re-look at the brand-new thoughts setup experience. How can we make that more streamlined? We should probably enforce/require a primary "thoughts" repo, and have an initial setup command that actually populates it with everything it needs. Currently it initializes the old v1 config and that's just silly. That's not used anywhere anymore.
 - a command for basically "Are you sure you're finished? What did you do or not do?" that can be run at the end of implement_plan. I find myself consistently asking this as a quick check. Using language like "reflect deeply on everything you did, did you cut any corners or make any changes to the plan?" etc. I also tend to need to say "Don't make any edits or anything, I just want to know the answer" to make sure claude doesn't get fix hungry.

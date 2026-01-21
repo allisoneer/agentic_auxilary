@@ -99,16 +99,16 @@ impl AgenticTools {
 
         // pr_comments (3 tools)
         if domain_wanted(PR_COMMENTS_NAMES) {
-            // Try ambient repo detection; fall back to empty repo to allow MCP clients
-            // to pass repo info in requests
+            // TODO(2): Centralize ambient git repo detection + overrides across tool registries
+            // (avoid per-domain fallbacks like this).
             let tool = match pr_comments::PrComments::new() {
                 Ok(t) => t,
                 Err(e) => {
                     warn!(
-                        "pr_comments: ambient repo detection failed ({}), using empty fallback",
+                        "pr_comments: ambient repo detection failed ({}); tools will return a clear error until repo context is available",
                         e
                     );
-                    pr_comments::PrComments::with_repo(String::new(), String::new())
+                    pr_comments::PrComments::disabled(format!("{:#}", e))
                 }
             };
             regs.push(pr_comments::build_registry(Arc::new(tool)));

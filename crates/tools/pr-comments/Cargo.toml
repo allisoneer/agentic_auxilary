@@ -23,7 +23,7 @@ futures = "0.3"
 tokio = { workspace = true }
 
 # GitHub API client
-octocrab = "0.41"
+octocrab = { version = "0.41", features = ["timeout"] }
 gh-config = "0.5.1"
 
 # Git operations
@@ -44,6 +44,8 @@ clap = { workspace = true, features = ["env"] }
 # Logging
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+agentic_logging = { workspace = true }
+thoughts-tool = { workspace = true }
 
 # URL parsing
 url = "2"
@@ -59,5 +61,5 @@ family = "tools"
 
 [package.metadata.repo.integrations]
 mcp = true
-logging = false
+logging = true
 napi = false
