@@ -23,8 +23,6 @@ path = "src/main.rs"
 
 [dependencies]
 thoughts-tool = { workspace = true }
-thoughts-mcp-tools = { workspace = true }
-agentic-tools-mcp = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }

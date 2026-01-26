@@ -5636,7 +5636,6 @@ dependencies = [
 name = "thoughts"
 version = "0.7.0"
 dependencies = [
- "agentic-tools-mcp",
  "anyhow",
  "assert_cmd",
  "chrono",
@@ -5646,7 +5645,6 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
- "thoughts-mcp-tools",
  "thoughts-tool",
  "tokio",
  "tracing",
