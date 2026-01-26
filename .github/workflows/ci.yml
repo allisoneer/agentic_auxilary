@@ -75,13 +75,16 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
+      # TODO(3): Use `just test` instead of calling nextest directly, so profile
+      # selection is driven by the justfile. Requires splitting mcp-test into
+      # its own CI job (it needs Node.js/npx which this job doesn't install).
       - name: Run tests (nextest)
         env:
           SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
           THOUGHTS_INTEGRATION_TESTS: "1"
           RUST_BACKTRACE: "1"
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace --profile ci
 
   audit:
     name: Security Audit (cargo-deny)
@@ -221,4 +224,4 @@ jobs:
           THOUGHTS_INTEGRATION_TESTS: "1"
           THOUGHTS_NETWORK_TESTS: "1"
           RUST_BACKTRACE: "1"
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace --profile ci
