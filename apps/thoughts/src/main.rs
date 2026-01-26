@@ -86,9 +86,6 @@ enum Commands {
         #[command(subcommand)]
         command: WorkCommands,
     },
-
-    /// Run as MCP server over stdio
-    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -236,9 +233,6 @@ enum WorkCommands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Detect MCP mode before initializing tracing
-    let is_mcp = matches!(cli.command, Commands::Mcp);
-
     // Initialize logging
     let log_level = match (cli.quiet, cli.verbose) {
         (true, _) => "error",
@@ -255,19 +249,10 @@ async fn main() -> Result<()> {
         .with_thread_ids(false)
         .with_thread_names(false);
 
-    if is_mcp {
-        // Critical: route logs to stderr in MCP mode to keep stdout clean for JSON-RPC
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt_layer.with_writer(std::io::stderr))
-            .init();
-    } else {
-        // Non-MCP: preserve existing stdout logging
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt_layer)
-            .init();
-    }
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .init();
 
     info!("Starting thoughts v{}", env!("CARGO_PKG_VERSION"));
 
@@ -346,18 +331,5 @@ async fn main() -> Result<()> {
                 execute(which).await
             }
         },
-        Commands::Mcp => {
-            use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
-            use std::sync::Arc;
-
-            let registry = thoughts_mcp_tools::build_registry();
-            let server = RegistryServer::new(Arc::new(registry))
-                .with_info("thoughts", env!("CARGO_PKG_VERSION"))
-                .with_output_mode(OutputMode::Text);
-            let transport = stdio();
-            let service = server.serve(transport).await?;
-            service.waiting().await?;
-            Ok(())
-        }
     }
 }
