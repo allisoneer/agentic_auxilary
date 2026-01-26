@@ -32,6 +32,8 @@ struct Args {
     output: Option<String>,
 
     // Convenience flags for individual tool filtering
+    // TODO(3): Probably don't need these convenience flags. They are kinda archaic for the old
+    // agentic-tools setup. We likely can remove them after ensuring no one else uses them.
     /// Enable cli_ls tool
     #[arg(long)]
     cli_ls: bool,
