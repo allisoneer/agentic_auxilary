@@ -15,6 +15,7 @@
     "build": "napi build --release && tsc -p tsconfig.json",
     "build:debug": "napi build && tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
+    "test": "bun run build:debug && bun test",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
