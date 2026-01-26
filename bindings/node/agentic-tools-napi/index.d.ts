@@ -138,6 +138,18 @@ export interface ReasoningRequestInput {
 }
 
 // =============================================================================
+// N-API Result Types
+// =============================================================================
+
+/** Result from a native tool call, containing both JSON data and human-readable text. */
+export interface ToolCallResult {
+  /** JSON string containing the tool result data. */
+  data: string;
+  /** Human-readable text representation of the result. */
+  text: string;
+}
+
+// =============================================================================
 // Tool Output Types
 // =============================================================================
 
@@ -260,10 +272,10 @@ export function listTools(provider: 'openai' | 'anthropic' | 'mcp'): string;
  *
  * @param name - Name of the tool to call
  * @param argsJson - JSON string containing the tool arguments
- * @returns Promise resolving to JSON string containing the tool result
+ * @returns Promise resolving to a ToolCallResult with data (JSON string) and text
  * @throws Error if registry is not initialized or tool execution fails
  */
-export function callTool(name: string, argsJson: string): Promise<string>;
+export function callTool(name: string, argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Apply schema patches for runtime customization.
@@ -296,57 +308,57 @@ export function getToolNames(): string[];
  * List files and directories.
  *
  * @param argsJson - JSON string with LsInput
- * @returns Promise resolving to JSON string with LsOutput
+ * @returns Promise resolving to a ToolCallResult with LsOutput in data
  */
-export function callLs(argsJson: string): Promise<string>;
+export function callLs(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Spawn a Claude subagent for discovery or analysis.
  *
  * @param argsJson - JSON string with SpawnAgentInput
- * @returns Promise resolving to JSON string with AgentOutput
+ * @returns Promise resolving to a ToolCallResult with AgentOutput in data
  */
-export function callSpawnAgent(argsJson: string): Promise<string>;
+export function callSpawnAgent(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Regex-based code search.
  *
  * @param argsJson - JSON string with SearchGrepInput
- * @returns Promise resolving to JSON string with GrepOutput
+ * @returns Promise resolving to a ToolCallResult with GrepOutput in data
  */
-export function callGrep(argsJson: string): Promise<string>;
+export function callGrep(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Glob-based file matching.
  *
  * @param argsJson - JSON string with SearchGlobInput
- * @returns Promise resolving to JSON string with GlobOutput
+ * @returns Promise resolving to a ToolCallResult with GlobOutput in data
  */
-export function callGlob(argsJson: string): Promise<string>;
+export function callGlob(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Search justfile recipes.
  *
  * @param argsJson - JSON string with JustSearchInput
- * @returns Promise resolving to JSON string with JustSearchOutput
+ * @returns Promise resolving to a ToolCallResult with JustSearchOutput in data
  */
-export function callJustSearch(argsJson: string): Promise<string>;
+export function callJustSearch(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Execute a justfile recipe.
  *
  * @param argsJson - JSON string with JustExecuteInput
- * @returns Promise resolving to JSON string with JustExecuteOutput
+ * @returns Promise resolving to a ToolCallResult with JustExecuteOutput in data
  */
-export function callJustExecute(argsJson: string): Promise<string>;
+export function callJustExecute(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Request assistance from the reasoning model.
  *
  * @param argsJson - JSON string with ReasoningRequestInput
- * @returns Promise resolving to JSON string with reasoning result
+ * @returns Promise resolving to a ToolCallResult with reasoning result in data
  */
-export function callReasoningRequest(argsJson: string): Promise<string>;
+export function callReasoningRequest(argsJson: string): Promise<ToolCallResult>;
 
 // =============================================================================
 // Type-Safe Wrapper Helpers
@@ -392,5 +404,6 @@ export function callJustExecuteTyped(input: JustExecuteInput): Promise<JustExecu
 
 /**
  * Helper to call reasoning request with typed input.
+ * Returns a string because the reasoning tool's output is a JSON string literal.
  */
-export function callReasoningRequestTyped(input: ReasoningRequestInput): Promise<any>;
+export function callReasoningRequestTyped(input: ReasoningRequestInput): Promise<string>;

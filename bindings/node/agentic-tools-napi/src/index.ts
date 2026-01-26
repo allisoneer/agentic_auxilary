@@ -47,14 +47,16 @@ function parseResult<T = any>(raw: string, label: string): T {
   }
 }
 
+type ToolCallResult = { data: string; text: string };
+
 async function callTyped<TOut = any>(
-  fn: (json: string) => Promise<string>,
+  fn: (json: string) => Promise<ToolCallResult>,
   input: unknown,
   label: string
 ): Promise<TOut> {
   const argsJson = stringifyInput(input, label);
-  const raw = await fn(argsJson);
-  return parseResult<TOut>(raw, label);
+  const result = await fn(argsJson);
+  return parseResult<TOut>(result.data, label);
 }
 
 // Typed helper implementations (runtime-typed; definitions are in index.d.ts)
