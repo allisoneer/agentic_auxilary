@@ -2,7 +2,7 @@
 //!
 //! This crate provides a single entry point for building a `ToolRegistry` containing
 //! all available tools from the various domain crates (coding_agent_tools, pr_comments,
-//! linear_tools, gpt5_reasoner, thoughts_tool).
+//! linear_tools, gpt5_reasoner, thoughts_mcp_tools).
 //!
 //! # Example
 //!
@@ -246,7 +246,7 @@ mod tests {
         );
         assert!(
             reg.contains("thoughts_add_reference"),
-            "missing thoughts_add_reference from thoughts_tool"
+            "missing thoughts_add_reference from thoughts_mcp_tools"
         );
     }
 
