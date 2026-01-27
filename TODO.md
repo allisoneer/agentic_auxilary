@@ -1,7 +1,22 @@
-Currently investigating:
+## Currently investigating:
 - (none)
 
-Deferred (pending SQLite migration):
+## Researched / Ready for planning:
+- Web fetch & web search tools + Discord MCP integration. Research completed:
+  - Research doc: `thoughts/google_supported_schema/research/discord_mcp_web_tooling_infrastructure.md`
+  - **Discord MCP** (config only, no code): Add glittercowboy/discord-mcp to opencode.json with dedicated agent. 3 meta-tools dispatch to 128 operations. Requires Python 3.12+, uv, bot token + guild ID.
+  - **Web fetch tool** (new crate: `crates/tools/web-tools/`): Two composable backends + two output modes:
+    - Static backend: `reqwest` + `htmd` for plain HTML (no JS rendering)
+    - Rendered backend: Calls configurable external API (e.g. reader sidecar, crawl4ai) for JS-rendered pages
+    - Raw markdown output (start here) and Haiku-wrapped output (build second, uses anthropic-async)
+    - Content-type early check to short-circuit non-HTML (PDFs, JSON, images)
+    - Strategy/trait design for backend+output composability
+  - **Web search tool** (same crate): Regular MCP tool, just reqwest + API key. Provider TBD (Exa vs Serper — needs focused evaluation). Date injection in tool description (steal from OpenCode pattern).
+  - **Subagent integration** (later): Replace Claude Code built-in WebSearch/WebFetch in `agent/config.rs` enabled_tools_for() Web locations with custom MCP tools.
+  - OpenCode's implementations analyzed for reference (not the approach we want — plain fetch + Turndown, no JS rendering, no Haiku wrapping, Exa MCP with no visible auth).
+  - References added: glittercowboy/discord-mcp, intergalacticalvariable/reader, unclecode/crawl4ai, allisoneer/web-reader, exa-labs/exa-mcp-server, letmutex/htmd (pre-existing)
+
+## Deferred (pending SQLite migration):
 - Token tracking with tiktoken instead of KB for thoughts files. Research completed:
   - tiktoken-rs already in workspace (used by gpt5-reasoner with o200k_base encoding)
   - `write_document()` is trivial: replace `content.len()` with `count_tokens(content)`
@@ -19,14 +34,14 @@ Deferred (pending SQLite migration):
     When refactoring, move ToolLogCtx to agentic_logging with parameterized server name.
   - Research docs: `thoughts/google_supported_schema/research/agentic_logging_integration_audit.md` and `agentic_logging_extraction_analysis.md`
 
-To plan/design:
+## To plan/design:
 - SQLite migration for thoughts. Current file-based structure (thoughts/{branch}/ with research/, plans/, artifacts/, logs/) would become database tables. Key questions:
   - Schema design: documents table, tool_calls table, branches table?
   - Sync strategy without git (SQLite replication? export/import?)
   - Config/storage unification across entire codebase
   - What happens to agentic_logging crate? Becomes thin wrapper over DB writes?
 
-To classify/investigate:
+## To classify/investigate:
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
 - README.md could use a huge refresh. We'll be at the point where we can have all-inclusive instructions for setting up for any repo soon. Would be a lot better than just "Here is a list of tools" if we mentioned how they are used and what they are for and how to do the entire setup.
@@ -45,119 +60,8 @@ tool has good phrasing but pr_comments only partially ported that style. Conside
 a standard output formatter? Or should pagination messaging be part of the MCP response schema itself?
 - Investigate every single clippy allow and see if there is a better approach than manually defining a clippy allow
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
-- I'd like to probably get to the point where I can add a web search/web fetch tool. I'm thinking probably integratino with exa for the
-  web search. And then I need to investigate the best potential html->markdown tool. I really like how extensive jina.ai reader API is.
-  I'm unsure if there are adequate local rust libraries that can do similar things as them, or if we'll want to rely on a provider. The
-  other potential desire here is to look at maybe having something like claude code, where the "Web fetch" is actually a wrapper around
-  a claude haiku call? Where the description for the `WebSearch` tool is like:
-```
-- Fetches content from a specified URL and processes it using an AI model
-- Takes a URL and a prompt as input
-- Fetches the URL content, converts HTML to markdown
-- Processes the content with the prompt using a small, fast model
-- Returns the model's response about the content
-- Use this tool when you need to retrieve and analyze web content
-```
-And it uses haiku with a default prompt to translate by default, or has the optional prompt field for the agent to ask specific
-questions. For both of these tools, we likely want to go and find references for what opencode and claude code both do for these tools.
-Not because we want to copy 1:1, but because we likely want to be inspired by what they do. The output schema of claude code's web fetch
-is:
-```
-{
-type:
-"object"
 
-properties:
-{
-bytes:
-{
-description:
-"Size of the fetched content in bytes"
-
-type:
-"number"
-
-}
-code:
-{
-description:
-"HTTP response code"
-
-type:
-"number"
-
-}
-codeText:
-{
-description:
-"HTTP response code text"
-
-type:
-"string"
-
-}
-result:
-{
-description:
-"Processed result from applying the prompt to the content"
-
-type:
-"string"
-
-}
-durationMs:
-{
-description:
-"Time taken to fetch and process the content"
-
-type:
-"number"
-
-}
-url:
-{
-description:
-"The URL that was fetched"
-
-type:
-"string"
-
-}
-}
-required:
-[
-0:
-"bytes"
-
-1:
-"code"
-
-2:
-"codeText"
-
-3:
-"result"
-
-4:
-"durationMs"
-
-5:
-"url"
-
-]
-$schema:
-"https://json-schema.org/draft/2020-12/schema"
-
-additionalProperties:
-false
-
-}
-```
-And we likely want to be inspired by that. Except we'll probably want "tokens" instead of bytes. And probably some other niceties. We
-can see how we use web fetch/web search currently in the `spawn_agent` tools. We use internal claude code tools for those, and the goal
-will likely be to replace those with our own, and bring them into our whole ecosystem.
-
-Old (probably delete):
+## Old (probably delete):
 - universal tool could use a re-look at how useful the current CLI fucntionality actually is, and how much we have to re-implement with clap for the standard use cases we have.
 - universal tool could potentially use an ability to modify things at runtime. There is potential to create strong dynamic tool params and types and such that we would need to use rmcp directly for currently.
 - Update rust-toolchain to whatever latest stable is and fix all the things that pop up by upgrading to a new stable version - Is this
