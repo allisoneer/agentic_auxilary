@@ -275,8 +275,8 @@ pub enum SortOrder {
 
 /// Footer reminder appended by search tools.
 pub const SEARCH_REMINDER: &str = "REMINDER: You should rarely need to call this repeatedly. If you didn't find \
-what you need, use spawn_agent(type='locator', location='codebase', \
-prompt='describe what you're looking for') instead of issuing more searches.";
+what you need, use ask_agent(agent_type='locator', location='codebase', \
+query='describe what you're looking for') instead of issuing more searches.";
 
 /// Output from search_grep tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

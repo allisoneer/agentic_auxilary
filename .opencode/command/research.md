@@ -26,8 +26,8 @@ $ARGUMENTS
 - If no clear research question was provided, ask for clarification and wait.
 
 **Thoughts and References:**
-1. Call `thoughts_list_active_documents` to see what exists. If relevant artifacts are found, keep them in mind for potential investigation via `tools_spawn_agent` with `location=thoughts` during research—do not read them directly here.
-2. Call `thoughts_list_references` to identify which external references may be useful for this research topic.
+1. Call `tools_thoughts_list_documents` to see what exists. If relevant artifacts are found, keep them in mind for potential investigation via `tools_ask_agent` with `location=thoughts` during research—do not read them directly here.
+2. Call `tools_thoughts_list_references` to identify which external references may be useful for this research topic.
 
 </step>
 
@@ -35,7 +35,7 @@ $ARGUMENTS
 
 ## Decompose and Plan
 
-Break the research question into sub-areas (APIs, data models, configuration, components, patterns). Decide on your `tools_spawn_agent` strategy:
+Break the research question into sub-areas (APIs, data models, configuration, components, patterns). Decide on your `tools_ask_agent` strategy:
 - Locators (`agent_type=locator`): Find where things live
 - Analyzers (`agent_type=analyzer`): 1–3 for distinct subsystems or components
 - Reference analysis (`agent_type=analyzer`, `location=references`): Per selected reference
@@ -66,7 +66,7 @@ Each todo should be actionable and specific enough that you know exactly what to
 
 ## Spawn Parallel Agents
 
-Launch agents concurrently (in parallel) using `tools_spawn_agent`:
+Launch agents concurrently (in parallel) using `tools_ask_agent`:
 
 - Start with a locator to map the landscape.
 - Spawn 1-3 analyzers for distinct subsystems or layers.
@@ -96,7 +96,7 @@ Review everything returned from your agents. Think critically about what you've 
 - Are there conflicting answers from different agents or sources?
 - Do any file:line references contradict each other?
 
-**Consider Using `reasoning_model_request`:**
+**Consider Using `tools_ask_reasoning_model`:**
 When you encounter uncertainty that agents can't resolve, use the reasoning model for a second opinion:
 - Conflicting information from multiple agents
 - Findings that look correct but feel suspicious
@@ -118,7 +118,7 @@ Based on your reflection, update your todo list with any remaining research work
 
 ## Using the Reasoning Model Effectively
 
-When you decide to use `reasoning_model_request`, here's how to get the most value:
+When you decide to use `tools_ask_reasoning_model`, here's how to get the most value:
 
 **Provide Context Well:**
 - Include ALL relevant files, not just the one you're focused on
@@ -182,9 +182,9 @@ Neither category is inherently better—the right choice depends on context. Pre
 
 **Write the Document:**
 
-1. Call `thoughts_get_template` with `template=research` to get the exact structure and tone.
+1. Call `tools_thoughts_get_template` with `template=research` to get the exact structure and tone.
 
-2. Write the document using `thoughts_write_document`:
+2. Write the document using `tools_thoughts_write_document`:
 
 **Parameters:**
 - **doc_type**: "research"
@@ -195,7 +195,7 @@ Neither category is inherently better—the right choice depends on context. Pre
   - Recommendations (2 targeted + 2 comprehensive approaches, each with tradeoffs)
   - Any iteration comments
 
-3. After writing, sync via the Just MCP tools: execute the "thoughts_sync" recipe with `tools_just_execute`. Do not run shell commands directly.
+3. After writing, sync via the Just MCP tools: execute the "thoughts_sync" recipe with `tools_cli_just_execute`. Do not run shell commands directly.
 
 </step>
 
