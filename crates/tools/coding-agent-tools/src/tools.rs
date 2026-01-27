@@ -112,12 +112,12 @@ impl Tool for SpawnAgentTool {
     const DESCRIPTION: &'static str = "Spawn a Claude subagent for discovery or deep analysis. Returns a single text response; no side effects.
 
 Agent types:
-- locator (haiku): Finds WHERE things are. Fast, shallow discovery via grep/glob/ls. Returns file paths grouped by purpose. Cannot read file contents deeply.
+- locator (haiku): Finds WHERE things are. Fast, shallow discovery via cli_grep/cli_glob/cli_ls. Returns file paths grouped by purpose. Cannot read file contents deeply.
 - analyzer (sonnet): Explains HOW things work. Reads files, traces data flow, provides technical analysis. Must cite file:line for all claims.
 
 Locations:
 - codebase: Current repository. Paths are repo-relative.
-- thoughts: Active branch documents (research/plans/artifacts). Uses list_active_documents for discovery.
+- thoughts: Active branch documents (research/plans/artifacts). Uses thoughts_list_documents for discovery.
 - references: Cloned reference repos. Paths start with references/{org}/{repo}/.
 - web: Internet search. Returns URLs with quotes and source attribution.
 
@@ -129,14 +129,14 @@ When to use:
 
 When NOT to use:
 - If you already know the file path, use Read directly.
-- If you need a simple directory listing, use ls.
-- For pattern matching in known locations, use search_grep or search_glob.
+- If you need a simple directory listing, use cli_ls.
+- For pattern matching in known locations, use cli_grep or cli_glob.
 - This tool cannot write files or make changes.
 
 Usage notes:
 - Provide clear, specific queries. The subagent is stateless and receives no prior context.
 - Locator returns locations only; use analyzer or Read for content.
-- Multiple spawn_agent calls can run in parallel for independent queries.";
+- Multiple ask_agent calls can run in parallel for independent queries.";
 
     fn call(
         &self,

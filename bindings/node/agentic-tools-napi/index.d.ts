@@ -36,7 +36,7 @@ export interface LsInput {
   hidden?: boolean;
 }
 
-/** Input for spawn_agent tool */
+/** Input for ask_agent tool */
 export interface SpawnAgentInput {
   /** Agent type: 'locator' (fast discovery) or 'analyzer' (deep analysis) */
   agent_type?: 'locator' | 'analyzer';
@@ -167,7 +167,7 @@ export interface LsOutput {
   warnings: string[];
 }
 
-/** Output from spawn_agent tool */
+/** Output from ask_agent tool */
 export interface AgentOutput {
   text: string;
 }
