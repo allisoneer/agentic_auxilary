@@ -271,8 +271,8 @@ fn golden_schema_with_range_constraint() {
         "test",
         vec!["properties".to_string(), "count".to_string()],
         FieldConstraint::Range {
-            minimum: Some(serde_json::json!(0)),
-            maximum: Some(serde_json::json!(100)),
+            minimum: Some(0.0),
+            maximum: Some(100.0),
         },
     );
 
