@@ -6,17 +6,17 @@ Guidance for Claude Code when working with this repository.
 
 <!-- BEGIN:xtask:autogen crate-index -->
 ### agentic-tools
-- `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
 - `agentic-tools-core` (lib) - `crates/agentic-tools/core/`
 - `agentic-mcp` (app) - `apps/agentic-mcp/`
+- `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
 - `agentic-tools-registry` (lib) - `crates/agentic-tools/registry/`
 - `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 
 ### infra
-- `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
+- `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
 ### legacy
 - `universal-tool-core` (legacy) - `crates/legacy/universal-tool-core/`
@@ -38,10 +38,10 @@ Guidance for Claude Code when working with this repository.
 
 ### tools
 - `thoughts` (app) - `apps/thoughts/`
-- `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
+- `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 <!-- END:xtask:autogen -->
 
 
