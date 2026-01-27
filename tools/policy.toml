@@ -47,8 +47,8 @@ any_of = ["napi", "napi-derive"]
 message = "NAPI integration requires napi and/or napi-derive dependencies."
 
 [paths]
-# Path constraints enforced after Plan 5 restructure
-enforce = true
+# Path constraint enforcement (enforcement logic not yet implemented)
+enforce = false
 allow = [
   # Apps
   "apps/*",
