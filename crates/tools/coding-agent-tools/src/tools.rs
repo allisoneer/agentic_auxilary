@@ -77,12 +77,12 @@ impl Tool for LsTool {
 }
 
 // ============================================================================
-// SpawnAgent Tool
+// AskAgent Tool
 // ============================================================================
 
-/// Input for the spawn_agent tool.
+/// Input for the ask_agent tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub struct SpawnAgentInput {
+pub struct AskAgentInput {
     /// Agent type: 'locator' (fast discovery, haiku) or 'analyzer' (deep analysis, sonnet). Default: locator
     #[serde(default)]
     pub agent_type: Option<AgentType>,
@@ -95,18 +95,18 @@ pub struct SpawnAgentInput {
 
 /// Tool for spawning Claude subagents.
 #[derive(Clone)]
-pub struct SpawnAgentTool {
+pub struct AskAgentTool {
     tools: Arc<CodingAgentTools>,
 }
 
-impl SpawnAgentTool {
+impl AskAgentTool {
     pub fn new(tools: Arc<CodingAgentTools>) -> Self {
         Self { tools }
     }
 }
 
-impl Tool for SpawnAgentTool {
-    type Input = SpawnAgentInput;
+impl Tool for AskAgentTool {
+    type Input = AskAgentInput;
     type Output = AgentOutput;
     const NAME: &'static str = "ask_agent";
     const DESCRIPTION: &'static str = "Spawn a Claude subagent for discovery or deep analysis. Returns a single text response; no side effects.
@@ -146,7 +146,7 @@ Usage notes:
         let tools = self.tools.clone();
         Box::pin(async move {
             tools
-                .spawn_agent(input.agent_type, input.location, input.query)
+                .ask_agent(input.agent_type, input.location, input.query)
                 .await
         })
     }
@@ -422,7 +422,7 @@ impl Tool for JustExecuteTool {
 pub fn build_registry(tools: Arc<CodingAgentTools>) -> ToolRegistry {
     ToolRegistry::builder()
         .register::<LsTool, ()>(LsTool::new(tools.clone()))
-        .register::<SpawnAgentTool, ()>(SpawnAgentTool::new(tools.clone()))
+        .register::<AskAgentTool, ()>(AskAgentTool::new(tools.clone()))
         .register::<SearchGrepTool, ()>(SearchGrepTool::new(tools.clone()))
         .register::<SearchGlobTool, ()>(SearchGlobTool::new(tools.clone()))
         .register::<JustSearchTool, ()>(JustSearchTool::new(tools.clone()))

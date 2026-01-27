@@ -53,7 +53,7 @@ pub struct ToolCallRecord {
     pub call_id: String,
     /// Server name (e.g., "gpt5_reasoner", "coding_agent_tools", "thoughts_tool")
     pub server: String,
-    /// Tool name (e.g., "plan", "reasoning", "spawn_agent", "ls")
+    /// Tool name (e.g., "plan", "reasoning", "ask_agent", "ls")
     pub tool: String,
     /// When the call started
     pub started_at: DateTime<Utc>,

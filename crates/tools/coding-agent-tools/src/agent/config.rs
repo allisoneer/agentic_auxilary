@@ -104,7 +104,7 @@ fn agentic_mcp_allowlist_from(enabled: &[String]) -> Vec<String> {
 }
 
 // NOTE: Binary existence checks (bin_in_path, require_binaries_for_location) have been removed.
-// MCP server validation now happens via claudecode::mcp::validate in spawn_agent, which provides
+// MCP server validation now happens via claudecode::mcp::validate in ask_agent, which provides
 // better error messages with stderr capture and actual handshake verification.
 
 /// Build MCP server configuration for a given location, with tool allowlist.
