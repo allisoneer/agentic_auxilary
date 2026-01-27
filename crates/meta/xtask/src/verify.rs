@@ -157,11 +157,13 @@ fn check_integrations(metadata: &Metadata, policy: &Policy) -> Result<()> {
 /// Check path constraints (when enforced).
 fn check_paths(policy: &Policy) -> Result<()> {
     if !policy.paths.enforce {
-        eprintln!("[verify] NOTE: Path constraints are not enforced (planned for Plan 5).");
+        // TODO(2): Implement path enforcement logic using policy.paths.allow patterns
+        // (planned in Plan 5, deferred). Flip enforce = true in policy.toml when ready.
+        eprintln!("[verify] NOTE: Path constraints are not enforced.");
         return Ok(());
     }
 
-    // Path enforcement will be implemented in Plan 5
+    // TODO(2): Validate workspace crate paths against policy.paths.allow glob patterns
     Ok(())
 }
 

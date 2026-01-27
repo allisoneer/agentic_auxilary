@@ -49,9 +49,13 @@ pub struct IntegrationRule {
 
 /// Path constraint configuration.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Paths {
     /// Whether to enforce path constraints.
     pub enforce: bool,
+    /// Allowed path patterns (glob) for workspace crates.
+    #[serde(default)]
+    pub allow: Vec<String>,
     /// Current allowed paths.
     #[serde(default)]
     pub current: Option<PathRules>,
@@ -130,6 +134,7 @@ message = "MCP required"
 
 [paths]
 enforce = false
+allow = ["apps/*", "crates/*"]
 
 [release_plz]
 git_tag_format = "{{ name }}-v{{ version }}"
@@ -138,5 +143,7 @@ publish_default = true
         let policy: Policy = toml::from_str(toml).unwrap();
         assert!(policy.is_valid_role("app"));
         assert!(!policy.is_valid_role("invalid"));
+        assert!(!policy.paths.enforce);
+        assert_eq!(policy.paths.allow, vec!["apps/*", "crates/*"]);
     }
 }
