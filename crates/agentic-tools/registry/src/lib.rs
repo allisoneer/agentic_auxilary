@@ -287,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_allowlist_returns_empty_registry() {
+    fn empty_allowlist_enables_all_tools() {
         let config = AgenticToolsConfig {
             allowlist: Some(HashSet::new()),
             extras: serde_json::json!({}),
@@ -295,9 +295,7 @@ mod tests {
 
         let reg = AgenticTools::new(config);
 
-        // Empty allowlist should result in all tools (empty = no filtering)
-        // This matches the behavior in normalize_allowlist where empty sets
-        // after filtering are effectively None
+        // Empty allowlist normalizes to None, enabling all tools
         assert!(reg.len() >= 19);
     }
 
