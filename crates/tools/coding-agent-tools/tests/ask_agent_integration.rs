@@ -1,4 +1,4 @@
-//! Integration tests for spawn_agent tool.
+//! Integration tests for ask_agent tool.
 //! These tests are ignored by default as they require the claude CLI to be installed.
 //! Run with: cargo test -p coding_agent_tools -- --ignored
 
@@ -10,7 +10,7 @@ use coding_agent_tools::types::{AgentLocation, AgentType};
 async fn locator_codebase_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
-        .spawn_agent(
+        .ask_agent(
             Some(AgentType::Locator),
             Some(AgentLocation::Codebase),
             "Find Cargo.toml files and related config".into(),
@@ -22,7 +22,7 @@ async fn locator_codebase_basic() {
             assert!(!output.text.trim().is_empty());
         }
         Err(e) => {
-            panic!("spawn_agent failed: {e}");
+            panic!("ask_agent failed: {e}");
         }
     }
 }
@@ -32,7 +32,7 @@ async fn locator_codebase_basic() {
 async fn analyzer_web_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
-        .spawn_agent(
+        .ask_agent(
             Some(AgentType::Analyzer),
             Some(AgentLocation::Web),
             "Summarize the core concepts of Rust error handling with sources".into(),
@@ -44,7 +44,7 @@ async fn analyzer_web_basic() {
             assert!(!output.text.trim().is_empty());
         }
         Err(e) => {
-            panic!("spawn_agent failed: {e}");
+            panic!("ask_agent failed: {e}");
         }
     }
 }
@@ -54,7 +54,7 @@ async fn analyzer_web_basic() {
 async fn locator_web_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
-        .spawn_agent(
+        .ask_agent(
             Some(AgentType::Locator),
             Some(AgentLocation::Web),
             "Find the official Rust documentation for the Result type".into(),
@@ -66,7 +66,7 @@ async fn locator_web_basic() {
             assert!(!output.text.trim().is_empty());
         }
         Err(e) => {
-            panic!("spawn_agent failed: {e}");
+            panic!("ask_agent failed: {e}");
         }
     }
 }
@@ -76,7 +76,7 @@ async fn locator_web_basic() {
 async fn analyzer_codebase_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
-        .spawn_agent(
+        .ask_agent(
             Some(AgentType::Analyzer),
             Some(AgentLocation::Codebase),
             "Analyze how the ls tool handles pagination in this codebase".into(),
@@ -88,17 +88,17 @@ async fn analyzer_codebase_basic() {
             assert!(!output.text.trim().is_empty());
         }
         Err(e) => {
-            panic!("spawn_agent failed: {e}");
+            panic!("ask_agent failed: {e}");
         }
     }
 }
 
 #[tokio::test]
 #[ignore]
-async fn spawn_agent_empty_query_fails() {
+async fn ask_agent_empty_query_fails() {
     let tools = CodingAgentTools::new();
     let out = tools
-        .spawn_agent(
+        .ask_agent(
             Some(AgentType::Locator),
             Some(AgentLocation::Codebase),
             "   ".into(), // empty/whitespace only
@@ -112,11 +112,11 @@ async fn spawn_agent_empty_query_fails() {
 
 #[tokio::test]
 #[ignore]
-async fn spawn_agent_defaults_to_locator_codebase() {
+async fn ask_agent_defaults_to_locator_codebase() {
     let tools = CodingAgentTools::new();
     // Test that defaults work (locator + codebase)
     let out = tools
-        .spawn_agent(None, None, "Find test files in this project".into())
+        .ask_agent(None, None, "Find test files in this project".into())
         .await;
 
     match out {
@@ -124,7 +124,7 @@ async fn spawn_agent_defaults_to_locator_codebase() {
             assert!(!output.text.trim().is_empty());
         }
         Err(e) => {
-            panic!("spawn_agent with defaults failed: {e}");
+            panic!("ask_agent with defaults failed: {e}");
         }
     }
 }

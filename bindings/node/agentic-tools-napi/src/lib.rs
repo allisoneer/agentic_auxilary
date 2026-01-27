@@ -16,7 +16,7 @@
 //! - `callLs(args)`: List files and directories
 //! - `callGrep(args)`: Regex-based search
 //! - `callGlob(args)`: Glob-based file matching
-//! - `callSpawnAgent(args)`: Spawn Claude subagent
+//! - `callAskAgent(args)`: Spawn Claude subagent
 //! - `callJustSearch(args)`: Search justfile recipes
 //! - `callJustExecute(args)`: Execute justfile recipe
 //! - `callReasoningRequest(args)`: GPT-5 reasoning model request
@@ -356,7 +356,7 @@ pub async fn call_ls(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_ls".to_string(), args_json).await
 }
 
-/// Spawn a Claude subagent (typed wrapper).
+/// Ask a Claude subagent (typed wrapper).
 ///
 /// # Arguments
 ///
@@ -366,7 +366,7 @@ pub async fn call_ls(args_json: String) -> Result<ToolCallResult> {
 ///
 /// `ToolCallResult` with `text` and `data` (JSON string for AgentOutput)
 #[napi]
-pub async fn call_spawn_agent(args_json: String) -> Result<ToolCallResult> {
+pub async fn call_ask_agent(args_json: String) -> Result<ToolCallResult> {
     call_tool("ask_agent".to_string(), args_json).await
 }
 

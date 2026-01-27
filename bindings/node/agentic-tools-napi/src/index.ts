@@ -15,7 +15,7 @@ export const getToolNames = native.getToolNames;
 
 // JSON-string per-tool wrappers (re-exported intact)
 export const callLs = native.callLs;
-export const callSpawnAgent = native.callSpawnAgent;
+export const callAskAgent = native.callAskAgent;
 export const callGrep = native.callGrep;
 export const callGlob = native.callGlob;
 export const callJustSearch = native.callJustSearch;
@@ -64,8 +64,8 @@ export async function callLsTyped(input: unknown): Promise<any> {
   return callTyped(native.callLs, input, 'callLsTyped');
 }
 
-export async function callSpawnAgentTyped(input: unknown): Promise<any> {
-  return callTyped(native.callSpawnAgent, input, 'callSpawnAgentTyped');
+export async function callAskAgentTyped(input: unknown): Promise<any> {
+  return callTyped(native.callAskAgent, input, 'callAskAgentTyped');
 }
 
 export async function callGrepTyped(input: unknown): Promise<any> {

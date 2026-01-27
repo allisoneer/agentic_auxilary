@@ -37,7 +37,7 @@ export interface LsInput {
 }
 
 /** Input for ask_agent tool */
-export interface SpawnAgentInput {
+export interface AskAgentInput {
   /** Agent type: 'locator' (fast discovery) or 'analyzer' (deep analysis) */
   agent_type?: 'locator' | 'analyzer';
   /** Location: 'codebase', 'thoughts', 'references', or 'web' */
@@ -315,10 +315,10 @@ export function callLs(argsJson: string): Promise<ToolCallResult>;
 /**
  * Spawn a Claude subagent for discovery or analysis.
  *
- * @param argsJson - JSON string with SpawnAgentInput
+ * @param argsJson - JSON string with AskAgentInput
  * @returns Promise resolving to a ToolCallResult with AgentOutput in data
  */
-export function callSpawnAgent(argsJson: string): Promise<ToolCallResult>;
+export function callAskAgent(argsJson: string): Promise<ToolCallResult>;
 
 /**
  * Regex-based code search.
@@ -378,9 +378,9 @@ export function callReasoningRequest(argsJson: string): Promise<ToolCallResult>;
 export function callLsTyped(input: LsInput): Promise<LsOutput>;
 
 /**
- * Helper to call spawn_agent with typed input and output.
+ * Helper to call ask_agent with typed input and output.
  */
-export function callSpawnAgentTyped(input: SpawnAgentInput): Promise<AgentOutput>;
+export function callAskAgentTyped(input: AskAgentInput): Promise<AgentOutput>;
 
 /**
  * Helper to call search_grep with typed input and output.

@@ -28,7 +28,7 @@ pub enum AgentLocation {
     Web,
 }
 
-/// Output from spawn_agent tool - plain text response from the subagent.
+/// Output from ask_agent tool - plain text response from the subagent.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AgentOutput {
     pub text: String,

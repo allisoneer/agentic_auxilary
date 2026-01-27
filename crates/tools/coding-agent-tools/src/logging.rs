@@ -151,7 +151,7 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn test_spawn_agent_request_json_shape() {
+    fn test_ask_agent_request_json_shape() {
         let req = serde_json::json!({
             "agent_type": "locator",
             "location": "codebase",
@@ -348,7 +348,7 @@ mod tests {
             response_file: None,
             success: true,
             error: None,
-            model: None, // coding_agent_tools doesn't use models (except spawn_agent)
+            model: None, // coding_agent_tools doesn't use models (except ask_agent)
             token_usage: None,
             summary: Some(serde_json::json!({"entries": 10})),
         };

@@ -225,7 +225,7 @@ impl CodingAgentTools {
     }
 
     /// Spawn an opinionated Claude subagent (locator | analyzer) in a specific location.
-    pub async fn spawn_agent(
+    pub async fn ask_agent(
         &self,
         agent_type: Option<types::AgentType>,
         location: Option<types::AgentLocation>,
@@ -282,7 +282,7 @@ impl CodingAgentTools {
                 details.push_str(&format!("  {}: {}\n", name, err));
             }
             let error_msg = format!(
-                "spawn_agent unavailable: MCP config validation failed.\n{}",
+                "ask_agent unavailable: MCP config validation failed.\n{}",
                 details
             );
             log_ctx.finish(
@@ -761,7 +761,7 @@ impl CodingAgentTools {
 }
 
 #[cfg(test)]
-mod spawn_agent_filter_tests {
+mod ask_agent_filter_tests {
     use super::*;
     use claudecode::types::Result as ClaudeResult;
 
