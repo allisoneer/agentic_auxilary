@@ -2,7 +2,7 @@
 //!
 //! Validates metadata, policy rules, and generated file freshness.
 
-use crate::policy::Policy;
+use crate::policy::{IntegrationRule, Policy};
 use crate::sync;
 use anyhow::{Context, Result, bail};
 use cargo_metadata::{Metadata, MetadataCommand, Package};
@@ -23,6 +23,46 @@ fn get_integration(pkg: &Package, key: &str) -> bool {
         .and_then(|i| i.get(key))
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+/// Validate an integration's dependency rule for a package.
+///
+/// This helper is intentionally dual-purpose:
+/// - It *guards* on the integration being enabled in `package.metadata.repo.integrations.<key>`
+///   (and on a policy rule existing), and
+/// - It validates both `any_of` and `all_of` dependency constraints when enabled.
+///
+/// Returns `Some(error_message)` on failure; otherwise `None` (disabled, no rule, or satisfied).
+fn validate_integration(
+    pkg: &Package,
+    key: &str,
+    label: &str,
+    rule: Option<&IntegrationRule>,
+) -> Option<String> {
+    if !get_integration(pkg, key) {
+        return None;
+    }
+    let rule = rule?;
+
+    let has_any = if rule.any_of.is_empty() {
+        true
+    } else {
+        rule.any_of.iter().any(|n| has_dep(pkg, n))
+    };
+    let has_all = rule.all_of.iter().all(|n| has_dep(pkg, n));
+
+    if !has_any || !has_all {
+        Some(format!(
+            "{}: {} integration enabled but missing required dependencies.\n  {}",
+            pkg.name,
+            label,
+            rule.message
+                .as_deref()
+                .unwrap_or("Check policy.toml for requirements.")
+        ))
+    } else {
+        None
+    }
 }
 
 /// Validate metadata presence and enum values.
@@ -89,61 +129,26 @@ fn check_integrations(metadata: &Metadata, policy: &Policy) -> Result<()> {
         }
 
         // Check MCP integration
-        if get_integration(pkg, "mcp")
-            && let Some(rule) = &policy.integrations.mcp
+        if let Some(err) = validate_integration(pkg, "mcp", "MCP", policy.integrations.mcp.as_ref())
         {
-            let has_any = if rule.any_of.is_empty() {
-                true
-            } else {
-                rule.any_of.iter().any(|n| has_dep(pkg, n))
-            };
-            let has_all = rule.all_of.iter().all(|n| has_dep(pkg, n));
-
-            if !has_any || !has_all {
-                errors.push(format!(
-                    "{}: MCP integration enabled but missing required dependencies.\n  {}",
-                    pkg.name,
-                    rule.message
-                        .as_deref()
-                        .unwrap_or("Check policy.toml for requirements.")
-                ));
-            }
+            errors.push(err);
         }
 
         // Check logging integration
-        if get_integration(pkg, "logging")
-            && let Some(rule) = &policy.integrations.logging
-        {
-            let has_all = rule.all_of.iter().all(|n| has_dep(pkg, n));
-            if !has_all {
-                errors.push(format!(
-                    "{}: Logging integration enabled but missing required dependencies.\n  {}",
-                    pkg.name,
-                    rule.message
-                        .as_deref()
-                        .unwrap_or("Check policy.toml for requirements.")
-                ));
-            }
+        if let Some(err) = validate_integration(
+            pkg,
+            "logging",
+            "Logging",
+            policy.integrations.logging.as_ref(),
+        ) {
+            errors.push(err);
         }
 
         // Check NAPI integration
-        if get_integration(pkg, "napi")
-            && let Some(rule) = &policy.integrations.napi
+        if let Some(err) =
+            validate_integration(pkg, "napi", "NAPI", policy.integrations.napi.as_ref())
         {
-            let has_any = if rule.any_of.is_empty() {
-                true
-            } else {
-                rule.any_of.iter().any(|n| has_dep(pkg, n))
-            };
-            if !has_any {
-                errors.push(format!(
-                    "{}: NAPI integration enabled but missing required dependencies.\n  {}",
-                    pkg.name,
-                    rule.message
-                        .as_deref()
-                        .unwrap_or("Check policy.toml for requirements.")
-                ));
-            }
+            errors.push(err);
         }
     }
 
