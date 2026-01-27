@@ -59,10 +59,10 @@ git_tag_enable = true
 release = true
 
 [[package]]
-name = "agentic-tools-mcp"
-changelog_path = "crates/agentic-tools/mcp/CHANGELOG.md"
-git_tag_name = "agentic-tools-mcp-v{{ version }}"
-git_tag_enable = false
+name = "thoughts-tool"
+changelog_path = "crates/infra/thoughts-core/CHANGELOG.md"
+git_tag_name = "thoughts-tool-v{{ version }}"
+git_tag_enable = true
 release = true
 
 [[package]]
@@ -73,23 +73,9 @@ git_tag_enable = false
 release = true
 
 [[package]]
-name = "thoughts-mcp-tools"
-changelog_path = "crates/tools/thoughts-mcp-tools/CHANGELOG.md"
-git_tag_name = "thoughts-mcp-tools-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
 name = "agentic_logging"
 changelog_path = "crates/infra/agentic-logging/CHANGELOG.md"
 git_tag_name = "agentic_logging-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "thoughts-tool"
-changelog_path = "crates/infra/thoughts-core/CHANGELOG.md"
-git_tag_name = "thoughts-tool-v{{ version }}"
 git_tag_enable = true
 release = true
 
@@ -98,6 +84,13 @@ name = "agentic-mcp"
 changelog_path = "apps/agentic-mcp/CHANGELOG.md"
 git_tag_name = "agentic-mcp-v{{ version }}"
 git_tag_enable = true
+release = true
+
+[[package]]
+name = "agentic-tools-mcp"
+changelog_path = "crates/agentic-tools/mcp/CHANGELOG.md"
+git_tag_name = "agentic-tools-mcp-v{{ version }}"
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -160,6 +153,13 @@ release = true
 name = "pr_comments"
 changelog_path = "crates/tools/pr-comments/CHANGELOG.md"
 git_tag_name = "pr_comments-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "thoughts-mcp-tools"
+changelog_path = "crates/tools/thoughts-mcp-tools/CHANGELOG.md"
+git_tag_name = "thoughts-mcp-tools-v{{ version }}"
 git_tag_enable = true
 release = true
 
