@@ -124,7 +124,11 @@ impl SchemaEngine {
             transform.apply(tool, &mut v);
         }
 
-        Schema::try_from(v).unwrap_or(schema)
+        // try_from only rejects non-object/non-bool JSON values.  Since we start
+        // from a valid Schema (always an object) and built-in transforms only mutate
+        // sub-nodes, failure here means a custom SchemaTransform replaced the root
+        // type — a programming error that must surface immediately.
+        Schema::try_from(v).expect("schema transform must produce a valid schema")
     }
 
     fn apply_constraint(root: &mut Json, path: &[String], constraint: &FieldConstraint) {
