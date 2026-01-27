@@ -33,6 +33,10 @@ pub trait SchemaTransform: Send + Sync {
 ///
 /// Schemars derive generates base schemas at compile time.
 /// SchemaEngine applies transforms at runtime for provider flexibility.
+///
+/// # Clone behavior
+/// When cloned, `custom_transforms` are **not** carried over (they are not `Clone`).
+/// Only `per_tool` constraints and `global_strict` settings are cloned.
 #[derive(Default)]
 pub struct SchemaEngine {
     per_tool: HashMap<String, Vec<(Vec<String>, FieldConstraint)>>,
