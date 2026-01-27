@@ -283,8 +283,8 @@ pub fn set_schema_patches(patches_json: String) -> Result<()> {
                 }
 
                 // Handle range constraints
-                let minimum = field_patch.get("minimum").and_then(|v| v.as_f64());
-                let maximum = field_patch.get("maximum").and_then(|v| v.as_f64());
+                let minimum = field_patch.get("minimum").cloned();
+                let maximum = field_patch.get("maximum").cloned();
                 if minimum.is_some() || maximum.is_some() {
                     engine.constrain_field(
                         tool_name,

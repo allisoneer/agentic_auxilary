@@ -12,8 +12,8 @@ pub enum FieldConstraint {
 
     /// Apply numeric range constraints.
     Range {
-        minimum: Option<f64>,
-        maximum: Option<f64>,
+        minimum: Option<Json>,
+        maximum: Option<Json>,
     },
 
     /// Apply string pattern constraint.
@@ -144,10 +144,10 @@ impl SchemaEngine {
             }
             FieldConstraint::Range { minimum, maximum } => {
                 if let Some(m) = minimum {
-                    obj.insert("minimum".into(), Json::from(*m));
+                    obj.insert("minimum".into(), m.clone());
                 }
                 if let Some(m) = maximum {
-                    obj.insert("maximum".into(), Json::from(*m));
+                    obj.insert("maximum".into(), m.clone());
                 }
             }
             FieldConstraint::Pattern(p) => {
@@ -364,8 +364,8 @@ mod tests {
             "test",
             vec!["properties".into(), "count".into()],
             FieldConstraint::Range {
-                minimum: Some(0.0),
-                maximum: Some(100.0),
+                minimum: Some(Json::Number(0.into())),
+                maximum: Some(Json::Number(100.into())),
             },
         );
 
