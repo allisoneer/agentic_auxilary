@@ -375,7 +375,7 @@ export function callReasoningRequest(argsJson: string): Promise<ToolCallResult>;
  * console.log(result.entries);
  * ```
  */
-export function callLsTyped(input: LsInput): Promise<LsOutput>;
+export function callLsTyped(input?: LsInput): Promise<LsOutput>;
 
 /**
  * Helper to call ask_agent with typed input and output.
@@ -395,7 +395,7 @@ export function callGlobTyped(input: SearchGlobInput): Promise<GlobOutput>;
 /**
  * Helper to call just_search with typed input and output.
  */
-export function callJustSearchTyped(input: JustSearchInput): Promise<JustSearchOutput>;
+export function callJustSearchTyped(input?: JustSearchInput): Promise<JustSearchOutput>;
 
 /**
  * Helper to call just_execute with typed input and output.
