@@ -2,7 +2,7 @@
 
 use darling::FromMeta;
 use darling::ast::NestedMeta;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{FnArg, ItemFn, ReturnType, Type, parse2};
 
@@ -45,35 +45,83 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
     let struct_name = to_pascal_case(&fn_ident.to_string());
     let tool_struct = format_ident!("{}Tool", struct_name);
 
-    // Extract input type from first parameter
-    let input_type: Type = func
-        .sig
-        .inputs
+    // Validate parameters
+    let inputs = &func.sig.inputs;
+
+    // Reject receivers
+    if inputs.iter().any(|arg| matches!(arg, FnArg::Receiver(_))) {
+        return Err(syn::Error::new_spanned(
+            inputs,
+            "#[tool] must be applied to a free function, not a method with a receiver (`self`). \
+             Pass state via the input struct instead.",
+        ));
+    }
+
+    // Collect typed parameters
+    let typed_params: Vec<&syn::PatType> = inputs
         .iter()
-        .filter_map(|arg| {
-            if let FnArg::Typed(pat_type) = arg {
-                Some((*pat_type.ty).clone())
-            } else {
-                None
-            }
+        .filter_map(|arg| match arg {
+            FnArg::Typed(pat_type) => Some(pat_type),
+            _ => None,
         })
-        .next()
-        .ok_or_else(|| {
-            syn::Error::new(
-                Span::call_site(),
-                "tool function must have an input parameter",
-            )
-        })?;
+        .collect();
+
+    // Validate arity and ctx type
+    let (input_type, forwards_ctx) = match typed_params.as_slice() {
+        [] => {
+            return Err(syn::Error::new_spanned(
+                inputs,
+                "#[tool] functions must take (input: T) or (input: T, ctx: &ToolContext). \
+                 If you need multiple inputs, wrap them in a single input struct.",
+            ));
+        }
+        [input] => ((*input.ty).clone(), false),
+        [input, ctx] => {
+            if !is_tool_context_ref(&ctx.ty) {
+                return Err(syn::Error::new_spanned(
+                    &ctx.ty,
+                    "second parameter of a #[tool] function must be `ctx: &ToolContext`. \
+                     Other extra parameters are not supported; put additional fields \
+                     into the input type instead.",
+                ));
+            }
+            ((*input.ty).clone(), true)
+        }
+        _ => {
+            return Err(syn::Error::new_spanned(
+                inputs,
+                "#[tool] functions must take (input: T) or (input: T, ctx: &ToolContext). \
+                 If you need multiple inputs, wrap them in a single input struct.",
+            ));
+        }
+    };
 
     // Extract output type from return type
     // Assume Result<Output, ToolError> and extract Output
     let output_type: Type = match &func.sig.output {
         ReturnType::Type(_, ty) => extract_result_ok_type(ty).unwrap_or_else(|| (**ty).clone()),
         ReturnType::Default => {
-            return Err(syn::Error::new(
-                Span::call_site(),
+            return Err(syn::Error::new_spanned(
+                &func.sig,
                 "tool function must have a return type",
             ));
+        }
+    };
+
+    let ctx_param = if forwards_ctx {
+        quote!(ctx: &agentic_tools_core::ToolContext)
+    } else {
+        quote!(_ctx: &agentic_tools_core::ToolContext)
+    };
+
+    let call_body = if forwards_ctx {
+        quote! {
+            let ctx = ctx.clone();
+            Box::pin(async move { #fn_ident(input, &ctx).await })
+        }
+    } else {
+        quote! {
+            Box::pin(#fn_ident(input))
         }
     };
 
@@ -93,10 +141,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
             fn call(
                 &self,
                 input: Self::Input,
-                _ctx: &agentic_tools_core::ToolContext,
+                #ctx_param,
             ) -> agentic_tools_core::BoxFuture<'static, Result<Self::Output, agentic_tools_core::ToolError>>
             {
-                Box::pin(#fn_ident(input))
+                #call_body
             }
         }
     };
@@ -130,6 +178,24 @@ fn extract_result_ok_type(ty: &Type) -> Option<Type> {
         return Some(ok_type.clone());
     }
     None
+}
+
+/// Check whether a type is `&ToolContext` (immutable reference, last segment ident match).
+fn is_tool_context_ref(ty: &Type) -> bool {
+    let Type::Reference(ty_ref) = ty else {
+        return false;
+    };
+    if ty_ref.mutability.is_some() {
+        return false;
+    }
+    let Type::Path(type_path) = ty_ref.elem.as_ref() else {
+        return false;
+    };
+    type_path
+        .path
+        .segments
+        .last()
+        .is_some_and(|seg| seg.ident == "ToolContext")
 }
 
 #[cfg(test)]
@@ -175,5 +241,114 @@ mod tests {
             "darling should parse commas within quoted description: {:?}",
             res.unwrap_err()
         );
+    }
+
+    #[test]
+    fn test_expand_rejects_receiver() {
+        let item = quote! {
+            async fn greet(&self, input: String) -> Result<String, agentic_tools_core::ToolError> {
+                Ok(input)
+            }
+        };
+        let res = expand(quote!(), item);
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("self"),
+            "Expected error about receiver, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_expand_rejects_zero_params() {
+        let item = quote! {
+            async fn greet() -> Result<String, agentic_tools_core::ToolError> {
+                Ok("hi".to_string())
+            }
+        };
+        let res = expand(quote!(), item);
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("(input: T)"),
+            "Expected guidance about parameters, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_expand_rejects_three_params() {
+        let item = quote! {
+            async fn greet(
+                input: String,
+                ctx: &agentic_tools_core::ToolContext,
+                extra: u8,
+            ) -> Result<String, agentic_tools_core::ToolError> {
+                let _ = (ctx, extra);
+                Ok(input)
+            }
+        };
+        let res = expand(quote!(), item);
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("(input: T)"),
+            "Expected guidance about parameters, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_expand_rejects_wrong_second_param_type() {
+        let item = quote! {
+            async fn greet(input: String, extra: u32) -> Result<String, agentic_tools_core::ToolError> {
+                let _ = extra;
+                Ok(input)
+            }
+        };
+        let res = expand(quote!(), item);
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("ToolContext"),
+            "Expected error about ToolContext, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_expand_rejects_owned_toolcontext() {
+        let item = quote! {
+            async fn greet(
+                input: String,
+                ctx: agentic_tools_core::ToolContext,
+            ) -> Result<String, agentic_tools_core::ToolError> {
+                let _ = ctx;
+                Ok(input)
+            }
+        };
+        let res = expand(quote!(), item);
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("ToolContext"),
+            "Expected error about ToolContext ref, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_expand_accepts_two_params_and_forwards_ctx() {
+        let item = quote! {
+            async fn greet(
+                input: String,
+                ctx: &agentic_tools_core::ToolContext,
+            ) -> Result<String, agentic_tools_core::ToolError> {
+                let _ = ctx;
+                Ok(input)
+            }
+        };
+        let expanded = expand(quote!(), item).expect("expected expansion to succeed");
+        let s: String = expanded.to_string().split_whitespace().collect();
+
+        // Verify clone-and-forward pattern in generated code
+        assert!(s.contains("ctx.clone()"), "expected ctx.clone() in: {s}");
+        assert!(s.contains("asyncmove"), "expected async move block in: {s}");
     }
 }
