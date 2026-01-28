@@ -51,7 +51,7 @@
     "https://github.com/modelcontextprotocol/python-sdk.git",
     "https://github.com/modelcontextprotocol/typescript-sdk.git",
     "https://github.com/allisoneer/cocoz.git",
-    "git@github.com:allisoneer/gwt.git",
+    "git@github.com:General-Wisdom/gwt.git",
     "https://github.com/siketyan/gh-config-rs.git",
     "https://github.com/AbdelStark/anthropic-rs.git",
     "https://github.com/anthropics/anthropic-sdk-python.git",
@@ -140,4 +140,3 @@
     }
   ]
 }
-

@@ -24,8 +24,8 @@ $ARGUMENTS
 - If no clear task was provided, ask for clarification and wait.
 
 **Thoughts and References:**
-1. Call `thoughts_list_active_documents` to see what exists in this branch. If relevant artifacts are found (prior research, existing plans), read them fully.
-2. Call `thoughts_list_references` to see available reference repositories.
+1. Call `tools_thoughts_list_documents` to see what exists in this branch. If relevant artifacts are found (prior research, existing plans), read them fully.
+2. Call `tools_thoughts_list_references` to see available reference repositories.
 3. Decide which references are relevant based on the task context. If uncertain, present top candidates to the user for selection.
 
 </step>
@@ -38,7 +38,7 @@ The research document passed into this command contains file:line references and
 
 Use `todowrite` to plan your agent calls. Be specific about what each agent will investigate.
 
-Launch agents concurrently using `tools_spawn_agent`:
+Launch agents concurrently using `tools_ask_agent`:
 
 - Spawn 1-3 codebase analyzers for distinct subsystems mentioned in the research.
 - Spawn 1 analyzer per selected reference.
@@ -60,7 +60,7 @@ If agent results conflict or seem incomplete, spawn follow-up agents to resolve 
 
 ## Deep Analysis with Reasoning Model
 
-Now synthesize what you know versus what remains uncertain. Use `reasoning_model_request` with `prompt_type: "reasoning"` to resolve gaps and get recommendations.
+Now synthesize what you know versus what remains uncertain. Use `tools_ask_reasoning_model` with `prompt_type: "reasoning"` to resolve gaps and get recommendations.
 
 Craft a prompt that asks the questions you need answered. Focus on:
 - Resolving open questions and uncertainties
@@ -74,7 +74,7 @@ Include only relevant files and directories (not exhaustive) with the request. T
 
 ### File and Directory Descriptions for the Reasoning Model
 
-When passing files and directories to `reasoning_model_request`, provide concise descriptions that help the optimizer group them intelligently. Describe what the file/directory is and why it matters for this task.
+When passing files and directories to `tools_ask_reasoning_model`, provide concise descriptions that help the optimizer group them intelligently. Describe what the file/directory is and why it matters for this task.
 
 Good descriptions are 1-2 sentences and mention:
 - What this file/directory contains

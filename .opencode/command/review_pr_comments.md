@@ -53,11 +53,11 @@ When making assumptions (e.g., auto-detected PR, default filters), state them ex
 
 ## Identify the PR
 
-Prefer auto-detection: call `pr_comments_get_comments` without pr_number — the tool infers from current branch.
+Prefer auto-detection: call `tools_gh_get_comments` without pr_number — the tool infers from current branch.
 
 If auto-detection fails or user specified a PR number, use that.
 
-If still unknown, call `pr_comments_list_prs` and ask user to select. State assumptions clearly.
+If still unknown, call `tools_gh_get_prs` and ask user to select. State assumptions clearly.
 
 </step>
 
@@ -65,7 +65,7 @@ If still unknown, call `pr_comments_list_prs` and ask user to select. State assu
 
 ## Fetch All Comment Threads (Paginated)
 
-Use `pr_comments_get_comments` with:
+Use `tools_gh_get_comments` with:
 - comment_source_type from intent ("all" default)
 - include_resolved from intent (false default)
 - pr_number from Step 2
@@ -118,7 +118,7 @@ Record selected thread IDs by analysis type.
 
 ## Deep Analysis with Sub-Agents (1 per Thread)
 
-For each **actionable/question** thread, spawn a sub-agent using `tools_spawn_agent` with `agent_type=analyzer`.
+For each **actionable/question** thread, spawn a sub-agent using `tools_ask_agent` with `agent_type=analyzer`.
 
 Each sub-agent receives:
 - The single thread: parent comment + all replies
@@ -181,7 +181,7 @@ This grouping makes it easy to batch-fix quick wins and know what to skip.
 ## Write Versioned Artifact
 
 Determine artifact filename:
-- Call `thoughts_list_active_documents`
+- Call `tools_thoughts_list_documents`
 - Find existing `pr_{number}_review_comments_*.md` files
 - Compute N = 1 + max existing suffix (or 1 if none)
 - Filename: `pr_{number}_review_comments_{N}.md`
@@ -220,7 +220,7 @@ For each invalid/not-applicable nit:
 - Note that reply drafts are in the assistant response
 - Quick command reference: "send reply for X", "fix quick wins", etc.
 
-Write using `thoughts_write_document` with doc_type="artifact".
+Write using `tools_thoughts_write_document` with doc_type="artifact".
 
 </step>
 
@@ -237,7 +237,7 @@ Format each as:
 
 Explain: "Say 'send reply for X' to post that reply."
 
-Do NOT call `add_comment_reply` yet — only on explicit user follow-up.
+Do NOT call `tools_gh_add_comment_reply` yet — only on explicit user follow-up.
 
 </step>
 

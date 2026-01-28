@@ -12,7 +12,7 @@ You are tasked with generating a comprehensive pull request description followin
 ## Steps to follow:
 
 1. **Get the PR description template:**
-   - Call `thoughts_get_template` with `template=pr_description`
+   - Call `tools_thoughts_get_template` with `template=pr_description`
    - Read the template carefully to understand all sections and requirements
 
 2. **Identify the PR to describe:**
@@ -21,7 +21,7 @@ You are tasked with generating a comprehensive pull request description followin
    - Ask the user which PR they want to describe
 
 3. **Check for existing description (MCP):**
-   - Call `thoughts_list_active_documents` and filter `doc_type = "artifacts"` with filename `pr_{number}_description.md`
+   - Call `tools_thoughts_list_documents` and filter `doc_type = "artifacts"` with filename `pr_{number}_description.md`
    - If found, read it and inform user you'll be updating it
    - Consider what has changed since last description
 
@@ -43,8 +43,8 @@ You are tasked with generating a comprehensive pull request description followin
    - Look for any checklist items in the "How to verify it" section of the template
    - For each verification step:
      - If it's a recipe you can run, use the Just MCP tools:
-       - Discover available recipes with `tools_just_search` (e.g., search for "check", "test")
-       - Execute recipes with `tools_just_execute` (e.g., run the "check" and "test" recipes)
+       - Discover available recipes with `tools_cli_just_search` (e.g., search for "check", "test")
+       - Execute recipes with `tools_cli_just_execute` (e.g., run the "check" and "test" recipes)
      - If it passes, mark the checkbox as checked: `- [x]`
      - If it fails, keep it unchecked and note what failed: `- [ ]` with explanation
      - If it requires manual testing (UI interactions, external services), leave unchecked and note for user
@@ -60,11 +60,11 @@ You are tasked with generating a comprehensive pull request description followin
    - Ensure all checklist items are addressed (checked or explained)
 
 8. **Save and sync the description (MCP):**
-   - Call `thoughts_write_document`:
+   - Call `tools_thoughts_write_document`:
      - `doc_type`: "artifact"
      - `filename`: `pr_{number}_description.md`
      - `content`: completed description from template
-   - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_just_execute`
+   - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_cli_just_execute`
 
 9. **Update the PR:**
    - After thoughts sync, the file will be at a path in thoughts/active/{branch}/artifacts/

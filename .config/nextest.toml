@@ -1,0 +1,41 @@
+# Nextest configuration
+# https://nexte.st/book/configuration.html
+
+[store]
+dir = "target/nextest"
+
+[profile.default]
+retries = { backoff = "exponential", count = 2, delay = "1s", max-delay = "10s" }
+slow-timeout = { period = "30s", terminate-after = 2 }
+leak-timeout = "100ms"
+failure-output = "immediate"
+success-output = "never"
+status-level = "fail"
+default-filter = 'not kind(bench)'
+
+[profile.default.junit]
+path = "target/nextest/junit.xml"
+
+[profile.minimal]
+retries = 0
+slow-timeout = "120s"
+leak-timeout = "100ms"
+failure-output = "immediate"
+success-output = "never"
+status-level = "fail"
+final-status-level = "fail"
+default-filter = 'not kind(bench)'
+
+[profile.ci]
+retries = 0
+slow-timeout = { period = "60s", terminate-after = 1 }
+leak-timeout = "100ms"
+failure-output = "immediate"
+success-output = "final"
+fail-fast = false
+status-level = "fail"
+default-filter = 'not kind(bench)'
+
+[profile.ci.junit]
+path = "target/nextest/junit.xml"
+report-name = "nextest-ci"

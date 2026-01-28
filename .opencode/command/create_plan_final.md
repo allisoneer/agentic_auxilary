@@ -20,11 +20,11 @@ $ARGUMENTS
 
 First, consolidate all the research and decisions from Phase 1 into a formal requirements document.
 
-Call `thoughts_get_template` with `template=requirements` to get the expected format.
+Call `tools_thoughts_get_template` with `template=requirements` to get the expected format.
 
 if ANY message is in the `<userMessage>` above, take it into account. This is important!
 
-Write the requirements document using `thoughts_write_document`:
+Write the requirements document using `tools_thoughts_write_document`:
 
 **Parameters:**
 - `doc_type: "plan"`
@@ -39,7 +39,7 @@ This document becomes the formal record of what was decided in Phase 1 and will 
 
 ## Pre-flight Verification
 
-Before generating the implementation plan, confirm that no critical "Pending" questions remain in the requirements dossier you just wrote. If gaps exist, ask the user or call `reasoning_model_request` with `prompt_type: "reasoning"` to resolve them first.
+Before generating the implementation plan, confirm that no critical "Pending" questions remain in the requirements dossier you just wrote. If gaps exist, ask the user or call `tools_ask_reasoning_model` with `prompt_type: "reasoning"` to resolve them first.
 
 </step>
 
@@ -47,7 +47,7 @@ Before generating the implementation plan, confirm that no critical "Pending" qu
 
 ## Generate Implementation Plan
 
-Call `reasoning_model_request` with `prompt_type: "plan"` to generate the full implementation plan.
+Call `tools_ask_reasoning_model` with `prompt_type: "plan"` to generate the full implementation plan.
 
 Craft a prompt that describes the feature/task and requests a complete, actionable implementation plan with phased approach, concrete file paths, and automated/manual success criteria.
 
@@ -70,7 +70,7 @@ The reasoner already has a built-in plan template and optimizer that will struct
 
 ## Format and Write Final Plan
 
-Call `thoughts_get_template` with `template=plan` to get the expected format.
+Call `tools_thoughts_get_template` with `template=plan` to get the expected format.
 
 Using the plan content from the reasoning model, write the final implementation plan following the template format.
 
@@ -87,7 +87,7 @@ Ask: "Any feedback or changes before I persist the final plan?"
 
 ## Persist Final Plan
 
-On user approval, write the plan using `thoughts_write_document`:
+On user approval, write the plan using `tools_thoughts_write_document`:
 
 **Parameters:**
 - `doc_type: "plan"`
@@ -104,7 +104,7 @@ Confirm the saved path and that the plan is ready for implementation.
 
 If new unknowns emerge:
 1. Ask targeted questions
-2. Optionally call `reasoning_model_request` with `prompt_type: "reasoning"` to close gaps
+2. Optionally call `tools_ask_reasoning_model` with `prompt_type: "reasoning"` to close gaps
 3. Re-run the "plan" request with updated context
 
 </guidance>
@@ -125,7 +125,7 @@ Store the returned file paths for future reference.
 
 ## Direct Plan Writing (Alternative)
 
-You can pass `output_filename` to `reasoning_model_request` with `prompt_type: "plan"` to write the plan directly into `thoughts/{branch}/plans/`. The tool returns the repo-relative path on success instead of the plan content. This is useful when you want to skip the manual persist step.
+You can pass `output_filename` to `tools_ask_reasoning_model` with `prompt_type: "plan"` to write the plan directly into `thoughts/{branch}/plans/`. The tool returns the repo-relative path on success instead of the plan content. This is useful when you want to skip the manual persist step.
 
 </guidance>
 

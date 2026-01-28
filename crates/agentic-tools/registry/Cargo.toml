@@ -1,0 +1,30 @@
+[package]
+name = "agentic-tools-registry"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Unified tool registry aggregating all agentic-tools domain registries"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[package.metadata.repo]
+role = "lib"
+family = "agentic-tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+coding_agent_tools = { workspace = true }
+pr_comments = { workspace = true }
+linear-tools = { workspace = true }
+gpt5_reasoner = { workspace = true }
+thoughts-mcp-tools = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

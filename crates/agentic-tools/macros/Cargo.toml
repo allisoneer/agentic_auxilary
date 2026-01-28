@@ -1,0 +1,29 @@
+[package]
+name = "agentic-tools-macros"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Proc macros for agentic-tools library family"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing"] }
+darling = "0.20"
+
+[features]
+default = []
+
+[package.metadata.repo]
+role = "lib"
+family = "agentic-tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

@@ -1,0 +1,34 @@
+[package]
+name = "agentic-mcp"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Unified MCP server for all agentic-tools"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = true
+
+[package.metadata.repo]
+role = "app"
+family = "agentic-tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = false
+napi = false
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+agentic-tools-registry = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"
+tokio = { workspace = true }
+anyhow = { workspace = true }
+
+# TLS backend - explicit dependency for CryptoProvider initialization
+# Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
+# in without explicit provider selection (due to Cargo's additive features)
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }

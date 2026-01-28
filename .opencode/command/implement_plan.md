@@ -26,7 +26,7 @@ $ARGUMENTS
 
 **Load Related Context:**
 1. If the plan filename ends with `_implementation.md`, read the sibling `{pair_base}_requirements.md`. Warn if not found but continue.
-2. Call `thoughts_list_active_documents` filtered to `doc_type == "artifacts"` with filename starting `plan_{basename}_`. Read any artifacts to understand prior progress.
+2. Call `tools_thoughts_list_documents` filtered to `doc_type == "artifacts"` with filename starting `plan_{basename}_`. Read any artifacts to understand prior progress.
 3. Read all files referenced in the plan.
 
 **Create Implementation Todo List:**
@@ -59,7 +59,7 @@ For the current phase's implementation todos:
 2. **Execute the change** exactly as specified in the plan
 3. **Handle divergence** — If codebase differs from plan expectations:
    - STOP and capture: Expected vs Found, Why it matters
-   - Optionally call `reasoning_model_request` with `prompt_type: "reasoning"` to evaluate adaptation paths
+   - Optionally call `tools_ask_reasoning_model` with `prompt_type: "reasoning"` to evaluate adaptation paths
    - Present options and wait for user guidance before proceeding
 4. **Mark the implementation todo complete**
 5. **Repeat** for each implementation todo in this phase
@@ -75,8 +75,8 @@ Do NOT run verification yet—that's step 3.
 **Run Verification:**
 1. Mark the phase's verification todo as in_progress
 2. Run ALL verification steps via the Just MCP tools:
-   - Discover relevant recipes with `tools_just_search`
-   - Execute necessary recipes (e.g., "check", "test") using `tools_just_execute`
+   - Discover relevant recipes with `tools_cli_just_search`
+   - Execute necessary recipes (e.g., "check", "test") using `tools_cli_just_execute`
 3. Check for regressions (run broader test suite if specified)
 
 **Reflect — Did I Complete Everything?**

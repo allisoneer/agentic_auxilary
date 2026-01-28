@@ -1,0 +1,55 @@
+[package]
+name = "coding_agent_tools"
+version = "0.1.8"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Coding agent tools (CLI + MCP). First tool: ls."
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+keywords = ["cli", "mcp", "filesystem", "ls", "ignore"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "coding_agent_tools"
+path = "src/lib.rs"
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+agentic-tools-utils = { workspace = true }
+claudecode = { workspace = true }
+thoughts-tool = { workspace = true }
+futures = "0.3"
+agentic_logging = { workspace = true }
+ignore = "0.4"
+globset = "0.4"
+regex = "1"
+walkdir = "2.5"
+once_cell = "1"
+shell-escape = "0.1"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+anyhow = { workspace = true }
+thiserror = "1"
+clap = { workspace = true, features = ["env"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "6"
+
+[dev-dependencies]
+tempfile = "3"
+serial_test = "3"
+filetime = "0.2"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = true
+napi = false
