@@ -50,6 +50,7 @@ nursery = "warn"
 [package.metadata.repo]
 role = "lib"
 family = "services"
+readme_tier = "featured"
 
 [package.metadata.repo.integrations]
 mcp = false

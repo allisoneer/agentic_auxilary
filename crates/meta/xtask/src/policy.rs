@@ -23,6 +23,8 @@ pub struct Enums {
     pub role: Vec<String>,
     pub family: Vec<String>,
     #[serde(default)]
+    pub readme_tier: Vec<String>,
+    #[serde(default)]
     pub documentation: Option<BTreeMap<String, String>>,
 }
 
@@ -132,6 +134,11 @@ impl Policy {
     pub fn is_valid_family(&self, family: &str) -> bool {
         self.enums.family.iter().any(|f| f == family)
     }
+
+    /// Check if a readme_tier is valid according to policy.
+    pub fn is_valid_readme_tier(&self, tier: &str) -> bool {
+        self.enums.readme_tier.iter().any(|t| t == tier)
+    }
 }
 
 #[cfg(test)]
@@ -144,6 +151,7 @@ mod tests {
 [enums]
 role = ["app", "lib"]
 family = ["tools", "services"]
+readme_tier = ["featured", "brief", "omit"]
 
 [integrations.mcp]
 any_of = ["agentic-tools-mcp"]
@@ -164,6 +172,8 @@ publish_default = true
         let policy: Policy = toml::from_str(toml).unwrap();
         assert!(policy.is_valid_role("app"));
         assert!(!policy.is_valid_role("invalid"));
+        assert!(policy.is_valid_readme_tier("featured"));
+        assert!(!policy.is_valid_readme_tier("unknown"));
         assert!(!policy.paths.enforce);
         assert_eq!(policy.paths.allow, vec!["apps/*", "crates/*"]);
         assert_eq!(policy.todos.blocked_severities, vec![0]);

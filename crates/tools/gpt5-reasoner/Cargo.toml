@@ -45,6 +45,7 @@ serial_test = "3"
 [package.metadata.repo]
 role = "tool-lib"
 family = "tools"
+readme_tier = "featured"
 
 [package.metadata.repo.integrations]
 mcp = true
