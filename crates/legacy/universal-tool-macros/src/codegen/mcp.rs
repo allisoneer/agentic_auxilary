@@ -146,11 +146,11 @@ fn generate_method_call(tool: &ToolDef) -> TokenStream {
 
             if ty_str.contains("ProgressReporter") {
                 // For now, pass None for progress reporter
-                // TODO: In the future, could accept progress_token in params and create reporter
+                // TODO(3): In the future, could accept progress_token in params and create reporter
                 quote! { None }
             } else if ty_str.contains("CancellationToken") {
                 // Create a new cancellation token
-                // TODO: In the future, could get from MCP request context
+                // TODO(3): In the future, could get from MCP request context
                 quote! { ::universal_tool_core::mcp::CancellationToken::new() }
             } else {
                 // Regular parameter - use local variable binding

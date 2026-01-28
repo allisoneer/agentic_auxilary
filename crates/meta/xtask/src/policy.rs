@@ -13,6 +13,7 @@ pub struct Policy {
     pub enums: Enums,
     pub integrations: Integrations,
     pub paths: Paths,
+    pub todos: TodoPolicy,
     pub release_plz: ReleasePlz,
 }
 
@@ -71,6 +72,22 @@ pub struct PathRules {
     pub allow: Vec<String>,
     #[serde(default)]
     pub documentation: Option<String>,
+}
+
+/// Annotation enforcement policy (severity-tagged comments).
+#[derive(Debug, Deserialize)]
+pub struct TodoPolicy {
+    /// Severities that are not allowed in HEAD (default: [0]).
+    #[serde(default = "default_blocked_severities")]
+    pub blocked_severities: Vec<u8>,
+
+    /// Repo-relative path prefixes to exclude from scanning.
+    #[serde(default)]
+    pub ignore_paths: Vec<String>,
+}
+
+fn default_blocked_severities() -> Vec<u8> {
+    vec![0]
 }
 
 /// Release-plz configuration.
@@ -136,6 +153,10 @@ message = "MCP required"
 enforce = false
 allow = ["apps/*", "crates/*"]
 
+[todos]
+blocked_severities = [0]
+ignore_paths = ["CLAUDE.md"]
+
 [release_plz]
 git_tag_format = "{{ name }}-v{{ version }}"
 publish_default = true
@@ -145,5 +166,7 @@ publish_default = true
         assert!(!policy.is_valid_role("invalid"));
         assert!(!policy.paths.enforce);
         assert_eq!(policy.paths.allow, vec!["apps/*", "crates/*"]);
+        assert_eq!(policy.todos.blocked_severities, vec![0]);
+        assert_eq!(policy.todos.ignore_paths, vec!["CLAUDE.md"]);
     }
 }

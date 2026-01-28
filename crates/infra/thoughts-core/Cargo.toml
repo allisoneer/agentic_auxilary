@@ -43,7 +43,6 @@ which = "6"
 atomicwrites = "0.4"
 colored = "2"
 regex = "1"
-# TODO(0): Verify schemars 1.x compatibility across all consumers after migration completes.
 schemars = { workspace = true }
 
 # Platform-specific dependencies

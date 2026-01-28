@@ -73,6 +73,21 @@ allow = [
   ".github/**",
 ]
 
+[todos]
+# Enforce severity-tagged annotations (see CLAUDE.md:145-149).
+# Severity 0 indicates "must never be merged to HEAD".
+blocked_severities = [0]
+
+# Repo-relative path prefixes to exclude from scanning.
+ignore_paths = [
+  "CLAUDE.md",                                # Convention definition text
+  "crates/meta/xtask/src/verify.rs",          # Self-referential enforcement code
+  "crates/infra/thoughts-core/CLAUDE.md",     # Prose mention
+  "crates/legacy/universal-tool-examples/",   # Legacy example READMEs with CLI examples
+  "crates/linear/CHANGELOG.md",               # Changelog prose
+  "crates/tools/coding-agent-tools/src/agent/prompts.rs", # Prompt template string
+]
+
 [release_plz]
 # Defaults for generated package entries
 git_tag_format = "{{ name }}-v{{ version }}"
