@@ -114,6 +114,16 @@ fn check_metadata(metadata: &Metadata, policy: &Policy) -> Result<()> {
                 pkg.name, family, policy.enums.family
             ));
         }
+
+        // Validate readme_tier if present
+        if let Some(tier) = repo.get("readme_tier").and_then(|v| v.as_str())
+            && !policy.is_valid_readme_tier(tier)
+        {
+            errors.push(format!(
+                "{}: invalid readme_tier '{}'. Allowed: {:?}",
+                pkg.name, tier, policy.enums.readme_tier
+            ));
+        }
     }
 
     if !errors.is_empty() {
@@ -323,9 +333,13 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
     bail!("{msg}");
 }
 
-/// Collect all generated paths including per-crate CLAUDE.md files.
+/// Collect all generated paths including per-crate CLAUDE.md files and README.md.
 fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
-    let mut paths = vec!["CLAUDE.md".to_string(), "release-plz.toml".to_string()];
+    let mut paths = vec![
+        "CLAUDE.md".to_string(),
+        "release-plz.toml".to_string(),
+        "README.md".to_string(),
+    ];
     let ws_root = metadata.workspace_root.as_std_path();
 
     for pkg in &metadata.packages {

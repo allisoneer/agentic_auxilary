@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use cargo_metadata::MetadataCommand;
 use clap::{Parser, Subcommand};
-use std::fs;
 use std::path::PathBuf;
 
 pub mod autogen;
 pub mod claude;
 pub mod marker;
 pub mod policy;
+pub mod readme;
 pub mod release_plz;
 pub mod sync;
 pub mod verify;
@@ -73,32 +73,6 @@ fn readme_sync(path: PathBuf, dry_run: bool, check: bool) -> Result<()> {
         .exec()
         .context("Failed to run `cargo metadata`")?;
     let strict = strict_mode();
-    let input =
-        fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
 
-    let (output, changed) = marker::apply_autodeps_markers(
-        &input,
-        &marker::RenderContext {
-            metadata: &metadata,
-            strict,
-        },
-    )?;
-
-    if !changed {
-        eprintln!("[autodeps] No changes needed for {}", path.display());
-        return Ok(());
-    }
-
-    if check {
-        anyhow::bail!("README is out of sync. Run `cargo run -p xtask -- readme-sync` to update.");
-    }
-
-    if dry_run {
-        println!("{output}");
-    } else {
-        fs::write(&path, output).with_context(|| format!("Failed to write {}", path.display()))?;
-        eprintln!("[autodeps] Updated {}", path.display());
-    }
-
-    Ok(())
+    readme::sync_root_readme_cli(&path, &metadata, dry_run, check, strict)
 }

@@ -1,8 +1,8 @@
 //! Sync command implementation.
 //!
-//! Updates autogen blocks in CLAUDE.md files and release-plz.toml.
+//! Updates autogen blocks in CLAUDE.md files, release-plz.toml, and README.md.
 
-use crate::{claude, policy::Policy, release_plz};
+use crate::{claude, policy::Policy, readme, release_plz};
 use anyhow::{Context, Result};
 use cargo_metadata::MetadataCommand;
 use std::fs;
@@ -39,8 +39,15 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     let release_changed =
         release_plz::sync_release_plz("release-plz.toml", &metadata, &policy, dry_run, check)?;
 
+    // README.md
+    eprintln!("[sync] Syncing README.md...");
+    let readme_changed = readme::sync_root_readme("README.md", &metadata, dry_run, check)?;
+
     // Summary
-    let total_changes = (root_changed as usize) + crate_count + (release_changed as usize);
+    let total_changes = (root_changed as usize)
+        + crate_count
+        + (release_changed as usize)
+        + (readme_changed as usize);
     if total_changes == 0 {
         eprintln!("[sync] No changes needed.");
     } else if dry_run {

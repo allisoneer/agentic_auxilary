@@ -6,7 +6,6 @@ authors = ["Allison Durham"]
 description = "CLI for flexible thought management using filesystem mounts"
 license = "MIT"
 repository = "https://github.com/allisoneer/agentic_auxilary"
-publish = false
 
 [package.metadata.repo]
 role = "app"

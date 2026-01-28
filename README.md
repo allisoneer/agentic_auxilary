@@ -1,71 +1,25 @@
 # Agentic Auxiliary Tools
 
-Development tools for enhanced AI agent workflows.
+Development tools and libraries for agentic workflows (MCP, CLIs, and Rust SDKs).
 
-## Tools
+OpenCode is supported as a first-class workflow in this repo. The codebase uses `just` for task automation and `xtask` for repository maintenance. AI-assisted development is facilitated through per-crate `CLAUDE.md` files containing context and commands.
 
-### 🔀 [Thoughts Tool](apps/thoughts/)
-Unified filesystem for organizing documentation across git repositories using mergerfs/fuse-t.
-- Merge multiple repositories into single mountpoint
-- Automatic git synchronization
-- Cross-platform (Linux/macOS)
+## Primary Tools
 
-### 🛠️ [Universal Tool Framework](crates/legacy/universal-tool-core/)
-Write tool logic once, deploy as CLI/REST/MCP without code changes.
-- Zero-overhead code generation
-- Type-safe interfaces
-- Framework agnostic
+### [`agentic-mcp`](apps/agentic-mcp/)
+Unified MCP server for all agentic-tools. Provides a single entry point for accessing the entire agentic-tools toolkit via the Model Context Protocol, enabling seamless integration with AI assistants and coding tools.
 
-### 🤖 [ClaudeCode-RS](crates/services/claudecode-rs/)
-Rust SDK for programmatically interacting with Claude Code CLI.
-- Type-safe event streaming
-- Async-first API design
-- MCP (Model Context Protocol) support
-- Builder pattern configuration
+### [`thoughts`](apps/thoughts/)
+CLI for flexible thought management using filesystem mounts. Unifies documentation across git repositories using mergerfs/FUSE, enabling automatic git synchronization and cross-platform support (Linux/macOS).
 
-### 📡 [opencode_rs](crates/services/opencode-rs/)
-Rust SDK for OpenCode: HTTP-first client with SSE streaming and optional managed server/CLI helpers.
-- HTTP endpoints with typed request/response models
-- SSE event subscriptions with backoff and heartbeats
-- Async builder-based client; Unix-only
-- Optional managed server startup (feature: server)
+### [`claudecode`](crates/services/claudecode-rs/)
+A Rust SDK for programmatically interacting with Claude Code. Provides type-safe event streaming, async-first API design, MCP support, and builder pattern configuration for launching and managing Claude sessions.
 
-### 🔄 [claude_to_opencode_migration](claude_to_opencode_migration/)
-Python script to migrate Claude Code configuration to OpenCode.
-- Zero-install via uv run (PEP 723 inline deps)
-- Dry-run with unified diffs and timestamped backups
-- Fine-grained flags: agents, commands, permissions, mcp
+### [`anthropic-async`](crates/services/anthropic-async/)
+Production-ready asynchronous client for Anthropic's API with prompt caching support. Includes Messages API (create, count tokens) and Models API with retry logic, exponential backoff, and strong typing.
 
-### 🧠 [GPT-5 Reasoner](crates/tools/gpt5-reasoner/)
-Two-phase prompt optimization tool: optimize with Claude, execute with GPT-5.
-- Directory-based file discovery with smart filtering
-- Dual CLI and MCP interfaces
-- Configurable optimizer model (default: Claude Sonnet 4.5)
-- Automatic binary file detection and deduplication
-
-### 🧩 [Anthropic Async](crates/services/anthropic-async/)
-Production-ready asynchronous client for Anthropic's API with prompt caching support.
-- Messages API (create, count tokens) and Models API
-- Retry with exponential backoff, beta feature support
-- Strong typing and examples
-
-### 💬 [PR Comments](crates/tools/pr-comments/)
-Fetch GitHub PR comments with resolution filtering.
-- CLI + MCP support
-- Filter by author, state, and resolution
-- Useful for code review analytics and CI reporting
-
-### 🔧 [Coding Agent Tools](crates/tools/coding-agent-tools/)
-CLI + MCP tools for coding assistants with gitignore-aware directory listing.
-- Dual CLI and MCP interfaces
-- Respects .gitignore and built-in ignore patterns
-- Implicit pagination for large directories
-
-### 📋 [linear_tools](crates/linear/tools/)
-CLI + MCP tools for Linear issue management.
-- Search and read Linear issues
-- Works as both CLI and MCP server
-- Extra fields via LINEAR_TOOLS_EXTRAS environment variable
+### [`gpt5_reasoner`](crates/tools/gpt5-reasoner/)
+GPT-5 prompt optimization and execution tool with MCP and CLI interfaces. Implements a two-phase approach: optimize prompts with Claude, then execute with GPT-5.2 xhigh reasoning. Supports directory-based file discovery with smart filtering.
 
 ## Quick Start
 
@@ -74,42 +28,43 @@ CLI + MCP tools for Linear issue management.
 git clone https://github.com/allisoneer/agentic_auxilary
 cd agentic_auxilary
 
-# Build thoughts
-cd apps/thoughts && just build
+# Build entire workspace
+just build
 
-# Build universal-tool-core
-cd crates/legacy/universal-tool-core && just build
+# Build a specific crate
+just crate-build agentic-mcp
+just crate-build thoughts
+just crate-build claudecode
 
-# Build claudecode
-cd crates/services/claudecode-rs && just build
+# Run tests
+just test
 
-# Build gpt5_reasoner
-cd crates/tools/gpt5-reasoner && just build
+# Check formatting and lints
+just check
 ```
 
 ## Installation
 
-### Install thoughts_tool from crates.io
+### Install binaries from source
+
 ```bash
-cargo install thoughts-tool
+cargo install --path apps/agentic-mcp
+cargo install --path apps/thoughts
 ```
-
-<!-- Note: Content between BEGIN:autodeps and END:autodeps is auto-generated. Manual edits inside will be overwritten. -->
-
-### Use universal_tool in your project
-<!-- BEGIN:autodeps {"crates":["universal-tool-core","universal-tool-macros"], "fence":"toml", "header":"[dependencies]"} -->
-```toml
-[dependencies]
-universal-tool-core = "0.2.5"
-universal-tool-macros = "0.1.8"
-```
-<!-- END:autodeps -->
 
 ### Use claudecode in your project
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
 claudecode = "0.1.9"
+```
+<!-- END:autodeps -->
+
+### Use anthropic-async in your project
+<!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
+```toml
+[dependencies]
+anthropic-async = "0.2.1"
 ```
 <!-- END:autodeps -->
 
@@ -121,54 +76,90 @@ opencode_rs = "0.1.1"
 ```
 <!-- END:autodeps -->
 
-### Run claude_to_opencode_migration (no install; via uv)
+## Additional Tools
+
+<!-- BEGIN:xtask:autogen readme-additional-tools -->
+### linear
+
+- [`linear-tools`](crates/linear/tools) - Linear issue tools via CLI + MCP
+
+### tools
+
+- [`coding_agent_tools`](crates/tools/coding-agent-tools) - Coding agent tools (CLI + MCP). First tool: ls.
+- [`pr_comments`](crates/tools/pr-comments) - Fetch GitHub PR comments via CLI and MCP
+- [`thoughts-mcp-tools`](crates/tools/thoughts-mcp-tools) - MCP tool wrappers for thoughts-tool using agentic-tools framework
+<!-- END:xtask:autogen -->
+
+## Supporting Libraries
+
+<!-- BEGIN:xtask:autogen readme-supporting-libraries -->
+### agentic-tools
+
+- [`agentic-tools-core`](crates/agentic-tools/core) - Core traits and types for agentic-tools library family
+- [`agentic-tools-macros`](crates/agentic-tools/macros) - Proc macros for agentic-tools library family
+- [`agentic-tools-mcp`](crates/agentic-tools/mcp) - MCP server integration for agentic-tools library family
+- [`agentic-tools-napi`](bindings/node/agentic-tools-napi) - N-API bindings for agentic-tools, enabling TypeScript/JavaScript integration
+- [`agentic-tools-registry`](crates/agentic-tools/registry) - Unified tool registry aggregating all agentic-tools domain registries
+- [`agentic-tools-utils`](crates/agentic-tools/utils) - Shared utilities for agentic-tools ecosystem: pagination, http, secrets, cli
+
+### infra
+
+- [`agentic_logging`](crates/infra/agentic-logging) - Centralized JSONL logging infrastructure for agentic tools
+- [`thoughts-tool`](crates/infra/thoughts-core) - Flexible thought management using filesystem mounts for git repositories
+
+### linear
+
+- [`linear-queries`](crates/linear/queries) - Cynic queries and input types for Linear
+- [`linear-schema`](crates/linear/schema) - Cached Linear GraphQL schema for cynic
+
+### services
+
+- [`opencode_rs`](crates/services/opencode-rs) - Rust SDK for OpenCode (HTTP-first hybrid with SSE streaming)
+<!-- END:xtask:autogen -->
+
+## Development
+
+### Task Automation
+
+This repository uses `just` for task automation. Common commands:
+
 ```bash
-uv run claude_to_opencode_migration/migrate_claude_to_opencode.py --dry-run
-uv run claude_to_opencode_migration/migrate_claude_to_opencode.py --all
+just check          # Check entire workspace (fmt + clippy)
+just test           # Test entire workspace
+just build          # Build entire workspace
+just fmt            # Format entire workspace
+
+# Per-crate commands
+just crate-check <crate>    # Run formatting and clippy checks for a crate
+just crate-test <crate>     # Run tests for a crate
+just crate-build <crate>    # Build a crate
 ```
 
-### Install gpt5_reasoner
+### Repository Maintenance (xtask)
+
+The `xtask` crate provides repository maintenance tooling:
+
 ```bash
-cargo install gpt5_reasoner
+just xtask-sync         # Sync autogen content (CLAUDE.md, release-plz.toml, README.md)
+just xtask-verify       # Verify metadata, policy, and file freshness
+just xtask-sync-check   # Check if sync is needed (for CI)
+just xtask-verify-check # Full verification including generated files
 ```
 
-### Install pr_comments
-```bash
-cargo install pr_comments
-```
+### AI-Assisted Development
 
-### Install coding_agent_tools
-```bash
-cargo install coding_agent_tools
-```
+Each crate has a `CLAUDE.md` file with crate-specific context and commands. The root `CLAUDE.md` provides repository-wide guidance.
 
-### Install linear-tools
-```bash
-cargo install linear-tools
-```
+## Legacy
 
-### Use anthropic-async in your project
-<!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
-```toml
-[dependencies]
-anthropic-async = "0.2.1"
-```
-<!-- END:autodeps -->
+<!-- BEGIN:xtask:autogen readme-legacy -->
+### legacy
 
-Quick example (ClaudeCode):
-```rust
-use claudecode::{Client, SessionConfig};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new().await?;
-    let config = SessionConfig::builder("Hello, Claude!")
-        .build()?;
-    let result = client.launch_and_wait(config).await?;
-    println!("{:?}", result.content);
-    Ok(())
-}
-```
+- [`universal-tool-core`](crates/legacy/universal-tool-core) - DEPRECATED: Use agentic-tools-* crates and agentic-mcp instead. Core runtime library for Universal Tool Framework.
+- [`universal-tool-integration-tests`](crates/legacy/universal-tool-integration-tests) - universal-tool-integration-tests
+- [`universal-tool-macros`](crates/legacy/universal-tool-macros) - DEPRECATED: Use agentic-tools-* crates and agentic-mcp instead. Procedural macros for Universal Tool Framework.
+<!-- END:xtask:autogen -->
 
 ## License
+
 MIT - See [LICENSE](LICENSE)

@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Unified MCP server for all agentic-tools"
 repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = true
 
 [package.metadata.repo]
 role = "app"

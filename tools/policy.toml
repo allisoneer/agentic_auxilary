@@ -5,6 +5,7 @@
 # Documented enums for package.metadata.repo
 role = ["app", "lib", "tool-lib", "binding", "legacy", "xtask"]
 family = ["agentic-tools", "linear", "services", "tools", "infra", "legacy", "meta"]
+readme_tier = ["featured", "brief", "one-liner", "legacy", "omit"]
 
 [enums.documentation]
 role = """
@@ -23,6 +24,13 @@ family = """
 - infra: Infrastructure/shared utilities (agentic_logging)
 - legacy: Deprecated crates (crates/legacy/*)
 - meta: Build/maintenance tooling (xtask)
+"""
+readme_tier = """
+- featured: Rich manual prose in Primary Tools section (app role default)
+- brief: Auto-generated with description in Additional Tools section (tool-lib role default)
+- one-liner: Auto-generated minimal in Supporting Libraries section (lib/binding role default)
+- legacy: Auto-generated in Legacy section (legacy role default)
+- omit: Not shown in README (xtask role default)
 """
 expansion_process = """
 To add a new enum value:
