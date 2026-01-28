@@ -269,7 +269,7 @@ impl DataTools {
 
         // Simulate file analysis with progress
         let total_files = paths.len();
-        // TODO: ProgressReporter should be injected by the framework based on cli(progress_style = "bar")
+        // TODO(3): ProgressReporter should be injected by the framework based on cli(progress_style = "bar")
         // For now, we'll simulate without actual progress reporting
 
         let mut files_processed = 0;
@@ -341,7 +341,7 @@ impl DataTools {
         #[universal_tool_param(description = "Fail on first error")] fail_fast: bool,
     ) -> Result<BatchResult, ToolError> {
         let start = std::time::Instant::now();
-        // TODO: ProgressReporter should be injected by framework
+        // TODO(3): ProgressReporter should be injected by framework
 
         let mut successful = Vec::new();
         let mut failed = Vec::new();

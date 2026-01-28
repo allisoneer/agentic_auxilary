@@ -2,10 +2,14 @@
 //!
 //! Validates metadata, policy rules, and generated file freshness.
 
-use crate::policy::{IntegrationRule, Policy};
+use crate::policy::{IntegrationRule, Policy, TodoPolicy};
 use crate::sync;
 use anyhow::{Context, Result, bail};
 use cargo_metadata::{Metadata, MetadataCommand, Package};
+use regex::Regex;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
+use std::path::Path;
 use std::process::Command;
 
 /// Check if a package has a dependency (direct or renamed).
@@ -189,6 +193,136 @@ fn check_generated_not_gitignored(paths: &[&str]) -> Result<()> {
     Ok(())
 }
 
+/// Check TODO annotation conventions across all git-tracked files.
+///
+/// Two validations in one scan:
+/// 1. **Blocked severity**: any `TODO(N)` where N is in `blocked_severities` fails.
+/// 2. **Format enforcement**: any uppercase `TODO` not in `TODO(0-3)` form fails.
+fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
+    let tagged_re = Regex::new(r"TODO\s*\(\s*([0-3])\s*\)").expect("valid regex");
+    let any_todo_re = Regex::new(r"\bTODO\b").expect("valid regex");
+
+    // Enumerate git-tracked files via `git ls-files -z`.
+    // Uses output() to read both stdout/stderr concurrently (avoids pipe deadlock).
+    let output = Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(ws_root)
+        .output()
+        .context("Failed to run `git ls-files -z`")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("`git ls-files -z` failed with {}: {stderr}", output.status);
+    }
+
+    let raw = output.stdout;
+    let mut blocked: Vec<String> = Vec::new();
+    let mut format_violations: Vec<String> = Vec::new();
+
+    for path_bytes in raw.split(|&b| b == 0) {
+        if path_bytes.is_empty() {
+            continue;
+        }
+        let rel_path = String::from_utf8_lossy(path_bytes);
+
+        // Check ignore_paths prefixes.
+        if todos
+            .ignore_paths
+            .iter()
+            .any(|prefix| rel_path.starts_with(prefix.as_str()))
+        {
+            continue;
+        }
+
+        let abs_path = ws_root.join(rel_path.as_ref());
+
+        // Skip symlinks: avoids blocking on FUSE mounts (e.g. thoughts three-space
+        // symlinks like context/, personal/, references/ that point to .thoughts-data/).
+        // symlink_metadata() uses lstat which does NOT follow the symlink.
+        match abs_path.symlink_metadata() {
+            Ok(meta) if meta.file_type().is_symlink() => continue,
+            Ok(meta) if !meta.file_type().is_file() => continue,
+            Err(_) => continue,
+            _ => {}
+        }
+
+        let file = match File::open(&abs_path) {
+            Ok(f) => f,
+            Err(_) => continue, // file may have been deleted since ls-files
+        };
+
+        // Binary detection: check first 512 bytes for NUL.
+        let mut reader = BufReader::new(file);
+        let mut header = [0u8; 512];
+        let n = reader.read(&mut header).unwrap_or(0);
+        if header[..n].contains(&0) {
+            continue; // binary file
+        }
+
+        // Seek back to start by re-opening (BufReader consumed bytes).
+        let file = match File::open(&abs_path) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let reader = BufReader::new(file);
+
+        for (line_idx, line_result) in reader.lines().enumerate() {
+            let line = match line_result {
+                Ok(l) => l,
+                Err(_) => continue, // skip decode errors
+            };
+            let line_num = line_idx + 1;
+
+            // Check for tagged TODOs with blocked severities.
+            for cap in tagged_re.captures_iter(&line) {
+                if let Some(m) = cap.get(1)
+                    && let Ok(severity) = m.as_str().parse::<u8>()
+                    && todos.blocked_severities.contains(&severity)
+                {
+                    blocked.push(format!("{}:{}: {}", rel_path, line_num, line.trim()));
+                }
+            }
+
+            // Check format enforcement: every \bTODO\b must have a tagged match at the same offset.
+            for m in any_todo_re.find_iter(&line) {
+                let start = m.start();
+                let has_tag = tagged_re.find_iter(&line).any(|tm| tm.start() == start);
+                if !has_tag {
+                    format_violations.push(format!("{}:{}: {}", rel_path, line_num, line.trim()));
+                }
+            }
+        }
+    }
+
+    if blocked.is_empty() && format_violations.is_empty() {
+        return Ok(());
+    }
+
+    let mut msg = String::new();
+    if !blocked.is_empty() {
+        msg.push_str(&format!(
+            "Blocked TODO severities {:?} found ({} occurrence{}):\n  {}",
+            todos.blocked_severities,
+            blocked.len(),
+            if blocked.len() == 1 { "" } else { "s" },
+            blocked.join("\n  ")
+        ));
+    }
+    if !format_violations.is_empty() {
+        if !msg.is_empty() {
+            msg.push_str("\n\n");
+        }
+        msg.push_str(&format!(
+            "TODO format violations ({} occurrence{}): TODO must be tagged as TODO(0), TODO(1), TODO(2), or TODO(3).\n  {}",
+            format_violations.len(),
+            if format_violations.len() == 1 { "" } else { "s" },
+            format_violations.join("\n  ")
+        ));
+    }
+
+    bail!("{msg}");
+}
+
 /// Collect all generated paths including per-crate CLAUDE.md files.
 fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
     let mut paths = vec!["CLAUDE.md".to_string(), "release-plz.toml".to_string()];
@@ -235,14 +369,18 @@ pub fn run(check: bool) -> Result<()> {
     eprintln!("[verify] Checking path constraints...");
     check_paths(&policy)?;
 
-    // 4) Generated files freshness
+    // 4) TODO annotations
+    eprintln!("[verify] Checking TODO annotations...");
+    check_todo_annotations(metadata.workspace_root.as_std_path(), &policy.todos)?;
+
+    // 5) Generated files freshness
     if check {
         eprintln!("[verify] Checking generated files are up to date...");
         // This will fail if any files need updating
         sync::run(true, true)?;
     }
 
-    // 5) Generated files not gitignored
+    // 6) Generated files not gitignored
     eprintln!("[verify] Checking generated files are not gitignored...");
     let gen_paths = collect_generated_paths(&metadata);
     let gen_path_refs: Vec<&str> = gen_paths.iter().map(|s| s.as_str()).collect();
@@ -250,4 +388,123 @@ pub fn run(check: bool) -> Result<()> {
 
     eprintln!("[verify] All checks passed!");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::policy::TodoPolicy;
+    use std::process::Command;
+
+    /// Create a temporary git repo, write files, stage them, and return the temp dir.
+    fn setup_git_repo(files: &[(&str, &[u8])]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        Command::new("git")
+            .args(["init", "--initial-branch=main"])
+            .current_dir(dir.path())
+            .output()
+            .expect("git init");
+
+        // Configure git user for commits (required by some git versions).
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(dir.path())
+            .output()
+            .expect("git config email");
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(dir.path())
+            .output()
+            .expect("git config name");
+
+        for (name, content) in files {
+            let path = dir.path().join(name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).expect("create parent dirs");
+            }
+            std::fs::write(&path, content).expect("write file");
+        }
+
+        Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(dir.path())
+            .output()
+            .expect("git add");
+
+        dir
+    }
+
+    #[test]
+    fn blocks_todo_0() {
+        let dir = setup_git_repo(&[("a.rs", b"// TODO(0): nope\n")]);
+        let policy = TodoPolicy {
+            blocked_severities: vec![0],
+            ignore_paths: vec![],
+        };
+        let result = check_todo_annotations(dir.path(), &policy);
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Blocked TODO severities"),
+            "expected blocked message, got: {err}"
+        );
+        assert!(err.contains("a.rs:1"), "expected file:line ref, got: {err}");
+    }
+
+    #[test]
+    fn flags_untagged_todo() {
+        let dir = setup_git_repo(&[("a.rs", b"// TODO: tag me\n")]);
+        let policy = TodoPolicy {
+            blocked_severities: vec![0],
+            ignore_paths: vec![],
+        };
+        let result = check_todo_annotations(dir.path(), &policy);
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("TODO format violations"),
+            "expected format violation, got: {err}"
+        );
+        assert!(err.contains("a.rs:1"), "expected file:line ref, got: {err}");
+    }
+
+    #[test]
+    fn does_not_match_lowercase_todo_calls() {
+        let dir = setup_git_repo(&[("a.rs", b"sessions.todo(\"s1\")\n")]);
+        let policy = TodoPolicy {
+            blocked_severities: vec![0],
+            ignore_paths: vec![],
+        };
+        let result = check_todo_annotations(dir.path(), &policy);
+        assert!(
+            result.is_ok(),
+            "lowercase todo should not trigger: {result:?}"
+        );
+    }
+
+    #[test]
+    fn ignores_configured_paths() {
+        let dir = setup_git_repo(&[("CLAUDE.md", b"TODO(0): convention definition\n")]);
+        let policy = TodoPolicy {
+            blocked_severities: vec![0],
+            ignore_paths: vec!["CLAUDE.md".to_string()],
+        };
+        let result = check_todo_annotations(dir.path(), &policy);
+        assert!(
+            result.is_ok(),
+            "ignored path should not trigger: {result:?}"
+        );
+    }
+
+    #[test]
+    fn skips_binary_files_by_nul_detection() {
+        // Put a NUL byte in the first 512 bytes, then a TODO(0) later.
+        let mut content = vec![0u8; 100];
+        content.extend_from_slice(b"TODO(0): should be skipped\n");
+        let dir = setup_git_repo(&[("binary.bin", &content)]);
+        let policy = TodoPolicy {
+            blocked_severities: vec![0],
+            ignore_paths: vec![],
+        };
+        let result = check_todo_annotations(dir.path(), &policy);
+        assert!(result.is_ok(), "binary file should be skipped: {result:?}");
+    }
 }

@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let calculator = calculator.clone();
                 move || async move {
                     // For now, OpenAPI returns a string message
-                    // TODO: Enable the 'openapi' feature for full OpenAPI support
+                    // TODO(3): Enable the 'openapi' feature for full OpenAPI support
                     calculator.get_openapi_spec()
                 }
             }),

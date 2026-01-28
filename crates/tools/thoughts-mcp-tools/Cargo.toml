@@ -22,7 +22,6 @@ thoughts-tool = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# TODO(0): Verify schemars 1.x compatibility across all consumers after migration completes.
 schemars = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
