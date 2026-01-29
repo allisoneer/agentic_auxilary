@@ -125,10 +125,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
         }
     };
 
+    let doc_comment = format!("Auto-generated tool struct for [`{}`].", fn_ident);
+
     let expanded = quote! {
         #func
 
-        /// Auto-generated tool struct for [`#fn_ident`].
+        #[doc = #doc_comment]
         #[derive(Clone)]
         pub struct #tool_struct;
 
