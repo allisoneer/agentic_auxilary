@@ -31,7 +31,7 @@ impl TextFormat for ActiveDocuments {
         for f in &self.files {
             let rel = f
                 .path
-                .strip_prefix(&format!("{}/", self.base))
+                .strip_prefix(&format!("{}/", self.base.trim_end_matches('/')))
                 .unwrap_or(&f.path);
             let ts = match chrono::DateTime::parse_from_rfc3339(&f.modified) {
                 Ok(dt) => dt
@@ -55,7 +55,7 @@ impl TextFormat for ReferencesList {
         for e in &self.entries {
             let rel = e
                 .path
-                .strip_prefix(&format!("{}/", self.base))
+                .strip_prefix(&format!("{}/", self.base.trim_end_matches('/')))
                 .unwrap_or(&e.path);
             match &e.description {
                 Some(desc) if !desc.trim().is_empty() => {
