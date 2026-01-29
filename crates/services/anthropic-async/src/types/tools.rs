@@ -130,8 +130,8 @@ pub mod schema {
     /// ```
     #[must_use]
     pub fn tool_from_schema<T: JsonSchema>(name: &str, description: Option<&str>) -> Tool {
-        let root = schemars::schema_for!(T);
-        let schema_value = serde_json::to_value(root.schema).expect("valid schema");
+        let schema = schemars::schema_for!(T);
+        let schema_value = serde_json::to_value(&schema).expect("valid schema");
         Tool {
             name: name.to_string(),
             description: description.map(std::string::ToString::to_string),
