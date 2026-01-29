@@ -44,6 +44,8 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
                 {
                     with_fn = Some(lit_str.parse()?);
                 }
+            } else {
+                return Err(meta.error("unknown text_format attribute"));
             }
             Ok(())
         })?;
