@@ -45,7 +45,11 @@ fn workspace_relative_dir(dir: &Path, ws_root: &Path) -> String {
     let rel = dir.strip_prefix(ws_root).unwrap_or(dir);
     let s = rel.to_string_lossy().replace('\\', "/");
     let s = s.trim_start_matches('/').to_string();
-    if s.is_empty() { ".".to_string() } else { s }
+    if s.is_empty() {
+        ".".to_string()
+    } else {
+        s
+    }
 }
 
 /// Render the crate index for root CLAUDE.md, grouped by family.
@@ -77,7 +81,7 @@ pub fn render_root_index(metadata: &Metadata) -> String {
     // Render as markdown list
     let mut out = String::new();
     for (family, items) in &groups {
-        out.push_str(&format!("### {family}\n"));
+        out.push_str(&format!("### {family}\n\n"));
         for (name, role, dir) in items {
             out.push_str(&format!("- `{name}` ({role}) - `{dir}/`\n"));
         }
