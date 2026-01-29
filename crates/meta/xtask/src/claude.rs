@@ -45,11 +45,7 @@ fn workspace_relative_dir(dir: &Path, ws_root: &Path) -> String {
     let rel = dir.strip_prefix(ws_root).unwrap_or(dir);
     let s = rel.to_string_lossy().replace('\\', "/");
     let s = s.trim_start_matches('/').to_string();
-    if s.is_empty() {
-        ".".to_string()
-    } else {
-        s
-    }
+    if s.is_empty() { ".".to_string() } else { s }
 }
 
 /// Render the crate index for root CLAUDE.md, grouped by family.
