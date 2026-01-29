@@ -6,6 +6,7 @@ Guidance for Claude Code when working with this repository.
 
 <!-- BEGIN:xtask:autogen crate-index -->
 ### agentic-tools
+
 - `agentic-tools-core` (lib) - `crates/agentic-tools/core/`
 - `agentic-mcp` (app) - `apps/agentic-mcp/`
 - `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
@@ -15,28 +16,34 @@ Guidance for Claude Code when working with this repository.
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 
 ### infra
+
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
 ### legacy
+
 - `universal-tool-core` (legacy) - `crates/legacy/universal-tool-core/`
 - `universal-tool-macros` (legacy) - `crates/legacy/universal-tool-macros/`
 - `universal-tool-integration-tests` (legacy) - `crates/legacy/universal-tool-integration-tests/`
 
 ### linear
+
 - `linear-tools` (tool-lib) - `crates/linear/tools/`
 - `linear-queries` (lib) - `crates/linear/queries/`
 - `linear-schema` (lib) - `crates/linear/schema/`
 
 ### meta
+
 - `xtask` (xtask) - `crates/meta/xtask/`
 
 ### services
+
 - `claudecode` (lib) - `crates/services/claudecode-rs/`
 - `anthropic-async` (lib) - `crates/services/anthropic-async/`
 - `opencode_rs` (lib) - `crates/services/opencode-rs/`
 
 ### tools
+
 - `thoughts` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
