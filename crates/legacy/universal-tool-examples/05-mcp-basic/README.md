@@ -86,8 +86,7 @@ You can integrate this MCP server with Claude Desktop by adding it to your confi
      "mcpServers": {
        "utf-text-tools": {
           "command": "/path/to/your/repo/target/release/examples/05-mcp-basic"
-
-       }
+        }
      }
    }
    ```
