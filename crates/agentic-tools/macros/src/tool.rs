@@ -97,9 +97,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
     };
 
     // Extract output type from return type
-    // Assume Result<Output, ToolError> and extract Output
+    // Require Result<Output, _> and extract Output
     let output_type: Type = match &func.sig.output {
-        ReturnType::Type(_, ty) => extract_result_ok_type(ty).unwrap_or_else(|| (**ty).clone()),
+        ReturnType::Type(_, ty) => extract_result_ok_type(ty).ok_or_else(|| {
+            syn::Error::new_spanned(ty, "#[tool] functions must return Result<T, ToolError>")
+        })?,
         ReturnType::Default => {
             return Err(syn::Error::new_spanned(
                 &func.sig,
@@ -352,5 +354,40 @@ mod tests {
         // Verify clone-and-forward pattern in generated code
         assert!(s.contains("ctx.clone()"), "expected ctx.clone() in: {s}");
         assert!(s.contains("asyncmove"), "expected async move block in: {s}");
+    }
+
+    #[test]
+    fn test_expand_rejects_non_result_return_type() {
+        let item = quote! {
+            async fn greet(input: String) -> String {
+                input
+            }
+        };
+
+        let res = expand(quote!(), item);
+        assert!(res.is_err());
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("#[tool] functions must return Result<T, ToolError>"),
+            "Expected error about Result return type, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_expand_accepts_std_result_path_return_type() {
+        let item = quote! {
+            async fn greet(
+                input: String
+            ) -> std::result::Result<String, agentic_tools_core::ToolError> {
+                Ok(input)
+            }
+        };
+
+        let res = expand(quote!(), item);
+        assert!(
+            res.is_ok(),
+            "Expected std::result::Result return type to be accepted, got: {:?}",
+            res.unwrap_err()
+        );
     }
 }
