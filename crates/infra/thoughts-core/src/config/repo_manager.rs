@@ -1578,4 +1578,77 @@ mod tests {
         // Restore cwd
         std::env::set_current_dir(cwd_before).unwrap();
     }
+
+    /// Regression test: validate_v2_hard() rejects mount directories with trailing slashes.
+    ///
+    /// This documents the invariant that the "single path segment" validation at lines 474-479
+    /// implicitly blocks trailing slashes (which contain '/'). This invariant protects against
+    /// a latent bug in fmt.rs path stripping where `format!("{}/", base)` would produce double
+    /// slashes if `base` already ended with '/'.
+    #[test]
+    fn test_validate_v2_hard_rejects_trailing_slash_in_mount_dirs() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        // Test trailing slash on thoughts mount dir
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts/".to_string(),
+                context: "context".to_string(),
+                references: "references".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(
+            result.is_err(),
+            "trailing slash on thoughts should be rejected"
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("single path segment"),
+            "error should mention single path segment requirement"
+        );
+
+        // Test trailing slash on context mount dir
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "context/".to_string(),
+                references: "references".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(
+            result.is_err(),
+            "trailing slash on context should be rejected"
+        );
+
+        // Test trailing slash on references mount dir
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "context".to_string(),
+                references: "references/".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(
+            result.is_err(),
+            "trailing slash on references should be rejected"
+        );
+    }
 }
