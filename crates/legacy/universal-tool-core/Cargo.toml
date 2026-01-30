@@ -1,6 +1,6 @@
 [package]
 name = "universal-tool-core"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "DEPRECATED: Use agentic-tools-* crates and agentic-mcp instead. Core runtime library for Universal Tool Framework."

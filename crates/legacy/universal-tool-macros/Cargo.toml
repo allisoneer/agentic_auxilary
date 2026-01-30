@@ -1,6 +1,6 @@
 [package]
 name = "universal-tool-macros"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "DEPRECATED: Use agentic-tools-* crates and agentic-mcp instead. Procedural macros for Universal Tool Framework."

@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "agentic_logging"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "atomicwrites",
  "chrono",
@@ -238,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "anthropic-async"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "backon",
@@ -938,7 +938,7 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "claudecode"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -2688,7 +2688,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -3410,7 +3410,7 @@ dependencies = [
 
 [[package]]
 name = "linear-queries"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "cynic",
@@ -3422,7 +3422,7 @@ dependencies = [
 
 [[package]]
 name = "linear-schema"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cynic",
  "cynic-codegen",
@@ -3430,7 +3430,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -3901,7 +3901,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode_rs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "backon",
@@ -4180,7 +4180,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -5634,7 +5634,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -5670,7 +5670,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6120,7 +6120,7 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "universal-tool-core"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "async-trait",
  "atty",
@@ -6160,7 +6160,7 @@ dependencies = [
 
 [[package]]
 name = "universal-tool-macros"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",

@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-tool"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Flexible thought management using filesystem mounts for git repositories"
@@ -17,7 +17,7 @@ linux = []
 macos = []
 
 [dependencies]
-agentic_logging = { version = "0.1.1", path = "../agentic-logging" }
+agentic_logging = { version = "0.1.2", path = "../agentic-logging" }
 agentic-tools-core = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
