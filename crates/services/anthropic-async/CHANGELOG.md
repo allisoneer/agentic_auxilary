@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+## [0.3.0] - 2026-01-30
+
+### ⚙️  Miscellaneous
+- *(deps)* Resolve cargo-deny security audit errors
+
+### ⛰️  Features
+- Agentic-tools framework and monorepo restructure
+- *(xtask)* Add README auto-generation with tiered crate listings
+
+### 🐛 Bug Fixes
+- *(anthropic-async)* Use schemars v1 API for schema_for! macro
 ## [0.2.1] - 2026-01-03
 
 ### 🚜 Refactor

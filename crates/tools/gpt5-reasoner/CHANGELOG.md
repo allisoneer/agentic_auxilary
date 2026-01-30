@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.6.0] - 2026-01-30
+
+### ⛰️  Features
+- Agentic-tools framework and monorepo restructure
+- [**breaking**] Rename tools with category-based prefixes and consolidate MCP server
+- *(gpt5_reasoner)* [**breaking**] Upgrade executor to GPT-5.2 with xhigh reasoning
+- *(xtask)* Add README auto-generation with tiered crate listings
 
 ### Breaking Changes
 - **gpt5_reasoner**: Executor model changed from `openai/gpt-5` to `openai/gpt-5.2`
