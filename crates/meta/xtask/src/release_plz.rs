@@ -66,6 +66,10 @@ pub fn render_packages(metadata: &Metadata, policy: &Policy) -> String {
             "release = {}\n",
             if publish { "true" } else { "false" }
         ));
+        // Emit publish = false to override workspace default for non-publishable packages
+        if !publish {
+            out.push_str("publish = false\n");
+        }
         out.push('\n');
     }
 

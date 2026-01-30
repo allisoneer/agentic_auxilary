@@ -137,6 +137,68 @@
     {
       "remote": "https://github.com/promptexecution/just-mcp",
       "description": "Production-ready Just MCP server using CLI wrapper approach - reference for justfile introspection and recipe execution"
+    },
+    {
+      "remote": "https://github.com/OpenRouterTeam/openrouter-examples",
+      "description": "OpenRouter API integration examples including prompt caching, streaming, and tool calling patterns"
+    },
+    {
+      "remote": "https://github.com/OpenRouterTeam/ai-sdk-provider",
+      "description": "OpenRouter provider for Vercel AI SDK with comprehensive Anthropic support and beta headers handling"
+    },
+    {
+      "remote": "https://github.com/OpenRouterTeam/tool-calling",
+      "description": "OpenRouter tool calling demo showing function calling capabilities"
+    },
+    {
+      "remote": "https://github.com/OpenRouterTeam/typescript-sdk.git",
+      "description": "Official OpenRouter TypeScript SDK - shows API patterns and model support"
+    },
+    "https://github.com/shekohex/opencode-google-antigravity-auth.git",
+    {
+      "remote": "https://github.com/napi-rs/napi-rs",
+      "description": "napi-rs - Rust bindings for Node-API, works with Bun (95% Node-API support). Key for the recommended napi-rs in-process architecture."
+    },
+    {
+      "remote": "https://github.com/chatmail/yerpc",
+      "description": "yerpc - JSON-RPC library with automatic TypeScript client generation. Alternative to napi-rs for type-safe Rust-to-TS communication."
+    },
+    {
+      "remote": "https://github.com/Aleph-Alpha/ts-rs",
+      "description": "ts-rs - Generate TypeScript type definitions from Rust structs. Useful for HTTP server approach with shared types."
+    },
+    {
+      "remote": "https://github.com/anomalyco/opentui",
+      "description": "OpenTUI - The underlying TUI framework used by opencode. TextareaRenderable and ref callback timing may be relevant to the input.setText race condition bug."
+    },
+    "git@github.com:General-Wisdom/monorepo.git",
+    {
+      "remote": "https://github.com/GREsau/schemars",
+      "description": "Schemars 1.x reference for JsonSchema API migration"
+    },
+    {
+      "remote": "https://github.com/glittercowboy/discord-mcp",
+      "description": "Discord MCP server with 128 operations for full server administration - the chosen Discord MCP for community setup"
+    },
+    {
+      "remote": "https://github.com/intergalacticalvariable/reader",
+      "description": "Self-hosted Jina Reader alternative - Docker-based HTML-to-Markdown converter with headless Chrome, leading candidate for web fetch tool"
+    },
+    {
+      "remote": "https://github.com/unclecode/crawl4ai",
+      "description": "MIT-licensed async Python crawler with Markdown/JSON output, JS rendering via Playwright - strong alternative for web fetch/crawl"
+    },
+    {
+      "remote": "https://github.com/allisoneer/web-reader",
+      "description": "User's own prior HTML-to-Markdown service built ~2 years ago with Cloudflare Workers (TinyGo), D1 caching - prior art for web fetch tooling"
+    },
+    {
+      "remote": "https://github.com/exa-labs/exa-mcp-server",
+      "description": "Exa's official MCP server implementation - reference for building custom web search tool"
     }
   ]
+<<<<<<< Updated upstream
 }
+=======
+}
+>>>>>>> Stashed changes
