@@ -1,0 +1,48 @@
+[package]
+name = "linear-tools"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+description = "Linear issue tools via CLI + MCP"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+readme = "../README.md"
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "linear_tools"
+path = "src/lib.rs"
+
+[dependencies]
+# Agentic tools framework
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+agentic-tools-utils = { workspace = true }
+futures = "0.3"
+cynic = { version = "3.12.0", features = ["http-reqwest"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+linear-queries = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+regex = "1"
+url = "2"
+
+[dev-dependencies]
+mockito = "1"
+serial_test = "3"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "linear"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = false
+napi = false

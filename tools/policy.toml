@@ -1,0 +1,136 @@
+# tools/policy.toml
+# Repository policy configuration for xtask sync/verify
+
+[enums]
+# Documented enums for package.metadata.repo
+role = ["app", "lib", "tool-lib", "binding", "legacy", "xtask"]
+family = ["agentic-tools", "linear", "services", "tools", "infra", "legacy", "meta"]
+readme_tier = ["featured", "brief", "one-liner", "legacy", "omit"]
+
+[enums.documentation]
+role = """
+- app: Binaries/CLIs with main.rs (e.g., thoughts, pr_comments, gpt5_reasoner)
+- lib: Libraries without tool-specific code (e.g., claudecode, anthropic-async)
+- tool-lib: Libraries providing tool implementations for MCP/CLI (e.g., linear-tools)
+- binding: Language bindings (e.g., agentic-tools-napi)
+- legacy: Deprecated crates pending migration (e.g., universal-tool-*)
+- xtask: Maintenance tooling crate
+"""
+family = """
+- agentic-tools: Core framework crates (core, macros, mcp, napi)
+- linear: Linear.app integration crates (schema, queries, tools)
+- services: External service SDKs (anthropic_async, claudecode_rs, opencode_rs)
+- tools: Domain-specific tool crates (pr_comments, gpt5_reasoner, coding_agent_tools, thoughts)
+- infra: Infrastructure/shared utilities (agentic_logging)
+- legacy: Deprecated crates (crates/legacy/*)
+- meta: Build/maintenance tooling (xtask)
+"""
+readme_tier = """
+- featured: Rich manual prose in Primary Tools section (app role default)
+- brief: Auto-generated with description in Additional Tools section (tool-lib role default)
+- one-liner: Auto-generated minimal in Supporting Libraries section (lib/binding role default)
+- legacy: Auto-generated in Legacy section (legacy role default)
+- omit: Not shown in README (xtask role default)
+"""
+expansion_process = """
+To add a new enum value:
+1) Append to the appropriate list (role/family) in this file with documentation.
+2) Update xtask/src/policy.rs validation to recognize the new value.
+3) Run: cargo run -p xtask -- verify --check
+"""
+
+[integrations.mcp]
+# Require at least one of these deps if metadata.repo.integrations.mcp = true
+any_of = ["agentic-tools-mcp", "universal-tool-core", "rmcp"]
+message = "MCP integration requires one of: agentic-tools-mcp, universal-tool-core, or rmcp. If migrating to agentic-tools, prefer agentic-tools-mcp."
+
+[integrations.logging]
+# If logging = true, require this dep
+all_of = ["agentic_logging"]
+message = "Logging integration requires agentic_logging dependency. Consider feature-gating if optional."
+
+[integrations.napi]
+# For NAPI crates
+any_of = ["napi", "napi-derive"]
+message = "NAPI integration requires napi and/or napi-derive dependencies."
+
+[paths]
+# Path constraint enforcement (enforcement logic not yet implemented)
+enforce = false
+allow = [
+  # Apps
+  "apps/*",
+  # Bindings
+  "bindings/node/*",
+  # Agentic-tools family
+  "crates/agentic-tools/*",
+  # Linear family
+  "crates/linear/*",
+  # Services family
+  "crates/services/*",
+  # Tools family
+  "crates/tools/*",
+  # Infra family
+  "crates/infra/*",
+  # Legacy family
+  "crates/legacy/*",
+  # Meta
+  "crates/meta/*",
+  # Non-crate directories
+  "tools/**",
+  ".github/**",
+]
+
+[todos]
+# Enforce severity-tagged annotations (see CLAUDE.md:145-149).
+# Severity 0 indicates "must never be merged to HEAD".
+blocked_severities = [0]
+
+# Repo-relative path prefixes to exclude from scanning.
+ignore_paths = [
+  "CLAUDE.md",                                # Convention definition text
+  "crates/meta/xtask/src/verify.rs",          # Self-referential enforcement code
+  "crates/infra/thoughts-core/CLAUDE.md",     # Prose mention
+  "crates/legacy/universal-tool-examples/",   # Legacy example READMEs with CLI examples
+  "crates/linear/CHANGELOG.md",               # Changelog prose
+  "crates/tools/coding-agent-tools/src/agent/prompts.rs", # Prompt template string
+]
+
+[release_plz]
+# Defaults for generated package entries
+git_tag_format = "{{ name }}-v{{ version }}"
+publish_default = true
+
+# Per-crate overrides to match current practices
+[release_plz.overrides.universal-tool-core]
+git_tag_enable = false
+
+[release_plz.overrides.universal-tool-macros]
+git_tag_enable = false
+
+[release_plz.overrides.claudecode]
+git_tag_enable = false
+
+[release_plz.overrides.anthropic-async]
+git_tag_enable = false
+
+[release_plz.overrides.universal-tool-integration-tests]
+publish = false
+
+[release_plz.overrides.xtask]
+publish = false
+
+[release_plz.overrides.agentic-tools-core]
+git_tag_enable = false
+
+[release_plz.overrides.agentic-tools-macros]
+git_tag_enable = false
+
+[release_plz.overrides.agentic-tools-mcp]
+git_tag_enable = false
+
+[release_plz.overrides.agentic-tools-napi]
+publish = false
+
+[release_plz.overrides.opencode_rs]
+git_tag_enable = false

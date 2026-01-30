@@ -1,0 +1,75 @@
+[package]
+name = "thoughts-tool"
+version = "0.7.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Flexible thought management using filesystem mounts for git repositories"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+keywords = ["filesystem", "mount", "git", "documentation", "mergerfs"]
+categories = ["command-line-utilities", "development-tools", "filesystem"]
+
+[features]
+default = []
+linux = []
+macos = []
+
+[dependencies]
+agentic_logging = { version = "0.1.1", path = "../agentic-logging" }
+agentic-tools-core = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+dirs = "5"
+git2 = { version = "0.18", features = ["vendored-openssl", "ssh", "https"] }
+gix = { version = "0.77", default-features = false, features = [
+    "blocking-network-client",
+    "worktree-mutation",
+    "interrupt",
+    "blocking-http-transport-reqwest-rust-tls"
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+chrono = { version = "0.4", features = ["serde"] }
+glob = "0.3"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+which = "6"
+atomicwrites = "0.4"
+colored = "2"
+regex = "1"
+schemars = { workspace = true }
+
+# Platform-specific dependencies
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.27", features = ["fs", "mount"] }
+
+[build-dependencies]
+rustc_version = "0.4"
+
+# Configure platform-specific compilation
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"]
+
+[dev-dependencies]
+tempfile = "3"
+pretty_assertions = "1"
+serial_test = "3"
+assert_cmd = "2.1"
+predicates = "3.1"
+
+[package.metadata.repo]
+role = "lib"
+family = "infra"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = true
+napi = false
+
