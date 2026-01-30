@@ -2,8 +2,13 @@
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 # All advisories are denied by default in cargo-deny 0.16.0+
-# Add specific advisory IDs to ignore if needed:
-# ignore = ["RUSTSEC-XXXX-XXXX"]
+# Ignore advisories for transitive dependencies we can't control:
+ignore = [
+    # backoff and instant come from async-openai (transitive via gpt5_reasoner)
+    # Upstream issue: https://github.com/64bit/async-openai/issues/298
+    "RUSTSEC-2025-0012",  # backoff unmaintained
+    "RUSTSEC-2024-0384",  # instant unmaintained
+]
 
 [licenses]
 # List of allowed licenses
@@ -16,6 +21,8 @@ allow = [
     "ISC",           # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
     "CDLA-Permissive-2.0",  # Community Data License Agreement for webpki-roots certificate data (CCADB)
     "Unlicense",  # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
+    "Zlib",       # zlib License (OSI-approved, FSF Free/Libre) - used by foldhash, zlib-rs via gix
+    "OpenSSL",    # OpenSSL License (FSF Free/Libre) - used by aws-lc-sys via rustls
 ]
 # Confidence threshold for license detection (0.0-1.0)
 confidence-threshold = 0.93
@@ -29,13 +36,9 @@ wildcards = "deny"
 skip = [
     # heck is used by different proc-macro crates with different major versions
     { name = "heck", version = "0.4" },  # Used by tabled_derive
-    # unicode-width has different behavior between 0.1 and 0.2 for control characters
-    { name = "unicode-width", version = "0.1" },  # Some crates need the old behavior
+
     # syn 1.0 is still used by some older proc-macro crates
     { name = "syn", version = "1.0" },  # Used by older proc-macro dependencies
-    # regex-automata and regex-syntax have different versions in the ecosystem
-    { name = "regex-automata", version = "0.1" },
-    { name = "regex-syntax", version = "0.6" },
     # System-level crates with different major versions
     { name = "rustix", version = "0.38" },
     { name = "linux-raw-sys", version = "0.4" },
@@ -44,19 +47,9 @@ skip = [
     { name = "thiserror-impl", version = "1.0" },  # Proc-macro for thiserror v1
     # getrandom has different major versions in the ecosystem
     { name = "getrandom", version = "0.2" },  # Used by older crates
-    # wasi has different versions for different snapshot versions
-    { name = "wasi", version = "0.11" },  # Used by getrandom 0.2 and mio
-    # Windows-specific crates (we don't support Windows, but these are transitive deps)
-    { name = "windows-sys" },  # Multiple versions from different dependencies
-    { name = "windows-targets" },
-    { name = "windows_aarch64_gnullvm" },
-    { name = "windows_aarch64_msvc" },
-    { name = "windows_i686_gnu" },
-    { name = "windows_i686_gnullvm" },
-    { name = "windows_i686_msvc" },
-    { name = "windows_x86_64_gnu" },
-    { name = "windows_x86_64_gnullvm" },
-    { name = "windows_x86_64_msvc" },
+
+    # base64 0.21 coexists with 0.22 in the ecosystem
+    { name = "base64", version = "0.21" },
 ]
 
 [graph]
@@ -68,8 +61,12 @@ targets = [
     "aarch64-apple-darwin",
 ]
 all-features = false
-# TODO(3): After verifying platform filtering, remove Windows-specific skip entries
-# in [bans.skip] that were only needed due to Windows crates being analyzed.
+# Exclude legacy universal-tool-* crates from cargo-deny analysis
+exclude = [
+    "universal-tool-core",
+    "universal-tool-macros",
+    "universal-tool-integration-tests",
+]
 
 [sources]
 # Warn for crates from unknown registries

@@ -1,0 +1,23 @@
+[package]
+name = "agentic-tools-utils"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+description = "Shared utilities for agentic-tools ecosystem: pagination, http, secrets, cli"
+
+[package.metadata.repo]
+role = "lib"
+family = "agentic-tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[dependencies]
+thiserror = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

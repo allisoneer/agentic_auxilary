@@ -22,7 +22,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -35,7 +35,10 @@ jobs:
           private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.92
+          cache: true
 
       - name: Sync README
         id: sync
@@ -45,9 +48,9 @@ jobs:
           set -euo pipefail
           cargo run -p xtask -- readme-sync
           if git diff --quiet --exit-code; then
-            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit changes
@@ -60,4 +63,4 @@ jobs:
           git config user.email "readme-sync[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "chore(readme): sync dependency versions [skip ci]"
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:${GITHUB_HEAD_REF}
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"

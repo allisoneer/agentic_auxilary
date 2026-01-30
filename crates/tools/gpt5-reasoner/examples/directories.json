@@ -1,0 +1,10 @@
+[
+  {
+    "directory_path": "crates/tools/gpt5-reasoner/src",
+    "description": "All Rust sources for gpt5_reasoner implementation",
+    "extensions": ["rs"],
+    "recursive": true,
+    "include_hidden": false,
+    "max_files": 1000
+  }
+]
