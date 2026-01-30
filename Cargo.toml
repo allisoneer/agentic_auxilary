@@ -65,20 +65,20 @@ agentic-tools-macros = { version = "0.1.0", path = "crates/agentic-tools/macros"
 agentic-tools-mcp = { version = "0.1.0", path = "crates/agentic-tools/mcp" }
 agentic-tools-utils = { version = "0.1.0", path = "crates/agentic-tools/utils" }
 agentic-tools-registry = { version = "0.1.0", path = "crates/agentic-tools/registry" }
-agentic_logging = { version = "0.1.1", path = "crates/infra/agentic-logging" }
-thoughts-tool = { version = "0.7.0", path = "crates/infra/thoughts-core" }
+agentic_logging = { version = "0.1.2", path = "crates/infra/agentic-logging" }
+thoughts-tool = { version = "0.8.0", path = "crates/infra/thoughts-core" }
 thoughts-mcp-tools = { version = "0.1.0", path = "crates/tools/thoughts-mcp-tools" }
-coding_agent_tools = { version = "0.1.8", path = "crates/tools/coding-agent-tools" }
-pr_comments = { version = "0.5.2", path = "crates/tools/pr-comments" }
-gpt5_reasoner = { version = "0.5.2", path = "crates/tools/gpt5-reasoner" }
-linear-tools = { version = "0.2.0", path = "crates/linear/tools" }
-linear-schema = { version = "0.1.0", path = "crates/linear/schema" }
-linear-queries = { version = "0.1.1", path = "crates/linear/queries" }
-claudecode = { version = "0.1.9", path = "crates/services/claudecode-rs" }
-anthropic-async = { version = "0.2.1", path = "crates/services/anthropic-async" }
-opencode_rs = { version = "0.1.1", path = "crates/services/opencode-rs" }
-universal-tool-core = { version = "0.2.5", path = "crates/legacy/universal-tool-core" }
-universal-tool-macros = { version = "0.1.8", path = "crates/legacy/universal-tool-macros" }
+coding_agent_tools = { version = "0.2.0", path = "crates/tools/coding-agent-tools" }
+pr_comments = { version = "0.6.0", path = "crates/tools/pr-comments" }
+gpt5_reasoner = { version = "0.6.0", path = "crates/tools/gpt5-reasoner" }
+linear-tools = { version = "0.3.0", path = "crates/linear/tools" }
+linear-schema = { version = "0.1.1", path = "crates/linear/schema" }
+linear-queries = { version = "0.1.2", path = "crates/linear/queries" }
+claudecode = { version = "0.1.10", path = "crates/services/claudecode-rs" }
+anthropic-async = { version = "0.3.0", path = "crates/services/anthropic-async" }
+opencode_rs = { version = "0.1.2", path = "crates/services/opencode-rs" }
+universal-tool-core = { version = "0.2.6", path = "crates/legacy/universal-tool-core" }
+universal-tool-macros = { version = "0.1.9", path = "crates/legacy/universal-tool-macros" }
 
 # The profile that 'dist' will build with
 [profile.dist]

@@ -1,6 +1,6 @@
 [package]
 name = "pr_comments"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Fetch GitHub PR comments via CLI and MCP"
