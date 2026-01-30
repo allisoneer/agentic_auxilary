@@ -1,6 +1,6 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
