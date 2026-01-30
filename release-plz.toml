@@ -169,6 +169,7 @@ changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
 git_tag_name = "agentic-tools-napi-v{{ version }}"
 git_tag_enable = true
 release = false
+publish = false
 
 [[package]]
 name = "agentic-tools-macros"
@@ -211,6 +212,7 @@ changelog_path = "crates/legacy/universal-tool-integration-tests/CHANGELOG.md"
 git_tag_name = "universal-tool-integration-tests-v{{ version }}"
 git_tag_enable = true
 release = false
+publish = false
 
 [[package]]
 name = "xtask"
@@ -218,4 +220,5 @@ changelog_path = "crates/meta/xtask/CHANGELOG.md"
 git_tag_name = "xtask-v{{ version }}"
 git_tag_enable = true
 release = false
+publish = false
 # END:xtask:autogen
