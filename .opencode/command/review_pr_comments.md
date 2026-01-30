@@ -1,19 +1,20 @@
 ---
-description: Review PR comments — triage, analyze with sub-agents, draft replies
+description: Review PR comments — triage, analyze, present overview for user direction
 ---
 
 <task>
-Triage PR review comments and perform targeted deep analysis using sub-agents.
+Triage PR review comments, analyze them, and present a structured overview so the user can decide what to do.
 
 Default behavior (no args):
 - Fetch all unresolved comments on the current PR
 - Triage all threads (actionable, question, context, nit) with severity
 - Spawn 1 sub-agent per actionable/question thread for deep analysis
 - Assess nits inline (validity, effort, worth addressing) without sub-agents
-- Write a versioned artifact with all threads analyzed and nits categorized as quick-wins/deferred/declined
-- Present reply drafts in the assistant response (not in artifact)
+- Write a versioned artifact with all threads analyzed and nits categorized
+- Present an **overview summary** in the assistant response with categorized comments
 
-The user can then say "send reply for X" to post a specific reply.
+The user then decides what to do: fix issues, add TODOs, send replies, investigate further, etc.
+Do NOT proactively draft replies or suggest sending them — let the user steer.
 
 Keep instructions LEAN — you already understand tool mechanics from their descriptions.
 </task>
@@ -31,7 +32,7 @@ $ARGUMENTS
 Infer user intent from `$ARGUMENTS`. Apply smart defaults if unspecified:
 - Scope: current PR, all unresolved comments, comment_source_type = all
 - Actions: triage all threads; deep-analyze actionable/question; inline-assess nits
-- Output: versioned artifact (with nits categorized) + reply drafts in response
+- Output: versioned artifact (with nits categorized) + overview summary in response
 
 Recognize common intents:
 - "just triage" → skip all analysis (deep and inline), just categorize
@@ -217,27 +218,48 @@ For each invalid/not-applicable nit:
 - One-liner: why declined
 
 ### Footer
-- Note that reply drafts are in the assistant response
-- Quick command reference: "send reply for X", "fix quick wins", etc.
+- Quick command reference: "fix quick wins", "fix X", "add TODO for Y", "reply to Z saying...", "tell me more about W"
 
 Write using `tools_thoughts_write_document` with doc_type="artifact".
 
 </step>
 
-<step name="present_reply_drafts" id="9">
+<step name="present_overview" id="9">
 
-## Present Reply Drafts in Response
+## Present Overview in Response
 
-In your assistant response (NOT in the artifact), list reply drafts:
+In your assistant response, present a **structured overview** of all comments organized by category. Do NOT show reply drafts unless the user asks for them.
 
-Format each as:
-- Thread identifier (path:line or index)
-- target_comment_id to reply to
-- The draft text (without "🤖" prefix — tool adds it)
+### Format
 
-Explain: "Say 'send reply for X' to post that reply."
+**Summary line**: "Found X comments: Y actionable, Z nits (W quick wins), ..."
 
-Do NOT call `tools_gh_add_comment_reply` yet — only on explicit user follow-up.
+**Actionable/Questions** (ordered by severity: high → medium → low):
+For each, show:
+- `path:line` — Brief summary of what the comment asks/requests
+- Category tag: `[actionable/high]` or `[question/medium]` etc.
+
+**Quick Wins** (trivial effort, valid nits worth fixing):
+For each, show:
+- `path:line` — What to fix (1 line)
+
+**Deferred** (valid but not worth it now):
+- `path:line` — Why deferred (1 line)
+
+**Declined** (invalid or N/A):
+- `path:line` — Why declined (1 line)
+
+### User Steers Next Steps
+
+End with: "What would you like to do?" — let the user decide:
+- "fix the quick wins" → make the code changes
+- "fix X and Y" → fix specific items
+- "add TODO for Z" → add TODO comment with appropriate severity
+- "reply to X saying..." → draft and send a reply
+- "tell me more about X" → deeper investigation
+- "create ticket for X" → (if Linear available) create follow-up issue
+
+Do NOT call `tools_gh_add_comment_reply` unless the user explicitly requests a reply.
 
 </step>
 
