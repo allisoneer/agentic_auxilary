@@ -44,7 +44,7 @@ Guidance for Claude Code when working with this repository.
 
 ### tools
 
-- `thoughts` (app) - `apps/thoughts/`
+- `thoughts-bin` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
