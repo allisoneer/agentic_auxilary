@@ -21,3 +21,13 @@ impl cynic::schema::IsScalar<schema::DateTimeOrDuration> for DateTimeOrDuration 
 }
 
 impl cynic::coercions::CoercesTo<schema::DateTimeOrDuration> for DateTimeOrDuration {}
+
+/// Wrapper for Linear TimelessDate scalar (YYYY-MM-DD format)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelessDate(pub String);
+
+impl cynic::schema::IsScalar<schema::TimelessDate> for TimelessDate {
+    type SchemaType = schema::TimelessDate;
+}
+
+impl cynic::coercions::CoercesTo<schema::TimelessDate> for TimelessDate {}

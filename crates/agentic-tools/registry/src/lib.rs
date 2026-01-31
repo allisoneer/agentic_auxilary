@@ -61,6 +61,8 @@ const LINEAR_NAMES: &[&str] = &[
     "linear_read_issue",
     "linear_create_issue",
     "linear_add_comment",
+    "linear_archive_issue",
+    "linear_get_metadata",
 ];
 
 const GPT5_NAMES: &[&str] = &["ask_reasoning_model"];
@@ -114,7 +116,7 @@ impl AgenticTools {
             regs.push(pr_comments::build_registry(Arc::new(tool)));
         }
 
-        // linear_tools (4 tools)
+        // linear_tools (6 tools)
         if domain_wanted(LINEAR_NAMES) {
             let linear = Arc::new(linear_tools::LinearTools::new());
             regs.push(linear_tools::build_registry(linear));
@@ -179,8 +181,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_19() {
-        assert_eq!(AgenticTools::total_tool_count(), 19);
+    fn total_tool_count_is_21() {
+        assert_eq!(AgenticTools::total_tool_count(), 21);
     }
 
     #[test]
@@ -220,10 +222,10 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 19 tools
+        // Should have all 21 tools
         assert!(
-            names.len() >= 19,
-            "expected at least 19 tools, got {}",
+            names.len() >= 21,
+            "expected at least 21 tools, got {}",
             names.len()
         );
 
@@ -296,7 +298,7 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Empty allowlist normalizes to None, enabling all tools
-        assert!(reg.len() >= 19);
+        assert!(reg.len() >= 21);
     }
 
     #[test]

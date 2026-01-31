@@ -1,4 +1,4 @@
-use linear_tools::test_support::EnvGuard;
+use linear_tools::test_support::*;
 use mockito::Server;
 use serial_test::serial;
 
@@ -29,33 +29,16 @@ async fn search_issues_auth_failure() {
 #[serial(env)]
 async fn read_issue_by_identifier_success() {
     let mut server = Server::new_async().await;
+
+    let mut node = issue_node("uuid-1", "ENG-245", "Test Issue");
+    node["description"] = serde_json::json!("Description here");
+    node["state"] = workflow_state_node("s1", "In Progress", "started");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issues": {
-                    "nodes": [{
-                        "id": "uuid-1",
-                        "identifier": "ENG-245",
-                        "title": "Test Issue",
-                        "description": "Description here",
-                        "priority": 2.0,
-                        "url": "https://linear.app/test/issue/ENG-245",
-                        "createdAt": "2025-01-01T00:00:00Z",
-                        "updatedAt": "2025-01-02T00:00:00Z",
-                        "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                        "state": {"id": "s1", "name": "In Progress", "type": "started"},
-                        "assignee": null,
-                        "project": null
-                    }],
-                    "pageInfo": {"hasNextPage": false, "endCursor": null}
-                }
-            }
-        }"#,
-        )
+        .with_body(issues_response(vec![node], false, None))
         .create_async()
         .await;
 
@@ -66,55 +49,36 @@ async fn read_issue_by_identifier_success() {
     let res = tool.read_issue("ENG-245".into()).await.unwrap();
     assert_eq!(res.issue.identifier, "ENG-245");
     assert_eq!(res.issue.title, "Test Issue");
+    assert_eq!(res.issue.state.as_ref().unwrap().name, "In Progress");
+    assert_eq!(res.issue.state.as_ref().unwrap().state_type, "started");
+    assert_eq!(res.issue.team.key, "ENG");
+    assert_eq!(res.issue.priority, 2);
+    assert_eq!(res.issue.priority_label, "High");
+    assert!(res.issue.creator.is_some());
+    assert_eq!(res.description, Some("Description here".to_string()));
 }
 
 #[tokio::test]
 #[serial(env)]
 async fn search_issues_success() {
     let mut server = Server::new_async().await;
+
+    let mut node1 = issue_node("uuid-1", "ENG-100", "First Issue");
+    node1["priority"] = serde_json::json!(1.0);
+    node1["priorityLabel"] = serde_json::json!("Urgent");
+    node1["assignee"] = user_node("u1", "Alice", "Alice Smith", "alice@example.com");
+
+    let mut node2 = issue_node("uuid-2", "ENG-101", "Second Issue");
+    node2["description"] = serde_json::json!("Some description");
+    node2["updatedAt"] = serde_json::json!("2025-01-03T00:00:00Z");
+    node2["state"] = workflow_state_node("s2", "In Progress", "started");
+    node2["project"] = project_node("p1", "Q1 Goals");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issues": {
-                    "nodes": [
-                        {
-                            "id": "uuid-1",
-                            "identifier": "ENG-100",
-                            "title": "First Issue",
-                            "description": null,
-                            "priority": 1.0,
-                            "url": "https://linear.app/test/issue/ENG-100",
-                            "createdAt": "2025-01-01T00:00:00Z",
-                            "updatedAt": "2025-01-02T00:00:00Z",
-                            "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                            "state": {"id": "s1", "name": "Todo", "type": "unstarted"},
-                            "assignee": {"id": "u1", "name": "Alice", "displayName": "Alice Smith", "email": "alice@example.com"},
-                            "project": null
-                        },
-                        {
-                            "id": "uuid-2",
-                            "identifier": "ENG-101",
-                            "title": "Second Issue",
-                            "description": "Some description",
-                            "priority": 2.0,
-                            "url": "https://linear.app/test/issue/ENG-101",
-                            "createdAt": "2025-01-01T00:00:00Z",
-                            "updatedAt": "2025-01-03T00:00:00Z",
-                            "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                            "state": {"id": "s2", "name": "In Progress", "type": "started"},
-                            "assignee": null,
-                            "project": {"id": "p1", "name": "Q1 Goals"}
-                        }
-                    ],
-                    "pageInfo": {"hasNextPage": true, "endCursor": "cursor123"}
-                }
-            }
-        }"#,
-        )
+        .with_body(issues_response(vec![node1, node2], true, Some("cursor123")))
         .create_async()
         .await;
 
@@ -131,8 +95,11 @@ async fn search_issues_success() {
 
     assert_eq!(res.issues.len(), 2);
     assert_eq!(res.issues[0].identifier, "ENG-100");
-    assert_eq!(res.issues[0].assignee, Some("Alice Smith".to_string()));
+    assert_eq!(res.issues[0].assignee.as_ref().unwrap().name, "Alice Smith");
+    assert_eq!(res.issues[0].priority, 1);
+    assert_eq!(res.issues[0].priority_label, "Urgent");
     assert_eq!(res.issues[1].identifier, "ENG-101");
+    assert_eq!(res.issues[1].project.as_ref().unwrap().name, "Q1 Goals");
     assert!(res.has_next_page);
     assert_eq!(res.end_cursor, Some("cursor123".to_string()));
 }
@@ -141,14 +108,11 @@ async fn search_issues_success() {
 #[serial(env)]
 async fn read_issue_not_found() {
     let mut server = Server::new_async().await;
-    // Mock that returns empty results for the identifier search
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json; charset=utf-8")
-        .with_body(
-            r#"{"data":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#,
-        )
+        .with_body(issues_response(vec![], false, None))
         .create_async()
         .await;
 
@@ -157,7 +121,6 @@ async fn read_issue_not_found() {
 
     let tool = linear_tools::LinearTools::new();
     let res = tool.read_issue("NONEXISTENT-999".into()).await;
-    // Should fail - either with NotFound or with a parsing error depending on mock behavior
     assert!(res.is_err(), "Expected error for non-existent issue");
 }
 
@@ -165,33 +128,16 @@ async fn read_issue_not_found() {
 #[serial(env)]
 async fn create_issue_success() {
     let mut server = Server::new_async().await;
+
+    let mut node = issue_node("new-uuid", "ENG-500", "New Issue");
+    node["description"] = serde_json::json!("Issue description");
+    node["state"] = workflow_state_node("s1", "Backlog", "backlog");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issueCreate": {
-                    "success": true,
-                    "issue": {
-                        "id": "new-uuid",
-                        "identifier": "ENG-500",
-                        "title": "New Issue",
-                        "description": "Issue description",
-                        "priority": 2.0,
-                        "url": "https://linear.app/test/issue/ENG-500",
-                        "createdAt": "2025-01-01T00:00:00Z",
-                        "updatedAt": "2025-01-01T00:00:00Z",
-                        "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                        "state": {"id": "s1", "name": "Backlog", "type": "backlog"},
-                        "assignee": null,
-                        "project": null
-                    }
-                }
-            }
-        }"#,
-        )
+        .with_body(issue_create_response(node))
         .create_async()
         .await;
 
@@ -229,20 +175,10 @@ async fn add_comment_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "commentCreate": {
-                    "success": true,
-                    "comment": {
-                        "id": "comment-uuid",
-                        "body": "This is a test comment",
-                        "createdAt": "2025-01-01T12:00:00Z"
-                    }
-                }
-            }
-        }"#,
-        )
+        .with_body(comment_create_response(
+            "comment-uuid",
+            "This is a test comment",
+        ))
         .create_async()
         .await;
 
@@ -250,7 +186,6 @@ async fn add_comment_success() {
     let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
 
     let tool = linear_tools::LinearTools::new();
-    // Using UUID directly - no resolution needed
     let res = tool
         .add_comment(
             "issue-uuid".to_string(),
@@ -271,33 +206,14 @@ async fn add_comment_by_identifier_success() {
     let mut server = Server::new_async().await;
 
     // First request: resolve identifier ENG-245 to UUID
+    let mut resolve_node = issue_node("resolved-uuid", "ENG-245", "Test Issue");
+    resolve_node["state"] = serde_json::json!(null);
+
     let _m1 = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issues": {
-                    "nodes": [{
-                        "id": "resolved-uuid",
-                        "identifier": "ENG-245",
-                        "title": "Test Issue",
-                        "description": null,
-                        "priority": 2.0,
-                        "url": "https://linear.app/test/issue/ENG-245",
-                        "createdAt": "2025-01-01T00:00:00Z",
-                        "updatedAt": "2025-01-02T00:00:00Z",
-                        "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                        "state": null,
-                        "assignee": null,
-                        "project": null
-                    }],
-                    "pageInfo": {"hasNextPage": false, "endCursor": null}
-                }
-            }
-        }"#,
-        )
+        .with_body(issues_response(vec![resolve_node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -307,20 +223,10 @@ async fn add_comment_by_identifier_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "commentCreate": {
-                    "success": true,
-                    "comment": {
-                        "id": "comment-uuid",
-                        "body": "Comment via identifier",
-                        "createdAt": "2025-01-01T12:00:00Z"
-                    }
-                }
-            }
-        }"#,
-        )
+        .with_body(comment_create_response(
+            "comment-uuid",
+            "Comment via identifier",
+        ))
         .expect(1)
         .create_async()
         .await;
@@ -349,33 +255,14 @@ async fn add_comment_by_url_success() {
     let mut server = Server::new_async().await;
 
     // First request: resolve identifier from URL to UUID
+    let mut resolve_node = issue_node("url-resolved-uuid", "ENG-100", "URL Test Issue");
+    resolve_node["state"] = serde_json::json!(null);
+
     let _m1 = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issues": {
-                    "nodes": [{
-                        "id": "url-resolved-uuid",
-                        "identifier": "ENG-100",
-                        "title": "URL Test Issue",
-                        "description": null,
-                        "priority": 2.0,
-                        "url": "https://linear.app/test/issue/ENG-100",
-                        "createdAt": "2025-01-01T00:00:00Z",
-                        "updatedAt": "2025-01-02T00:00:00Z",
-                        "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                        "state": null,
-                        "assignee": null,
-                        "project": null
-                    }],
-                    "pageInfo": {"hasNextPage": false, "endCursor": null}
-                }
-            }
-        }"#,
-        )
+        .with_body(issues_response(vec![resolve_node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -385,20 +272,10 @@ async fn add_comment_by_url_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "commentCreate": {
-                    "success": true,
-                    "comment": {
-                        "id": "url-comment-uuid",
-                        "body": "Comment via URL",
-                        "createdAt": "2025-01-01T12:00:00Z"
-                    }
-                }
-            }
-        }"#,
-        )
+        .with_body(comment_create_response(
+            "url-comment-uuid",
+            "Comment via URL",
+        ))
         .expect(1)
         .create_async()
         .await;
@@ -425,33 +302,16 @@ async fn add_comment_by_url_success() {
 #[serial(env)]
 async fn create_issue_with_state_label_parent_success() {
     let mut server = Server::new_async().await;
+
+    let mut node = issue_node("new-uuid-with-extras", "ENG-600", "Issue with extras");
+    node["description"] = serde_json::json!("Has state, labels, parent");
+    node["state"] = workflow_state_node("state-1", "In Progress", "started");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issueCreate": {
-                    "success": true,
-                    "issue": {
-                        "id": "new-uuid-with-extras",
-                        "identifier": "ENG-600",
-                        "title": "Issue with extras",
-                        "description": "Has state, labels, parent",
-                        "priority": 2.0,
-                        "url": "https://linear.app/test/issue/ENG-600",
-                        "createdAt": "2025-01-01T00:00:00Z",
-                        "updatedAt": "2025-01-01T00:00:00Z",
-                        "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                        "state": {"id": "state-1", "name": "In Progress", "type": "started"},
-                        "assignee": null,
-                        "project": null
-                    }
-                }
-            }
-        }"#,
-        )
+        .with_body(issue_create_response(node))
         .create_async()
         .await;
 
@@ -479,42 +339,22 @@ async fn create_issue_with_state_label_parent_success() {
     let issue = res.issue.unwrap();
     assert_eq!(issue.identifier, "ENG-600");
     assert_eq!(issue.title, "Issue with extras");
-    assert_eq!(issue.state, Some("In Progress".to_string()));
+    assert_eq!(issue.state.as_ref().unwrap().name, "In Progress");
 }
 
 #[tokio::test]
 #[serial(env)]
 async fn search_issues_with_state_filter() {
     let mut server = Server::new_async().await;
+
+    let mut node = issue_node("uuid-filtered", "ENG-200", "Filtered Issue");
+    node["state"] = workflow_state_node("state-in-progress", "In Progress", "started");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issues": {
-                    "nodes": [
-                        {
-                            "id": "uuid-filtered",
-                            "identifier": "ENG-200",
-                            "title": "Filtered Issue",
-                            "description": null,
-                            "priority": 2.0,
-                            "url": "https://linear.app/test/issue/ENG-200",
-                            "createdAt": "2025-01-01T00:00:00Z",
-                            "updatedAt": "2025-01-02T00:00:00Z",
-                            "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                            "state": {"id": "state-in-progress", "name": "In Progress", "type": "started"},
-                            "assignee": null,
-                            "project": null
-                        }
-                    ],
-                    "pageInfo": {"hasNextPage": false, "endCursor": null}
-                }
-            }
-        }"#,
-        )
+        .with_body(issues_response(vec![node], false, None))
         .create_async()
         .await;
 
@@ -524,61 +364,44 @@ async fn search_issues_with_state_filter() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None,                                  // query
-            None,                                  // include_comments
-            None,                                  // priority
-            Some("state-in-progress".to_string()), // state_id
-            None,                                  // assignee_id
-            None,                                  // team_id
-            None,                                  // project_id
-            None,                                  // created_after
-            None,                                  // created_before
-            None,                                  // updated_after
-            None,                                  // updated_before
-            None,                                  // first
-            None,                                  // after
+            None,
+            None,
+            None,
+            Some("state-in-progress".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
 
     assert_eq!(res.issues.len(), 1);
     assert_eq!(res.issues[0].identifier, "ENG-200");
-    assert_eq!(res.issues[0].state, Some("In Progress".to_string()));
+    assert_eq!(res.issues[0].state.as_ref().unwrap().name, "In Progress");
 }
 
 #[tokio::test]
 #[serial(env)]
 async fn search_issues_with_date_ranges() {
     let mut server = Server::new_async().await;
+
+    let mut node = issue_node("uuid-recent", "ENG-300", "Recent Issue");
+    node["priority"] = serde_json::json!(3.0);
+    node["priorityLabel"] = serde_json::json!("Normal");
+    node["createdAt"] = serde_json::json!("2025-01-15T00:00:00Z");
+    node["updatedAt"] = serde_json::json!("2025-01-16T00:00:00Z");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-                "issues": {
-                    "nodes": [
-                        {
-                            "id": "uuid-recent",
-                            "identifier": "ENG-300",
-                            "title": "Recent Issue",
-                            "description": null,
-                            "priority": 3.0,
-                            "url": "https://linear.app/test/issue/ENG-300",
-                            "createdAt": "2025-01-15T00:00:00Z",
-                            "updatedAt": "2025-01-16T00:00:00Z",
-                            "team": {"id": "t1", "key": "ENG", "name": "Engineering"},
-                            "state": {"id": "s1", "name": "Todo", "type": "unstarted"},
-                            "assignee": null,
-                            "project": null
-                        }
-                    ],
-                    "pageInfo": {"hasNextPage": false, "endCursor": null}
-                }
-            }
-        }"#,
-        )
+        .with_body(issues_response(vec![node], false, None))
         .create_async()
         .await;
 
@@ -588,19 +411,19 @@ async fn search_issues_with_date_ranges() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None,                                     // query
-            None,                                     // include_comments
-            None,                                     // priority
-            None,                                     // state_id
-            None,                                     // assignee_id
-            None,                                     // team_id
-            None,                                     // project_id
-            Some("2025-01-01T00:00:00Z".to_string()), // created_after
-            Some("2025-01-31T23:59:59Z".to_string()), // created_before
-            None,                                     // updated_after
-            None,                                     // updated_before
-            None,                                     // first
-            None,                                     // after
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("2025-01-01T00:00:00Z".to_string()),
+            Some("2025-01-31T23:59:59Z".to_string()),
+            None,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -619,9 +442,7 @@ async fn auth_header_personal_key() {
         .match_header("authorization", "lin_api_abc123")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{"data":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#,
-        )
+        .with_body(issues_response(vec![], false, None))
         .create_async()
         .await;
 
@@ -647,9 +468,7 @@ async fn auth_header_oauth_token() {
         .match_header("authorization", "Bearer oauth_token_123")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{"data":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#,
-        )
+        .with_body(issues_response(vec![], false, None))
         .create_async()
         .await;
 
@@ -670,33 +489,16 @@ async fn auth_header_oauth_token() {
 #[serial(env)]
 async fn search_issues_full_text_success() {
     let mut server = Server::new_async().await;
+
+    let mut node = search_issue_node("uuid-s1", "ENG-777", "Found via full-text search");
+    node["description"] = serde_json::json!("This issue contains the search term");
+    node["state"] = workflow_state_node("s1", "In Progress", "started");
+
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "data": {
-              "searchIssues": {
-                "nodes": [{
-                    "id": "uuid-s1",
-                    "identifier": "ENG-777",
-                    "title": "Found via full-text search",
-                    "description": "This issue contains the search term",
-                    "priority": 2.0,
-                    "url": "https://linear.app/test/issue/ENG-777",
-                    "createdAt": "2025-01-01T00:00:00Z",
-                    "updatedAt": "2025-01-02T00:00:00Z",
-                    "team": {"id":"t1","key":"ENG","name":"Engineering"},
-                    "state": {"id":"s1","name":"In Progress","type":"started"},
-                    "assignee": null,
-                    "project": null
-                }],
-                "pageInfo": {"hasNextPage": false, "endCursor": null}
-              }
-            }
-        }"#,
-        )
+        .with_body(search_response(vec![node], false, None))
         .create_async()
         .await;
 
@@ -706,19 +508,19 @@ async fn search_issues_full_text_success() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            Some("search term".to_string()), // query - triggers full-text path
-            Some(true),                      // include_comments
-            None,                            // priority
-            None,                            // state_id
-            None,                            // assignee_id
-            None,                            // team_id
-            None,                            // project_id
-            None,                            // created_after
-            None,                            // created_before
-            None,                            // updated_after
-            None,                            // updated_before
-            Some(10),                        // first
-            None,                            // after
+            Some("search term".to_string()),
+            Some(true),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(10),
+            None,
         )
         .await
         .unwrap();
@@ -726,7 +528,7 @@ async fn search_issues_full_text_success() {
     assert_eq!(res.issues.len(), 1);
     assert_eq!(res.issues[0].identifier, "ENG-777");
     assert_eq!(res.issues[0].title, "Found via full-text search");
-    assert_eq!(res.issues[0].state, Some("In Progress".to_string()));
+    assert_eq!(res.issues[0].state.as_ref().unwrap().name, "In Progress");
 }
 
 #[tokio::test]
@@ -747,19 +549,19 @@ async fn graphql_errors_fail_fast() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            Some("anything".into()), // query
-            None,                    // include_comments
-            None,                    // priority
-            None,                    // state_id
-            None,                    // assignee_id
-            None,                    // team_id
-            None,                    // project_id
-            None,                    // created_after
-            None,                    // created_before
-            None,                    // updated_after
-            None,                    // updated_before
-            Some(1),                 // first
-            None,                    // after
+            Some("anything".into()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(1),
+            None,
         )
         .await;
     assert!(res.is_err(), "Expected failure on GraphQL errors");
@@ -770,4 +572,212 @@ async fn graphql_errors_fail_fast() {
         "Error message should contain 'GraphQL errors': {}",
         err_msg
     );
+}
+
+// ============================================================================
+// Archive issue tests
+// ============================================================================
+
+#[tokio::test]
+#[serial(env)]
+async fn archive_issue_success_by_id() {
+    let mut server = Server::new_async().await;
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(archive_response(true))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool.archive_issue("some-uuid".to_string()).await.unwrap();
+    assert!(res.success);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn archive_issue_success_by_identifier() {
+    let mut server = Server::new_async().await;
+
+    // First request: resolve identifier to UUID
+    let mut resolve_node = issue_node("resolved-uuid", "ENG-245", "Test Issue");
+    resolve_node["state"] = serde_json::json!(null);
+
+    let _m1 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issues_response(vec![resolve_node], false, None))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // Second request: archive
+    let _m2 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(archive_response(true))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool.archive_issue("ENG-245".to_string()).await.unwrap();
+    assert!(res.success);
+}
+
+// ============================================================================
+// Get metadata tests
+// ============================================================================
+
+#[tokio::test]
+#[serial(env)]
+async fn get_metadata_users_success() {
+    let mut server = Server::new_async().await;
+    let nodes = vec![
+        user_node("u1", "Alice", "Alice Smith", "alice@example.com"),
+        user_node("u2", "Bob", "Bob Jones", "bob@example.com"),
+    ];
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(users_response(nodes, false, None))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .get_metadata(
+            linear_tools::models::MetadataKind::Users,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.items.len(), 2);
+    assert_eq!(res.items[0].name, "Alice Smith");
+    assert_eq!(res.items[0].email, Some("alice@example.com".to_string()));
+    assert!(!res.has_next_page);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn get_metadata_teams_success() {
+    let mut server = Server::new_async().await;
+    let nodes = vec![
+        team_node("t1", "ENG", "Engineering"),
+        team_node("t2", "DES", "Design"),
+    ];
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(teams_response(nodes, false, None))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .get_metadata(
+            linear_tools::models::MetadataKind::Teams,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.items.len(), 2);
+    assert_eq!(res.items[0].name, "Engineering");
+    assert_eq!(res.items[0].key, Some("ENG".to_string()));
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn get_metadata_labels_success() {
+    let mut server = Server::new_async().await;
+    let nodes = vec![
+        issue_label_node("l1", "Bug", Some(team_node("t1", "ENG", "Engineering"))),
+        issue_label_node("l2", "Feature", None),
+    ];
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_labels_response(nodes, false, None))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .get_metadata(
+            linear_tools::models::MetadataKind::Labels,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.items.len(), 2);
+    assert_eq!(res.items[0].name, "Bug");
+    assert_eq!(res.items[0].team_id, Some("t1".to_string()));
+    assert_eq!(res.items[1].name, "Feature");
+    assert_eq!(res.items[1].team_id, None);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn get_metadata_pagination() {
+    let mut server = Server::new_async().await;
+    let nodes = vec![team_node("t1", "ENG", "Engineering")];
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(teams_response(nodes, true, Some("cursor-abc")))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .get_metadata(
+            linear_tools::models::MetadataKind::Teams,
+            None,
+            None,
+            Some(1),
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.items.len(), 1);
+    assert!(res.has_next_page);
+    assert_eq!(res.end_cursor, Some("cursor-abc".to_string()));
 }
