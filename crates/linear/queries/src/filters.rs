@@ -71,6 +71,10 @@ pub struct DateComparator {
 pub struct WorkflowStateFilter {
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub id: Option<IdComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub name: Option<StringComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamFilter>,
 }
 
 /// Filter for nullable user fields (by ID)
@@ -98,6 +102,50 @@ pub struct NullableProjectFilter {
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub id: Option<IdComparator>,
 }
+
+// ============================================================================
+// Metadata query filters
+// ============================================================================
+
+/// User filtering options (uses displayName for name search per schema).
+#[derive(cynic::InputObject, Clone, Debug, Default)]
+#[cynic(schema = "linear")]
+pub struct UserFilter {
+    #[cynic(rename = "displayName", skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<StringComparator>,
+}
+
+/// Project filtering options.
+#[derive(cynic::InputObject, Clone, Debug, Default)]
+#[cynic(schema = "linear")]
+pub struct ProjectFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub name: Option<StringComparator>,
+}
+
+/// Nullable team filter (for IssueLabelFilter.team which uses NullableTeamFilter in schema)
+#[derive(cynic::InputObject, Clone, Debug, Default)]
+#[cynic(schema = "linear")]
+pub struct NullableTeamFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub id: Option<IdComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub key: Option<StringComparator>,
+}
+
+/// Issue label filtering options.
+#[derive(cynic::InputObject, Clone, Debug, Default)]
+#[cynic(schema = "linear")]
+pub struct IssueLabelFilter {
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub name: Option<StringComparator>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub team: Option<NullableTeamFilter>,
+}
+
+// ============================================================================
+// Issue filter
+// ============================================================================
 
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]

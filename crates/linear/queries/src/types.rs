@@ -1,4 +1,4 @@
-use crate::scalars::DateTime;
+use crate::scalars::{DateTime, TimelessDate};
 use linear_schema::linear as schema;
 
 #[derive(cynic::QueryFragment, Debug, Clone)]
@@ -35,6 +35,14 @@ pub struct Project {
     pub name: String,
 }
 
+/// Minimal parent issue fragment to avoid recursive Issue expansion.
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "Issue")]
+pub struct ParentIssue {
+    pub id: cynic::Id,
+    pub identifier: String,
+}
+
 #[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema = "linear")]
 pub struct Issue {
@@ -43,11 +51,29 @@ pub struct Issue {
     pub title: String,
     pub description: Option<String>,
     pub priority: f64,
+    #[cynic(rename = "priorityLabel")]
+    pub priority_label: String,
+    #[cynic(rename = "labelIds")]
+    pub label_ids: Vec<String>,
+    #[cynic(rename = "dueDate")]
+    pub due_date: Option<TimelessDate>,
     pub url: String,
     #[cynic(rename = "createdAt")]
     pub created_at: DateTime,
     #[cynic(rename = "updatedAt")]
     pub updated_at: DateTime,
+
+    // Details-only metadata (still fetched on Issue fragment)
+    pub estimate: Option<f64>,
+    pub parent: Option<ParentIssue>,
+    #[cynic(rename = "startedAt")]
+    pub started_at: Option<DateTime>,
+    #[cynic(rename = "completedAt")]
+    pub completed_at: Option<DateTime>,
+    #[cynic(rename = "canceledAt")]
+    pub canceled_at: Option<DateTime>,
+
+    pub creator: Option<User>,
     pub team: Team,
     pub state: Option<WorkflowState>,
     pub assignee: Option<User>,
@@ -71,7 +97,9 @@ pub struct IssueConnection {
     pub page_info: PageInfo,
 }
 
-/// IssueSearchResult from searchIssues query - has issue fields directly
+/// IssueSearchResult from searchIssues query - has issue fields directly.
+/// NOTE: Duplicates subset of Issue fields; keep in sync.
+/// Nullability differs (e.g., state is non-null here).
 #[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema = "linear")]
 pub struct IssueSearchResult {
@@ -80,11 +108,18 @@ pub struct IssueSearchResult {
     pub title: String,
     pub description: Option<String>,
     pub priority: f64,
+    #[cynic(rename = "priorityLabel")]
+    pub priority_label: String,
+    #[cynic(rename = "labelIds")]
+    pub label_ids: Vec<String>,
+    #[cynic(rename = "dueDate")]
+    pub due_date: Option<TimelessDate>,
     pub url: String,
     #[cynic(rename = "createdAt")]
     pub created_at: DateTime,
     #[cynic(rename = "updatedAt")]
     pub updated_at: DateTime,
+    pub creator: Option<User>,
     pub team: Team,
     pub state: WorkflowState,
     pub assignee: Option<User>,
@@ -95,6 +130,58 @@ pub struct IssueSearchResult {
 #[cynic(schema = "linear")]
 pub struct IssueSearchPayload {
     pub nodes: Vec<IssueSearchResult>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
+// ============================================================================
+// Metadata query types
+// ============================================================================
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct IssueLabel {
+    pub id: cynic::Id,
+    pub name: String,
+    pub team: Option<Team>,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct UserConnection {
+    pub nodes: Vec<User>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct TeamConnection {
+    pub nodes: Vec<Team>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct ProjectConnection {
+    pub nodes: Vec<Project>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct WorkflowStateConnection {
+    pub nodes: Vec<WorkflowState>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct IssueLabelConnection {
+    pub nodes: Vec<IssueLabel>,
     #[cynic(rename = "pageInfo")]
     pub page_info: PageInfo,
 }
