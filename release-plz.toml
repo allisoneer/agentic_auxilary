@@ -52,9 +52,9 @@ commit_parsers = [
 # DO NOT EDIT: run `cargo run -p xtask -- sync` to update
 # BEGIN:xtask:autogen release-plz:packages
 [[package]]
-name = "thoughts"
+name = "thoughts-bin"
 changelog_path = "apps/thoughts/CHANGELOG.md"
-git_tag_name = "thoughts-v{{ version }}"
+git_tag_name = "thoughts-bin-v{{ version }}"
 git_tag_enable = true
 release = true
 

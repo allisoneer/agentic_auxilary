@@ -1,7 +1,7 @@
 # CLAUDE.md - thoughts
 
 <!-- BEGIN:xtask:autogen header -->
-- Crate: thoughts
+- Crate: thoughts-bin
 - Path: apps/thoughts/
 - Role: app
 - Family: tools
@@ -17,14 +17,14 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p thoughts -- --check
-cargo clippy -p thoughts --all-targets -- -D warnings
+cargo fmt -p thoughts-bin -- --check
+cargo clippy -p thoughts-bin --all-targets -- -D warnings
 
 # Tests
-cargo test -p thoughts
+cargo test -p thoughts-bin
 
 # Build
-cargo build -p thoughts
+cargo build -p thoughts-bin
 ```
 <!-- END:xtask:autogen -->
 

@@ -12,6 +12,8 @@ Unified MCP server for all agentic-tools. Provides a single entry point for acce
 ### [`thoughts`](apps/thoughts/)
 CLI for flexible thought management using filesystem mounts. Unifies documentation across git repositories using mergerfs/FUSE, enabling automatic git synchronization and cross-platform support (Linux/macOS).
 
+> Note: Published on crates.io as `thoughts-bin` (it installs the `thoughts` binary).
+
 ### [`claudecode`](crates/services/claudecode-rs/)
 A Rust SDK for programmatically interacting with Claude Code. Provides type-safe event streaming, async-first API design, MCP support, and builder pattern configuration for launching and managing Claude sessions.
 
@@ -33,7 +35,7 @@ just build
 
 # Build a specific crate
 just crate-build agentic-mcp
-just crate-build thoughts
+just crate-build thoughts-bin
 just crate-build claudecode
 
 # Run tests
