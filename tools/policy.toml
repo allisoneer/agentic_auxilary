@@ -93,7 +93,11 @@ ignore_paths = [
   "crates/infra/thoughts-core/CLAUDE.md",     # Prose mention
   "crates/legacy/universal-tool-examples/",   # Legacy example READMEs with CLI examples
   "crates/linear/CHANGELOG.md",               # Changelog prose
+  "crates/infra/thoughts-core/CHANGELOG.md",  # Changelog prose
+  "crates/legacy/universal-tool-macros/CHANGELOG.md", # Changelog prose
+  "crates/tools/thoughts-mcp-tools/CHANGELOG.md", # Changelog prose
   "crates/tools/coding-agent-tools/src/agent/prompts.rs", # Prompt template string
+  ".opencode/",                               # Editor command/config docs
 ]
 
 [release_plz]

@@ -74,6 +74,214 @@ impl Drop for EnvGuard {
     }
 }
 
+// ============================================================================
+// JSON fixture builders for integration tests
+// ============================================================================
+
+use serde_json::{Value, json};
+
+pub fn user_node(id: &str, name: &str, display_name: &str, email: &str) -> Value {
+    json!({ "id": id, "name": name, "displayName": display_name, "email": email })
+}
+
+pub fn team_node(id: &str, key: &str, name: &str) -> Value {
+    json!({ "id": id, "key": key, "name": name })
+}
+
+pub fn workflow_state_node(id: &str, name: &str, state_type: &str) -> Value {
+    json!({ "id": id, "name": name, "type": state_type })
+}
+
+pub fn project_node(id: &str, name: &str) -> Value {
+    json!({ "id": id, "name": name })
+}
+
+pub fn parent_issue_node(id: &str, identifier: &str) -> Value {
+    json!({ "id": id, "identifier": identifier })
+}
+
+/// Build a full issue node with sensible defaults. Override fields by mutating the returned Value.
+pub fn issue_node(id: &str, identifier: &str, title: &str) -> Value {
+    json!({
+        "id": id,
+        "identifier": identifier,
+        "title": title,
+        "description": null,
+        "priority": 2.0,
+        "priorityLabel": "High",
+        "labelIds": [],
+        "dueDate": null,
+        "estimate": null,
+        "parent": null,
+        "startedAt": null,
+        "completedAt": null,
+        "canceledAt": null,
+        "url": format!("https://linear.app/test/issue/{}", identifier),
+        "createdAt": "2025-01-01T00:00:00Z",
+        "updatedAt": "2025-01-02T00:00:00Z",
+        "team": team_node("t1", "ENG", "Engineering"),
+        "state": workflow_state_node("s1", "Todo", "unstarted"),
+        "assignee": null,
+        "creator": user_node("u0", "Creator", "Creator", "creator@example.com"),
+        "project": null
+    })
+}
+
+/// Build an issue node suitable for searchIssues responses (no details-only fields).
+pub fn search_issue_node(id: &str, identifier: &str, title: &str) -> Value {
+    json!({
+        "id": id,
+        "identifier": identifier,
+        "title": title,
+        "description": null,
+        "priority": 2.0,
+        "priorityLabel": "High",
+        "labelIds": [],
+        "dueDate": null,
+        "url": format!("https://linear.app/test/issue/{}", identifier),
+        "createdAt": "2025-01-01T00:00:00Z",
+        "updatedAt": "2025-01-02T00:00:00Z",
+        "team": team_node("t1", "ENG", "Engineering"),
+        "state": workflow_state_node("s1", "Todo", "unstarted"),
+        "assignee": null,
+        "creator": user_node("u0", "Creator", "Creator", "creator@example.com"),
+        "project": null
+    })
+}
+
+pub fn issues_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issues": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn search_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "searchIssues": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn issue_by_id_response(issue: Value) -> String {
+    serde_json::to_string(&json!({
+        "data": { "issue": issue }
+    }))
+    .unwrap()
+}
+
+pub fn issue_create_response(issue: Value) -> String {
+    serde_json::to_string(&json!({
+        "data": { "issueCreate": { "success": true, "issue": issue } }
+    }))
+    .unwrap()
+}
+
+pub fn comment_create_response(id: &str, body: &str) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "commentCreate": {
+                "success": true,
+                "comment": { "id": id, "body": body, "createdAt": "2025-01-01T00:00:00Z" }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn archive_response(success: bool) -> String {
+    serde_json::to_string(&json!({
+        "data": { "issueArchive": { "success": success } }
+    }))
+    .unwrap()
+}
+
+pub fn users_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "users": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn teams_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "teams": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn projects_response(
+    nodes: Vec<Value>,
+    has_next_page: bool,
+    end_cursor: Option<&str>,
+) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "projects": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn workflow_states_response(
+    nodes: Vec<Value>,
+    has_next_page: bool,
+    end_cursor: Option<&str>,
+) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "workflowStates": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn issue_labels_response(
+    nodes: Vec<Value>,
+    has_next_page: bool,
+    end_cursor: Option<&str>,
+) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issueLabels": {
+                "nodes": nodes,
+                "pageInfo": { "hasNextPage": has_next_page, "endCursor": end_cursor }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn issue_label_node(id: &str, name: &str, team: Option<Value>) -> Value {
+    json!({ "id": id, "name": name, "team": team })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
