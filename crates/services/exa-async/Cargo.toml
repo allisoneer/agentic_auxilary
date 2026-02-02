@@ -1,0 +1,52 @@
+[package]
+name = "exa-async"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Exa API client for Rust (async)"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[package.metadata.dist]
+dist = false
+
+[features]
+default = []
+schemars = ["dep:schemars"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls-tls"], default-features = false }
+backon = { version = "1", features = ["tokio-sleep"] }
+chrono = { workspace = true, features = ["serde"] }
+bytes = "1.0"
+futures = "0.3"
+derive_builder = "0.20"
+schemars = { version = "1", optional = true, features = ["derive", "preserve_order"] }
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+serial_test = "3"
+serde_json = { workspace = true }
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"
+pedantic = "warn"
+nursery = "warn"
+
+[package.metadata.repo]
+role = "lib"
+family = "services"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

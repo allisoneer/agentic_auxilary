@@ -2,7 +2,7 @@
 //!
 //! This crate provides a single entry point for building a `ToolRegistry` containing
 //! all available tools from the various domain crates (coding_agent_tools, pr_comments,
-//! linear_tools, gpt5_reasoner, thoughts_mcp_tools).
+//! linear_tools, gpt5_reasoner, thoughts_mcp_tools, web_tools).
 //!
 //! # Example
 //!
@@ -75,6 +75,8 @@ const THOUGHTS_NAMES: &[&str] = &[
     "thoughts_get_template",
 ];
 
+const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
+
 impl AgenticTools {
     /// Build the unified ToolRegistry using domain registries.
     ///
@@ -132,6 +134,12 @@ impl AgenticTools {
             regs.push(thoughts_mcp_tools::build_registry());
         }
 
+        // web-tools (2 tools)
+        if domain_wanted(WEB_NAMES) {
+            let web = Arc::new(web_tools::WebTools::new());
+            regs.push(web_tools::build_registry(web));
+        }
+
         let merged = ToolRegistry::merge_all(regs);
 
         // Final allowlist filtering at registry level (authoritative)
@@ -156,6 +164,7 @@ impl AgenticTools {
             + LINEAR_NAMES.len()
             + GPT5_NAMES.len()
             + THOUGHTS_NAMES.len()
+            + WEB_NAMES.len()
     }
 }
 
@@ -181,8 +190,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_21() {
-        assert_eq!(AgenticTools::total_tool_count(), 21);
+    fn total_tool_count_is_23() {
+        assert_eq!(AgenticTools::total_tool_count(), 23);
     }
 
     #[test]
@@ -222,10 +231,10 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 21 tools
+        // Should have all 23 tools
         assert!(
-            names.len() >= 21,
-            "expected at least 21 tools, got {}",
+            names.len() >= 23,
+            "expected at least 23 tools, got {}",
             names.len()
         );
 
@@ -249,6 +258,14 @@ mod tests {
         assert!(
             reg.contains("thoughts_add_reference"),
             "missing thoughts_add_reference from thoughts_mcp_tools"
+        );
+        assert!(
+            reg.contains("web_fetch"),
+            "missing web_fetch from web_tools"
+        );
+        assert!(
+            reg.contains("web_search"),
+            "missing web_search from web_tools"
         );
     }
 
@@ -298,7 +315,22 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Empty allowlist normalizes to None, enabling all tools
-        assert!(reg.len() >= 21);
+        assert!(reg.len() >= 23);
+    }
+
+    #[test]
+    fn allowlist_web_search_only() {
+        let mut set = HashSet::new();
+        set.insert("web_search".to_string());
+        let config = AgenticToolsConfig {
+            allowlist: Some(set),
+            extras: serde_json::json!({}),
+        };
+
+        let reg = AgenticTools::new(config);
+        assert_eq!(reg.len(), 1);
+        assert!(reg.contains("web_search"));
+        assert!(!reg.contains("web_fetch"));
     }
 
     #[test]

@@ -40,6 +40,7 @@ Guidance for Claude Code when working with this repository.
 
 - `claudecode` (lib) - `crates/services/claudecode-rs/`
 - `anthropic-async` (lib) - `crates/services/anthropic-async/`
+- `exa-async` (lib) - `crates/services/exa-async/`
 - `opencode_rs` (lib) - `crates/services/opencode-rs/`
 
 ### tools
@@ -49,6 +50,7 @@ Guidance for Claude Code when working with this repository.
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
+- `web-tools` (tool-lib) - `crates/tools/web-tools/`
 <!-- END:xtask:autogen -->
 
 

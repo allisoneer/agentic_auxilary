@@ -23,6 +23,7 @@ members = [
     # Services family
     "crates/services/anthropic-async",
     "crates/services/claudecode-rs",
+    "crates/services/exa-async",
     "crates/services/opencode-rs",
 
     # Tools family
@@ -30,6 +31,7 @@ members = [
     "crates/tools/pr-comments",
     "crates/tools/gpt5-reasoner",
     "crates/tools/thoughts-mcp-tools",
+    "crates/tools/web-tools",
 
     # Infra family
     "crates/infra/agentic-logging",
@@ -76,7 +78,9 @@ linear-schema = { version = "0.1.1", path = "crates/linear/schema" }
 linear-queries = { version = "0.2.0", path = "crates/linear/queries" }
 claudecode = { version = "0.1.10", path = "crates/services/claudecode-rs" }
 anthropic-async = { version = "0.3.0", path = "crates/services/anthropic-async" }
+exa-async = { version = "0.1.0", path = "crates/services/exa-async" }
 opencode_rs = { version = "0.1.2", path = "crates/services/opencode-rs" }
+web-tools = { version = "0.1.0", path = "crates/tools/web-tools" }
 universal-tool-core = { version = "0.2.6", path = "crates/legacy/universal-tool-core" }
 universal-tool-macros = { version = "0.1.9", path = "crates/legacy/universal-tool-macros" }
 

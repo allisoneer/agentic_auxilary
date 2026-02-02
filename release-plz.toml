@@ -164,6 +164,34 @@ git_tag_enable = true
 release = true
 
 [[package]]
+name = "web-tools"
+changelog_path = "crates/tools/web-tools/CHANGELOG.md"
+git_tag_name = "web-tools-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "anthropic-async"
+changelog_path = "crates/services/anthropic-async/CHANGELOG.md"
+git_tag_name = "anthropic-async-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "exa-async"
+changelog_path = "crates/services/exa-async/CHANGELOG.md"
+git_tag_name = "exa-async-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "opencode_rs"
+changelog_path = "crates/services/opencode-rs/CHANGELOG.md"
+git_tag_name = "opencode_rs-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
 name = "agentic-tools-napi"
 changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
 git_tag_name = "agentic-tools-napi-v{{ version }}"
@@ -175,20 +203,6 @@ publish = false
 name = "agentic-tools-macros"
 changelog_path = "crates/agentic-tools/macros/CHANGELOG.md"
 git_tag_name = "agentic-tools-macros-v{{ version }}"
-git_tag_enable = false
-release = true
-
-[[package]]
-name = "anthropic-async"
-changelog_path = "crates/services/anthropic-async/CHANGELOG.md"
-git_tag_name = "anthropic-async-v{{ version }}"
-git_tag_enable = false
-release = true
-
-[[package]]
-name = "opencode_rs"
-changelog_path = "crates/services/opencode-rs/CHANGELOG.md"
-git_tag_name = "opencode_rs-v{{ version }}"
 git_tag_enable = false
 release = true
 

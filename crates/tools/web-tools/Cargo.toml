@@ -1,0 +1,48 @@
+[package]
+name = "web-tools"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Web fetch and web search MCP tools"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+exa-async = { workspace = true }
+anthropic-async = { workspace = true }
+opencode_rs = { workspace = true, features = ["http"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls-tls"], default-features = false }
+htmd = "0.5"
+url = "2"
+futures = "0.3"
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"
+pedantic = "warn"
+nursery = "warn"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

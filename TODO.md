@@ -40,8 +40,12 @@
   - Sync strategy without git (SQLite replication? export/import?)
   - Config/storage unification across entire codebase
   - What happens to agentic_logging crate? Becomes thin wrapper over DB writes?
+  - I'm also considering postgres. Some deeper thoughts around postgres vs sqlite and the full agent setup come to mind.
 
 ## To classify/investigate:
+- Need to develop a configuration system, so everything can be configurable. Need heavy inspiration from opencode. E.g. similar "here is
+  the schema" header stuff as their config and similar granularity of configurable options available. This absolutely needs to come
+before any "big lifts" or "large changes". e.g. before database or before doing more agent work.
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
 - README.md could use a huge refresh. We'll be at the point where we can have all-inclusive instructions for setting up for any repo soon. Would be a lot better than just "Here is a list of tools" if we mentioned how they are used and what they are for and how to do the entire setup.

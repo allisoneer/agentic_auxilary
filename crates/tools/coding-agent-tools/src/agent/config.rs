@@ -44,6 +44,10 @@ pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
             "Grep".into(),
             "Glob".into(),
         ],
+        // TODO(3): Replace Claude Code built-in WebSearch/WebFetch with our MCP tools:
+        // - mcp__agentic-mcp__web_search
+        // - mcp__agentic-mcp__web_fetch
+        // This will require updating config tests once the migration happens.
         (Locator, Web) => vec!["WebSearch".into(), "WebFetch".into()],
         (Analyzer, Codebase) => vec![
             "Read".into(),
