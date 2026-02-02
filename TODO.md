@@ -3,7 +3,7 @@
 
 ## Researched / Ready for planning:
 - Web fetch & web search tools + Discord MCP integration. Research completed:
-  - Research doc: `thoughts/google_supported_schema/research/discord_mcp_web_tooling_infrastructure.md`
+  - Research doc: `thoughts/completed/2026-01-10_to_2026-01-30_google_supported_schema/research/discord_mcp_web_tooling_infrastructure.md`
   - **Discord MCP** (config only, no code): Add glittercowboy/discord-mcp to opencode.json with dedicated agent. 3 meta-tools dispatch to 128 operations. Requires Python 3.12+, uv, bot token + guild ID.
   - **Web fetch tool** (new crate: `crates/tools/web-tools/`): Two composable backends + two output modes:
     - Static backend: `reqwest` + `htmd` for plain HTML (no JS rendering)
@@ -23,7 +23,7 @@
   - `list_documents()` is the problem: currently uses `meta.len()` (filesystem metadata). To get tokens, would need to read+tokenize every file (~80-300ms for 50 files vs ~5ms for metadata-only)
   - Sidecar caching approach considered but adds complexity that SQLite eliminates
   - DEFERRED: With SQLite, token count becomes a column computed on write, queried on list. No caching needed.
-  - Research doc: `thoughts/google_supported_schema/research/tiktoken_file_tracking_migration.md`
+  - Research doc: `thoughts/completed/2026-01-10_to_2026-01-30_google_supported_schema/research/tiktoken_file_tracking_migration.md`
 
 - agentic_logging integration for linear-tools and pr_comments. Research completed:
   - Only `linear-tools` needs logging from the linear family (linear-schema and linear-queries are libs without tool methods)
@@ -32,7 +32,7 @@
   - DEFERRED: agentic_logging's file-based primitives (LogWriter, JSONL, day-bucketing, fd-lock) will be obsolete once thoughts moves to SQLite. The ToolCallRecord schema survives but storage layer changes completely.
   - CLEANUP NEEDED: ToolLogCtx is duplicated in `coding-agent-tools/src/logging.rs` and `pr-comments/src/logging.rs`.
     When refactoring, move ToolLogCtx to agentic_logging with parameterized server name.
-  - Research docs: `thoughts/google_supported_schema/research/agentic_logging_integration_audit.md` and `agentic_logging_extraction_analysis.md`
+  - Research docs: `thoughts/completed/2026-01-10_to_2026-01-30_google_supported_schema/research/agentic_logging_integration_audit.md` and `agentic_logging_extraction_analysis.md`
 
 ## To plan/design:
 - SQLite migration for thoughts. Current file-based structure (thoughts/{branch}/ with research/, plans/, artifacts/, logs/) would become database tables. Key questions:
