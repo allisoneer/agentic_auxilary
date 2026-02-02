@@ -3,7 +3,10 @@
 //! Each tool delegates to the corresponding method on [`LinearTools`].
 
 use crate::LinearTools;
-use crate::models::{CommentResult, CreateIssueResult, IssueDetails, SearchResult};
+use crate::models::{
+    ArchiveIssueResult, CommentResult, CreateIssueResult, GetMetadataResult, IssueDetails,
+    SearchResult,
+};
 use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
@@ -277,6 +280,113 @@ impl Tool for AddCommentTool {
 }
 
 // ============================================================================
+// ArchiveIssue Tool
+// ============================================================================
+
+/// Input for archive_issue tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct ArchiveIssueInput {
+    /// Issue ID, identifier (e.g., ENG-245), or URL
+    pub issue: String,
+}
+
+/// Tool for archiving a Linear issue.
+#[derive(Clone)]
+pub struct ArchiveIssueTool {
+    linear: Arc<LinearTools>,
+}
+
+impl ArchiveIssueTool {
+    pub fn new(linear: Arc<LinearTools>) -> Self {
+        Self { linear }
+    }
+}
+
+impl Tool for ArchiveIssueTool {
+    type Input = ArchiveIssueInput;
+    type Output = ArchiveIssueResult;
+    const NAME: &'static str = "linear_archive_issue";
+    const DESCRIPTION: &'static str =
+        "Archive a Linear issue by ID, identifier (e.g., ENG-245), or URL";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let linear = self.linear.clone();
+        Box::pin(async move {
+            linear
+                .archive_issue(input.issue)
+                .await
+                .map_err(map_anyhow_to_tool_error)
+        })
+    }
+}
+
+// ============================================================================
+// GetMetadata Tool
+// ============================================================================
+
+/// Input for get_metadata tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct GetMetadataInput {
+    /// Kind of metadata to retrieve
+    pub kind: crate::models::MetadataKind,
+    /// Optional search string (case-insensitive name match)
+    #[serde(default)]
+    pub search: Option<String>,
+    /// Optional team ID to filter by (relevant for workflow_states and labels)
+    #[serde(default)]
+    pub team_id: Option<String>,
+    /// Maximum number of results (default: 50)
+    #[serde(default)]
+    pub first: Option<i32>,
+    /// Pagination cursor for next page
+    #[serde(default)]
+    pub after: Option<String>,
+}
+
+/// Tool for looking up Linear metadata (users, teams, projects, workflow states, labels).
+#[derive(Clone)]
+pub struct GetMetadataTool {
+    linear: Arc<LinearTools>,
+}
+
+impl GetMetadataTool {
+    pub fn new(linear: Arc<LinearTools>) -> Self {
+        Self { linear }
+    }
+}
+
+impl Tool for GetMetadataTool {
+    type Input = GetMetadataInput;
+    type Output = GetMetadataResult;
+    const NAME: &'static str = "linear_get_metadata";
+    const DESCRIPTION: &'static str = "Look up Linear metadata: users, teams, projects, workflow states, or labels. Use this to discover IDs for filtering and updating issues.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let linear = self.linear.clone();
+        Box::pin(async move {
+            linear
+                .get_metadata(
+                    input.kind,
+                    input.search,
+                    input.team_id,
+                    input.first,
+                    input.after,
+                )
+                .await
+                .map_err(map_anyhow_to_tool_error)
+        })
+    }
+}
+
+// ============================================================================
 // Registry Builder
 // ============================================================================
 
@@ -286,7 +396,9 @@ pub fn build_registry(linear: Arc<LinearTools>) -> ToolRegistry {
         .register::<SearchIssuesTool, ()>(SearchIssuesTool::new(linear.clone()))
         .register::<ReadIssueTool, ()>(ReadIssueTool::new(linear.clone()))
         .register::<CreateIssueTool, ()>(CreateIssueTool::new(linear.clone()))
-        .register::<AddCommentTool, ()>(AddCommentTool::new(linear))
+        .register::<AddCommentTool, ()>(AddCommentTool::new(linear.clone()))
+        .register::<ArchiveIssueTool, ()>(ArchiveIssueTool::new(linear.clone()))
+        .register::<GetMetadataTool, ()>(GetMetadataTool::new(linear))
         .finish()
 }
 
