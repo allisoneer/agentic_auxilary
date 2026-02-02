@@ -50,8 +50,8 @@ task_name() {
 
 smart_tail() {
   local output="$1"
-  local max_lines=60
-  local default_lines=30
+  local max_lines=100
+  local default_lines=60
 
   local total_lines
   total_lines=$(echo "$output" | wc -l | tr -d ' ')
