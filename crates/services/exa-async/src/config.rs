@@ -1,4 +1,5 @@
 use reqwest::header::{HeaderMap, HeaderValue};
+use secrecy::{ExposeSecret, SecretString};
 
 /// Default Exa API base URL
 pub const EXA_DEFAULT_BASE: &str = "https://api.exa.ai";
@@ -6,19 +7,12 @@ pub const EXA_DEFAULT_BASE: &str = "https://api.exa.ai";
 pub const HDR_X_API_KEY: &str = "x-api-key";
 
 /// Configuration for the Exa client
-#[derive(Clone)]
+///
+/// Debug output automatically redacts `api_key` via [`SecretString`].
+#[derive(Clone, Debug)]
 pub struct ExaConfig {
     api_base: String,
-    api_key: Option<String>,
-}
-
-impl std::fmt::Debug for ExaConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ExaConfig")
-            .field("api_base", &self.api_base)
-            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
-            .finish()
-    }
+    api_key: Option<SecretString>,
 }
 
 impl Default for ExaConfig {
@@ -26,7 +20,8 @@ impl Default for ExaConfig {
         let api_key = std::env::var("EXA_API_KEY")
             .ok()
             .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty());
+            .filter(|v| !v.is_empty())
+            .map(SecretString::from);
 
         let api_base = std::env::var("EXA_BASE_URL")
             .ok()
@@ -59,7 +54,7 @@ impl ExaConfig {
     /// Sets the API key
     #[must_use]
     pub fn with_api_key(mut self, key: impl Into<String>) -> Self {
-        self.api_key = Some(key.into());
+        self.api_key = Some(SecretString::from(key.into()));
         self
     }
 
@@ -101,17 +96,15 @@ impl Config for ExaConfig {
 
         let mut h = HeaderMap::new();
 
-        if let Some(key) = self
-            .api_key
-            .as_deref()
-            .map(str::trim)
-            .filter(|k| !k.is_empty())
-        {
-            h.insert(
-                HDR_X_API_KEY,
-                HeaderValue::from_str(key)
-                    .map_err(|_| ExaError::Config("Invalid x-api-key value".into()))?,
-            );
+        if let Some(secret) = &self.api_key {
+            let key = secret.expose_secret().trim();
+            if !key.is_empty() {
+                h.insert(
+                    HDR_X_API_KEY,
+                    HeaderValue::from_str(key)
+                        .map_err(|_| ExaError::Config("Invalid x-api-key value".into()))?,
+                );
+            }
         }
 
         Ok(h)
@@ -128,8 +121,8 @@ impl Config for ExaConfig {
     }
 
     fn validate_auth(&self) -> Result<(), crate::error::ExaError> {
-        match self.api_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => Ok(()),
+        match &self.api_key {
+            Some(secret) if !secret.expose_secret().trim().is_empty() => Ok(()),
             _ => Err(crate::error::ExaError::Config(
                 "Missing Exa credentials: set EXA_API_KEY environment variable".into(),
             )),
@@ -209,9 +202,10 @@ mod tests {
             !debug_str.contains("super-secret-key-12345"),
             "Debug output should not contain the API key"
         );
+        // SecretString uses [REDACTED] format
         assert!(
-            debug_str.contains("<redacted>"),
-            "Debug output should contain '<redacted>'"
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
         );
     }
 

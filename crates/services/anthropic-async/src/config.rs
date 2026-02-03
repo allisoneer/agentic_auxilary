@@ -1,4 +1,5 @@
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 /// Default Anthropic API base URL
@@ -13,40 +14,29 @@ pub const HDR_ANTHROPIC_BETA: &str = "anthropic-beta";
 pub const HDR_X_API_KEY: &str = "x-api-key";
 
 /// Authentication method for Anthropic API
-#[derive(Clone, PartialEq, Eq)]
+///
+/// Debug output automatically redacts credentials via [`SecretString`].
+#[derive(Clone, Debug)]
 pub enum AnthropicAuth {
     /// API key authentication
-    ApiKey(String),
+    ApiKey(SecretString),
     /// Bearer token authentication
-    Bearer(String),
+    Bearer(SecretString),
     /// Both API key and bearer token authentication
     Both {
         /// API key for x-api-key header
-        api_key: String,
+        api_key: SecretString,
         /// Bearer token for Authorization header
-        bearer: String,
+        bearer: SecretString,
     },
     /// No authentication configured
     None,
 }
 
-impl std::fmt::Debug for AnthropicAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ApiKey(_) => f.debug_tuple("ApiKey").field(&"<redacted>").finish(),
-            Self::Bearer(_) => f.debug_tuple("Bearer").field(&"<redacted>").finish(),
-            Self::Both { .. } => f
-                .debug_struct("Both")
-                .field("api_key", &"<redacted>")
-                .field("bearer", &"<redacted>")
-                .finish(),
-            Self::None => f.write_str("None"),
-        }
-    }
-}
-
 /// Configuration for the Anthropic client
-#[derive(Clone, Deserialize)]
+///
+/// Debug output automatically redacts credentials via [`SecretString`] in [`AnthropicAuth`].
+#[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
 pub struct AnthropicConfig {
     api_base: String,
@@ -55,17 +45,6 @@ pub struct AnthropicConfig {
     auth: AnthropicAuth,
     #[serde(skip)]
     beta: Vec<String>,
-}
-
-impl std::fmt::Debug for AnthropicConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AnthropicConfig")
-            .field("api_base", &self.api_base)
-            .field("version", &self.version)
-            .field("auth", &self.auth)
-            .field("beta", &self.beta)
-            .finish()
-    }
 }
 
 /// Helper to read and normalize an env var (trim + filter empty).
@@ -78,8 +57,8 @@ fn env_trimmed(name: &str) -> Option<String> {
 
 impl Default for AnthropicConfig {
     fn default() -> Self {
-        let api_key = env_trimmed("ANTHROPIC_API_KEY");
-        let bearer = env_trimmed("ANTHROPIC_AUTH_TOKEN");
+        let api_key = env_trimmed("ANTHROPIC_API_KEY").map(SecretString::from);
+        let bearer = env_trimmed("ANTHROPIC_AUTH_TOKEN").map(SecretString::from);
         let api_base =
             env_trimmed("ANTHROPIC_BASE_URL").unwrap_or_else(|| ANTHROPIC_DEFAULT_BASE.into());
 
@@ -137,7 +116,7 @@ impl AnthropicConfig {
     /// This will use the `x-api-key` header for authentication.
     #[must_use]
     pub fn with_api_key(mut self, k: impl Into<String>) -> Self {
-        self.auth = AnthropicAuth::ApiKey(k.into());
+        self.auth = AnthropicAuth::ApiKey(SecretString::from(k.into()));
         self
     }
 
@@ -146,7 +125,7 @@ impl AnthropicConfig {
     /// This will use the `Authorization: Bearer` header for authentication.
     #[must_use]
     pub fn with_bearer(mut self, t: impl Into<String>) -> Self {
-        self.auth = AnthropicAuth::Bearer(t.into());
+        self.auth = AnthropicAuth::Bearer(SecretString::from(t.into()));
         self
     }
 
@@ -157,8 +136,8 @@ impl AnthropicConfig {
     #[must_use]
     pub fn with_both(mut self, api_key: impl Into<String>, bearer: impl Into<String>) -> Self {
         self.auth = AnthropicAuth::Both {
-            api_key: api_key.into(),
-            bearer: bearer.into(),
+            api_key: SecretString::from(api_key.into()),
+            bearer: SecretString::from(bearer.into()),
         };
         self
     }
@@ -192,10 +171,11 @@ impl AnthropicConfig {
         use crate::error::AnthropicError;
 
         match &self.auth {
-            AnthropicAuth::ApiKey(k) if !k.trim().is_empty() => Ok(()),
-            AnthropicAuth::Bearer(t) if !t.trim().is_empty() => Ok(()),
+            AnthropicAuth::ApiKey(k) if !k.expose_secret().trim().is_empty() => Ok(()),
+            AnthropicAuth::Bearer(t) if !t.expose_secret().trim().is_empty() => Ok(()),
             AnthropicAuth::Both { api_key, bearer }
-                if !api_key.trim().is_empty() && !bearer.trim().is_empty() =>
+                if !api_key.expose_secret().trim().is_empty()
+                    && !bearer.expose_secret().trim().is_empty() =>
             {
                 Ok(())
             }
@@ -266,12 +246,12 @@ impl Config for AnthropicConfig {
             AnthropicAuth::ApiKey(k) => {
                 h.insert(
                     HDR_X_API_KEY,
-                    HeaderValue::from_str(k)
+                    HeaderValue::from_str(k.expose_secret())
                         .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
                 );
             }
             AnthropicAuth::Bearer(t) => {
-                let v = format!("Bearer {t}");
+                let v = format!("Bearer {}", t.expose_secret());
                 h.insert(
                     AUTHORIZATION,
                     HeaderValue::from_str(&v).map_err(|_| {
@@ -282,10 +262,10 @@ impl Config for AnthropicConfig {
             AnthropicAuth::Both { api_key, bearer } => {
                 h.insert(
                     HDR_X_API_KEY,
-                    HeaderValue::from_str(api_key)
+                    HeaderValue::from_str(api_key.expose_secret())
                         .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
                 );
-                let v = format!("Bearer {bearer}");
+                let v = format!("Bearer {}", bearer.expose_secret());
                 h.insert(
                     AUTHORIZATION,
                     HeaderValue::from_str(&v).map_err(|_| {
@@ -420,9 +400,10 @@ mod tests {
             !debug_str.contains("super-secret-key-12345"),
             "Debug output should not contain the API key"
         );
+        // SecretString uses [REDACTED] format
         assert!(
-            debug_str.contains("<redacted>"),
-            "Debug output should contain '<redacted>'"
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
         );
     }
 
@@ -435,9 +416,10 @@ mod tests {
             !debug_str.contains("super-secret-token-12345"),
             "Debug output should not contain the bearer token"
         );
+        // SecretString uses [REDACTED] format
         assert!(
-            debug_str.contains("<redacted>"),
-            "Debug output should contain '<redacted>'"
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
         );
     }
 
@@ -454,9 +436,10 @@ mod tests {
             !debug_str.contains("secret-bearer-token"),
             "Debug output should not contain the bearer token"
         );
+        // SecretString uses [REDACTED] format
         assert!(
-            debug_str.contains("<redacted>"),
-            "Debug output should contain '<redacted>'"
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
         );
     }
 

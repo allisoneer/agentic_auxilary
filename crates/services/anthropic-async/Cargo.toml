@@ -30,6 +30,7 @@ chrono = { workspace = true, features = ["serde"] }
 bytes = "1.0"
 futures = "0.3"
 derive_builder = "0.20"
+secrecy = "0.10"
 schemars = { version = "1", optional = true, features = ["derive", "preserve_order"] }
 
 [dev-dependencies]
