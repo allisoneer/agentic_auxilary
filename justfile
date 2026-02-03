@@ -403,6 +403,7 @@ pr-update-autogen number body_file:
       close $afh;
 
       $body    //= "";
+      $body = "" if $body eq "null";  # gh outputs literal "null" for empty PR body
       $autogen //= "";
       $autogen =~ s/\n+\z//;
 
