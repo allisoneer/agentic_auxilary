@@ -6,16 +6,33 @@ pub const EXA_DEFAULT_BASE: &str = "https://api.exa.ai";
 pub const HDR_X_API_KEY: &str = "x-api-key";
 
 /// Configuration for the Exa client
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExaConfig {
     api_base: String,
     api_key: Option<String>,
 }
 
+impl std::fmt::Debug for ExaConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExaConfig")
+            .field("api_base", &self.api_base)
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
 impl Default for ExaConfig {
     fn default() -> Self {
-        let api_key = std::env::var("EXA_API_KEY").ok();
-        let api_base = std::env::var("EXA_BASE_URL").unwrap_or_else(|_| EXA_DEFAULT_BASE.into());
+        let api_key = std::env::var("EXA_API_KEY")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
+        let api_base = std::env::var("EXA_BASE_URL")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| EXA_DEFAULT_BASE.into());
 
         Self { api_base, api_key }
     }
@@ -84,7 +101,12 @@ impl Config for ExaConfig {
 
         let mut h = HeaderMap::new();
 
-        if let Some(key) = &self.api_key {
+        if let Some(key) = self
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|k| !k.is_empty())
+        {
             h.insert(
                 HDR_X_API_KEY,
                 HeaderValue::from_str(key)
@@ -106,12 +128,12 @@ impl Config for ExaConfig {
     }
 
     fn validate_auth(&self) -> Result<(), crate::error::ExaError> {
-        if self.api_key.is_none() {
-            return Err(crate::error::ExaError::Config(
+        match self.api_key.as_deref() {
+            Some(k) if !k.trim().is_empty() => Ok(()),
+            _ => Err(crate::error::ExaError::Config(
                 "Missing Exa credentials: set EXA_API_KEY environment variable".into(),
-            ));
+            )),
         }
-        Ok(())
     }
 }
 
@@ -176,5 +198,66 @@ mod tests {
 
         let h = cfg.headers().unwrap();
         assert_eq!(h.get(HDR_X_API_KEY).unwrap().to_str().unwrap(), "my-key");
+    }
+
+    #[test]
+    fn debug_output_redacts_api_key() {
+        let cfg = ExaConfig::new().with_api_key("super-secret-key-12345");
+        let debug_str = format!("{cfg:?}");
+
+        assert!(
+            !debug_str.contains("super-secret-key-12345"),
+            "Debug output should not contain the API key"
+        );
+        assert!(
+            debug_str.contains("<redacted>"),
+            "Debug output should contain '<redacted>'"
+        );
+    }
+
+    #[test]
+    fn validate_auth_rejects_empty_or_whitespace() {
+        // Empty string
+        let cfg = ExaConfig::new().with_api_key("");
+        assert!(cfg.validate_auth().is_err());
+
+        // Whitespace only
+        let cfg = ExaConfig::new().with_api_key("   ");
+        assert!(cfg.validate_auth().is_err());
+
+        // Newline-padded
+        let cfg = ExaConfig::new().with_api_key("\n");
+        assert!(cfg.validate_auth().is_err());
+
+        // Valid key with whitespace (should pass after trim)
+        let cfg = ExaConfig::new().with_api_key("  valid-key  ");
+        assert!(cfg.validate_auth().is_ok());
+    }
+
+    #[test]
+    #[serial(env)]
+    fn config_trims_whitespace_padded_env_key() {
+        let _key = EnvGuard::set("EXA_API_KEY", "  trimmed-key  \n");
+        let _base = EnvGuard::remove("EXA_BASE_URL");
+
+        let cfg = ExaConfig::new();
+        assert!(cfg.validate_auth().is_ok());
+
+        let h = cfg.headers().unwrap();
+        assert_eq!(
+            h.get(HDR_X_API_KEY).unwrap().to_str().unwrap(),
+            "trimmed-key",
+            "Headers should contain the trimmed key"
+        );
+    }
+
+    #[test]
+    #[serial(env)]
+    fn config_rejects_whitespace_only_env_key() {
+        let _key = EnvGuard::set("EXA_API_KEY", "   ");
+        let _base = EnvGuard::remove("EXA_BASE_URL");
+
+        let cfg = ExaConfig::new();
+        assert!(cfg.validate_auth().is_err());
     }
 }

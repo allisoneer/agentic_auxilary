@@ -36,6 +36,14 @@ pub async fn web_fetch(
         .await
         .map_err(|e| ToolError::external(format!("HTTP request failed: {e}")))?;
 
+    let status = response.status();
+    if !status.is_success() {
+        return Err(ToolError::external(format!(
+            "HTTP request failed with status {status} for {}",
+            response.url()
+        )));
+    }
+
     let final_url = response.url().to_string();
     let content_type = response
         .headers()
@@ -243,5 +251,95 @@ mod tests {
             extract_title("<TiTlE>Mixed</TiTlE>"),
             Some("Mixed".to_string())
         );
+    }
+
+    mod integration {
+        use super::*;
+        use crate::WebTools;
+        use crate::types::WebFetchInput;
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        #[tokio::test]
+        async fn web_fetch_returns_error_on_404() {
+            let mock_server = MockServer::start().await;
+
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(404).set_body_string("Not Found"))
+                .mount(&mock_server)
+                .await;
+
+            let http = reqwest::Client::new();
+            let tools = WebTools::with_http_client(http);
+
+            let input = WebFetchInput {
+                url: mock_server.uri(),
+                summarize: false,
+                max_bytes: None,
+            };
+
+            let result = web_fetch(&tools, input).await;
+            assert!(result.is_err(), "Expected error for 404 response");
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string().contains("404"),
+                "Error message should mention 404 status"
+            );
+        }
+
+        #[tokio::test]
+        async fn web_fetch_returns_error_on_500() {
+            let mock_server = MockServer::start().await;
+
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+                .mount(&mock_server)
+                .await;
+
+            let http = reqwest::Client::new();
+            let tools = WebTools::with_http_client(http);
+
+            let input = WebFetchInput {
+                url: mock_server.uri(),
+                summarize: false,
+                max_bytes: None,
+            };
+
+            let result = web_fetch(&tools, input).await;
+            assert!(result.is_err(), "Expected error for 500 response");
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string().contains("500"),
+                "Error message should mention 500 status"
+            );
+        }
+
+        #[tokio::test]
+        async fn web_fetch_succeeds_on_200() {
+            let mock_server = MockServer::start().await;
+
+            Mock::given(method("GET"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_string("Hello, world!")
+                        .insert_header("Content-Type", "text/plain"),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let http = reqwest::Client::new();
+            let tools = WebTools::with_http_client(http);
+
+            let input = WebFetchInput {
+                url: mock_server.uri(),
+                summarize: false,
+                max_bytes: None,
+            };
+
+            let result = web_fetch(&tools, input).await;
+            assert!(result.is_ok(), "Expected success for 200 response");
+            let output = result.unwrap();
+            assert_eq!(output.content, "Hello, world!");
+        }
     }
 }

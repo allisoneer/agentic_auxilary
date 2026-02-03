@@ -16,6 +16,11 @@ const MAX_CONTEXT_CHARS: usize = 1500;
 /// Max chars for snippet trimming
 const MAX_SNIPPET_CHARS: usize = 300;
 
+/// Clamp `num_results` to a valid range: at least 1, at most `MAX_RESULTS`.
+fn clamp_num_results(n: Option<u32>) -> u32 {
+    n.unwrap_or(DEFAULT_RESULTS).clamp(1, MAX_RESULTS)
+}
+
 /// Execute a web search via Exa's semantic search API.
 ///
 /// # Errors
@@ -24,10 +29,7 @@ pub async fn web_search(
     tools: &WebTools,
     input: WebSearchInput,
 ) -> Result<WebSearchOutput, ToolError> {
-    let num_results = input
-        .num_results
-        .unwrap_or(DEFAULT_RESULTS)
-        .min(MAX_RESULTS);
+    let num_results = clamp_num_results(input.num_results);
 
     let req = exa_async::types::search::SearchRequest::new(&input.query)
         .with_num_results(num_results)
@@ -191,5 +193,29 @@ mod tests {
     fn test_pick_snippet_none() {
         let result = exa_async::types::common::SearchResult::default();
         assert_eq!(pick_snippet(&result), None);
+    }
+
+    #[test]
+    fn num_results_is_clamped() {
+        // None uses default (8)
+        assert_eq!(clamp_num_results(None), super::DEFAULT_RESULTS);
+
+        // Zero is clamped to 1
+        assert_eq!(clamp_num_results(Some(0)), 1);
+
+        // Value of 1 is unchanged
+        assert_eq!(clamp_num_results(Some(1)), 1);
+
+        // Value within range is unchanged
+        assert_eq!(clamp_num_results(Some(10)), 10);
+
+        // MAX_RESULTS is unchanged
+        assert_eq!(
+            clamp_num_results(Some(super::MAX_RESULTS)),
+            super::MAX_RESULTS
+        );
+
+        // Over MAX_RESULTS is clamped to MAX_RESULTS
+        assert_eq!(clamp_num_results(Some(999)), super::MAX_RESULTS);
     }
 }

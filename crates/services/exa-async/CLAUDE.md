@@ -10,7 +10,10 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Async Rust client for the Exa API.
+
+- Defaults to `EXA_API_KEY` and `EXA_BASE_URL` env vars.
+- Typical usage: create a client via `exa_async::Client::new()` (env-based) or `Client::with_config(...)`.
 
 ## Quick Commands
 

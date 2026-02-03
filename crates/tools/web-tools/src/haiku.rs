@@ -73,15 +73,27 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
     Ok(text)
 }
 
+/// Normalize a key by trimming whitespace; returns None if empty after trim.
+fn normalize_key(s: &str) -> Option<String> {
+    let t = s.trim();
+    if t.is_empty() {
+        None
+    } else {
+        Some(t.to_string())
+    }
+}
+
 /// Initialize the Anthropic client.
 ///
 /// Attempts to find an API key from:
-/// 1. `ANTHROPIC_API_KEY` environment variable
+/// 1. `ANTHROPIC_API_KEY` environment variable (must be non-empty after trim)
 /// 2. `OpenCode` provider discovery (fallback)
 async fn init_anthropic_client()
 -> Result<anthropic_async::Client<anthropic_async::AnthropicConfig>, ToolError> {
-    // Try env var first
-    if let Ok(key) = std::env::var("ANTHROPIC_API_KEY") {
+    // Try env var first (only if non-empty after trim)
+    if let Ok(key) = std::env::var("ANTHROPIC_API_KEY")
+        && let Some(key) = normalize_key(&key)
+    {
         debug!("Using ANTHROPIC_API_KEY from environment");
         let config = anthropic_async::AnthropicConfig::new().with_api_key(key);
         return Ok(anthropic_async::Client::with_config(config));
@@ -122,4 +134,32 @@ async fn get_anthropic_key_from_opencode() -> Result<String, String> {
     }
 
     Err("No Anthropic provider found in OpenCode".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_key_returns_none_for_empty() {
+        assert_eq!(normalize_key(""), None);
+    }
+
+    #[test]
+    fn normalize_key_returns_none_for_whitespace_only() {
+        assert_eq!(normalize_key("   "), None);
+        assert_eq!(normalize_key("\t\n"), None);
+        assert_eq!(normalize_key("  \n  "), None);
+    }
+
+    #[test]
+    fn normalize_key_trims_and_returns_valid_key() {
+        assert_eq!(normalize_key("key"), Some("key".to_string()));
+        assert_eq!(normalize_key("  key  "), Some("key".to_string()));
+        assert_eq!(normalize_key("\nkey\n"), Some("key".to_string()));
+        assert_eq!(
+            normalize_key("  my-api-key-123  "),
+            Some("my-api-key-123".to_string())
+        );
+    }
 }

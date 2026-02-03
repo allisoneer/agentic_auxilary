@@ -145,12 +145,15 @@ impl TextFormat for WebSearchOutput {
                 card.domain,
                 card.url,
             );
+            let mut meta = Vec::new();
             if let Some(date) = &card.published_date {
-                let _ = write!(out, "   Date: {date}");
-                if let Some(author) = &card.author {
-                    let _ = write!(out, " | Author: {author}");
-                }
-                out.push('\n');
+                meta.push(format!("Date: {date}"));
+            }
+            if let Some(author) = &card.author {
+                meta.push(format!("Author: {author}"));
+            }
+            if !meta.is_empty() {
+                let _ = writeln!(out, "   {}", meta.join(" | "));
             }
             if let Some(score) = card.score {
                 let _ = writeln!(out, "   Score: {score}/100");
@@ -160,5 +163,86 @@ impl TextFormat for WebSearchOutput {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn author_displayed_without_date() {
+        let output = WebSearchOutput {
+            query: "test query".into(),
+            retrieved_at: Utc::now(),
+            context: None,
+            results: vec![WebSearchResultCard {
+                url: "https://example.com".into(),
+                domain: "example.com".into(),
+                title: Some("Test Title".into()),
+                published_date: None,            // No date
+                author: Some("Jane Doe".into()), // Has author
+                score: None,
+                snippet: None,
+            }],
+        };
+
+        let text = output.fmt_text(&TextOptions::default());
+        assert!(
+            text.contains("Author: Jane Doe"),
+            "Author should be displayed even when date is missing"
+        );
+    }
+
+    #[test]
+    fn date_and_author_displayed_together() {
+        let output = WebSearchOutput {
+            query: "test query".into(),
+            retrieved_at: Utc::now(),
+            context: None,
+            results: vec![WebSearchResultCard {
+                url: "https://example.com".into(),
+                domain: "example.com".into(),
+                title: Some("Test Title".into()),
+                published_date: Some("2025-01-15".into()),
+                author: Some("John Smith".into()),
+                score: None,
+                snippet: None,
+            }],
+        };
+
+        let text = output.fmt_text(&TextOptions::default());
+        assert!(
+            text.contains("Date: 2025-01-15 | Author: John Smith"),
+            "Date and author should be joined with pipe"
+        );
+    }
+
+    #[test]
+    fn date_displayed_without_author() {
+        let output = WebSearchOutput {
+            query: "test query".into(),
+            retrieved_at: Utc::now(),
+            context: None,
+            results: vec![WebSearchResultCard {
+                url: "https://example.com".into(),
+                domain: "example.com".into(),
+                title: Some("Test Title".into()),
+                published_date: Some("2025-01-15".into()),
+                author: None,
+                score: None,
+                snippet: None,
+            }],
+        };
+
+        let text = output.fmt_text(&TextOptions::default());
+        assert!(
+            text.contains("Date: 2025-01-15"),
+            "Date should be displayed when author is missing"
+        );
+        assert!(
+            !text.contains("Author:"),
+            "Author should not appear when not present"
+        );
     }
 }

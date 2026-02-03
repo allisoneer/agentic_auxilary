@@ -60,7 +60,7 @@ impl<C: Config> Client<C> {
 
     /// Replaces the backoff configuration for retry logic
     #[must_use]
-    pub fn with_backoff(mut self, backoff: ExponentialBuilder) -> Self {
+    pub const fn with_backoff(mut self, backoff: ExponentialBuilder) -> Self {
         self.backoff = backoff;
         self
     }

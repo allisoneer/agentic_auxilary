@@ -51,3 +51,15 @@ impl Default for WebTools {
 
 /// Re-export the `build_registry` function and `WebTools` for registry consumers.
 pub use tools::build_registry;
+
+#[cfg(test)]
+impl WebTools {
+    /// Create a `WebTools` instance with a custom HTTP client for testing.
+    pub(crate) fn with_http_client(http: reqwest::Client) -> Self {
+        Self {
+            http,
+            exa: exa_async::Client::new(),
+            anthropic: OnceCell::new(),
+        }
+    }
+}

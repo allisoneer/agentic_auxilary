@@ -10,7 +10,14 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Implements web tooling:
+
+- `web_fetch`: downloads a URL, converts HTML to Markdown (or returns text/JSON), optional Haiku summarization.
+- `web_search`: semantic search via Exa and returns compact, citable result cards.
+
+Environment:
+- `EXA_API_KEY` required for `web_search`
+- `ANTHROPIC_API_KEY` required only when `summarize=true` for `web_fetch`
 
 ## Quick Commands
 
