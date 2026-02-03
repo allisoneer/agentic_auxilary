@@ -121,15 +121,9 @@ fn pick_snippet(result: &exa_async::types::common::SearchResult) -> Option<Strin
 
 /// Trim a string to `max` characters, appending an ellipsis if truncated.
 fn trim_chars(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        // Find a char boundary near `max`
-        let mut end = max;
-        while end > 0 && !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        format!("{}...", &s[..end])
+    match s.char_indices().nth(max) {
+        Some((idx, _)) => format!("{}...", &s[..idx]),
+        None => s.to_string(),
     }
 }
 
@@ -160,6 +154,17 @@ mod tests {
     fn test_trim_chars() {
         assert_eq!(trim_chars("hello", 10), "hello");
         assert_eq!(trim_chars("hello world", 5), "hello...");
+    }
+
+    #[test]
+    fn test_trim_chars_multibyte() {
+        // Chinese: 4 chars, 12 bytes
+        assert_eq!(trim_chars("你好世界", 2), "你好...");
+        assert_eq!(trim_chars("你好世界", 4), "你好世界");
+        assert_eq!(trim_chars("你好世界", 10), "你好世界");
+
+        // Emoji: 3 chars, 12 bytes
+        assert_eq!(trim_chars("🎉🎉🎉", 2), "🎉🎉...");
     }
 
     #[test]
