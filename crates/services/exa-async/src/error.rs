@@ -47,7 +47,7 @@ impl ExaError {
     /// Determines if this error is retryable
     ///
     /// Retryable errors include rate limits (429), timeouts (408),
-    /// conflicts (409), and server errors (5xx).
+    /// and server errors (5xx).
     #[must_use]
     pub fn is_retryable(&self) -> bool {
         match self {

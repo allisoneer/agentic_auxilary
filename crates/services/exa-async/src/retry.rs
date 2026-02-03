@@ -21,10 +21,10 @@ pub fn default_backoff_builder() -> ExponentialBuilder {
 
 /// Determines if an HTTP status code should trigger a retry
 ///
-/// Retries on: 408, 409, 429, and 5xx
+/// Retries on: 408, 429, and 5xx
 #[must_use]
 pub const fn is_retryable_status(code: u16) -> bool {
-    matches!(code, 408 | 409 | 429 | 500..=599)
+    matches!(code, 408 | 429 | 500..=599)
 }
 
 #[cfg(test)]
@@ -37,7 +37,7 @@ mod tests {
         assert!(is_retryable_status(500));
         assert!(is_retryable_status(503));
         assert!(is_retryable_status(408));
-        assert!(is_retryable_status(409));
+        assert!(!is_retryable_status(409));
         assert!(!is_retryable_status(404));
         assert!(!is_retryable_status(400));
         assert!(!is_retryable_status(401));
