@@ -52,7 +52,14 @@ it's done. Our even better, we figure out how to make the setup look good as an 
 `create_plan_final`, and `implement_plan`. We'll have to support resuming existing sessions to support create_plan_final. Maybe opencode
 exposes some ID that we can use for resuming. Then we'll have to implement some type of automatic insertion of user message when
 `implement_plan` (or others) are running, to be able to get like some summarized version written to an artifact or something of progress
-made so far before the limit is up.
+made so far before the limit is up. Okay, so I'm sorta thinking it needs multiple tools? One for a session. One for resuming a session.
+And maybe one for searching sessions or something? That last one isn't thought out yet and maybe shouldn't be included in the original.
+But the "naive" approach could just be listing the last X sessions to get IDs and such? That would be doable and useful without much
+extra thought. Then the enum for type of response, which are tied to the commands, and in addition to the enum of types of commands
+there should be a "no-template" option or something. For scenarios like the last turn of create_plan_final where it asks if you want to
+persist it and really all you need to say is "yes". I think the same style of functionality as claude code, where the final assistance
+response is returned back, makes sense to me. We can probably continue that trend. I think all of our "final assistant responses" are
+already setup to be clear of what happened and such.
 before any "big lifts" or "large changes". e.g. before database or before doing more agent work.
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
