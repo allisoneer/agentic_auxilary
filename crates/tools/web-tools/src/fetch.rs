@@ -9,6 +9,9 @@ use crate::types::{WebFetchInput, WebFetchOutput};
 /// Default maximum download size: 5 MB
 const DEFAULT_MAX_BYTES: usize = 5 * 1024 * 1024;
 
+/// Hard maximum allowed `max_bytes`: 20 MB
+pub const HARD_MAX_BYTES: usize = 20 * 1024 * 1024;
+
 /// Execute a web fetch: download URL, convert content, optionally summarize.
 ///
 /// # Errors
@@ -19,8 +22,14 @@ pub async fn web_fetch(
 ) -> Result<WebFetchOutput, ToolError> {
     let max_bytes = input.max_bytes.unwrap_or(DEFAULT_MAX_BYTES);
 
+    if max_bytes > HARD_MAX_BYTES {
+        return Err(ToolError::invalid_input(format!(
+            "max_bytes must be <= {HARD_MAX_BYTES} (20MB)"
+        )));
+    }
+
     // Send GET request
-    let response = tools
+    let mut response = tools
         .http
         .get(&input.url)
         .send()
@@ -35,21 +44,44 @@ pub async fn web_fetch(
         .unwrap_or("text/plain")
         .to_string();
 
-    // Download body with size cap
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| ToolError::external(format!("Failed to read response body: {e}")))?;
+    // Download body with size cap (streaming)
+    #[allow(clippy::cast_possible_truncation)]
+    // max_bytes is already bounded by HARD_MAX_BYTES (20MB)
+    let initial_capacity = response
+        .content_length()
+        .map_or(8 * 1024, |len| len.min(max_bytes as u64) as usize)
+        .min(max_bytes);
 
-    let truncated = bytes.len() > max_bytes;
-    let raw_bytes = if truncated {
-        &bytes[..max_bytes]
-    } else {
-        &bytes
-    };
+    let mut bytes: Vec<u8> = Vec::with_capacity(initial_capacity);
+    let mut truncated = false;
+
+    loop {
+        // Conservative: once we reach the cap, stop without attempting to read more
+        if bytes.len() >= max_bytes {
+            truncated = true;
+            break;
+        }
+
+        let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| ToolError::external(format!("Failed to read response body: {e}")))?
+        else {
+            break;
+        };
+
+        let remaining = max_bytes - bytes.len();
+        if chunk.len() > remaining {
+            bytes.extend_from_slice(&chunk[..remaining]);
+            truncated = true;
+            break;
+        }
+
+        bytes.extend_from_slice(&chunk);
+    }
 
     // Convert based on content-type
-    let (title, content) = decode_and_convert(raw_bytes, &content_type)?;
+    let (title, content) = decode_and_convert(&bytes, &content_type)?;
 
     let word_count = content.split_whitespace().count();
 

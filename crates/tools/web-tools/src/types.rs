@@ -20,7 +20,7 @@ pub struct WebFetchInput {
     /// Requires Anthropic credentials when enabled.
     #[serde(default)]
     pub summarize: bool,
-    /// Maximum bytes to download (default: 5MB)
+    /// Maximum bytes to download (default: 5MB, hard limit: 20MB)
     #[serde(default)]
     pub max_bytes: Option<usize>,
 }
