@@ -18,7 +18,7 @@ async fn test_count_tokens() {
         .await;
 
     let req = MessageTokensCountRequest {
-        model: "claude-3-5-haiku".into(),
+        model: "claude-haiku-4-5".into(),
         system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,

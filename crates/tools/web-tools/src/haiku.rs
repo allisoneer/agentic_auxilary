@@ -28,7 +28,7 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
         .map_err(|e| ToolError::external(format!("Failed to initialize Anthropic client: {e}")))?;
 
     let req = MessagesCreateRequest {
-        model: "claude-3-5-haiku-latest".into(),
+        model: "claude-haiku-4-5".into(),
         max_tokens: 300,
         messages: vec![MessageParam {
             role: MessageRole::User,
