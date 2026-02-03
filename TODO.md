@@ -2,19 +2,8 @@
 - (none)
 
 ## Researched / Ready for planning:
-- Web fetch & web search tools + Discord MCP integration. Research completed:
+- Discord MCP integration (config only, no code): Add glittercowboy/discord-mcp to opencode.json with dedicated agent. 3 meta-tools dispatch to 128 operations. Requires Python 3.12+, uv, bot token + guild ID.
   - Research doc: `thoughts/completed/2026-01-10_to_2026-01-30_google_supported_schema/research/discord_mcp_web_tooling_infrastructure.md`
-  - **Discord MCP** (config only, no code): Add glittercowboy/discord-mcp to opencode.json with dedicated agent. 3 meta-tools dispatch to 128 operations. Requires Python 3.12+, uv, bot token + guild ID.
-  - **Web fetch tool** (new crate: `crates/tools/web-tools/`): Two composable backends + two output modes:
-    - Static backend: `reqwest` + `htmd` for plain HTML (no JS rendering)
-    - Rendered backend: Calls configurable external API (e.g. reader sidecar, crawl4ai) for JS-rendered pages
-    - Raw markdown output (start here) and Haiku-wrapped output (build second, uses anthropic-async)
-    - Content-type early check to short-circuit non-HTML (PDFs, JSON, images)
-    - Strategy/trait design for backend+output composability
-  - **Web search tool** (same crate): Regular MCP tool, just reqwest + API key. Provider TBD (Exa vs Serper — needs focused evaluation). Date injection in tool description (steal from OpenCode pattern).
-  - **Subagent integration** (later): Replace Claude Code built-in WebSearch/WebFetch in `agent/config.rs` enabled_tools_for() Web locations with custom MCP tools.
-  - OpenCode's implementations analyzed for reference (not the approach we want — plain fetch + Turndown, no JS rendering, no Haiku wrapping, Exa MCP with no visible auth).
-  - References added: glittercowboy/discord-mcp, intergalacticalvariable/reader, unclecode/crawl4ai, allisoneer/web-reader, exa-labs/exa-mcp-server, letmutex/htmd (pre-existing)
 
 ## Deferred (pending SQLite migration):
 - Token tracking with tiktoken instead of KB for thoughts files. Research completed:
@@ -81,18 +70,4 @@ a standard output formatter? Or should pagination messaging be part of the MCP r
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
 
 ## Old (probably delete):
-- universal tool could use a re-look at how useful the current CLI fucntionality actually is, and how much we have to re-implement with clap for the standard use cases we have.
-- universal tool could potentially use an ability to modify things at runtime. There is potential to create strong dynamic tool params and types and such that we would need to use rmcp directly for currently.
-- Update rust-toolchain to whatever latest stable is and fix all the things that pop up by upgrading to a new stable version - Is this
-done?
-- The agentic-mcp command line really should do some type of tooling seperation to make permissions handling easier. e.g. the tool names
-  shouldn't be root levell. They should be similar to how we had them setup in the old system, with the prefixes in opencode.json
-defined. I'm not sure what categories would be best? Maybe cli_ls for cli-type tools. Then the reasoning model request method I think
-makes sense as `reasoning_model_request` (Kinda it's own standalone). Although I could see benefit in doing that in the same category as
-the sub agents. like `ask_agent` and `ask_reasoning_model` could be the two there? So they are in the same "sub category". It's
-important to both consider how I want to split tools for permissions as well as how the tokenizer will represent tool calls. e.g. I
-don't want have them all start with the same token, but it could be worthwhile to have the same token(s) starting the tool name for
-similar tools. This gives the model a stronger chance at calling the right tool instead of the wrong one at any given time. e.g.
-`ask_blah` ends up tokenizing to `ask` and `_blah[1...]`. Therefore the tokenizer could choose ask as the token that it wants to choose,
-and have the next token generated having a higher chance at success. I think the `just_search` and `just_execute` are similarly useful
-in this regard.
+- (none)
