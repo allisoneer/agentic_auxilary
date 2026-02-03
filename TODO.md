@@ -34,22 +34,22 @@
 ## To classify/investigate:
 - Need to develop a configuration system, so everything can be configurable. Need heavy inspiration from opencode. E.g. similar "here is
   the schema" header stuff as their config and similar granularity of configurable options available. This absolutely needs to come
+  before any "big lifts" or "large changes". e.g. before database or before doing more agent work.
 - I need to have a way to run higher-level orchestrator-style agents. I'm thinking like where I could just press tab in opencode to
-swithc to an "orchestrator" agent that can then spawn an entire opencode agent with a command. We could even just start with only
-supporting `research`. Where it can spawn the entire research loop adhoc, get the response, and then read the research document once
-it's done. Our even better, we figure out how to make the setup look good as an enum of `research` `create_plan_init`,
-`create_plan_final`, and `implement_plan`. We'll have to support resuming existing sessions to support create_plan_final. Maybe opencode
-exposes some ID that we can use for resuming. Then we'll have to implement some type of automatic insertion of user message when
-`implement_plan` (or others) are running, to be able to get like some summarized version written to an artifact or something of progress
-made so far before the limit is up. Okay, so I'm sorta thinking it needs multiple tools? One for a session. One for resuming a session.
-And maybe one for searching sessions or something? That last one isn't thought out yet and maybe shouldn't be included in the original.
-But the "naive" approach could just be listing the last X sessions to get IDs and such? That would be doable and useful without much
-extra thought. Then the enum for type of response, which are tied to the commands, and in addition to the enum of types of commands
-there should be a "no-template" option or something. For scenarios like the last turn of create_plan_final where it asks if you want to
-persist it and really all you need to say is "yes". I think the same style of functionality as claude code, where the final assistance
-response is returned back, makes sense to me. We can probably continue that trend. I think all of our "final assistant responses" are
-already setup to be clear of what happened and such.
-before any "big lifts" or "large changes". e.g. before database or before doing more agent work.
+  switch to an "orchestrator" agent that can then spawn an entire opencode agent with a command. We could even just start with only
+  supporting `research`. Where it can spawn the entire research loop ad hoc, get the response, and then read the research document once
+  it's done. Or even better, we figure out how to make the setup look good as an enum of `research` `create_plan_init`,
+  `create_plan_final`, and `implement_plan`. We'll have to support resuming existing sessions to support create_plan_final. Maybe opencode
+  exposes some ID that we can use for resuming. Then we'll have to implement some type of automatic insertion of user message when
+  `implement_plan` (or others) are running, to be able to get like some summarized version written to an artifact or something of progress
+  made so far before the limit is up. Okay, so I'm sorta thinking it needs multiple tools? One for a session. One for resuming a session.
+  And maybe one for searching sessions or something? That last one isn't thought out yet and maybe shouldn't be included in the original.
+  But the "naive" approach could just be listing the last X sessions to get IDs and such? That would be doable and useful without much
+  extra thought. Then the enum for type of response, which are tied to the commands, and in addition to the enum of types of commands
+  there should be a "no-template" option or something. For scenarios like the last turn of create_plan_final where it asks if you want to
+  persist it and really all you need to say is "yes". I think the same style of functionality as claude code, where the final assistance
+  response is returned back, makes sense to me. We can probably continue that trend. I think all of our "final assistant responses" are
+  already setup to be clear of what happened and such.
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
 - README.md could use a huge refresh. We'll be at the point where we can have all-inclusive instructions for setting up for any repo soon. Would be a lot better than just "Here is a list of tools" if we mentioned how they are used and what they are for and how to do the entire setup.
