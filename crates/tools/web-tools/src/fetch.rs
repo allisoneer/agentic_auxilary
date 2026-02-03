@@ -49,7 +49,7 @@ pub async fn web_fetch(
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("text/plain")
+        .unwrap_or("")
         .to_string();
 
     // Download body with size cap (streaming)
@@ -340,6 +340,58 @@ mod tests {
             assert!(result.is_ok(), "Expected success for 200 response");
             let output = result.unwrap();
             assert_eq!(output.content, "Hello, world!");
+        }
+
+        #[tokio::test]
+        async fn web_fetch_detects_html_without_content_type() {
+            let mock_server = MockServer::start().await;
+
+            let html = b"<!DOCTYPE html><html><head><title>Test Page</title></head><body><p>Hello</p></body></html>";
+
+            // HTML response with NO Content-Type header (misconfigured server)
+            // Use set_body_bytes to avoid wiremock's automatic text/plain Content-Type
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(200).set_body_bytes(html.as_slice()))
+                .mount(&mock_server)
+                .await;
+
+            let http = reqwest::Client::new();
+            let tools = WebTools::with_http_client(http);
+
+            let input = WebFetchInput {
+                url: mock_server.uri(),
+                summarize: false,
+                max_bytes: None,
+            };
+
+            let result = web_fetch(&tools, input).await;
+            assert!(
+                result.is_ok(),
+                "Expected success for HTML without Content-Type"
+            );
+            let output = result.unwrap();
+
+            // Verify content_type is empty (no header)
+            assert!(
+                output.content_type.is_empty(),
+                "Content-Type should be empty, got: {}",
+                output.content_type
+            );
+
+            // Verify HTML heuristic detected the content and converted to markdown
+            assert_eq!(
+                output.title.as_deref(),
+                Some("Test Page"),
+                "Should extract title via looks_like_html heuristic"
+            );
+            assert!(
+                output.content.contains("Hello"),
+                "Content should be converted"
+            );
+            assert!(
+                !output.content.contains("<p>"),
+                "HTML tags should be removed by markdown conversion"
+            );
         }
     }
 }
