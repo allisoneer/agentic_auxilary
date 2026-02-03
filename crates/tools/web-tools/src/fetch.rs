@@ -149,7 +149,7 @@ pub fn decode_and_convert(
 /// Best-effort `<title>` extraction from HTML.
 #[must_use]
 pub fn extract_title(html: &str) -> Option<String> {
-    let lower = html.to_lowercase();
+    let lower = html.to_ascii_lowercase();
     let start = lower.find("<title")?;
     let after_tag = lower[start..].find('>')?;
     let title_start = start + after_tag + 1;
@@ -221,5 +221,27 @@ mod tests {
         assert!(looks_like_html("<!DOCTYPE html><html>"));
         assert!(looks_like_html("  <html>"));
         assert!(!looks_like_html("Hello, world!"));
+    }
+
+    #[test]
+    fn test_extract_title_unicode_before_tag() {
+        // Turkish İ (2→3 bytes under to_lowercase) would panic or corrupt with old code
+        assert_eq!(
+            extract_title("İ<title>Test Page</title>"),
+            Some("Test Page".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_title_mixed_case_tags() {
+        // Verify ASCII case-insensitivity still works
+        assert_eq!(
+            extract_title("<TITLE>Upper</TITLE>"),
+            Some("Upper".to_string())
+        );
+        assert_eq!(
+            extract_title("<TiTlE>Mixed</TiTlE>"),
+            Some("Mixed".to_string())
+        );
     }
 }
