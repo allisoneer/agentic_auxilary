@@ -96,7 +96,9 @@ impl Config for ExaConfig {
     }
 
     fn url(&self, path: &str) -> String {
-        format!("{}{}", self.api_base, path)
+        let base = self.api_base.trim_end_matches('/');
+        let path = path.trim_start_matches('/');
+        format!("{base}/{path}")
     }
 
     fn query(&self) -> Vec<(&str, &str)> {
