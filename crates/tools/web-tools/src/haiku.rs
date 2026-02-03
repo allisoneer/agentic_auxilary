@@ -17,6 +17,10 @@ use crate::WebTools;
 /// # Errors
 /// Returns `ToolError` if the Anthropic client cannot be initialized or the API call fails.
 pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<String, ToolError> {
+    // Truncate to avoid context window overflow (~25K tokens, well under 200K limit)
+    const MAX_MARKDOWN_CHARS: usize = 100_000;
+    let markdown: String = markdown.chars().take(MAX_MARKDOWN_CHARS).collect();
+
     let client = tools
         .anthropic
         .get_or_try_init(|| async { init_anthropic_client().await })
