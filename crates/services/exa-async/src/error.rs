@@ -79,10 +79,10 @@ pub fn deserialize_api_error(status: StatusCode, body: &[u8]) -> ExaError {
         return ExaError::Api(obj);
     }
 
-    // Server may return plain text on 5xx
+    // Server may return plain text on 5xx; cap body to avoid log/memory bloat
     ExaError::Api(ApiErrorObject {
         status_code,
-        message: String::from_utf8_lossy(body).into_owned(),
+        message: String::from_utf8_lossy(&body[..body.len().min(400)]).into_owned(),
         timestamp: None,
         path: None,
         error: Some(format!("http_{}", status.as_u16())),
