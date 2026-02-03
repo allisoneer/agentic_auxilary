@@ -1,6 +1,7 @@
-use exa_async::config::Config;
+use exa_async::test_support::EnvGuard;
 use exa_async::types::search::SearchRequest;
 use exa_async::{Client, ExaConfig, ExaError};
+use serial_test::serial;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -112,24 +113,21 @@ async fn search_request_serializes_camel_case() {
 }
 
 #[tokio::test]
+#[serial(env)]
 async fn missing_api_key_is_config_error() {
-    // Build a client without a key
+    // Force EXA_API_KEY to be unset for deterministic test behavior
+    let _guard = EnvGuard::remove("EXA_API_KEY");
+
+    // Build a client without a key - now guaranteed to have no API key
     let client = Client::with_config(ExaConfig::new().with_api_base("http://localhost:1234"));
 
-    // Without an api key set via with_api_key (and assuming EXA_API_KEY is not in env),
-    // validate_auth should fail. We test this by trying to make a request.
-    // If EXA_API_KEY happens to be set in the environment, this test still passes
-    // because we're testing the config validation path.
-    let cfg_only = ExaConfig::new().with_api_base("http://localhost:1234");
-    // If no env var, validate should fail
-    if cfg_only.validate_auth().is_err() {
-        let req = SearchRequest::new("test");
-        let result = client.search().create(req).await;
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ExaError::Config(msg) => assert!(msg.contains("EXA_API_KEY")),
-            other => panic!("Expected Config error, got {other:?}"),
-        }
+    let req = SearchRequest::new("test");
+    let result = client.search().create(req).await;
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        ExaError::Config(msg) => assert!(msg.contains("EXA_API_KEY")),
+        other => panic!("Expected Config error, got {other:?}"),
     }
 }
 
