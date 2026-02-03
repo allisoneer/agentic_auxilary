@@ -45,6 +45,14 @@
 ## To classify/investigate:
 - Need to develop a configuration system, so everything can be configurable. Need heavy inspiration from opencode. E.g. similar "here is
   the schema" header stuff as their config and similar granularity of configurable options available. This absolutely needs to come
+- I need to have a way to run higher-level orchestrator-style agents. I'm thinking like where I could just press tab in opencode to
+swithc to an "orchestrator" agent that can then spawn an entire opencode agent with a command. We could even just start with only
+supporting `research`. Where it can spawn the entire research loop adhoc, get the response, and then read the research document once
+it's done. Our even better, we figure out how to make the setup look good as an enum of `research` `create_plan_init`,
+`create_plan_final`, and `implement_plan`. We'll have to support resuming existing sessions to support create_plan_final. Maybe opencode
+exposes some ID that we can use for resuming. Then we'll have to implement some type of automatic insertion of user message when
+`implement_plan` (or others) are running, to be able to get like some summarized version written to an artifact or something of progress
+made so far before the limit is up.
 before any "big lifts" or "large changes". e.g. before database or before doing more agent work.
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
