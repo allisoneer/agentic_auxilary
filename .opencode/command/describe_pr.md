@@ -68,7 +68,8 @@ You are tasked with generating a comprehensive pull request description followin
 
 9. **Update the PR:**
    - After thoughts sync, the file will be at a path in thoughts/active/{branch}/artifacts/
-   - Update PR description: `gh pr edit {number} --body-file {path_returned_from_sync}`
+   - Execute the "pr-update-autogen" recipe using `tools_cli_just_execute` with the PR number and artifact path as arguments
+   - This preserves any human notes outside the autogen markers
    - Confirm update successful
    - If any verification steps remain unchecked, remind user to complete them before merging
 
