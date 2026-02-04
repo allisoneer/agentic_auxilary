@@ -1,44 +1,34 @@
 [package]
-name = "anthropic-async"
-version = "0.3.0"
+name = "web-retrieval"
+version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Anthropic API client for Rust with prompt caching support"
+description = "Web fetch and web search MCP tools"
 repository = "https://github.com/allisoneer/agentic_auxilary"
-readme = "README.md"
-categories = ["api-bindings"]
-keywords = ["anthropic", "claude", "llm", "client"]
 
 [package.metadata.dist]
 dist = false
 
-[features]
-default = []
-streaming = [] # placeholder for future SSE
-schemars = ["dep:schemars"]
-
 [dependencies]
+agentic-tools-core = { workspace = true }
+exa-async = { workspace = true }
+anthropic-async = { workspace = true }
+opencode_rs = { workspace = true, features = ["http"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+schemars = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-anyhow = { workspace = true }
-reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls-tls"], default-features = false }
-backon = { version = "1", features = ["tokio-sleep"] }
 chrono = { workspace = true, features = ["serde"] }
-bytes = "1.0"
+tracing = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls-tls"], default-features = false }
+htmd = "0.5"
+url = "2"
 futures = "0.3"
-derive_builder = "0.20"
-secrecy = "0.10"
-schemars = { version = "1", optional = true, features = ["derive", "preserve_order"] }
 
 [dev-dependencies]
 wiremock = "0.6"
-proptest = "1.6"
-serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-serial_test = "3"
 
 [lints.rust]
 warnings = "deny"
@@ -49,9 +39,8 @@ pedantic = "warn"
 nursery = "warn"
 
 [package.metadata.repo]
-role = "lib"
-family = "services"
-readme_tier = "featured"
+role = "tool-lib"
+family = "tools"
 
 [package.metadata.repo.integrations]
 mcp = false

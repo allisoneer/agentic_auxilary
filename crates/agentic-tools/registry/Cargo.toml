@@ -22,6 +22,7 @@ pr_comments = { workspace = true }
 linear-tools = { workspace = true }
 gpt5_reasoner = { workspace = true }
 thoughts-mcp-tools = { workspace = true }
+web-retrieval = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

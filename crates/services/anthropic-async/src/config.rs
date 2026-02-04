@@ -1,4 +1,5 @@
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 /// Default Anthropic API base URL
@@ -13,25 +14,29 @@ pub const HDR_ANTHROPIC_BETA: &str = "anthropic-beta";
 pub const HDR_X_API_KEY: &str = "x-api-key";
 
 /// Authentication method for Anthropic API
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Debug output automatically redacts credentials via [`SecretString`].
+#[derive(Clone, Debug)]
 pub enum AnthropicAuth {
     /// API key authentication
-    ApiKey(String),
+    ApiKey(SecretString),
     /// Bearer token authentication
-    Bearer(String),
+    Bearer(SecretString),
     /// Both API key and bearer token authentication
     Both {
         /// API key for x-api-key header
-        api_key: String,
+        api_key: SecretString,
         /// Bearer token for Authorization header
-        bearer: String,
+        bearer: SecretString,
     },
     /// No authentication configured
     None,
 }
 
 /// Configuration for the Anthropic client
-#[derive(Debug, Clone, Deserialize)]
+///
+/// Debug output automatically redacts credentials via [`SecretString`] in [`AnthropicAuth`].
+#[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
 pub struct AnthropicConfig {
     api_base: String,
@@ -42,12 +47,20 @@ pub struct AnthropicConfig {
     beta: Vec<String>,
 }
 
+/// Helper to read and normalize an env var (trim + filter empty).
+fn env_trimmed(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
 impl Default for AnthropicConfig {
     fn default() -> Self {
-        let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
-        let bearer = std::env::var("ANTHROPIC_AUTH_TOKEN").ok();
+        let api_key = env_trimmed("ANTHROPIC_API_KEY").map(SecretString::from);
+        let bearer = env_trimmed("ANTHROPIC_AUTH_TOKEN").map(SecretString::from);
         let api_base =
-            std::env::var("ANTHROPIC_BASE_URL").unwrap_or_else(|_| ANTHROPIC_DEFAULT_BASE.into());
+            env_trimmed("ANTHROPIC_BASE_URL").unwrap_or_else(|| ANTHROPIC_DEFAULT_BASE.into());
 
         let auth = match (api_key, bearer) {
             (Some(k), Some(t)) => AnthropicAuth::Both {
@@ -103,7 +116,7 @@ impl AnthropicConfig {
     /// This will use the `x-api-key` header for authentication.
     #[must_use]
     pub fn with_api_key(mut self, k: impl Into<String>) -> Self {
-        self.auth = AnthropicAuth::ApiKey(k.into());
+        self.auth = AnthropicAuth::ApiKey(SecretString::from(k.into()));
         self
     }
 
@@ -112,7 +125,7 @@ impl AnthropicConfig {
     /// This will use the `Authorization: Bearer` header for authentication.
     #[must_use]
     pub fn with_bearer(mut self, t: impl Into<String>) -> Self {
-        self.auth = AnthropicAuth::Bearer(t.into());
+        self.auth = AnthropicAuth::Bearer(SecretString::from(t.into()));
         self
     }
 
@@ -123,8 +136,8 @@ impl AnthropicConfig {
     #[must_use]
     pub fn with_both(mut self, api_key: impl Into<String>, bearer: impl Into<String>) -> Self {
         self.auth = AnthropicAuth::Both {
-            api_key: api_key.into(),
-            bearer: bearer.into(),
+            api_key: SecretString::from(api_key.into()),
+            bearer: SecretString::from(bearer.into()),
         };
         self
     }
@@ -148,18 +161,28 @@ impl AnthropicConfig {
         &self.api_base
     }
 
-    /// Validates that authentication credentials are present.
+    /// Validates that authentication credentials are present and non-empty.
     ///
     /// # Errors
     ///
-    /// Returns an error if neither API key nor bearer token is configured.
+    /// Returns an error if neither API key nor bearer token is configured,
+    /// or if the configured credentials are empty/whitespace-only.
     pub fn validate_auth(&self) -> Result<(), crate::error::AnthropicError> {
+        use crate::error::AnthropicError;
+
         match &self.auth {
-            AnthropicAuth::None => Err(crate::error::AnthropicError::Config(
+            AnthropicAuth::ApiKey(k) if !k.expose_secret().trim().is_empty() => Ok(()),
+            AnthropicAuth::Bearer(t) if !t.expose_secret().trim().is_empty() => Ok(()),
+            AnthropicAuth::Both { api_key, bearer }
+                if !api_key.expose_secret().trim().is_empty()
+                    && !bearer.expose_secret().trim().is_empty() =>
+            {
+                Ok(())
+            }
+            _ => Err(AnthropicError::Config(
                 "Missing Anthropic credentials: set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN"
                     .into(),
             )),
-            _ => Ok(()),
         }
     }
 
@@ -223,12 +246,12 @@ impl Config for AnthropicConfig {
             AnthropicAuth::ApiKey(k) => {
                 h.insert(
                     HDR_X_API_KEY,
-                    HeaderValue::from_str(k)
+                    HeaderValue::from_str(k.expose_secret())
                         .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
                 );
             }
             AnthropicAuth::Bearer(t) => {
-                let v = format!("Bearer {t}");
+                let v = format!("Bearer {}", t.expose_secret());
                 h.insert(
                     AUTHORIZATION,
                     HeaderValue::from_str(&v).map_err(|_| {
@@ -239,10 +262,10 @@ impl Config for AnthropicConfig {
             AnthropicAuth::Both { api_key, bearer } => {
                 h.insert(
                     HDR_X_API_KEY,
-                    HeaderValue::from_str(api_key)
+                    HeaderValue::from_str(api_key.expose_secret())
                         .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
                 );
-                let v = format!("Bearer {bearer}");
+                let v = format!("Bearer {}", bearer.expose_secret());
                 h.insert(
                     AUTHORIZATION,
                     HeaderValue::from_str(&v).map_err(|_| {
@@ -366,5 +389,113 @@ mod tests {
             beta: vec![],
         };
         assert!(cfg.validate_auth().is_err());
+    }
+
+    #[test]
+    fn debug_output_redacts_api_key() {
+        let cfg = AnthropicConfig::new().with_api_key("super-secret-key-12345");
+        let debug_str = format!("{cfg:?}");
+
+        assert!(
+            !debug_str.contains("super-secret-key-12345"),
+            "Debug output should not contain the API key"
+        );
+        // SecretString uses [REDACTED] format
+        assert!(
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
+        );
+    }
+
+    #[test]
+    fn debug_output_redacts_bearer() {
+        let cfg = AnthropicConfig::new().with_bearer("super-secret-token-12345");
+        let debug_str = format!("{cfg:?}");
+
+        assert!(
+            !debug_str.contains("super-secret-token-12345"),
+            "Debug output should not contain the bearer token"
+        );
+        // SecretString uses [REDACTED] format
+        assert!(
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
+        );
+    }
+
+    #[test]
+    fn debug_output_redacts_both() {
+        let cfg = AnthropicConfig::new().with_both("secret-api-key", "secret-bearer-token");
+        let debug_str = format!("{cfg:?}");
+
+        assert!(
+            !debug_str.contains("secret-api-key"),
+            "Debug output should not contain the API key"
+        );
+        assert!(
+            !debug_str.contains("secret-bearer-token"),
+            "Debug output should not contain the bearer token"
+        );
+        // SecretString uses [REDACTED] format
+        assert!(
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain '[REDACTED]', got: {debug_str}"
+        );
+    }
+
+    #[test]
+    fn validate_auth_rejects_empty_api_key() {
+        let cfg = AnthropicConfig::new().with_api_key("");
+        assert!(cfg.validate_auth().is_err());
+
+        let cfg = AnthropicConfig::new().with_api_key("   ");
+        assert!(cfg.validate_auth().is_err());
+
+        let cfg = AnthropicConfig::new().with_api_key("\n");
+        assert!(cfg.validate_auth().is_err());
+    }
+
+    #[test]
+    fn validate_auth_rejects_empty_bearer() {
+        let cfg = AnthropicConfig::new().with_bearer("");
+        assert!(cfg.validate_auth().is_err());
+
+        let cfg = AnthropicConfig::new().with_bearer("   ");
+        assert!(cfg.validate_auth().is_err());
+    }
+
+    #[test]
+    fn validate_auth_rejects_empty_both() {
+        // Both empty
+        let cfg = AnthropicConfig::new().with_both("", "");
+        assert!(cfg.validate_auth().is_err());
+
+        // API key empty, bearer valid
+        let cfg = AnthropicConfig::new().with_both("", "valid-token");
+        assert!(cfg.validate_auth().is_err());
+
+        // API key valid, bearer empty
+        let cfg = AnthropicConfig::new().with_both("valid-key", "");
+        assert!(cfg.validate_auth().is_err());
+
+        // Both whitespace
+        let cfg = AnthropicConfig::new().with_both("   ", "   ");
+        assert!(cfg.validate_auth().is_err());
+    }
+
+    #[test]
+    fn validate_auth_accepts_valid_credentials() {
+        let cfg = AnthropicConfig::new().with_api_key("valid-key");
+        assert!(cfg.validate_auth().is_ok());
+
+        let cfg = AnthropicConfig::new().with_bearer("valid-token");
+        assert!(cfg.validate_auth().is_ok());
+
+        let cfg = AnthropicConfig::new().with_both("valid-key", "valid-token");
+        assert!(cfg.validate_auth().is_ok());
+
+        // Valid with leading/trailing whitespace (trimmed internally)
+        let cfg = AnthropicConfig::new().with_api_key("  valid-key  ");
+        assert!(cfg.validate_auth().is_ok());
     }
 }

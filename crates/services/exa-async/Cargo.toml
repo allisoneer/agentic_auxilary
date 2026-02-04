@@ -1,20 +1,16 @@
 [package]
-name = "anthropic-async"
-version = "0.3.0"
+name = "exa-async"
+version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Anthropic API client for Rust with prompt caching support"
+description = "Exa API client for Rust (async)"
 repository = "https://github.com/allisoneer/agentic_auxilary"
-readme = "README.md"
-categories = ["api-bindings"]
-keywords = ["anthropic", "claude", "llm", "client"]
 
 [package.metadata.dist]
 dist = false
 
 [features]
 default = []
-streaming = [] # placeholder for future SSE
 schemars = ["dep:schemars"]
 
 [dependencies]
@@ -35,10 +31,9 @@ schemars = { version = "1", optional = true, features = ["derive", "preserve_ord
 
 [dev-dependencies]
 wiremock = "0.6"
-proptest = "1.6"
-serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serial_test = "3"
+serde_json = { workspace = true }
 
 [lints.rust]
 warnings = "deny"
@@ -51,7 +46,6 @@ nursery = "warn"
 [package.metadata.repo]
 role = "lib"
 family = "services"
-readme_tier = "featured"
 
 [package.metadata.repo.integrations]
 mcp = false
