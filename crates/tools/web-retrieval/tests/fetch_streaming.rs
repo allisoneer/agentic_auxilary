@@ -1,8 +1,8 @@
 //! Integration tests for streaming download behavior in `web_fetch`.
 
-use web_tools::WebTools;
-use web_tools::fetch::{HARD_MAX_BYTES, web_fetch};
-use web_tools::types::WebFetchInput;
+use web_retrieval::WebTools;
+use web_retrieval::fetch::{HARD_MAX_BYTES, web_fetch};
+use web_retrieval::types::WebFetchInput;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

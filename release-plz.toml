@@ -164,9 +164,9 @@ git_tag_enable = true
 release = true
 
 [[package]]
-name = "web-tools"
-changelog_path = "crates/tools/web-tools/CHANGELOG.md"
-git_tag_name = "web-tools-v{{ version }}"
+name = "web-retrieval"
+changelog_path = "crates/tools/web-retrieval/CHANGELOG.md"
+git_tag_name = "web-retrieval-v{{ version }}"
 git_tag_enable = true
 release = true
 

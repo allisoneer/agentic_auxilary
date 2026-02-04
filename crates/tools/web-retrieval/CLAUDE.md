@@ -1,8 +1,8 @@
-# CLAUDE.md - web-tools
+# CLAUDE.md - web-retrieval
 
 <!-- BEGIN:xtask:autogen header -->
-- Crate: web-tools
-- Path: crates/tools/web-tools/
+- Crate: web-retrieval
+- Path: crates/tools/web-retrieval/
 - Role: tool-lib
 - Family: tools
 - Integrations: mcp=false, logging=false, napi=false
@@ -24,14 +24,14 @@ Environment:
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p web-tools -- --check
-cargo clippy -p web-tools --all-targets -- -D warnings
+cargo fmt -p web-retrieval -- --check
+cargo clippy -p web-retrieval --all-targets -- -D warnings
 
 # Tests
-cargo test -p web-tools
+cargo test -p web-retrieval
 
 # Build
-cargo build -p web-tools
+cargo build -p web-retrieval
 ```
 <!-- END:xtask:autogen -->
 

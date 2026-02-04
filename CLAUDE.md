@@ -50,7 +50,7 @@ Guidance for Claude Code when working with this repository.
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
-- `web-tools` (tool-lib) - `crates/tools/web-tools/`
+- `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
 <!-- END:xtask:autogen -->
 
 

@@ -2,7 +2,7 @@
 //!
 //! This crate provides a single entry point for building a `ToolRegistry` containing
 //! all available tools from the various domain crates (coding_agent_tools, pr_comments,
-//! linear_tools, gpt5_reasoner, thoughts_mcp_tools, web_tools).
+//! linear_tools, gpt5_reasoner, thoughts_mcp_tools, web_retrieval).
 //!
 //! # Example
 //!
@@ -134,10 +134,10 @@ impl AgenticTools {
             regs.push(thoughts_mcp_tools::build_registry());
         }
 
-        // web-tools (2 tools)
+        // web-retrieval (2 tools)
         if domain_wanted(WEB_NAMES) {
-            let web = Arc::new(web_tools::WebTools::new());
-            regs.push(web_tools::build_registry(web));
+            let web = Arc::new(web_retrieval::WebTools::new());
+            regs.push(web_retrieval::build_registry(web));
         }
 
         let merged = ToolRegistry::merge_all(regs);
@@ -261,11 +261,11 @@ mod tests {
         );
         assert!(
             reg.contains("web_fetch"),
-            "missing web_fetch from web_tools"
+            "missing web_fetch from web_retrieval"
         );
         assert!(
             reg.contains("web_search"),
-            "missing web_search from web_tools"
+            "missing web_search from web_retrieval"
         );
     }
 

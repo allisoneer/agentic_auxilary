@@ -91,6 +91,11 @@
         "tools_linear_*": "allow"
       }
     },
+    "Web": {
+      "permission": {
+        "tools_web_*": "allow"
+      }
+    },
     "build": {
       "disable": true
     },
