@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [0.4.0] - 2026-02-04
+
+### 🐛 Bug Fixes
+- *(anthropic-async)* Redact credentials from Debug and reject empty keys
+
+### 🚜 Refactor
+- *(services)* Use SecretString for credential handling
 ## [0.3.0] - 2026-01-30
 
 ### ⚙️  Miscellaneous
