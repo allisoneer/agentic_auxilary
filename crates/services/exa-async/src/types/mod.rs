@@ -12,4 +12,4 @@ pub mod find_similar;
 pub mod search;
 
 pub use common::*;
-pub use search::*;
+pub use search::{SearchRequest, SearchResponse};

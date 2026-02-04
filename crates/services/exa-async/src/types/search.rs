@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use super::common::{ContentsOptions, LivecrawlOption, SearchResult, SearchType};
 
+// Backward-compatible re-exports (CostDollars previously lived in this module)
+pub use super::common::{CostDollars, CostDollarsContents, CostDollarsSearch};
+
 /// Request body for `POST /search`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,19 +109,4 @@ pub struct SearchResponse {
     /// Resolved search type used
     #[serde(default)]
     pub resolved_search_type: Option<String>,
-}
-
-/// Cost information from Exa API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CostDollars {
-    /// Total cost
-    #[serde(default)]
-    pub total: Option<f64>,
-    /// Search cost component
-    #[serde(default)]
-    pub search: Option<f64>,
-    /// Contents cost component
-    #[serde(default)]
-    pub contents: Option<f64>,
 }

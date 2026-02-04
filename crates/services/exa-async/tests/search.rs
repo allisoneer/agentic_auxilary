@@ -31,8 +31,8 @@ fn mock_search_response() -> serde_json::Value {
         "autopromptString": "Here is some context about the query.",
         "costDollars": {
             "total": 0.005,
-            "search": 0.003,
-            "contents": 0.002
+            "search": { "neural": 0.003 },
+            "contents": { "text": 0.001, "highlights": 0.0005, "summary": 0.0005 }
         },
         "resolvedSearchType": "neural"
     })
@@ -72,7 +72,18 @@ async fn search_success_parses() {
         Some("Here is some context about the query.")
     );
     assert_eq!(resp.resolved_search_type.as_deref(), Some("neural"));
-    assert!((resp.cost_dollars.as_ref().unwrap().total.unwrap() - 0.005).abs() < f64::EPSILON);
+
+    let cost = resp.cost_dollars.as_ref().unwrap();
+    assert!((cost.total.unwrap() - 0.005).abs() < 1e-12);
+
+    let search_cost = cost.search.as_ref().unwrap();
+    assert!((search_cost.neural.unwrap() - 0.003).abs() < 1e-12);
+    assert!(search_cost.keyword.is_none());
+
+    let contents_cost = cost.contents.as_ref().unwrap();
+    assert!((contents_cost.text.unwrap() - 0.001).abs() < 1e-12);
+    assert!((contents_cost.highlights.unwrap() - 0.0005).abs() < 1e-12);
+    assert!((contents_cost.summary.unwrap() - 0.0005).abs() < 1e-12);
 }
 
 #[tokio::test]
