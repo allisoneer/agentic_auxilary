@@ -62,10 +62,10 @@ pub struct TextContentsOptions {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HighlightsContentsOptions {
-    /// Number of highlights per result
+    /// Number of sentences per highlight
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_sentences: Option<u32>,
-    /// Number of highlights per result
+    /// Number of highlights per URL
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highlights_per_url: Option<u32>,
     /// Query for highlights
