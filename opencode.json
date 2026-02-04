@@ -12,6 +12,7 @@
     "read": true,
     "todowrite": true,
     "todoread": true,
+    "tools_web_*": false,
     "tools_cli_*": true,
     "tools_ask_*": true,
     "tools_thoughts_*": true,
