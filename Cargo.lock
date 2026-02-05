@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "agentic-tools-core",
  "coding_agent_tools",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "anthropic-async"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "backon",
@@ -940,7 +940,7 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "claudecode"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -5864,7 +5864,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -6636,7 +6636,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "agentic-tools-core",
  "anthropic-async",
