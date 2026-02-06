@@ -203,7 +203,18 @@ enum ReferenceCommands {
     List,
 
     /// Sync (clone) all reference repositories
-    Sync,
+    Sync {
+        /// Print canonical identity + resolution diagnostics per reference
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
+    /// Diagnose reference repo mapping/clone issues
+    Doctor {
+        /// Apply safe automatic repairs (dedupe identical mappings; prune missing auto-managed entries)
+        #[arg(long)]
+        fix: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -313,7 +324,10 @@ async fn main() -> Result<()> {
             ReferenceCommands::Add { url } => commands::references::add::execute(url).await,
             ReferenceCommands::Remove { url } => commands::references::remove::execute(url).await,
             ReferenceCommands::List => commands::references::list::execute().await,
-            ReferenceCommands::Sync => commands::references::sync::execute().await,
+            ReferenceCommands::Sync { verbose } => {
+                commands::references::sync::execute(verbose).await
+            }
+            ReferenceCommands::Doctor { fix } => commands::references::doctor::execute(fix).await,
         },
         Commands::Work { command } => match command {
             WorkCommands::Init => commands::work::init::execute().await,

@@ -1,9 +1,33 @@
 use super::types::{RepoLocation, RepoMapping};
+use crate::repo_identity::{
+    RepoIdentity, RepoIdentityKey, parse_url_and_subpath as identity_parse_url_and_subpath,
+};
+use crate::utils::locks::FileLock;
 use crate::utils::paths::{self, sanitize_dir_name};
 use anyhow::{Context, Result, bail};
 use atomicwrites::{AllowOverwrite, AtomicFile};
 use std::io::Write;
 use std::path::PathBuf;
+
+/// Indicates how a URL was resolved to a mapping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UrlResolutionKind {
+    /// The URL matched exactly as stored in repos.json
+    Exact,
+    /// The URL matched via canonical identity comparison (different scheme/format)
+    CanonicalFallback,
+}
+
+/// Details about a resolved URL mapping.
+#[derive(Debug, Clone)]
+pub struct ResolvedUrl {
+    /// The key in repos.json that matched
+    pub matched_url: String,
+    /// How the match was found
+    pub resolution: UrlResolutionKind,
+    /// The location details (cloned)
+    pub location: RepoLocation,
+}
 
 pub struct RepoMappingManager {
     mapping_path: PathBuf,
@@ -13,6 +37,16 @@ impl RepoMappingManager {
     pub fn new() -> Result<Self> {
         let mapping_path = paths::get_repo_mapping_path()?;
         Ok(Self { mapping_path })
+    }
+
+    /// Get the lock file path for repos.json RMW operations.
+    fn lock_path(&self) -> PathBuf {
+        let name = self
+            .mapping_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        self.mapping_path.with_file_name(format!("{name}.lock"))
     }
 
     pub fn load(&self) -> Result<RepoMapping> {
@@ -44,27 +78,84 @@ impl RepoMappingManager {
         Ok(())
     }
 
-    /// Resolve a git URL to its local path
-    pub fn resolve_url(&self, url: &str) -> Result<Option<PathBuf>> {
-        let mapping = self.load()?;
-
-        // Handle subdirectory URLs (git@github.com:user/repo.git:docs/api)
+    /// Resolve a git URL with detailed resolution information.
+    ///
+    /// Returns the matched URL key, resolution kind, location, and optional subpath.
+    pub fn resolve_url_with_details(
+        &self,
+        url: &str,
+    ) -> Result<Option<(ResolvedUrl, Option<String>)>> {
+        let mapping = self.load()?; // read-only; atomic writes make this safe
         let (base_url, subpath) = parse_url_and_subpath(url);
 
-        if let Some(location) = mapping.mappings.get(&base_url) {
-            let mut path = location.path.clone();
-            if let Some(sub) = subpath {
-                path = path.join(sub);
-            }
-            Ok(Some(path))
-        } else {
-            Ok(None)
+        // Try exact match first
+        if let Some(loc) = mapping.mappings.get(&base_url) {
+            return Ok(Some((
+                ResolvedUrl {
+                    matched_url: base_url,
+                    resolution: UrlResolutionKind::Exact,
+                    location: loc.clone(),
+                },
+                subpath,
+            )));
         }
+
+        // Canonical fallback: parse target URL and find a matching key
+        let target_key = match RepoIdentity::parse(&base_url) {
+            Ok(id) => id.canonical_key(),
+            Err(_) => return Ok(None),
+        };
+
+        let mut matches: Vec<(String, RepoLocation)> = mapping
+            .mappings
+            .iter()
+            .filter_map(|(k, v)| {
+                let (k_base, _) = parse_url_and_subpath(k);
+                let key = RepoIdentity::parse(&k_base).ok()?.canonical_key();
+                (key == target_key).then(|| (k.clone(), v.clone()))
+            })
+            .collect();
+
+        // Sort for deterministic selection
+        matches.sort_by(|a, b| a.0.cmp(&b.0));
+
+        if let Some((matched_url, location)) = matches.into_iter().next() {
+            return Ok(Some((
+                ResolvedUrl {
+                    matched_url,
+                    resolution: UrlResolutionKind::CanonicalFallback,
+                    location,
+                },
+                subpath,
+            )));
+        }
+
+        Ok(None)
     }
 
-    /// Add a URL-to-path mapping
+    /// Resolve a git URL to its local path.
+    ///
+    /// Uses exact match first, then falls back to canonical identity matching
+    /// to handle URL scheme variants (SSH vs HTTPS).
+    pub fn resolve_url(&self, url: &str) -> Result<Option<PathBuf>> {
+        if let Some((resolved, subpath)) = self.resolve_url_with_details(url)? {
+            let mut p = resolved.location.path.clone();
+            if let Some(sub) = subpath {
+                p = p.join(sub);
+            }
+            return Ok(Some(p));
+        }
+        Ok(None)
+    }
+
+    /// Add a URL-to-path mapping with identity-based upsert.
+    ///
+    /// If a mapping with the same canonical identity already exists,
+    /// it will be replaced (preserving any existing last_sync time).
+    /// This prevents duplicate entries for SSH vs HTTPS variants.
     pub fn add_mapping(&mut self, url: String, path: PathBuf, auto_managed: bool) -> Result<()> {
-        let mut mapping = self.load()?;
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
+        let mut mapping = self.load()?; // safe under lock for RMW
 
         // Basic validation
         if !path.exists() {
@@ -75,13 +166,41 @@ impl RepoMappingManager {
             bail!("Path is not a directory: {}", path.display());
         }
 
-        let location = RepoLocation {
-            path,
-            auto_managed,
-            last_sync: None,
-        };
+        let (base_url, _) = parse_url_and_subpath(&url);
+        let new_key = RepoIdentity::parse(&base_url)?.canonical_key();
 
-        mapping.mappings.insert(url, location);
+        // Find all existing entries with the same canonical identity
+        let matching_urls: Vec<String> = mapping
+            .mappings
+            .keys()
+            .filter_map(|k| {
+                let (k_base, _) = parse_url_and_subpath(k);
+                let key = RepoIdentity::parse(&k_base).ok()?.canonical_key();
+                (key == new_key).then(|| k.clone())
+            })
+            .collect();
+
+        // Preserve last_sync from any existing entry
+        let preserved_last_sync = matching_urls
+            .iter()
+            .filter_map(|k| mapping.mappings.get(k).and_then(|loc| loc.last_sync))
+            .max();
+
+        // Remove all matching entries
+        for k in matching_urls {
+            mapping.mappings.remove(&k);
+        }
+
+        // Insert the new mapping
+        mapping.mappings.insert(
+            base_url,
+            RepoLocation {
+                path,
+                auto_managed,
+                last_sync: preserved_last_sync,
+            },
+        );
+
         self.save(&mapping)?;
         Ok(())
     }
@@ -90,6 +209,7 @@ impl RepoMappingManager {
     #[allow(dead_code)]
     // TODO(2): Add "thoughts mount unmap" command for cleanup
     pub fn remove_mapping(&mut self, url: &str) -> Result<()> {
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
         let mut mapping = self.load()?;
         mapping.mappings.remove(url);
         self.save(&mapping)?;
@@ -106,52 +226,86 @@ impl RepoMappingManager {
             .unwrap_or(false))
     }
 
-    /// Get default clone path for a URL
+    /// Get default clone path for a URL using hierarchical layout.
+    ///
+    /// Returns `~/.thoughts/clones/{host}/{org_path}/{repo}` with sanitized directory names.
     pub fn get_default_clone_path(url: &str) -> Result<PathBuf> {
         let home = dirs::home_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
 
         let (base_url, _sub) = parse_url_and_subpath(url);
-        let repo_name = sanitize_dir_name(&extract_repo_name_from_url(&base_url)?);
-        Ok(home.join(".thoughts").join("clones").join(repo_name))
+        let id = RepoIdentity::parse(&base_url)?;
+        let key = id.canonical_key(); // use canonical for stable paths across case/scheme
+
+        let mut p = home
+            .join(".thoughts")
+            .join("clones")
+            .join(sanitize_dir_name(&key.host));
+        for seg in key.org_path.split('/') {
+            if !seg.is_empty() {
+                p = p.join(sanitize_dir_name(seg));
+            }
+        }
+        p = p.join(sanitize_dir_name(&key.repo));
+        Ok(p)
     }
 
-    /// Update last sync time
+    /// Update last sync time for a URL.
+    ///
+    /// Uses canonical fallback to update the correct entry even if the URL
+    /// scheme differs from what's stored.
     pub fn update_sync_time(&mut self, url: &str) -> Result<()> {
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
         let mut mapping = self.load()?;
+        let now = chrono::Utc::now();
 
-        if let Some(location) = mapping.mappings.get_mut(url) {
-            location.last_sync = Some(chrono::Utc::now());
+        // Prefer exact base_url key
+        let (base_url, _) = parse_url_and_subpath(url);
+        if let Some(loc) = mapping.mappings.get_mut(&base_url) {
+            loc.last_sync = Some(now);
+            self.save(&mapping)?;
+            return Ok(());
+        }
+
+        // Fall back to canonical match
+        // Note: We need to find the matching key without holding a mutable borrow
+        let target_key = match RepoIdentity::parse(&base_url) {
+            Ok(id) => id.canonical_key(),
+            Err(_) => return Ok(()),
+        };
+
+        let matched_key: Option<String> = mapping
+            .mappings
+            .keys()
+            .filter_map(|k| {
+                let (k_base, _) = parse_url_and_subpath(k);
+                let key = RepoIdentity::parse(&k_base).ok()?.canonical_key();
+                (key == target_key).then(|| k.clone())
+            })
+            .next();
+
+        if let Some(key) = matched_key
+            && let Some(loc) = mapping.mappings.get_mut(&key)
+        {
+            loc.last_sync = Some(now);
             self.save(&mapping)?;
         }
 
         Ok(())
     }
+
+    /// Get the canonical identity key for a URL, if parseable.
+    pub fn get_canonical_key(url: &str) -> Option<RepoIdentityKey> {
+        let (base, _) = parse_url_and_subpath(url);
+        RepoIdentity::parse(&base).ok().map(|id| id.canonical_key())
+    }
 }
 
+/// Parse a URL into (base_url, optional_subpath).
+///
+/// Delegates to the repo_identity module for robust port-aware parsing.
 pub fn parse_url_and_subpath(url: &str) -> (String, Option<String>) {
-    // Look for a subpath pattern: URL followed by :path
-    // For SSH URLs like git@github.com:user/repo.git, the first colon is part of the URL
-    // So we look for a pattern where we have a second colon after .git or end of repo name
-
-    // First, check if this looks like it might have a subpath
-    let parts: Vec<&str> = url.splitn(3, ':').collect();
-
-    if parts.len() == 3 {
-        // Potential subpath - verify it's not part of the URL
-        let potential_subpath = parts[2];
-        let potential_base = format!("{}:{}", parts[0], parts[1]);
-
-        // Check if the base looks like a complete URL
-        if (potential_base.contains('@') && potential_base.contains('/'))
-            || potential_base.ends_with(".git")
-        {
-            // This looks like URL:subpath format
-            return (potential_base, Some(potential_subpath.to_string()));
-        }
-    }
-
-    (url.to_string(), None)
+    identity_parse_url_and_subpath(url)
 }
 
 pub fn extract_repo_name_from_url(url: &str) -> Result<String> {
@@ -172,29 +326,16 @@ pub fn extract_repo_name_from_url(url: &str) -> Result<String> {
     }
 }
 
+/// Extract org_path and repo from a URL.
+///
+/// Delegates to RepoIdentity for robust parsing that handles:
+/// - SSH with ports: `ssh://git@host:2222/org/repo.git`
+/// - GitLab subgroups: `https://gitlab.com/a/b/c/repo.git`
+/// - Azure DevOps: `https://dev.azure.com/org/proj/_git/repo`
 pub fn extract_org_repo_from_url(url: &str) -> anyhow::Result<(String, String)> {
-    // Normalize
-    let url = url.trim_end_matches(".git");
-    // SSH: git@github.com:org/repo
-    if let Some(at_pos) = url.find('@')
-        && let Some(colon_pos) = url[at_pos..].find(':')
-    {
-        let path = &url[at_pos + colon_pos + 1..]; // org/repo
-        let mut it = path.split('/');
-        let org = it.next().ok_or_else(|| anyhow::anyhow!("No org"))?;
-        let repo = it.next().ok_or_else(|| anyhow::anyhow!("No repo"))?;
-        return Ok((org.into(), repo.into()));
-    }
-    // HTTPS: https://github.com/org/repo
-    if let Some(host_pos) = url.find("://") {
-        let path = &url[host_pos + 3..]; // host/org/repo
-        let mut it = path.split('/');
-        let _host = it.next().ok_or_else(|| anyhow::anyhow!("No host"))?;
-        let org = it.next().ok_or_else(|| anyhow::anyhow!("No org"))?;
-        let repo = it.next().ok_or_else(|| anyhow::anyhow!("No repo"))?;
-        return Ok((org.into(), repo.into()));
-    }
-    anyhow::bail!("Unsupported URL: {url}")
+    let (base, _) = parse_url_and_subpath(url);
+    let id = RepoIdentity::parse(&base)?;
+    Ok((id.org_path, id.repo))
 }
 
 #[cfg(test)]
@@ -254,9 +395,43 @@ mod tests {
     }
 
     #[test]
-    fn test_default_clone_path_uses_base_url_for_subpath() {
+    fn test_default_clone_path_hierarchical() {
+        // Test hierarchical path: ~/.thoughts/clones/{host}/{org}/{repo}
         let p =
             RepoMappingManager::get_default_clone_path("git@github.com:org/repo.git:docs").unwrap();
-        assert!(p.ends_with(std::path::Path::new(".thoughts/clones/repo")));
+        assert!(p.ends_with(std::path::Path::new(".thoughts/clones/github.com/org/repo")));
+    }
+
+    #[test]
+    fn test_default_clone_path_gitlab_subgroups() {
+        let p = RepoMappingManager::get_default_clone_path(
+            "https://gitlab.com/group/subgroup/team/repo.git",
+        )
+        .unwrap();
+        assert!(p.ends_with(std::path::Path::new(
+            ".thoughts/clones/gitlab.com/group/subgroup/team/repo"
+        )));
+    }
+
+    #[test]
+    fn test_default_clone_path_ssh_port() {
+        let p = RepoMappingManager::get_default_clone_path(
+            "ssh://git@myhost.example.com:2222/org/repo.git",
+        )
+        .unwrap();
+        assert!(p.ends_with(std::path::Path::new(
+            ".thoughts/clones/myhost.example.com/org/repo"
+        )));
+    }
+
+    #[test]
+    fn test_canonical_key_consistency() {
+        let ssh_key = RepoMappingManager::get_canonical_key("git@github.com:Org/Repo.git").unwrap();
+        let https_key =
+            RepoMappingManager::get_canonical_key("https://github.com/org/repo").unwrap();
+        assert_eq!(
+            ssh_key, https_key,
+            "SSH and HTTPS should have same canonical key"
+        );
     }
 }
