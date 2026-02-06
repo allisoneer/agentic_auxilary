@@ -1,4 +1,5 @@
 use crate::error::ThoughtsError;
+use crate::repo_identity::RepoIdentity;
 use anyhow::Result;
 use git2::{Repository, StatusOptions};
 use std::path::{Path, PathBuf};
@@ -130,6 +131,21 @@ pub fn get_remote_url(repo_path: &Path) -> Result<String> {
         .url()
         .ok_or_else(|| anyhow::anyhow!("Remote 'origin' has no URL"))
         .map(|s| s.to_string())
+}
+
+/// Get the canonical identity of a repository's origin remote, if available.
+///
+/// Returns `Ok(Some(identity))` if the repo has an origin and it parses successfully,
+/// `Ok(None)` if the repo has no origin or it can't be parsed, or an error for
+/// other failures.
+pub fn try_get_origin_identity(repo_path: &Path) -> Result<Option<RepoIdentity>> {
+    match get_remote_url(repo_path) {
+        Ok(url) => match RepoIdentity::parse(&url) {
+            Ok(id) => Ok(Some(id)),
+            Err(_) => Ok(None), // URL doesn't parse as a valid identity
+        },
+        Err(_) => Ok(None), // No origin remote or can't open repo
+    }
 }
 
 /// Get the current branch name, or "detached" if in detached HEAD state

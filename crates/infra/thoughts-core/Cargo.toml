@@ -44,6 +44,7 @@ atomicwrites = "0.4"
 colored = "2"
 regex = "1"
 schemars = { workspace = true }
+fs4 = "0.13"
 
 # Platform-specific dependencies
 [target.'cfg(unix)'.dependencies]

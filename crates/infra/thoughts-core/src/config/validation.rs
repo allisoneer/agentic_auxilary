@@ -1,4 +1,4 @@
-use crate::config::repo_mapping_manager::{extract_org_repo_from_url, parse_url_and_subpath};
+use crate::repo_identity::{RepoIdentity, parse_url_and_subpath};
 use anyhow::{Result, bail};
 
 /// Sanitize a mount name for use as directory name
@@ -23,26 +23,14 @@ pub fn is_git_url(s: &str) -> bool {
 /// Extract host from SSH/HTTPS URLs
 pub fn get_host_from_url(url: &str) -> Result<String> {
     let (base, _) = parse_url_and_subpath(url);
-    let base = base.trim_end_matches(".git");
-
-    if let Some(at) = base.find('@')
-        && let Some(colon) = base[at..].find(':')
-    {
-        let host = &base[at + 1..at + colon];
-        return Ok(host.to_lowercase());
-    }
-    if let Some(scheme) = base.find("://") {
-        let rest = &base[scheme + 3..];
-        let host = rest
-            .split('/')
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("No host"))?;
-        // Strip userinfo and port if present (e.g., user@host:2222)
-        let host = host.split('@').next_back().unwrap_or(host);
-        let host = host.split(':').next().unwrap_or(host);
-        return Ok(host.to_lowercase());
-    }
-    bail!("Unsupported URL (cannot parse host): {}", url)
+    let id = RepoIdentity::parse(&base).map_err(|e| {
+        anyhow::anyhow!(
+            "Unsupported URL (cannot parse host): {}\nDetails: {}",
+            url,
+            e
+        )
+    })?;
+    Ok(id.host)
 }
 
 /// Validate that a reference URL is well-formed and points to org/repo (repo-level only)
@@ -66,8 +54,8 @@ pub fn validate_reference_url(url: &str) -> Result<()> {
             url
         );
     }
-    // Ensure org/repo structure is parseable
-    extract_org_repo_from_url(&base).map_err(|e| {
+    // Ensure org/repo structure is parseable via RepoIdentity
+    RepoIdentity::parse(&base).map_err(|e| {
         anyhow::anyhow!(
             "Invalid repository URL: {}\n\n\
              Expected a URL with an org and repo (e.g., github.com/org/repo).\n\
@@ -79,12 +67,11 @@ pub fn validate_reference_url(url: &str) -> Result<()> {
     Ok(())
 }
 
-/// Canonical key (host, org, repo) all lowercased, without .git
+/// Canonical key (host, org_path, repo) all lowercased, without .git
 pub fn canonical_reference_key(url: &str) -> Result<(String, String, String)> {
     let (base, _) = parse_url_and_subpath(url);
-    let (org, repo) = extract_org_repo_from_url(&base)?;
-    let host = get_host_from_url(&base)?;
-    Ok((host.to_lowercase(), org.to_lowercase(), repo.to_lowercase()))
+    let key = RepoIdentity::parse(&base)?.canonical_key();
+    Ok((key.host, key.org_path, key.repo))
 }
 
 // --- MCP HTTPS-only validation helpers ---
@@ -133,33 +120,23 @@ pub fn validate_reference_url_https_only(url: &str) -> Result<()> {
         );
     }
 
-    // Determine host and require either GitHub web/clone, or generic https://*.git
-    let host = get_host_from_url(&base)?;
-    if host == "github.com" {
-        // Ensure org/repo parseability
-        extract_org_repo_from_url(&base).map_err(|e| {
-            anyhow::anyhow!(
-                "Invalid GitHub URL. Expected https://github.com/<org>/<repo>[.git]\nDetails: {}",
-                e
-            )
-        })?;
-        Ok(())
-    } else {
-        // Generic host: must end with .git and parse as org/repo
-        if !base.ends_with(".git") {
-            bail!(
-                "For non-GitHub hosts, please provide an HTTPS clone URL ending with .git:\n  {}",
-                base
-            );
-        }
-        extract_org_repo_from_url(&base).map_err(|e| {
-            anyhow::anyhow!(
-                "Invalid repository URL (expected host/org/repo.git).\nDetails: {}",
-                e
-            )
-        })?;
-        Ok(())
+    // Parse as RepoIdentity to validate structure
+    let id = RepoIdentity::parse(&base).map_err(|e| {
+        anyhow::anyhow!(
+            "Invalid repository URL (expected host/org/repo).\nDetails: {}",
+            e
+        )
+    })?;
+
+    // For non-GitHub hosts, require .git suffix
+    if id.host != "github.com" && !base.ends_with(".git") {
+        bail!(
+            "For non-GitHub hosts, please provide an HTTPS clone URL ending with .git:\n  {}",
+            base
+        );
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
