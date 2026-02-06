@@ -1,19 +1,18 @@
-//! Advisory file locking utilities using fs4.
+//! Advisory file locking utilities.
 //!
-//! This module provides a thin RAII wrapper around fs4 for advisory file locks.
+//! This module provides a thin RAII wrapper around std::fs file locking (Rust 1.89+).
 //! Used for:
 //! - Protecting `repos.json` read-modify-write operations
 //! - Per-repo clone locks to prevent concurrent clones into the same target
 
 use anyhow::{Context, Result};
-use fs4::fs_std::FileExt;
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
 
 /// RAII advisory file lock.
 ///
 /// The lock is automatically released when this struct is dropped.
-/// Uses advisory locking via fs4, which works across processes on Unix systems.
+/// Uses advisory locking via std, which works across processes on Unix systems.
 pub struct FileLock {
     _file: File,
     pub path: PathBuf,
@@ -36,7 +35,7 @@ impl FileLock {
             .truncate(false)
             .open(&path)
             .with_context(|| format!("Failed to open lock file: {}", path.display()))?;
-        file.lock_exclusive()
+        file.lock()
             .with_context(|| format!("Failed to acquire exclusive lock: {}", path.display()))?;
         Ok(Self { _file: file, path })
     }
@@ -56,10 +55,10 @@ impl FileLock {
             .create(true)
             .truncate(false)
             .open(&path)?;
-        match file.try_lock_exclusive() {
-            Ok(true) => Ok(Some(Self { _file: file, path })),
-            Ok(false) => Ok(None), // Lock not acquired (would block)
-            Err(e) => Err(e.into()),
+        match file.try_lock() {
+            Ok(()) => Ok(Some(Self { _file: file, path })),
+            Err(TryLockError::WouldBlock) => Ok(None), // Lock not acquired (would block)
+            Err(TryLockError::Error(e)) => Err(e.into()),
         }
     }
 }
