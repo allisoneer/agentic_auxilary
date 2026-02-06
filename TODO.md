@@ -90,6 +90,10 @@ tool has good phrasing but pr_comments only partially ported that style. Conside
 a standard output formatter? Or should pagination messaging be part of the MCP response schema itself?
 - Investigate every single clippy allow and see if there is a better approach than manually defining a clippy allow
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
+- PRs merged from release-plz don't automatically run
+`xtask-sync` and thus out of date things aren't really caught
+until the next cycle of PR. That's obviouslly unideal but I'm
+unsure what the best fix would be.
 
 ## To validate:
 - ENG-397: Linear MCP should return issue URL after creation. May already be implemented - needs verification.
