@@ -62,7 +62,12 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
 
     // Ensure target directory is empty (if it exists but isn't a git repo)
     if options.target_path.exists() {
-        let entries = std::fs::read_dir(&options.target_path)?;
+        let entries = std::fs::read_dir(&options.target_path).with_context(|| {
+            format!(
+                "Failed to read target directory: {}",
+                options.target_path.display()
+            )
+        })?;
         if entries.count() > 0 {
             anyhow::bail!(
                 "Target directory exists but is not a git repo (and is not empty): {}",

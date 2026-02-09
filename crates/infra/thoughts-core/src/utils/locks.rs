@@ -47,18 +47,23 @@ impl FileLock {
     pub fn try_lock_exclusive(path: impl AsRef<Path>) -> Result<Option<Self>> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create lock dir: {}", parent.display()))?;
         }
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
-            .open(&path)?;
+            .open(&path)
+            .with_context(|| format!("Failed to open lock file: {}", path.display()))?;
         match file.try_lock() {
             Ok(()) => Ok(Some(Self { _file: file, path })),
             Err(TryLockError::WouldBlock) => Ok(None), // Lock not acquired (would block)
-            Err(TryLockError::Error(e)) => Err(e.into()),
+            Err(TryLockError::Error(e)) => Err(anyhow::Error::from(e).context(format!(
+                "Failed to acquire exclusive lock: {}",
+                path.display()
+            ))),
         }
     }
 }
