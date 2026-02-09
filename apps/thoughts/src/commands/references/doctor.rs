@@ -208,7 +208,7 @@ pub async fn execute(fix: bool) -> Result<()> {
 
     // Apply fixes if requested
     if fix {
-        apply_fixes(&mapping_path, &issues)?;
+        apply_fixes(&issues)?;
     } else {
         println!(
             "Run with {} to apply safe automatic repairs.",
@@ -219,7 +219,7 @@ pub async fn execute(fix: bool) -> Result<()> {
     Ok(())
 }
 
-fn apply_fixes(_mapping_path: &std::path::Path, issues: &[Issue]) -> Result<()> {
+fn apply_fixes(issues: &[Issue]) -> Result<()> {
     let mapping_mgr = RepoMappingManager::new()?;
     let mut mapping = mapping_mgr.load()?;
     let mut fixed_count = 0;
