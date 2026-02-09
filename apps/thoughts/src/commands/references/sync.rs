@@ -76,7 +76,13 @@ pub async fn execute(verbose: bool) -> Result<()> {
                                 println!("{} Updated {} (ff-only)", "↻".green(), url);
                             }
                             updated_count += 1;
-                            let _ = mapping_mgr.update_sync_time(url);
+                            if let Err(e) = mapping_mgr.update_sync_time(url) {
+                                tracing::warn!(
+                                    url = %url,
+                                    error = ?e,
+                                    "Failed to update repos.json last_sync (continuing)"
+                                );
+                            }
                         }
                         Err(e) => {
                             if verbose {
@@ -125,7 +131,13 @@ pub async fn execute(verbose: bool) -> Result<()> {
                     println!("{} Cloned {}", "✓".green(), url);
                 }
                 cloned_count += 1;
-                let _ = mapping_mgr.update_sync_time(url);
+                if let Err(e) = mapping_mgr.update_sync_time(url) {
+                    tracing::warn!(
+                        url = %url,
+                        error = ?e,
+                        "Failed to update repos.json last_sync (continuing)"
+                    );
+                }
             }
             Err(e) => {
                 if verbose {

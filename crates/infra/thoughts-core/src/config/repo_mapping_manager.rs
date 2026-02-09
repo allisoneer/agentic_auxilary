@@ -269,11 +269,11 @@ impl RepoMappingManager {
 
         // Fall back to canonical match
         // Note: We need to find the matching key without holding a mutable borrow
-        let target_key = match RepoIdentity::parse(&base_url) {
-            Ok(id) => id.canonical_key(),
-            Err(_) => return Ok(()),
-        };
+        let target_key = RepoIdentity::parse(&base_url)?.canonical_key();
 
+        // TODO(2): If repos.json contains multiple entries with the same canonical identity (legacy
+        // duplicates), the selection below is nondeterministic due to HashMap iteration order.
+        // Consider sorting (as in `resolve_url_with_details`) or updating all matches.
         let matched_key: Option<String> = mapping
             .mappings
             .keys()

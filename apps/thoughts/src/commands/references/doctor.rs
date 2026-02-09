@@ -161,25 +161,37 @@ pub async fn execute(fix: bool) -> Result<()> {
         }
 
         // Check if origin matches
-        if let Some(ref expected_id) = identity
-            && let Ok(Some(actual_id)) = try_get_origin_identity(path)
-        {
-            let expected_key = expected_id.canonical_key();
-            let actual_key = actual_id.canonical_key();
+        if let Some(ref expected_id) = identity {
+            match try_get_origin_identity(path) {
+                Ok(Some(actual_id)) => {
+                    let expected_key = expected_id.canonical_key();
+                    let actual_key = actual_id.canonical_key();
 
-            if expected_key != actual_key {
-                issues.push(Issue::OriginMismatch {
-                    url: url.clone(),
-                    path: path_str.clone(),
-                    expected: format!(
-                        "{}/{}/{}",
-                        expected_key.host, expected_key.org_path, expected_key.repo
-                    ),
-                    actual: format!(
-                        "{}/{}/{}",
-                        actual_key.host, actual_key.org_path, actual_key.repo
-                    ),
-                });
+                    if expected_key != actual_key {
+                        issues.push(Issue::OriginMismatch {
+                            url: url.clone(),
+                            path: path_str.clone(),
+                            expected: format!(
+                                "{}/{}/{}",
+                                expected_key.host, expected_key.org_path, expected_key.repo
+                            ),
+                            actual: format!(
+                                "{}/{}/{}",
+                                actual_key.host, actual_key.org_path, actual_key.repo
+                            ),
+                        });
+                    }
+                }
+                Ok(None) => {
+                    // No origin (or origin URL doesn't parse) — skip mismatch check.
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        path = %path_str,
+                        error = ?e,
+                        "Could not verify origin identity (skipping origin check)"
+                    );
+                }
             }
         }
     }
