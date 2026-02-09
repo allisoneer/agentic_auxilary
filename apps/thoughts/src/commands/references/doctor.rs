@@ -233,7 +233,8 @@ pub async fn execute(fix: bool) -> Result<()> {
 
 fn apply_fixes(issues: &[Issue]) -> Result<()> {
     let mapping_mgr = RepoMappingManager::new()?;
-    let mut mapping = mapping_mgr.load()?;
+    // Use load_locked() to prevent concurrent RMW races with sync operations
+    let (mut mapping, _lock) = mapping_mgr.load_locked()?;
     let mut fixed_count = 0;
 
     for issue in issues {

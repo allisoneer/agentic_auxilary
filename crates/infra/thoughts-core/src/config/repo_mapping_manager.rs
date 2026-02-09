@@ -7,7 +7,7 @@ use crate::utils::paths::{self, sanitize_dir_name};
 use anyhow::{Context, Result, bail};
 use atomicwrites::{AllowOverwrite, AtomicFile};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 /// Indicates how a URL was resolved to a mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +78,19 @@ impl RepoMappingManager {
         Ok(())
     }
 
+    /// Load the mapping while holding an exclusive lock.
+    ///
+    /// Returns the mapping and the lock guard. The lock is released when the
+    /// guard is dropped, so callers should hold it until after `save()`.
+    ///
+    /// Use this for read-modify-write operations to prevent concurrent updates
+    /// from losing changes.
+    pub fn load_locked(&self) -> Result<(RepoMapping, FileLock)> {
+        let lock = FileLock::lock_exclusive(self.lock_path())?;
+        let mapping = self.load()?;
+        Ok((mapping, lock))
+    }
+
     /// Resolve a git URL with detailed resolution information.
     ///
     /// Returns the matched URL key, resolution kind, location, and optional subpath.
@@ -140,7 +153,8 @@ impl RepoMappingManager {
     pub fn resolve_url(&self, url: &str) -> Result<Option<PathBuf>> {
         if let Some((resolved, subpath)) = self.resolve_url_with_details(url)? {
             let mut p = resolved.location.path.clone();
-            if let Some(sub) = subpath {
+            if let Some(ref sub) = subpath {
+                validate_subpath(sub)?;
                 p = p.join(sub);
             }
             return Ok(Some(p));
@@ -308,6 +322,38 @@ pub fn parse_url_and_subpath(url: &str) -> (String, Option<String>) {
     identity_parse_url_and_subpath(url)
 }
 
+/// Validate a subpath to prevent directory traversal attacks.
+///
+/// Rejects absolute paths and paths containing ".." components that could
+/// escape the repository root directory.
+fn validate_subpath(subpath: &str) -> Result<()> {
+    let path = Path::new(subpath);
+    if path.is_absolute() {
+        bail!(
+            "Invalid subpath (must be relative and not contain '..'): {}",
+            subpath
+        );
+    }
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                bail!(
+                    "Invalid subpath (must be relative and not contain '..'): {}",
+                    subpath
+                );
+            }
+            Component::Prefix(_) => {
+                bail!(
+                    "Invalid subpath (must be relative and not contain '..'): {}",
+                    subpath
+                );
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn extract_repo_name_from_url(url: &str) -> Result<String> {
     let url = url.trim_end_matches(".git");
 
@@ -440,4 +486,31 @@ mod tests {
     // actually uses canonical matching to find mappings stored under different URL schemes.
     // Test should: 1) add mapping with SSH URL, 2) resolve with HTTPS URL,
     // 3) verify CanonicalFallback resolution kind is returned.
+
+    #[test]
+    fn test_validate_subpath_accepts_valid_paths() {
+        // Simple relative paths should be accepted
+        assert!(validate_subpath("docs").is_ok());
+        assert!(validate_subpath("docs/api").is_ok());
+        assert!(validate_subpath("src/lib/utils").is_ok());
+        assert!(validate_subpath("a/b/c/d/e").is_ok());
+    }
+
+    #[test]
+    fn test_validate_subpath_rejects_parent_dir_traversal() {
+        // Parent directory traversal should be rejected
+        assert!(validate_subpath("..").is_err());
+        assert!(validate_subpath("../etc").is_err());
+        assert!(validate_subpath("docs/../..").is_err());
+        assert!(validate_subpath("docs/../../etc").is_err());
+        assert!(validate_subpath("a/b/c/../../../etc").is_err());
+    }
+
+    #[test]
+    fn test_validate_subpath_rejects_absolute_paths() {
+        // Absolute paths should be rejected
+        assert!(validate_subpath("/etc").is_err());
+        assert!(validate_subpath("/etc/passwd").is_err());
+        assert!(validate_subpath("/home/user/.ssh").is_err());
+    }
 }
