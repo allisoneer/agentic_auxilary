@@ -434,4 +434,10 @@ mod tests {
             "SSH and HTTPS should have same canonical key"
         );
     }
+
+    // TODO(2): Add integration test for resolve_url_with_details canonical fallback path.
+    // This test verifies keys match, but doesn't test that resolve_url_with_details
+    // actually uses canonical matching to find mappings stored under different URL schemes.
+    // Test should: 1) add mapping with SSH URL, 2) resolve with HTTPS URL,
+    // 3) verify CanonicalFallback resolution kind is returned.
 }
