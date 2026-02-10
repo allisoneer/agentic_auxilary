@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.8.1] - 2026-02-10
+
+### ⛰️  Features
+- *(thoughts-tool)* Add canonical RepoIdentity for robust reference sync
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Add error context to I/O operations for consistent debugging
+- *(thoughts_tool)* Stop silently swallowing errors in sync and doctor commands
+- *(thoughts_tool)* Address race condition and path traversal in repo mapping
+
+### 🚜 Refactor
+- *(thoughts_tool)* Replace fs4 with std file locking
 ## [0.8.0] - 2026-01-30
 
 ### ⚙️  Miscellaneous
