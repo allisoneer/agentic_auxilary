@@ -49,7 +49,6 @@
     "git@github.com:modelcontextprotocol/rust-sdk.git",
     "https://github.com/modelcontextprotocol/modelcontextprotocol.git",
     "https://github.com/modelcontextprotocol/python-sdk.git",
-    "https://github.com/modelcontextprotocol/typescript-sdk.git",
     "https://github.com/allisoneer/cocoz.git",
     "git@github.com:General-Wisdom/gwt.git",
     "https://github.com/siketyan/gh-config-rs.git",
@@ -195,6 +194,11 @@
     {
       "remote": "https://github.com/exa-labs/exa-mcp-server",
       "description": "Exa's official MCP server implementation - reference for building custom web search tool"
-    }
+    },
+    {
+      "remote": "https://github.com/rust-lang/cargo",
+      "description": "Cargo's file locking implementation - reference for DIY FileLock replacement"
+    },
+    "https://github.com/modelcontextprotocol/typescript-sdk.git"
   ]
 }
