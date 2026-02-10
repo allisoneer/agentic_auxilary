@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-bin"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "CLI for flexible thought management using filesystem mounts"
