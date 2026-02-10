@@ -375,7 +375,50 @@ thoughts references add https://github.com/tokio-rs/tokio
 
 # Sync all references (clones if missing)
 thoughts references sync
+
+# Verbose sync shows canonical identity and resolution details
+thoughts references sync --verbose
 ```
+
+#### Hierarchical Clone Layout
+
+References are cloned to `~/.thoughts/clones/{host}/{org_path}/{repo}`:
+- `alice/utils` and `bob/utils` no longer collide
+- GitLab subgroups are fully supported (e.g., `gitlab.com/group/subgroup/team/repo`)
+- SSH with ports works correctly (`ssh://git@host:2222/org/repo.git`)
+
+Both old (flat) and new (hierarchical) layouts are supported indefinitely.
+
+#### Canonical Identity Resolution
+
+URLs are matched by canonical identity, not exact string:
+- `git@github.com:org/repo.git` and `https://github.com/org/repo` resolve to the same clone
+- Switching a reference URL scheme doesn't trigger a re-clone
+- Case-insensitive matching for host, org, and repo names
+
+#### Idempotent Cloning
+
+Re-running sync is safe:
+- If the repo is already cloned with matching origin, sync succeeds immediately
+- Clone locks prevent concurrent sync races
+- Clear error messages when target contains a different repository
+
+#### Diagnosing Issues
+
+Use `references doctor` to detect and fix mapping problems:
+
+```bash
+# Check for issues
+thoughts references doctor
+
+# Auto-fix safe issues (dedupe, prune missing auto-managed entries)
+thoughts references doctor --fix
+```
+
+Detects:
+- Duplicate mappings by canonical identity
+- Missing or invalid paths
+- Origin URL mismatches
 
 ### Subpath Mounting
 

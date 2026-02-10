@@ -6,6 +6,7 @@ pub mod git;
 pub mod mcp;
 pub mod mount;
 pub mod platform;
+pub mod repo_identity;
 pub mod utils;
 pub mod workspace;
 

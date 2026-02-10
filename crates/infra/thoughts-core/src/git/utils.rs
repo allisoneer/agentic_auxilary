@@ -1,6 +1,7 @@
 use crate::error::ThoughtsError;
-use anyhow::Result;
-use git2::{Repository, StatusOptions};
+use crate::repo_identity::RepoIdentity;
+use anyhow::{Context, Result};
+use git2::{ErrorCode, Repository, StatusOptions};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
@@ -132,6 +133,37 @@ pub fn get_remote_url(repo_path: &Path) -> Result<String> {
         .map(|s| s.to_string())
 }
 
+/// Get the canonical identity of a repository's origin remote, if available.
+///
+/// Returns `Ok(Some(identity))` if the repo has an origin and it parses successfully,
+/// `Ok(None)` if the repo has no origin or it can't be parsed, or an error for
+/// other failures (permissions, corruption, etc.).
+pub fn try_get_origin_identity(repo_path: &Path) -> Result<Option<RepoIdentity>> {
+    // TODO(2): Consider refactoring `get_remote_url()` to preserve `git2::Error` (ErrorCode)
+    // so callers can classify NotFound vs other failures without duplicating git2 logic.
+    let repo = Repository::open(repo_path)
+        .with_context(|| format!("Failed to open git repository at {}", repo_path.display()))?;
+
+    let remote = match repo.find_remote("origin") {
+        Ok(r) => r,
+        Err(e) if e.code() == ErrorCode::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(anyhow::Error::from(e)).with_context(|| {
+                format!(
+                    "Failed to find 'origin' remote for git repository at {}",
+                    repo_path.display()
+                )
+            });
+        }
+    };
+
+    let Some(url) = remote.url() else {
+        return Ok(None);
+    };
+
+    Ok(RepoIdentity::parse(url).ok())
+}
+
 /// Get the current branch name, or "detached" if in detached HEAD state
 pub fn get_current_branch(repo_path: &Path) -> Result<String> {
     let repo = Repository::open(repo_path)
@@ -261,5 +293,52 @@ mod tests {
         idx.write().unwrap();
 
         assert!(is_worktree_dirty(&repo).unwrap());
+    }
+
+    #[test]
+    fn try_get_origin_identity_some_when_origin_is_parseable() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        repo.remote("origin", "https://github.com/org/repo.git")
+            .unwrap();
+
+        let expected = RepoIdentity::parse("https://github.com/org/repo.git")
+            .unwrap()
+            .canonical_key();
+        let actual = try_get_origin_identity(dir.path())
+            .unwrap()
+            .unwrap()
+            .canonical_key();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn try_get_origin_identity_none_when_no_origin_remote() {
+        let dir = TempDir::new().unwrap();
+        Repository::init(dir.path()).unwrap();
+
+        assert!(try_get_origin_identity(dir.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn try_get_origin_identity_none_when_origin_url_unparseable() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+
+        // URL without org/repo structure won't parse as RepoIdentity
+        repo.remote("origin", "https://github.com").unwrap();
+
+        assert!(try_get_origin_identity(dir.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn try_get_origin_identity_err_when_repo_cannot_be_opened() {
+        let dir = TempDir::new().unwrap();
+        let non_repo = dir.path().join("not-a-repo");
+        std::fs::create_dir_all(&non_repo).unwrap();
+
+        let err = try_get_origin_identity(&non_repo).unwrap_err();
+        assert!(err.to_string().contains("Failed to open git repository"));
     }
 }
