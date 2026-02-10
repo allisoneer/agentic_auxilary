@@ -60,6 +60,26 @@ These items have dependencies and should be done in order.
 
 ## To classify/investigate:
 
+### References cleanup commands (follow-up work after ENG-454)
+The core ENG-454 issues have been addressed. Remaining follow-up work:
+
+**1. `references remove` doesn't clean up repos.json**
+- Current: Only removes from local `.thoughts/config.json`, not from `~/.thoughts/repos.json`
+- Mitigation: `references remove` now suggests running `doctor --fix` to clean up stale mappings
+- Future: Consider `unmap`/`purge` commands for explicit repos.json cleanup (deferred)
+
+**2. Clone directory cleanup**
+- `doctor --fix` removes mappings but does NOT delete clone directories (by design)
+- Users must manually `rm -rf` stale clone directories
+- Future: Consider `--prune-dirs` flag for explicit directory cleanup (deferred)
+
+**COMPLETED in ENG-454:**
+- ✓ `doctor` error messages now correctly suggest `doctor --fix` (not `sync`)
+- ✓ `doctor --fix` handles NotADirectory, NotAGitRepo, OriginMismatch (auto_managed only)
+- ✓ `doctor --fix` deterministically consolidates duplicate canonical identities
+- ✓ `references remove` uses canonical identity matching (SSH/HTTPS variants work)
+- ✓ Same-repo-name collisions prevented by hierarchical clone paths
+
 ### Orchestrator-style agents (ENG-460) - blocked by: config + SQLite
 - I need to have a way to run higher-level orchestrator-style agents. I'm thinking like where I could just press tab in opencode to
   switch to an "orchestrator" agent that can then spawn an entire opencode agent with a command. We could even just start with only

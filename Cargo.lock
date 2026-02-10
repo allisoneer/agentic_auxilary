@@ -5871,6 +5871,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored 2.2.0",
+ "git2",
  "predicates",
  "serde_json",
  "serial_test",
