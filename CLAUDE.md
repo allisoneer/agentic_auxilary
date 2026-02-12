@@ -53,6 +53,9 @@ Guidance for Claude Code when working with this repository.
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
 <!-- END:xtask:autogen -->
 
+## Working Notes
+
+See [TODO.md](TODO.md) for the human maintainer's ad-hoc notes and thoughts. This file contains ideas, observations, and potential work items that are still loosely scoped—things worth thinking about but not yet defined enough for a formal ticket.
 
 ## Common Commands
 
