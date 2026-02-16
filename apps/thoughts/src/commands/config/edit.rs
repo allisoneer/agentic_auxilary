@@ -24,13 +24,14 @@ pub async fn execute() -> Result<()> {
         bail!("Editor exited with error");
     }
 
-    // Validate after editing
+    // Validate after editing (V2 only - V1 is no longer supported)
     let repo_root = get_control_repo_root(&env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
     match mgr.peek_config_version()? {
         Some(v) if v == "1.0" => {
-            mgr.load()?; // v1 parse triggers validation
-            println!("✓ Saved and validated v1 configuration");
+            bail!(
+                "V1 configuration is no longer supported. Please reinitialize with 'thoughts init'."
+            );
         }
         Some(_) => {
             let cfg = mgr.load_v2_or_bail()?;

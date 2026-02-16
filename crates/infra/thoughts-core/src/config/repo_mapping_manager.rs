@@ -36,6 +36,25 @@ pub struct RepoMappingManager {
 impl RepoMappingManager {
     pub fn new() -> Result<Self> {
         let mapping_path = paths::get_repo_mapping_path()?;
+
+        // Check for legacy location migration
+        if !mapping_path.exists()
+            && let Ok(legacy_path) = paths::get_legacy_repo_mapping_path()
+            && legacy_path.exists()
+        {
+            // Migrate from legacy location
+            if let Some(parent) = mapping_path.parent() {
+                paths::ensure_dir(parent)?;
+            }
+            std::fs::copy(&legacy_path, &mapping_path)
+                .context("Failed to migrate repos.json from legacy location")?;
+            tracing::info!(
+                "Migrated repos.json from {} to {}",
+                legacy_path.display(),
+                mapping_path.display()
+            );
+        }
+
         Ok(Self { mapping_path })
     }
 

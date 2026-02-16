@@ -1,0 +1,36 @@
+[package]
+name = "agentic-bin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+description = "Agentic unified CLI for configuration management"
+
+[package.metadata.repo]
+role = "app"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[[bin]]
+name = "agentic"
+path = "src/main.rs"
+
+[dependencies]
+agentic-config = { workspace = true }
+clap = { workspace = true, features = ["env"] }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+colored = "2"
+atomicwrites = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2.1"
+predicates = "3.1"
+tempfile = "3"
+serial_test = "3"

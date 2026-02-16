@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     # Apps
+    "apps/agentic",
     "apps/thoughts",
     "apps/agentic-mcp",
 
@@ -34,6 +35,7 @@ members = [
     "crates/tools/web-retrieval",
 
     # Infra family
+    "crates/infra/agentic-config",
     "crates/infra/agentic-logging",
     "crates/infra/thoughts-core",
 
@@ -60,15 +62,19 @@ tracing = "0.1"
 anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
 schemars = { version = "1", features = ["derive"] }
+dirs = "6"
+secrecy = "0.8"
+atomicwrites = "0.4"
 
 # Internal crates
+agentic-config = { version = "0.1.0", path = "crates/infra/agentic-config" }
 agentic-tools-core = { version = "0.1.0", path = "crates/agentic-tools/core" }
 agentic-tools-macros = { version = "0.1.0", path = "crates/agentic-tools/macros" }
 agentic-tools-mcp = { version = "0.1.0", path = "crates/agentic-tools/mcp" }
 agentic-tools-utils = { version = "0.1.0", path = "crates/agentic-tools/utils" }
 agentic-tools-registry = { version = "0.2.2", path = "crates/agentic-tools/registry" }
 agentic_logging = { version = "0.1.2", path = "crates/infra/agentic-logging" }
-thoughts-tool = { version = "0.8.1", path = "crates/infra/thoughts-core" }
+thoughts-tool = { version = "0.9.0", path = "crates/infra/thoughts-core" }
 thoughts-mcp-tools = { version = "0.1.1", path = "crates/tools/thoughts-mcp-tools" }
 coding_agent_tools = { version = "0.2.2", path = "crates/tools/coding-agent-tools" }
 pr_comments = { version = "0.6.1", path = "crates/tools/pr-comments" }
