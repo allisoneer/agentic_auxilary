@@ -74,7 +74,7 @@ agentic-tools-mcp = { version = "0.1.0", path = "crates/agentic-tools/mcp" }
 agentic-tools-utils = { version = "0.1.0", path = "crates/agentic-tools/utils" }
 agentic-tools-registry = { version = "0.2.2", path = "crates/agentic-tools/registry" }
 agentic_logging = { version = "0.1.2", path = "crates/infra/agentic-logging" }
-thoughts-tool = { version = "0.9.0", path = "crates/infra/thoughts-core" }
+thoughts-tool = { version = "0.8.1", path = "crates/infra/thoughts-core" }
 thoughts-mcp-tools = { version = "0.1.1", path = "crates/tools/thoughts-mcp-tools" }
 coding_agent_tools = { version = "0.2.2", path = "crates/tools/coding-agent-tools" }
 pr_comments = { version = "0.6.1", path = "crates/tools/pr-comments" }
