@@ -17,6 +17,7 @@ Guidance for Claude Code when working with this repository.
 
 ### infra
 
+- `agentic-config` (lib) - `crates/infra/agentic-config/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
@@ -45,6 +46,7 @@ Guidance for Claude Code when working with this repository.
 
 ### tools
 
+- `agentic-bin` (app) - `apps/agentic/`
 - `thoughts-bin` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
