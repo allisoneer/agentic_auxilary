@@ -11,9 +11,9 @@ pub mod utils;
 pub mod workspace;
 
 pub use config::{Config, Mount, SyncStrategy};
-pub use config::{
-    FileMetadata, MountDirs, RepoConfig, RepoConfigManager, RepoMappingManager, RequiredMount, Rule,
-};
+// Note: V1 config types (RepoConfig, MountDirs, RequiredMount, FileMetadata, Rule, etc.)
+// have been removed. Use V2 config APIs (load_desired_state, load_v2_or_bail, etc.).
+pub use config::{RepoConfigManager, RepoMappingManager};
 pub use documents::{
     ActiveDocuments, DocumentInfo, DocumentType, WriteDocumentOk, active_logs_dir, list_documents,
     write_document,

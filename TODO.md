@@ -2,10 +2,6 @@
 - (none)
 
 ## Researched / Ready for implementation:
-- ENG-454: References sync failures due to URL key mismatches and clone path collisions. Fix: targeted storage-agnostic approach with canonical identity module, in-memory canonical lookup, collision-free clone paths (`{host}/{org}/{repo}`), idempotent cloning, and minimal locking. Work survives SQLite migration.
-  - Research doc: `thoughts/allison-eng-454-fir-thoughts-references-annoyance/research/ENG-454_thoughts_references_sync_failures.md`
-- Discord MCP integration (config only, no code): Add glittercowboy/discord-mcp to opencode.json with dedicated agent. 3 meta-tools dispatch to 128 operations. Requires Python 3.12+, uv, bot token + guild ID.
-  - Research doc: `thoughts/completed/2026-01-10_to_2026-01-30_google_supported_schema/research/discord_mcp_web_tooling_infrastructure.md`
 
 ## Blocked / Sequenced:
 These items have dependencies and should be done in order.

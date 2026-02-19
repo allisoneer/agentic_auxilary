@@ -107,6 +107,7 @@ opencode_rs = "0.1.2"
 
 ### infra
 
+- [`agentic-config`](crates/infra/agentic-config) - Unified configuration system for agentic tools ecosystem
 - [`agentic_logging`](crates/infra/agentic-logging) - Centralized JSONL logging infrastructure for agentic tools
 - [`thoughts-tool`](crates/infra/thoughts-core) - Flexible thought management using filesystem mounts for git repositories
 

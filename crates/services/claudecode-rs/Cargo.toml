@@ -33,7 +33,7 @@ thiserror = "2.0"
 tracing = "0.1"
 
 # Path and environment handling
-dirs = "5.0"
+dirs = { workspace = true }
 which = "6.0"
 
 # Time handling

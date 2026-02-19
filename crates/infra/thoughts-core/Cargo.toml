@@ -17,6 +17,7 @@ linux = []
 macos = []
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic_logging = { version = "0.1.2", path = "../agentic-logging" }
 agentic-tools-core = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
@@ -25,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 thiserror = "2"
-dirs = "5"
+dirs = { workspace = true }
 git2 = { version = "0.18", features = ["vendored-openssl", "ssh", "https"] }
 gix = { version = "0.77", default-features = false, features = [
     "blocking-network-client",

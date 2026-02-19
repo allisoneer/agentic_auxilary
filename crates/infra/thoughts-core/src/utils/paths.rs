@@ -64,8 +64,19 @@ pub fn get_repo_rules_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".thoughts").join("rules.json")
 }
 
-/// Get the repository mapping file path
+/// Get the repository mapping file path.
+///
+/// Returns the new location at `~/.config/agentic/repos.json`.
 pub fn get_repo_mapping_path() -> Result<PathBuf> {
+    let base = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+    Ok(base.join("agentic").join("repos.json"))
+}
+
+/// Get the legacy repository mapping file path.
+///
+/// Returns the old location at `~/.thoughts/repos.json` for migration purposes.
+pub fn get_legacy_repo_mapping_path() -> Result<PathBuf> {
     let home =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     Ok(home.join(".thoughts").join("repos.json"))
