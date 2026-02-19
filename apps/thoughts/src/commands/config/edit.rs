@@ -25,7 +25,6 @@ pub async fn execute() -> Result<()> {
     }
 
     // Validate after editing (V2 only - V1 is no longer supported)
-    let repo_root = get_control_repo_root(&env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
     match mgr.peek_config_version()? {
         Some(v) if v == "1.0" => {

@@ -6,7 +6,7 @@ use crate::utils::locks::FileLock;
 use crate::utils::paths::{self, sanitize_dir_name};
 use anyhow::{Context, Result, bail};
 use atomicwrites::{AllowOverwrite, AtomicFile};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 
 /// Indicates how a URL was resolved to a mapping.
@@ -33,26 +33,70 @@ pub struct RepoMappingManager {
     mapping_path: PathBuf,
 }
 
+/// Compute the lock path for a given mapping file path.
+///
+/// This is extracted as a standalone function so it can be used both in
+/// `RepoMappingManager::lock_path()` and `migrate_legacy_repos_json_if_needed()`.
+fn lock_path_for_mapping_path(mapping_path: &Path) -> PathBuf {
+    let name = mapping_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+    mapping_path.with_file_name(format!("{name}.lock"))
+}
+
+/// Migrate legacy repos.json to the new location, if needed.
+///
+/// Returns `Ok(true)` if migration was performed, `Ok(false)` otherwise.
+///
+/// # Safety Properties
+///
+/// - Acquires the same lock used by all RMW operations.
+/// - Re-checks `mapping_path.exists()` under lock to close the TOCTOU window.
+/// - Writes via `AtomicFile` for atomic visibility.
+fn migrate_legacy_repos_json_if_needed(mapping_path: &Path, legacy_path: &Path) -> Result<bool> {
+    let _lock = FileLock::lock_exclusive(lock_path_for_mapping_path(mapping_path))?;
+
+    // Re-check under lock to close the TOCTOU window.
+    if mapping_path.exists() || !legacy_path.exists() {
+        return Ok(false);
+    }
+
+    if let Some(parent) = mapping_path.parent() {
+        paths::ensure_dir(parent)?;
+    }
+
+    let bytes = std::fs::read(legacy_path).with_context(|| {
+        format!(
+            "Failed to read legacy repos.json at {}",
+            legacy_path.display()
+        )
+    })?;
+
+    let af = AtomicFile::new(mapping_path, AllowOverwrite);
+    af.write(|f| f.write_all(&bytes))
+        .context("Failed to migrate repos.json from legacy location")?;
+
+    tracing::info!(
+        "Migrated repos.json from {} to {}",
+        legacy_path.display(),
+        mapping_path.display()
+    );
+
+    Ok(true)
+}
+
 impl RepoMappingManager {
     pub fn new() -> Result<Self> {
         let mapping_path = paths::get_repo_mapping_path()?;
 
-        // Check for legacy location migration
+        // Check for legacy location migration (fast-path guard), then migrate under lock.
         if !mapping_path.exists()
             && let Ok(legacy_path) = paths::get_legacy_repo_mapping_path()
             && legacy_path.exists()
         {
-            // Migrate from legacy location
-            if let Some(parent) = mapping_path.parent() {
-                paths::ensure_dir(parent)?;
-            }
-            std::fs::copy(&legacy_path, &mapping_path)
-                .context("Failed to migrate repos.json from legacy location")?;
-            tracing::info!(
-                "Migrated repos.json from {} to {}",
-                legacy_path.display(),
-                mapping_path.display()
-            );
+            // Performs the lock + recheck + atomic write.
+            let _ = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path)?;
         }
 
         Ok(Self { mapping_path })
@@ -60,27 +104,22 @@ impl RepoMappingManager {
 
     /// Get the lock file path for repos.json RMW operations.
     fn lock_path(&self) -> PathBuf {
-        let name = self
-            .mapping_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-        self.mapping_path.with_file_name(format!("{name}.lock"))
+        lock_path_for_mapping_path(&self.mapping_path)
     }
 
     pub fn load(&self) -> Result<RepoMapping> {
-        if !self.mapping_path.exists() {
-            // First time - create empty mapping
-            let default = RepoMapping::default();
-            self.save(&default)?;
-            return Ok(default);
-        }
+        let contents = match std::fs::read_to_string(&self.mapping_path) {
+            Ok(c) => c,
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                // Pure read: do not create the file here.
+                return Ok(RepoMapping::default());
+            }
+            Err(e) => {
+                return Err(e).context("Failed to read repository mapping file");
+            }
+        };
 
-        let contents = std::fs::read_to_string(&self.mapping_path)
-            .context("Failed to read repository mapping file")?;
-        let mapping: RepoMapping =
-            serde_json::from_str(&contents).context("Failed to parse repository mapping")?;
-        Ok(mapping)
+        serde_json::from_str(&contents).context("Failed to parse repository mapping")
     }
 
     pub fn save(&self, mapping: &RepoMapping) -> Result<()> {
@@ -406,6 +445,7 @@ pub fn extract_org_repo_from_url(url: &str) -> anyhow::Result<(String, String)> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_parse_url_and_subpath() {
@@ -531,5 +571,89 @@ mod tests {
         assert!(validate_subpath("/etc").is_err());
         assert!(validate_subpath("/etc/passwd").is_err());
         assert!(validate_subpath("/home/user/.ssh").is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // Migration and load() TOCTOU-fix tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_migrate_legacy_when_destination_missing() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let legacy_path = dir.path().join("legacy_repos.json");
+
+        let legacy_bytes = br#"{ "mappings": { "git@github.com:a/b.git": { "path": "/tmp/x", "auto_managed": false, "last_sync": null } } }"#;
+        std::fs::write(&legacy_path, legacy_bytes).unwrap();
+
+        let migrated = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path).unwrap();
+        assert!(migrated);
+        assert!(mapping_path.exists());
+
+        let got = std::fs::read(&mapping_path).unwrap();
+        assert_eq!(got, legacy_bytes);
+    }
+
+    #[test]
+    fn test_migrate_does_not_overwrite_existing_destination() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let legacy_path = dir.path().join("legacy_repos.json");
+
+        std::fs::write(&legacy_path, b"legacy").unwrap();
+        std::fs::write(&mapping_path, b"already-there").unwrap();
+
+        let migrated = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path).unwrap();
+        assert!(!migrated);
+
+        let got = std::fs::read(&mapping_path).unwrap();
+        assert_eq!(got, b"already-there");
+    }
+
+    #[test]
+    fn test_migrate_noop_when_legacy_missing() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let legacy_path = dir.path().join("legacy_repos.json"); // intentionally absent
+
+        let migrated = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path).unwrap();
+        assert!(!migrated);
+        assert!(!mapping_path.exists());
+    }
+
+    #[test]
+    fn test_load_missing_file_returns_default_without_creating_file() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let mgr = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let mapping = mgr.load().unwrap();
+        assert_eq!(mapping, RepoMapping::default());
+        assert!(!mapping_path.exists(), "load() must not create repos.json");
+    }
+
+    #[test]
+    fn test_load_reads_existing_file() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let mgr = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let mut m = RepoMapping::default();
+        m.mappings.insert(
+            "git@github.com:org/repo.git".to_string(),
+            RepoLocation {
+                path: PathBuf::from("/tmp/repo"),
+                auto_managed: false,
+                last_sync: None,
+            },
+        );
+        mgr.save(&m).unwrap();
+
+        let loaded = mgr.load().unwrap();
+        assert!(loaded.mappings.contains_key("git@github.com:org/repo.git"));
     }
 }

@@ -84,13 +84,13 @@ impl std::fmt::Display for SyncStrategy {
 // See CLAUDE.md for V2 config API guidance.
 
 /// Maps git URLs to local filesystem paths
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepoMapping {
     pub version: String,
     pub mappings: HashMap<String, RepoLocation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepoLocation {
     pub path: PathBuf,
     pub auto_managed: bool,

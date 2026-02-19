@@ -340,13 +340,12 @@ mod tests {
     }
 
     #[test]
-    fn test_null_in_local_deletes_global_key() {
-        // This tests RFC 7396 null deletion at the merge level
-        // We create a scenario where local has null for a key that global has
+    fn test_local_value_overrides_struct_default() {
+        // Test that local config values override struct defaults (not RFC 7396 null deletion,
+        // which is tested in merge.rs). This verifies the merge behavior for nested objects.
 
         let temp = TempDir::new().unwrap();
-        // Create local config that tries to delete a nested key
-        // (In practice, this would merge with global to delete)
+        // Create local config that overrides a nested value
         std::fs::write(
             temp.path().join(LOCAL_FILE),
             r#"{"thoughts": {"mount_dirs": {"thoughts": "custom"}}}"#,
