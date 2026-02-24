@@ -8,8 +8,9 @@
 //!
 //! # Running modes
 //!
-//! - **Replay mode** (default): Uses pre-recorded snapshots for deterministic CI
-//! - **Live mode** (`ANTHROPIC_LIVE=1`): Makes real API calls to record new snapshots
+//! - **Replay mode** (default): Uses httpmock to replay recorded cassettes. No API key needed.
+//! - **Live mode** (`ANTHROPIC_LIVE=1`): Makes real API calls. Requires `ANTHROPIC_API_KEY`.
+//! - **Record mode** (`ANTHROPIC_LIVE=1 ANTHROPIC_RECORD=1`): Records API interactions to YAML.
 //!
 //! # Example
 //!
@@ -17,8 +18,11 @@
 //! # Run in replay mode (CI)
 //! cargo test -p anthropic-async multi_turn
 //!
-//! # Run in live mode (record new snapshots)
+//! # Run in live mode (no recording)
 //! ANTHROPIC_LIVE=1 cargo test -p anthropic-async multi_turn
+//!
+//! # Record new cassettes
+//! ANTHROPIC_LIVE=1 ANTHROPIC_RECORD=1 cargo test -p anthropic-async multi_turn -- --nocapture
 //! ```
 
 mod support;
@@ -31,7 +35,8 @@ use anthropic_async::types::{
     messages::MessagesCreateRequest,
     tools::{Tool, ToolChoice},
 };
-use support::snapshots::{SnapshotHarness, is_live};
+use insta::assert_json_snapshot;
+use support::snapshots::SnapshotHarness;
 
 /// Creates a simple weather tool definition for testing.
 fn weather_tool() -> Tool {
@@ -71,14 +76,6 @@ fn extract_tool_use_id(content: &[ContentBlock]) -> Option<String> {
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn multi_turn_tool_conversation() {
-    // Skip replay mode since we don't have snapshots recorded yet.
-    // To record snapshots, run with ANTHROPIC_LIVE=1
-    if !is_live() {
-        eprintln!("Skipping multi_turn_tool_conversation in replay mode (no snapshots recorded)");
-        eprintln!("Run with ANTHROPIC_LIVE=1 to execute against the real API");
-        return;
-    }
-
     let harness = SnapshotHarness::new("multi_turn_tool_conversation").await;
     let client = harness.client();
 
@@ -90,11 +87,13 @@ async fn multi_turn_tool_conversation() {
 
     let req1 = MessagesCreateRequest {
         model: "claude-sonnet-4-20250514".into(),
-        max_tokens: 1024,
+        max_tokens: 256,
+        temperature: Some(0.0),
         messages: vec![user_message.clone()],
         tools: Some(vec![weather_tool()]),
-        tool_choice: Some(ToolChoice::Auto {
-            disable_parallel_tool_use: None,
+        tool_choice: Some(ToolChoice::Tool {
+            name: "get_weather".into(),
+            disable_parallel_tool_use: Some(true),
         }),
         ..Default::default()
     };
@@ -129,6 +128,12 @@ async fn multi_turn_tool_conversation() {
         Some("get_weather"),
         "Expected get_weather tool, got: {tool_name:?}"
     );
+
+    // Snapshot turn 1 response for SDK contract verification
+    assert_json_snapshot!("turn1_response", &resp1, {
+        ".id" => "[redacted]",
+        ".content[].id" => "[redacted]",
+    });
 
     // --- Turn 2: Echo assistant + send tool_result ---
 
@@ -169,12 +174,11 @@ async fn multi_turn_tool_conversation() {
 
     let req2 = MessagesCreateRequest {
         model: "claude-sonnet-4-20250514".into(),
-        max_tokens: 1024,
+        max_tokens: 256,
+        temperature: Some(0.0),
         messages: vec![user_message, assistant_msg, tool_result_message],
         tools: Some(vec![weather_tool()]),
-        tool_choice: Some(ToolChoice::Auto {
-            disable_parallel_tool_use: None,
-        }),
+        tool_choice: Some(ToolChoice::None),
         ..Default::default()
     };
 
@@ -183,6 +187,11 @@ async fn multi_turn_tool_conversation() {
         .create(req2)
         .await
         .expect("Second turn should succeed");
+
+    // Snapshot turn 2 response for SDK contract verification
+    assert_json_snapshot!("turn2_response", &resp2, {
+        ".id" => "[redacted]",
+    });
 
     // Verify final response contains text (not another tool_use)
     let has_text = resp2

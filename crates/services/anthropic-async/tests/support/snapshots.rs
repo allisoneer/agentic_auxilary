@@ -92,10 +92,10 @@ impl SnapshotHarness {
         )
         .await;
 
-        // Use a placeholder key so recordings never depend on the real key.
-        // The proxy server injects the real key when forwarding to upstream.
+        // Skip auth - the proxy injects the real API key when forwarding.
+        // This ensures no auth headers are sent by the client, avoiding duplicate headers.
         let config = AnthropicConfig::new()
-            .with_api_key("test-key")
+            .dangerously_skip_auth()
             .with_api_base(server.base_url());
         let client = Client::with_config(config);
 
@@ -110,8 +110,10 @@ impl SnapshotHarness {
     async fn new_replay(name: &str) -> Self {
         let server = SnapshotServer::start_playback(name).await;
 
+        // Skip auth - replay mode doesn't need real credentials.
+        // This matches record mode so cassettes are consistent.
         let config = AnthropicConfig::new()
-            .with_api_key("test-key")
+            .dangerously_skip_auth()
             .with_api_base(server.base_url());
         let client = Client::with_config(config);
 

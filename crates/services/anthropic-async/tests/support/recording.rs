@@ -63,12 +63,15 @@ pub fn recording_path(dir: &Path, name: &str) -> PathBuf {
 /// Server handle kept alive for the duration of a test.
 ///
 /// - In replay mode: owns `MockServer` with `playback(...)` loaded.
-/// - In record mode: owns `MockServer` + recording handle, saves YAML on Drop.
+/// - In record mode: owns `MockServer`, saves YAML on Drop.
+///
+/// We store only the recording ID (not the `Recording<'a>` handle) to avoid
+/// self-referential struct issues. The Recording handle is reconstructed
+/// in Drop when we need to save.
 pub struct SnapshotServer {
-    // Note: field order matters! recording must be dropped before server.
-    // Recording holds a reference to MockServer, so server must outlive recording.
-    recording: Option<Recording<'static>>,
     server: MockServer,
+    /// Recording ID (if recording). We store just the ID to avoid self-referential lifetimes.
+    recording_id: Option<usize>,
     snapshot_dir: PathBuf,
     name: String,
     redact_api_key: Option<String>,
@@ -96,8 +99,8 @@ impl SnapshotServer {
         server.playback(&path);
 
         Self {
-            recording: None,
             server,
+            recording_id: None,
             snapshot_dir: dir,
             name: name.to_string(),
             redact_api_key: None,
@@ -123,8 +126,10 @@ impl SnapshotServer {
             rule.add_request_header("x-api-key", key_clone);
         });
 
-        let recording = if record {
-            let rec = server.record(|rule| {
+        // Start recording if requested, but only store the ID (not the Recording handle)
+        // to avoid self-referential struct issues. We'll reconstruct the handle in Drop.
+        let recording_id = if record {
+            let recording = server.record(|rule| {
                 // Record all requests, including relevant headers
                 rule.record_request_headers(vec![
                     "content-type",
@@ -132,18 +137,14 @@ impl SnapshotServer {
                     "anthropic-beta",
                 ]);
             });
-            // SAFETY: We own `server` and it lives as long as this struct.
-            // Recording only holds a reference to server, so extending to 'static
-            // is safe as long as recording is dropped before server (which Rust
-            // guarantees due to field declaration order).
-            Some(unsafe { std::mem::transmute::<Recording<'_>, Recording<'static>>(rec) })
+            Some(recording.id)
         } else {
             None
         };
 
         Self {
-            recording,
             server,
+            recording_id,
             snapshot_dir: dir,
             name: name.to_string(),
             redact_api_key: Some(upstream_api_key),
@@ -155,105 +156,102 @@ impl SnapshotServer {
     pub fn base_url(&self) -> String {
         self.server.base_url()
     }
+
+    /// Save the recording to disk. Called automatically in Drop.
+    fn save_recording(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let Some(id) = self.recording_id else {
+            return Ok(());
+        };
+
+        // Create snapshot directory if needed
+        fs::create_dir_all(&self.snapshot_dir)?;
+
+        // Reconstruct the Recording handle from the ID.
+        // This is safe because we still own the server and it hasn't been dropped.
+        let recording = Recording::new(id, &self.server);
+
+        // Save the recording (httpmock adds a timestamp to the filename)
+        recording.save_to(&self.snapshot_dir, &self.name)?;
+
+        // Post-process: redact API key and rename to canonical path
+        let canonical_path = recording_path(&self.snapshot_dir, &self.name);
+        self.postprocess_recording(&canonical_path)?;
+
+        Ok(())
+    }
+
+    /// Find the newest YAML file, redact the API key, and rename to canonical path.
+    fn postprocess_recording(
+        &self,
+        canonical_path: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let Some(key) = self.redact_api_key.as_deref() else {
+            return Ok(());
+        };
+
+        // Find the most recent yaml file matching our name pattern
+        // (httpmock adds timestamps to filenames)
+        let entries = fs::read_dir(&self.snapshot_dir)?;
+        let mut matching_files: Vec<_> = entries
+            .filter_map(Result::ok)
+            .filter(|e| {
+                let path = e.path();
+                let name_matches = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(&self.name));
+                let ext_matches = path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml"));
+                name_matches && ext_matches
+            })
+            .collect();
+
+        // Sort by modification time, newest first
+        matching_files.sort_by(|a, b| {
+            b.metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                .cmp(
+                    &a.metadata()
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+                )
+        });
+
+        if let Some(newest) = matching_files.first() {
+            let newest_path = newest.path();
+
+            // Redact the API key from the file
+            redact_string_in_file(&newest_path, key, "<redacted>")?;
+
+            // Rename to the canonical path (without timestamp) for easy playback
+            if newest_path != canonical_path {
+                fs::rename(&newest_path, canonical_path)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Drop for SnapshotServer {
     fn drop(&mut self) {
-        let Some(recording) = self.recording.take() else {
+        // Skip saving if no recording was made
+        if self.recording_id.is_none() {
             return;
-        };
+        }
 
-        // Never double-panic (a failing test + failing save would abort).
-        let already_panicking = std::thread::panicking();
-
-        // Create snapshot directory if needed
-        if let Err(err) = fs::create_dir_all(&self.snapshot_dir) {
-            if already_panicking {
-                eprintln!("Failed to create snapshot dir: {err}");
-                return;
-            }
-            panic!("Failed to create snapshot dir: {err}");
+        // Don't try to save if test is already failing - httpmock may panic
+        // if there are no recorded interactions
+        if std::thread::panicking() {
+            eprintln!("Test failed, skipping cassette save for '{}'", self.name);
+            return;
         }
 
         // Save the recording
-        let path = recording_path(&self.snapshot_dir, &self.name);
-
-        if let Err(err) = recording.save_to(&self.snapshot_dir, &self.name) {
-            if already_panicking {
-                eprintln!("Failed to save recording: {err}");
-                return;
-            }
-            panic!("Failed to save recording: {err}");
-        }
-
-        // Safety net: redact the real API key if it ended up serialized anywhere.
-        // httpmock's save_to creates a file with timestamp, we need to find it and rename it
-        if let Some(key) = self.redact_api_key.as_deref() {
-            // Find the most recent yaml file matching our name pattern
-            if let Ok(entries) = fs::read_dir(&self.snapshot_dir) {
-                let mut matching_files: Vec<_> = entries
-                    .filter_map(Result::ok)
-                    .filter(|e| {
-                        let path = e.path();
-                        let name_matches = path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .is_some_and(|n| n.starts_with(&self.name));
-                        let ext_matches = path
-                            .extension()
-                            .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml"));
-                        name_matches && ext_matches
-                    })
-                    .collect();
-
-                // Sort by modification time, newest first
-                matching_files.sort_by(|a, b| {
-                    b.metadata()
-                        .and_then(|m| m.modified())
-                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                        .cmp(
-                            &a.metadata()
-                                .and_then(|m| m.modified())
-                                .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-                        )
-                });
-
-                if let Some(newest) = matching_files.first() {
-                    let newest_path = newest.path();
-                    if let Err(err) = redact_string_in_file(&newest_path, key, "<redacted>") {
-                        if already_panicking {
-                            eprintln!(
-                                "Failed to redact API key from {}: {err}",
-                                newest_path.display()
-                            );
-                            return;
-                        }
-                        panic!(
-                            "Failed to redact API key from {}: {err}",
-                            newest_path.display()
-                        );
-                    }
-
-                    // Rename to the canonical path (without timestamp) for easy playback
-                    if newest_path != path
-                        && let Err(err) = fs::rename(&newest_path, &path)
-                    {
-                        if already_panicking {
-                            eprintln!(
-                                "Failed to rename {} to {}: {err}",
-                                newest_path.display(),
-                                path.display()
-                            );
-                            return;
-                        }
-                        panic!(
-                            "Failed to rename {} to {}: {err}",
-                            newest_path.display(),
-                            path.display()
-                        );
-                    }
-                }
-            }
+        if let Err(e) = self.save_recording() {
+            eprintln!("Failed to save recording '{}': {e}", self.name);
         }
     }
 }

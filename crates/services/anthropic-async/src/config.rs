@@ -45,6 +45,9 @@ pub struct AnthropicConfig {
     auth: AnthropicAuth,
     #[serde(skip)]
     beta: Vec<String>,
+    /// Skip auth validation (for proxy/testing scenarios where auth is handled externally)
+    #[serde(skip)]
+    dangerously_skip_auth: bool,
 }
 
 /// Helper to read and normalize an env var (trim + filter empty).
@@ -77,6 +80,7 @@ impl Default for AnthropicConfig {
             version: ANTHROPIC_VERSION.into(),
             auth,
             beta: vec![],
+            dangerously_skip_auth: false,
         }
     }
 }
@@ -155,6 +159,22 @@ impl AnthropicConfig {
         self
     }
 
+    /// Disable sending auth headers and skip auth validation.
+    ///
+    /// Use only when authentication is injected by an upstream proxy/gateway
+    /// (e.g., during recording tests or in a service mesh).
+    ///
+    /// # Safety
+    ///
+    /// This bypasses all authentication. Only use in controlled environments
+    /// where auth is handled externally.
+    #[must_use]
+    pub fn dangerously_skip_auth(mut self) -> Self {
+        self.dangerously_skip_auth = true;
+        self.auth = AnthropicAuth::None;
+        self
+    }
+
     /// Returns the configured API base URL
     #[must_use]
     pub fn api_base(&self) -> &str {
@@ -167,8 +187,14 @@ impl AnthropicConfig {
     ///
     /// Returns an error if neither API key nor bearer token is configured,
     /// or if the configured credentials are empty/whitespace-only.
+    /// Returns `Ok(())` if `dangerously_skip_auth()` was called.
     pub fn validate_auth(&self) -> Result<(), crate::error::AnthropicError> {
         use crate::error::AnthropicError;
+
+        // Skip validation if auth is handled externally (proxy/gateway)
+        if self.dangerously_skip_auth {
+            return Ok(());
+        }
 
         match &self.auth {
             AnthropicAuth::ApiKey(k) if !k.expose_secret().trim().is_empty() => Ok(()),
@@ -242,38 +268,43 @@ impl Config for AnthropicConfig {
             );
         }
 
-        match &self.auth {
-            AnthropicAuth::ApiKey(k) => {
-                h.insert(
-                    HDR_X_API_KEY,
-                    HeaderValue::from_str(k.expose_secret())
-                        .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
-                );
+        // Skip auth headers if auth is handled externally (proxy/gateway)
+        if !self.dangerously_skip_auth {
+            match &self.auth {
+                AnthropicAuth::ApiKey(k) => {
+                    h.insert(
+                        HDR_X_API_KEY,
+                        HeaderValue::from_str(k.expose_secret()).map_err(|_| {
+                            AnthropicError::Config("Invalid x-api-key value".into())
+                        })?,
+                    );
+                }
+                AnthropicAuth::Bearer(t) => {
+                    let v = format!("Bearer {}", t.expose_secret());
+                    h.insert(
+                        AUTHORIZATION,
+                        HeaderValue::from_str(&v).map_err(|_| {
+                            AnthropicError::Config("Invalid Authorization header".into())
+                        })?,
+                    );
+                }
+                AnthropicAuth::Both { api_key, bearer } => {
+                    h.insert(
+                        HDR_X_API_KEY,
+                        HeaderValue::from_str(api_key.expose_secret()).map_err(|_| {
+                            AnthropicError::Config("Invalid x-api-key value".into())
+                        })?,
+                    );
+                    let v = format!("Bearer {}", bearer.expose_secret());
+                    h.insert(
+                        AUTHORIZATION,
+                        HeaderValue::from_str(&v).map_err(|_| {
+                            AnthropicError::Config("Invalid Authorization header".into())
+                        })?,
+                    );
+                }
+                AnthropicAuth::None => {}
             }
-            AnthropicAuth::Bearer(t) => {
-                let v = format!("Bearer {}", t.expose_secret());
-                h.insert(
-                    AUTHORIZATION,
-                    HeaderValue::from_str(&v).map_err(|_| {
-                        AnthropicError::Config("Invalid Authorization header".into())
-                    })?,
-                );
-            }
-            AnthropicAuth::Both { api_key, bearer } => {
-                h.insert(
-                    HDR_X_API_KEY,
-                    HeaderValue::from_str(api_key.expose_secret())
-                        .map_err(|_| AnthropicError::Config("Invalid x-api-key value".into()))?,
-                );
-                let v = format!("Bearer {}", bearer.expose_secret());
-                h.insert(
-                    AUTHORIZATION,
-                    HeaderValue::from_str(&v).map_err(|_| {
-                        AnthropicError::Config("Invalid Authorization header".into())
-                    })?,
-                );
-            }
-            AnthropicAuth::None => {}
         }
 
         Ok(h)
@@ -387,6 +418,7 @@ mod tests {
             version: "test".into(),
             auth: AnthropicAuth::None,
             beta: vec![],
+            dangerously_skip_auth: false,
         };
         assert!(cfg.validate_auth().is_err());
     }

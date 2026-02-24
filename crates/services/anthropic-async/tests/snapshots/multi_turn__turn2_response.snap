@@ -1,0 +1,23 @@
+---
+source: crates/services/anthropic-async/tests/multi_turn.rs
+expression: "&resp2"
+---
+{
+  "id": "[redacted]",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "The weather in Paris, France right now is sunny with a pleasant temperature of 22°C (72°F) and a light breeze coming from the west. It's a lovely day there!"
+    }
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 494,
+    "output_tokens": 44,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0
+  }
+}
