@@ -38,16 +38,8 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
             )
             .into(),
         }],
-        system: None,
         temperature: Some(0.2),
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let resp = client

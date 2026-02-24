@@ -377,6 +377,72 @@ impl From<String> for SystemParam {
     }
 }
 
+// =========================================================================
+// Echo Pattern Conversions (TryFrom)
+// =========================================================================
+
+/// Error when converting a response `ContentBlock` to a request `ContentBlockParam`
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ContentBlockConversionError {
+    /// Cannot convert an unknown content block type
+    #[error("cannot convert unknown content block to request content block param")]
+    UnknownContentBlock,
+}
+
+impl TryFrom<&ContentBlock> for ContentBlockParam {
+    type Error = ContentBlockConversionError;
+
+    fn try_from(block: &ContentBlock) -> Result<Self, Self::Error> {
+        match block {
+            ContentBlock::Text { text, citations } => Ok(Self::Text {
+                text: text.clone(),
+                citations: citations.clone(),
+                cache_control: None,
+            }),
+            ContentBlock::ToolUse { id, name, input } => Ok(Self::ToolUse {
+                id: id.clone(),
+                name: name.clone(),
+                input: input.clone(),
+                cache_control: None,
+            }),
+            ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => Ok(Self::Thinking {
+                thinking: thinking.clone(),
+                signature: signature.clone(),
+            }),
+            ContentBlock::RedactedThinking { data } => {
+                Ok(Self::RedactedThinking { data: data.clone() })
+            }
+            ContentBlock::ServerToolUse { id, name, input } => Ok(Self::ServerToolUse {
+                id: id.clone(),
+                name: name.clone(),
+                input: input.clone(),
+                cache_control: None,
+            }),
+            ContentBlock::WebSearchToolResult {
+                tool_use_id,
+                content,
+            } => Ok(Self::WebSearchToolResult {
+                tool_use_id: tool_use_id.clone(),
+                content: content.clone(),
+                cache_control: None,
+            }),
+            ContentBlock::Unknown => Err(ContentBlockConversionError::UnknownContentBlock),
+        }
+    }
+}
+
+impl TryFrom<ContentBlock> for ContentBlockParam {
+    type Error = ContentBlockConversionError;
+
+    fn try_from(block: ContentBlock) -> Result<Self, Self::Error> {
+        // Delegate to the borrowed implementation to avoid code duplication
+        Self::try_from(&block)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -614,6 +680,160 @@ mod tests {
                 assert!(content["results"].is_array());
             }
             _ => panic!("Expected WebSearchToolResult variant"),
+        }
+    }
+
+    // =========================================================================
+    // TryFrom tests (echo pattern)
+    // =========================================================================
+
+    #[test]
+    fn tryfrom_content_block_text_to_param() {
+        let block = ContentBlock::Text {
+            text: "hello world".into(),
+            citations: Some(vec![serde_json::json!({"url": "https://example.com"})]),
+        };
+        let param = ContentBlockParam::try_from(&block).unwrap();
+        match param {
+            ContentBlockParam::Text {
+                text,
+                citations,
+                cache_control,
+            } => {
+                assert_eq!(text, "hello world");
+                assert!(citations.is_some());
+                assert!(cache_control.is_none());
+            }
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn tryfrom_content_block_tool_use_to_param() {
+        let block = ContentBlock::ToolUse {
+            id: "toolu_test".into(),
+            name: "get_weather".into(),
+            input: serde_json::json!({"city": "Paris"}),
+        };
+        let param = ContentBlockParam::try_from(&block).unwrap();
+        match param {
+            ContentBlockParam::ToolUse {
+                id,
+                name,
+                input,
+                cache_control,
+            } => {
+                assert_eq!(id, "toolu_test");
+                assert_eq!(name, "get_weather");
+                assert_eq!(input["city"], "Paris");
+                assert!(cache_control.is_none());
+            }
+            _ => panic!("Expected ToolUse variant"),
+        }
+    }
+
+    #[test]
+    fn tryfrom_content_block_thinking_to_param() {
+        let block = ContentBlock::Thinking {
+            thinking: "Let me think...".into(),
+            signature: "sig_123".into(),
+        };
+        let param = ContentBlockParam::try_from(&block).unwrap();
+        match param {
+            ContentBlockParam::Thinking {
+                thinking,
+                signature,
+            } => {
+                assert_eq!(thinking, "Let me think...");
+                assert_eq!(signature, "sig_123");
+            }
+            _ => panic!("Expected Thinking variant"),
+        }
+    }
+
+    #[test]
+    fn tryfrom_content_block_redacted_thinking_to_param() {
+        let block = ContentBlock::RedactedThinking {
+            data: "redacted".into(),
+        };
+        let param = ContentBlockParam::try_from(&block).unwrap();
+        match param {
+            ContentBlockParam::RedactedThinking { data } => {
+                assert_eq!(data, "redacted");
+            }
+            _ => panic!("Expected RedactedThinking variant"),
+        }
+    }
+
+    #[test]
+    fn tryfrom_content_block_server_tool_use_to_param() {
+        let block = ContentBlock::ServerToolUse {
+            id: "srv_123".into(),
+            name: "web_search".into(),
+            input: serde_json::json!({"query": "rust"}),
+        };
+        let param = ContentBlockParam::try_from(&block).unwrap();
+        match param {
+            ContentBlockParam::ServerToolUse {
+                id,
+                name,
+                input,
+                cache_control,
+            } => {
+                assert_eq!(id, "srv_123");
+                assert_eq!(name, "web_search");
+                assert_eq!(input["query"], "rust");
+                assert!(cache_control.is_none());
+            }
+            _ => panic!("Expected ServerToolUse variant"),
+        }
+    }
+
+    #[test]
+    fn tryfrom_content_block_web_search_result_to_param() {
+        let block = ContentBlock::WebSearchToolResult {
+            tool_use_id: "tool_456".into(),
+            content: serde_json::json!({"results": []}),
+        };
+        let param = ContentBlockParam::try_from(&block).unwrap();
+        match param {
+            ContentBlockParam::WebSearchToolResult {
+                tool_use_id,
+                content,
+                cache_control,
+            } => {
+                assert_eq!(tool_use_id, "tool_456");
+                assert!(content["results"].is_array());
+                assert!(cache_control.is_none());
+            }
+            _ => panic!("Expected WebSearchToolResult variant"),
+        }
+    }
+
+    #[test]
+    fn tryfrom_content_block_unknown_fails() {
+        let block = ContentBlock::Unknown;
+        let result = ContentBlockParam::try_from(&block);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ContentBlockConversionError::UnknownContentBlock
+        ));
+    }
+
+    #[test]
+    fn tryfrom_content_block_owned_works() {
+        let block = ContentBlock::Text {
+            text: "owned".into(),
+            citations: None,
+        };
+        // Test the owned version (consumes block)
+        let param = ContentBlockParam::try_from(block).unwrap();
+        match param {
+            ContentBlockParam::Text { text, .. } => {
+                assert_eq!(text, "owned");
+            }
+            _ => panic!("Expected Text variant"),
         }
     }
 }

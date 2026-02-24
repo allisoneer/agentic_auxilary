@@ -232,6 +232,18 @@ pub mod streaming {
             /// Initial input (usually empty object)
             input: serde_json::Value,
         },
+        /// Thinking block (extended thinking feature)
+        Thinking {
+            /// Initial thinking text (usually empty)
+            #[serde(default)]
+            thinking: String,
+            /// Initial signature (usually empty)
+            #[serde(default)]
+            signature: String,
+        },
+        /// Unknown block type (forward compatibility)
+        #[serde(other)]
+        Unknown,
     }
 
     /// Content block delta data
@@ -443,6 +455,11 @@ pub mod streaming {
             name: String,
             input_json: String,
         },
+        Thinking {
+            thinking: String,
+            signature: String,
+        },
+        Unknown,
     }
 
     impl Accumulator {
@@ -498,6 +515,14 @@ pub mod streaming {
                                 input_json: String::new(),
                             }
                         }
+                        ContentBlockStartData::Thinking {
+                            thinking,
+                            signature,
+                        } => AccumulatorBlock::Thinking {
+                            thinking: thinking.clone(),
+                            signature: signature.clone(),
+                        },
+                        ContentBlockStartData::Unknown => AccumulatorBlock::Unknown,
                     };
                 }
                 Event::ContentBlockDelta { index, delta } => {
@@ -518,6 +543,18 @@ pub mod streaming {
                             ContentBlockDeltaData::InputJsonDelta { partial_json },
                         ) => {
                             input_json.push_str(partial_json);
+                        }
+                        (
+                            AccumulatorBlock::Thinking { thinking, .. },
+                            ContentBlockDeltaData::ThinkingDelta { thinking: t },
+                        ) => {
+                            thinking.push_str(t);
+                        }
+                        (
+                            AccumulatorBlock::Thinking { signature, .. },
+                            ContentBlockDeltaData::SignatureDelta { signature: s },
+                        ) => {
+                            signature.push_str(s);
                         }
                         // Forward-compatible: ignore mismatched or unknown delta types
                         _ => {}
@@ -582,6 +619,14 @@ pub mod streaming {
                             input,
                         })
                     }
+                    AccumulatorBlock::Thinking {
+                        thinking,
+                        signature,
+                    } => Ok(ContentBlock::Thinking {
+                        thinking: thinking.clone(),
+                        signature: signature.clone(),
+                    }),
+                    AccumulatorBlock::Unknown => Ok(ContentBlock::Unknown),
                 })
                 .collect::<Result<Vec<_>, AnthropicError>>()?;
 
@@ -616,7 +661,9 @@ pub mod streaming {
                 .iter()
                 .filter_map(|block| match block {
                     AccumulatorBlock::Text(text) => Some(text.as_str()),
-                    AccumulatorBlock::ToolUse { .. } => None,
+                    AccumulatorBlock::ToolUse { .. }
+                    | AccumulatorBlock::Thinking { .. }
+                    | AccumulatorBlock::Unknown => None,
                 })
                 .collect::<Vec<_>>()
                 .join("")
@@ -903,5 +950,193 @@ mod tests {
             }
             _ => panic!("Expected ToolUse block"),
         }
+    }
+
+    #[test]
+    fn test_accumulator_thinking_block() {
+        let mut acc = Accumulator::new();
+
+        // message_start
+        acc.apply(&Event::MessageStart {
+            message: MessageStartPayload {
+                id: "msg_think".to_string(),
+                kind: "message".to_string(),
+                role: crate::types::content::MessageRole::Assistant,
+                model: "claude".to_string(),
+                content: vec![],
+                stop_reason: None,
+                stop_sequence: None,
+                usage: None,
+            },
+        })
+        .unwrap();
+
+        // content_block_start (thinking)
+        acc.apply(&Event::ContentBlockStart {
+            index: 0,
+            content_block: ContentBlockStartData::Thinking {
+                thinking: String::new(),
+                signature: String::new(),
+            },
+        })
+        .unwrap();
+
+        // thinking_delta
+        acc.apply(&Event::ContentBlockDelta {
+            index: 0,
+            delta: ContentBlockDeltaData::ThinkingDelta {
+                thinking: "Let me think ".to_string(),
+            },
+        })
+        .unwrap();
+
+        acc.apply(&Event::ContentBlockDelta {
+            index: 0,
+            delta: ContentBlockDeltaData::ThinkingDelta {
+                thinking: "about this...".to_string(),
+            },
+        })
+        .unwrap();
+
+        // signature_delta
+        acc.apply(&Event::ContentBlockDelta {
+            index: 0,
+            delta: ContentBlockDeltaData::SignatureDelta {
+                signature: "sig_abc123".to_string(),
+            },
+        })
+        .unwrap();
+
+        // content_block_stop
+        acc.apply(&Event::ContentBlockStop { index: 0 }).unwrap();
+
+        // message_delta
+        acc.apply(&Event::MessageDelta {
+            delta: MessageDeltaPayload {
+                stop_reason: Some("end_turn".to_string()),
+                stop_sequence: None,
+            },
+            usage: None,
+        })
+        .unwrap();
+
+        // message_stop
+        let response = acc.apply(&Event::MessageStop).unwrap().unwrap();
+
+        assert_eq!(response.content.len(), 1);
+        match &response.content[0] {
+            ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
+                assert_eq!(thinking, "Let me think about this...");
+                assert_eq!(signature, "sig_abc123");
+            }
+            _ => panic!("Expected Thinking block"),
+        }
+    }
+
+    #[test]
+    fn test_accumulator_zero_token_thinking() {
+        let mut acc = Accumulator::new();
+
+        // message_start
+        acc.apply(&Event::MessageStart {
+            message: MessageStartPayload {
+                id: "msg_zero".to_string(),
+                kind: "message".to_string(),
+                role: crate::types::content::MessageRole::Assistant,
+                model: "claude".to_string(),
+                content: vec![],
+                stop_reason: None,
+                stop_sequence: None,
+                usage: None,
+            },
+        })
+        .unwrap();
+
+        // content_block_start (thinking) - no deltas, immediate stop
+        acc.apply(&Event::ContentBlockStart {
+            index: 0,
+            content_block: ContentBlockStartData::Thinking {
+                thinking: String::new(),
+                signature: String::new(),
+            },
+        })
+        .unwrap();
+
+        // content_block_stop (no deltas)
+        acc.apply(&Event::ContentBlockStop { index: 0 }).unwrap();
+
+        // message_delta
+        acc.apply(&Event::MessageDelta {
+            delta: MessageDeltaPayload {
+                stop_reason: Some("end_turn".to_string()),
+                stop_sequence: None,
+            },
+            usage: None,
+        })
+        .unwrap();
+
+        // message_stop
+        let response = acc.apply(&Event::MessageStop).unwrap().unwrap();
+
+        assert_eq!(response.content.len(), 1);
+        match &response.content[0] {
+            ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
+                assert_eq!(thinking, "");
+                assert_eq!(signature, "");
+            }
+            _ => panic!("Expected Thinking block"),
+        }
+    }
+
+    #[test]
+    fn test_accumulator_unknown_block() {
+        let mut acc = Accumulator::new();
+
+        // message_start
+        acc.apply(&Event::MessageStart {
+            message: MessageStartPayload {
+                id: "msg_unk".to_string(),
+                kind: "message".to_string(),
+                role: crate::types::content::MessageRole::Assistant,
+                model: "claude".to_string(),
+                content: vec![],
+                stop_reason: None,
+                stop_sequence: None,
+                usage: None,
+            },
+        })
+        .unwrap();
+
+        // content_block_start (unknown)
+        acc.apply(&Event::ContentBlockStart {
+            index: 0,
+            content_block: ContentBlockStartData::Unknown,
+        })
+        .unwrap();
+
+        // content_block_stop
+        acc.apply(&Event::ContentBlockStop { index: 0 }).unwrap();
+
+        // message_delta
+        acc.apply(&Event::MessageDelta {
+            delta: MessageDeltaPayload {
+                stop_reason: Some("end_turn".to_string()),
+                stop_sequence: None,
+            },
+            usage: None,
+        })
+        .unwrap();
+
+        // message_stop
+        let response = acc.apply(&Event::MessageStop).unwrap().unwrap();
+
+        assert_eq!(response.content.len(), 1);
+        assert!(matches!(response.content[0], ContentBlock::Unknown));
     }
 }

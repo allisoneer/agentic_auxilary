@@ -66,22 +66,15 @@ fn message_request_with_tools() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet-20241022".into(),
         max_tokens: 128,
-        system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: "Hello".into(),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
         tools: Some(vec![tool]),
         tool_choice: Some(ToolChoice::Auto {
             disable_parallel_tool_use: None,
         }),
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let s = serde_json::to_string(&req).unwrap();
