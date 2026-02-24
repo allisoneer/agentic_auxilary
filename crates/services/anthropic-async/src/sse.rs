@@ -560,7 +560,10 @@ pub mod streaming {
                 .content_blocks
                 .iter()
                 .map(|block| match block {
-                    AccumulatorBlock::Text(text) => Ok(ContentBlock::Text { text: text.clone() }),
+                    AccumulatorBlock::Text(text) => Ok(ContentBlock::Text {
+                        text: text.clone(),
+                        citations: None,
+                    }),
                     AccumulatorBlock::ToolUse {
                         id,
                         name,
@@ -822,8 +825,8 @@ mod tests {
         assert_eq!(response.id, "msg_test");
         assert_eq!(response.content.len(), 1);
         match &response.content[0] {
-            ContentBlock::Text { text } => assert_eq!(text, "Hello, world!"),
-            ContentBlock::ToolUse { .. } => panic!("Expected Text block"),
+            ContentBlock::Text { text, .. } => assert_eq!(text, "Hello, world!"),
+            _ => panic!("Expected Text block"),
         }
         assert_eq!(response.stop_reason, Some("end_turn".to_string()));
     }
@@ -898,7 +901,7 @@ mod tests {
                 assert_eq!(name, "get_weather");
                 assert_eq!(input["city"], "Paris");
             }
-            ContentBlock::Text { .. } => panic!("Expected ToolUse block"),
+            _ => panic!("Expected ToolUse block"),
         }
     }
 }

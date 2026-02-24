@@ -61,7 +61,7 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
         .content
         .iter()
         .filter_map(|block| {
-            if let ContentBlock::Text { text } = block {
+            if let ContentBlock::Text { text, .. } = block {
                 Some(text.as_str())
             } else {
                 None

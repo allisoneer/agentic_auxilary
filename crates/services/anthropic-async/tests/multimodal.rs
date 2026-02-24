@@ -47,6 +47,7 @@ async fn test_multimodal_content_serialization() {
 
     let text = ContentBlockParam::Text {
         text: "What's in these files?".into(),
+        citations: None,
         cache_control: None,
     };
 

@@ -67,7 +67,7 @@ pub struct MessagesCreateRequest {
 }
 
 /// Response from creating a message
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessagesCreateResponse {
     /// Message ID
     pub id: String,
@@ -89,7 +89,7 @@ pub struct MessagesCreateResponse {
 }
 
 /// Request to count tokens for a message
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageTokensCountRequest {
     /// Model to use for token counting
     pub model: String,
@@ -181,6 +181,7 @@ mod tests {
                 role: MessageRole::User,
                 content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
                     text: "Block content".into(),
+                    citations: None,
                     cache_control: None,
                 }]),
             }],

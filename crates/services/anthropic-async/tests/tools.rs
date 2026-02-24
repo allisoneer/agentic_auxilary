@@ -139,7 +139,7 @@ fn tool_use_response_deserialization() {
             assert_eq!(name, "weather");
             assert_eq!(input["city"], "Paris");
         }
-        ContentBlock::Text { .. } => panic!("Expected ToolUse variant"),
+        _ => panic!("Expected ToolUse variant"),
     }
 }
 
