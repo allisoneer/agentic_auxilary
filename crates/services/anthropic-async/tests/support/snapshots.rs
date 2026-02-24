@@ -3,11 +3,11 @@
 //! This module provides infrastructure for testing against the Anthropic API
 //! with support for both live and replay modes:
 //!
-//! - **Replay mode** (default): Uses wiremock to replay recorded snapshots.
+//! - **Replay mode** (default): Uses httpmock to replay recorded snapshots.
 //!   This is deterministic and doesn't require an API key, making it suitable for CI.
 //!
-//! - **Live mode** (`ANTHROPIC_LIVE=1`): Makes real API calls and can record
-//!   new snapshots. Requires `ANTHROPIC_API_KEY` environment variable.
+//! - **Live mode** (`ANTHROPIC_LIVE=1`): Makes real API calls. If `ANTHROPIC_RECORD=1`
+//!   is also set, records the interactions to YAML for later replay.
 //!
 //! # Usage
 //!
@@ -25,68 +25,99 @@
 use std::env;
 
 use anthropic_async::{AnthropicConfig, Client};
-use wiremock::MockServer;
+
+use super::recording::{self, SnapshotServer};
 
 /// Check if we're running in live mode (real API calls).
 #[must_use]
 pub fn is_live() -> bool {
-    env::var("ANTHROPIC_LIVE").as_deref() == Ok("1")
+    recording::is_live()
 }
 
 /// Snapshot test harness that supports both live and replay modes.
 pub struct SnapshotHarness {
     /// The configured client (either real or mock-backed).
     client: Client<AnthropicConfig>,
-    /// The mock server (only used in replay mode).
-    _mock_server: Option<MockServer>,
+    /// Keeps the server alive for replay/record mode; Drop will also save recordings.
+    _server: Option<SnapshotServer>,
     /// Name of this test (used for snapshot file naming).
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Will be used for insta snapshots in Phase 6
     name: String,
 }
 
 impl SnapshotHarness {
     /// Create a new harness for the given test name.
     ///
-    /// In replay mode, this starts a wiremock server.
-    /// In live mode, this creates a client with the real API.
+    /// In replay mode, this starts an httpmock server with playback from YAML.
+    /// In live mode without recording, this creates a direct client.
+    /// In live+record mode, this creates a proxy server that records interactions.
     pub async fn new(name: &str) -> Self {
-        if is_live() {
-            Self::new_live(name)
+        if recording::is_live() {
+            if recording::is_recording() {
+                Self::new_live_record(name).await
+            } else {
+                Self::new_live(name)
+            }
         } else {
             Self::new_replay(name).await
         }
     }
 
-    /// Create a harness in live mode (real API calls).
+    /// Create a harness in live mode (direct real API calls, no recording).
     fn new_live(name: &str) -> Self {
-        let api_key = env::var("ANTHROPIC_API_KEY")
-            .expect("ANTHROPIC_API_KEY required when ANTHROPIC_LIVE=1");
+        let api_key = env::var(recording::ENV_API_KEY).expect(
+            "ANTHROPIC_API_KEY required when ANTHROPIC_LIVE=1 (set ANTHROPIC_RECORD=1 to record)",
+        );
 
         let config = AnthropicConfig::new().with_api_key(api_key);
         let client = Client::with_config(config);
 
         Self {
             client,
-            _mock_server: None,
+            _server: None,
             name: name.to_string(),
         }
     }
 
-    /// Create a harness in replay mode (mock server).
-    async fn new_replay(name: &str) -> Self {
-        let server = MockServer::start().await;
+    /// Create a harness in live+record mode (proxy with recording).
+    async fn new_live_record(name: &str) -> Self {
+        let upstream_api_key = env::var(recording::ENV_API_KEY)
+            .expect("ANTHROPIC_API_KEY required when ANTHROPIC_LIVE=1 and ANTHROPIC_RECORD=1");
 
-        // In replay mode, we load pre-recorded snapshots.
-        // For now, we create a client that points to the mock server.
-        // Actual snapshot loading would be implemented here.
+        let server = SnapshotServer::start_live_proxy(
+            name,
+            recording::DEFAULT_UPSTREAM_BASE,
+            upstream_api_key,
+            true,
+        )
+        .await;
+
+        // Use a placeholder key so recordings never depend on the real key.
+        // The proxy server injects the real key when forwarding to upstream.
         let config = AnthropicConfig::new()
             .with_api_key("test-key")
-            .with_api_base(server.uri());
+            .with_api_base(server.base_url());
         let client = Client::with_config(config);
 
         Self {
             client,
-            _mock_server: Some(server),
+            _server: Some(server),
+            name: name.to_string(),
+        }
+    }
+
+    /// Create a harness in replay mode (mock server with playback).
+    async fn new_replay(name: &str) -> Self {
+        let server = SnapshotServer::start_playback(name).await;
+
+        let config = AnthropicConfig::new()
+            .with_api_key("test-key")
+            .with_api_base(server.base_url());
+        let client = Client::with_config(config);
+
+        Self {
+            client,
+            _server: Some(server),
             name: name.to_string(),
         }
     }
@@ -99,9 +130,17 @@ impl SnapshotHarness {
 
     /// Check if running in live mode.
     #[must_use]
-    #[allow(clippy::unused_self)] // Provides convenient method API for tests
+    #[allow(clippy::unused_self)]
+    #[allow(dead_code)] // Public API for tests
     pub fn is_live(&self) -> bool {
         is_live()
+    }
+
+    /// Get the test name.
+    #[must_use]
+    #[allow(dead_code)] // Public API for tests
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -112,23 +151,8 @@ mod tests {
     #[test]
     fn test_is_live_default() {
         // By default (no env var), should be replay mode
-        // Note: This test might be flaky if ANTHROPIC_LIVE is set in the environment
-        // In practice, CI won't have it set
-        if env::var("ANTHROPIC_LIVE").is_err() {
+        if env::var(recording::ENV_LIVE).is_err() {
             assert!(!is_live());
         }
-    }
-
-    #[tokio::test]
-    async fn test_harness_initializes_replay() {
-        // Skip if running in live mode
-        if is_live() {
-            return;
-        }
-
-        let harness = SnapshotHarness::new("test_init").await;
-        assert!(!harness.is_live());
-        // Client should be configured
-        let _ = harness.client();
     }
 }

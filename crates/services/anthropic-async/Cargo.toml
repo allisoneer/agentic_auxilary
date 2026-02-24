@@ -34,7 +34,8 @@ secrecy = "0.10"
 schemars = { version = "1", optional = true, features = ["derive", "preserve_order"] }
 
 [dev-dependencies]
-wiremock = "0.6"
+httpmock = { version = "0.8", features = ["record", "proxy"] }
+wiremock = "0.6"  # Used by existing tests; httpmock used for recording infrastructure
 proptest = "1.6"
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
