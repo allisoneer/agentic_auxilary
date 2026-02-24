@@ -3,9 +3,11 @@
 //! This binary exposes all 19+ tools from the various domain crates through a single
 //! MCP stdio server, with optional allowlist filtering.
 
+use agentic_config::loader::load_merged;
 use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
 use agentic_tools_registry::{AgenticTools, AgenticToolsConfig};
 use clap::Parser;
+use colored::Colorize;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs;
@@ -19,8 +21,12 @@ struct Args {
     #[arg(long, value_name = "NAMES")]
     allow: Option<String>,
 
-    /// JSON config file path (supports { "allowlist": ["cli_ls", "cli_grep"] })
-    #[arg(long, value_name = "PATH")]
+    /// JSON config file path for server settings (allowlist/output)
+    #[arg(long = "server-config", value_name = "PATH")]
+    server_config: Option<String>,
+
+    /// DEPRECATED: use --server-config
+    #[arg(long, value_name = "PATH", hide = true)]
     config: Option<String>,
 
     /// List available tools and exit
@@ -65,11 +71,22 @@ struct FileConfig {
     output: Option<String>,
 }
 
+/// Get effective server config path, preferring --server-config over deprecated --config.
+fn effective_server_config(args: &Args) -> Option<&str> {
+    if args.config.is_some() && args.server_config.is_none() {
+        eprintln!(
+            "{} --config is deprecated; use --server-config",
+            "WARN".yellow()
+        );
+    }
+    args.server_config.as_deref().or(args.config.as_deref())
+}
+
 fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
-    // Parse --config if provided
+    // Parse server config if provided
     let mut allowlist: Option<HashSet<String>> = None;
     let mut file_output: Option<String> = None;
-    if let Some(path) = &args.config {
+    if let Some(path) = effective_server_config(args) {
         match fs::read_to_string(path) {
             Ok(s) => {
                 if let Ok(fc) = serde_json::from_str::<FileConfig>(&s) {
@@ -125,7 +142,7 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
     (
         AgenticToolsConfig {
             allowlist,
-            extras: serde_json::json!({}),
+            ..Default::default()
         },
         file_output,
     )
@@ -143,8 +160,35 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    let (cfg, file_output) = parse_config(&args);
-    let reg = AgenticTools::new(cfg);
+    // Load agentic.json for tool-specific config (subagents, reasoning)
+    let cwd = std::env::current_dir()?;
+    let loaded = load_merged(&cwd)?;
+
+    // Print config feedback (migration events + warnings)
+    for event in &loaded.events {
+        match event {
+            agentic_config::loader::LoadEvent::MigratedThoughtsV2 { from, to } => {
+                eprintln!(
+                    "{} Migrated config from {} to {}",
+                    "INFO".blue(),
+                    from.display(),
+                    to.display()
+                );
+            }
+        }
+    }
+    for w in &loaded.warnings {
+        eprintln!("{} {}", "WARN".yellow(), w);
+    }
+
+    // Parse server config (allowlist, output mode)
+    let (mut reg_cfg, file_output) = parse_config(&args);
+
+    // Attach tool config sections from agentic.json
+    reg_cfg.subagents = loaded.config.subagents.clone();
+    reg_cfg.reasoning = loaded.config.reasoning.clone();
+
+    let reg = AgenticTools::new(reg_cfg);
 
     if args.list_tools {
         let mut names = reg.list_names();

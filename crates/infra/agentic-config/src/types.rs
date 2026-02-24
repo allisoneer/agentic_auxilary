@@ -23,11 +23,14 @@ pub struct AgenticConfig {
     /// Thoughts workspace configuration (directories, mounts, references).
     pub thoughts: ThoughtsConfig,
 
+    /// Tool-specific config for coding-agent-tools subagents.
+    pub subagents: SubagentsConfig,
+
+    /// Tool-specific config for gpt5-reasoner.
+    pub reasoning: ReasoningConfig,
+
     /// External service configurations (Anthropic, Exa, etc.).
     pub services: ServicesConfig,
-
-    /// Model selection and defaults.
-    pub models: ModelsConfig,
 
     /// Logging and diagnostics configuration.
     pub logging: LoggingConfig,
@@ -197,26 +200,44 @@ impl Default for ExaServiceConfig {
     }
 }
 
-/// Model selection and defaults.
+/// Configuration for coding-agent-tools subagents (ask_agent tool).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
-pub struct ModelsConfig {
-    /// Default model to use for general tasks.
-    pub default_model: String,
-
-    /// Model to use for reasoning/planning tasks.
-    pub reasoning_model: String,
-
-    /// Model to use for fast/cheap tasks.
-    pub fast_model: String,
+pub struct SubagentsConfig {
+    /// Model for Locator subagent (fast discovery). Uses Claude CLI format.
+    pub locator_model: String,
+    /// Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
+    pub analyzer_model: String,
 }
 
-impl Default for ModelsConfig {
+impl Default for SubagentsConfig {
     fn default() -> Self {
         Self {
-            default_model: "claude-sonnet-4-20250514".into(),
-            reasoning_model: "claude-sonnet-4-20250514".into(),
-            fast_model: "claude-haiku-4-20250514".into(),
+            locator_model: "claude-haiku-4-5".into(),
+            analyzer_model: "claude-sonnet-4-6".into(),
+        }
+    }
+}
+
+/// Configuration for gpt5-reasoner tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ReasoningConfig {
+    /// OpenRouter model ID for optimizer step.
+    pub optimizer_model: String,
+    /// OpenRouter model ID for executor/reasoner step.
+    pub executor_model: String,
+    /// Optional reasoning effort level: low, medium, high, xhigh.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
+}
+
+impl Default for ReasoningConfig {
+    fn default() -> Self {
+        Self {
+            optimizer_model: "anthropic/claude-sonnet-4.6".into(),
+            executor_model: "openai/gpt-5.2".into(),
+            reasoning_effort: None,
         }
     }
 }
@@ -250,9 +271,23 @@ mod tests {
         let config = AgenticConfig::default();
         let json = serde_json::to_string_pretty(&config).unwrap();
         assert!(json.contains("\"thoughts\""));
+        assert!(json.contains("\"subagents\""));
+        assert!(json.contains("\"reasoning\""));
         assert!(json.contains("\"services\""));
-        assert!(json.contains("\"models\""));
         assert!(json.contains("\"logging\""));
+        // Ensure old "models" section is NOT present
+        assert!(!json.contains("\"models\""));
+    }
+
+    #[test]
+    fn test_default_models_use_undated_names() {
+        let subagents = SubagentsConfig::default();
+        assert!(!subagents.locator_model.contains("20"));
+        assert!(!subagents.analyzer_model.contains("20"));
+
+        let reasoning = ReasoningConfig::default();
+        assert!(!reasoning.optimizer_model.contains("20"));
+        assert!(!reasoning.executor_model.contains("20"));
     }
 
     #[test]

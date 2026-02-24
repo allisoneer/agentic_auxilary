@@ -65,6 +65,7 @@ schemars = { version = "1", features = ["derive"] }
 dirs = "6"
 secrecy = "0.8"
 atomicwrites = "0.4"
+colored = "2"
 
 # Internal crates
 agentic-config = { version = "0.1.0", path = "crates/infra/agentic-config" }

@@ -4,14 +4,83 @@
 //! managing agentic.json configuration files.
 
 use agentic_config::{
-    loader::{global_config_path, load_merged, local_config_path},
+    loader::{LoadedAgenticConfig, global_config_path, load_merged, local_config_path},
     types::AgenticConfig,
 };
 use anyhow::{Context, Result};
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use clap::Subcommand;
 use colored::Colorize;
-use std::{io::Write, path::PathBuf, process::Command};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+// =============================================================================
+// Helper functions (DRY refactor)
+// =============================================================================
+
+/// Resolve optional --path argument to current directory if not provided.
+fn resolve_dir(path: Option<PathBuf>) -> Result<PathBuf> {
+    path.map(Ok)
+        .unwrap_or_else(|| std::env::current_dir().context("Failed to determine current directory"))
+}
+
+/// Ensure parent directory exists for a config file path.
+fn ensure_parent_dir(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+    }
+    Ok(())
+}
+
+/// Create default config and serialize to pretty JSON.
+fn default_config_json_pretty() -> Result<String> {
+    let cfg = AgenticConfig::default();
+    serde_json::to_string_pretty(&cfg).context("Failed to serialize default config")
+}
+
+/// Write string contents to file atomically.
+fn write_atomic_str(path: &Path, contents: &str) -> Result<()> {
+    AtomicFile::new(path, OverwriteBehavior::AllowOverwrite)
+        .write(|f| f.write_all(contents.as_bytes()))
+        .with_context(|| format!("Failed to write config to {}", path.display()))?;
+    Ok(())
+}
+
+/// Create config file with defaults if it doesn't exist.
+fn ensure_config_exists_with_defaults(path: &Path) -> Result<()> {
+    if !path.exists() {
+        ensure_parent_dir(path)?;
+        write_atomic_str(path, &default_config_json_pretty()?)?;
+    }
+    Ok(())
+}
+
+/// Print migration events and warnings from loaded config.
+fn print_load_feedback(loaded: &LoadedAgenticConfig) {
+    for event in &loaded.events {
+        match event {
+            agentic_config::loader::LoadEvent::MigratedThoughtsV2 { from, to } => {
+                eprintln!(
+                    "{} Migrated config from {} to {}",
+                    "INFO".blue(),
+                    from.display(),
+                    to.display()
+                );
+            }
+        }
+    }
+    for warning in &loaded.warnings {
+        eprintln!("{} {}", "WARN".yellow(), warning);
+    }
+}
+
+// =============================================================================
+// CLI Subcommands
+// =============================================================================
 
 #[derive(Subcommand)]
 pub enum ConfigCommands {
@@ -68,11 +137,7 @@ pub fn execute(cmd: ConfigCommands) -> Result<()> {
 fn cmd_init(global: bool, force: bool) -> Result<()> {
     let path = if global {
         let global = global_config_path()?;
-        // Ensure parent directory exists
-        if let Some(parent) = global.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
-        }
+        ensure_parent_dir(&global)?;
         global
     } else {
         local_config_path(&std::env::current_dir()?)
@@ -85,12 +150,7 @@ fn cmd_init(global: bool, force: bool) -> Result<()> {
         );
     }
 
-    let config = AgenticConfig::default();
-    let json = serde_json::to_string_pretty(&config)?;
-
-    AtomicFile::new(&path, OverwriteBehavior::AllowOverwrite)
-        .write(|f| f.write_all(json.as_bytes()))
-        .with_context(|| format!("Failed to write config to {}", path.display()))?;
+    write_atomic_str(&path, &default_config_json_pretty()?)?;
 
     println!(
         "{} Created {}",
@@ -101,27 +161,10 @@ fn cmd_init(global: bool, force: bool) -> Result<()> {
 }
 
 fn cmd_show(json_output: bool, path: Option<PathBuf>) -> Result<()> {
-    let dir = path.unwrap_or(std::env::current_dir()?);
+    let dir = resolve_dir(path)?;
     let loaded = load_merged(&dir)?;
 
-    // Show migration events
-    for event in &loaded.events {
-        match event {
-            agentic_config::loader::LoadEvent::MigratedThoughtsV2 { from, to } => {
-                eprintln!(
-                    "{} Migrated config from {} to {}",
-                    "INFO".blue(),
-                    from.display(),
-                    to.display()
-                );
-            }
-        }
-    }
-
-    // Show warnings
-    for warning in &loaded.warnings {
-        eprintln!("{} {}", "WARN".yellow(), warning);
-    }
+    print_load_feedback(&loaded);
 
     // Output the config
     if json_output {
@@ -141,26 +184,11 @@ fn cmd_schema() -> Result<()> {
 fn cmd_edit(global: bool) -> Result<()> {
     let path = if global {
         let global = global_config_path()?;
-        // Ensure the file exists with defaults if not
-        if !global.exists() {
-            if let Some(parent) = global.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let config = AgenticConfig::default();
-            let json = serde_json::to_string_pretty(&config)?;
-            AtomicFile::new(&global, OverwriteBehavior::AllowOverwrite)
-                .write(|f| f.write_all(json.as_bytes()))?;
-        }
+        ensure_config_exists_with_defaults(&global)?;
         global
     } else {
         let local = local_config_path(&std::env::current_dir()?);
-        // Create with defaults if not exists
-        if !local.exists() {
-            let config = AgenticConfig::default();
-            let json = serde_json::to_string_pretty(&config)?;
-            AtomicFile::new(&local, OverwriteBehavior::AllowOverwrite)
-                .write(|f| f.write_all(json.as_bytes()))?;
-        }
+        ensure_config_exists_with_defaults(&local)?;
         local
     };
 
@@ -177,9 +205,16 @@ fn cmd_edit(global: bool) -> Result<()> {
 
     // Validate after edit
     let raw = std::fs::read_to_string(&path)?;
+    let mut warnings = vec![];
+
+    // Check for deprecated keys in raw JSON
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+        warnings.extend(agentic_config::validation::detect_deprecated_keys(&v));
+    }
+
     match serde_json::from_str::<AgenticConfig>(&raw) {
         Ok(config) => {
-            let warnings = agentic_config::validation::validate(&config);
+            warnings.extend(agentic_config::validation::validate(&config));
             if warnings.is_empty() {
                 println!("{} Configuration is valid", "OK".green());
             } else {
@@ -199,7 +234,7 @@ fn cmd_edit(global: bool) -> Result<()> {
 }
 
 fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
-    let dir = path.unwrap_or(std::env::current_dir()?);
+    let dir = resolve_dir(path)?;
     let loaded = load_merged(&dir)?;
 
     if loaded.warnings.is_empty() {

@@ -11,6 +11,7 @@ keywords = ["gpt-5", "reasoning", "mcp", "cli", "prompt"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 thoughts-tool = { workspace = true }

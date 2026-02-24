@@ -137,10 +137,10 @@ fn test_show_with_local_config() {
     let temp = TempDir::new().unwrap();
     let config_path = temp.path().join("agentic.json");
 
-    // Create local config with custom value
+    // Create local config with custom value (using new subagents config structure)
     std::fs::write(
         &config_path,
-        r#"{"models": {"default_model": "custom-model"}}"#,
+        r#"{"subagents": {"locator_model": "custom-locator-model"}}"#,
     )
     .unwrap();
 
@@ -148,7 +148,7 @@ fn test_show_with_local_config() {
     cmd.args(["config", "show", "--path", temp.path().to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("custom-model"));
+        .stdout(predicate::str::contains("custom-locator-model"));
 }
 
 #[test]
@@ -156,10 +156,10 @@ fn test_show_with_local_config() {
 fn test_show_reflects_env_overrides() {
     let temp = TempDir::new().unwrap();
 
-    // Set env var
+    // Set env var (using new subagents env var naming)
     // SAFETY: This test runs serially via #[serial] to avoid data races
     unsafe {
-        std::env::set_var("AGENTIC_MODEL_DEFAULT", "env-override-model");
+        std::env::set_var("AGENTIC_SUBAGENTS_LOCATOR_MODEL", "env-override-model");
     }
 
     let mut cmd = agentic_cmd();
@@ -171,7 +171,7 @@ fn test_show_reflects_env_overrides() {
     // Clean up env var
     // SAFETY: This test runs serially via #[serial] to avoid data races
     unsafe {
-        std::env::remove_var("AGENTIC_MODEL_DEFAULT");
+        std::env::remove_var("AGENTIC_SUBAGENTS_LOCATOR_MODEL");
     }
 
     result.stdout(predicate::str::contains("env-override-model"));

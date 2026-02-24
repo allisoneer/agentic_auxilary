@@ -106,6 +106,9 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     // Merge: global as base, local as patch
     let merged = merge_patch(global_v, local_v);
 
+    // Detect deprecated keys from raw JSON (before deserialization)
+    let mut warnings = crate::validation::detect_deprecated_keys(&merged);
+
     // Deserialize to typed config
     let mut cfg: AgenticConfig =
         serde_json::from_value(merged).context("Failed to deserialize merged agentic config")?;
@@ -113,8 +116,8 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     // Apply env var overrides (highest precedence)
     apply_env_overrides(&mut cfg);
 
-    // Run advisory validation
-    let warnings = crate::validation::validate(&cfg);
+    // Run advisory validation and add to warnings
+    warnings.extend(crate::validation::validate(&cfg));
 
     Ok(LoadedAgenticConfig {
         config: cfg,
@@ -145,15 +148,23 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
         cfg.services.exa.api_key = Some(secrecy::SecretString::from(k));
     }
 
-    // Model overrides
-    if let Some(v) = env_trimmed("AGENTIC_MODEL_DEFAULT") {
-        cfg.models.default_model = v;
+    // Subagents model overrides
+    if let Some(v) = env_trimmed("AGENTIC_SUBAGENTS_LOCATOR_MODEL") {
+        cfg.subagents.locator_model = v;
     }
-    if let Some(v) = env_trimmed("AGENTIC_MODEL_REASONING") {
-        cfg.models.reasoning_model = v;
+    if let Some(v) = env_trimmed("AGENTIC_SUBAGENTS_ANALYZER_MODEL") {
+        cfg.subagents.analyzer_model = v;
     }
-    if let Some(v) = env_trimmed("AGENTIC_MODEL_FAST") {
-        cfg.models.fast_model = v;
+
+    // Reasoning model overrides
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_OPTIMIZER_MODEL") {
+        cfg.reasoning.optimizer_model = v;
+    }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_EXECUTOR_MODEL") {
+        cfg.reasoning.executor_model = v;
+    }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_EFFORT") {
+        cfg.reasoning.reasoning_effort = Some(v);
     }
 
     // Logging overrides
@@ -260,7 +271,7 @@ mod tests {
         std::fs::create_dir_all(&global_dir).unwrap();
         std::fs::write(
             global_dir.join(GLOBAL_FILE),
-            r#"{"models": {"default_model": "global-model"}}"#,
+            r#"{"subagents": {"locator_model": "global-model"}}"#,
         )
         .unwrap();
 
@@ -269,14 +280,14 @@ mod tests {
         std::fs::create_dir_all(&local_dir).unwrap();
         std::fs::write(
             local_dir.join(LOCAL_FILE),
-            r#"{"models": {"default_model": "local-model"}}"#,
+            r#"{"subagents": {"locator_model": "local-model"}}"#,
         )
         .unwrap();
 
         // Note: This test can't easily override the global path without mocking
         // We test the merge logic more directly in merge.rs tests
         let loaded = load_merged(&local_dir).unwrap();
-        assert_eq!(loaded.config.models.default_model, "local-model");
+        assert_eq!(loaded.config.subagents.locator_model, "local-model");
     }
 
     #[test]
@@ -285,23 +296,23 @@ mod tests {
         let temp = TempDir::new().unwrap();
         std::fs::write(
             temp.path().join(LOCAL_FILE),
-            r#"{"models": {"default_model": "file-model"}}"#,
+            r#"{"reasoning": {"optimizer_model": "file-model"}}"#,
         )
         .unwrap();
 
         // Set env var
         // SAFETY: This test runs serially via #[serial] to avoid data races
         unsafe {
-            std::env::set_var("AGENTIC_MODEL_DEFAULT", "env-model");
+            std::env::set_var("AGENTIC_REASONING_OPTIMIZER_MODEL", "env-model");
         }
 
         let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(loaded.config.models.default_model, "env-model");
+        assert_eq!(loaded.config.reasoning.optimizer_model, "env-model");
 
         // Clean up
         // SAFETY: This test runs serially via #[serial] to avoid data races
         unsafe {
-            std::env::remove_var("AGENTIC_MODEL_DEFAULT");
+            std::env::remove_var("AGENTIC_REASONING_OPTIMIZER_MODEL");
         }
     }
 
