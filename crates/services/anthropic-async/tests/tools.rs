@@ -64,7 +64,7 @@ fn message_request_with_tools() {
     };
 
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 128,
         system: None,
         messages: vec![MessageParam {

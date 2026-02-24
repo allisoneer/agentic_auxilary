@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn message_request_ser() {
         let req = MessagesCreateRequest {
-            model: "claude-3-5-sonnet-20241022".into(),
+            model: "claude-sonnet-4-6".into(),
             max_tokens: 128,
             system: None,
             messages: vec![MessageParam {
@@ -139,7 +139,7 @@ mod tests {
             output_format: None,
         };
         let s = serde_json::to_string(&req).unwrap();
-        assert!(s.contains(r#""model":"claude-3-5-sonnet-20241022""#));
+        assert!(s.contains(r#""model":"claude-sonnet-4-6""#));
         assert!(s.contains(r#""max_tokens":128"#));
         assert!(s.contains(r#""Hello""#));
         // stream and output_format should not appear when None
@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn message_request_with_system_string() {
         let req = MessagesCreateRequest {
-            model: "claude-3-5-sonnet-20241022".into(),
+            model: "claude-sonnet-4-6".into(),
             max_tokens: 128,
             system: Some("You are helpful".into()),
             messages: vec![MessageParam {
@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn message_request_with_blocks() {
         let req = MessagesCreateRequest {
-            model: "claude-3-5-sonnet-20241022".into(),
+            model: "claude-sonnet-4-6".into(),
             max_tokens: 128,
             system: None,
             messages: vec![MessageParam {
