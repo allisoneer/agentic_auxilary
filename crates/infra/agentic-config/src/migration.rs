@@ -105,9 +105,10 @@ pub fn legacy_thoughts_v2_path(local_dir: &Path) -> std::path::PathBuf {
     local_dir.join(".thoughts").join("config.json")
 }
 
-/// Check if migration is needed and possible.
+/// Check if legacy V2 config should be used as a fallback.
 ///
-/// Returns `Some(legacy_path)` if migration should be attempted, `None` otherwise.
+/// Returns `Some(legacy_path)` when `agentic.json` does not exist and
+/// legacy `.thoughts/config.json` is present.
 pub fn should_migrate(local_dir: &Path, agentic_path: &Path) -> Option<std::path::PathBuf> {
     // If agentic.json already exists, no migration needed
     if agentic_path.exists() {

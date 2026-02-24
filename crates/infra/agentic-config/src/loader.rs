@@ -76,38 +76,37 @@ pub fn local_config_path(local_dir: &Path) -> PathBuf {
 /// 3. Local config (`./agentic.json`)
 /// 4. Environment variables
 ///
-/// # Migration
+/// # Legacy fallback (read-only)
 /// If `./agentic.json` doesn't exist but `./.thoughts/config.json` does (V2 format),
-/// migration will be attempted automatically. The legacy file remains untouched.
+/// the legacy config is loaded in-memory and mapped to agentic.json structure.
+/// No files are written during config loading.
 pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     let global_path = global_config_path()?;
     let local_path = local_config_path(local_dir);
 
-    let mut events = vec![];
-
-    // Check for migration opportunity
-    if let Some(legacy_path) = crate::migration::should_migrate(local_dir, &local_path) {
-        match attempt_migration(&legacy_path, &local_path) {
-            Ok(Some(event)) => events.push(event),
-            Ok(None) => {
-                // Another process already migrated - this is fine
-            }
-            Err(e) => {
-                // Log migration failure but continue - we can still load defaults
-                tracing::warn!("Migration from legacy config failed: {}", e);
-            }
-        }
-    }
+    // No auto-migration; loader is strictly read-only.
+    let events = vec![];
 
     // Read configs as JSON Values
     let global_v = read_json_object_or_empty(&global_path)?;
-    let local_v = read_json_object_or_empty(&local_path)?;
+
+    let legacy_path = crate::migration::should_migrate(local_dir, &local_path);
+    let (local_v, legacy_used) = if let Some(legacy_path) = legacy_path {
+        let mapped = read_legacy_v2_as_agentic_object(&legacy_path)?;
+        (mapped, Some(legacy_path))
+    } else {
+        (read_json_object_or_empty(&local_path)?, None)
+    };
 
     // Merge: global as base, local as patch
     let merged = merge_patch(global_v, local_v);
 
     // Detect deprecated keys from raw JSON (before deserialization)
     let mut warnings = crate::validation::detect_deprecated_keys(&merged);
+
+    if let Some(legacy_path) = legacy_used.as_deref() {
+        warnings.push(legacy_config_warning(legacy_path));
+    }
 
     // Deserialize to typed config
     let mut cfg: AgenticConfig =
@@ -184,28 +183,30 @@ fn env_trimmed(name: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-/// Attempt to migrate legacy V2 config to agentic.json.
-///
-/// Returns `Ok(Some(event))` if migration was performed, `Ok(None)` if skipped
-/// (e.g., another process already created the file).
-fn attempt_migration(legacy_path: &Path, local_path: &Path) -> Result<Option<LoadEvent>> {
-    // Re-check to narrow the TOCTOU window. Another process may have migrated
-    // between should_migrate() and now. This isn't bulletproof but reduces the
-    // window from ~10ms to ~microseconds. The failure mode is benign anyway:
-    // both processes write identical content from the same legacy source.
-    if local_path.exists() {
-        tracing::debug!("agentic.json appeared during migration check, skipping migration");
-        return Ok(None);
-    }
-
+/// Read legacy V2 config and map it to agentic.json format (in-memory).
+fn read_legacy_v2_as_agentic_object(legacy_path: &Path) -> Result<Value> {
     let v2 = crate::migration::read_legacy_v2(legacy_path)?;
-    let agentic_value = crate::migration::map_v2_to_agentic_value(v2);
-    crate::writer::write_pretty_json_atomic(local_path, &agentic_value)?;
+    let mapped = crate::migration::map_v2_to_agentic_value(v2);
 
-    Ok(Some(LoadEvent::MigratedThoughtsV2 {
-        from: legacy_path.to_path_buf(),
-        to: local_path.to_path_buf(),
-    }))
+    match mapped {
+        Value::Object(_) => Ok(mapped),
+        _ => anyhow::bail!(
+            "Internal error: mapped legacy config must be a JSON object (source: {})",
+            legacy_path.display()
+        ),
+    }
+}
+
+/// Create an advisory warning for legacy config usage.
+fn legacy_config_warning(legacy_path: &Path) -> AdvisoryWarning {
+    AdvisoryWarning::new(
+        "legacy_config.used",
+        "$",
+        format!(
+            "Using legacy config at {}. To migrate: `agentic config show > agentic.json`",
+            legacy_path.display()
+        ),
+    )
 }
 
 /// Read a JSON file as a Value, returning empty object if file doesn't exist.
@@ -389,5 +390,110 @@ mod tests {
 
         assert_eq!(loaded.paths.local, temp.path().join(LOCAL_FILE));
         assert!(loaded.paths.global.ends_with("agentic/agentic.json"));
+    }
+
+    #[test]
+    fn test_load_legacy_only_is_read_only_and_uses_legacy_values() {
+        let temp = TempDir::new().unwrap();
+
+        // Create legacy config
+        let thoughts_dir = temp.path().join(".thoughts");
+        std::fs::create_dir_all(&thoughts_dir).unwrap();
+        std::fs::write(
+            thoughts_dir.join("config.json"),
+            r#"{
+                "version": "2.0",
+                "mount_dirs": {
+                    "thoughts": "legacy-thoughts",
+                    "context": "legacy-context",
+                    "references": "legacy-refs"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+
+        // Legacy values are applied
+        assert_eq!(
+            loaded.config.thoughts.mount_dirs.thoughts,
+            "legacy-thoughts"
+        );
+
+        // Read-only: loader must not create agentic.json
+        assert!(!temp.path().join(LOCAL_FILE).exists());
+
+        // Warning must point to manual migration path
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.code == "legacy_config.used"
+                    && w.message.contains("agentic config show > agentic.json"))
+        );
+    }
+
+    #[test]
+    fn test_agentic_json_wins_over_legacy_and_no_legacy_warning() {
+        let temp = TempDir::new().unwrap();
+
+        // Create legacy config
+        let thoughts_dir = temp.path().join(".thoughts");
+        std::fs::create_dir_all(&thoughts_dir).unwrap();
+        std::fs::write(
+            thoughts_dir.join("config.json"),
+            r#"{"version":"2.0","mount_dirs":{"thoughts":"legacy-thoughts"}}"#,
+        )
+        .unwrap();
+
+        // Create local agentic.json that should win
+        std::fs::write(
+            temp.path().join(LOCAL_FILE),
+            r#"{"thoughts":{"mount_dirs":{"thoughts":"agentic-thoughts"}}}"#,
+        )
+        .unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert_eq!(
+            loaded.config.thoughts.mount_dirs.thoughts,
+            "agentic-thoughts"
+        );
+
+        // Legacy warning should not appear because legacy was not used
+        assert!(
+            !loaded
+                .warnings
+                .iter()
+                .any(|w| w.code == "legacy_config.used")
+        );
+    }
+
+    #[test]
+    fn test_invalid_legacy_json_errors() {
+        let temp = TempDir::new().unwrap();
+        let thoughts_dir = temp.path().join(".thoughts");
+        std::fs::create_dir_all(&thoughts_dir).unwrap();
+        std::fs::write(thoughts_dir.join("config.json"), "not valid json").unwrap();
+
+        let result = load_merged(temp.path());
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid JSON in legacy config")
+        );
+    }
+
+    #[test]
+    fn test_legacy_v1_errors() {
+        let temp = TempDir::new().unwrap();
+        let thoughts_dir = temp.path().join(".thoughts");
+        std::fs::create_dir_all(&thoughts_dir).unwrap();
+        std::fs::write(thoughts_dir.join("config.json"), r#"{"version":"1.0"}"#).unwrap();
+
+        let result = load_merged(temp.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("only v2"));
     }
 }

@@ -90,7 +90,7 @@ pub enum ConfigCommands {
         #[arg(long)]
         global: bool,
 
-        /// Overwrite existing config file
+        /// Overwrite existing config file (or ignore legacy `.thoughts/config.json`)
         #[arg(long)]
         force: bool,
     },
@@ -135,13 +135,40 @@ pub fn execute(cmd: ConfigCommands) -> Result<()> {
 }
 
 fn cmd_init(global: bool, force: bool) -> Result<()> {
-    let path = if global {
-        let global = global_config_path()?;
-        ensure_parent_dir(&global)?;
-        global
-    } else {
-        local_config_path(&std::env::current_dir()?)
-    };
+    if global {
+        let path = global_config_path()?;
+        ensure_parent_dir(&path)?;
+
+        if path.exists() && !force {
+            anyhow::bail!(
+                "Config file already exists: {}\nUse --force to overwrite",
+                path.display()
+            );
+        }
+
+        write_atomic_str(&path, &default_config_json_pretty()?)?;
+        println!(
+            "{} Created {}",
+            "OK".green(),
+            path.display().to_string().cyan()
+        );
+        return Ok(());
+    }
+
+    let dir = std::env::current_dir()?;
+    let path = local_config_path(&dir);
+
+    // Protect users from accidentally shadowing legacy config with fresh defaults.
+    let legacy_path = dir.join(".thoughts").join("config.json");
+    if legacy_path.exists() && !force && !path.exists() {
+        let legacy_display = legacy_path.strip_prefix(&dir).unwrap_or(&legacy_path);
+        anyhow::bail!(
+            "Legacy config found at {}\n\
+             To migrate: agentic config show > agentic.json\n\
+             To create fresh defaults instead: agentic config init --force",
+            legacy_display.display()
+        );
+    }
 
     if path.exists() && !force {
         anyhow::bail!(
@@ -257,4 +284,95 @@ fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        path::{Path, PathBuf},
+        sync::Mutex,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TestDir {
+        path: PathBuf,
+    }
+
+    impl TestDir {
+        fn new(prefix: &str) -> Self {
+            let mut path = std::env::temp_dir();
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            path.push(format!("{}{}-{}", prefix, std::process::id(), nanos));
+            std::fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    struct CwdGuard {
+        prev: PathBuf,
+    }
+
+    impl CwdGuard {
+        fn set(dir: &Path) -> Self {
+            let prev = std::env::current_dir().unwrap();
+            std::env::set_current_dir(dir).unwrap();
+            Self { prev }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.prev);
+        }
+    }
+
+    fn write_legacy_v2(dir: &Path) {
+        let thoughts = dir.join(".thoughts");
+        std::fs::create_dir_all(&thoughts).unwrap();
+        std::fs::write(thoughts.join("config.json"), r#"{"version":"2.0"}"#).unwrap();
+    }
+
+    #[test]
+    fn test_init_refuses_when_legacy_exists() {
+        let _lock = CWD_LOCK.lock().unwrap();
+
+        let temp = TestDir::new("agentic-init-");
+        write_legacy_v2(&temp.path);
+
+        let _cwd = CwdGuard::set(&temp.path);
+
+        let err = cmd_init(false, false).unwrap_err();
+        let msg = err.to_string();
+
+        assert!(msg.contains("Legacy config found"));
+        assert!(msg.contains("agentic config show > agentic.json"));
+        assert!(msg.contains("agentic config init --force"));
+        assert!(!temp.path.join("agentic.json").exists());
+    }
+
+    #[test]
+    fn test_init_force_creates_defaults_even_when_legacy_exists() {
+        let _lock = CWD_LOCK.lock().unwrap();
+
+        let temp = TestDir::new("agentic-init-");
+        write_legacy_v2(&temp.path);
+
+        let _cwd = CwdGuard::set(&temp.path);
+
+        cmd_init(false, true).unwrap();
+        assert!(temp.path.join("agentic.json").exists());
+        assert!(temp.path.join(".thoughts").join("config.json").exists());
+    }
 }
