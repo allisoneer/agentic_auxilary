@@ -45,6 +45,8 @@ pub mod loader;
 pub mod merge;
 pub mod migration;
 pub mod schema;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod types;
 pub mod validation;
 pub mod writer;

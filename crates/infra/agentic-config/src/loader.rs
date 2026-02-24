@@ -58,7 +58,20 @@ pub struct LoadedAgenticConfig {
 /// Get the global config file path.
 ///
 /// Returns `~/.config/agentic/agentic.json` on Unix-like systems.
+///
+/// # Test Hook
+///
+/// Set `__AGENTIC_CONFIG_DIR_FOR_TESTS` to override the base config directory.
+/// This bypasses `dirs::config_dir()` entirely, enabling cross-platform test isolation.
+/// The env var is inert in production (never set outside tests).
 pub fn global_config_path() -> Result<PathBuf> {
+    // Test hook (inert unless env var set)
+    if let Ok(override_dir) = std::env::var("__AGENTIC_CONFIG_DIR_FOR_TESTS") {
+        return Ok(PathBuf::from(override_dir)
+            .join(GLOBAL_DIR)
+            .join(GLOBAL_FILE));
+    }
+
     let base = dirs::config_dir().context("Could not determine config dir")?;
     Ok(base.join(GLOBAL_DIR).join(GLOBAL_FILE))
 }
@@ -230,12 +243,19 @@ fn read_json_object_or_empty(path: &Path) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
 
+    /// Env var name for test isolation of global config path.
+    const CONFIG_DIR_TEST_VAR: &str = "__AGENTIC_CONFIG_DIR_FOR_TESTS";
+
     #[test]
+    #[serial]
     fn test_load_no_files_returns_defaults() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
         let loaded = load_merged(temp.path()).unwrap();
 
         // Should get default values
@@ -248,8 +268,11 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_local_only() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
         let local_path = temp.path().join(LOCAL_FILE);
         std::fs::write(
             &local_path,
@@ -264,19 +287,24 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_local_overrides_global() {
         let temp = TempDir::new().unwrap();
 
-        // Create a fake global config dir
-        let global_dir = temp.path().join("global_config").join(GLOBAL_DIR);
+        // Point global config to our temp directory
+        let global_base = temp.path().join("global_config");
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, &global_base);
+
+        // Create global config
+        let global_dir = global_base.join(GLOBAL_DIR);
         std::fs::create_dir_all(&global_dir).unwrap();
         std::fs::write(
             global_dir.join(GLOBAL_FILE),
-            r#"{"subagents": {"locator_model": "global-model"}}"#,
+            r#"{"subagents": {"locator_model": "global-model", "analyzer_model": "global-analyzer"}}"#,
         )
         .unwrap();
 
-        // Create local config
+        // Create local config that overrides locator_model but not analyzer_model
         let local_dir = temp.path().join("local_repo");
         std::fs::create_dir_all(&local_dir).unwrap();
         std::fs::write(
@@ -285,10 +313,11 @@ mod tests {
         )
         .unwrap();
 
-        // Note: This test can't easily override the global path without mocking
-        // We test the merge logic more directly in merge.rs tests
         let loaded = load_merged(&local_dir).unwrap();
+        // Local wins for locator_model
         assert_eq!(loaded.config.subagents.locator_model, "local-model");
+        // Global value preserved for analyzer_model
+        assert_eq!(loaded.config.subagents.analyzer_model, "global-analyzer");
     }
 
     #[test]
@@ -367,11 +396,14 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_local_value_overrides_struct_default() {
         // Test that local config values override struct defaults (not RFC 7396 null deletion,
         // which is tested in merge.rs). This verifies the merge behavior for nested objects.
 
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
         // Create local config that overrides a nested value
         std::fs::write(
             temp.path().join(LOCAL_FILE),
@@ -384,17 +416,26 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_paths_are_set() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
         let loaded = load_merged(temp.path()).unwrap();
 
         assert_eq!(loaded.paths.local, temp.path().join(LOCAL_FILE));
-        assert!(loaded.paths.global.ends_with("agentic/agentic.json"));
+        // Global path should point to our isolated temp dir
+        assert_eq!(
+            loaded.paths.global,
+            temp.path().join(GLOBAL_DIR).join(GLOBAL_FILE)
+        );
     }
 
     #[test]
+    #[serial]
     fn test_load_legacy_only_is_read_only_and_uses_legacy_values() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
 
         // Create legacy config
         let thoughts_dir = temp.path().join(".thoughts");
@@ -434,8 +475,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_agentic_json_wins_over_legacy_and_no_legacy_warning() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
 
         // Create legacy config
         let thoughts_dir = temp.path().join(".thoughts");
