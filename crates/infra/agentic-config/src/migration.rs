@@ -143,12 +143,12 @@ pub fn read_legacy_v2(path: &Path) -> Result<LegacyRepoConfigV2> {
 /// Map legacy V2 config to the new `agentic.json` format.
 ///
 /// Returns a JSON Value that can be written to `agentic.json`.
-pub fn map_v2_to_agentic_value(v2: LegacyRepoConfigV2) -> Result<Value> {
+pub fn map_v2_to_agentic_value(v2: LegacyRepoConfigV2) -> Value {
     let thoughts_config = map_v2_to_thoughts_config(v2);
 
-    Ok(json!({
+    json!({
         "thoughts": thoughts_config
-    }))
+    })
 }
 
 /// Map legacy V2 config to ThoughtsConfig struct.
@@ -301,7 +301,7 @@ mod tests {
             )],
         };
 
-        let value = map_v2_to_agentic_value(v2).unwrap();
+        let value = map_v2_to_agentic_value(v2);
 
         // Verify the structure
         assert!(value.get("thoughts").is_some());

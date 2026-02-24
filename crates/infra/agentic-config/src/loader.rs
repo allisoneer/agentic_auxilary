@@ -188,7 +188,7 @@ fn attempt_migration(legacy_path: &Path, local_path: &Path) -> Result<Option<Loa
     }
 
     let v2 = crate::migration::read_legacy_v2(legacy_path)?;
-    let agentic_value = crate::migration::map_v2_to_agentic_value(v2)?;
+    let agentic_value = crate::migration::map_v2_to_agentic_value(v2);
     crate::writer::write_pretty_json_atomic(local_path, &agentic_value)?;
 
     Ok(Some(LoadEvent::MigratedThoughtsV2 {
