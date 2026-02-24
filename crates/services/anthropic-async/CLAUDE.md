@@ -30,4 +30,29 @@ cargo build -p anthropic-async
 
 ## Notes
 
-Add any human-authored notes below. Content outside autogen blocks is preserved by xtask sync.
+Anthropic API client for Rust with support for:
+- Messages API with tool calling and multi-turn conversations
+- Extended thinking (ThinkingConfig)
+- Streaming with SSE accumulation
+- Prompt caching with TTL validation
+
+## Crate-Specific Commands
+
+This crate has a local justfile for specialized testing. Run from this directory:
+
+```bash
+# Run conformance tests against live Anthropic API (requires ANTHROPIC_API_KEY)
+just live-test
+
+# Record new API snapshots for conformance tests
+just record-snapshots
+
+# Run only multi-turn conformance test
+just live-multi-turn
+```
+
+## Live vs Replay Testing
+
+Tests use `ANTHROPIC_LIVE=1` to switch between modes:
+- **Replay mode** (default): Uses wiremock to replay recorded snapshots. No API key needed. Runs in CI.
+- **Live mode**: Makes real API calls. Requires `ANTHROPIC_API_KEY`. Use to record new snapshots or verify against real API.

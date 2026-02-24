@@ -39,6 +39,7 @@ proptest = "1.6"
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serial_test = "3"
+insta = { version = "1", features = ["json"] }
 
 [lints.rust]
 warnings = "deny"
