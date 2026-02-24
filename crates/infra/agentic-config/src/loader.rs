@@ -88,7 +88,10 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     // Check for migration opportunity
     if let Some(legacy_path) = crate::migration::should_migrate(local_dir, &local_path) {
         match attempt_migration(&legacy_path, &local_path) {
-            Ok(event) => events.push(event),
+            Ok(Some(event)) => events.push(event),
+            Ok(None) => {
+                // Another process already migrated - this is fine
+            }
             Err(e) => {
                 // Log migration failure but continue - we can still load defaults
                 tracing::warn!("Migration from legacy config failed: {}", e);
@@ -171,15 +174,27 @@ fn env_trimmed(name: &str) -> Option<String> {
 }
 
 /// Attempt to migrate legacy V2 config to agentic.json.
-fn attempt_migration(legacy_path: &Path, local_path: &Path) -> Result<LoadEvent> {
+///
+/// Returns `Ok(Some(event))` if migration was performed, `Ok(None)` if skipped
+/// (e.g., another process already created the file).
+fn attempt_migration(legacy_path: &Path, local_path: &Path) -> Result<Option<LoadEvent>> {
+    // Re-check to narrow the TOCTOU window. Another process may have migrated
+    // between should_migrate() and now. This isn't bulletproof but reduces the
+    // window from ~10ms to ~microseconds. The failure mode is benign anyway:
+    // both processes write identical content from the same legacy source.
+    if local_path.exists() {
+        tracing::debug!("agentic.json appeared during migration check, skipping migration");
+        return Ok(None);
+    }
+
     let v2 = crate::migration::read_legacy_v2(legacy_path)?;
     let agentic_value = crate::migration::map_v2_to_agentic_value(v2)?;
     crate::writer::write_pretty_json_atomic(local_path, &agentic_value)?;
 
-    Ok(LoadEvent::MigratedThoughtsV2 {
+    Ok(Some(LoadEvent::MigratedThoughtsV2 {
         from: legacy_path.to_path_buf(),
         to: local_path.to_path_buf(),
-    })
+    }))
 }
 
 /// Read a JSON file as a Value, returning empty object if file doesn't exist.
