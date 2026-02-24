@@ -22,6 +22,11 @@
 //! assert_eq!(filtered.len(), 2);
 //! ```
 
+#[cfg(not(unix))]
+compile_error!(
+    "agentic-tools-registry only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 use agentic_config::types::{ReasoningConfig, SubagentsConfig};
 use agentic_tools_core::ToolRegistry;
 use serde::{Deserialize, Serialize};

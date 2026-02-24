@@ -1,3 +1,8 @@
+#[cfg(not(unix))]
+compile_error!(
+    "coding_agent_tools only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 pub mod agent;
 pub mod glob;
 pub mod grep;

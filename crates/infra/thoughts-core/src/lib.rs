@@ -1,3 +1,8 @@
+#[cfg(not(unix))]
+compile_error!(
+    "thoughts-tool only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 pub mod config;
 pub mod documents;
 pub mod error;

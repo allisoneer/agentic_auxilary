@@ -3,6 +3,11 @@
 //! This binary exposes all 19+ tools from the various domain crates through a single
 //! MCP stdio server, with optional allowlist filtering.
 
+#[cfg(not(unix))]
+compile_error!(
+    "agentic-mcp only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 use agentic_config::loader::load_merged;
 use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
 use agentic_tools_registry::{AgenticTools, AgenticToolsConfig};

@@ -36,6 +36,11 @@
 //! - `AGENTIC_LOG_LEVEL`: Override log level
 //! - `AGENTIC_LOG_JSON`: Enable JSON logging ("true" or "1")
 
+#[cfg(not(unix))]
+compile_error!(
+    "agentic-config only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 pub mod loader;
 pub mod merge;
 pub mod migration;
