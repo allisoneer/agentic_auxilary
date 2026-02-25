@@ -163,11 +163,6 @@ impl AnthropicConfig {
     ///
     /// Use only when authentication is injected by an upstream proxy/gateway
     /// (e.g., during recording tests or in a service mesh).
-    ///
-    /// # Safety
-    ///
-    /// This bypasses all authentication. Only use in controlled environments
-    /// where auth is handled externally.
     #[must_use]
     pub fn dangerously_skip_auth(mut self) -> Self {
         self.dangerously_skip_auth = true;
