@@ -6,7 +6,7 @@
 //!
 //! This module owns:
 //! - snapshot file paths
-//! - API key redaction (safety net)
+//! - API key and sensitive header redaction
 //! - starting/stopping the httpmock server used by the harness
 
 use std::{
@@ -27,6 +27,14 @@ pub const ENV_SNAPSHOT_DIR: &str = "ANTHROPIC_SNAPSHOT_DIR";
 
 /// Default upstream Anthropic API base URL.
 pub const DEFAULT_UPSTREAM_BASE: &str = "https://api.anthropic.com";
+
+/// Response headers to redact from cassette recordings.
+/// These contain identity info or noise that shouldn't be in version control.
+const HEADERS_TO_REDACT: &[&str] = &[
+    "anthropic-organization-id", // Links repo to specific Anthropic account
+    "request-id",                // Noise, changes every request
+    "cf-ray",                    // Cloudflare ray ID, noise + datacenter info
+];
 
 /// True if running in live mode (`ANTHROPIC_LIVE=1`).
 #[must_use]
@@ -196,10 +204,13 @@ impl SnapshotServer {
             .filter_map(Result::ok)
             .filter(|e| {
                 let path = e.path();
+                // Use underscore delimiter to prevent prefix collisions
+                // (e.g., "multi_turn" should not match "multi_turn_v2_*.yaml")
+                let expected_prefix = format!("{}_", self.name);
                 let name_matches = path
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with(&self.name));
+                    .is_some_and(|n| n.starts_with(&expected_prefix));
                 let ext_matches = path
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml"));
@@ -224,6 +235,11 @@ impl SnapshotServer {
 
             // Redact the API key from the file
             redact_string_in_file(&newest_path, key, "<redacted>")?;
+
+            // Redact sensitive response headers (org-id, request-id, cf-ray)
+            for header in HEADERS_TO_REDACT {
+                redact_header_value(&newest_path, header, "<redacted>")?;
+            }
 
             // Rename to the canonical path (without timestamp) for easy playback
             if newest_path != canonical_path {
@@ -261,6 +277,50 @@ fn redact_string_in_file(path: &Path, needle: &str, replacement: &str) -> std::i
     let after = before.replace(needle, replacement);
     if after != before {
         fs::write(path, after)?;
+    }
+    Ok(())
+}
+
+/// Redact a response header value by name in an httpmock YAML cassette.
+///
+/// Finds lines matching `- name: {header_name}` and replaces the value on the
+/// following `value:` line with the replacement string.
+fn redact_header_value(path: &Path, header_name: &str, replacement: &str) -> std::io::Result<()> {
+    let content = fs::read_to_string(path)?;
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let mut modified = false;
+
+    let mut i = 0;
+    while i < lines.len() {
+        // Check if this line declares the header we're looking for
+        // YAML format: "  - name: header-name"
+        let is_target_header = {
+            let trimmed = lines[i].trim();
+            trimmed.starts_with("- name:")
+                && trimmed
+                    .strip_prefix("- name:")
+                    .is_some_and(|rest| rest.trim() == header_name)
+        };
+
+        if is_target_header && i + 1 < lines.len() {
+            // Next line should be the value line: "    value: some-value"
+            if let Some(colon_pos) = lines[i + 1].find("value:") {
+                let prefix_end = colon_pos + 6; // "value:" is 6 chars
+                let prefix = &lines[i + 1][..prefix_end];
+                lines[i + 1] = format!("{prefix} {replacement}");
+                modified = true;
+            }
+        }
+        i += 1;
+    }
+
+    if modified {
+        let mut new_content = lines.join("\n");
+        // Preserve trailing newline if original had one
+        if content.ends_with('\n') {
+            new_content.push('\n');
+        }
+        fs::write(path, new_content)?;
     }
     Ok(())
 }
@@ -310,5 +370,72 @@ mod tests {
                 .block_on(SnapshotServer::start_playback("nonexistent_test_12345"));
         });
         assert!(result.is_err(), "Expected panic for missing recording");
+    }
+
+    #[test]
+    fn test_redact_header_value() {
+        use std::io::Write;
+
+        // Create a temp file with YAML content similar to httpmock cassettes
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        let yaml_content = r"then:
+  status: 200
+  header:
+  - name: content-type
+    value: application/json
+  - name: anthropic-organization-id
+    value: 74e30b4a-5fab-438b-8fe7-5989330fe3b2
+  - name: request-id
+    value: req_011CYTicPYkV5sJsYj1oKGUr
+  - name: cf-ray
+    value: 9d328cbcce781376-DFW
+";
+        temp.write_all(yaml_content.as_bytes()).unwrap();
+        temp.flush().unwrap();
+
+        // Redact the org-id header
+        redact_header_value(temp.path(), "anthropic-organization-id", "<redacted>").unwrap();
+
+        let result = fs::read_to_string(temp.path()).unwrap();
+
+        // Org-id should be redacted
+        assert!(result.contains("- name: anthropic-organization-id"));
+        assert!(result.contains("value: <redacted>"));
+        assert!(!result.contains("74e30b4a-5fab-438b-8fe7-5989330fe3b2"));
+
+        // Other headers should be unchanged
+        assert!(result.contains("value: application/json"));
+        assert!(result.contains("value: req_011CYTicPYkV5sJsYj1oKGUr"));
+        assert!(result.contains("value: 9d328cbcce781376-DFW"));
+    }
+
+    #[test]
+    fn test_redact_header_value_multiple_occurrences() {
+        use std::io::Write;
+
+        // Multi-turn cassette has the same headers in multiple responses
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        let yaml_content = r"---
+then:
+  header:
+  - name: anthropic-organization-id
+    value: first-org-id
+---
+then:
+  header:
+  - name: anthropic-organization-id
+    value: second-org-id
+";
+        temp.write_all(yaml_content.as_bytes()).unwrap();
+        temp.flush().unwrap();
+
+        redact_header_value(temp.path(), "anthropic-organization-id", "<redacted>").unwrap();
+
+        let result = fs::read_to_string(temp.path()).unwrap();
+
+        // Both occurrences should be redacted
+        assert!(!result.contains("first-org-id"));
+        assert!(!result.contains("second-org-id"));
+        assert_eq!(result.matches("value: <redacted>").count(), 2);
     }
 }
