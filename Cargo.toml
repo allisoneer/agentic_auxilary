@@ -107,3 +107,47 @@ install-path = "CARGO_HOME"
 install-updater = false
 # Custom tag pattern for release-plz format (see commit 023d153)
 allow-dirty = ["ci"]
+
+[workspace.lints.rust]
+# unsafe_code = "warn"                # disabled; too noisy for this codebase
+# unused_crate_dependencies = "warn"  # useful but can be noisy with dev-dependencies
+
+[workspace.lints.clippy]
+# ── Enable pedantic as a baseline ──────────────────────────
+pedantic = { level = "warn", priority = -1 }
+
+# Pedantic lints that are usually too noisy to keep:
+cast_possible_truncation = "allow"   # too many legitimate truncations
+cast_precision_loss = "allow"        # f64 from u64 is often fine
+cast_sign_loss = "allow"             # often intentional
+default_trait_access = "allow"       # String::default() vs Default::default() is taste
+missing_errors_doc = "allow"         # tedious on internal code
+missing_panics_doc = "allow"         # tedious on internal code
+module_name_repetitions = "allow"    # config::ConfigError is natural
+must_use_candidate = "allow"         # extremely noisy
+struct_excessive_bools = "allow"     # sometimes you just need flags
+too_many_lines = "allow"             # arbitrary; use judgment instead
+
+# ── Cherry-picked restriction lints ────────────────────────
+allow_attributes = "warn"            # prefer #[expect] over #[allow]
+clone_on_ref_ptr = "warn"            # Arc::clone(&x) over x.clone()
+create_dir = "warn"                  # prefer create_dir_all
+dbg_macro = "warn"                   # no leftover dbg!()
+exit = "warn"                        # no surprise process::exit
+rest_pat_in_fully_bound_structs = "warn"
+self_named_module_files = "warn"     # consistent module file layout
+undocumented_unsafe_blocks = "warn"  # every unsafe needs a SAFETY comment
+unused_result_ok = "warn"
+unwrap_used = "warn"                 # ban .unwrap() - use ? or explicit handling
+expect_used = "warn"                 # ban .expect() - use ? or explicit handling
+
+# ── Cherry-picked nursery lints ────────────────────────────
+nursery = { level = "warn", priority = -1 }
+missing_const_for_fn = "allow"       # too many false positives
+significant_drop_tightening = "allow" # buggy
+option_if_let_else = "allow"         # suggestions often less readable
+suboptimal_flops = "allow"           # not always relevant
+
+# ── Cargo lints ────────────────────────────────────────────
+wildcard_dependencies = "warn"
+# cargo_common_metadata = "warn"    # enable if publishing to crates.io

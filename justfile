@@ -25,6 +25,7 @@ default: help
 help:
     @echo "Workspace commands:"
     @echo "  just check            # fmt-check + clippy for entire workspace"
+    @echo "  just fix              # auto-fix clippy warnings for entire workspace"
     @echo "  just test             # run tests for entire workspace"
     @echo "  just build            # build entire workspace"
     @echo "  just fmt              # format entire workspace"
@@ -45,6 +46,9 @@ help:
 
 check: fmt-check-just fmt-check
     {{ exec }}cargo clippy --workspace --all-targets -- -D warnings
+
+fix:
+    cargo clippy --workspace --all-targets --fix --allow-dirty
 
 test: mcp-test
     {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
