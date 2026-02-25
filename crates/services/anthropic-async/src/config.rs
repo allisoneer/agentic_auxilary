@@ -525,4 +525,47 @@ mod tests {
         let cfg = AnthropicConfig::new().with_api_key("  valid-key  ");
         assert!(cfg.validate_auth().is_ok());
     }
+
+    #[test]
+    fn dangerously_skip_auth_bypasses_validation() {
+        // Without skip_auth, no credentials fails validation
+        let cfg_normal = AnthropicConfig {
+            api_base: "test".into(),
+            version: "test".into(),
+            auth: AnthropicAuth::None,
+            beta: vec![],
+            dangerously_skip_auth: false,
+        };
+        assert!(cfg_normal.validate_auth().is_err());
+
+        // With skip_auth, validation succeeds despite no credentials
+        let cfg_skip = AnthropicConfig::new().dangerously_skip_auth();
+        assert!(
+            cfg_skip.validate_auth().is_ok(),
+            "validate_auth must succeed when dangerously_skip_auth is set"
+        );
+    }
+
+    #[test]
+    fn dangerously_skip_auth_omits_headers() {
+        // Start with valid credentials, then skip auth ("skip wins")
+        let cfg = AnthropicConfig::new()
+            .with_both("test-key", "test-token")
+            .dangerously_skip_auth();
+
+        let headers = cfg.headers().unwrap();
+
+        // Should NOT contain auth headers
+        assert!(
+            !headers.contains_key(HDR_X_API_KEY),
+            "x-api-key must not be present when dangerously_skip_auth is set"
+        );
+        assert!(
+            !headers.contains_key(reqwest::header::AUTHORIZATION),
+            "Authorization must not be present when dangerously_skip_auth is set"
+        );
+
+        // Should still contain non-auth headers
+        assert!(headers.contains_key(HDR_ANTHROPIC_VERSION));
+    }
 }

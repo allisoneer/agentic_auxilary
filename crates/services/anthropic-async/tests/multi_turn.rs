@@ -224,13 +224,12 @@ async fn multi_turn_tool_conversation() {
         })
         .collect();
 
-    // The response should reference the weather data we provided
+    // The response should reference the location AND weather data from the tool result
+    let text_lc = text_content.to_lowercase();
     assert!(
-        text_content.to_lowercase().contains("paris")
-            || text_content.to_lowercase().contains("sunny")
-            || text_content.to_lowercase().contains("22")
-            || text_content.to_lowercase().contains("72"),
-        "Expected response to reference the weather data, got: {text_content}"
+        text_lc.contains("paris")
+            && (text_lc.contains("sunny") || text_lc.contains("22") || text_lc.contains("72")),
+        "Expected response to reference Paris AND weather data (sunny/22/72), got: {text_content}"
     );
 }
 
@@ -287,20 +286,12 @@ fn echo_pattern_serialization() {
     // Convert to param
     let param = ContentBlockParam::try_from(&tool_use).unwrap();
 
-    // Serialize
-    let json = serde_json::to_string(&param).unwrap();
-
-    // Verify the JSON structure
-    assert!(
-        json.contains(r#""type":"tool_use""#),
-        "Should have type field"
-    );
-    assert!(json.contains(r#""id":"toolu_test123""#), "Should have id");
-    assert!(json.contains(r#""name":"calculator""#), "Should have name");
-    assert!(
-        json.contains(r#""expression":"2 + 2""#),
-        "Should have input"
-    );
+    // Serialize and validate structure
+    let json = serde_json::to_value(&param).expect("serialization should succeed");
+    assert_eq!(json["type"], "tool_use");
+    assert_eq!(json["id"], "toolu_test123");
+    assert_eq!(json["name"], "calculator");
+    assert_eq!(json["input"]["expression"], "2 + 2");
 }
 
 mod unit_tests {

@@ -297,9 +297,11 @@ fn redact_header_value(path: &Path, header_name: &str, replacement: &str) -> std
         let is_target_header = {
             let trimmed = lines[i].trim();
             trimmed.starts_with("- name:")
-                && trimmed
-                    .strip_prefix("- name:")
-                    .is_some_and(|rest| rest.trim() == header_name)
+                && trimmed.strip_prefix("- name:").is_some_and(|rest| {
+                    rest.trim()
+                        .trim_matches(|c| c == '"' || c == '\'')
+                        .eq_ignore_ascii_case(header_name)
+                })
         };
 
         if is_target_header && i + 1 < lines.len() {
@@ -437,5 +439,38 @@ then:
         assert!(!result.contains("first-org-id"));
         assert!(!result.contains("second-org-id"));
         assert_eq!(result.matches("value: <redacted>").count(), 2);
+    }
+
+    #[test]
+    fn test_redact_header_value_case_insensitive() {
+        use std::io::Write;
+
+        // HTTP headers are case-insensitive per RFC 7230; verify redaction handles this
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        let yaml_content = r#"then:
+  status: 200
+  header:
+  - name: Request-Id
+    value: req_mixed_case_123
+  - name: CF-RAY
+    value: uppercase-cf-ray-456
+  - name: "Anthropic-Organization-Id"
+    value: quoted-org-id-789
+"#;
+        temp.write_all(yaml_content.as_bytes()).unwrap();
+        temp.flush().unwrap();
+
+        // Redact using lowercase names (as defined in HEADERS_TO_REDACT)
+        redact_header_value(temp.path(), "request-id", "<redacted>").unwrap();
+        redact_header_value(temp.path(), "cf-ray", "<redacted>").unwrap();
+        redact_header_value(temp.path(), "anthropic-organization-id", "<redacted>").unwrap();
+
+        let result = fs::read_to_string(temp.path()).unwrap();
+
+        // All values should be redacted despite case differences
+        assert!(!result.contains("req_mixed_case_123"));
+        assert!(!result.contains("uppercase-cf-ray-456"));
+        assert!(!result.contains("quoted-org-id-789"));
+        assert_eq!(result.matches("value: <redacted>").count(), 3);
     }
 }
