@@ -324,6 +324,7 @@ mod tests {
     #[serial]
     fn test_env_overrides_files() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
         std::fs::write(
             temp.path().join(LOCAL_FILE),
             r#"{"reasoning": {"optimizer_model": "file-model"}}"#,
@@ -371,8 +372,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_json_errors() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
         std::fs::write(temp.path().join(LOCAL_FILE), "not valid json").unwrap();
 
         let result = load_merged(temp.path());
@@ -381,8 +384,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_non_object_root_errors() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
         std::fs::write(temp.path().join(LOCAL_FILE), "[1, 2, 3]").unwrap();
 
         let result = load_merged(temp.path());
@@ -512,8 +517,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_legacy_json_errors() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
         let thoughts_dir = temp.path().join(".thoughts");
         std::fs::create_dir_all(&thoughts_dir).unwrap();
         std::fs::write(thoughts_dir.join("config.json"), "not valid json").unwrap();
@@ -529,8 +536,10 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_legacy_v1_errors() {
         let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
         let thoughts_dir = temp.path().join(".thoughts");
         std::fs::create_dir_all(&thoughts_dir).unwrap();
         std::fs::write(thoughts_dir.join("config.json"), r#"{"version":"1.0"}"#).unwrap();
