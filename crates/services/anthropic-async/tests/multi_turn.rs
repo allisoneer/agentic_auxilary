@@ -222,9 +222,6 @@ async fn multi_turn_tool_conversation() {
             || text_content.to_lowercase().contains("72"),
         "Expected response to reference the weather data, got: {text_content}"
     );
-
-    eprintln!("Multi-turn tool conversation test passed!");
-    eprintln!("Final response: {text_content}");
 }
 
 /// Tests that the echo pattern preserves `tool_use` details correctly.
@@ -296,7 +293,6 @@ fn echo_pattern_serialization() {
     );
 }
 
-#[cfg(test)]
 mod unit_tests {
     use super::*;
 
