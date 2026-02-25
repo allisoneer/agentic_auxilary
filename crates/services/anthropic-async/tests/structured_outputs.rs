@@ -44,7 +44,7 @@ fn test_output_format_json_schema_serialization() {
 
 /// Test deprecated `output_format` field - it should bridge to `output_config`
 #[test]
-#[allow(deprecated)]
+#[expect(deprecated)]
 fn test_messages_request_with_output_format() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet-20241022".into(),

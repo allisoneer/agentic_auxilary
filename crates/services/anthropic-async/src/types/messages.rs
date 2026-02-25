@@ -14,7 +14,7 @@ use super::tools::{Tool, ToolChoice};
 /// Requires a structured outputs beta header to be enabled via [`BetaFeature`](crate::BetaFeature).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[allow(clippy::derive_partial_eq_without_eq)] // serde_json::Value doesn't impl Eq
+#[expect(clippy::derive_partial_eq_without_eq)] // serde_json::Value doesn't impl Eq
 pub enum OutputFormat {
     /// Structured outputs via JSON schema
     #[serde(rename = "json_schema")]
@@ -47,7 +47,7 @@ pub enum ThinkingConfig {
 ///
 /// Provides fine-grained control over response format and effort level.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-#[allow(clippy::derive_partial_eq_without_eq)] // OutputFormat contains serde_json::Value
+#[expect(clippy::derive_partial_eq_without_eq)] // OutputFormat contains serde_json::Value
 pub struct OutputConfig {
     /// Output format constraint (e.g., JSON schema)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,7 +154,7 @@ impl Serialize for MessagesCreateRequest {
         field_count += usize::from(self.inference_geo.is_some());
 
         // Determine effective output_config: bridge output_format if needed
-        #[allow(deprecated)]
+        #[expect(deprecated)]
         let effective_output_config = if self.output_config.is_some() {
             self.output_config.clone()
         } else if self.output_format.is_some() {
@@ -442,7 +442,7 @@ mod tests {
     // These intentionally use the deprecated field to verify backwards compatibility
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn output_format_bridges_to_output_config() {
         // Test that deprecated output_format serializes as output_config.format
         let req = MessagesCreateRequest {
@@ -463,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn output_config_takes_precedence_over_output_format() {
         // When both are set, output_config wins
         let req = MessagesCreateRequest {

@@ -43,13 +43,8 @@ serial_test = "3"
 insta = { version = "1", features = ["json", "redactions"] }
 tempfile = "3"
 
-[lints.rust]
-warnings = "deny"
-
-[lints.clippy]
-all = "deny"
-pedantic = "warn"
-nursery = "warn"
+[lints]
+workspace = true
 
 [package.metadata.repo]
 role = "lib"

@@ -74,7 +74,7 @@ fn extract_tool_use_id(content: &[ContentBlock]) -> Option<String> {
 /// 3. We can send a `tool_result` with the weather data
 /// 4. Assistant responds with a final text answer
 #[tokio::test]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 async fn multi_turn_tool_conversation() {
     let harness = SnapshotHarness::new("multi_turn_tool_conversation").await;
 
