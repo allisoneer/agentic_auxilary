@@ -62,6 +62,10 @@ impl SnapshotHarness {
     }
 
     /// Create a harness in live mode (direct real API calls, no recording).
+    #[expect(
+        clippy::expect_used,
+        reason = "live mode requires API key; descriptive panic message guides the user"
+    )]
     fn new_live() -> Self {
         let api_key = env::var(recording::ENV_API_KEY).expect(
             "ANTHROPIC_API_KEY required when ANTHROPIC_LIVE=1 (set ANTHROPIC_RECORD=1 to record)",
@@ -77,6 +81,10 @@ impl SnapshotHarness {
     }
 
     /// Create a harness in live+record mode (proxy with recording).
+    #[expect(
+        clippy::expect_used,
+        reason = "live+record mode requires API key; descriptive panic message guides the user"
+    )]
     async fn new_live_record(name: &str) -> Self {
         let upstream_api_key = env::var(recording::ENV_API_KEY)
             .expect("ANTHROPIC_API_KEY required when ANTHROPIC_LIVE=1 and ANTHROPIC_RECORD=1");

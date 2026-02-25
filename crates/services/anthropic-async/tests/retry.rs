@@ -12,7 +12,7 @@ async fn test_retry_on_429_then_success() {
     let server = MockServer::start().await;
     let count = Arc::new(AtomicUsize::new(0));
 
-    let count_clone = count.clone();
+    let count_clone = Arc::clone(&count);
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
         .respond_with(move |_req: &wiremock::Request| {
@@ -64,7 +64,7 @@ async fn test_529_overloaded_retry() {
     let server = MockServer::start().await;
     let count = Arc::new(AtomicUsize::new(0));
 
-    let count_clone = count.clone();
+    let count_clone = Arc::clone(&count);
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
         .respond_with(move |_req: &wiremock::Request| {

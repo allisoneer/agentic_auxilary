@@ -47,7 +47,6 @@ pub enum ThinkingConfig {
 ///
 /// Provides fine-grained control over response format and effort level.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-#[expect(clippy::derive_partial_eq_without_eq)] // OutputFormat contains serde_json::Value
 pub struct OutputConfig {
     /// Output format constraint (e.g., JSON schema)
     #[serde(skip_serializing_if = "Option::is_none")]

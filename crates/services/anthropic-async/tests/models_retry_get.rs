@@ -10,7 +10,7 @@ async fn test_models_list_retries_on_429_then_success() {
     let server = MockServer::start().await;
     let count = Arc::new(AtomicUsize::new(0));
 
-    let count_clone = count.clone();
+    let count_clone = Arc::clone(&count);
     Mock::given(method("GET"))
         .and(path("/v1/models"))
         .respond_with(move |_req: &wiremock::Request| {
@@ -46,7 +46,7 @@ async fn test_models_get_retries_on_500_then_success() {
     let server = MockServer::start().await;
     let count = Arc::new(AtomicUsize::new(0));
 
-    let count_clone = count.clone();
+    let count_clone = Arc::clone(&count);
     Mock::given(method("GET"))
         .and(path("/v1/models/claude-foo"))
         .respond_with(move |_req: &wiremock::Request| {
