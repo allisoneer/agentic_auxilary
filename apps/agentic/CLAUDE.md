@@ -106,35 +106,8 @@ export AGENTIC_REASONING_OPTIMIZER_MODEL=anthropic/claude-sonnet-4.6
 - **Errors**: Config cannot be parsed (e.g., invalid JSON syntax)
 
 ### Common Warnings
-- `deprecated_key: models`: Old config format, migrate to `subagents`/`reasoning`
 - `invalid_value: reasoning.optimizer_model`: Should use OpenRouter format (`provider/model`)
 - `invalid_value: reasoning.reasoning_effort`: Must be `low`, `medium`, `high`, or `xhigh`
-
-### Resolving Deprecated Config
-If you see `deprecated_key: models`, update your config:
-
-**Old format (deprecated):**
-```json
-{
-  "models": {
-    "default_model": "claude-sonnet-4-6"
-  }
-}
-```
-
-**New format:**
-```json
-{
-  "subagents": {
-    "locator_model": "claude-haiku-4-5",
-    "analyzer_model": "claude-sonnet-4-6"
-  },
-  "reasoning": {
-    "optimizer_model": "anthropic/claude-sonnet-4.6",
-    "executor_model": "openai/gpt-5.2"
-  }
-}
-```
 
 ## Module Structure
 

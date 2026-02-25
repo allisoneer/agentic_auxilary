@@ -42,16 +42,9 @@ impl std::fmt::Display for AdvisoryWarning {
 /// This inspects the merged JSON Value to detect keys that are no longer
 /// used and emit advisory warnings. The config will still load successfully,
 /// but users will be notified that they should update their configuration.
-pub fn detect_deprecated_keys(v: &Value) -> Vec<AdvisoryWarning> {
-    let mut out = vec![];
-    if v.get("models").is_some() {
-        out.push(AdvisoryWarning::new(
-            "deprecated_key",
-            "models",
-            "Config key `models` is deprecated and ignored. Use top-level `subagents` and `reasoning` sections instead.",
-        ));
-    }
-    out
+pub fn detect_deprecated_keys(_v: &Value) -> Vec<AdvisoryWarning> {
+    // Intentionally empty: reserved for future schema deprecations.
+    Vec::new()
 }
 
 /// Validate a configuration and return advisory warnings.
@@ -325,30 +318,6 @@ mod tests {
         };
         let display = format!("{}", warning);
         assert_eq!(display, "[test.code] test.path: Test message");
-    }
-
-    #[test]
-    fn test_detect_deprecated_models_key() {
-        let json: Value = serde_json::json!({
-            "models": {
-                "default_model": "some-model"
-            }
-        });
-        let warnings = detect_deprecated_keys(&json);
-        assert_eq!(warnings.len(), 1);
-        assert_eq!(warnings[0].code, "deprecated_key");
-        assert!(warnings[0].message.contains("models"));
-    }
-
-    #[test]
-    fn test_detect_deprecated_keys_returns_empty_for_clean_config() {
-        let json: Value = serde_json::json!({
-            "subagents": {
-                "locator_model": "claude-haiku-4-5"
-            }
-        });
-        let warnings = detect_deprecated_keys(&json);
-        assert!(warnings.is_empty());
     }
 
     #[test]

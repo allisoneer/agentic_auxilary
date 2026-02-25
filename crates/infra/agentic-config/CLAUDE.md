@@ -73,7 +73,6 @@ Log level and JSON formatting preferences.
 ## Deprecations and Warnings
 
 The system uses advisory warnings (non-fatal) for:
-- **Deprecated keys**: Old `models` config section is detected and warns
 - **Invalid values**: Empty strings, format mismatches, suspicious executor models
 - **Reasoning effort**: Invalid enum values warn but don't fail
 

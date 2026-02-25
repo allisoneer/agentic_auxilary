@@ -18,7 +18,7 @@
 //! use std::path::Path;
 //!
 //! let loaded = load_merged(Path::new(".")).unwrap();
-//! println!("Default model: {}", loaded.config.models.default_model);
+//! println!("Locator model: {}", loaded.config.subagents.locator_model);
 //!
 //! for warning in &loaded.warnings {
 //!     eprintln!("Warning: {}", warning);
@@ -30,9 +30,11 @@
 //! - `ANTHROPIC_API_KEY`: Set Anthropic API key (env-only)
 //! - `EXA_BASE_URL`: Override Exa API base URL
 //! - `EXA_API_KEY`: Set Exa API key (env-only)
-//! - `AGENTIC_MODEL_DEFAULT`: Override default model
-//! - `AGENTIC_MODEL_REASONING`: Override reasoning model
-//! - `AGENTIC_MODEL_FAST`: Override fast model
+//! - `AGENTIC_SUBAGENTS_LOCATOR_MODEL`: Override `subagents.locator_model`
+//! - `AGENTIC_SUBAGENTS_ANALYZER_MODEL`: Override `subagents.analyzer_model`
+//! - `AGENTIC_REASONING_OPTIMIZER_MODEL`: Override `reasoning.optimizer_model`
+//! - `AGENTIC_REASONING_EXECUTOR_MODEL`: Override `reasoning.executor_model`
+//! - `AGENTIC_REASONING_EFFORT`: Override `reasoning.reasoning_effort`
 //! - `AGENTIC_LOG_LEVEL`: Override log level
 //! - `AGENTIC_LOG_JSON`: Enable JSON logging ("true" or "1")
 
