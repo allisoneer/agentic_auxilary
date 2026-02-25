@@ -77,6 +77,16 @@ fn extract_tool_use_id(content: &[ContentBlock]) -> Option<String> {
 #[allow(clippy::too_many_lines)]
 async fn multi_turn_tool_conversation() {
     let harness = SnapshotHarness::new("multi_turn_tool_conversation").await;
+
+    // Verify harness is configured correctly for the mode we're in
+    if harness.is_live() {
+        // Live mode: server presence depends on whether we're recording
+        eprintln!("Running in LIVE mode against {}", harness.base_url());
+    } else {
+        // Replay mode: must have a mock server
+        assert!(harness.has_server(), "Replay mode requires a mock server");
+    }
+
     let client = harness.client();
 
     // --- Turn 1: User asks about weather ---

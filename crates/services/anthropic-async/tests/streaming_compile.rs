@@ -3,16 +3,13 @@
 fn streaming_feature_compiles() {
     use anthropic_async::streaming::{Accumulator, Event, EventStream, SSEDecoder, SseFrame};
 
-    // Just ensure types are accessible
-    let _decoder = SSEDecoder::new();
-    let _acc = Accumulator::new();
-    let _frame = SseFrame::default();
-
-    // Ensure Event::MessageStop is accessible (unit variant)
-    let _: Event = Event::MessageStop;
-
-    // Type annotation to ensure EventStream is properly defined
-    let _: Option<EventStream> = None;
+    // Verify types are accessible and constructible by explicitly dropping instances.
+    // The turbofish annotation ensures type resolution at compile time.
+    drop::<SSEDecoder>(SSEDecoder::new());
+    drop::<Accumulator>(Accumulator::new());
+    drop::<SseFrame>(SseFrame::default());
+    drop::<Event>(Event::MessageStop);
+    drop::<Option<EventStream>>(None);
 }
 
 #[cfg(not(feature = "streaming"))]

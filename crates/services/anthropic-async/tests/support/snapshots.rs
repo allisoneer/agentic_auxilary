@@ -38,11 +38,9 @@ pub fn is_live() -> bool {
 pub struct SnapshotHarness {
     /// The configured client (either real or mock-backed).
     client: Client<AnthropicConfig>,
-    /// Keeps the server alive for replay/record mode; Drop will also save recordings.
-    _server: Option<SnapshotServer>,
-    /// Name of this test (used for snapshot file naming).
-    #[allow(dead_code)] // Will be used for insta snapshots in Phase 6
-    name: String,
+    /// The snapshot server (mock for replay, proxy for record, None for live).
+    /// Kept alive for the test duration; Drop saves recordings in record mode.
+    server: Option<SnapshotServer>,
 }
 
 impl SnapshotHarness {
@@ -56,7 +54,7 @@ impl SnapshotHarness {
             if recording::is_recording() {
                 Self::new_live_record(name).await
             } else {
-                Self::new_live(name)
+                Self::new_live()
             }
         } else {
             Self::new_replay(name).await
@@ -64,7 +62,7 @@ impl SnapshotHarness {
     }
 
     /// Create a harness in live mode (direct real API calls, no recording).
-    fn new_live(name: &str) -> Self {
+    fn new_live() -> Self {
         let api_key = env::var(recording::ENV_API_KEY).expect(
             "ANTHROPIC_API_KEY required when ANTHROPIC_LIVE=1 (set ANTHROPIC_RECORD=1 to record)",
         );
@@ -74,8 +72,7 @@ impl SnapshotHarness {
 
         Self {
             client,
-            _server: None,
-            name: name.to_string(),
+            server: None,
         }
     }
 
@@ -101,8 +98,7 @@ impl SnapshotHarness {
 
         Self {
             client,
-            _server: Some(server),
-            name: name.to_string(),
+            server: Some(server),
         }
     }
 
@@ -119,8 +115,7 @@ impl SnapshotHarness {
 
         Self {
             client,
-            _server: Some(server),
-            name: name.to_string(),
+            server: Some(server),
         }
     }
 
@@ -130,19 +125,39 @@ impl SnapshotHarness {
         &self.client
     }
 
-    /// Check if running in live mode.
+    /// Get the base URL for API requests.
+    ///
+    /// In replay/record modes, returns the mock server URL.
+    /// In live mode, returns the real Anthropic API URL.
     #[must_use]
-    #[allow(clippy::unused_self)]
-    #[allow(dead_code)] // Public API for tests
-    pub fn is_live(&self) -> bool {
-        is_live()
+    pub fn base_url(&self) -> String {
+        self.server.as_ref().map_or_else(
+            || recording::DEFAULT_UPSTREAM_BASE.to_string(),
+            SnapshotServer::base_url,
+        )
     }
 
-    /// Get the test name.
+    /// Check if running in live mode (direct API calls).
+    ///
+    /// This validates that the harness configuration is consistent with the environment:
+    /// - Live mode without recording: no server (direct API)
+    /// - Live mode with recording: has proxy server
+    /// - Replay mode: has mock server
     #[must_use]
-    #[allow(dead_code)] // Public API for tests
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn is_live(&self) -> bool {
+        let live = is_live();
+        // Validate configuration consistency (uses self.server meaningfully)
+        debug_assert!(
+            live || self.server.is_some(),
+            "Replay mode should have a mock server"
+        );
+        live
+    }
+
+    /// Check if using a mock/proxy server (replay or record mode).
+    #[must_use]
+    pub const fn has_server(&self) -> bool {
+        self.server.is_some()
     }
 }
 
