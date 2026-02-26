@@ -908,7 +908,10 @@ mod tests {
         assert_eq!(info.role, "assistant");
         assert_eq!(info.format, Some("markdown".to_string()));
         assert!(info.model.is_some());
-        assert_eq!(info.model.as_ref().unwrap().provider_id, "anthropic");
+        assert_eq!(
+            info.model.as_ref().unwrap().provider_id,
+            Some("anthropic".to_string())
+        );
         assert_eq!(info.system, Some("You are a helpful assistant".to_string()));
         assert_eq!(info.tools.len(), 2);
         assert_eq!(info.parent_id, Some("msg-100".to_string()));

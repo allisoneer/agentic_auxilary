@@ -124,9 +124,14 @@ pub struct ProjectSettings {
 #[serde(rename_all = "camelCase")]
 pub struct ModelRef {
     /// Provider identifier.
-    pub provider_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
     /// Model identifier.
-    pub model_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    /// Additional fields from server.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 /// Request to update a project.
@@ -241,7 +246,16 @@ mod tests {
     fn test_model_ref() {
         let json = r#"{"providerId": "anthropic", "modelId": "claude-3"}"#;
         let model_ref: ModelRef = serde_json::from_str(json).unwrap();
-        assert_eq!(model_ref.provider_id, "anthropic");
-        assert_eq!(model_ref.model_id, "claude-3");
+        assert_eq!(model_ref.provider_id, Some("anthropic".to_string()));
+        assert_eq!(model_ref.model_id, Some("claude-3".to_string()));
+    }
+
+    #[test]
+    fn test_model_ref_partial() {
+        // Server may send partial model refs
+        let json = r#"{}"#;
+        let model_ref: ModelRef = serde_json::from_str(json).unwrap();
+        assert!(model_ref.provider_id.is_none());
+        assert!(model_ref.model_id.is_none());
     }
 }

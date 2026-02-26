@@ -385,6 +385,7 @@ pub struct SessionInfoProps {
 #[serde(rename_all = "camelCase")]
 pub struct SessionIdleProps {
     /// Session ID.
+    #[serde(alias = "sessionID")]
     pub session_id: String,
     /// Additional properties.
     #[serde(flatten)]

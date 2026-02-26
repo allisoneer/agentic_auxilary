@@ -240,8 +240,8 @@ mod tests {
         let agent: Agent = serde_json::from_str(json).unwrap();
         assert_eq!(agent.name, "model-agent");
         let model = agent.model.unwrap();
-        assert_eq!(model.provider_id, "anthropic");
-        assert_eq!(model.model_id, "claude-3-opus");
+        assert_eq!(model.provider_id, Some("anthropic".to_string()));
+        assert_eq!(model.model_id, Some("claude-3-opus".to_string()));
     }
 
     #[test]
@@ -304,8 +304,9 @@ mod tests {
             color: Some("#00ff00".to_string()),
             permission: None,
             model: Some(ModelRef {
-                provider_id: "openai".to_string(),
-                model_id: "gpt-4".to_string(),
+                provider_id: Some("openai".to_string()),
+                model_id: Some("gpt-4".to_string()),
+                extra: serde_json::Value::Null,
             }),
             variant: Some("turbo".to_string()),
             prompt: None,

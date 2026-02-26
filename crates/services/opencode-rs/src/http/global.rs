@@ -46,10 +46,12 @@ impl GlobalApi {
     ///
     /// Returns an error if the server is unreachable.
     pub async fn health(&self) -> Result<bool> {
-        // Try to get misc/health or similar endpoint
-        // For now, we just verify we can reach the server
-        let _: serde_json::Value = self.http.request_json(Method::GET, "/health", None).await?;
-        Ok(true)
+        use crate::http::misc::HealthInfo;
+        let info: HealthInfo = self
+            .http
+            .request_json(Method::GET, "/global/health", None)
+            .await?;
+        Ok(info.healthy)
     }
 }
 
@@ -141,9 +143,10 @@ mod tests {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
-            .and(path("/health"))
+            .and(path("/global/health"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "ok"
+                "healthy": true,
+                "version": "1.0.0"
             })))
             .mount(&mock_server)
             .await;

@@ -67,6 +67,11 @@ impl HttpClient {
             .timeout(cfg.timeout)
             .build()
             .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        // Normalize base_url to not have trailing slash (paths start with /)
+        let cfg = HttpConfig {
+            base_url: cfg.base_url.trim_end_matches('/').to_string(),
+            ..cfg
+        };
         Ok(Self { inner, cfg })
     }
 
