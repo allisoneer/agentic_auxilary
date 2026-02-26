@@ -3,11 +3,33 @@
 use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use serial_test::serial;
 use tempfile::TempDir;
 
 fn agentic_cmd() -> Command {
     cargo_bin_cmd!("agentic")
+}
+
+/// Environment variable for test isolation of config paths.
+const CONFIG_DIR_TEST_VAR: &str = "__AGENTIC_CONFIG_DIR_FOR_TESTS";
+
+/// Create an agentic command with isolated config directory.
+///
+/// This sets the test hook env var via `cmd.env()` (command-scoped, not process-global)
+/// and removes env vars that might affect test assertions.
+fn agentic_cmd_isolated(config_dir: &std::path::Path) -> Command {
+    let mut cmd = agentic_cmd();
+    cmd.env(CONFIG_DIR_TEST_VAR, config_dir);
+    // Prevent developer/CI env from affecting assertions
+    for k in [
+        "AGENTIC_SUBAGENTS_LOCATOR_MODEL",
+        "AGENTIC_SUBAGENTS_ANALYZER_MODEL",
+        "AGENTIC_REASONING_OPTIMIZER_MODEL",
+        "AGENTIC_REASONING_EXECUTOR_MODEL",
+        "AGENTIC_REASONING_EFFORT",
+    ] {
+        cmd.env_remove(k);
+    }
+    cmd
 }
 
 #[test]
@@ -152,29 +174,16 @@ fn test_show_with_local_config() {
 }
 
 #[test]
-#[serial]
 fn test_show_reflects_env_overrides() {
     let temp = TempDir::new().unwrap();
 
-    // Set env var (using new subagents env var naming)
-    // SAFETY: This test runs serially via #[serial] to avoid data races
-    unsafe {
-        std::env::set_var("AGENTIC_SUBAGENTS_LOCATOR_MODEL", "env-override-model");
-    }
-
-    let mut cmd = agentic_cmd();
-    let result = cmd
+    // Use command-scoped env (not process-global) for test isolation
+    let mut cmd = agentic_cmd_isolated(temp.path());
+    cmd.env("AGENTIC_SUBAGENTS_LOCATOR_MODEL", "env-override-model")
         .args(["config", "show", "--path", temp.path().to_str().unwrap()])
         .assert()
-        .success();
-
-    // Clean up env var
-    // SAFETY: This test runs serially via #[serial] to avoid data races
-    unsafe {
-        std::env::remove_var("AGENTIC_SUBAGENTS_LOCATOR_MODEL");
-    }
-
-    result.stdout(predicate::str::contains("env-override-model"));
+        .success()
+        .stdout(predicate::str::contains("env-override-model"));
 }
 
 #[test]
@@ -194,4 +203,79 @@ fn test_help_flag() {
         .success()
         .stdout(predicate::str::contains("config"))
         .stdout(predicate::str::contains("Configuration"));
+}
+
+// =============================================================================
+// Migrate command tests
+// =============================================================================
+
+#[test]
+fn test_migrate_dry_run_does_not_write() {
+    let temp = TempDir::new().unwrap();
+    let legacy_dir = temp.path().join(".thoughts");
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    std::fs::write(
+        legacy_dir.join("config.json"),
+        r#"{"version": "2.0", "mount_dirs": {"thoughts": "t"}}"#,
+    )
+    .unwrap();
+
+    let mut cmd = agentic_cmd_isolated(temp.path());
+    cmd.args([
+        "config",
+        "migrate",
+        "--dry-run",
+        "--path",
+        temp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("\"thoughts\""));
+
+    assert!(!temp.path().join("agentic.json").exists());
+}
+
+#[test]
+fn test_migrate_creates_file() {
+    let temp = TempDir::new().unwrap();
+    let legacy_dir = temp.path().join(".thoughts");
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    std::fs::write(
+        legacy_dir.join("config.json"),
+        r#"{"version": "2.0", "mount_dirs": {"thoughts": "docs"}}"#,
+    )
+    .unwrap();
+
+    let mut cmd = agentic_cmd_isolated(temp.path());
+    cmd.args(["config", "migrate", "--path", temp.path().to_str().unwrap()])
+        .assert()
+        .success();
+
+    assert!(temp.path().join("agentic.json").exists());
+}
+
+#[test]
+fn test_migrate_fails_if_target_exists() {
+    let temp = TempDir::new().unwrap();
+    let legacy_dir = temp.path().join(".thoughts");
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    std::fs::write(legacy_dir.join("config.json"), r#"{"version": "2.0"}"#).unwrap();
+    std::fs::write(temp.path().join("agentic.json"), "{}").unwrap();
+
+    let mut cmd = agentic_cmd_isolated(temp.path());
+    cmd.args(["config", "migrate", "--path", temp.path().to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
+}
+
+#[test]
+fn test_migrate_fails_if_no_legacy() {
+    let temp = TempDir::new().unwrap();
+
+    let mut cmd = agentic_cmd_isolated(temp.path());
+    cmd.args(["config", "migrate", "--path", temp.path().to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No legacy config"));
 }

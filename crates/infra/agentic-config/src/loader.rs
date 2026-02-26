@@ -62,17 +62,10 @@ pub struct LoadedAgenticConfig {
 /// # Test Hook
 ///
 /// Set `__AGENTIC_CONFIG_DIR_FOR_TESTS` to override the base config directory.
-/// This bypasses `dirs::config_dir()` entirely, enabling cross-platform test isolation.
-/// The env var is inert in production (never set outside tests).
+/// This is handled by [`crate::paths::xdg_config_home()`] which implements XDG
+/// path resolution with test hook support.
 pub fn global_config_path() -> Result<PathBuf> {
-    // Test hook (inert unless env var set)
-    if let Ok(override_dir) = std::env::var("__AGENTIC_CONFIG_DIR_FOR_TESTS") {
-        return Ok(PathBuf::from(override_dir)
-            .join(GLOBAL_DIR)
-            .join(GLOBAL_FILE));
-    }
-
-    let base = dirs::config_dir().context("Could not determine config dir")?;
+    let base = crate::paths::xdg_config_home()?;
     Ok(base.join(GLOBAL_DIR).join(GLOBAL_FILE))
 }
 
@@ -216,7 +209,7 @@ fn legacy_config_warning(legacy_path: &Path) -> AdvisoryWarning {
         "legacy_config.used",
         "$",
         format!(
-            "Using legacy config at {}. To migrate: `agentic config show > agentic.json`",
+            "Using legacy config at {}. To migrate: `agentic config migrate`",
             legacy_path.display()
         ),
     )
@@ -331,44 +324,24 @@ mod tests {
         )
         .unwrap();
 
-        // Set env var
-        // SAFETY: This test runs serially via #[serial] to avoid data races
-        unsafe {
-            std::env::set_var("AGENTIC_REASONING_OPTIMIZER_MODEL", "env-model");
-        }
+        // Set env var via EnvGuard (RAII cleanup)
+        let _env_guard = EnvGuard::set("AGENTIC_REASONING_OPTIMIZER_MODEL", "env-model");
 
         let loaded = load_merged(temp.path()).unwrap();
         assert_eq!(loaded.config.reasoning.optimizer_model, "env-model");
-
-        // Clean up
-        // SAFETY: This test runs serially via #[serial] to avoid data races
-        unsafe {
-            std::env::remove_var("AGENTIC_REASONING_OPTIMIZER_MODEL");
-        }
     }
 
     #[test]
     #[serial]
     fn test_env_trimmed_ignores_whitespace() {
-        // SAFETY: This test runs serially via #[serial] to avoid data races
-        unsafe {
-            std::env::set_var("TEST_AGENTIC_TRIM", "  value  ");
-        }
+        // Use EnvGuard for RAII cleanup
+        let _g1 = EnvGuard::set("TEST_AGENTIC_TRIM", "  value  ");
         let result = env_trimmed("TEST_AGENTIC_TRIM");
         assert_eq!(result, Some("value".to_string()));
 
-        // SAFETY: This test runs serially via #[serial] to avoid data races
-        unsafe {
-            std::env::set_var("TEST_AGENTIC_EMPTY", "   ");
-        }
+        let _g2 = EnvGuard::set("TEST_AGENTIC_EMPTY", "   ");
         let result = env_trimmed("TEST_AGENTIC_EMPTY");
         assert_eq!(result, None);
-
-        // SAFETY: This test runs serially via #[serial] to avoid data races
-        unsafe {
-            std::env::remove_var("TEST_AGENTIC_TRIM");
-            std::env::remove_var("TEST_AGENTIC_EMPTY");
-        }
     }
 
     #[test]
@@ -469,14 +442,10 @@ mod tests {
         // Read-only: loader must not create agentic.json
         assert!(!temp.path().join(LOCAL_FILE).exists());
 
-        // Warning must point to manual migration path
-        assert!(
-            loaded
-                .warnings
-                .iter()
-                .any(|w| w.code == "legacy_config.used"
-                    && w.message.contains("agentic config show > agentic.json"))
-        );
+        // Warning must point to migration command
+        assert!(loaded.warnings.iter().any(
+            |w| w.code == "legacy_config.used" && w.message.contains("agentic config migrate")
+        ));
     }
 
     #[test]

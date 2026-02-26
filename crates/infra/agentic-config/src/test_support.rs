@@ -19,6 +19,10 @@
 //! - All tests that use these guards MUST use `#[serial]` to prevent concurrent
 //!   execution and ensure process-global state mutations don't interfere with each other.
 //! - Never stack multiple guards of the same variable; prefer separate test functions.
+//!
+// TODO(2): Consolidate env isolation helpers across workspace. Consider shared
+// test-support crate to avoid duplicated EnvGuard patterns in agentic-logging,
+// coding-agent-tools, etc.
 
 use std::path::Path;
 

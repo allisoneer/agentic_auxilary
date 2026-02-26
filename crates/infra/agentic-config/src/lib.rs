@@ -46,6 +46,7 @@ compile_error!(
 pub mod loader;
 pub mod merge;
 pub mod migration;
+pub mod paths;
 pub mod schema;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -55,5 +56,6 @@ pub mod writer;
 
 // Re-exports for convenient access
 pub use loader::{LoadedAgenticConfig, load_merged};
+pub use paths::{agentic_config_dir, xdg_config_home};
 pub use schema::schema_json_pretty;
 pub use types::AgenticConfig;

@@ -141,6 +141,15 @@ pub fn read_legacy_v2(path: &Path) -> Result<LegacyRepoConfigV2> {
         .with_context(|| format!("Failed to parse legacy V2 config: {}", path.display()))
 }
 
+/// Read legacy V2 config and map to `agentic.json` format.
+///
+/// This is a high-level helper for the migrate command. It reads the legacy
+/// config file, parses it, and returns the mapped JSON Value ready to write.
+pub fn read_legacy_v2_as_agentic_value(legacy_path: &Path) -> Result<Value> {
+    let v2 = read_legacy_v2(legacy_path)?;
+    Ok(map_v2_to_agentic_value(v2))
+}
+
 /// Map legacy V2 config to the new `agentic.json` format.
 ///
 /// Returns a JSON Value that can be written to `agentic.json`.

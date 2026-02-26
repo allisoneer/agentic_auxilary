@@ -122,6 +122,17 @@ pub enum ConfigCommands {
         #[arg(long)]
         path: Option<PathBuf>,
     },
+
+    /// Migrate legacy `.thoughts/config.json` (v2) to `agentic.json`
+    Migrate {
+        /// Print migrated JSON to stdout without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Path to use as local directory (defaults to current dir)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
 }
 
 pub fn execute(cmd: ConfigCommands) -> Result<()> {
@@ -131,6 +142,7 @@ pub fn execute(cmd: ConfigCommands) -> Result<()> {
         ConfigCommands::Schema => cmd_schema(),
         ConfigCommands::Edit { global } => cmd_edit(global),
         ConfigCommands::Validate { path } => cmd_validate(path),
+        ConfigCommands::Migrate { dry_run, path } => cmd_migrate(dry_run, path),
     }
 }
 
@@ -164,7 +176,7 @@ fn cmd_init(global: bool, force: bool) -> Result<()> {
         let legacy_display = legacy_path.strip_prefix(&dir).unwrap_or(&legacy_path);
         anyhow::bail!(
             "Legacy config found at {}\n\
-             To migrate: agentic config show > agentic.json\n\
+             To migrate: agentic config migrate\n\
              To create fresh defaults instead: agentic config init --force",
             legacy_display.display()
         );
@@ -219,12 +231,13 @@ fn cmd_edit(global: bool) -> Result<()> {
         local
     };
 
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+    let argv = agentic_tools_utils::editor_argv()?;
 
-    let status = Command::new(&editor)
+    let status = Command::new(&argv.program)
+        .args(&argv.args)
         .arg(&path)
         .status()
-        .with_context(|| format!("Failed to run editor: {}", editor))?;
+        .with_context(|| format!("Failed to run editor: {}", argv.raw))?;
 
     if !status.success() {
         anyhow::bail!("Editor exited with non-zero status");
@@ -283,6 +296,40 @@ fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
         println!("  Local:  {}", loaded.paths.local.display());
     }
 
+    Ok(())
+}
+
+fn cmd_migrate(dry_run: bool, path: Option<PathBuf>) -> Result<()> {
+    let dir = resolve_dir(path)?;
+    let legacy_path = agentic_config::migration::legacy_thoughts_v2_path(&dir);
+    let target_path = local_config_path(&dir);
+
+    if !legacy_path.exists() {
+        anyhow::bail!("No legacy config found at {}", legacy_path.display());
+    }
+
+    if target_path.exists() {
+        anyhow::bail!(
+            "Target already exists: {}\nNo migration needed.",
+            target_path.display()
+        );
+    }
+
+    let mapped = agentic_config::migration::read_legacy_v2_as_agentic_value(&legacy_path)?;
+    let json = serde_json::to_string_pretty(&mapped)?;
+
+    if dry_run {
+        println!("{json}");
+        return Ok(());
+    }
+
+    write_atomic_str(&target_path, &json)?;
+    println!(
+        "{} Migrated {} -> {}",
+        "OK".green(),
+        legacy_path.display(),
+        target_path.display()
+    );
     Ok(())
 }
 
@@ -357,7 +404,7 @@ mod tests {
         let msg = err.to_string();
 
         assert!(msg.contains("Legacy config found"));
-        assert!(msg.contains("agentic config show > agentic.json"));
+        assert!(msg.contains("agentic config migrate"));
         assert!(msg.contains("agentic config init --force"));
         assert!(!temp.path.join("agentic.json").exists());
     }

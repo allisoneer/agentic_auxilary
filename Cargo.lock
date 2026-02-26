@@ -24,6 +24,7 @@ name = "agentic-bin"
 version = "0.1.0"
 dependencies = [
  "agentic-config",
+ "agentic-tools-utils",
  "anyhow",
  "assert_cmd",
  "atomicwrites",
@@ -150,7 +151,9 @@ dependencies = [
 name = "agentic-tools-utils"
 version = "0.1.1"
 dependencies = [
+ "anyhow",
  "reqwest 0.12.28",
+ "shlex",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -6166,6 +6169,7 @@ dependencies = [
 name = "thoughts-bin"
 version = "0.1.2"
 dependencies = [
+ "agentic-tools-utils",
  "anyhow",
  "assert_cmd",
  "chrono",

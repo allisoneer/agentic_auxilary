@@ -80,10 +80,15 @@ Warnings are returned via `LoadedAgenticConfig.warnings` and printed by CLI comm
 
 ## Module Structure
 
-- `types.rs`: All config structs with `#[serde(default)]` for partial configs
-- `loader.rs`: `load_merged()` function, env var overrides, path resolution
-- `validation.rs`: `validate()` and `detect_deprecated_keys()` functions
-- `lib.rs`: Public exports
+- `types.rs`: Config structs and serialization
+- `paths.rs`: XDG path resolution and config directory helpers
+- `loader.rs`: Load, merge, and env override logic
+- `merge.rs`: RFC 7396 JSON merge-patch implementation
+- `migration.rs`: Legacy v2 mapping helpers
+- `writer.rs`: Atomic config writing utilities
+- `validation.rs`: Advisory validation and deprecated key detection
+- `schema.rs`: JSON schema generation
+- `test_support.rs`: Test-only env guards (crate-private)
 
 ## Adding a New Config Section
 

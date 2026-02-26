@@ -68,8 +68,7 @@ pub fn get_repo_rules_path(repo_root: &Path) -> PathBuf {
 ///
 /// Returns the new location at `~/.config/agentic/repos.json`.
 pub fn get_repo_mapping_path() -> Result<PathBuf> {
-    let base = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+    let base = agentic_config::xdg_config_home()?;
     Ok(base.join("agentic").join("repos.json"))
 }
 

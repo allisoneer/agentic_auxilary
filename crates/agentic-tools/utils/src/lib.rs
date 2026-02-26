@@ -4,3 +4,6 @@ pub mod cli;
 pub mod http;
 pub mod pagination;
 pub mod secrets;
+
+// Re-exports for convenient access
+pub use cli::{Argv, editor_argv};

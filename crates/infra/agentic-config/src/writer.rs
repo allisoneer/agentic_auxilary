@@ -15,10 +15,8 @@ use std::path::Path;
 /// renamed to the target path. This ensures the file is never left in a
 /// partial state.
 pub fn write_pretty_json_atomic(path: &Path, value: &Value) -> Result<()> {
-    // Ensure parent directory exists
-    if let Some(parent) = path.parent()
-        && !parent.exists()
-    {
+    // Ensure parent directory exists (create_dir_all is idempotent)
+    if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
     }

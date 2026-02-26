@@ -3,6 +3,7 @@
 //! This module provides utilities for parsing environment variables
 //! and CLI inputs in consistent ways.
 
+use anyhow::{Result, anyhow};
 use std::collections::BTreeSet;
 
 /// Parse a comma/whitespace separated string into a lowercase-trimmed set.
@@ -90,6 +91,70 @@ pub fn set_from_env(var: &str) -> Option<BTreeSet<String>> {
         .filter(|s| !s.is_empty())
 }
 
+/// Parsed editor command with program and arguments.
+///
+/// Supports editors with arguments like `code --wait` or `nvim -u NONE`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Argv {
+    /// The original raw value (for error messages).
+    pub raw: String,
+    /// The program/binary name.
+    pub program: String,
+    /// Additional arguments to pass before the file path.
+    pub args: Vec<String>,
+}
+
+/// Get the editor command from `$VISUAL` or `$EDITOR`, parsed into program and args.
+///
+/// Precedence (Unix convention):
+/// 1. `$VISUAL` (if set and non-empty)
+/// 2. `$EDITOR` (if set and non-empty)
+/// 3. Falls back to `vi`
+///
+/// Supports editors with arguments like `code --wait` or `nvim -u NONE`.
+///
+/// # Errors
+///
+/// Returns an error if the environment variable value cannot be parsed as shell words
+/// (e.g., unbalanced quotes).
+///
+/// # Example
+///
+/// ```
+/// use agentic_tools_utils::cli::editor_argv;
+///
+/// // With no VISUAL/EDITOR set, returns "vi"
+/// std::env::remove_var("VISUAL");
+/// std::env::remove_var("EDITOR");
+/// let argv = editor_argv().unwrap();
+/// assert_eq!(argv.program, "vi");
+/// assert!(argv.args.is_empty());
+/// ```
+pub fn editor_argv() -> Result<Argv> {
+    let visual = std::env::var("VISUAL").ok();
+    let editor = std::env::var("EDITOR").ok();
+
+    let raw = visual
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| editor.as_deref().map(str::trim).filter(|s| !s.is_empty()))
+        .unwrap_or("vi")
+        .to_string();
+
+    let parts =
+        shlex::split(&raw).ok_or_else(|| anyhow!("Invalid $VISUAL/$EDITOR value: {raw}"))?;
+    let (program, args) = parts
+        .split_first()
+        .ok_or_else(|| anyhow!("Empty $VISUAL/$EDITOR value"))?;
+
+    Ok(Argv {
+        raw,
+        program: program.clone(),
+        args: args.to_vec(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +237,66 @@ mod tests {
     fn set_from_env_returns_none_when_unset() {
         let result = set_from_env("__AGENTIC_TEST_NONEXISTENT_VAR__");
         assert!(result.is_none());
+    }
+
+    // editor_argv tests use a helper that doesn't touch the actual env vars
+    // to avoid needing #[serial] for tests that don't actually call editor_argv()
+
+    fn argv_from(visual: Option<&str>, editor: Option<&str>) -> super::Result<Argv> {
+        let raw = visual
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .or_else(|| editor.map(str::trim).filter(|s| !s.is_empty()))
+            .unwrap_or("vi")
+            .to_string();
+        let parts = shlex::split(&raw).ok_or_else(|| anyhow::anyhow!("Invalid value: {raw}"))?;
+        let (program, args) = parts
+            .split_first()
+            .ok_or_else(|| anyhow::anyhow!("Empty value"))?;
+        Ok(Argv {
+            raw,
+            program: program.clone(),
+            args: args.to_vec(),
+        })
+    }
+
+    #[test]
+    fn test_editor_code_wait() {
+        let argv = argv_from(None, Some("code --wait")).unwrap();
+        assert_eq!(argv.program, "code");
+        assert_eq!(argv.args, vec!["--wait"]);
+    }
+
+    #[test]
+    fn test_editor_visual_precedence() {
+        let argv = argv_from(Some("nvim"), Some("vim")).unwrap();
+        assert_eq!(argv.program, "nvim");
+    }
+
+    #[test]
+    fn test_editor_whitespace_fallback() {
+        let argv = argv_from(Some("  "), Some("  ")).unwrap();
+        assert_eq!(argv.program, "vi");
+    }
+
+    #[test]
+    fn test_editor_quoted_args() {
+        let argv = argv_from(None, Some(r#"nvim -c "set number""#)).unwrap();
+        assert_eq!(argv.program, "nvim");
+        assert_eq!(argv.args, vec!["-c", "set number"]);
+    }
+
+    #[test]
+    fn test_editor_multiple_args() {
+        let argv = argv_from(None, Some("code --wait --new-window")).unwrap();
+        assert_eq!(argv.program, "code");
+        assert_eq!(argv.args, vec!["--wait", "--new-window"]);
+    }
+
+    #[test]
+    fn test_editor_default_vi() {
+        let argv = argv_from(None, None).unwrap();
+        assert_eq!(argv.program, "vi");
+        assert!(argv.args.is_empty());
     }
 }
