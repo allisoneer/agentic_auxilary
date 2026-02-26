@@ -3,7 +3,7 @@
 //! Endpoints for Model Context Protocol server management.
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::McpActionResponse;
 use crate::types::mcp::{
     McpAddRequest, McpAuthCallbackRequest, McpAuthStartRequest, McpAuthStartResponse,
@@ -54,9 +54,10 @@ impl McpApi {
         name: &str,
         req: &McpAuthStartRequest,
     ) -> Result<McpAuthStartResponse> {
+        let n = encode_path_segment(name);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::POST, &format!("/mcp/{}/auth", name), Some(body))
+            .request_json(Method::POST, &format!("/mcp/{}/auth", n), Some(body))
             .await
     }
 
@@ -70,11 +71,12 @@ impl McpApi {
         name: &str,
         req: &McpAuthCallbackRequest,
     ) -> Result<McpActionResponse> {
+        let n = encode_path_segment(name);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/auth/callback", name),
+                &format!("/mcp/{}/auth/callback", n),
                 Some(body),
             )
             .await
@@ -90,11 +92,12 @@ impl McpApi {
         name: &str,
         req: &McpAuthenticateRequest,
     ) -> Result<McpActionResponse> {
+        let n = encode_path_segment(name);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/auth/authenticate", name),
+                &format!("/mcp/{}/auth/authenticate", n),
                 Some(body),
             )
             .await
@@ -106,8 +109,9 @@ impl McpApi {
     ///
     /// Returns an error if the request fails.
     pub async fn auth_remove(&self, name: &str) -> Result<()> {
+        let n = encode_path_segment(name);
         self.http
-            .request_empty(Method::DELETE, &format!("/mcp/{}/auth", name), None)
+            .request_empty(Method::DELETE, &format!("/mcp/{}/auth", n), None)
             .await
     }
 
@@ -117,10 +121,11 @@ impl McpApi {
     ///
     /// Returns an error if the request fails.
     pub async fn connect(&self, name: &str) -> Result<McpActionResponse> {
+        let n = encode_path_segment(name);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/connect", name),
+                &format!("/mcp/{}/connect", n),
                 None, // OpenCode API expects no request body
             )
             .await
@@ -132,10 +137,11 @@ impl McpApi {
     ///
     /// Returns an error if the request fails.
     pub async fn disconnect(&self, name: &str) -> Result<McpActionResponse> {
+        let n = encode_path_segment(name);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/disconnect", name),
+                &format!("/mcp/{}/disconnect", n),
                 None, // OpenCode API expects no request body
             )
             .await

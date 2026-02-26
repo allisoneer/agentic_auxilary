@@ -292,4 +292,120 @@ mod tests {
         // Subscription should be cancelled
         assert!(subscription.cancel.is_cancelled());
     }
+
+    // ==================== Question Event Parsing Tests ====================
+
+    #[test]
+    fn test_question_asked_event_parsing() {
+        let json = r#"{
+            "type": "question.asked",
+            "properties": {
+                "id": "req-123",
+                "sessionId": "sess-456",
+                "questions": [
+                    {"question": "Continue?", "header": "Confirm action"}
+                ]
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::QuestionAsked { .. }));
+        if let Event::QuestionAsked { properties } = &event {
+            assert_eq!(properties.request.id, "req-123");
+            assert_eq!(properties.request.session_id, "sess-456");
+            assert_eq!(properties.request.questions.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_question_replied_event_parsing() {
+        let json = r#"{
+            "type": "question.replied",
+            "properties": {
+                "sessionId": "sess-456",
+                "requestId": "req-123",
+                "answers": [["Yes", "Confirm"], ["Option B"]]
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::QuestionReplied { .. }));
+        if let Event::QuestionReplied { properties } = &event {
+            assert_eq!(properties.session_id, "sess-456");
+            assert_eq!(properties.request_id, "req-123");
+            assert_eq!(properties.answers.len(), 2);
+            assert_eq!(properties.answers[0], vec!["Yes", "Confirm"]);
+        }
+    }
+
+    #[test]
+    fn test_question_rejected_event_parsing() {
+        let json = r#"{
+            "type": "question.rejected",
+            "properties": {
+                "sessionId": "sess-456",
+                "requestId": "req-123",
+                "reason": "User cancelled the operation"
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::QuestionRejected { .. }));
+        if let Event::QuestionRejected { properties } = &event {
+            assert_eq!(properties.session_id, "sess-456");
+            assert_eq!(properties.request_id, "req-123");
+            assert_eq!(
+                properties.reason,
+                Some("User cancelled the operation".to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn test_question_rejected_event_without_reason() {
+        let json = r#"{
+            "type": "question.rejected",
+            "properties": {
+                "sessionId": "sess-456",
+                "requestId": "req-123"
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        if let Event::QuestionRejected { properties } = &event {
+            assert!(properties.reason.is_none());
+        }
+    }
+
+    #[test]
+    fn test_question_event_session_id_extraction() {
+        // Test that session_id() method works for question events
+        let asked_json = r#"{
+            "type": "question.asked",
+            "properties": {
+                "id": "req-1",
+                "sessionId": "sess-asked",
+                "questions": []
+            }
+        }"#;
+        let asked: Event = serde_json::from_str(asked_json).unwrap();
+        assert_eq!(asked.session_id(), Some("sess-asked"));
+
+        let replied_json = r#"{
+            "type": "question.replied",
+            "properties": {
+                "sessionId": "sess-replied",
+                "requestId": "req-1",
+                "answers": []
+            }
+        }"#;
+        let replied: Event = serde_json::from_str(replied_json).unwrap();
+        assert_eq!(replied.session_id(), Some("sess-replied"));
+
+        let rejected_json = r#"{
+            "type": "question.rejected",
+            "properties": {
+                "sessionId": "sess-rejected",
+                "requestId": "req-1"
+            }
+        }"#;
+        let rejected: Event = serde_json::from_str(rejected_json).unwrap();
+        assert_eq!(rejected.session_id(), Some("sess-rejected"));
+    }
 }

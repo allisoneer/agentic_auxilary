@@ -3,7 +3,7 @@
 //! This module provides methods for message endpoints (6 total).
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::{CommandResponse, PromptResponse, ShellResponse};
 use crate::types::message::{CommandRequest, Message, PromptRequest, ShellRequest};
 use reqwest::Method;
@@ -26,11 +26,12 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn prompt(&self, session_id: &str, req: &PromptRequest) -> Result<PromptResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/message", session_id),
+                &format!("/session/{}/message", sid),
                 Some(body),
             )
             .await
@@ -42,12 +43,9 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn list(&self, session_id: &str) -> Result<Vec<Message>> {
+        let sid = encode_path_segment(session_id);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/session/{}/message", session_id),
-                None,
-            )
+            .request_json(Method::GET, &format!("/session/{}/message", sid), None)
             .await
     }
 
@@ -57,10 +55,12 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn get(&self, session_id: &str, message_id: &str) -> Result<Message> {
+        let sid = encode_path_segment(session_id);
+        let mid = encode_path_segment(message_id);
         self.http
             .request_json(
                 Method::GET,
-                &format!("/session/{}/message/{}", session_id, message_id),
+                &format!("/session/{}/message/{}", sid, mid),
                 None,
             )
             .await
@@ -79,11 +79,12 @@ impl MessagesApi {
         session_id: &str,
         req: &PromptRequest,
     ) -> Result<PromptResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/prompt_async", session_id),
+                &format!("/session/{}/prompt_async", sid),
                 Some(body),
             )
             .await
@@ -95,11 +96,12 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/command", session_id),
+                &format!("/session/{}/command", sid),
                 Some(body),
             )
             .await
@@ -111,13 +113,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn shell(&self, session_id: &str, req: &ShellRequest) -> Result<ShellResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/shell", session_id),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/session/{}/shell", sid), Some(body))
             .await
     }
 }

@@ -3,7 +3,7 @@
 //! Endpoints for managing LLM providers.
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::{OAuthCallbackResponse, SetAuthResponse};
 use crate::types::provider::{
     OAuthAuthorizeResponse, OAuthCallbackRequest, ProviderAuth, ProviderListResponse,
@@ -52,10 +52,11 @@ impl ProvidersApi {
     ///
     /// Returns an error if the request fails.
     pub async fn oauth_authorize(&self, provider_id: &str) -> Result<OAuthAuthorizeResponse> {
+        let pid = encode_path_segment(provider_id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/provider/{}/oauth/authorize", provider_id),
+                &format!("/provider/{}/oauth/authorize", pid),
                 Some(serde_json::json!({})),
             )
             .await
@@ -71,11 +72,12 @@ impl ProvidersApi {
         provider_id: &str,
         req: &OAuthCallbackRequest,
     ) -> Result<OAuthCallbackResponse> {
+        let pid = encode_path_segment(provider_id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/provider/{}/oauth/callback", provider_id),
+                &format!("/provider/{}/oauth/callback", pid),
                 Some(body),
             )
             .await
@@ -91,9 +93,10 @@ impl ProvidersApi {
         provider_id: &str,
         req: &SetAuthRequest,
     ) -> Result<SetAuthResponse> {
+        let pid = encode_path_segment(provider_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PUT, &format!("/auth/{}", provider_id), Some(body))
+            .request_json(Method::PUT, &format!("/auth/{}", pid), Some(body))
             .await
     }
 }

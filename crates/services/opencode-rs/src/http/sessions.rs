@@ -3,7 +3,7 @@
 //! This module provides methods for session endpoints (18 total).
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::session::{
     CreateSessionRequest, RevertRequest, Session, SessionDiff, SessionStatus, ShareInfo,
     SummarizeRequest, TodoItem, UpdateSessionRequest,
@@ -40,8 +40,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails or session not found.
     pub async fn get(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}", id), None)
+            .request_json(Method::GET, &format!("/session/{}", sid), None)
             .await
     }
 
@@ -60,8 +61,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn delete(&self, id: &str) -> Result<()> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_empty(Method::DELETE, &format!("/session/{}", id), None)
+            .request_empty(Method::DELETE, &format!("/session/{}", sid), None)
             .await
     }
 
@@ -71,10 +73,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn fork(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/fork", id),
+                &format!("/session/{}/fork", sid),
                 Some(serde_json::json!({})),
             )
             .await
@@ -86,10 +89,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn abort(&self, id: &str) -> Result<()> {
+        let sid = encode_path_segment(id);
         self.http
             .request_empty(
                 Method::POST,
-                &format!("/session/{}/abort", id),
+                &format!("/session/{}/abort", sid),
                 Some(serde_json::json!({})),
             )
             .await
@@ -112,8 +116,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn children(&self, id: &str) -> Result<Vec<Session>> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}/children", id), None)
+            .request_json(Method::GET, &format!("/session/{}/children", sid), None)
             .await
     }
 
@@ -123,8 +128,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn todo(&self, id: &str) -> Result<Vec<TodoItem>> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}/todo", id), None)
+            .request_json(Method::GET, &format!("/session/{}/todo", sid), None)
             .await
     }
 
@@ -134,9 +140,10 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn update(&self, id: &str, req: &UpdateSessionRequest) -> Result<Session> {
+        let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PATCH, &format!("/session/{}", id), Some(body))
+            .request_json(Method::PATCH, &format!("/session/{}", sid), Some(body))
             .await
     }
 
@@ -146,10 +153,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn init(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/init", id),
+                &format!("/session/{}/init", sid),
                 Some(serde_json::json!({})),
             )
             .await
@@ -161,10 +169,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn share(&self, id: &str) -> Result<ShareInfo> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/share", id),
+                &format!("/session/{}/share", sid),
                 Some(serde_json::json!({})),
             )
             .await
@@ -176,8 +185,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn unshare(&self, id: &str) -> Result<()> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_empty(Method::DELETE, &format!("/session/{}/share", id), None)
+            .request_empty(Method::DELETE, &format!("/session/{}/share", sid), None)
             .await
     }
 
@@ -187,8 +197,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn diff(&self, id: &str) -> Result<SessionDiff> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}/diff", id), None)
+            .request_json(Method::GET, &format!("/session/{}/diff", sid), None)
             .await
     }
 
@@ -198,11 +209,12 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn diff_since_message(&self, id: &str, message_id: &str) -> Result<SessionDiff> {
-        let encoded = urlencoding::encode(message_id);
+        let sid = encode_path_segment(id);
+        let mid = encode_path_segment(message_id);
         self.http
             .request_json(
                 Method::GET,
-                &format!("/session/{}/diff?messageID={}", id, encoded),
+                &format!("/session/{}/diff?messageID={}", sid, mid),
                 None,
             )
             .await
@@ -214,11 +226,12 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn summarize(&self, id: &str, req: &SummarizeRequest) -> Result<Session> {
+        let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/summarize", id),
+                &format!("/session/{}/summarize", sid),
                 Some(body),
             )
             .await
@@ -230,9 +243,14 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn revert(&self, id: &str, req: &RevertRequest) -> Result<Session> {
+        let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::POST, &format!("/session/{}/revert", id), Some(body))
+            .request_json(
+                Method::POST,
+                &format!("/session/{}/revert", sid),
+                Some(body),
+            )
             .await
     }
 
@@ -242,10 +260,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn unrevert(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/unrevert", id),
+                &format!("/session/{}/unrevert", sid),
                 Some(serde_json::json!({})),
             )
             .await

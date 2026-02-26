@@ -193,6 +193,36 @@ impl Client {
         crate::http::misc::MiscApi::new(self.http.clone())
     }
 
+    /// Get the question API.
+    #[cfg(feature = "http")]
+    pub fn question(&self) -> crate::http::question::QuestionApi {
+        crate::http::question::QuestionApi::new(self.http.clone())
+    }
+
+    /// Get the skills API.
+    #[cfg(feature = "http")]
+    pub fn skills(&self) -> crate::http::skills::SkillsApi {
+        crate::http::skills::SkillsApi::new(self.http.clone())
+    }
+
+    /// Get the snapshots API.
+    #[cfg(feature = "http")]
+    pub fn snapshots(&self) -> crate::http::snapshots::SnapshotsApi {
+        crate::http::snapshots::SnapshotsApi::new(self.http.clone())
+    }
+
+    /// Get the resource API (experimental).
+    #[cfg(feature = "http")]
+    pub fn resource(&self) -> crate::http::resource::ResourceApi {
+        crate::http::resource::ResourceApi::new(self.http.clone())
+    }
+
+    /// Get the global API for event stream metadata and health checks.
+    #[cfg(feature = "http")]
+    pub fn global(&self) -> crate::http::global::GlobalApi {
+        crate::http::global::GlobalApi::new(self.http.clone())
+    }
+
     /// Simple helper to create session and send a text prompt.
     ///
     /// Note: This method returns immediately after sending the prompt.
