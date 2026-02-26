@@ -269,6 +269,7 @@ mod tests {
             .and(body_json(serde_json::json!({})))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "session123",
+                "slug": "session123",
                 "projectId": "proj1",
                 "directory": "/path",
                 "title": "New Session",
@@ -301,6 +302,7 @@ mod tests {
             .and(path("/session/abc123"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "abc123",
+                "slug": "abc123",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Test Session",
@@ -330,8 +332,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/session"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {"id": "s1", "projectId": "p1", "directory": "/path", "title": "S1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}},
-                {"id": "s2", "projectId": "p1", "directory": "/path", "title": "S2", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
+                {"id": "s1", "slug": "s1", "projectId": "p1", "directory": "/path", "title": "S1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}},
+                {"id": "s2", "slug": "s2", "projectId": "p1", "directory": "/path", "title": "S2", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
             ])))
             .mount(&mock_server)
             .await;
@@ -376,7 +378,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/session/parent123/children"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {"id": "child1", "projectId": "p1", "directory": "/path", "title": "Child 1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
+                {"id": "child1", "slug": "child1", "projectId": "p1", "directory": "/path", "title": "Child 1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
             ])))
             .mount(&mock_server)
             .await;
@@ -429,6 +431,7 @@ mod tests {
             .and(path("/session/s1"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Updated Title",
@@ -537,6 +540,7 @@ mod tests {
             .and(path("/session/s1/summarize"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Summarized Session",
@@ -576,6 +580,7 @@ mod tests {
             .and(path("/session/s1/revert"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Reverted Session",
@@ -614,6 +619,7 @@ mod tests {
             .and(path("/session/s1/unrevert"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Unreverted Session",

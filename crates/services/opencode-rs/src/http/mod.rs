@@ -2,8 +2,14 @@
 //!
 //! This module provides the core HTTP client and resource API modules.
 
-// TODO(2): Add encode_path_segment() helper and apply to all path parameter interpolations
-// across sessions, messages, parts, providers, pty, mcp, and project modules (~38 call sites)
+/// Percent-encode a single URL path segment (NOT a full path).
+///
+/// Use this for path parameters to prevent injection (e.g., IDs containing `/`).
+/// The full rollout across all HTTP modules will happen in Phase 9.
+#[allow(dead_code)] // Will be used in Phase 9 rollout
+pub(crate) fn encode_path_segment(raw: &str) -> String {
+    urlencoding::encode(raw).into_owned()
+}
 
 use crate::error::{OpencodeError, Result};
 use reqwest::{Client as ReqClient, Method, Response};

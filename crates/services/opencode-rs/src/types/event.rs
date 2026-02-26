@@ -510,6 +510,7 @@ mod tests {
             "properties": {
                 "info": {
                     "id": "sess-123",
+                    "slug": "sess-123",
                     "title": "Test Session",
                     "version": "1.0"
                 }

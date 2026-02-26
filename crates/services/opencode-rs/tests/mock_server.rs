@@ -127,6 +127,7 @@ async fn session_lifecycle() {
         .and(path("/session"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "id": "test-session-123",
+            "slug": "test-session-123",
             "projectId": "proj1",
             "directory": "/path/to/project",
             "title": "Test Session",

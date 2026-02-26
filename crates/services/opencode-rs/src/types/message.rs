@@ -24,6 +24,84 @@ pub struct MessageInfo {
     /// Message variant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
+
+    // Upstream parity fields
+    /// Message format.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Model reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<crate::types::project::ModelRef>,
+    /// System prompt override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+    /// Tools available for this message.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<String>,
+    /// Parent message ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    /// Model ID (denormalized).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    /// Provider ID (denormalized).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    /// Path context for this message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<MessagePath>,
+    /// Cost of this message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<f64>,
+    /// Token usage for this message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<TokenUsage>,
+    /// Structured output/response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structured: Option<serde_json::Value>,
+    /// Finish reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<String>,
+    /// Additional fields from server (forward compatibility).
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Path context for a message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessagePath {
+    /// Current working directory.
+    pub cwd: String,
+    /// Root directory.
+    pub root: String,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Typed view of message info based on role.
+pub enum MessageInfoKind<'a> {
+    /// User message.
+    User(&'a MessageInfo),
+    /// Assistant message.
+    Assistant(&'a MessageInfo),
+    /// System message.
+    System(&'a MessageInfo),
+    /// Unknown/other role.
+    Other(&'a MessageInfo),
+}
+
+impl MessageInfo {
+    /// Get a typed view of this message based on its role.
+    pub fn kind(&self) -> MessageInfoKind<'_> {
+        match self.role.as_str() {
+            "user" => MessageInfoKind::User(self),
+            "assistant" => MessageInfoKind::Assistant(self),
+            "system" => MessageInfoKind::System(self),
+            _ => MessageInfoKind::Other(self),
+        }
+    }
 }
 
 /// Message timestamps.
@@ -71,6 +149,7 @@ pub type MessageWithParts = Message;
 
 /// A content part within a message (12 variants).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Part {
     /// Text content.
@@ -262,6 +341,7 @@ pub struct FilePartSourceText {
 
 /// Source information for a file part (internally tagged by "type").
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 #[serde(tag = "type")]
 pub enum FilePartSource {
     /// File source.
@@ -419,6 +499,7 @@ pub struct ToolStateError {
 /// Variant order matters for untagged enums - most specific variants with more
 /// required fields must come first to avoid less specific variants matching early.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 #[serde(untagged)]
 pub enum ToolState {
     /// Tool completed successfully.
@@ -486,6 +567,9 @@ impl ToolState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
+    /// Total tokens (sum of input + output + reasoning).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
     /// Input tokens.
     pub input: u64,
     /// Output tokens.
@@ -496,6 +580,9 @@ pub struct TokenUsage {
     /// Cache usage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache: Option<CacheUsage>,
+    /// Additional fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 /// Cache usage information.
@@ -535,6 +622,7 @@ pub struct PromptRequest {
 
 /// A content part in a prompt request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum PromptPart {
     /// Text content.
@@ -778,5 +866,142 @@ mod tests {
         } else {
             panic!("Expected FilePartSource::File");
         }
+    }
+
+    // ==================== MessageInfo Tests ====================
+
+    #[test]
+    fn test_message_info_minimal() {
+        let json = r#"{
+            "id": "msg-123",
+            "role": "user",
+            "time": {"created": 1234567890}
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.id, "msg-123");
+        assert_eq!(info.role, "user");
+        assert!(info.tokens.is_none());
+        assert!(info.cost.is_none());
+    }
+
+    #[test]
+    fn test_message_info_with_new_fields() {
+        let json = r#"{
+            "id": "msg-123",
+            "sessionId": "sess-456",
+            "role": "assistant",
+            "time": {"created": 1234567890, "completed": 1234567900},
+            "format": "markdown",
+            "model": {"providerId": "anthropic", "modelId": "claude-3"},
+            "system": "You are a helpful assistant",
+            "tools": ["read_file", "write_file"],
+            "parentId": "msg-100",
+            "modelId": "claude-3",
+            "providerId": "anthropic",
+            "cost": 0.0125,
+            "tokens": {"total": 1500, "input": 1000, "output": 500, "reasoning": 0},
+            "finish": "stop"
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.id, "msg-123");
+        assert_eq!(info.session_id, Some("sess-456".to_string()));
+        assert_eq!(info.role, "assistant");
+        assert_eq!(info.format, Some("markdown".to_string()));
+        assert!(info.model.is_some());
+        assert_eq!(info.model.as_ref().unwrap().provider_id, "anthropic");
+        assert_eq!(info.system, Some("You are a helpful assistant".to_string()));
+        assert_eq!(info.tools.len(), 2);
+        assert_eq!(info.parent_id, Some("msg-100".to_string()));
+        assert_eq!(info.model_id, Some("claude-3".to_string()));
+        assert_eq!(info.provider_id, Some("anthropic".to_string()));
+        assert_eq!(info.cost, Some(0.0125));
+        assert!(info.tokens.is_some());
+        let tokens = info.tokens.unwrap();
+        assert_eq!(tokens.total, Some(1500));
+        assert_eq!(tokens.input, 1000);
+        assert_eq!(tokens.output, 500);
+        assert_eq!(info.finish, Some("stop".to_string()));
+    }
+
+    #[test]
+    fn test_message_info_with_path() {
+        let json = r#"{
+            "id": "msg-123",
+            "role": "user",
+            "time": {"created": 1234567890},
+            "path": {"cwd": "/home/user/project", "root": "/home/user"}
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(info.path.is_some());
+        let path = info.path.unwrap();
+        assert_eq!(path.cwd, "/home/user/project");
+        assert_eq!(path.root, "/home/user");
+    }
+
+    #[test]
+    fn test_message_info_extra_fields_preserved() {
+        let json = r#"{
+            "id": "msg-123",
+            "role": "user",
+            "time": {"created": 1234567890},
+            "futureField": "preserved"
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.extra.get("futureField").unwrap(), "preserved");
+    }
+
+    #[test]
+    fn test_message_info_kind_user() {
+        let json = r#"{"id": "m1", "role": "user", "time": {"created": 1}}"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(matches!(info.kind(), MessageInfoKind::User(_)));
+    }
+
+    #[test]
+    fn test_message_info_kind_assistant() {
+        let json = r#"{"id": "m1", "role": "assistant", "time": {"created": 1}}"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(matches!(info.kind(), MessageInfoKind::Assistant(_)));
+    }
+
+    #[test]
+    fn test_message_info_kind_system() {
+        let json = r#"{"id": "m1", "role": "system", "time": {"created": 1}}"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(matches!(info.kind(), MessageInfoKind::System(_)));
+    }
+
+    #[test]
+    fn test_message_info_kind_other() {
+        let json = r#"{"id": "m1", "role": "tool", "time": {"created": 1}}"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(matches!(info.kind(), MessageInfoKind::Other(_)));
+    }
+
+    #[test]
+    fn test_token_usage_with_total() {
+        let json = r#"{"total": 2000, "input": 1500, "output": 500, "reasoning": 0}"#;
+        let tokens: TokenUsage = serde_json::from_str(json).unwrap();
+        assert_eq!(tokens.total, Some(2000));
+        assert_eq!(tokens.input, 1500);
+        assert_eq!(tokens.output, 500);
+        assert_eq!(tokens.reasoning, 0);
+    }
+
+    #[test]
+    fn test_token_usage_without_total() {
+        let json = r#"{"input": 1500, "output": 500}"#;
+        let tokens: TokenUsage = serde_json::from_str(json).unwrap();
+        assert!(tokens.total.is_none());
+        assert_eq!(tokens.input, 1500);
+        assert_eq!(tokens.output, 500);
+    }
+
+    #[test]
+    fn test_message_path_deserialize() {
+        let json = r#"{"cwd": "/path/to/dir", "root": "/path"}"#;
+        let path: MessagePath = serde_json::from_str(json).unwrap();
+        assert_eq!(path.cwd, "/path/to/dir");
+        assert_eq!(path.root, "/path");
     }
 }
