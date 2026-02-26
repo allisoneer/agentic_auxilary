@@ -7,11 +7,11 @@ Guidance for Claude Code when working with this repository.
 <!-- BEGIN:xtask:autogen crate-index -->
 ### agentic-tools
 
+- `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-core` (lib) - `crates/agentic-tools/core/`
 - `agentic-mcp` (app) - `apps/agentic-mcp/`
 - `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
 - `agentic-tools-registry` (lib) - `crates/agentic-tools/registry/`
-- `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 

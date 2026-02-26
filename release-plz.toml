@@ -66,6 +66,13 @@ git_tag_enable = true
 release = true
 
 [[package]]
+name = "agentic-tools-utils"
+changelog_path = "crates/agentic-tools/utils/CHANGELOG.md"
+git_tag_name = "agentic-tools-utils-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "thoughts-bin"
 changelog_path = "apps/thoughts/CHANGELOG.md"
 git_tag_name = "thoughts-bin-v{{ version }}"
@@ -118,13 +125,6 @@ release = true
 name = "coding_agent_tools"
 changelog_path = "crates/tools/coding-agent-tools/CHANGELOG.md"
 git_tag_name = "coding_agent_tools-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "agentic-tools-utils"
-changelog_path = "crates/agentic-tools/utils/CHANGELOG.md"
-git_tag_name = "agentic-tools-utils-v{{ version }}"
 git_tag_enable = true
 release = true
 
