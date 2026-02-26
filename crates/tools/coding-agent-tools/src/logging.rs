@@ -1,7 +1,7 @@
-//! Logging utilities for coding_agent_tools.
+//! Logging utilities for `coding_agent_tools`.
 //!
 //! Provides a helper context that reduces duplication when logging tool calls
-//! to the thoughts logs directory using agentic_logging.
+//! to the thoughts logs directory using `agentic_logging`.
 
 use agentic_logging::chrono::{DateTime, Utc};
 use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
@@ -13,7 +13,7 @@ use thoughts_tool::active_logs_dir;
 /// Logging is best-effort: if the logs directory is unavailable (e.g., branch lockout),
 /// the tool call still succeeds without logging.
 pub struct ToolLogCtx {
-    /// Timer for this call (contains call_id and started_at)
+    /// Timer for this call (contains `call_id` and `started_at`)
     pub timer: CallTimer,
     /// Writer instance (if logs dir was resolved)
     writer: Option<LogWriter>,
@@ -105,6 +105,7 @@ impl ToolLogCtx {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -424,7 +425,11 @@ mod tests {
             }
             Some((filename, _completed_at)) => {
                 // Valid in environments with active branch
-                assert!(filename.ends_with(".md"));
+                assert!(
+                    std::path::Path::new(&filename)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+                );
             }
         }
     }

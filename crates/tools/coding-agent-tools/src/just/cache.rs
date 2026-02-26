@@ -32,13 +32,25 @@ impl JustRegistry {
         Self::default()
     }
 
+    // TODO(3): Consider returning Result<MutexGuard, ToolError> instead of panicking
+    // on poison. For cache structures, recovering via `poisoned.into_inner()` or
+    // returning an error may provide better server resilience.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a prior panic while holding the lock. \
+                  For this cache, we fail fast rather than risk inconsistent state."
+    )]
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.inner.lock().unwrap()
+    }
+
     /// Refresh the list of discovered justfiles.
     pub async fn refresh(&self, repo_root: &str) -> Result<(), String> {
         let root = repo_root.to_string();
         let paths = tokio::task::spawn_blocking(move || find_justfiles(&root))
             .await
             .map_err(|e| format!("spawn_blocking failed: {e}"))??;
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
         inner.last_paths = paths;
         Ok(())
     }
@@ -54,14 +66,14 @@ impl JustRegistry {
     ) -> Result<Vec<(String, ParsedRecipe)>, String> {
         // Ensure discovery has run - check without holding lock across await
         let needs_refresh = {
-            let inner = self.inner.lock().unwrap();
+            let inner = self.lock_inner();
             inner.last_paths.is_empty()
         };
         if needs_refresh {
             self.refresh(repo_root).await?;
         }
 
-        let paths = self.inner.lock().unwrap().last_paths.clone();
+        let paths = self.lock_inner().last_paths.clone();
         let mut results = Vec::new();
 
         for jf in paths {
@@ -74,23 +86,19 @@ impl JustRegistry {
             .map_err(|e| format!("stat failed for {}: {e}", jf.path))?;
 
             let need_parse = {
-                let inner = self.inner.lock().unwrap();
-                inner
-                    .files
-                    .get(&jf.path)
-                    .map(|c| c.mtime < mtime)
-                    .unwrap_or(true)
+                let inner = self.lock_inner();
+                inner.files.get(&jf.path).is_none_or(|c| c.mtime < mtime)
             };
 
             if need_parse {
                 let recipes = parse_justfile(&jf.path).await?;
-                let mut inner = self.inner.lock().unwrap();
+                let mut inner = self.lock_inner();
                 inner
                     .files
                     .insert(jf.path.clone(), CachedJustfile { mtime, recipes });
             }
 
-            let inner = self.inner.lock().unwrap();
+            let inner = self.lock_inner();
             if let Some(cached) = inner.files.get(&jf.path) {
                 for r in &cached.recipes {
                     results.push((jf.dir.clone(), r.clone()));
@@ -103,13 +111,14 @@ impl JustRegistry {
     /// Force clear all cached data (useful for testing).
     #[cfg(test)]
     pub fn clear(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
         inner.files.clear();
         inner.last_paths.clear();
     }
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs;

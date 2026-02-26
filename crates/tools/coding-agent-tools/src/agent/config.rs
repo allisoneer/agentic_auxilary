@@ -23,8 +23,8 @@ pub fn model_for(agent_type: AgentType) -> Model {
 /// Get the enabled tools for a given type × location combination.
 /// This list includes both built-in tools and MCP tools (prefixed with "mcp__").
 pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
-    use AgentLocation::*;
-    use AgentType::*;
+    use AgentLocation::{Codebase, References, Thoughts, Web};
+    use AgentType::{Analyzer, Locator};
 
     match (agent_type, location) {
         (Locator, Codebase) => vec![
@@ -89,8 +89,8 @@ pub fn compose_prompt(agent_type: AgentType, location: AgentLocation) -> String 
 }
 
 /// Extract base tool names for our agentic-mcp server from enabled tool IDs.
-/// Example: "mcp__agentic-mcp__cli_ls" -> "cli_ls".
-/// Uses BTreeSet for deterministic ordering.
+/// Example: "mcp__agentic-mcp__cli_ls" -> "`cli_ls`".
+/// Uses `BTreeSet` for deterministic ordering.
 fn agentic_mcp_allowlist_from(enabled: &[String]) -> Vec<String> {
     use std::collections::BTreeSet;
     const PREFIX: &str = "mcp__agentic-mcp__";
@@ -296,9 +296,7 @@ mod tests {
                 let tools = enabled_tools_for(agent_type, location);
                 assert!(
                     !tools.is_empty(),
-                    "No tools for {:?} + {:?}",
-                    agent_type,
-                    location
+                    "No tools for {agent_type:?} + {location:?}"
                 );
             }
         }
@@ -317,15 +315,11 @@ mod tests {
                 let prompt = compose_prompt(agent_type, location);
                 assert!(
                     !prompt.is_empty(),
-                    "Empty prompt for {:?} + {:?}",
-                    agent_type,
-                    location
+                    "Empty prompt for {agent_type:?} + {location:?}"
                 );
                 assert!(
                     prompt.len() > 100,
-                    "Prompt too short for {:?} + {:?}",
-                    agent_type,
-                    location
+                    "Prompt too short for {agent_type:?} + {location:?}"
                 );
             }
         }

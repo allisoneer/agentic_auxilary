@@ -90,8 +90,7 @@ pub async fn parse_justfile(path: &str) -> Result<Vec<ParsedRecipe>, String> {
             let is_mcp_hidden = r
                 .doc
                 .as_ref()
-                .map(|d| d.to_ascii_lowercase().contains("@mcp-hidden"))
-                .unwrap_or(false);
+                .is_some_and(|d| d.to_ascii_lowercase().contains("@mcp-hidden"));
             let params = r
                 .parameters
                 .into_iter()
@@ -131,8 +130,7 @@ pub fn parse_dump_json(json: &str) -> Result<Vec<ParsedRecipe>, String> {
             let is_mcp_hidden = r
                 .doc
                 .as_ref()
-                .map(|d| d.to_ascii_lowercase().contains("@mcp-hidden"))
-                .unwrap_or(false);
+                .is_some_and(|d| d.to_ascii_lowercase().contains("@mcp-hidden"));
             let params = r
                 .parameters
                 .into_iter()
@@ -160,6 +158,7 @@ pub fn parse_dump_json(json: &str) -> Result<Vec<ParsedRecipe>, String> {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

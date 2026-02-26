@@ -43,18 +43,11 @@ async fn test_messages_create_with_caching() {
             role: MessageRole::User,
             content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
                 text: "Hello".into(),
+                citations: None,
                 cache_control: Some(CacheControl::ephemeral_5m()),
             }]),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let cfg = AnthropicConfig::new()
@@ -88,18 +81,11 @@ async fn test_ttl_ordering_validation() {
             role: MessageRole::User,
             content: MessageContentParam::Blocks(vec![ContentBlockParam::Text {
                 text: "User".into(),
+                citations: None,
                 cache_control: Some(CacheControl::ephemeral_1h()), // 1h after 5m = invalid
             }]),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let cfg = AnthropicConfig::new()

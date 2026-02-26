@@ -1,3 +1,6 @@
+#![expect(clippy::unwrap_used)]
+#![expect(clippy::undocumented_unsafe_blocks)]
+
 use coding_agent_tools::CodingAgentTools;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -137,7 +140,6 @@ async fn tilde_expansion_error_when_home_unavailable() {
     let err_msg = res.unwrap_err().to_string();
     assert!(
         err_msg.contains("Could not determine home directory"),
-        "Expected home directory error, got: {}",
-        err_msg
+        "Expected home directory error, got: {err_msg}"
     );
 }

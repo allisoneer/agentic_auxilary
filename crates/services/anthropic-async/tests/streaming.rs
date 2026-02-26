@@ -122,7 +122,7 @@ fn event_mapping_content_block_start_text() {
                 ContentBlockStartData::Text { text } => {
                     assert_eq!(text, "");
                 }
-                ContentBlockStartData::ToolUse { .. } => panic!("Expected Text content block"),
+                _ => panic!("Expected Text content block"),
             }
         }
         _ => panic!("Expected ContentBlockStart"),
@@ -147,7 +147,7 @@ fn event_mapping_content_block_start_tool_use() {
                     assert_eq!(id, "tool_123");
                     assert_eq!(name, "get_weather");
                 }
-                ContentBlockStartData::Text { .. } => panic!("Expected ToolUse content block"),
+                _ => panic!("Expected ToolUse content block"),
             }
         }
         _ => panic!("Expected ContentBlockStart"),
@@ -325,8 +325,8 @@ fn accumulator_text_blocks() {
     assert_eq!(response.id, "msg_test");
     assert_eq!(response.content.len(), 1);
     match &response.content[0] {
-        ContentBlock::Text { text } => assert_eq!(text, "Hello, world!"),
-        ContentBlock::ToolUse { .. } => panic!("Expected Text block"),
+        ContentBlock::Text { text, .. } => assert_eq!(text, "Hello, world!"),
+        _ => panic!("Expected Text block"),
     }
     assert_eq!(response.stop_reason, Some("end_turn".to_string()));
 }
@@ -401,7 +401,7 @@ fn accumulator_tool_use_input_json() {
             assert_eq!(name, "get_weather");
             assert_eq!(input["city"], "Paris");
         }
-        ContentBlock::Text { .. } => panic!("Expected ToolUse block"),
+        _ => panic!("Expected ToolUse block"),
     }
 }
 

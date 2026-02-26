@@ -46,7 +46,7 @@ pub struct GrepConfig {
     pub offset: usize,
 }
 
-/// Maximum allowed head_limit to prevent context bloat.
+/// Maximum allowed `head_limit` to prevent context bloat.
 const MAX_HEAD_LIMIT: usize = 1000;
 
 /// Size of buffer for binary detection (8KB).
@@ -60,21 +60,20 @@ fn is_binary_file(path: &Path) -> std::io::Result<bool> {
     Ok(buffer[..bytes_read].contains(&0))
 }
 
-/// Build a GlobSet for include patterns.
+/// Build a `GlobSet` for include patterns.
 fn build_include_globset(patterns: &[String]) -> Result<Option<GlobSet>, ToolError> {
     if patterns.is_empty() {
         return Ok(None);
     }
     let mut builder = GlobSetBuilder::new();
     for p in patterns {
-        let g = Glob::new(p).map_err(|e| {
-            ToolError::invalid_input(format!("Invalid include glob '{}': {}", p, e))
-        })?;
+        let g = Glob::new(p)
+            .map_err(|e| ToolError::invalid_input(format!("Invalid include glob '{p}': {e}")))?;
         builder.add(g);
     }
     let gs = builder
         .build()
-        .map_err(|e| ToolError::internal(format!("Failed to build include globset: {}", e)))?;
+        .map_err(|e| ToolError::internal(format!("Failed to build include globset: {e}")))?;
     Ok(Some(gs))
 }
 
@@ -119,6 +118,10 @@ fn search_file_lines(
             match_count += regex.find_iter(&line).count();
 
             // Add pending context-before lines
+            #[expect(
+                clippy::iter_with_drain,
+                reason = "drain() clears buffer in-place; into_iter() would require reassignment"
+            )]
             for (ln, content) in before_buffer.drain(..) {
                 if matched_lines.is_empty() || ln > last_matched_line {
                     matched_lines.push((ln, content));
@@ -207,7 +210,7 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
     }
     let regex = rb
         .build()
-        .map_err(|e| ToolError::invalid_input(format!("Invalid regex: {}", e)))?;
+        .map_err(|e| ToolError::invalid_input(format!("Invalid regex: {e}")))?;
 
     // Build include globset
     let include_gs = build_include_globset(&cfg.include_globs)?;
@@ -226,11 +229,21 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
     if root_path.is_file() {
         let rel_path = root_path
             .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| cfg.root.clone());
+            .map_or_else(|| cfg.root.clone(), |s| s.to_string_lossy().to_string());
 
         // Check binary
-        if !cfg.include_binary {
+        if cfg.include_binary {
+            let result = if cfg.multiline {
+                search_file_multiline(root_path, &rel_path, &regex)
+            } else {
+                search_file_lines(root_path, &rel_path, &regex, &cfg)
+            };
+            match result {
+                Ok(Some(m)) => all_matches.push(m),
+                Ok(None) => {}
+                Err(e) => warnings.push(format!("Could not read {rel_path}: {e}")),
+            }
+        } else {
             match is_binary_file(root_path) {
                 Ok(true) => {
                     binary_skipped = 1;
@@ -246,19 +259,8 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
                     }
                 }
                 Err(e) => {
-                    warnings.push(format!("Could not read {}: {}", rel_path, e));
+                    warnings.push(format!("Could not read {rel_path}: {e}"));
                 }
-            }
-        } else {
-            let result = if cfg.multiline {
-                search_file_multiline(root_path, &rel_path, &regex)
-            } else {
-                search_file_lines(root_path, &rel_path, &regex, &cfg)
-            };
-            match result {
-                Ok(Some(m)) => all_matches.push(m),
-                Ok(None) => {}
-                Err(e) => warnings.push(format!("Could not read {}: {}", rel_path, e)),
             }
         }
     } else {
@@ -296,10 +298,10 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
                         continue;
                     }
 
-                    let rel_path = path
-                        .strip_prefix(root_path)
-                        .map(|p| p.to_string_lossy().replace('\\', "/"))
-                        .unwrap_or_else(|_| path.to_string_lossy().to_string());
+                    let rel_path = path.strip_prefix(root_path).map_or_else(
+                        |_| path.to_string_lossy().to_string(),
+                        |p| p.to_string_lossy().replace('\\', "/"),
+                    );
 
                     // Double-check against ignore patterns
                     if ignore_gs.is_match(&rel_path) {
@@ -348,12 +350,12 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
                         Ok(Some(m)) => all_matches.push(m),
                         Ok(None) => {}
                         Err(e) => {
-                            warnings.push(format!("Could not read {}: {}", rel_path, e));
+                            warnings.push(format!("Could not read {rel_path}: {e}"));
                         }
                     }
                 }
                 Err(e) => {
-                    warnings.push(format!("Walk error: {}", e));
+                    warnings.push(format!("Walk error: {e}"));
                 }
             }
         }
@@ -400,7 +402,7 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
         OutputMode::Count => {
             // Total match count
             let total: usize = all_matches.iter().map(|m| m.match_count).sum();
-            let summary = format!("Total matches: {}", total);
+            let summary = format!("Total matches: {total}");
             (vec![], Some(summary), total)
         }
     };

@@ -39,6 +39,10 @@ impl<C: Config> Client<C> {
     ///
     /// Panics if the reqwest client cannot be built.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "reqwest client build failure is rare (TLS/resolver init) and fatal; matches reqwest::Client::new() pattern"
+    )]
     pub fn with_config(config: C) -> Self {
         Self {
             http: reqwest::Client::builder()

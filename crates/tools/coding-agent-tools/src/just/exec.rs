@@ -15,6 +15,14 @@ use tokio::process::Command;
 ///
 /// When no dir is specified, defaults to the root repository's justfile if the recipe exists there.
 /// Only errors for ambiguity if recipe is not in root AND exists in multiple subdirectories.
+#[expect(
+    clippy::implicit_hasher,
+    reason = "HashMap with default hasher is simpler for MCP tool API"
+)]
+#[expect(
+    clippy::similar_names,
+    reason = "args and argv are distinct: args is input, argv is CLI"
+)]
 pub async fn execute_recipe(
     registry: &JustRegistry,
     recipe_name: &str,
@@ -40,8 +48,7 @@ pub async fn execute_recipe(
 
     if candidates.is_empty() {
         return Err(format!(
-            "Recipe '{}' not found or not exposed. Use just_search(query='{}') to discover available recipes.",
-            recipe_name, recipe_name
+            "Recipe '{recipe_name}' not found or not exposed. Use just_search(query='{recipe_name}') to discover available recipes."
         ));
     }
 
@@ -57,12 +64,11 @@ pub async fn execute_recipe(
             // Recipe not in root, genuine ambiguity
             let dirs_list = unique_dirs
                 .into_iter()
-                .map(|d| format!("  - {}", d))
+                .map(|d| format!("  - {d}"))
                 .collect::<Vec<_>>()
                 .join("\n");
             return Err(format!(
-                "Recipe '{}' not in root justfile and exists in multiple directories:\n{}\nSpecify dir parameter to disambiguate.",
-                recipe_name, dirs_list
+                "Recipe '{recipe_name}' not in root justfile and exists in multiple directories:\n{dirs_list}\nSpecify dir parameter to disambiguate."
             ));
         }
     } else {
@@ -74,6 +80,15 @@ pub async fn execute_recipe(
     // Validate args
     let args = args_opt.unwrap_or_default();
     SecurityValidator::default().validate(&args)?;
+
+    // Compute expected param names and find unused arg keys for better error messages
+    let expected_params: std::collections::HashSet<&str> =
+        recipe.params.iter().map(|p| p.name.as_str()).collect();
+    let unused_keys: Vec<&str> = args
+        .keys()
+        .filter(|k| !expected_params.contains(k.as_str()))
+        .map(std::string::String::as_str)
+        .collect();
 
     // Build argv
     let mut argv = vec![recipe_name.to_string()];
@@ -94,10 +109,20 @@ pub async fn execute_recipe(
                 }
             }
         } else if !p.has_default {
-            return Err(format!(
-                "Missing required argument '{}' for recipe '{}'",
+            use std::fmt::Write;
+            let mut err_msg = format!(
+                "Missing required argument '{}' for recipe '{}'.",
                 p.name, recipe_name
-            ));
+            );
+            if !unused_keys.is_empty() {
+                let _ = write!(
+                    err_msg,
+                    " You provided key(s) {unused_keys:?} which didn't match any parameter."
+                );
+            }
+            let param_names: Vec<&str> = recipe.params.iter().map(|p| p.name.as_str()).collect();
+            let _ = write!(err_msg, " Expected parameter(s): {param_names:?}");
+            return Err(err_msg);
         }
     }
 
@@ -130,6 +155,7 @@ fn value_to_arg(v: &Value) -> Result<String, String> {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -207,7 +233,7 @@ mod tests {
 
         // Create same recipe in root and subdirectory
         fs::write(root.join("justfile"), "check:\n    echo root").unwrap();
-        fs::create_dir(root.join("sub")).unwrap();
+        fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("sub/justfile"), "check:\n    echo sub").unwrap();
 
         let registry = JustRegistry::new();
@@ -229,9 +255,9 @@ mod tests {
 
         // Create recipe only in subdirectories, NOT in root
         fs::write(root.join("justfile"), "other:\n    echo other").unwrap();
-        fs::create_dir(root.join("sub1")).unwrap();
+        fs::create_dir_all(root.join("sub1")).unwrap();
         fs::write(root.join("sub1/justfile"), "check:\n    echo sub1").unwrap();
-        fs::create_dir(root.join("sub2")).unwrap();
+        fs::create_dir_all(root.join("sub2")).unwrap();
         fs::write(root.join("sub2/justfile"), "check:\n    echo sub2").unwrap();
 
         let registry = JustRegistry::new();
@@ -300,7 +326,7 @@ mod tests {
         let output = result.unwrap();
         assert!(!output.success);
         // just wraps the exit code, so we check it's non-zero
-        assert!(output.exit_code.map(|c| c != 0).unwrap_or(true));
+        assert!(output.exit_code != Some(0));
     }
 
     #[tokio::test]
@@ -312,7 +338,7 @@ mod tests {
 
         // Create same recipe in two directories
         fs::write(root.join("justfile"), "check:\n    echo root").unwrap();
-        fs::create_dir(root.join("sub")).unwrap();
+        fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("sub/justfile"), "check:\n    echo sub").unwrap();
 
         let registry = JustRegistry::new();
@@ -332,5 +358,43 @@ mod tests {
         let output = result.unwrap();
         assert!(output.success);
         assert!(output.stdout.contains("sub"));
+    }
+
+    #[tokio::test]
+    async fn missing_arg_error_shows_unused_keys() {
+        skip_if_just_unavailable!();
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        // Recipe with required parameter named 'target'
+        fs::write(
+            root.join("justfile"),
+            "build target:\n    echo building {{target}}",
+        )
+        .unwrap();
+
+        let registry = JustRegistry::new();
+        // Call with wrong key name 'tgt' instead of 'target'
+        let mut wrong_args = HashMap::new();
+        wrong_args.insert("tgt".to_string(), json!("x86_64"));
+
+        let result = execute_recipe(
+            &registry,
+            "build",
+            None,
+            Some(wrong_args),
+            root.to_str().unwrap(),
+        )
+        .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Should mention the missing required arg
+        assert!(err.contains("Missing required argument"));
+        assert!(err.contains("target"));
+        // Should mention the unused key the user provided
+        assert!(err.contains("tgt"));
+        // Should list expected parameters
+        assert!(err.contains("Expected parameter"));
     }
 }

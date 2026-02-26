@@ -30,7 +30,7 @@ pub async fn ensure_just_available() -> Result<(), String> {
     if !out.status.success() {
         return Err("`just` CLI returned non-zero; please install/repair".into());
     }
-    JUST_OK.set(true).ok();
+    let _ = JUST_OK.set(true);
     Ok(())
 }
 

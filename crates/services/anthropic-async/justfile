@@ -1,0 +1,33 @@
+# Crate-specific recipes for anthropic-async
+#
+# These commands are specific to this crate and don't generalize to the workspace.
+# For standard operations, use the root justfile: `just crate-check anthropic-async`
+
+# Run conformance tests against live Anthropic API (no recording)
+# Requires ANTHROPIC_API_KEY environment variable
+live-test:
+    ANTHROPIC_LIVE=1 cargo test -p anthropic-async
+
+# Record new API cassettes AND update insta snapshots
+# Requires ANTHROPIC_API_KEY environment variable
+# Creates/updates: tests/snapshots/*.yaml (httpmock cassettes)
+# Creates/updates: tests/snapshots/*.snap (insta snapshots)
+record-snapshots:
+    ANTHROPIC_LIVE=1 ANTHROPIC_RECORD=1 INSTA_UPDATE=always cargo test -p anthropic-async -- --nocapture
+
+# Record only multi-turn conformance test cassette
+# Requires ANTHROPIC_API_KEY environment variable
+record-multi-turn:
+    ANTHROPIC_LIVE=1 ANTHROPIC_RECORD=1 INSTA_UPDATE=always cargo test -p anthropic-async multi_turn_tool_conversation -- --nocapture
+
+# Run only multi-turn conformance test against live API (no recording)
+live-multi-turn:
+    ANTHROPIC_LIVE=1 cargo test -p anthropic-async multi_turn_tool_conversation
+
+# Review and accept insta snapshots interactively
+insta-review:
+    cargo insta review -p anthropic-async
+
+# List available recipes
+default:
+    @just --list

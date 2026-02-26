@@ -1,4 +1,4 @@
-//! Pagination helpers specific to coding_agent_tools (ls tool).
+//! Pagination helpers specific to `coding_agent_tools` (ls tool).
 //!
 //! Generic pagination infrastructure is in `agentic_tools_utils::pagination`.
 //! This module contains ls-specific helpers and type aliases.

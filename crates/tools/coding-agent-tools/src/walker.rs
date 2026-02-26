@@ -68,7 +68,7 @@ pub const BUILTIN_IGNORES: &[&str] = &[
     "**/env/**",
 ];
 
-/// Build a GlobSet from built-in and user patterns.
+/// Build a `GlobSet` from built-in and user patterns.
 /// Public for reuse in grep/glob tools.
 pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
     let mut builder = GlobSetBuilder::new();
@@ -78,13 +78,13 @@ pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolErr
         .chain(user_patterns.iter().map(String::as_str))
     {
         let glob = Glob::new(pattern).map_err(|e| {
-            ToolError::invalid_input(format!("Invalid glob pattern '{}': {}", pattern, e))
+            ToolError::invalid_input(format!("Invalid glob pattern '{pattern}': {e}"))
         })?;
         builder.add(glob);
     }
     builder
         .build()
-        .map_err(|e| ToolError::internal(format!("Failed to build globset: {}", e)))
+        .map_err(|e| ToolError::internal(format!("Failed to build globset: {e}")))
 }
 
 /// Configuration for directory walking.
@@ -174,7 +174,7 @@ pub fn list(cfg: &WalkConfig<'_>) -> Result<WalkResult, ToolError> {
                             Ok(md) if md.is_dir() => EntryKind::Dir,
                             Ok(_) => EntryKind::File,
                             Err(err) => {
-                                warnings.push(format!("Skipping {}: {}", rel, err));
+                                warnings.push(format!("Skipping {rel}: {err}"));
                                 continue;
                             }
                         }
@@ -191,7 +191,7 @@ pub fn list(cfg: &WalkConfig<'_>) -> Result<WalkResult, ToolError> {
                 entries.push(LsEntry { path: rel, kind });
             }
             Err(err) => {
-                warnings.push(format!("Walk error: {}", err));
+                warnings.push(format!("Walk error: {err}"));
             }
         }
     }
@@ -240,6 +240,7 @@ fn sort_entries(entries: &mut [LsEntry], show: Show) {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

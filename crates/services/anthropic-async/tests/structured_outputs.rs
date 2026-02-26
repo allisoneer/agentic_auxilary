@@ -42,24 +42,17 @@ fn test_output_format_json_schema_serialization() {
     }
 }
 
+/// Test deprecated `output_format` field - it should bridge to `output_config`
 #[test]
+#[expect(deprecated)]
 fn test_messages_request_with_output_format() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet-20241022".into(),
         max_tokens: 1024,
-        system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: "Generate a person".into(),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
         output_format: Some(OutputFormat::JsonSchema {
             schema: serde_json::json!({
                 "type": "object",
@@ -68,10 +61,12 @@ fn test_messages_request_with_output_format() {
                 }
             }),
         }),
+        ..Default::default()
     };
 
     let s = serde_json::to_string(&req).unwrap();
-    assert!(s.contains(r#""output_format""#));
+    // output_format bridges to output_config
+    assert!(s.contains(r#""output_config""#));
     assert!(s.contains(r#""type":"json_schema""#));
 }
 
@@ -80,24 +75,16 @@ fn test_messages_request_omits_none_output_format() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet-20241022".into(),
         max_tokens: 1024,
-        system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: "Hello".into(),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let s = serde_json::to_string(&req).unwrap();
     assert!(!s.contains("output_format"));
+    assert!(!s.contains("output_config"));
 }
 
 #[test]
@@ -105,20 +92,12 @@ fn test_messages_request_with_stream() {
     let req = MessagesCreateRequest {
         model: "claude-3-5-sonnet-20241022".into(),
         max_tokens: 1024,
-        system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: "Hello".into(),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
         stream: Some(true),
-        output_format: None,
+        ..Default::default()
     };
 
     let s = serde_json::to_string(&req).unwrap();

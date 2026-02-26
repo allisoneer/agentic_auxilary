@@ -1,10 +1,14 @@
-//! Integration tests for search_grep.
+//! Integration tests for `search_grep`.
+#![expect(clippy::unwrap_used)]
+#![expect(clippy::create_dir)]
+#![expect(clippy::case_sensitive_file_extension_comparisons)]
+#![expect(clippy::fn_params_excessive_bools)]
 
 use coding_agent_tools::types::OutputMode;
 use std::fs;
 use tempfile::TempDir;
 
-/// Helper to create a GrepConfig and run grep.
+/// Helper to create a `GrepConfig` and run grep.
 fn run_grep(
     root: &str,
     pattern: &str,
@@ -139,8 +143,7 @@ fn test_grep_content_mode_with_line_numbers() {
     for line in &result.lines {
         assert!(
             line.contains(':'),
-            "Line should be in path:line: format: {}",
-            line
+            "Line should be in path:line: format: {line}"
         );
     }
 }
@@ -203,8 +206,7 @@ fn test_grep_include_globs() {
     for path in &result.lines {
         assert!(
             path.ends_with(".txt"),
-            "Should only match .txt files: {}",
-            path
+            "Should only match .txt files: {path}"
         );
     }
 }
@@ -235,11 +237,7 @@ fn test_grep_ignore_globs() {
 
     // Should not find .rs files
     for path in &result.lines {
-        assert!(
-            !path.ends_with(".rs"),
-            "Should not match .rs files: {}",
-            path
-        );
+        assert!(!path.ends_with(".rs"), "Should not match .rs files: {path}");
     }
 }
 
@@ -414,8 +412,8 @@ fn test_grep_pagination() {
     // Create multiple files with matches
     for i in 0..10 {
         fs::write(
-            tmp.path().join(format!("file{}.txt", i)),
-            format!("content {}\nmatch here", i),
+            tmp.path().join(format!("file{i}.txt")),
+            format!("content {i}\nmatch here"),
         )
         .unwrap();
     }

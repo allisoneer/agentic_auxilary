@@ -1,0 +1,27 @@
+---
+source: crates/services/anthropic-async/tests/multi_turn.rs
+expression: "&resp1"
+---
+{
+  "id": "[redacted]",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "[redacted]",
+      "name": "get_weather",
+      "input": {
+        "location": "Paris, France"
+      }
+    }
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "stop_reason": "tool_use",
+  "usage": {
+    "input_tokens": 369,
+    "output_tokens": 26,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0
+  }
+}

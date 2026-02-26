@@ -1,12 +1,13 @@
-//! Integration tests for ask_agent tool.
+//! Integration tests for `ask_agent` tool.
 //! These tests are ignored by default as they require the claude CLI to be installed.
-//! Run with: cargo test -p coding_agent_tools -- --ignored
+//! Run with: cargo test -p `coding_agent_tools` -- --ignored
+#![expect(clippy::unwrap_used)]
 
 use coding_agent_tools::CodingAgentTools;
 use coding_agent_tools::types::{AgentLocation, AgentType};
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live API key and network access"]
 async fn locator_codebase_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
@@ -28,7 +29,7 @@ async fn locator_codebase_basic() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live API key and network access"]
 async fn analyzer_web_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
@@ -50,7 +51,7 @@ async fn analyzer_web_basic() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live API key and network access"]
 async fn locator_web_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
@@ -72,7 +73,7 @@ async fn locator_web_basic() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live API key and network access"]
 async fn analyzer_codebase_basic() {
     let tools = CodingAgentTools::new();
     let out = tools
@@ -94,7 +95,7 @@ async fn analyzer_codebase_basic() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live API key and network access"]
 async fn ask_agent_empty_query_fails() {
     let tools = CodingAgentTools::new();
     let out = tools
@@ -111,7 +112,7 @@ async fn ask_agent_empty_query_fails() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live API key and network access"]
 async fn ask_agent_defaults_to_locator_codebase() {
     let tools = CodingAgentTools::new();
     // Test that defaults work (locator + codebase)

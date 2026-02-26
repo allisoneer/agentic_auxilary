@@ -25,6 +25,7 @@ default: help
 help:
     @echo "Workspace commands:"
     @echo "  just check            # fmt-check + clippy for entire workspace"
+    @echo "  just fix              # auto-fix clippy warnings for entire workspace"
     @echo "  just test             # run tests for entire workspace"
     @echo "  just build            # build entire workspace"
     @echo "  just fmt              # format entire workspace"
@@ -45,6 +46,9 @@ help:
 
 check: fmt-check-just fmt-check
     {{ exec }}cargo clippy --workspace --all-targets -- -D warnings
+
+fix:
+    cargo clippy --workspace --all-targets --fix --allow-dirty
 
 test: mcp-test
     {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
@@ -67,15 +71,15 @@ fmt-check-just:
     @just --fmt --check --unstable
 
 # Per-crate commands
-crate-check name:
-    {{ exec }}cargo fmt -p {{ name }} -- --check
-    {{ exec }}cargo clippy -p {{ name }} --all-targets -- -D warnings
+crate-check crate:
+    {{ exec }}cargo fmt -p {{ crate }} -- --check
+    {{ exec }}cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
-crate-test name:
-    {{ exec }}cargo nextest run --profile {{ nextest_profile }} {{ nextest_args }} -E 'package({{ name }})'
+crate-test crate:
+    {{ exec }}cargo nextest run --profile {{ nextest_profile }} {{ nextest_args }} -E 'package({{ crate }})'
 
-crate-build name:
-    {{ exec }}cargo build -p {{ name }}
+crate-build crate:
+    {{ exec }}cargo build -p {{ crate }}
 
 # xtask commands
 

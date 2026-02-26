@@ -21,16 +21,8 @@ async fn test_temperature_validation_below_range() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
         temperature: Some(-0.1), // Invalid: below 0.0
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -59,16 +51,8 @@ async fn test_temperature_validation_above_range() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
         temperature: Some(1.1), // Invalid: above 1.0
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -97,16 +81,8 @@ async fn test_top_p_validation_zero() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
-        temperature: None,
-        stop_sequences: None,
         top_p: Some(0.0), // Invalid: must be > 0.0
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -134,16 +110,8 @@ async fn test_top_p_validation_above_range() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
-        temperature: None,
-        stop_sequences: None,
         top_p: Some(1.5), // Invalid: above 1.0
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -172,16 +140,8 @@ async fn test_top_k_validation_zero() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
         top_k: Some(0), // Invalid: must be >= 1
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -210,16 +170,7 @@ async fn test_max_tokens_validation_zero() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(req).await.unwrap_err();
@@ -297,16 +248,11 @@ async fn test_valid_parameters_accepted() {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        system: None,
         temperature: Some(0.5), // Valid
         stop_sequences: Some(vec!["END".into()]),
         top_p: Some(0.9), // Valid
         top_k: Some(10),  // Valid
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let response = client.messages().create(req).await.unwrap();

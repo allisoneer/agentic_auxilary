@@ -1,3 +1,8 @@
+#![expect(clippy::unwrap_used)]
+#![expect(clippy::create_dir)]
+#![expect(clippy::needless_collect)]
+#![expect(clippy::case_sensitive_file_extension_comparisons)]
+
 use coding_agent_tools::paths::to_abs_string;
 use coding_agent_tools::types::{Depth, Show};
 use std::str::FromStr;
@@ -65,7 +70,7 @@ mod depth_tests {
         // Verify the schema contains min/max constraints
         assert!(json.contains("minimum"));
         assert!(json.contains("maximum"));
-        assert!(json.contains("0"));
+        assert!(json.contains('0'));
         assert!(json.contains("10"));
     }
 }
@@ -117,8 +122,7 @@ mod path_tests {
         let abs = to_abs_string("foo/bar").unwrap();
         assert!(
             Path::new(&abs).is_absolute(),
-            "expected absolute path, got: {}",
-            abs
+            "expected absolute path, got: {abs}"
         );
     }
 
@@ -631,7 +635,7 @@ mod pagination_integration_tests {
     fn make_entries(count: usize) -> Vec<LsEntry> {
         (0..count)
             .map(|i| LsEntry {
-                path: format!("file_{:04}.txt", i),
+                path: format!("file_{i:04}.txt"),
                 kind: EntryKind::File,
             })
             .collect()
@@ -721,7 +725,7 @@ mod ls_stateful_pagination_tests {
 
     fn create_files(root: &Path, count: usize) {
         for i in 0..count {
-            let name = format!("file_{:04}.txt", i);
+            let name = format!("file_{i:04}.txt");
             fs::write(root.join(name), "x").unwrap();
         }
     }
@@ -813,7 +817,7 @@ mod ls_parallel_and_cache_tests {
 
     fn create_files(root: &Path, count: usize) {
         for i in 0..count {
-            let name = format!("file_{:04}.txt", i);
+            let name = format!("file_{i:04}.txt");
             fs::write(root.join(name), "x").unwrap();
         }
     }
@@ -957,7 +961,7 @@ mod enhanced_truncation_message_tests {
 
     fn create_files(root: &Path, count: usize) {
         for i in 0..count {
-            let name = format!("file_{:04}.txt", i);
+            let name = format!("file_{i:04}.txt");
             fs::write(root.join(name), "x").unwrap();
         }
     }
@@ -979,19 +983,16 @@ mod enhanced_truncation_message_tests {
         let text1 = out1.fmt_text(&TextOptions::default());
         assert!(
             text1.contains("showing 100 of 250 entries"),
-            "Expected 'showing 100 of 250 entries' in: {}",
-            text1
+            "Expected 'showing 100 of 250 entries' in: {text1}"
         );
         assert!(
             text1.contains("2 pages remaining"),
-            "Expected '2 pages remaining' in: {}",
-            text1
+            "Expected '2 pages remaining' in: {text1}"
         );
         // Should have reminder since >1 page remains
         assert!(
             text1.contains("REMINDER"),
-            "Expected REMINDER when >1 page remains in: {}",
-            text1
+            "Expected REMINDER when >1 page remains in: {text1}"
         );
 
         // Page 2: showing 200 of 250, 1 page remaining
@@ -1002,19 +1003,16 @@ mod enhanced_truncation_message_tests {
         let text2 = out2.fmt_text(&TextOptions::default());
         assert!(
             text2.contains("showing 200 of 250 entries"),
-            "Expected 'showing 200 of 250 entries' in: {}",
-            text2
+            "Expected 'showing 200 of 250 entries' in: {text2}"
         );
         assert!(
             text2.contains("1 page remaining"),
-            "Expected '1 page remaining' (singular) in: {}",
-            text2
+            "Expected '1 page remaining' (singular) in: {text2}"
         );
         // Should NOT have reminder since only 1 page remains
         assert!(
             !text2.contains("REMINDER"),
-            "Should not have REMINDER when only 1 page remains in: {}",
-            text2
+            "Should not have REMINDER when only 1 page remains in: {text2}"
         );
     }
 
@@ -1033,8 +1031,7 @@ mod enhanced_truncation_message_tests {
         // The sentinel should not appear in the formatted output
         assert!(
             !text.contains("<<<mcp:ls:page_info>>>"),
-            "Sentinel should not be visible in output: {}",
-            text
+            "Sentinel should not be visible in output: {text}"
         );
     }
 }
