@@ -55,12 +55,22 @@ impl<T, M> PaginationCache<T, M> {
         }
     }
 
+    // TODO(3): Consider returning Result or recovering from poison for better
+    // MCP server resilience.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a prior panic. Fail fast for pagination cache map."
+    )]
+    fn lock_map(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<QueryLock<T, M>>>> {
+        self.map.lock().unwrap()
+    }
+
     /// Remove entry if it still points to the provided Arc.
     ///
     /// This is safe for concurrent access - only removes if the current
     /// entry is the exact same Arc, preventing removal of a replaced entry.
     pub fn remove_if_same(&self, key: &str, candidate: &Arc<QueryLock<T, M>>) {
-        let mut m = self.map.lock().unwrap();
+        let mut m = self.lock_map();
         if let Some(existing) = m.get(key)
             && Arc::ptr_eq(existing, candidate)
         {
@@ -75,7 +85,7 @@ impl<T, M: Default> PaginationCache<T, M> {
     /// If a lock already exists for this key, returns a clone of its Arc.
     /// Otherwise creates a new QueryLock and returns it.
     pub fn get_or_create(&self, key: &str) -> Arc<QueryLock<T, M>> {
-        let mut m = self.map.lock().unwrap();
+        let mut m = self.lock_map();
         m.entry(key.to_string())
             .or_insert_with(|| Arc::new(QueryLock::new()))
             .clone()
@@ -87,14 +97,14 @@ impl<T, M: Default> PaginationCache<T, M> {
     /// Each expired entry is only removed if it hasn't been replaced.
     pub fn sweep_expired(&self) {
         let entries: Vec<(String, Arc<QueryLock<T, M>>)> = {
-            let m = self.map.lock().unwrap();
+            let m = self.lock_map();
             m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         };
 
         for (k, lk) in entries {
-            let expired = { lk.state.lock().unwrap().is_expired() };
+            let expired = { lk.lock_state().is_expired() };
             if expired {
-                let mut m = self.map.lock().unwrap();
+                let mut m = self.lock_map();
                 if let Some(existing) = m.get(&k)
                     && Arc::ptr_eq(existing, &lk)
                 {
@@ -108,6 +118,19 @@ impl<T, M: Default> PaginationCache<T, M> {
 /// Per-query lock protecting the query state.
 pub struct QueryLock<T, M = ()> {
     pub state: Mutex<QueryState<T, M>>,
+}
+
+impl<T, M> QueryLock<T, M> {
+    // TODO(3): Consider returning Result or recovering from poison for better
+    // MCP server resilience. Pagination state is reconstructible.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a prior panic. Fail fast to avoid \
+                  inconsistent pagination state."
+    )]
+    pub fn lock_state(&self) -> std::sync::MutexGuard<'_, QueryState<T, M>> {
+        self.state.lock().unwrap()
+    }
 }
 
 impl<T, M: Default> QueryLock<T, M> {

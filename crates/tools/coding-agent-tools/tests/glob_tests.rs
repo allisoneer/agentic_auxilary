@@ -1,4 +1,7 @@
-//! Integration tests for search_glob.
+//! Integration tests for `search_glob`.
+#![expect(clippy::unwrap_used)]
+#![expect(clippy::create_dir)]
+#![expect(clippy::case_sensitive_file_extension_comparisons)]
 
 use coding_agent_tools::types::SortOrder;
 use filetime::{FileTime, set_file_mtime};
@@ -6,7 +9,7 @@ use std::fs;
 use std::time::{Duration, SystemTime};
 use tempfile::TempDir;
 
-/// Helper to create a GlobConfig and run glob.
+/// Helper to create a `GlobConfig` and run glob.
 fn run_glob(
     root: &str,
     pattern: &str,
@@ -155,11 +158,7 @@ fn test_glob_ignore_patterns() {
 
     // Should not find .rs files
     for path in &result.entries {
-        assert!(
-            !path.ends_with(".rs"),
-            "Should not match .rs files: {}",
-            path
-        );
+        assert!(!path.ends_with(".rs"), "Should not match .rs files: {path}");
     }
 }
 
@@ -209,7 +208,7 @@ fn test_glob_pagination() {
 
     // Create multiple files
     for i in 0..10 {
-        fs::write(tmp.path().join(format!("file{:02}.txt", i)), "content").unwrap();
+        fs::write(tmp.path().join(format!("file{i:02}.txt")), "content").unwrap();
     }
 
     let root = tmp.path().to_string_lossy().to_string();
@@ -343,11 +342,7 @@ fn test_glob_specific_extension() {
     // Should only find .rs files
     assert!(!result.entries.is_empty(), "Should find .rs files");
     for path in &result.entries {
-        assert!(
-            path.ends_with(".rs"),
-            "Should only match .rs files: {}",
-            path
-        );
+        assert!(path.ends_with(".rs"), "Should only match .rs files: {path}");
     }
 }
 
@@ -370,8 +365,7 @@ fn test_glob_builtin_ignores() {
     for path in &result.entries {
         assert!(
             !path.contains("node_modules"),
-            "Should not match node_modules: {}",
-            path
+            "Should not match node_modules: {path}"
         );
     }
     assert!(

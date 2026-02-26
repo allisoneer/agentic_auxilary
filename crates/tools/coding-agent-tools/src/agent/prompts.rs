@@ -6,7 +6,7 @@ use crate::types::{AgentLocation, AgentType};
 // Base prompts per agent type
 // =============================================================================
 
-pub const LOCATOR_BASE_PROMPT: &str = r#"
+pub const LOCATOR_BASE_PROMPT: &str = r"
 You are a specialist at finding WHERE things are. Your job is to locate relevant files/resources
 and organize them by purpose. Do not analyze implementation details. No side effects.
 
@@ -22,9 +22,9 @@ What NOT to do:
 - Don't read files to understand implementation
 - Don't make assumptions about functionality
 - Don't skip test, config, or documentation files
-"#;
+";
 
-pub const ANALYZER_BASE_PROMPT: &str = r#"
+pub const ANALYZER_BASE_PROMPT: &str = r"
 You are a specialist at understanding HOW things work. Analyze implementation details, trace data flow,
 and explain technical workings with precise file:line references. No side effects.
 
@@ -42,28 +42,28 @@ What NOT to do:
 - Don't ignore configuration or dependencies
 - Don't make architectural recommendations (describe, don't prescribe)
 - Don't analyze code quality or suggest improvements
-"#;
+";
 
 // =============================================================================
 // Location overlays
 // =============================================================================
 
-pub const CODEBASE_OVERLAY: &str = r#"
+pub const CODEBASE_OVERLAY: &str = r"
 Context: Local codebase (current repository).
 
 Guidelines:
 - Prefer relative paths from repo root
 - For locator, organize results by purpose; for analyzer, include file:line citations
-"#;
+";
 
-pub const THOUGHTS_OVERLAY: &str = r#"
+pub const THOUGHTS_OVERLAY: &str = r"
 Context: Thought documents (active branch).
 Working directory: THOUGHTS_BASE env or ./thoughts/<branch_or_week>.
 
 Guidelines:
 - Use mcp__agentic-mcp__thoughts_list_documents to identify thought docs, then grep/glob/read within the base
 - Keep citations and paths relative to the thoughts base
-"#;
+";
 
 pub const REFERENCES_OVERLAY: &str = r#"
 Context: Reference repositories (mirrored into local filesystem).
@@ -83,7 +83,7 @@ Guidelines:
 - Be selective; go deep on 2-3 relevant references
 "#;
 
-pub const WEB_OVERLAY: &str = r#"
+pub const WEB_OVERLAY: &str = r"
 Context: The web.
 
 Guidelines:
@@ -91,7 +91,7 @@ Guidelines:
 - Prefer official docs and reputable sources
 - Include direct links and attribute quotes; note recency and version when relevant
 - Synthesize across sources; highlight conflicts and gaps
-"#;
+";
 
 // =============================================================================
 // Shared sections
@@ -112,7 +112,7 @@ pub const CITATIONS_ANALYZER: &str = r#"
 - Every factual claim must include a citation. Uncertain claims must be marked "uncited".
 "#;
 
-pub const QUALITY_FILTERS_ANALYZER_THOUGHTS: &str = r#"
+pub const QUALITY_FILTERS_ANALYZER_THOUGHTS: &str = r"
 ## Quality Filters
 
 ### Include Only If:
@@ -128,13 +128,13 @@ pub const QUALITY_FILTERS_ANALYZER_THOUGHTS: &str = r#"
 - It's been clearly superseded
 - It's too vague to action
 - It's redundant with better sources
-"#;
+";
 
 // =============================================================================
 // Strategy and Template constants per combination (skeletons for Phase 1)
 // =============================================================================
 
-pub const STRATEGY_LOCATOR_CODEBASE: &str = r#"
+pub const STRATEGY_LOCATOR_CODEBASE: &str = r"
 ## Strategy
 
 ### Step 1: Decompose Topic
@@ -155,9 +155,9 @@ pub const STRATEGY_LOCATOR_CODEBASE: &str = r#"
 - Group by purpose: implementation, tests, config, docs, types, examples
 - Count files in related directories
 - Note naming patterns for future reference
-"#;
+";
 
-pub const TEMPLATE_LOCATOR_CODEBASE: &str = r#"
+pub const TEMPLATE_LOCATOR_CODEBASE: &str = r"
 ## Output Format
 
 ## File Locations for [Feature/Topic]
@@ -182,7 +182,7 @@ pub const TEMPLATE_LOCATOR_CODEBASE: &str = r#"
 
 ### Entry Points
 - `path/to/entry.ext` — [entry role: exports, routes, main]
-"#;
+";
 
 pub const STRATEGY_ANALYZER_CODEBASE: &str = r#"
 ## Strategy
@@ -210,7 +210,7 @@ pub const STRATEGY_ANALYZER_CODEBASE: &str = r#"
 - Show 1-2 variations and when to use each
 "#;
 
-pub const TEMPLATE_ANALYZER_CODEBASE: &str = r#"
+pub const TEMPLATE_ANALYZER_CODEBASE: &str = r"
 ## Output Format
 
 ## Analysis: [Feature/Component Name]
@@ -244,7 +244,7 @@ pub const TEMPLATE_ANALYZER_CODEBASE: &str = r#"
 
 ### Error Handling
 - [Error scenario] handled at `path:line`
-"#;
+";
 
 pub const STRATEGY_LOCATOR_THOUGHTS: &str = r#"
 ## Strategy
@@ -265,7 +265,7 @@ pub const STRATEGY_LOCATOR_THOUGHTS: &str = r#"
 - Default to active branch only
 "#;
 
-pub const TEMPLATE_LOCATOR_THOUGHTS: &str = r#"
+pub const TEMPLATE_LOCATOR_THOUGHTS: &str = r"
 ## Output Format
 
 ## Thought Documents about [Topic] (Active branch: [branch])
@@ -280,7 +280,7 @@ pub const TEMPLATE_LOCATOR_THOUGHTS: &str = r#"
 - `[path]` — [1-line description]
 
 Total: [N] relevant documents found
-"#;
+";
 
 pub const STRATEGY_ANALYZER_THOUGHTS: &str = r#"
 ## Strategy
@@ -314,7 +314,7 @@ Remove:
 - Information superseded by newer documents
 "#;
 
-pub const TEMPLATE_ANALYZER_THOUGHTS: &str = r#"
+pub const TEMPLATE_ANALYZER_THOUGHTS: &str = r"
 ## Output Format
 
 ## Analysis of: [Document Path]
@@ -346,9 +346,9 @@ pub const TEMPLATE_ANALYZER_THOUGHTS: &str = r#"
 
 ### Relevance Assessment
 [1-2 sentences on whether this information is still applicable and why]
-"#;
+";
 
-pub const STRATEGY_LOCATOR_REFERENCES: &str = r#"
+pub const STRATEGY_LOCATOR_REFERENCES: &str = r"
 ## Strategy
 
 ### Step 1: List Available References
@@ -365,9 +365,9 @@ pub const STRATEGY_LOCATOR_REFERENCES: &str = r#"
 - Group by reference repo
 - Within each repo, group by file type (docs, examples, source)
 - Note path patterns for future reference
-"#;
+";
 
-pub const TEMPLATE_LOCATOR_REFERENCES: &str = r#"
+pub const TEMPLATE_LOCATOR_REFERENCES: &str = r"
 ## Output Format
 
 ## Reference Files for [Topic]
@@ -389,7 +389,7 @@ pub const TEMPLATE_LOCATOR_REFERENCES: &str = r#"
 
 ### Gaps
 - [What references are missing or unavailable]
-"#;
+";
 
 pub const STRATEGY_ANALYZER_REFERENCES: &str = r#"
 ## Strategy
@@ -422,7 +422,7 @@ pub const STRATEGY_ANALYZER_REFERENCES: &str = r#"
 - Stop once you have well-cited coverage
 "#;
 
-pub const TEMPLATE_ANALYZER_REFERENCES: &str = r#"
+pub const TEMPLATE_ANALYZER_REFERENCES: &str = r"
 ## Output Format
 
 ## Reference Analysis: [Topic/Question]
@@ -447,7 +447,7 @@ pub const TEMPLATE_ANALYZER_REFERENCES: &str = r#"
 
 ### Gaps
 - [What wasn't found or remains unclear]
-"#;
+";
 
 pub const STRATEGY_LOCATOR_WEB: &str = r#"
 ## Strategy
@@ -492,7 +492,7 @@ pub const TEMPLATE_LOCATOR_WEB: &str = r#"
 - "[query 2]" — [N results, key findings]
 "#;
 
-pub const STRATEGY_ANALYZER_WEB: &str = r#"
+pub const STRATEGY_ANALYZER_WEB: &str = r"
 ## Strategy
 
 ### Step 1: Analyze Query
@@ -522,9 +522,9 @@ pub const STRATEGY_ANALYZER_WEB: &str = r#"
 - **Relevance**: Focus on information that directly addresses the query
 - **Currency**: Note publication dates and version information
 - **Authority**: Prioritize official sources and recognized experts
-"#;
+";
 
-pub const TEMPLATE_ANALYZER_WEB: &str = r#"
+pub const TEMPLATE_ANALYZER_WEB: &str = r"
 ## Output Format
 
 ## Summary
@@ -548,7 +548,7 @@ pub const TEMPLATE_ANALYZER_WEB: &str = r#"
 
 ## Gaps or Limitations
 [Note any information that couldn't be found or requires further investigation]
-"#;
+";
 
 // =============================================================================
 // Composition
@@ -660,27 +660,20 @@ mod tests {
             let prompt = compose_prompt_impl(t, l);
             assert!(
                 prompt.contains("Strategy"),
-                "Missing Strategy for {:?}×{:?}",
-                t,
-                l
+                "Missing Strategy for {t:?}×{l:?}"
             );
             assert!(
                 prompt.contains("Output Format"),
-                "Missing Output Format for {:?}×{:?}",
-                t,
-                l
+                "Missing Output Format for {t:?}×{l:?}"
             );
             assert!(
                 prompt.contains("Guardrails"),
-                "Missing Guardrails for {:?}×{:?}",
-                t,
-                l
+                "Missing Guardrails for {t:?}×{l:?}"
             );
             if matches!(t, Analyzer) {
                 assert!(
                     prompt.contains("Citations"),
-                    "Missing Citations for Analyzer×{:?}",
-                    l
+                    "Missing Citations for Analyzer×{l:?}"
                 );
             }
         }

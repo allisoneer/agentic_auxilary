@@ -1,4 +1,4 @@
-//! Tool wrappers for coding_agent_tools using agentic-tools-core.
+//! Tool wrappers for `coding_agent_tools` using agentic-tools-core.
 //!
 //! Each tool delegates to the corresponding method on [`CodingAgentTools`].
 
@@ -61,7 +61,7 @@ impl Tool for LsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move {
             tools
                 .ls(
@@ -80,7 +80,7 @@ impl Tool for LsTool {
 // AskAgent Tool
 // ============================================================================
 
-/// Input for the ask_agent tool.
+/// Input for the `ask_agent` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct AskAgentInput {
     /// Agent type: 'locator' (fast discovery, haiku) or 'analyzer' (deep analysis, sonnet). Default: locator
@@ -143,7 +143,7 @@ Usage notes:
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move {
             tools
                 .ask_agent(input.agent_type, input.location, input.query)
@@ -156,7 +156,7 @@ Usage notes:
 // SearchGrep Tool
 // ============================================================================
 
-/// Input for the search_grep tool.
+/// Input for the `search_grep` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct SearchGrepInput {
     /// Regex pattern to search for
@@ -185,7 +185,7 @@ pub struct SearchGrepInput {
     /// Show line numbers in content mode (default: true)
     #[serde(default)]
     pub line_numbers: Option<bool>,
-    /// Context lines before and after matches (overridden by context_before/after if provided)
+    /// Context lines before and after matches (overridden by `context_before/after` if provided)
     #[serde(default)]
     pub context: Option<u32>,
     /// Context lines before match
@@ -228,7 +228,7 @@ impl Tool for SearchGrepTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move {
             tools
                 .search_grep(
@@ -257,7 +257,7 @@ impl Tool for SearchGrepTool {
 // SearchGlob Tool
 // ============================================================================
 
-/// Input for the search_glob tool.
+/// Input for the `search_glob` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct SearchGlobInput {
     /// Glob pattern to match against (e.g., '**/*.rs')
@@ -305,7 +305,7 @@ impl Tool for SearchGlobTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move {
             tools
                 .search_glob(
@@ -326,7 +326,7 @@ impl Tool for SearchGlobTool {
 // JustSearch Tool
 // ============================================================================
 
-/// Input for the just_search tool.
+/// Input for the `just_search` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct JustSearchInput {
     /// Search query (substring match on name/docs)
@@ -360,7 +360,7 @@ impl Tool for JustSearchTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move { tools.just_search(input.query, input.dir).await })
     }
 }
@@ -369,7 +369,7 @@ impl Tool for JustSearchTool {
 // JustExecute Tool
 // ============================================================================
 
-/// Input for the just_execute tool.
+/// Input for the `just_execute` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct JustExecuteInput {
     /// Recipe name (e.g., 'check', 'test', 'build')
@@ -405,7 +405,7 @@ impl Tool for JustExecuteTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move {
             tools
                 .just_execute(input.recipe, input.dir, input.args)
@@ -418,14 +418,14 @@ impl Tool for JustExecuteTool {
 // Registry Builder
 // ============================================================================
 
-/// Build a ToolRegistry containing all coding_agent_tools.
+/// Build a `ToolRegistry` containing all `coding_agent_tools`.
 pub fn build_registry(tools: Arc<CodingAgentTools>) -> ToolRegistry {
     ToolRegistry::builder()
-        .register::<LsTool, ()>(LsTool::new(tools.clone()))
-        .register::<AskAgentTool, ()>(AskAgentTool::new(tools.clone()))
-        .register::<SearchGrepTool, ()>(SearchGrepTool::new(tools.clone()))
-        .register::<SearchGlobTool, ()>(SearchGlobTool::new(tools.clone()))
-        .register::<JustSearchTool, ()>(JustSearchTool::new(tools.clone()))
+        .register::<LsTool, ()>(LsTool::new(Arc::clone(&tools)))
+        .register::<AskAgentTool, ()>(AskAgentTool::new(Arc::clone(&tools)))
+        .register::<SearchGrepTool, ()>(SearchGrepTool::new(Arc::clone(&tools)))
+        .register::<SearchGlobTool, ()>(SearchGlobTool::new(Arc::clone(&tools)))
+        .register::<JustSearchTool, ()>(JustSearchTool::new(Arc::clone(&tools)))
         .register::<JustExecuteTool, ()>(JustExecuteTool::new(tools))
         .finish()
 }

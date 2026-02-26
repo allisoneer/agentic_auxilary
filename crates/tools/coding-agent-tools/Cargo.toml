@@ -45,6 +45,9 @@ tempfile = "3"
 serial_test = "3"
 filetime = "0.2"
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "tool-lib"
 family = "tools"

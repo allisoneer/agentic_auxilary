@@ -64,6 +64,7 @@ pub fn to_abs_string(p: &str) -> Result<String, String> {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use serial_test::serial;
@@ -74,8 +75,7 @@ mod tests {
         let abs = to_abs_string("foo/bar").unwrap();
         assert!(
             Path::new(&abs).is_absolute(),
-            "expected absolute path, got: {}",
-            abs
+            "expected absolute path, got: {abs}"
         );
     }
 
@@ -84,8 +84,7 @@ mod tests {
         let abs = to_abs_string("/tmp/nonexistent/path").unwrap();
         assert!(
             Path::new(&abs).is_absolute(),
-            "expected absolute path, got: {}",
-            abs
+            "expected absolute path, got: {abs}"
         );
         assert!(abs.contains("nonexistent"));
     }
@@ -103,6 +102,9 @@ mod tests {
     #[serial]
     fn tilde_slash_expands() {
         // Use test override for deterministic behavior
+        // SAFETY: This test is marked #[serial] which ensures no other #[serial] tests
+        // run concurrently within this crate. The variable __CAT_HOME_FOR_TESTS is
+        // test-specific and cleaned up at test end.
         unsafe {
             std::env::set_var("__CAT_HOME_FOR_TESTS", "/tmp/test_home");
         }
@@ -112,6 +114,8 @@ mod tests {
         assert!(!abs.starts_with('~'));
         // Should start with our test home
         assert!(abs.starts_with("/tmp/test_home"));
+        // SAFETY: Restores environment to prior state. See safety note on corresponding
+        // set_var for serialization guarantees.
         unsafe {
             std::env::remove_var("__CAT_HOME_FOR_TESTS");
         }
@@ -121,6 +125,9 @@ mod tests {
     #[serial]
     fn tilde_alone_expands() {
         // Use test override for deterministic behavior
+        // SAFETY: This test is marked #[serial] which ensures no other #[serial] tests
+        // run concurrently within this crate. The variable __CAT_HOME_FOR_TESTS is
+        // test-specific and cleaned up at test end.
         unsafe {
             std::env::set_var("__CAT_HOME_FOR_TESTS", "/tmp/test_home");
         }
@@ -129,6 +136,8 @@ mod tests {
         assert!(!abs.starts_with('~'));
         // Should be exactly our test home (or with trailing slash removed)
         assert!(abs.starts_with("/tmp/test_home"));
+        // SAFETY: Restores environment to prior state. See safety note on corresponding
+        // set_var for serialization guarantees.
         unsafe {
             std::env::remove_var("__CAT_HOME_FOR_TESTS");
         }
@@ -145,15 +154,19 @@ mod tests {
     #[serial]
     fn error_when_home_unavailable() {
         // Force home resolution to fail
+        // SAFETY: This test is marked #[serial] which ensures no other #[serial] tests
+        // run concurrently within this crate. The variable __CAT_FORCE_HOME_NONE is
+        // test-specific and cleaned up at test end.
         unsafe {
             std::env::set_var("__CAT_FORCE_HOME_NONE", "1");
         }
         let err = to_abs_string("~").unwrap_err();
         assert!(
             err.contains("Could not determine home directory"),
-            "unexpected error: {}",
-            err
+            "unexpected error: {err}"
         );
+        // SAFETY: Restores environment to prior state. See safety note on corresponding
+        // set_var for serialization guarantees.
         unsafe {
             std::env::remove_var("__CAT_FORCE_HOME_NONE");
         }

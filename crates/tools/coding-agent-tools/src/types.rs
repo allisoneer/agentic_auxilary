@@ -28,7 +28,7 @@ pub enum AgentLocation {
     Web,
 }
 
-/// Output from ask_agent tool - plain text response from the subagent.
+/// Output from `ask_agent` tool - plain text response from the subagent.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AgentOutput {
     pub text: String,
@@ -78,7 +78,7 @@ impl<'de> Deserialize<'de> for Depth {
         D: serde::Deserializer<'de>,
     {
         let v = u8::deserialize(deserializer)?;
-        Depth::new(v).map_err(serde::de::Error::custom)
+        Self::new(v).map_err(serde::de::Error::custom)
     }
 }
 
@@ -87,6 +87,10 @@ impl JsonSchema for Depth {
         std::borrow::Cow::Borrowed("Depth0to10")
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Schema is a known-valid literal; failure indicates a bug in schemars."
+    )]
     fn json_schema(_gen: &mut schemars::generate::SchemaGenerator) -> Schema {
         Schema::try_from(serde_json::json!({
             "type": "integer",
@@ -111,10 +115,10 @@ impl std::str::FromStr for Show {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "all" => Ok(Show::All),
-            "files" => Ok(Show::Files),
-            "dirs" | "directories" => Ok(Show::Dirs),
-            _ => Err(format!("invalid show: {}", s)),
+            "all" => Ok(Self::All),
+            "files" => Ok(Self::Files),
+            "dirs" | "directories" => Ok(Self::Dirs),
+            _ => Err(format!("invalid show: {s}")),
         }
     }
 }
@@ -150,14 +154,11 @@ pub const TRUNCATION_SENTINEL: &str = "<<<mcp:ls:page_info>>>";
 
 /// Encode truncation info into a sentinel warning string.
 pub fn encode_truncation_info(shown: usize, total: usize, page_size: usize) -> String {
-    format!(
-        "{} shown={} total={} page_size={}",
-        TRUNCATION_SENTINEL, shown, total, page_size
-    )
+    format!("{TRUNCATION_SENTINEL} shown={shown} total={total} page_size={page_size}")
 }
 
 /// Decode truncation info from a sentinel warning string.
-/// Returns (shown, total, page_size) if valid, None otherwise.
+/// Returns (shown, total, `page_size`) if valid, None otherwise.
 fn decode_truncation_info(s: &str) -> Option<(usize, usize, usize)> {
     if !s.starts_with(TRUNCATION_SENTINEL) {
         return None;
@@ -240,7 +241,7 @@ impl TextFormat for LsOutput {
 
         // Normal warnings footer
         for warning in normal_warnings {
-            let _ = writeln!(out, "Note: {}", warning);
+            let _ = writeln!(out, "Note: {warning}");
         }
 
         out.trim_end().to_string()
@@ -251,9 +252,10 @@ impl TextFormat for LsOutput {
 // search_grep and search_glob types
 // =============================================================================
 
-/// Output mode for search_grep results: 'files' (default, returns unique file paths - most
-/// token-efficient), 'content' (returns matching lines with context), or 'count' (returns
-/// total match count only).
+/// Output mode for `search_grep` results.
+///
+/// Options: 'files' (default, returns unique file paths - most token-efficient),
+/// 'content' (returns matching lines with context), or 'count' (returns total match count only).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputMode {
@@ -263,7 +265,7 @@ pub enum OutputMode {
     Count,
 }
 
-/// Sort order for search_glob results: 'name' (default, alphabetical case-insensitive) or
+/// Sort order for `search_glob` results: 'name' (default, alphabetical case-insensitive) or
 /// 'mtime' (newest modification time first).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -278,7 +280,7 @@ pub const SEARCH_REMINDER: &str = "REMINDER: You should rarely need to call this
 what you need, use ask_agent(agent_type='locator', location='codebase', \
 query='describe what you're looking for') instead of issuing more searches.";
 
-/// Output from search_grep tool.
+/// Output from `search_grep` tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GrepOutput {
     /// Root directory searched
@@ -290,7 +292,7 @@ pub struct GrepOutput {
     /// - content: `path:line: content`
     /// - count: usually empty; see summary
     pub lines: Vec<String>,
-    /// Whether there are more results beyond head_limit
+    /// Whether there are more results beyond `head_limit`
     pub has_more: bool,
     /// Warnings encountered during search (e.g., binary files skipped)
     pub warnings: Vec<String>,
@@ -316,11 +318,11 @@ impl TextFormat for GrepOutput {
         );
 
         for line in &self.lines {
-            let _ = writeln!(out, "  {}", line);
+            let _ = writeln!(out, "  {line}");
         }
 
         if let Some(ref s) = self.summary {
-            let _ = writeln!(out, "{}", s);
+            let _ = writeln!(out, "{s}");
         }
 
         if self.has_more {
@@ -331,24 +333,24 @@ impl TextFormat for GrepOutput {
         }
 
         for w in &self.warnings {
-            let _ = writeln!(out, "Note: {}", w);
+            let _ = writeln!(out, "Note: {w}");
         }
 
         // Required REMINDER footer on every call
-        let _ = writeln!(out, "{}", SEARCH_REMINDER);
+        let _ = writeln!(out, "{SEARCH_REMINDER}");
 
         out.trim_end().to_string()
     }
 }
 
-/// Output from search_glob tool.
+/// Output from `search_glob` tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GlobOutput {
     /// Root directory searched
     pub root: String,
     /// Matched file/directory paths (relative to root)
     pub entries: Vec<String>,
-    /// Whether there are more results beyond head_limit
+    /// Whether there are more results beyond `head_limit`
     pub has_more: bool,
     /// Warnings encountered during search
     pub warnings: Vec<String>,
@@ -361,7 +363,7 @@ impl TextFormat for GlobOutput {
 
         let _ = writeln!(out, "glob results in {}/", self.root.trim_end_matches('/'));
         for e in &self.entries {
-            let _ = writeln!(out, "  {}", e);
+            let _ = writeln!(out, "  {e}");
         }
 
         if self.has_more {
@@ -372,16 +374,17 @@ impl TextFormat for GlobOutput {
         }
 
         for w in &self.warnings {
-            let _ = writeln!(out, "Note: {}", w);
+            let _ = writeln!(out, "Note: {w}");
         }
 
-        let _ = writeln!(out, "{}", SEARCH_REMINDER);
+        let _ = writeln!(out, "{SEARCH_REMINDER}");
 
         out.trim_end().to_string()
     }
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

@@ -2,13 +2,40 @@
 //!
 //! Validates argument values against forbidden patterns to prevent injection attacks.
 
-use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 
+/// Shell metacharacters that enable command chaining or redirection.
+const FORBIDDEN_SHELL_CHARS: &[char] = &[';', '&', '|', '>', '<'];
+
+/// Newline characters that could enable shell escape vectors.
+const FORBIDDEN_NEWLINE_CHARS: &[char] = &['\n', '\r'];
+
+/// Pattern types for forbidden content detection using `str::contains()`.
+#[derive(Clone, Copy)]
+enum ForbiddenPattern {
+    /// Match any character in the given set (e.g., shell metacharacters).
+    AnyChar(&'static [char]),
+    /// Match an exact substring (e.g., "$(" or "..").
+    Substring(&'static str),
+    /// Match a single character (e.g., backtick or null byte).
+    Char(char),
+}
+
+impl ForbiddenPattern {
+    /// Check if the pattern matches anywhere in the given string.
+    fn is_match(self, s: &str) -> bool {
+        match self {
+            Self::AnyChar(chars) => s.contains(chars),
+            Self::Substring(substr) => s.contains(substr),
+            Self::Char(ch) => s.contains(ch),
+        }
+    }
+}
+
 /// Validator for recipe argument security.
 pub struct SecurityValidator {
-    forbidden: Vec<Regex>,
+    forbidden: Vec<ForbiddenPattern>,
     max_len: usize,
 }
 
@@ -16,13 +43,13 @@ impl Default for SecurityValidator {
     fn default() -> Self {
         Self {
             forbidden: vec![
-                Regex::new(r"[;&|><]").unwrap(),
-                Regex::new(r"\$\(").unwrap(),
-                Regex::new(r"`").unwrap(),
-                Regex::new(r"\$\{").unwrap(),
-                Regex::new(r"\.\.").unwrap(),
-                Regex::new(r"[\n\r]").unwrap(), // Block newlines (shell escape vector)
-                Regex::new(r"\x00").unwrap(),   // Block null bytes (string truncation)
+                ForbiddenPattern::AnyChar(FORBIDDEN_SHELL_CHARS), // r"[;&|><]"
+                ForbiddenPattern::Substring("$("),                // r"\$\("
+                ForbiddenPattern::Char('`'),                      // r"`"
+                ForbiddenPattern::Substring("${"),                // r"\$\{"
+                ForbiddenPattern::Substring(".."),                // r"\.\."
+                ForbiddenPattern::AnyChar(FORBIDDEN_NEWLINE_CHARS), // r"[\n\r]"
+                ForbiddenPattern::Char('\0'),                     // r"\x00"
             ],
             max_len: 1024,
         }
@@ -39,30 +66,26 @@ impl SecurityValidator {
     }
 
     fn validate_value(&self, name: &str, val: &Value) -> Result<(), String> {
-        match val {
-            Value::Array(items) => {
-                for (i, item) in items.iter().enumerate() {
-                    self.validate_value(&format!("{}[{}]", name, i), item)?;
-                }
+        if let Value::Array(items) = val {
+            for (i, item) in items.iter().enumerate() {
+                self.validate_value(&format!("{name}[{i}]"), item)?;
             }
-            _ => {
-                let s = value_to_string(val)?;
-                if s.len() > self.max_len {
-                    return Err(format!(
-                        "Argument '{}' exceeds max length {}",
-                        name, self.max_len
-                    ));
-                }
-                if s.starts_with('/') || s.starts_with('~') {
-                    return Err(format!(
-                        "Argument '{}' looks like absolute path; use repo-relative",
-                        name
-                    ));
-                }
-                for re in &self.forbidden {
-                    if re.is_match(&s) {
-                        return Err(format!("Argument '{}' contains forbidden pattern", name));
-                    }
+        } else {
+            let s = value_to_string(val)?;
+            if s.len() > self.max_len {
+                return Err(format!(
+                    "Argument '{}' exceeds max length {}",
+                    name, self.max_len
+                ));
+            }
+            if s.starts_with('/') || s.starts_with('~') {
+                return Err(format!(
+                    "Argument '{name}' looks like absolute path; use repo-relative"
+                ));
+            }
+            for pat in &self.forbidden {
+                if pat.is_match(&s) {
+                    return Err(format!("Argument '{name}' contains forbidden pattern"));
                 }
             }
         }
@@ -87,6 +110,7 @@ pub fn value_to_string(v: &Value) -> Result<String, String> {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -221,5 +245,53 @@ mod tests {
         assert_eq!(value_to_string(&json!(["a", "b", "c"])).unwrap(), "a b c");
         assert_eq!(value_to_string(&json!(null)).unwrap(), "");
         assert!(value_to_string(&json!({"key": "value"})).is_err());
+    }
+
+    // Helper to create args map for edge-case tests
+    fn args_map<const N: usize>(pairs: [(&str, &str); N]) -> HashMap<String, Value> {
+        pairs
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), json!(v)))
+            .collect()
+    }
+
+    // Edge-case tests for contains()-based pattern matching
+
+    #[test]
+    fn allows_dollar_alone() {
+        let v = SecurityValidator::default();
+        assert!(v.validate(&args_map([("x", "$")])).is_ok());
+    }
+
+    #[test]
+    fn blocks_dollar_paren() {
+        let v = SecurityValidator::default();
+        assert!(v.validate(&args_map([("x", "$(")])).is_err());
+    }
+
+    #[test]
+    fn allows_single_dot() {
+        let v = SecurityValidator::default();
+        assert!(v.validate(&args_map([("x", ".")])).is_ok());
+    }
+
+    #[test]
+    fn blocks_double_dot() {
+        let v = SecurityValidator::default();
+        assert!(v.validate(&args_map([("x", "..")])).is_err());
+    }
+
+    #[test]
+    fn allows_dollar_space_paren() {
+        // "$ (" with a space should be allowed (not "$(")
+        let v = SecurityValidator::default();
+        assert!(v.validate(&args_map([("x", "$ (")])).is_ok());
+    }
+
+    #[test]
+    fn allows_escaped_newline_literal() {
+        // The literal string "\\n" (two characters: backslash, n) should be allowed
+        let v = SecurityValidator::default();
+        assert!(v.validate(&args_map([("x", "\\n")])).is_ok());
     }
 }

@@ -61,6 +61,17 @@ impl QueryLock {
             state: Mutex::new(QueryState::new()),
         }
     }
+
+    // TODO(3): Consider returning Result or recovering from poison for better
+    // server resilience. Pagination state is reconstructible.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a prior panic. Fail fast to avoid \
+                  inconsistent pagination state."
+    )]
+    pub fn lock_state(&self) -> std::sync::MutexGuard<'_, QueryState> {
+        self.state.lock().unwrap()
+    }
 }
 
 impl Default for QueryLock {
@@ -71,7 +82,7 @@ impl Default for QueryLock {
 
 /// Two-level locking pagination cache for search results.
 ///
-/// Level 1: Brief lock to get/insert per-query state (outer HashMap)
+/// Level 1: Brief lock to get/insert per-query state (outer `HashMap`)
 /// Level 2: Per-query lock held during work, serializes same-param calls
 #[derive(Default)]
 pub struct PaginationCache {
@@ -83,17 +94,28 @@ impl PaginationCache {
         Self::default()
     }
 
+    // TODO(3): Consider returning Result or recovering from poison for better
+    // MCP server resilience.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a prior panic. Fail fast for pagination cache."
+    )]
+    fn lock_map(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<QueryLock>>> {
+        self.map.lock().unwrap()
+    }
+
     /// Get or create the per-query lock for the given key.
     pub fn get_or_create(&self, key: &str) -> Arc<QueryLock> {
-        let mut m = self.map.lock().unwrap();
-        m.entry(key.to_string())
-            .or_insert_with(|| Arc::new(QueryLock::new()))
-            .clone()
+        let mut m = self.lock_map();
+        Arc::clone(
+            m.entry(key.to_string())
+                .or_insert_with(|| Arc::new(QueryLock::new())),
+        )
     }
 
     /// Remove entry if it still points to the provided Arc.
     pub fn remove_if_same(&self, key: &str, candidate: &Arc<QueryLock>) {
-        let mut m = self.map.lock().unwrap();
+        let mut m = self.lock_map();
         if let Some(existing) = m.get(key)
             && Arc::ptr_eq(existing, candidate)
         {
@@ -104,11 +126,11 @@ impl PaginationCache {
     /// Opportunistic sweep: remove expired entries.
     pub fn sweep_expired(&self) {
         let snapshot: Vec<_> = {
-            let m = self.map.lock().unwrap();
-            m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            let m = self.lock_map();
+            m.iter().map(|(k, v)| (k.clone(), Arc::clone(v))).collect()
         };
         for (k, lk) in snapshot {
-            let expired = lk.state.lock().unwrap().is_expired();
+            let expired = lk.lock_state().is_expired();
             if expired {
                 self.remove_if_same(&k, &lk);
             }
@@ -123,6 +145,7 @@ pub fn make_key(dir: &str, query: &str) -> String {
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -194,7 +217,9 @@ mod tests {
         {
             let mut st = lock.state.lock().unwrap();
             // Manually expire
-            st.created_at = Instant::now() - Duration::from_secs(6 * 60);
+            st.created_at = Instant::now()
+                .checked_sub(Duration::from_secs(6 * 60))
+                .unwrap();
         }
 
         cache.sweep_expired();
