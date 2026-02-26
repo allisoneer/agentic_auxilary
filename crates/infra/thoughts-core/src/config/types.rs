@@ -79,118 +79,18 @@ impl std::fmt::Display for SyncStrategy {
     }
 }
 
-// Add after line 101 (after existing types)
-// use std::collections::HashMap; - already imported at the top
-
-// New configuration structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoConfig {
-    pub version: String,
-    #[serde(default)]
-    pub mount_dirs: MountDirs,
-    #[serde(default)]
-    pub requires: Vec<RequiredMount>,
-    #[serde(default)]
-    pub rules: Vec<Rule>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MountDirs {
-    #[serde(default = "default_repository_dir")]
-    pub repository: String,
-    #[serde(default = "default_personal_dir")]
-    pub personal: String,
-}
-
-impl Default for MountDirs {
-    fn default() -> Self {
-        Self {
-            repository: default_repository_dir(),
-            personal: default_personal_dir(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequiredMount {
-    pub remote: String,
-    pub mount_path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subpath: Option<String>,
-    pub description: String,
-    #[serde(default)]
-    pub optional: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub override_rules: Option<bool>,
-    #[serde(default = "default_sync_strategy")]
-    pub sync: SyncStrategy,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PersonalConfig {
-    #[serde(default)]
-    pub patterns: Vec<MountPattern>,
-    #[serde(default)]
-    pub repository_mounts: HashMap<String, Vec<PersonalMount>>,
-    #[serde(default)]
-    pub rules: Vec<Rule>,
-    #[serde(default)]
-    pub default_mount_dirs: MountDirs,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MountPattern {
-    pub match_remote: String,
-    pub personal_mounts: Vec<PersonalMount>,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PersonalMount {
-    pub remote: String,
-    pub mount_path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subpath: Option<String>,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Rule {
-    pub pattern: String,
-    pub metadata: HashMap<String, serde_json::Value>,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMetadata {
-    #[serde(flatten)]
-    pub auto_metadata: HashMap<String, serde_json::Value>,
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub manual_metadata: HashMap<String, serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_updated: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-fn default_repository_dir() -> String {
-    "context".to_string()
-}
-
-fn default_personal_dir() -> String {
-    "personal".to_string()
-}
-
-fn default_sync_strategy() -> SyncStrategy {
-    SyncStrategy::None
-}
+// Note: V1 config types (RepoConfig, MountDirs, RequiredMount, PersonalConfig,
+// MountPattern, PersonalMount, Rule, FileMetadata) have been removed.
+// See CLAUDE.md for V2 config API guidance.
 
 /// Maps git URLs to local filesystem paths
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepoMapping {
     pub version: String,
     pub mappings: HashMap<String, RepoLocation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepoLocation {
     pub path: PathBuf,
     pub auto_managed: bool,
@@ -211,138 +111,8 @@ impl Default for RepoMapping {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_repo_config_serialization() {
-        let config = RepoConfig {
-            version: "1.0".to_string(),
-            mount_dirs: MountDirs::default(),
-            requires: vec![RequiredMount {
-                remote: "git@github.com:example/repo.git".to_string(),
-                mount_path: "repo".to_string(),
-                subpath: None,
-                description: "Example repository".to_string(),
-                optional: false,
-                override_rules: Some(true),
-                sync: SyncStrategy::Auto,
-            }],
-            rules: vec![Rule {
-                pattern: "*.md".to_string(),
-                metadata: {
-                    let mut m = HashMap::new();
-                    m.insert(
-                        "type".to_string(),
-                        serde_json::Value::String("documentation".to_string()),
-                    );
-                    m
-                },
-                description: "Markdown files".to_string(),
-            }],
-        };
-
-        // Serialize
-        let json = serde_json::to_string_pretty(&config).unwrap();
-
-        // Deserialize
-        let deserialized: RepoConfig = serde_json::from_str(&json).unwrap();
-
-        // Verify
-        assert_eq!(deserialized.version, config.version);
-        assert_eq!(
-            deserialized.mount_dirs.repository,
-            config.mount_dirs.repository
-        );
-        assert_eq!(deserialized.mount_dirs.personal, config.mount_dirs.personal);
-        assert_eq!(deserialized.requires.len(), config.requires.len());
-        assert_eq!(deserialized.rules.len(), config.rules.len());
-    }
-
-    #[test]
-    fn test_personal_config_serialization() {
-        let config = PersonalConfig {
-            patterns: vec![MountPattern {
-                match_remote: "git@github.com:mycompany/*".to_string(),
-                personal_mounts: vec![PersonalMount {
-                    remote: "git@github.com:me/notes.git".to_string(),
-                    mount_path: "notes".to_string(),
-                    subpath: None,
-                    description: "My notes".to_string(),
-                }],
-                description: "Company projects".to_string(),
-            }],
-            repository_mounts: {
-                let mut m = HashMap::new();
-                m.insert(
-                    "git@github.com:example/project.git".to_string(),
-                    vec![PersonalMount {
-                        remote: "git@github.com:me/personal.git".to_string(),
-                        mount_path: "personal".to_string(),
-                        subpath: None,
-                        description: "Personal files".to_string(),
-                    }],
-                );
-                m
-            },
-            rules: vec![],
-            default_mount_dirs: MountDirs::default(),
-        };
-
-        // Serialize
-        let json = serde_json::to_string_pretty(&config).unwrap();
-
-        // Deserialize
-        let deserialized: PersonalConfig = serde_json::from_str(&json).unwrap();
-
-        // Verify
-        assert_eq!(deserialized.patterns.len(), config.patterns.len());
-        assert_eq!(
-            deserialized.repository_mounts.len(),
-            config.repository_mounts.len()
-        );
-        assert_eq!(deserialized.rules.len(), config.rules.len());
-    }
-
-    #[test]
-    fn test_mount_dirs_defaults() {
-        let dirs = MountDirs::default();
-        assert_eq!(dirs.repository, "context");
-        assert_eq!(dirs.personal, "personal");
-    }
-
-    #[test]
-    fn test_file_metadata_serialization() {
-        let metadata = FileMetadata {
-            auto_metadata: {
-                let mut m = HashMap::new();
-                m.insert(
-                    "type".to_string(),
-                    serde_json::Value::String("research".to_string()),
-                );
-                m.insert(
-                    "tags".to_string(),
-                    serde_json::Value::Array(vec![
-                        serde_json::Value::String("important".to_string()),
-                        serde_json::Value::String("review".to_string()),
-                    ]),
-                );
-                m
-            },
-            manual_metadata: HashMap::new(),
-            last_updated: Some(chrono::Utc::now()),
-        };
-
-        // Serialize
-        let json = serde_json::to_string_pretty(&metadata).unwrap();
-
-        // Deserialize
-        let deserialized: FileMetadata = serde_json::from_str(&json).unwrap();
-
-        // Verify
-        assert_eq!(
-            deserialized.auto_metadata.len(),
-            metadata.auto_metadata.len()
-        );
-        assert!(deserialized.last_updated.is_some());
-    }
+    // Note: V1 config tests (test_repo_config_serialization, test_personal_config_serialization,
+    // test_mount_dirs_defaults, test_file_metadata_serialization) have been removed.
 
     #[test]
     fn test_reference_entry_deserialize_simple() {

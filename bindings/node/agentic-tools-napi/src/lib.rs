@@ -95,7 +95,7 @@ pub fn init(config_json: String) -> Result<()> {
     // Build registry via shared aggregator (includes all 19 tools)
     let registry = AgenticTools::new(AgenticToolsConfig {
         allowlist,
-        extras: serde_json::json!({}),
+        ..Default::default()
     });
 
     REGISTRY

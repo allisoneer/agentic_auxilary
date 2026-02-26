@@ -14,19 +14,9 @@ pub async fn execute(json: bool) -> Result<()> {
             println!("Run {} to initialize", "thoughts init".cyan());
         }
         Some(v) if v == "1.0" => {
-            let cfg = mgr.load()?.unwrap();
-            if json {
-                println!("{}", serde_json::to_string_pretty(&cfg)?);
-            } else {
-                println!("{}", "Repository Configuration (v1)".bold());
-                println!();
-                println!("version: {}", cfg.version);
-                println!("repository mount dir: {}", cfg.mount_dirs.repository);
-                println!("requires ({}):", cfg.requires.len());
-                for r in cfg.requires {
-                    println!("  - {} -> {}", r.mount_path, r.remote);
-                }
-            }
+            anyhow::bail!(
+                "V1 configuration is no longer supported. Please reinitialize with 'thoughts init'."
+            );
         }
         Some(_) => {
             let cfg = mgr.load_v2_or_bail()?;

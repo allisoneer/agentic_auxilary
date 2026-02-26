@@ -1,5 +1,4 @@
 use crate::engine::{
-    config::select_optimizer_model,
     directory::expand_directories_to_filemeta,
     guards::{ensure_plan_template_group, maybe_inject_plan_structure_meta},
     memory::{auto_inject_claude_memories, injection_enabled_from_env},
@@ -14,6 +13,7 @@ use crate::{
     token::enforce_limit,
     types::{DirectoryMeta, FileMeta, PromptType},
 };
+use agentic_config::types::ReasoningConfig;
 use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
 use agentic_tools_core::ToolError;
 use async_openai::types::chat::{
@@ -22,14 +22,22 @@ use async_openai::types::chat::{
 };
 use thoughts_tool::{DocumentType, write_document};
 
-/// The executor model used for final prompt execution.
-const EXECUTOR_MODEL: &str = "openai/gpt-5.2";
+/// Parse reasoning effort string to enum, defaulting to Xhigh.
+fn parse_reasoning_effort(v: Option<&str>) -> ReasoningEffort {
+    match v.map(|s| s.trim().to_lowercase()).as_deref() {
+        Some("low") => ReasoningEffort::Low,
+        Some("medium") => ReasoningEffort::Medium,
+        Some("high") => ReasoningEffort::High,
+        Some("xhigh") => ReasoningEffort::Xhigh,
+        _ => ReasoningEffort::Xhigh, // default
+    }
+}
 
 pub async fn gpt5_reasoner_impl(
     prompt: String,
     mut files: Vec<FileMeta>,
     directories: Option<Vec<DirectoryMeta>>,
-    optimizer_model: Option<String>,
+    cfg: &ReasoningConfig,
     prompt_type: PromptType,
     output_filename: Option<String>,
 ) -> std::result::Result<String, ToolError> {
@@ -157,7 +165,7 @@ pub async fn gpt5_reasoner_impl(
     let client = OrClient::from_env().map_err(ToolError::from)?;
 
     // Step 1: optimize with retry on validation errors
-    let opt_model = select_optimizer_model(optimizer_model);
+    let opt_model = cfg.optimizer_model.clone();
 
     // Layer 3: Validation retry (complements Layer 2 network retry in optimizer/mod.rs)
     const TEMPLATE_RETRIES: usize = 2; // 3 total attempts
@@ -270,19 +278,27 @@ pub async fn gpt5_reasoner_impl(
         return Err(ToolError::from(e));
     }
 
-    // Execute GPT-5 with application-level retries for network/transport errors
-    const GPT5_RETRIES: usize = 1;
-    const GPT5_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
+    // Execute with application-level retries for network/transport errors
+    const EXECUTOR_RETRIES: usize = 1;
+    const EXECUTOR_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
+
+    let executor_model = cfg.executor_model.as_str();
+    let reasoning_effort = parse_reasoning_effort(cfg.reasoning_effort.as_deref());
 
     tracing::debug!(
-        "Executing final prompt with {} at xhigh reasoning effort",
-        EXECUTOR_MODEL
+        "Executing final prompt with {} at {:?} reasoning effort",
+        executor_model,
+        reasoning_effort
     );
 
-    for attempt in 0..=GPT5_RETRIES {
+    for attempt in 0..=EXECUTOR_RETRIES {
         if attempt > 0 {
-            tracing::warn!("GPT-5 API attempt {} of {}", attempt + 1, GPT5_RETRIES + 1);
-            tokio::time::sleep(GPT5_DELAY).await;
+            tracing::warn!(
+                "Executor API attempt {} of {}",
+                attempt + 1,
+                EXECUTOR_RETRIES + 1
+            );
+            tokio::time::sleep(EXECUTOR_DELAY).await;
         }
 
         // Build request inside the loop; clone final_prompt to keep ownership
@@ -299,9 +315,9 @@ pub async fn gpt5_reasoner_impl(
         };
 
         let req = match CreateChatCompletionRequestArgs::default()
-            .model(EXECUTOR_MODEL)
+            .model(executor_model)
             .messages([ChatCompletionRequestMessage::User(user_msg)])
-            .reasoning_effort(ReasoningEffort::Xhigh)
+            .reasoning_effort(reasoning_effort.clone())
             .temperature(0.2)
             .build()
         {
@@ -317,7 +333,7 @@ pub async fn gpt5_reasoner_impl(
         match client.client.chat().create(req).await {
             Ok(resp) => {
                 let duration = start.elapsed();
-                tracing::debug!("GPT-5 API succeeded in {:?}", duration);
+                tracing::debug!("Executor API succeeded in {:?}", duration);
 
                 // NEW: log response metadata + classify emptiness
                 let empty_kind = crate::logging::log_chat_response("executor", &resp, duration);
@@ -342,11 +358,11 @@ pub async fn gpt5_reasoner_impl(
                     }
 
                     // NEW: Treat as retryable anomaly once, then return helpful error
-                    if attempt < GPT5_RETRIES {
+                    if attempt < EXECUTOR_RETRIES {
                         tracing::warn!(
                             "Empty response from GPT-5; retrying once (attempt {} of {})",
                             attempt + 2,
-                            GPT5_RETRIES + 1
+                            EXECUTOR_RETRIES + 1
                         );
                         continue;
                     }
@@ -362,7 +378,7 @@ pub async fn gpt5_reasoner_impl(
                         false,
                         Some(format!("stage=empty_response: {}", err_msg)),
                         None,
-                        Some(EXECUTOR_MODEL.to_string()),
+                        Some(executor_model.to_string()),
                         None,
                         files.len(),
                     );
@@ -397,7 +413,7 @@ pub async fn gpt5_reasoner_impl(
                                         false,
                                         Some(msg),
                                         None,
-                                        Some(EXECUTOR_MODEL.to_string()),
+                                        Some(executor_model.to_string()),
                                         None,
                                         files.len(),
                                     );
@@ -434,7 +450,7 @@ pub async fn gpt5_reasoner_impl(
                     true,
                     None,
                     response_file,
-                    Some(EXECUTOR_MODEL.to_string()),
+                    Some(executor_model.to_string()),
                     usage,
                     files.len(),
                 );
@@ -443,27 +459,27 @@ pub async fn gpt5_reasoner_impl(
             }
             Err(e) => {
                 let retryable = crate::errors::is_retryable_app_level(&e);
-                if attempt < GPT5_RETRIES && retryable {
-                    tracing::warn!("GPT-5 call failed with retryable error: {e}; retrying...");
+                if attempt < EXECUTOR_RETRIES && retryable {
+                    tracing::warn!("Executor call failed with retryable error: {e}; retrying...");
                     continue;
                 }
 
                 // Not retryable or retries exhausted
                 if retryable {
                     tracing::error!(
-                        "GPT-5 call failed after {} attempts with retryable error: {}",
+                        "Executor call failed after {} attempts with retryable error: {}",
                         attempt + 1,
                         e
                     );
                 } else {
-                    tracing::error!("GPT-5 call failed with non-retryable error: {}", e);
+                    tracing::error!("Executor call failed with non-retryable error: {}", e);
                 }
                 let msg = format!("stage=chat_execute: {}", e);
                 log_record(
                     false,
                     Some(msg),
                     None,
-                    Some(EXECUTOR_MODEL.to_string()),
+                    Some(executor_model.to_string()),
                     None,
                     files.len(),
                 );
@@ -475,14 +491,14 @@ pub async fn gpt5_reasoner_impl(
     // Should never reach here due to loop logic, but provide a defensive error
     log_record(
         false,
-        Some("stage=final_unreachable: GPT-5 failed after all retries".to_string()),
+        Some("stage=final_unreachable: Executor failed after all retries".to_string()),
         None,
-        Some(EXECUTOR_MODEL.to_string()),
+        Some(executor_model.to_string()),
         None,
         files.len(),
     );
     Err(ToolError::Internal(
-        "GPT-5 failed after all retries".to_string(),
+        "Executor failed after all retries".to_string(),
     ))
 }
 

@@ -23,7 +23,7 @@ async fn test_multimodal_content_serialization() {
             "type": "message",
             "role": "assistant",
             "content": [{"type": "text", "text": "I can see the image and document."}],
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-sonnet-4-6",
             "stop_reason": "end_turn",
             "usage": {"input_tokens": 100, "output_tokens": 20}
         })))
@@ -52,7 +52,7 @@ async fn test_multimodal_content_serialization() {
     };
 
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 128,
         messages: vec![MessageParam {
             role: MessageRole::User,

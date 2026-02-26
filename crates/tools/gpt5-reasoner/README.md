@@ -55,7 +55,7 @@ gpt5_reasoner mcp
 
 - `OPENROUTER_API_KEY` (required): API key for OpenRouter
 - `OPTIMIZER_MODEL` (optional): Override default optimizer model
-  - Default: `anthropic/claude-sonnet-4.5`
+  - Default: `anthropic/claude-sonnet-4.6`
   - Precedence: parameter > env var > default
 - `RUST_LOG` (optional): Control logging level (e.g., `gpt5_reasoner=debug`)
 
@@ -151,7 +151,7 @@ gpt5_reasoner mcp
 ### Optimizer Model
 The optimizer analyzes file metadata to determine which files to include and how to structure the final prompt.
 
-**Default**: `anthropic/claude-sonnet-4.5`
+**Default**: `anthropic/claude-sonnet-4.6`
 
 Override via:
 1. Function parameter (MCP/library usage)
@@ -209,7 +209,7 @@ OUTPUT_MODE=verbose just test   # Verbose output
 
 ## Breaking Changes from 0.1.0
 
-- Default optimizer model changed from `openai/gpt-5` to `anthropic/claude-sonnet-4.5`
+- Default optimizer model changed from `openai/gpt-5` to `anthropic/claude-sonnet-4.6`
 - `gpt5_reasoner_impl` signature now includes `directories` parameter
 - `optimize_and_execute` MCP function now accepts optional `directories` parameter
 

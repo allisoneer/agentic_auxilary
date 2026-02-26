@@ -6,7 +6,6 @@ pub mod orchestration;
 pub mod paths;
 
 // Re-exports: only selectively export what the crate root needs
-pub use config::select_optimizer_model;
 pub use directory::expand_directories_to_filemeta;
 pub use guards::{
     ensure_plan_template_group, ensure_xml_has_group_marker, maybe_inject_plan_structure_meta,

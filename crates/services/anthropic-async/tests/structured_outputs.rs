@@ -47,7 +47,7 @@ fn test_output_format_json_schema_serialization() {
 #[expect(deprecated)]
 fn test_messages_request_with_output_format() {
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 1024,
         messages: vec![MessageParam {
             role: MessageRole::User,
@@ -73,7 +73,7 @@ fn test_messages_request_with_output_format() {
 #[test]
 fn test_messages_request_omits_none_output_format() {
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 1024,
         messages: vec![MessageParam {
             role: MessageRole::User,
@@ -90,7 +90,7 @@ fn test_messages_request_omits_none_output_format() {
 #[test]
 fn test_messages_request_with_stream() {
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 1024,
         messages: vec![MessageParam {
             role: MessageRole::User,

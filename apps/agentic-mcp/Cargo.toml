@@ -17,10 +17,12 @@ logging = false
 napi = false
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 agentic-tools-registry = { workspace = true }
 clap = { workspace = true }
+colored = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

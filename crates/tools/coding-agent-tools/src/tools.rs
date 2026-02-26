@@ -7,6 +7,7 @@ use crate::types::{
     Show, SortOrder,
 };
 use crate::{CodingAgentTools, just};
+use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
@@ -419,7 +420,8 @@ impl Tool for JustExecuteTool {
 // ============================================================================
 
 /// Build a `ToolRegistry` containing all `coding_agent_tools`.
-pub fn build_registry(tools: Arc<CodingAgentTools>) -> ToolRegistry {
+pub fn build_registry(cfg: SubagentsConfig) -> ToolRegistry {
+    let tools = Arc::new(CodingAgentTools::with_config(cfg));
     ToolRegistry::builder()
         .register::<LsTool, ()>(LsTool::new(Arc::clone(&tools)))
         .register::<AskAgentTool, ()>(AskAgentTool::new(Arc::clone(&tools)))

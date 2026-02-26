@@ -7,16 +7,17 @@ Guidance for Claude Code when working with this repository.
 <!-- BEGIN:xtask:autogen crate-index -->
 ### agentic-tools
 
+- `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-core` (lib) - `crates/agentic-tools/core/`
 - `agentic-mcp` (app) - `apps/agentic-mcp/`
 - `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
 - `agentic-tools-registry` (lib) - `crates/agentic-tools/registry/`
-- `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 
 ### infra
 
+- `agentic-config` (lib) - `crates/infra/agentic-config/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
@@ -45,6 +46,7 @@ Guidance for Claude Code when working with this repository.
 
 ### tools
 
+- `agentic-bin` (app) - `apps/agentic/`
 - `thoughts-bin` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
@@ -53,6 +55,9 @@ Guidance for Claude Code when working with this repository.
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
 <!-- END:xtask:autogen -->
 
+## Working Notes
+
+See [TODO.md](TODO.md) for the human maintainer's ad-hoc notes and thoughts. This file contains ideas, observations, and potential work items that are still loosely scoped—things worth thinking about but not yet defined enough for a formal ticket.
 
 ## Common Commands
 

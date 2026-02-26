@@ -1,3 +1,8 @@
+#[cfg(not(unix))]
+compile_error!(
+    "coding_agent_tools only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 pub mod agent;
 pub mod glob;
 pub mod grep;
@@ -11,6 +16,7 @@ pub mod walker;
 
 pub use tools::build_registry;
 
+use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::ToolError;
 use std::sync::Arc;
 use types::{AgentOutput, Depth, GlobOutput, GrepOutput, LsOutput, OutputMode, Show, SortOrder};
@@ -34,6 +40,8 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
 
 #[derive(Clone)]
 pub struct CodingAgentTools {
+    /// Tool-specific config for subagents (model selection).
+    subagents: SubagentsConfig,
     /// Two-level pagination cache for MCP (persists across calls when Arc-wrapped)
     pager: Arc<pagination::PaginationCache>,
     /// Cache for parsed justfile recipes
@@ -50,7 +58,12 @@ impl Default for CodingAgentTools {
 
 impl CodingAgentTools {
     pub fn new() -> Self {
+        Self::with_config(SubagentsConfig::default())
+    }
+
+    pub fn with_config(subagents: SubagentsConfig) -> Self {
         Self {
+            subagents,
             pager: Arc::new(pagination::PaginationCache::new()),
             just_registry: Arc::new(just::JustRegistry::new()),
             just_pager: Arc::new(just::pager::PaginationCache::new()),
@@ -266,7 +279,7 @@ impl CodingAgentTools {
         }
 
         // Compose configuration
-        let model = agent::model_for(agent_type);
+        let model = agent::model_for(agent_type, &self.subagents);
         let system_prompt = agent::compose_prompt(agent_type, location);
         let enabled_tools = agent::enabled_tools_for(agent_type, location);
 

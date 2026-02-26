@@ -2,19 +2,36 @@
 
 use std::collections::HashMap;
 
+use agentic_config::types::SubagentsConfig;
 use claudecode::config::{MCPConfig, MCPServer};
 use claudecode::types::Model;
 
 use super::prompts::compose_prompt_impl;
 use crate::types::{AgentLocation, AgentType};
 
-/// Get the model for a given agent type.
-/// - Locator → Haiku (fast, cheap)
-/// - Analyzer → Sonnet (deep understanding)
-pub fn model_for(agent_type: AgentType) -> Model {
-    match agent_type {
-        AgentType::Locator => Model::Haiku,
-        AgentType::Analyzer => Model::Sonnet,
+/// Select model for agent type based on config.
+///
+/// Maps config strings to claudecode Model enum variants.
+/// TODO(2): claudecode SDK could be enhanced with Custom(String) variant
+/// for more flexibility, but enum mapping works for now.
+pub fn model_for(agent_type: AgentType, cfg: &SubagentsConfig) -> Model {
+    let raw = match agent_type {
+        AgentType::Locator => cfg.locator_model.as_str(),
+        AgentType::Analyzer => cfg.analyzer_model.as_str(),
+    };
+
+    // Map known model strings to enum variants
+    match raw.trim().to_lowercase().as_str() {
+        "haiku" | "claude-haiku-4-5" => Model::Haiku,
+        "sonnet" | "claude-sonnet-4-6" => Model::Sonnet,
+        "opus" | "claude-opus-4-6" => Model::Opus,
+        _ => {
+            // Fallback based on agent type
+            match agent_type {
+                AgentType::Locator => Model::Haiku,
+                AgentType::Analyzer => Model::Sonnet,
+            }
+        }
     }
 }
 
@@ -145,13 +162,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_model_for_locator() {
-        assert_eq!(model_for(AgentType::Locator), Model::Haiku);
+    fn test_model_for_locator_default() {
+        let cfg = SubagentsConfig::default();
+        assert_eq!(model_for(AgentType::Locator, &cfg), Model::Haiku);
     }
 
     #[test]
-    fn test_model_for_analyzer() {
-        assert_eq!(model_for(AgentType::Analyzer), Model::Sonnet);
+    fn test_model_for_analyzer_default() {
+        let cfg = SubagentsConfig::default();
+        assert_eq!(model_for(AgentType::Analyzer, &cfg), Model::Sonnet);
+    }
+
+    #[test]
+    fn test_model_for_with_custom_config() {
+        let cfg = SubagentsConfig {
+            locator_model: "sonnet".into(),
+            analyzer_model: "opus".into(),
+        };
+        assert_eq!(model_for(AgentType::Locator, &cfg), Model::Sonnet);
+        assert_eq!(model_for(AgentType::Analyzer, &cfg), Model::Opus);
+    }
+
+    #[test]
+    fn test_model_for_fallback_on_unknown() {
+        let cfg = SubagentsConfig {
+            locator_model: "unknown-model".into(),
+            analyzer_model: "another-unknown".into(),
+        };
+        // Falls back based on agent type
+        assert_eq!(model_for(AgentType::Locator, &cfg), Model::Haiku);
+        assert_eq!(model_for(AgentType::Analyzer, &cfg), Model::Sonnet);
     }
 
     #[test]
