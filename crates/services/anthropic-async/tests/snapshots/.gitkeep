@@ -1,0 +1,2 @@
+# This directory stores recorded API response snapshots for conformance tests.
+# Snapshots are recorded with ANTHROPIC_LIVE=1 and replayed in CI.

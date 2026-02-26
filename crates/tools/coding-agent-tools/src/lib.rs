@@ -74,6 +74,11 @@ impl CodingAgentTools {
 // Removed universal-tool-core macros; Tool impls live in tools.rs
 impl CodingAgentTools {
     /// List files and directories (gitignore-aware)
+    #[expect(
+        clippy::unused_async,
+        reason = "Must remain async for Tool trait BoxFuture dispatch pattern. \
+                  Called via Box::pin(async move { tools.ls(...).await }) in tools.rs."
+    )]
     pub async fn ls(
         &self,
         path: Option<String>,
@@ -88,8 +93,8 @@ impl CodingAgentTools {
         let log_ctx = logging::ToolLogCtx::start("cli_ls");
         let req_json = serde_json::json!({
             "path": &path,
-            "depth": depth.map(|d| d.as_u8()),
-            "show": show.map(|s| format!("{:?}", s).to_lowercase()),
+            "depth": depth.map(types::Depth::as_u8),
+            "show": show.map(|s| format!("{s:?}").to_lowercase()),
             "ignore": &ignore,
             "hidden": hidden,
         });
@@ -107,7 +112,7 @@ impl CodingAgentTools {
 
         // Validate root path exists and is a directory
         if !root_path.exists() {
-            let error_msg = format!("Path does not exist: {}", abs_root);
+            let error_msg = format!("Path does not exist: {abs_root}");
             log_ctx.finish(
                 req_json,
                 None,
@@ -141,7 +146,7 @@ impl CodingAgentTools {
         }
 
         // Configure walker
-        let depth_val = depth.map(|d| d.as_u8()).unwrap_or(1);
+        let depth_val = depth.map_or(1, types::Depth::as_u8);
         let show_val = show.unwrap_or_default();
         let user_ignores = ignore.unwrap_or_default();
         let include_hidden = hidden.unwrap_or(false);
@@ -170,7 +175,7 @@ impl CodingAgentTools {
         // Acquire per-query lock (level 2), serialize same-param calls
         let qlock = self.pager.get_or_create(&query_key);
         let (entries, has_more, warnings, shown, total) = {
-            let mut st = qlock.state.lock().unwrap();
+            let mut st = qlock.lock_state();
 
             // Fill cache if empty or expired
             if st.is_empty() || st.is_expired() {
@@ -255,8 +260,8 @@ impl CodingAgentTools {
         let location = location.unwrap_or_default();
 
         let req_json = serde_json::json!({
-            "agent_type": format!("{:?}", agent_type).to_lowercase(),
-            "location": format!("{:?}", location).to_lowercase(),
+            "agent_type": format!("{agent_type:?}").to_lowercase(),
+            "location": format!("{location:?}").to_lowercase(),
             "query": &query,
         });
 
@@ -290,14 +295,13 @@ impl CodingAgentTools {
         // Validate MCP servers before launching (spawn, handshake, tools/list)
         let opts = ValidateOptions::default();
         if let Err(e) = ensure_valid_mcp_config(&mcp_config, &opts).await {
+            use std::fmt::Write;
             let mut details = String::new();
             for (name, err) in &e.errors {
-                details.push_str(&format!("  {}: {}\n", name, err));
+                let _ = writeln!(details, "  {name}: {err}");
             }
-            let error_msg = format!(
-                "ask_agent unavailable: MCP config validation failed.\n{}",
-                details
-            );
+            let error_msg =
+                format!("ask_agent unavailable: MCP config validation failed.\n{details}");
             log_ctx.finish(
                 req_json,
                 None,
@@ -307,7 +311,7 @@ impl CodingAgentTools {
                 Some(model.to_string()),
                 None,
             );
-            return Err(ToolError::Internal(error_msg.to_string()));
+            return Err(ToolError::Internal(error_msg));
         }
 
         // Build session config
@@ -334,7 +338,7 @@ impl CodingAgentTools {
                     Some(model.to_string()),
                     None,
                 );
-                return Err(ToolError::Internal(error_msg.to_string()));
+                return Err(ToolError::Internal(error_msg));
             }
         };
 
@@ -354,7 +358,7 @@ impl CodingAgentTools {
                     Some(model.to_string()),
                     None,
                 );
-                return Err(ToolError::Internal(error_msg.to_string()));
+                return Err(ToolError::Internal(error_msg));
             }
         };
 
@@ -371,14 +375,13 @@ impl CodingAgentTools {
                     Some(model.to_string()),
                     None,
                 );
-                return Err(ToolError::Internal(error_msg.to_string()));
+                return Err(ToolError::Internal(error_msg));
             }
         };
 
         if result.is_error {
             let error_msg = result
                 .error
-                .clone()
                 .unwrap_or_else(|| "Claude session returned an error".into());
             log_ctx.finish(
                 req_json,
@@ -389,7 +392,7 @@ impl CodingAgentTools {
                 Some(model.to_string()),
                 None,
             );
-            return Err(ToolError::Internal(error_msg.to_string()));
+            return Err(ToolError::Internal(error_msg));
         }
 
         // Return plain text output (reject empty/whitespace-only strings)
@@ -397,8 +400,7 @@ impl CodingAgentTools {
             // Write markdown response file and capture timestamp for consistent logging
             let (response_file, completed_at) = log_ctx
                 .write_markdown_response(&text)
-                .map(|(f, ts)| (Some(f), Some(ts)))
-                .unwrap_or((None, None));
+                .map_or((None, None), |(f, ts)| (Some(f), Some(ts)));
             log_ctx.finish(
                 req_json,
                 response_file,
@@ -425,6 +427,10 @@ impl CodingAgentTools {
     }
 
     /// Search the codebase using a regex pattern (gitignore-aware).
+    #[expect(
+        clippy::unused_async,
+        reason = "Must remain async for Tool trait BoxFuture dispatch pattern."
+    )]
     pub async fn search_grep(
         &self,
         pattern: String,
@@ -448,7 +454,7 @@ impl CodingAgentTools {
         let req_json = serde_json::json!({
             "pattern": &pattern,
             "path": &path,
-            "mode": mode.map(|m| format!("{:?}", m).to_lowercase()),
+            "mode": mode.map(|m| format!("{m:?}").to_lowercase()),
             "globs": &globs,
             "ignore": &ignore,
             "include_hidden": include_hidden,
@@ -507,6 +513,10 @@ impl CodingAgentTools {
     }
 
     /// Match files/directories by glob pattern (gitignore-aware).
+    #[expect(
+        clippy::unused_async,
+        reason = "Must remain async for Tool trait BoxFuture dispatch pattern."
+    )]
     pub async fn search_glob(
         &self,
         pattern: String,
@@ -524,7 +534,7 @@ impl CodingAgentTools {
             "path": &path,
             "ignore": &ignore,
             "include_hidden": include_hidden,
-            "sort": sort.map(|s| format!("{:?}", s).to_lowercase()),
+            "sort": sort.map(|s| format!("{s:?}").to_lowercase()),
             "head_limit": head_limit,
             "offset": offset,
         });
@@ -577,7 +587,7 @@ impl CodingAgentTools {
         });
 
         if let Err(e) = just::ensure_just_available().await {
-            let error_msg = e.to_string();
+            let error_msg = e;
             log_ctx.finish(
                 req_json,
                 None,
@@ -587,7 +597,7 @@ impl CodingAgentTools {
                 None,
                 None,
             );
-            return Err(ToolError::Internal(error_msg.to_string()));
+            return Err(ToolError::Internal(error_msg));
         }
 
         let repo_root = match paths::to_abs_string(".") {
@@ -612,7 +622,7 @@ impl CodingAgentTools {
 
         // Check if we need to refresh - do this without holding lock across await
         let needs_refresh = {
-            let st = qlock.state.lock().unwrap();
+            let st = qlock.lock_state();
             st.is_empty() || st.is_expired()
         };
 
@@ -621,7 +631,7 @@ impl CodingAgentTools {
             let all = match self.just_registry.get_all_recipes(&repo_root).await {
                 Ok(r) => r,
                 Err(e) => {
-                    let error_msg = e.to_string();
+                    let error_msg = e;
                     log_ctx.finish(
                         req_json,
                         None,
@@ -631,7 +641,7 @@ impl CodingAgentTools {
                         None,
                         None,
                     );
-                    return Err(ToolError::Internal(error_msg.to_string()));
+                    return Err(ToolError::Internal(error_msg));
                 }
             };
 
@@ -640,17 +650,15 @@ impl CodingAgentTools {
                 .filter(|(recipe_dir, r)| {
                     let dir_ok = dir_filter
                         .as_ref()
-                        .map(|f| recipe_dir.starts_with(f))
-                        .unwrap_or(true);
+                        .is_none_or(|f| recipe_dir.starts_with(f));
                     let visible = !r.is_private && !r.is_mcp_hidden;
                     let q_ok = q.is_empty()
                         || r.name
                             .to_ascii_lowercase()
                             .contains(&q.to_ascii_lowercase())
-                        || r.doc
-                            .as_ref()
-                            .map(|d| d.to_ascii_lowercase().contains(&q.to_ascii_lowercase()))
-                            .unwrap_or(false);
+                        || r.doc.as_ref().is_some_and(|d| {
+                            d.to_ascii_lowercase().contains(&q.to_ascii_lowercase())
+                        });
                     dir_ok && visible && q_ok
                 })
                 .map(|(d, r)| {
@@ -677,13 +685,13 @@ impl CodingAgentTools {
                 .collect();
 
             // Reacquire lock to update state
-            let mut st = qlock.state.lock().unwrap();
+            let mut st = qlock.lock_state();
             st.reset(filtered);
         }
 
         // Paginate (separate lock acquisition)
         let (items, has_more) = {
-            let mut st = qlock.state.lock().unwrap();
+            let mut st = qlock.lock_state();
             let offset = st.next_offset;
             let end = (offset + just::pager::PAGE_SIZE).min(st.results.len());
             let page = st.results[offset..end].to_vec();
@@ -724,7 +732,7 @@ impl CodingAgentTools {
         });
 
         if let Err(e) = just::ensure_just_available().await {
-            let error_msg = e.to_string();
+            let error_msg = e;
             log_ctx.finish(
                 req_json,
                 None,
@@ -734,7 +742,7 @@ impl CodingAgentTools {
                 None,
                 None,
             );
-            return Err(ToolError::Internal(error_msg.to_string()));
+            return Err(ToolError::Internal(error_msg));
         }
 
         let repo_root = match paths::to_abs_string(".") {
@@ -757,7 +765,7 @@ impl CodingAgentTools {
                 Ok(output)
             }
             Err(e) => {
-                let error_msg = e.to_string();
+                let error_msg = e;
                 log_ctx.finish(
                     req_json,
                     None,
@@ -767,7 +775,7 @@ impl CodingAgentTools {
                     None,
                     None,
                 );
-                Err(ToolError::Internal(error_msg.to_string()))
+                Err(ToolError::Internal(error_msg))
             }
         }
     }
@@ -781,7 +789,7 @@ mod ask_agent_filter_tests {
     #[test]
     fn prefers_content_when_result_is_empty_string() {
         let r = ClaudeResult {
-            result: Some("".into()),
+            result: Some(String::new()),
             content: Some("ok".into()),
             ..Default::default()
         };
@@ -792,7 +800,7 @@ mod ask_agent_filter_tests {
     fn returns_none_when_both_empty_or_whitespace() {
         let r1 = ClaudeResult {
             result: None,
-            content: Some("".into()),
+            content: Some(String::new()),
             ..Default::default()
         };
         assert_eq!(pick_non_empty_text(&r1), None);

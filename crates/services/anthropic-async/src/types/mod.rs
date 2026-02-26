@@ -13,12 +13,12 @@ pub mod tools;
 
 pub use common::{CacheControl, CacheTtl, Metadata, Usage, validate_mixed_ttl_order};
 pub use content::{
-    ContentBlock, ContentBlockParam, DocumentSource, ImageSource, MessageContentParam,
-    MessageParam, MessageRole, SystemParam, TextBlockParam,
+    ContentBlock, ContentBlockConversionError, ContentBlockParam, DocumentSource, ImageSource,
+    MessageContentParam, MessageParam, MessageRole, SystemParam, TextBlockParam,
 };
 pub use messages::{
     MessageTokensCountRequest, MessageTokensCountResponse, MessagesCreateRequest,
-    MessagesCreateResponse,
+    MessagesCreateResponse, OutputConfig, OutputFormat, ServiceTier, ThinkingConfig,
 };
 pub use models::{Model, ModelListParams, ModelsListResponse};
 pub use tools::{Tool, ToolChoice};

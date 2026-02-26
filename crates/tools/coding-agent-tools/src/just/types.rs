@@ -103,9 +103,7 @@ impl TextFormat for ExecuteOutput {
             self.recipe,
             self.dir,
             if self.success { "SUCCESS" } else { "FAILURE" },
-            self.exit_code
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "?".into())
+            self.exit_code.map_or_else(|| "?".into(), |c| c.to_string())
         );
         if !self.stdout.is_empty() {
             let _ = writeln!(out, "\nstdout:\n{}", self.stdout.trim_end());

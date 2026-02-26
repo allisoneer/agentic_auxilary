@@ -12,7 +12,7 @@ async fn test_retry_on_429_then_success() {
     let server = MockServer::start().await;
     let count = Arc::new(AtomicUsize::new(0));
 
-    let count_clone = count.clone();
+    let count_clone = Arc::clone(&count);
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
         .respond_with(move |_req: &wiremock::Request| {
@@ -47,20 +47,11 @@ async fn test_retry_on_429_then_success() {
     let request = MessagesCreateRequest {
         model: "claude".into(),
         max_tokens: 10,
-        system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let response = client.messages().create(request).await.unwrap();
@@ -73,7 +64,7 @@ async fn test_529_overloaded_retry() {
     let server = MockServer::start().await;
     let count = Arc::new(AtomicUsize::new(0));
 
-    let count_clone = count.clone();
+    let count_clone = Arc::clone(&count);
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
         .respond_with(move |_req: &wiremock::Request| {
@@ -106,20 +97,11 @@ async fn test_529_overloaded_retry() {
     let request = MessagesCreateRequest {
         model: "claude".into(),
         max_tokens: 10,
-        system: None,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: "test".into(),
         }],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let response = client.messages().create(request).await.unwrap();
@@ -149,17 +131,8 @@ async fn test_non_retryable_400() {
     let request = MessagesCreateRequest {
         model: "invalid-model".into(),
         max_tokens: 10,
-        system: None,
         messages: vec![],
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let err = client.messages().create(request).await.unwrap_err();

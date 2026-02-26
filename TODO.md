@@ -104,7 +104,6 @@ The core ENG-454 issues have been addressed. Remaining follow-up work:
 instructions ("Showing X out of Y, call again for more") should be solved elegantly at the framework level rather than per-tool. The ls
 tool has good phrasing but pr_comments only partially ported that style. Consider: should agentic-tools-utils pagination module provide
 a standard output formatter? Or should pagination messaging be part of the MCP response schema itself?
-- Investigate every single clippy allow and see if there is a better approach than manually defining a clippy allow
 - Check to see if I'm setting server-specific timeouts for the various MCP servers of if the timeout is up to the client.
 - PRs merged from release-plz don't automatically run
 `xtask-sync` and thus out of date things aren't really caught

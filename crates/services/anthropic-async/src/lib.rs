@@ -21,16 +21,7 @@
 //!         role: MessageRole::User,
 //!         content: "Hello!".into(),
 //!     }],
-//!     system: None,
-//!     temperature: None,
-//!     stop_sequences: None,
-//!     top_p: None,
-//!     top_k: None,
-//!     metadata: None,
-//!     tools: None,
-//!     tool_choice: None,
-//!     stream: None,
-//!     output_format: None,
+//!     ..Default::default()
 //! };
 //!
 //! let response = client.messages().create(req).await?;

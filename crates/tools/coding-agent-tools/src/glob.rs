@@ -26,7 +26,7 @@ pub struct GlobConfig {
     pub offset: usize,
 }
 
-/// Maximum allowed head_limit to prevent context bloat.
+/// Maximum allowed `head_limit` to prevent context bloat.
 const MAX_HEAD_LIMIT: usize = 1000;
 
 /// Entry with metadata for sorting.
@@ -96,10 +96,10 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
                     continue;
                 }
 
-                let rel_path = path
-                    .strip_prefix(root_path)
-                    .map(|p| p.to_string_lossy().replace('\\', "/"))
-                    .unwrap_or_else(|_| path.to_string_lossy().to_string());
+                let rel_path = path.strip_prefix(root_path).map_or_else(
+                    |_| path.to_string_lossy().to_string(),
+                    |p| p.to_string_lossy().replace('\\', "/"),
+                );
 
                 // Double-check against ignore patterns
                 if ignore_gs.is_match(&rel_path) {
@@ -133,7 +133,7 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
                 entries.push(GlobEntry { rel_path, mtime });
             }
             Err(e) => {
-                warnings.push(format!("Walk error: {}", e));
+                warnings.push(format!("Walk error: {e}"));
             }
         }
     }

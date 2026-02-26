@@ -47,6 +47,7 @@ async fn test_multimodal_content_serialization() {
 
     let text = ContentBlockParam::Text {
         text: "What's in these files?".into(),
+        citations: None,
         cache_control: None,
     };
 
@@ -57,16 +58,7 @@ async fn test_multimodal_content_serialization() {
             role: MessageRole::User,
             content: MessageContentParam::Blocks(vec![image, document, text]),
         }],
-        system: None,
-        temperature: None,
-        stop_sequences: None,
-        top_p: None,
-        top_k: None,
-        metadata: None,
-        tools: None,
-        tool_choice: None,
-        stream: None,
-        output_format: None,
+        ..Default::default()
     };
 
     let cfg = AnthropicConfig::new()

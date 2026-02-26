@@ -35,7 +35,7 @@ pub fn find_justfiles(repo_root_abs: &str) -> Result<Vec<JustfilePath>, String> 
             }
         });
 
-    for entry in walker.filter_map(|e| e.ok()) {
+    for entry in walker.filter_map(std::result::Result::ok) {
         if !entry.file_type().is_file() {
             continue;
         }
@@ -59,6 +59,7 @@ pub fn find_justfiles(repo_root_abs: &str) -> Result<Vec<JustfilePath>, String> 
 }
 
 #[cfg(test)]
+#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs;
@@ -71,7 +72,7 @@ mod tests {
 
         // Create justfile variants
         fs::write(root.join("justfile"), "default:\n    echo hi").unwrap();
-        fs::create_dir(root.join("sub")).unwrap();
+        fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("sub/Justfile"), "build:\n    cargo build").unwrap();
 
         let results = find_justfiles(root.to_str().unwrap()).unwrap();
@@ -84,7 +85,7 @@ mod tests {
         let root = tmp.path();
 
         // Create justfile in hidden dir (should be ignored)
-        fs::create_dir(root.join(".hidden")).unwrap();
+        fs::create_dir_all(root.join(".hidden")).unwrap();
         fs::write(root.join(".hidden/justfile"), "secret:\n    echo secret").unwrap();
 
         // Create justfile in normal dir

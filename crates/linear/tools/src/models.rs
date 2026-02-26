@@ -198,12 +198,10 @@ impl TextFormat for SearchResult {
             }
             let _ = writeln!(out, "  {}", line);
         }
-        if self.has_next_page && self.end_cursor.is_some() {
-            let _ = writeln!(
-                out,
-                "\n[More results available, cursor: {}]",
-                self.end_cursor.as_ref().unwrap()
-            );
+        if self.has_next_page
+            && let Some(cursor) = &self.end_cursor
+        {
+            let _ = writeln!(out, "\n[More results available, cursor: {}]", cursor);
         }
         out
     }
