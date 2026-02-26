@@ -66,7 +66,7 @@ claudecode = "0.1.11"
 <!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-anthropic-async = "0.4.0"
+anthropic-async = "0.5.0"
 ```
 <!-- END:autodeps -->
 

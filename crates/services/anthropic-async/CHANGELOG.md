@@ -1,6 +1,26 @@
 # Changelog
 
 ## [Unreleased]
+## [0.5.0] - 2026-02-26
+
+### ⛰️  Features
+- *(anthropic-async)* Expand content block types for SDK alignment
+- *(anthropic-async)* Add request config types and echo pattern conversions
+- *(anthropic-async)* Add httpmock recording infrastructure for conformance tests
+- *(anthropic-async)* Complete conformance test infrastructure (phases 5-6)
+
+### 🐛 Bug Fixes
+- *(anthropic-async)* Complete TTL validation across all 12 cacheable locations
+- *(anthropic-async)* Redact sensitive headers from cassette recordings
+- *(anthropic-async)* Resolve clippy lint violations
+- *(anthropic-async)* Address PR review comments for test infrastructure
+
+### 🚜 Refactor
+- *(anthropic-async)* Eliminate underscore-prefixed variable patterns
+- *(anthropic-async)* Migrate to workspace lint inheritance
+
+### 🧪 Testing
+- *(anthropic-async)* Add conformance test infrastructure and multi-turn tests
 ## [0.4.0] - 2026-02-04
 
 ### 🐛 Bug Fixes

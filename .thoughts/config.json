@@ -199,6 +199,35 @@
       "remote": "https://github.com/rust-lang/cargo",
       "description": "Cargo's file locking implementation - reference for DIY FileLock replacement"
     },
-    "https://github.com/modelcontextprotocol/typescript-sdk.git"
+    "https://github.com/modelcontextprotocol/typescript-sdk.git",
+    {
+      "remote": "https://github.com/electric-sql/pglite",
+      "description": "PGlite - Postgres compiled to WASM, developed by ElectricSQL - key candidate for embedded Postgres in client/edge"
+    },
+    {
+      "remote": "https://github.com/f0rr0/pglite-oxide",
+      "description": "pglite-oxide - Rust bindings for PGlite via wasmtime, version 0.1.0 - for running Postgres 17.x in WASM from Rust"
+    },
+    {
+      "remote": "https://github.com/electric-sql/electric",
+      "description": "ElectricSQL - Postgres sync engine that just hit 1.0 GA, syncs subsets of Postgres to clients via HTTP"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/libsql",
+      "description": "libSQL - Production-ready SQLite fork with sync, vectors, encryption - the underlying tech for Turso"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/agentfs",
+      "description": "AgentFS filesystem for agents (Turso) for DB-backed filesystem patterns."
+    },
+    {
+      "remote": "https://github.com/durable-streams/durable-streams",
+      "description": "Durable Streams monorepo with official Rust client (packages/client-rust) - investigating for Postgres sync to local stores"
+    },
+    {
+      "remote": "https://github.com/alexliesenfeld/httpmock",
+      "description": "HTTP mocking library with built-in recording/playback support for conformance testing"
+    },
+    "https://github.com/openai/codex"
   ]
 }
