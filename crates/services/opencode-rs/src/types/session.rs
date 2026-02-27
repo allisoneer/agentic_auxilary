@@ -1,9 +1,9 @@
-//! Session types for opencode_rs.
+//! Session types for `opencode_rs`.
 
 use crate::types::permission::Ruleset;
 use serde::{Deserialize, Serialize};
 
-/// A session in OpenCode.
+/// A session in `OpenCode`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {

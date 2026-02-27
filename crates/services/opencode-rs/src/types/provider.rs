@@ -1,4 +1,4 @@
-//! Provider types for opencode_rs.
+//! Provider types for `opencode_rs`.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ pub struct ProviderListResponse {
     /// All available providers.
     #[serde(default)]
     pub all: Vec<Provider>,
-    /// Default model for each provider (provider_id -> model_id).
+    /// Default model for each provider (`provider_id` -> `model_id`).
     #[serde(default)]
     pub default: HashMap<String, String>,
     /// List of connected/authenticated provider IDs.
@@ -219,9 +219,9 @@ pub struct InterleavedConfig {
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
 pub enum InterleavedField {
-    /// Use reasoning_content field.
+    /// Use `reasoning_content` field.
     ReasoningContent,
-    /// Use reasoning_details field.
+    /// Use `reasoning_details` field.
     ReasoningDetails,
     /// Unknown field type (forward compatibility).
     #[serde(other)]
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(cost.input, Some(3.0));
         assert_eq!(cost.output, Some(15.0));
         assert!(model.limit.is_some());
-        assert_eq!(model.limit.unwrap().context, Some(200000));
+        assert_eq!(model.limit.unwrap().context, Some(200_000));
         assert_eq!(model.status, Some(ModelStatus::Available));
         assert_eq!(model.release_date, Some("2024-01-01".to_string()));
         assert_eq!(model.headers.get("X-Custom"), Some(&"value".to_string()));
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_interleaved_capability_bool() {
-        let json = r#"true"#;
+        let json = r"true";
         let cap: InterleavedCapability = serde_json::from_str(json).unwrap();
         assert!(matches!(cap, InterleavedCapability::Bool(true)));
     }

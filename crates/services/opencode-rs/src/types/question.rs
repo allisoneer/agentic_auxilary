@@ -1,4 +1,4 @@
-//! Question types for opencode_rs.
+//! Question types for `opencode_rs`.
 //!
 //! Types for the question-answer flow where the server asks users for input.
 

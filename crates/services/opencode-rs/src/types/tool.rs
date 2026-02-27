@@ -1,4 +1,4 @@
-//! Tool and agent types for opencode_rs.
+//! Tool and agent types for `opencode_rs`.
 
 use crate::types::permission::Ruleset;
 use crate::types::project::ModelRef;

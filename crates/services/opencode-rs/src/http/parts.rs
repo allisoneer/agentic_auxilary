@@ -1,4 +1,4 @@
-//! Parts API for OpenCode.
+//! Parts API for `OpenCode`.
 //!
 //! Endpoints for modifying message parts.
 
@@ -28,10 +28,7 @@ impl PartsApi {
         self.http
             .request_empty(
                 Method::DELETE,
-                &format!(
-                    "/session/{}/message/{}/part/{}",
-                    session_id, message_id, part_id
-                ),
+                &format!("/session/{session_id}/message/{message_id}/part/{part_id}"),
                 None,
             )
             .await
@@ -52,10 +49,7 @@ impl PartsApi {
         self.http
             .request_json(
                 Method::PATCH,
-                &format!(
-                    "/session/{}/message/{}/part/{}",
-                    session_id, message_id, part_id
-                ),
+                &format!("/session/{session_id}/message/{message_id}/part/{part_id}"),
                 Some(body.clone()),
             )
             .await

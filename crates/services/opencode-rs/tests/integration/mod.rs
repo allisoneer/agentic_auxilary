@@ -1,4 +1,4 @@
-//! Integration tests for opencode_rs.
+//! Integration tests for `opencode_rs`.
 //!
 //! These tests verify typed deserialization against a live opencode server.
 //!
@@ -8,6 +8,9 @@
 //! 2. Set the environment variable: `OPENCODE_INTEGRATION=1`
 //! 3. Optionally set `OPENCODE_BASE_URL` (defaults to `http://127.0.0.1:4096`)
 //! 4. Run the tests: `cargo test --test integration -- --ignored`
+
+// Integration tests are allowed to use unwrap/expect for test assertions
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod http_endpoints;
 mod server_sse;
@@ -28,5 +31,5 @@ pub async fn create_test_client() -> opencode_rs::Client {
         .base_url(test_url())
         .timeout_secs(30)
         .build()
-        .expect("Failed to create test client")
+        .unwrap()
 }

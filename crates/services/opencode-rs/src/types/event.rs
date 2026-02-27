@@ -1,6 +1,6 @@
-//! SSE event types for opencode_rs.
+//! SSE event types for `opencode_rs`.
 //!
-//! Contains 40 event variants matching OpenCode's server.ts.
+//! Contains 40 event variants matching `OpenCode`'s server.ts.
 
 use crate::types::error::APIError;
 use crate::types::permission::{PermissionReply, PermissionRequest};
@@ -16,7 +16,7 @@ pub struct GlobalEventEnvelope {
     pub payload: Event,
 }
 
-/// SSE Event from OpenCode server (40 variants).
+/// SSE Event from `OpenCode` server (40 variants).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 #[serde(tag = "type")]
@@ -392,7 +392,7 @@ pub struct SessionIdleProps {
     pub extra: serde_json::Value,
 }
 
-/// Error union that can be APIError or unknown value.
+/// Error union that can be `APIError` or unknown value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AssistantError {
@@ -536,35 +536,36 @@ pub struct QuestionRejectedProps {
 }
 
 impl Event {
-    /// Extract session_id if present in this event.
+    /// Extract `session_id` if present in this event.
     pub fn session_id(&self) -> Option<&str> {
         match self {
-            Event::SessionCreated { properties } => Some(&properties.info.id),
-            Event::SessionUpdated { properties } => Some(&properties.info.id),
-            Event::SessionDeleted { properties } => Some(&properties.info.id),
-            Event::SessionIdle { properties } => Some(&properties.session_id),
-            Event::SessionError { properties } => properties.session_id.as_deref(),
-            Event::MessageUpdated { properties } => properties.info.session_id.as_deref(),
-            Event::MessageRemoved { properties } => Some(&properties.session_id),
-            Event::MessagePartUpdated { properties } => properties.session_id.as_deref(),
-            Event::PermissionAsked { properties } => Some(&properties.request.session_id),
-            Event::PermissionReplied { properties } => Some(&properties.session_id),
-            Event::PermissionRepliedNext { properties } => Some(&properties.session_id),
-            Event::QuestionAsked { properties } => Some(&properties.request.session_id),
-            Event::QuestionReplied { properties } => Some(&properties.session_id),
-            Event::QuestionRejected { properties } => Some(&properties.session_id),
+            Self::SessionCreated { properties }
+            | Self::SessionUpdated { properties }
+            | Self::SessionDeleted { properties } => Some(&properties.info.id),
+            Self::SessionIdle { properties } => Some(&properties.session_id),
+            Self::SessionError { properties } => properties.session_id.as_deref(),
+            Self::MessageUpdated { properties } => properties.info.session_id.as_deref(),
+            Self::MessageRemoved { properties } => Some(&properties.session_id),
+            Self::MessagePartUpdated { properties } => properties.session_id.as_deref(),
+            Self::PermissionAsked { properties } => Some(&properties.request.session_id),
+            Self::PermissionReplied { properties } | Self::PermissionRepliedNext { properties } => {
+                Some(&properties.session_id)
+            }
+            Self::QuestionAsked { properties } => Some(&properties.request.session_id),
+            Self::QuestionReplied { properties } => Some(&properties.session_id),
+            Self::QuestionRejected { properties } => Some(&properties.session_id),
             _ => None,
         }
     }
 
     /// Check if this is a heartbeat event.
     pub fn is_heartbeat(&self) -> bool {
-        matches!(self, Event::ServerHeartbeat { .. })
+        matches!(self, Self::ServerHeartbeat { .. })
     }
 
     /// Check if this is a connection event.
     pub fn is_connected(&self) -> bool {
-        matches!(self, Event::ServerConnected { .. })
+        matches!(self, Self::ServerConnected { .. })
     }
 }
 

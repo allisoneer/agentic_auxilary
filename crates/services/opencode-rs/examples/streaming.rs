@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example streaming
 //!
-//! Requires an OpenCode server running at localhost:4096:
+//! Requires an `OpenCode` server running at localhost:4096:
 //!   opencode serve
 
 use opencode_rs::ClientBuilder;
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Created session: {}", session.id);
 
     // Subscribe to session events BEFORE sending prompt
-    let mut subscription = client.subscribe_session(&session.id).await?;
+    let mut subscription = client.subscribe_session(&session.id)?;
     println!("Subscribed to events");
 
     // Send prompt
@@ -65,14 +65,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(Event::MessagePartUpdated { properties }) => {
                 if let Some(delta) = &properties.delta {
-                    print!("{}", delta);
+                    print!("{delta}");
                 }
             }
             Some(Event::ServerHeartbeat { .. }) => {
                 // Heartbeat received, connection alive
             }
             Some(event) => {
-                println!("[Event: {:?}]", event);
+                println!("[Event: {event:?}]");
             }
             None => {
                 println!("[Stream closed]");

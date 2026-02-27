@@ -1,4 +1,4 @@
-//! Question API for OpenCode.
+//! Question API for `OpenCode`.
 //!
 //! Endpoints for managing question-answer flows.
 
@@ -37,11 +37,7 @@ impl QuestionApi {
         let rid = encode_path_segment(request_id);
         let body = serde_json::to_value(reply)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/question/{}/reply", rid),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/question/{rid}/reply"), Some(body))
             .await
     }
 
@@ -55,7 +51,7 @@ impl QuestionApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/question/{}/reject", rid),
+                &format!("/question/{rid}/reject"),
                 Some(serde_json::json!({})),
             )
             .await

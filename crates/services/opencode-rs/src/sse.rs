@@ -63,7 +63,7 @@ impl Drop for SseSubscription {
     }
 }
 
-/// SSE subscriber for OpenCode events.
+/// SSE subscriber for `OpenCode` events.
 #[derive(Clone)]
 pub struct SseSubscriber {
     http: ReqClient,
@@ -91,21 +91,16 @@ impl SseSubscriber {
 
     /// Subscribe to events, optionally filtered by session ID.
     ///
-    /// OpenCode's `/event` endpoint streams all events for the configured directory.
+    /// `OpenCode`'s `/event` endpoint streams all events for the configured directory.
     /// If `session_id` is provided, events will be filtered client-side to only
     /// include events for that session.
     ///
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub async fn subscribe_session(
-        &self,
-        session_id: &str,
-        opts: SseOptions,
-    ) -> Result<SseSubscription> {
+    pub fn subscribe_session(&self, session_id: &str, opts: SseOptions) -> Result<SseSubscription> {
         let url = format!("{}/event", self.base_url);
         self.subscribe_filtered(url, Some(session_id.to_string()), opts)
-            .await
     }
 
     /// Subscribe to all events for the configured directory.
@@ -116,26 +111,30 @@ impl SseSubscriber {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub async fn subscribe(&self, opts: SseOptions) -> Result<SseSubscription> {
+    pub fn subscribe(&self, opts: SseOptions) -> Result<SseSubscription> {
         let url = format!("{}/event", self.base_url);
-        self.subscribe_filtered(url, None, opts).await
+        self.subscribe_filtered(url, None, opts)
     }
 
     /// Subscribe to global events (all directories).
     ///
     /// This uses the `/global/event` endpoint which streams events from all
-    /// OpenCode instances across all directories. Events are wrapped in a
+    /// `OpenCode` instances across all directories. Events are wrapped in a
     /// `GlobalEventEnvelope` with directory context.
     ///
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub async fn subscribe_global(&self, opts: SseOptions) -> Result<SseSubscription> {
+    pub fn subscribe_global(&self, opts: SseOptions) -> Result<SseSubscription> {
         let url = format!("{}/global/event", self.base_url);
-        self.subscribe_filtered(url, None, opts).await
+        self.subscribe_filtered(url, None, opts)
     }
 
-    async fn subscribe_filtered(
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "API consistency with public methods"
+    )]
+    fn subscribe_filtered(
         &self,
         url: String,
         session_filter: Option<String>,
@@ -147,7 +146,7 @@ impl SseSubscriber {
 
         let http = self.http.clone();
         let dir = self.directory.clone();
-        let lei = self.last_event_id.clone();
+        let lei = Arc::clone(&self.last_event_id);
         let initial = opts.initial_interval;
         let max = opts.max_interval;
         let filter = session_filter;
@@ -173,7 +172,8 @@ impl SseSubscriber {
                 if let Some(d) = &dir {
                     req = req.header("x-opencode-directory", d);
                 }
-                if let Some(id) = lei.read().await.clone() {
+                let last_id = lei.read().await.clone();
+                if let Some(id) = last_id {
                     req = req.header("Last-Event-ID", id);
                 }
 
@@ -287,7 +287,7 @@ mod tests {
             max_interval: Duration::from_millis(50),
         };
 
-        let subscription = subscriber.subscribe_global(opts).await.unwrap();
+        let subscription = subscriber.subscribe_global(opts).unwrap();
         subscription.close();
         // Subscription should be cancelled
         assert!(subscription.cancel.is_cancelled());

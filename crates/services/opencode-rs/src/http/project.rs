@@ -1,4 +1,4 @@
-//! Project API for OpenCode.
+//! Project API for `OpenCode`.
 //!
 //! Endpoints for project management.
 
@@ -48,7 +48,7 @@ impl ProjectApi {
         let pid = encode_path_segment(project_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PATCH, &format!("/project/{}", pid), Some(body))
+            .request_json(Method::PATCH, &format!("/project/{pid}"), Some(body))
             .await
     }
 }

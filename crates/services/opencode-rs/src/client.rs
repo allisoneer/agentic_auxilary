@@ -1,4 +1,4 @@
-//! High-level client API for OpenCode.
+//! High-level client API for `OpenCode`.
 //!
 //! This module provides the ergonomic `Client` and `ClientBuilder` types.
 
@@ -12,13 +12,12 @@ use tokio::sync::RwLock;
 #[cfg(feature = "http")]
 use crate::http::{HttpClient, HttpConfig};
 
-/// OpenCode client for interacting with the server.
+/// `OpenCode` client for interacting with the server.
 #[derive(Clone)]
 pub struct Client {
     #[cfg(feature = "http")]
     http: HttpClient,
-    // Used by SSE subscriber for reconnection (Phase 5)
-    #[allow(dead_code)]
+    /// Last event ID for SSE reconnection (used by SSE subscriber).
     last_event_id: Arc<RwLock<Option<String>>>,
 }
 
@@ -50,7 +49,8 @@ impl ClientBuilder {
         Self::default()
     }
 
-    /// Set the base URL for the OpenCode server.
+    /// Set the base URL for the `OpenCode` server.
+    #[must_use]
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = url.into();
         self
@@ -59,12 +59,14 @@ impl ClientBuilder {
     /// Set the directory context for requests.
     ///
     /// This sets the `x-opencode-directory` header on all requests.
+    #[must_use]
     pub fn directory(mut self, dir: impl Into<String>) -> Self {
         self.directory = Some(dir.into());
         self
     }
 
     /// Set the request timeout in seconds.
+    #[must_use]
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout = Duration::from_secs(secs);
         self
@@ -271,30 +273,30 @@ impl Client {
 
     /// Set the last event ID (for SSE reconnection).
     #[cfg(feature = "sse")]
-    #[allow(dead_code)] // Used by SSE subscriber in Phase 5
+    #[expect(dead_code)] // Used by SSE subscriber in Phase 5
     pub(crate) async fn set_last_event_id(&self, id: Option<String>) {
         *self.last_event_id.write().await = id;
     }
 
     /// Get the last event ID.
     #[cfg(feature = "sse")]
-    #[allow(dead_code)] // Used by SSE subscriber in Phase 5
+    #[expect(dead_code)] // Used by SSE subscriber in Phase 5
     pub(crate) async fn last_event_id(&self) -> Option<String> {
         self.last_event_id.read().await.clone()
     }
 
     /// Get the HTTP client.
     #[cfg(feature = "http")]
-    #[allow(dead_code)] // May be used by external crates
+    #[expect(dead_code)] // May be used by external crates
     pub(crate) fn http(&self) -> &HttpClient {
         &self.http
     }
 
     /// Get the last event ID handle for SSE.
     #[cfg(feature = "sse")]
-    #[allow(dead_code)] // May be used by external crates
+    #[expect(dead_code)] // May be used by external crates
     pub(crate) fn last_event_id_handle(&self) -> Arc<RwLock<Option<String>>> {
-        self.last_event_id.clone()
+        Arc::clone(&self.last_event_id)
     }
 }
 
@@ -304,8 +306,8 @@ impl Client {
     pub fn sse_subscriber(&self) -> crate::sse::SseSubscriber {
         crate::sse::SseSubscriber::new(
             self.http.base().to_string(),
-            self.http.directory().map(|s| s.to_string()),
-            self.last_event_id.clone(),
+            self.http.directory().map(std::string::ToString::to_string),
+            Arc::clone(&self.last_event_id),
         )
     }
 
@@ -317,10 +319,9 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub async fn subscribe(&self) -> Result<crate::sse::SseSubscription> {
+    pub fn subscribe(&self) -> Result<crate::sse::SseSubscription> {
         self.sse_subscriber()
             .subscribe(crate::sse::SseOptions::default())
-            .await
     }
 
     /// Subscribe to events filtered by session ID with default options.
@@ -331,10 +332,9 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub async fn subscribe_session(&self, session_id: &str) -> Result<crate::sse::SseSubscription> {
+    pub fn subscribe_session(&self, session_id: &str) -> Result<crate::sse::SseSubscription> {
         self.sse_subscriber()
             .subscribe_session(session_id, crate::sse::SseOptions::default())
-            .await
     }
 
     /// Subscribe to global events with default options (all directories).
@@ -342,10 +342,9 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub async fn subscribe_global(&self) -> Result<crate::sse::SseSubscription> {
+    pub fn subscribe_global(&self) -> Result<crate::sse::SseSubscription> {
         self.sse_subscriber()
             .subscribe_global(crate::sse::SseOptions::default())
-            .await
     }
 }
 

@@ -1,4 +1,4 @@
-//! Providers API for OpenCode.
+//! Providers API for `OpenCode`.
 //!
 //! Endpoints for managing LLM providers.
 
@@ -56,7 +56,7 @@ impl ProvidersApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/provider/{}/oauth/authorize", pid),
+                &format!("/provider/{pid}/oauth/authorize"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -77,7 +77,7 @@ impl ProvidersApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/provider/{}/oauth/callback", pid),
+                &format!("/provider/{pid}/oauth/callback"),
                 Some(body),
             )
             .await
@@ -96,7 +96,7 @@ impl ProvidersApi {
         let pid = encode_path_segment(provider_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PUT, &format!("/auth/{}", pid), Some(body))
+            .request_json(Method::PUT, &format!("/auth/{pid}"), Some(body))
             .await
     }
 }

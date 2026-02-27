@@ -1,4 +1,4 @@
-//! Core types for opencode_rs.
+//! Core types for `opencode_rs`.
 //!
 //! This module contains session, message, event, and other types.
 

@@ -1,4 +1,4 @@
-//! Skill types for opencode_rs.
+//! Skill types for `opencode_rs`.
 //!
 //! Types for skills (reusable prompt templates/workflows).
 

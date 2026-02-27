@@ -1,4 +1,4 @@
-//! MCP API for OpenCode.
+//! MCP API for `OpenCode`.
 //!
 //! Endpoints for Model Context Protocol server management.
 
@@ -57,7 +57,7 @@ impl McpApi {
         let n = encode_path_segment(name);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::POST, &format!("/mcp/{}/auth", n), Some(body))
+            .request_json(Method::POST, &format!("/mcp/{n}/auth"), Some(body))
             .await
     }
 
@@ -74,11 +74,7 @@ impl McpApi {
         let n = encode_path_segment(name);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/mcp/{}/auth/callback", n),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/mcp/{n}/auth/callback"), Some(body))
             .await
     }
 
@@ -97,7 +93,7 @@ impl McpApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/auth/authenticate", n),
+                &format!("/mcp/{n}/auth/authenticate"),
                 Some(body),
             )
             .await
@@ -111,7 +107,7 @@ impl McpApi {
     pub async fn auth_remove(&self, name: &str) -> Result<()> {
         let n = encode_path_segment(name);
         self.http
-            .request_empty(Method::DELETE, &format!("/mcp/{}/auth", n), None)
+            .request_empty(Method::DELETE, &format!("/mcp/{n}/auth"), None)
             .await
     }
 
@@ -125,7 +121,7 @@ impl McpApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/connect", n),
+                &format!("/mcp/{n}/connect"),
                 None, // OpenCode API expects no request body
             )
             .await
@@ -141,7 +137,7 @@ impl McpApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/mcp/{}/disconnect", n),
+                &format!("/mcp/{n}/disconnect"),
                 None, // OpenCode API expects no request body
             )
             .await

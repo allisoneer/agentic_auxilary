@@ -1,4 +1,4 @@
-//! PTY API for OpenCode.
+//! PTY API for `OpenCode`.
 //!
 //! Endpoints for pseudo-terminal management.
 
@@ -47,7 +47,7 @@ impl PtyApi {
     /// Returns an error if the request fails.
     pub async fn get(&self, id: &str) -> Result<Pty> {
         self.http
-            .request_json(Method::GET, &format!("/pty/{}", id), None)
+            .request_json(Method::GET, &format!("/pty/{id}"), None)
             .await
     }
 
@@ -59,7 +59,7 @@ impl PtyApi {
     pub async fn update(&self, id: &str, req: &UpdatePtyRequest) -> Result<Pty> {
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PUT, &format!("/pty/{}", id), Some(body))
+            .request_json(Method::PUT, &format!("/pty/{id}"), Some(body))
             .await
     }
 
@@ -70,7 +70,7 @@ impl PtyApi {
     /// Returns an error if the request fails.
     pub async fn delete(&self, id: &str) -> Result<()> {
         self.http
-            .request_empty(Method::DELETE, &format!("/pty/{}", id), None)
+            .request_empty(Method::DELETE, &format!("/pty/{id}"), None)
             .await
     }
 }

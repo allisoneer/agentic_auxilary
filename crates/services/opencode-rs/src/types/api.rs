@@ -1,12 +1,12 @@
-//! HTTP API response types for opencode_rs.
+//! HTTP API response types for `opencode_rs`.
 //!
-//! Typed response wrappers for HTTP endpoints, replacing serde_json::Value returns.
+//! Typed response wrappers for HTTP endpoints, replacing `serde_json::Value` returns.
 
 use serde::{Deserialize, Serialize};
 
 // ==================== Messages API Responses ====================
 
-/// Response from prompt and prompt_async endpoints.
+/// Response from prompt and `prompt_async` endpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptResponse {
@@ -72,7 +72,7 @@ pub type SetAuthResponse = OAuthCallbackResponse;
 
 // ==================== MCP API Responses ====================
 
-/// Response from MCP action endpoints (add, auth_callback, authenticate, connect, disconnect).
+/// Response from MCP action endpoints (add, `auth_callback`, authenticate, connect, disconnect).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpActionResponse {
@@ -137,11 +137,11 @@ pub struct FormatterInfo {
     pub enabled: bool,
 }
 
-/// Response from OpenAPI doc endpoint.
+/// Response from `OpenAPI` doc endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenApiDoc {
-    /// The OpenAPI spec (full document).
+    /// The `OpenAPI` spec (full document).
     #[serde(flatten)]
     pub spec: serde_json::Value,
 }

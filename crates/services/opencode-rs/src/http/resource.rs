@@ -1,4 +1,4 @@
-//! Resource API for OpenCode.
+//! Resource API for `OpenCode`.
 //!
 //! Experimental endpoint for resource access.
 
@@ -54,7 +54,7 @@ impl ResourceApi {
         self.http
             .request_json(
                 Method::GET,
-                &format!("/experimental/resource?uri={}", encoded_uri),
+                &format!("/experimental/resource?uri={encoded_uri}"),
                 None,
             )
             .await
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_resource_info_minimal() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let resource: ResourceInfo = serde_json::from_str(json).unwrap();
         assert!(resource.uri.is_none());
         assert!(resource.content.is_none());

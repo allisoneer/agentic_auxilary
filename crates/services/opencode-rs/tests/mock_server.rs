@@ -1,4 +1,4 @@
-//! Standalone mock server tests for opencode_rs.
+//! Standalone mock server tests for `opencode_rs`.
 //!
 //! These tests verify the SDK works correctly against a wiremock server.
 
@@ -27,7 +27,7 @@ async fn get_health_ok() {
     assert_eq!(health.version, Some("0.0.3".to_string()));
 }
 
-/// Test 404 error handling with NamedError response.
+/// Test 404 error handling with `NamedError` response.
 #[tokio::test]
 async fn session_not_found_error() {
     let server = MockServer::start().await;
@@ -132,7 +132,7 @@ async fn session_lifecycle() {
             "directory": "/path/to/project",
             "title": "Test Session",
             "version": "1.0",
-            "time": {"created": 1234567890, "updated": 1234567890}
+            "time": {"created": 1_234_567_890, "updated": 1_234_567_890}
         })))
         .mount(&server)
         .await;

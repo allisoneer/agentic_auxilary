@@ -1,4 +1,4 @@
-//! PTY (pseudo-terminal) types for opencode_rs.
+//! PTY (pseudo-terminal) types for `opencode_rs`.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

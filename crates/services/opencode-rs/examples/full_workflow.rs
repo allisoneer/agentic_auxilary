@@ -1,8 +1,8 @@
 //! Complete workflow example demonstrating all major SDK capabilities.
 //!
-//! Run with: cargo run --example full_workflow --features full
+//! Run with: cargo run --example `full_workflow` --features full
 //!
-//! This example requires an OpenCode server running at localhost:4096:
+//! This example requires an `OpenCode` server running at localhost:4096:
 //!   opencode serve
 //!
 //! Or use the managed server feature to spawn one automatically.
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let health = client.misc().health().await?;
     println!("   Server healthy: {}", health.healthy);
     if let Some(version) = &health.version {
-        println!("   Server version: {}", version);
+        println!("   Server version: {version}");
     }
 
     // Step 3: Create a session
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 4: Subscribe to events BEFORE sending prompt
     println!("\n4. Subscribing to session events...");
-    let mut subscription = client.subscribe_session(&session.id).await?;
+    let mut subscription = client.subscribe_session(&session.id)?;
     println!("   Subscribed successfully");
 
     // Step 5: Send a prompt
@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         )
         .await?;
-    println!("   Prompt sent: \"{}\"", prompt_text);
+    println!("   Prompt sent: \"{prompt_text}\"");
 
     // Step 6: Stream response events
     println!("\n6. Streaming response...\n");
@@ -103,15 +103,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Some(Event::MessagePartUpdated { properties }) => {
                         if let Some(delta) = &properties.delta {
-                            print!("{}", delta);
+                            print!("{delta}");
                             response_text.push_str(delta);
                         }
                     }
-                    Some(Event::ServerHeartbeat { .. }) => {
-                        // Connection alive
-                    }
                     Some(_) => {
-                        // Other events
+                        // Other events (heartbeats, etc.)
                     }
                     None => {
                         println!("\n   [Stream closed]");
@@ -119,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(100)) => {
+            () = tokio::time::sleep(Duration::from_millis(100)) => {
                 // Check periodically
             }
         }
@@ -144,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Files changed: {}", diff.files.len());
     if !diff.diff.is_empty() {
         let preview: String = diff.diff.chars().take(100).collect();
-        println!("   Diff preview: {}...", preview);
+        println!("   Diff preview: {preview}...");
     }
 
     // Step 9: Get todos
@@ -173,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Session deleted");
 
     println!("\n=== Workflow Complete ===");
-    println!("\nResponse received:\n{}", response_text);
+    println!("\nResponse received:\n{response_text}");
 
     Ok(())
 }

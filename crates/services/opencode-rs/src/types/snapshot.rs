@@ -1,4 +1,4 @@
-//! Snapshot types for opencode_rs.
+//! Snapshot types for `opencode_rs`.
 //!
 //! Types for file snapshots and diffs.
 
@@ -30,7 +30,7 @@ pub struct SnapshotTrackResponse {
 }
 
 /// Request for snapshot patch operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotPatchRequest {
     /// Session ID for the snapshot.
@@ -42,7 +42,7 @@ pub struct SnapshotPatchRequest {
     pub message_id: Option<String>,
 
     /// Additional fields.
-    #[serde(flatten)]
+    #[serde(default, flatten)]
     pub extra: serde_json::Value,
 }
 
@@ -88,7 +88,7 @@ pub struct SnapshotPatchResponse {
 }
 
 /// Request for snapshot diff operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotDiffRequest {
     /// Session ID for the snapshot.
@@ -100,7 +100,7 @@ pub struct SnapshotDiffRequest {
     pub message_id: Option<String>,
 
     /// Additional fields.
-    #[serde(flatten)]
+    #[serde(default, flatten)]
     pub extra: serde_json::Value,
 }
 
@@ -142,7 +142,7 @@ pub struct SnapshotDiffResponse {
 }
 
 /// Request for snapshot restore operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotRestoreRequest {
     /// Session ID for the snapshot.
@@ -158,7 +158,7 @@ pub struct SnapshotRestoreRequest {
     pub files: Vec<String>,
 
     /// Additional fields.
-    #[serde(flatten)]
+    #[serde(default, flatten)]
     pub extra: serde_json::Value,
 }
 
@@ -176,7 +176,7 @@ pub struct SnapshotRestoreResponse {
 }
 
 /// Request for snapshot revert operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotRevertRequest {
     /// Session ID for the snapshot.
@@ -188,7 +188,7 @@ pub struct SnapshotRevertRequest {
     pub message_id: Option<String>,
 
     /// Additional fields.
-    #[serde(flatten)]
+    #[serde(default, flatten)]
     pub extra: serde_json::Value,
 }
 

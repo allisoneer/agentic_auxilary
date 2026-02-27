@@ -1,4 +1,4 @@
-//! Global API for OpenCode.
+//! Global API for `OpenCode`.
 //!
 //! Provides access to global SSE event streams across all directories.
 

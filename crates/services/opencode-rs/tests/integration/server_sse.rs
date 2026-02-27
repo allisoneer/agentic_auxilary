@@ -9,17 +9,14 @@ use tokio::time::timeout;
 
 /// Test SSE connection and server.connected event.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_sse_server_connected() {
     if !should_run() {
         return;
     }
 
     let client = create_test_client().await;
-    let mut subscription = client
-        .subscribe()
-        .await
-        .expect("Failed to subscribe to SSE");
+    let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Wait for the first event (should be server.connected)
     let event = timeout(Duration::from_secs(5), subscription.recv())
@@ -29,14 +26,13 @@ async fn test_sse_server_connected() {
 
     assert!(
         event.is_connected(),
-        "First event should be server.connected, got: {:?}",
-        event
+        "First event should be server.connected, got: {event:?}"
     );
 }
 
 /// Test session events have properly typed info.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_sse_session_created_event() {
     if !should_run() {
         return;
@@ -46,10 +42,7 @@ async fn test_sse_session_created_event() {
 
     // Subscribe FIRST to avoid race condition - we need to be listening
     // before creating the session to catch the session.created event
-    let mut subscription = client
-        .subscribe()
-        .await
-        .expect("Failed to subscribe to SSE");
+    let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Skip server.connected
     let _ = timeout(Duration::from_secs(5), subscription.recv()).await;
@@ -67,21 +60,20 @@ async fn test_sse_session_created_event() {
     let mut found_event = false;
 
     while tokio::time::Instant::now() < deadline {
-        match timeout(Duration::from_secs(1), subscription.recv()).await {
-            Ok(Some(Event::SessionCreated { properties })) => {
-                // Verify the event has typed SessionInfo
-                assert!(
-                    !properties.info.id.is_empty(),
-                    "SessionCreated should have info.id"
-                );
-                // Only check if this is our session
-                if properties.info.id == session.id {
-                    found_event = true;
-                    break;
-                }
-                // Otherwise continue looking for our session
+        if let Ok(Some(Event::SessionCreated { properties })) =
+            timeout(Duration::from_secs(1), subscription.recv()).await
+        {
+            // Verify the event has typed SessionInfo
+            assert!(
+                !properties.info.id.is_empty(),
+                "SessionCreated should have info.id"
+            );
+            // Only check if this is our session
+            if properties.info.id == session.id {
+                found_event = true;
+                break;
             }
-            _ => continue,
+            // Otherwise continue looking for our session
         }
     }
 
@@ -100,17 +92,14 @@ async fn test_sse_session_created_event() {
 
 /// Test that session.idle events deserialize with sessionID.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_sse_session_idle_event() {
     if !should_run() {
         return;
     }
 
     let client = create_test_client().await;
-    let mut subscription = client
-        .subscribe()
-        .await
-        .expect("Failed to subscribe to SSE");
+    let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Create a session
     let session = client
@@ -122,16 +111,15 @@ async fn test_sse_session_idle_event() {
     // Listen for events - session.idle should have just sessionID, not full info
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     while tokio::time::Instant::now() < deadline {
-        match timeout(Duration::from_secs(1), subscription.recv()).await {
-            Ok(Some(Event::SessionIdle { properties })) => {
-                // Verify it has session_id
-                assert!(
-                    !properties.session_id.is_empty(),
-                    "SessionIdle should have session_id"
-                );
-                break;
-            }
-            _ => continue,
+        if let Ok(Some(Event::SessionIdle { properties })) =
+            timeout(Duration::from_secs(1), subscription.recv()).await
+        {
+            // Verify it has session_id
+            assert!(
+                !properties.session_id.is_empty(),
+                "SessionIdle should have session_id"
+            );
+            break;
         }
     }
 
@@ -141,17 +129,14 @@ async fn test_sse_session_idle_event() {
 
 /// Test that message events deserialize with typed info.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_sse_message_events() {
     if !should_run() {
         return;
     }
 
     let client = create_test_client().await;
-    let mut subscription = client
-        .subscribe()
-        .await
-        .expect("Failed to subscribe to SSE");
+    let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Create a session
     let session = client
@@ -199,7 +184,7 @@ async fn test_sse_message_events() {
 
 /// Test that permission events deserialize properly.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_sse_permission_events() {
     if !should_run() {
         return;
@@ -208,10 +193,7 @@ async fn test_sse_permission_events() {
     let client = create_test_client().await;
 
     // Subscribe
-    let mut subscription = client
-        .subscribe()
-        .await
-        .expect("Failed to subscribe to SSE");
+    let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Just verify we can subscribe without errors
     // Permission events require triggering a permission request which is harder to test
@@ -220,17 +202,14 @@ async fn test_sse_permission_events() {
 
 /// Test heartbeat events.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_sse_heartbeat() {
     if !should_run() {
         return;
     }
 
     let client = create_test_client().await;
-    let mut subscription = client
-        .subscribe()
-        .await
-        .expect("Failed to subscribe to SSE");
+    let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Wait for a heartbeat (sent periodically)
     let deadline = tokio::time::Instant::now() + Duration::from_secs(120);

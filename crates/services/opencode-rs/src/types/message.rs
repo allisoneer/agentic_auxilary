@@ -1,4 +1,4 @@
-//! Message and content part types for opencode_rs.
+//! Message and content part types for `opencode_rs`.
 //!
 // TODO(3): Add unit tests for Message, Part variants, and PromptPart serialization/deserialization
 // TODO(3): Consider using enum for `role` field (User/Assistant/System) with #[serde(other)] for forward-compat
@@ -366,7 +366,7 @@ pub enum FilePartSource {
         range: serde_json::Value,
         /// Symbol name.
         name: String,
-        /// Symbol kind (LSP SymbolKind).
+        /// Symbol kind (LSP `SymbolKind`).
         kind: i64,
         /// Additional fields.
         #[serde(flatten)]
@@ -518,18 +518,18 @@ impl ToolState {
     /// Get the status string for this tool state.
     pub fn status(&self) -> &str {
         match self {
-            ToolState::Pending(s) => &s.status,
-            ToolState::Running(s) => &s.status,
-            ToolState::Completed(s) => &s.status,
-            ToolState::Error(s) => &s.status,
-            ToolState::Unknown(_) => "unknown",
+            Self::Pending(s) => &s.status,
+            Self::Running(s) => &s.status,
+            Self::Completed(s) => &s.status,
+            Self::Error(s) => &s.status,
+            Self::Unknown(_) => "unknown",
         }
     }
 
     /// Get the output if the tool completed successfully.
     pub fn output(&self) -> Option<&str> {
         match self {
-            ToolState::Completed(s) => Some(&s.output),
+            Self::Completed(s) => Some(&s.output),
             _ => None,
         }
     }
@@ -537,29 +537,29 @@ impl ToolState {
     /// Get the error message if the tool errored.
     pub fn error(&self) -> Option<&str> {
         match self {
-            ToolState::Error(s) => Some(&s.error),
+            Self::Error(s) => Some(&s.error),
             _ => None,
         }
     }
 
     /// Check if the tool is pending.
     pub fn is_pending(&self) -> bool {
-        matches!(self, ToolState::Pending(_))
+        matches!(self, Self::Pending(_))
     }
 
     /// Check if the tool is running.
     pub fn is_running(&self) -> bool {
-        matches!(self, ToolState::Running(_))
+        matches!(self, Self::Running(_))
     }
 
     /// Check if the tool completed successfully.
     pub fn is_completed(&self) -> bool {
-        matches!(self, ToolState::Completed(_))
+        matches!(self, Self::Completed(_))
     }
 
     /// Check if the tool errored.
     pub fn is_error(&self) -> bool {
-        matches!(self, ToolState::Error(_))
+        matches!(self, Self::Error(_))
     }
 }
 

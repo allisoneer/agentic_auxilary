@@ -1,4 +1,4 @@
-//! Worktree API for OpenCode.
+//! Worktree API for `OpenCode`.
 //!
 //! Experimental endpoints for git worktree management.
 

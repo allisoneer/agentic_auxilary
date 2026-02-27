@@ -1,4 +1,4 @@
-//! Miscellaneous API endpoints for OpenCode.
+//! Miscellaneous API endpoints for `OpenCode`.
 //!
 //! Includes: VCS, path, instance, log, LSP, formatter, global endpoints.
 
@@ -107,7 +107,7 @@ impl MiscApi {
             .await
     }
 
-    /// Get OpenAPI spec.
+    /// Get `OpenAPI` spec.
     ///
     /// # Errors
     ///

@@ -1,4 +1,4 @@
-//! Snapshots API for OpenCode.
+//! Snapshots API for `OpenCode`.
 //!
 //! Endpoints for managing file snapshots and diffs.
 
@@ -171,8 +171,7 @@ mod tests {
         let api = SnapshotsApi::new(client);
         let request = SnapshotPatchRequest {
             session_id: Some("sess-123".to_string()),
-            message_id: None,
-            extra: serde_json::Value::Null,
+            ..Default::default()
         };
         let response = api.patch(&request).await.unwrap();
         assert_eq!(response.patches.len(), 1);
@@ -203,8 +202,7 @@ mod tests {
         let api = SnapshotsApi::new(client);
         let request = SnapshotDiffRequest {
             session_id: Some("sess-123".to_string()),
-            message_id: None,
-            extra: serde_json::Value::Null,
+            ..Default::default()
         };
         let response = api.diff(&request).await.unwrap();
         assert_eq!(response.diffs.len(), 1);
@@ -239,8 +237,7 @@ mod tests {
         let api = SnapshotsApi::new(client);
         let request = SnapshotDiffRequest {
             session_id: Some("sess-123".to_string()),
-            message_id: None,
-            extra: serde_json::Value::Null,
+            ..Default::default()
         };
         let diffs = api.diff_full(&request).await.unwrap();
         assert_eq!(diffs.len(), 1);
@@ -269,9 +266,7 @@ mod tests {
         let api = SnapshotsApi::new(client);
         let request = SnapshotRestoreRequest {
             session_id: Some("sess-123".to_string()),
-            message_id: None,
-            files: vec![],
-            extra: serde_json::Value::Null,
+            ..Default::default()
         };
         let response = api.restore(&request).await.unwrap();
         assert_eq!(response.restored, 2);
@@ -300,8 +295,7 @@ mod tests {
         let api = SnapshotsApi::new(client);
         let request = SnapshotRevertRequest {
             session_id: Some("sess-123".to_string()),
-            message_id: None,
-            extra: serde_json::Value::Null,
+            ..Default::default()
         };
         let response = api.revert(&request).await.unwrap();
         assert!(response.success);

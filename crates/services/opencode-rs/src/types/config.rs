@@ -1,8 +1,8 @@
-//! Config types for opencode_rs.
+//! Config types for `opencode_rs`.
 
 use serde::{Deserialize, Serialize};
 
-/// OpenCode configuration.
+/// `OpenCode` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_config_info_lite_minimal() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let config: ConfigInfoLite = serde_json::from_str(json).unwrap();
         assert!(config.model.is_none());
         assert!(config.small_model.is_none());

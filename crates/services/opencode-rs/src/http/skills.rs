@@ -1,4 +1,4 @@
-//! Skills API for OpenCode.
+//! Skills API for `OpenCode`.
 //!
 //! Endpoints for managing skills (reusable prompt templates).
 
@@ -40,7 +40,7 @@ impl SkillsApi {
         self.http
             .request_json(
                 Method::GET,
-                &format!("/skill/get?name={}", encoded_name),
+                &format!("/skill/get?name={encoded_name}"),
                 None,
             )
             .await

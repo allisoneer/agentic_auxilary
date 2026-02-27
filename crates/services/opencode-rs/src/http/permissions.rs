@@ -1,4 +1,4 @@
-//! Permissions API for OpenCode.
+//! Permissions API for `OpenCode`.
 //!
 //! Endpoints for managing permission requests.
 
@@ -46,7 +46,7 @@ impl PermissionsApi {
         self.http
             .request_json(
                 Method::POST,
-                &format!("/permission/{}/reply", rid),
+                &format!("/permission/{rid}/reply"),
                 Some(body),
             )
             .await

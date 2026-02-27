@@ -10,7 +10,7 @@ use opencode_rs::types::message::{PromptPart, PromptRequest};
 
 /// Test session CRUD with typed responses.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_session_crud_typed() {
     if !should_run() {
         return;
@@ -48,7 +48,7 @@ async fn test_session_crud_typed() {
         }
         Err(e) => {
             // List may fail in some configurations
-            println!("List sessions: {:?}", e);
+            println!("List sessions: {e:?}");
         }
     }
 
@@ -62,7 +62,7 @@ async fn test_session_crud_typed() {
 
 /// Test prompt with typed response.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_prompt_typed_response() {
     if !should_run() {
         return;
@@ -111,7 +111,7 @@ async fn test_prompt_typed_response() {
 
 /// Test providers list with typed response.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_providers_list_typed() {
     if !should_run() {
         return;
@@ -149,7 +149,7 @@ async fn test_providers_list_typed() {
 
 /// Test MCP status with typed response.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_mcp_status_typed() {
     if !should_run() {
         return;
@@ -174,7 +174,7 @@ async fn test_mcp_status_typed() {
 
 /// Test LSP status with typed response.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_lsp_status_typed() {
     if !should_run() {
         return;
@@ -194,7 +194,7 @@ async fn test_lsp_status_typed() {
 
 /// Test formatter status with typed response.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_formatter_status_typed() {
     if !should_run() {
         return;
@@ -219,9 +219,9 @@ async fn test_formatter_status_typed() {
     }
 }
 
-/// Test OpenAPI doc with typed response.
+/// Test `OpenAPI` doc with typed response.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_openapi_doc_typed() {
     if !should_run() {
         return;
@@ -246,7 +246,7 @@ async fn test_openapi_doc_typed() {
 
 /// Test find endpoints with typed responses.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_find_endpoints_typed() {
     if !should_run() {
         return;
@@ -262,7 +262,7 @@ async fn test_find_endpoints_typed() {
         }
         Err(e) => {
             // May fail if ripgrep not available or no files to search
-            println!("Text search not available: {:?}", e);
+            println!("Text search not available: {e:?}");
         }
     }
 
@@ -273,7 +273,7 @@ async fn test_find_endpoints_typed() {
             let _ = file_results.results;
         }
         Err(e) => {
-            println!("File search not available: {:?}", e);
+            println!("File search not available: {e:?}");
         }
     }
 
@@ -284,14 +284,14 @@ async fn test_find_endpoints_typed() {
             let _ = symbol_results.results;
         }
         Err(e) => {
-            println!("Symbol search not available: {:?}", e);
+            println!("Symbol search not available: {e:?}");
         }
     }
 }
 
 /// Test message list with typed Part deserialization.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_message_parts_typed() {
     if !should_run() {
         return;
@@ -342,13 +342,13 @@ async fn test_message_parts_typed() {
             match part {
                 opencode_rs::types::Part::Text { text, .. } => {
                     let preview: String = text.chars().take(50).collect();
-                    println!("  Text part: {}...", preview);
+                    println!("  Text part: {preview}...");
                 }
                 opencode_rs::types::Part::Tool { tool, state, .. } => {
                     println!(
                         "  Tool part: {} - state: {:?}",
                         tool,
-                        state.as_ref().map(|s| s.status())
+                        state.as_ref().map(opencode_rs::types::ToolState::status)
                     );
                 }
                 _ => {
@@ -364,7 +364,7 @@ async fn test_message_parts_typed() {
 
 /// Test session with permission ruleset.
 #[tokio::test]
-#[ignore] // requires: opencode serve --port 4096
+#[ignore = "requires: opencode serve"]
 async fn test_session_permission_ruleset() {
     if !should_run() {
         return;

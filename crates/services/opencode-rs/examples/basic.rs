@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example basic
 //!
-//! Requires an OpenCode server running at localhost:4096:
+//! Requires an `OpenCode` server running at localhost:4096:
 //!   opencode serve
 
 use opencode_rs::ClientBuilder;

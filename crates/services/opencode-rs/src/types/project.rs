@@ -1,9 +1,9 @@
-//! Project types for opencode_rs.
+//! Project types for `opencode_rs`.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A project in OpenCode.
+/// A project in `OpenCode`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -189,9 +189,9 @@ mod tests {
         assert_eq!(icon.value, Some("rocket".to_string()));
 
         let time = project.time.unwrap();
-        assert_eq!(time.created, Some(1234567890));
-        assert_eq!(time.updated, Some(1234567891));
-        assert_eq!(time.accessed, Some(1234567892));
+        assert_eq!(time.created, Some(1_234_567_890));
+        assert_eq!(time.updated, Some(1_234_567_891));
+        assert_eq!(time.accessed, Some(1_234_567_892));
 
         assert_eq!(project.sandboxes, vec!["sandbox-1", "sandbox-2"]);
     }
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_project_commands_empty() {
-        let json = r#"{}"#;
+        let json = r"{}";
         let commands: ProjectCommands = serde_json::from_str(json).unwrap();
         assert!(commands.commands.is_empty());
     }
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_model_ref_partial() {
         // Server may send partial model refs
-        let json = r#"{}"#;
+        let json = r"{}";
         let model_ref: ModelRef = serde_json::from_str(json).unwrap();
         assert!(model_ref.provider_id.is_none());
         assert!(model_ref.model_id.is_none());
