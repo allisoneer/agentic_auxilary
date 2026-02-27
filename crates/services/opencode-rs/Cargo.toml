@@ -64,6 +64,9 @@ required-features = ["cli"]
 name = "full_workflow"
 required-features = ["http", "sse"]
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "lib"
 family = "services"

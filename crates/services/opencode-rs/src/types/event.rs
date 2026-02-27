@@ -1,6 +1,6 @@
-//! SSE event types for opencode_rs.
+//! SSE event types for `opencode_rs`.
 //!
-//! Contains 40 event variants matching OpenCode's server.ts.
+//! Contains 40 event variants matching `OpenCode`'s server.ts.
 
 use crate::types::error::APIError;
 use crate::types::permission::{PermissionReply, PermissionRequest};
@@ -16,8 +16,9 @@ pub struct GlobalEventEnvelope {
     pub payload: Event,
 }
 
-/// SSE Event from OpenCode server (40 variants).
+/// SSE Event from `OpenCode` server (40 variants).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 #[serde(tag = "type")]
 pub enum Event {
     // ==================== Server/Instance (4) ====================
@@ -330,6 +331,28 @@ pub enum Event {
         properties: serde_json::Value,
     },
 
+    // ==================== Question (3) ====================
+    /// Question asked by the server.
+    #[serde(rename = "question.asked")]
+    QuestionAsked {
+        /// Event properties with question request.
+        properties: QuestionAskedProps,
+    },
+
+    /// Question replied by the user.
+    #[serde(rename = "question.replied")]
+    QuestionReplied {
+        /// Event properties with reply info.
+        properties: QuestionRepliedProps,
+    },
+
+    /// Question rejected by the user.
+    #[serde(rename = "question.rejected")]
+    QuestionRejected {
+        /// Event properties with rejection info.
+        properties: QuestionRejectedProps,
+    },
+
     // ==================== Todo (1) ====================
     /// Todo updated.
     #[serde(rename = "todo.updated")]
@@ -362,13 +385,14 @@ pub struct SessionInfoProps {
 #[serde(rename_all = "camelCase")]
 pub struct SessionIdleProps {
     /// Session ID.
+    #[serde(alias = "sessionID")]
     pub session_id: String,
     /// Additional properties.
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-/// Error union that can be APIError or unknown value.
+/// Error union that can be `APIError` or unknown value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AssistantError {
@@ -469,33 +493,79 @@ pub struct PermissionRepliedProps {
     pub extra: serde_json::Value,
 }
 
+// ==================== Question Event Properties ====================
+
+/// Properties for question.asked events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionAskedProps {
+    /// The question request.
+    #[serde(flatten)]
+    pub request: crate::types::question::QuestionRequest,
+}
+
+/// Properties for question.replied events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionRepliedProps {
+    /// Session ID.
+    pub session_id: String,
+    /// Request ID that was replied to.
+    pub request_id: String,
+    /// The answers given.
+    pub answers: Vec<Vec<String>>,
+    /// Additional properties.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Properties for question.rejected events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionRejectedProps {
+    /// Session ID.
+    pub session_id: String,
+    /// Request ID that was rejected.
+    pub request_id: String,
+    /// Optional reason for rejection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Additional properties.
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 impl Event {
-    /// Extract session_id if present in this event.
+    /// Extract `session_id` if present in this event.
     pub fn session_id(&self) -> Option<&str> {
         match self {
-            Event::SessionCreated { properties } => Some(&properties.info.id),
-            Event::SessionUpdated { properties } => Some(&properties.info.id),
-            Event::SessionDeleted { properties } => Some(&properties.info.id),
-            Event::SessionIdle { properties } => Some(&properties.session_id),
-            Event::SessionError { properties } => properties.session_id.as_deref(),
-            Event::MessageUpdated { properties } => properties.info.session_id.as_deref(),
-            Event::MessageRemoved { properties } => Some(&properties.session_id),
-            Event::MessagePartUpdated { properties } => properties.session_id.as_deref(),
-            Event::PermissionAsked { properties } => Some(&properties.request.session_id),
-            Event::PermissionReplied { properties } => Some(&properties.session_id),
-            Event::PermissionRepliedNext { properties } => Some(&properties.session_id),
+            Self::SessionCreated { properties }
+            | Self::SessionUpdated { properties }
+            | Self::SessionDeleted { properties } => Some(&properties.info.id),
+            Self::SessionIdle { properties } => Some(&properties.session_id),
+            Self::SessionError { properties } => properties.session_id.as_deref(),
+            Self::MessageUpdated { properties } => properties.info.session_id.as_deref(),
+            Self::MessageRemoved { properties } => Some(&properties.session_id),
+            Self::MessagePartUpdated { properties } => properties.session_id.as_deref(),
+            Self::PermissionAsked { properties } => Some(&properties.request.session_id),
+            Self::PermissionReplied { properties } | Self::PermissionRepliedNext { properties } => {
+                Some(&properties.session_id)
+            }
+            Self::QuestionAsked { properties } => Some(&properties.request.session_id),
+            Self::QuestionReplied { properties } => Some(&properties.session_id),
+            Self::QuestionRejected { properties } => Some(&properties.session_id),
             _ => None,
         }
     }
 
     /// Check if this is a heartbeat event.
     pub fn is_heartbeat(&self) -> bool {
-        matches!(self, Event::ServerHeartbeat { .. })
+        matches!(self, Self::ServerHeartbeat { .. })
     }
 
     /// Check if this is a connection event.
     pub fn is_connected(&self) -> bool {
-        matches!(self, Event::ServerConnected { .. })
+        matches!(self, Self::ServerConnected { .. })
     }
 }
 
@@ -510,6 +580,7 @@ mod tests {
             "properties": {
                 "info": {
                     "id": "sess-123",
+                    "slug": "sess-123",
                     "title": "Test Session",
                     "version": "1.0"
                 }
@@ -643,6 +714,61 @@ mod tests {
         let json = r#"{"type":"todo.updated","properties":{}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::TodoUpdated { .. }));
+    }
+
+    #[test]
+    fn test_event_deserialize_question_asked() {
+        let json = r#"{
+            "type": "question.asked",
+            "properties": {
+                "id": "req-123",
+                "sessionId": "sess-456",
+                "questions": [{"question": "Continue?"}]
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::QuestionAsked { .. }));
+        assert_eq!(event.session_id(), Some("sess-456"));
+    }
+
+    #[test]
+    fn test_event_deserialize_question_replied() {
+        let json = r#"{
+            "type": "question.replied",
+            "properties": {
+                "sessionId": "sess-456",
+                "requestId": "req-123",
+                "answers": [["Yes"]]
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        if let Event::QuestionReplied { properties } = &event {
+            assert_eq!(properties.session_id, "sess-456");
+            assert_eq!(properties.request_id, "req-123");
+            assert_eq!(properties.answers, vec![vec!["Yes"]]);
+        } else {
+            panic!("Expected QuestionReplied");
+        }
+    }
+
+    #[test]
+    fn test_event_deserialize_question_rejected() {
+        let json = r#"{
+            "type": "question.rejected",
+            "properties": {
+                "sessionId": "sess-456",
+                "requestId": "req-123",
+                "reason": "User cancelled"
+            }
+        }"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        if let Event::QuestionRejected { properties } = &event {
+            assert_eq!(properties.session_id, "sess-456");
+            assert_eq!(properties.request_id, "req-123");
+            assert_eq!(properties.reason, Some("User cancelled".to_string()));
+        } else {
+            panic!("Expected QuestionRejected");
+        }
     }
 
     // TODO(3): Add tests for GlobalEventEnvelope deserialization and round-trip serialization

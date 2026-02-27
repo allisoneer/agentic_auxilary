@@ -1,9 +1,9 @@
-//! Messages API for OpenCode.
+//! Messages API for `OpenCode`.
 //!
 //! This module provides methods for message endpoints (6 total).
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::{CommandResponse, PromptResponse, ShellResponse};
 use crate::types::message::{CommandRequest, Message, PromptRequest, ShellRequest};
 use reqwest::Method;
@@ -26,13 +26,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn prompt(&self, session_id: &str, req: &PromptRequest) -> Result<PromptResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/message", session_id),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/session/{sid}/message"), Some(body))
             .await
     }
 
@@ -42,12 +39,9 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn list(&self, session_id: &str) -> Result<Vec<Message>> {
+        let sid = encode_path_segment(session_id);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/session/{}/message", session_id),
-                None,
-            )
+            .request_json(Method::GET, &format!("/session/{sid}/message"), None)
             .await
     }
 
@@ -57,12 +51,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn get(&self, session_id: &str, message_id: &str) -> Result<Message> {
+        let sid = encode_path_segment(session_id);
+        let mid = encode_path_segment(message_id);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/session/{}/message/{}", session_id, message_id),
-                None,
-            )
+            .request_json(Method::GET, &format!("/session/{sid}/message/{mid}"), None)
             .await
     }
 
@@ -79,11 +71,12 @@ impl MessagesApi {
         session_id: &str,
         req: &PromptRequest,
     ) -> Result<PromptResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/prompt_async", session_id),
+                &format!("/session/{sid}/prompt_async"),
                 Some(body),
             )
             .await
@@ -95,13 +88,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/command", session_id),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/session/{sid}/command"), Some(body))
             .await
     }
 
@@ -111,13 +101,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn shell(&self, session_id: &str, req: &ShellRequest) -> Result<ShellResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/shell", session_id),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/session/{sid}/shell"), Some(body))
             .await
     }
 }
@@ -182,11 +169,11 @@ mod tests {
             .and(path("/session/s1/message"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
-                    "info": {"id": "m1", "sessionId": "s1", "role": "user", "time": {"created": 1234567890}},
+                    "info": {"id": "m1", "sessionId": "s1", "role": "user", "time": {"created": 1_234_567_890}},
                     "parts": []
                 },
                 {
-                    "info": {"id": "m2", "sessionId": "s1", "role": "assistant", "time": {"created": 1234567891}},
+                    "info": {"id": "m2", "sessionId": "s1", "role": "assistant", "time": {"created": 1_234_567_891}},
                     "parts": []
                 }
             ])))
@@ -556,7 +543,7 @@ mod tests {
             .shell(
                 "s1",
                 &ShellRequest {
-                    command: "".to_string(),
+                    command: String::new(),
                     model: None,
                 },
             )

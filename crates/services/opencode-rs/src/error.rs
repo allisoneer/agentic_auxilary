@@ -1,19 +1,19 @@
-//! Error types for opencode_rs.
+//! Error types for `opencode_rs`.
 
 use thiserror::Error;
 
-/// Result type alias for opencode_rs operations.
+/// Result type alias for `opencode_rs` operations.
 pub type Result<T> = std::result::Result<T, OpencodeError>;
 
-/// Error type for opencode_rs operations.
+/// Error type for `opencode_rs` operations.
 #[derive(Debug, Error)]
 pub enum OpencodeError {
-    /// HTTP error with structured response from OpenCode.
+    /// HTTP error with structured response from `OpenCode`.
     #[error("HTTP error {status}: {message}")]
     Http {
         /// HTTP status code.
         status: u16,
-        /// Error name from OpenCode's NamedError (e.g., "NotFound", "ValidationError").
+        /// Error name from `OpenCode`'s `NamedError` (e.g., "`NotFound`", "`ValidationError`").
         name: Option<String>,
         /// Error message.
         message: String,
@@ -76,10 +76,10 @@ pub enum OpencodeError {
     State(String),
 }
 
-/// Helper to parse OpenCode's NamedError response body.
+/// Helper to parse `OpenCode`'s `NamedError` response body.
 #[derive(Debug, Clone)]
 pub struct HttpErrorBody {
-    /// Error name (e.g., "NotFound", "ValidationError").
+    /// Error name (e.g., "`NotFound`", "`ValidationError`").
     pub name: Option<String>,
     /// Error message.
     pub message: Option<String>,
@@ -89,16 +89,16 @@ pub struct HttpErrorBody {
 
 impl HttpErrorBody {
     /// Parse from a JSON value.
-    pub fn from_json(v: serde_json::Value) -> Self {
+    pub fn from_json(v: &serde_json::Value) -> Self {
         Self {
             name: v
                 .get("name")
                 .and_then(|x| x.as_str())
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             message: v
                 .get("message")
                 .and_then(|x| x.as_str())
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             data: v.get("data").cloned(),
         }
     }
@@ -109,7 +109,7 @@ impl OpencodeError {
     pub fn http(status: u16, body_text: &str) -> Self {
         // Try to parse as JSON to extract NamedError fields
         let parsed: Option<serde_json::Value> = serde_json::from_str(body_text).ok();
-        let info = parsed.map(HttpErrorBody::from_json);
+        let info = parsed.as_ref().map(HttpErrorBody::from_json);
 
         Self::Http {
             status,
@@ -117,7 +117,7 @@ impl OpencodeError {
             message: info
                 .as_ref()
                 .and_then(|i| i.message.clone())
-                .unwrap_or_else(|| format!("HTTP {}", status)),
+                .unwrap_or_else(|| format!("HTTP {status}")),
             data: info.and_then(|i| i.data),
         }
     }

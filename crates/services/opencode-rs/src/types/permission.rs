@@ -1,6 +1,6 @@
-//! Permission types for opencode_rs.
+//! Permission types for `opencode_rs`.
 //!
-//! Matches TypeScript PermissionNext schema from permission/next.ts.
+//! Matches TypeScript `PermissionNext` schema from permission/next.ts.
 
 use serde::{Deserialize, Serialize};
 

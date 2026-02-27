@@ -1,9 +1,9 @@
-//! Sessions API for OpenCode.
+//! Sessions API for `OpenCode`.
 //!
 //! This module provides methods for session endpoints (18 total).
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::session::{
     CreateSessionRequest, RevertRequest, Session, SessionDiff, SessionStatus, ShareInfo,
     SummarizeRequest, TodoItem, UpdateSessionRequest,
@@ -40,8 +40,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails or session not found.
     pub async fn get(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}", id), None)
+            .request_json(Method::GET, &format!("/session/{sid}"), None)
             .await
     }
 
@@ -60,8 +61,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn delete(&self, id: &str) -> Result<()> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_empty(Method::DELETE, &format!("/session/{}", id), None)
+            .request_empty(Method::DELETE, &format!("/session/{sid}"), None)
             .await
     }
 
@@ -71,10 +73,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn fork(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/fork", id),
+                &format!("/session/{sid}/fork"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -86,10 +89,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn abort(&self, id: &str) -> Result<()> {
+        let sid = encode_path_segment(id);
         self.http
             .request_empty(
                 Method::POST,
-                &format!("/session/{}/abort", id),
+                &format!("/session/{sid}/abort"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -112,8 +116,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn children(&self, id: &str) -> Result<Vec<Session>> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}/children", id), None)
+            .request_json(Method::GET, &format!("/session/{sid}/children"), None)
             .await
     }
 
@@ -123,8 +128,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn todo(&self, id: &str) -> Result<Vec<TodoItem>> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}/todo", id), None)
+            .request_json(Method::GET, &format!("/session/{sid}/todo"), None)
             .await
     }
 
@@ -134,9 +140,10 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn update(&self, id: &str, req: &UpdateSessionRequest) -> Result<Session> {
+        let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PATCH, &format!("/session/{}", id), Some(body))
+            .request_json(Method::PATCH, &format!("/session/{sid}"), Some(body))
             .await
     }
 
@@ -146,10 +153,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn init(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/init", id),
+                &format!("/session/{sid}/init"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -161,10 +169,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn share(&self, id: &str) -> Result<ShareInfo> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/share", id),
+                &format!("/session/{sid}/share"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -176,8 +185,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn unshare(&self, id: &str) -> Result<()> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_empty(Method::DELETE, &format!("/session/{}/share", id), None)
+            .request_empty(Method::DELETE, &format!("/session/{sid}/share"), None)
             .await
     }
 
@@ -187,8 +197,9 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn diff(&self, id: &str) -> Result<SessionDiff> {
+        let sid = encode_path_segment(id);
         self.http
-            .request_json(Method::GET, &format!("/session/{}/diff", id), None)
+            .request_json(Method::GET, &format!("/session/{sid}/diff"), None)
             .await
     }
 
@@ -198,11 +209,12 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn diff_since_message(&self, id: &str, message_id: &str) -> Result<SessionDiff> {
-        let encoded = urlencoding::encode(message_id);
+        let sid = encode_path_segment(id);
+        let mid = encode_path_segment(message_id);
         self.http
             .request_json(
                 Method::GET,
-                &format!("/session/{}/diff?messageID={}", id, encoded),
+                &format!("/session/{sid}/diff?messageID={mid}"),
                 None,
             )
             .await
@@ -214,11 +226,12 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn summarize(&self, id: &str, req: &SummarizeRequest) -> Result<Session> {
+        let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/summarize", id),
+                &format!("/session/{sid}/summarize"),
                 Some(body),
             )
             .await
@@ -230,9 +243,10 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn revert(&self, id: &str, req: &RevertRequest) -> Result<Session> {
+        let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::POST, &format!("/session/{}/revert", id), Some(body))
+            .request_json(Method::POST, &format!("/session/{sid}/revert"), Some(body))
             .await
     }
 
@@ -242,10 +256,11 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn unrevert(&self, id: &str) -> Result<Session> {
+        let sid = encode_path_segment(id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/session/{}/unrevert", id),
+                &format!("/session/{sid}/unrevert"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -269,11 +284,12 @@ mod tests {
             .and(body_json(serde_json::json!({})))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "session123",
+                "slug": "session123",
                 "projectId": "proj1",
                 "directory": "/path",
                 "title": "New Session",
                 "version": "1.0",
-                "time": {"created": 1234567890, "updated": 1234567890}
+                "time": {"created": 1_234_567_890, "updated": 1_234_567_890}
             })))
             .mount(&mock_server)
             .await;
@@ -301,11 +317,12 @@ mod tests {
             .and(path("/session/abc123"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "abc123",
+                "slug": "abc123",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Test Session",
                 "version": "1.0",
-                "time": {"created": 1234567890, "updated": 1234567890}
+                "time": {"created": 1_234_567_890, "updated": 1_234_567_890}
             })))
             .mount(&mock_server)
             .await;
@@ -330,8 +347,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/session"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {"id": "s1", "projectId": "p1", "directory": "/path", "title": "S1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}},
-                {"id": "s2", "projectId": "p1", "directory": "/path", "title": "S2", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
+                {"id": "s1", "slug": "s1", "projectId": "p1", "directory": "/path", "title": "S1", "version": "1.0", "time": {"created": 1_234_567_890, "updated": 1_234_567_890}},
+                {"id": "s2", "slug": "s2", "projectId": "p1", "directory": "/path", "title": "S2", "version": "1.0", "time": {"created": 1_234_567_890, "updated": 1_234_567_890}}
             ])))
             .mount(&mock_server)
             .await;
@@ -376,7 +393,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/session/parent123/children"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {"id": "child1", "projectId": "p1", "directory": "/path", "title": "Child 1", "version": "1.0", "time": {"created": 1234567890, "updated": 1234567890}}
+                {"id": "child1", "slug": "child1", "projectId": "p1", "directory": "/path", "title": "Child 1", "version": "1.0", "time": {"created": 1_234_567_890, "updated": 1_234_567_890}}
             ])))
             .mount(&mock_server)
             .await;
@@ -429,11 +446,12 @@ mod tests {
             .and(path("/session/s1"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Updated Title",
                 "version": "1.0",
-                "time": {"created": 1234567890, "updated": 1234567891}
+                "time": {"created": 1_234_567_890, "updated": 1_234_567_891}
             })))
             .mount(&mock_server)
             .await;
@@ -537,11 +555,12 @@ mod tests {
             .and(path("/session/s1/summarize"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Summarized Session",
                 "version": "1.0",
-                "time": {"created": 1234567890, "updated": 1234567891}
+                "time": {"created": 1_234_567_890, "updated": 1_234_567_891}
             })))
             .mount(&mock_server)
             .await;
@@ -576,11 +595,12 @@ mod tests {
             .and(path("/session/s1/revert"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Reverted Session",
                 "version": "1.0",
-                "time": {"created": 1234567890, "updated": 1234567891}
+                "time": {"created": 1_234_567_890, "updated": 1_234_567_891}
             })))
             .mount(&mock_server)
             .await;
@@ -614,11 +634,12 @@ mod tests {
             .and(path("/session/s1/unrevert"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": "s1",
+                "slug": "s1",
                 "projectId": "p1",
                 "directory": "/path",
                 "title": "Unreverted Session",
                 "version": "1.0",
-                "time": {"created": 1234567890, "updated": 1234567891}
+                "time": {"created": 1_234_567_890, "updated": 1_234_567_891}
             })))
             .mount(&mock_server)
             .await;

@@ -1,14 +1,16 @@
-//! Session types for opencode_rs.
+//! Session types for `opencode_rs`.
 
 use crate::types::permission::Ruleset;
 use serde::{Deserialize, Serialize};
 
-/// A session in OpenCode.
+/// A session in `OpenCode`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
+    /// URL-safe session slug (upstream-required).
+    pub slug: String,
     /// Project identifier (may not be present in all responses).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
@@ -223,6 +225,7 @@ mod tests {
     fn test_session_deserialize() {
         let json = r#"{
             "id": "s1",
+            "slug": "s1",
             "projectId": "p1",
             "directory": "/path/to/project",
             "title": "Test Session",
@@ -231,22 +234,32 @@ mod tests {
         }"#;
         let session: Session = serde_json::from_str(json).unwrap();
         assert_eq!(session.id, "s1");
+        assert_eq!(session.slug, "s1");
         assert_eq!(session.title, "Test Session");
     }
 
     #[test]
-    fn test_session_minimal() {
-        // Session with only required field (id)
-        let json = r#"{"id": "s1"}"#;
+    fn test_session_minimal_upstream() {
+        // Session with only required fields (id + slug)
+        let json = r#"{"id": "s1", "slug": "s1"}"#;
         let session: Session = serde_json::from_str(json).unwrap();
         assert_eq!(session.id, "s1");
+        assert_eq!(session.slug, "s1");
         assert!(session.project_id.is_none());
+    }
+
+    #[test]
+    fn test_session_missing_slug_fails() {
+        // Session without slug should fail deserialization (slug is upstream-required)
+        let json = r#"{"id": "s1"}"#;
+        assert!(serde_json::from_str::<Session>(json).is_err());
     }
 
     #[test]
     fn test_session_with_optional_fields() {
         let json = r#"{
             "id": "s1",
+            "slug": "s1",
             "projectId": "p1",
             "directory": "/path",
             "title": "Test",
@@ -256,6 +269,7 @@ mod tests {
             "share": {"url": "https://example.com/share/s1"}
         }"#;
         let session: Session = serde_json::from_str(json).unwrap();
+        assert_eq!(session.slug, "s1");
         assert_eq!(session.parent_id, Some("s0".to_string()));
         assert!(session.share.is_some());
     }

@@ -1,4 +1,4 @@
-//! Config API for OpenCode.
+//! Config API for `OpenCode`.
 //!
 //! Endpoints for configuration management.
 

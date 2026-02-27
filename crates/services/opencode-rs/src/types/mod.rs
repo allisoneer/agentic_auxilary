@@ -1,4 +1,4 @@
-//! Core types for opencode_rs.
+//! Core types for `opencode_rs`.
 //!
 //! This module contains session, message, event, and other types.
 
@@ -13,7 +13,10 @@ pub mod permission;
 pub mod project;
 pub mod provider;
 pub mod pty;
+pub mod question;
 pub mod session;
+pub mod skill;
+pub mod snapshot;
 pub mod tool;
 
 pub use api::*;
@@ -27,5 +30,8 @@ pub use permission::*;
 pub use project::*;
 pub use provider::*;
 pub use pty::*;
+pub use question::*;
 pub use session::*;
+pub use skill::*;
+pub use snapshot::*;
 pub use tool::*;

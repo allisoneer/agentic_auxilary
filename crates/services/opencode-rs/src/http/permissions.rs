@@ -1,9 +1,9 @@
-//! Permissions API for OpenCode.
+//! Permissions API for `OpenCode`.
 //!
 //! Endpoints for managing permission requests.
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::PermissionReplyResponse;
 use crate::types::permission::{PermissionReplyRequest, PermissionRequest};
 use reqwest::Method;
@@ -41,11 +41,12 @@ impl PermissionsApi {
         request_id: &str,
         reply: &PermissionReplyRequest,
     ) -> Result<PermissionReplyResponse> {
+        let rid = encode_path_segment(request_id);
         let body = serde_json::to_value(reply)?;
         self.http
             .request_json(
                 Method::POST,
-                &format!("/permission/{}/reply", request_id),
+                &format!("/permission/{rid}/reply"),
                 Some(body),
             )
             .await

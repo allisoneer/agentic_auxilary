@@ -1,4 +1,4 @@
-//! Tools, Agents, and Commands API for OpenCode.
+//! Tools, Agents, and Commands API for `OpenCode`.
 //!
 //! Endpoints for tool, agent, and command management.
 

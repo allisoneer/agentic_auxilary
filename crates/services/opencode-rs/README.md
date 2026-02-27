@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Created session: {}", session.id);
 
     // Subscribe to session events BEFORE sending prompt
-    let mut subscription = client.subscribe_session(&session.id).await?;
+    let mut subscription = client.subscribe_session(&session.id)?;
     println!("Subscribed to events");
 
     // Send prompt
