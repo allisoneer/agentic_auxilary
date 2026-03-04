@@ -18,7 +18,7 @@ pub struct ServerOptions {
     pub hostname: String,
     /// Directory to run in.
     pub directory: Option<std::path::PathBuf>,
-    /// Config JSON to inject via OPENCODE_CONFIG_CONTENT.
+    /// Config JSON to inject via `OPENCODE_CONFIG_CONTENT`.
     pub config_json: Option<String>,
     /// Startup timeout in milliseconds (default: 5000).
     pub startup_timeout_ms: u64,
@@ -40,49 +40,55 @@ impl Default for ServerOptions {
 }
 
 impl ServerOptions {
-    /// Create a new ServerOptions with defaults.
+    /// Create a new `ServerOptions` with defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the port.
+    #[must_use]
     pub fn port(mut self, port: u16) -> Self {
         self.port = Some(port);
         self
     }
 
     /// Set the hostname.
+    #[must_use]
     pub fn hostname(mut self, hostname: impl Into<String>) -> Self {
         self.hostname = hostname.into();
         self
     }
 
     /// Set the directory.
+    #[must_use]
     pub fn directory(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
         self.directory = Some(dir.into());
         self
     }
 
     /// Set config JSON.
+    #[must_use]
     pub fn config_json(mut self, json: impl Into<String>) -> Self {
         self.config_json = Some(json.into());
         self
     }
 
     /// Set startup timeout in milliseconds.
+    #[must_use]
     pub fn startup_timeout_ms(mut self, ms: u64) -> Self {
         self.startup_timeout_ms = ms;
         self
     }
 
     /// Set the binary path.
+    #[must_use]
     pub fn binary(mut self, binary: impl Into<String>) -> Self {
         self.binary = binary.into();
         self
     }
 }
 
-/// A managed OpenCode server instance.
+/// A managed `OpenCode` server instance.
 ///
 /// The server is automatically stopped when this is dropped.
 pub struct ManagedServer {
@@ -168,7 +174,6 @@ impl ManagedServer {
 
             match tokio::time::timeout(Duration::from_millis(100), reader.next_line()).await {
                 Ok(Ok(Some(line))) if line.contains(ready_marker) => break,
-                Ok(Ok(Some(_))) => continue,
                 Ok(Ok(None)) => {
                     return Err(OpencodeError::SpawnServer {
                         message: "Server process exited unexpectedly".into(),
@@ -176,10 +181,11 @@ impl ManagedServer {
                 }
                 Ok(Err(e)) => {
                     return Err(OpencodeError::SpawnServer {
-                        message: format!("Error reading server output: {}", e),
+                        message: format!("Error reading server output: {e}"),
                     });
                 }
-                Err(_) => continue, // timeout, keep trying
+                // Non-matching line or timeout - keep trying
+                Ok(Ok(Some(_))) | Err(_) => {}
             }
         }
 
