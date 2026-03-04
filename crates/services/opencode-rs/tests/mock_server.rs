@@ -140,7 +140,7 @@ async fn session_lifecycle() {
     // Delete session
     Mock::given(method("DELETE"))
         .and(path("/session/test-session-123"))
-        .respond_with(ResponseTemplate::new(204))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&server)
         .await;
 

@@ -50,26 +50,6 @@ pub struct FindResponse {
     pub extra: serde_json::Value,
 }
 
-// ==================== Provider API Responses ====================
-
-/// Response from OAuth callback endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OAuthCallbackResponse {
-    /// Whether the operation succeeded.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ok: Option<bool>,
-    /// Message from server.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Response from set auth endpoint.
-pub type SetAuthResponse = OAuthCallbackResponse;
-
 // ==================== MCP API Responses ====================
 
 /// Response from MCP action endpoints (add, `auth_callback`, authenticate, connect, disconnect).
@@ -194,14 +174,6 @@ mod tests {
         let json = r#"{"results":[{"file":"test.rs","line":10}]}"#;
         let resp: FindResponse = serde_json::from_str(json).unwrap();
         assert!(resp.results.is_some());
-    }
-
-    #[test]
-    fn test_oauth_callback_response_deserialize() {
-        let json = r#"{"ok":true,"message":"Authentication successful"}"#;
-        let resp: OAuthCallbackResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.ok, Some(true));
-        assert_eq!(resp.message, Some("Authentication successful".to_string()));
     }
 
     #[test]

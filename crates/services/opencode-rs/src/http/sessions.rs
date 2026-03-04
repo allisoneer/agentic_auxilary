@@ -60,10 +60,10 @@ impl SessionsApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn delete(&self, id: &str) -> Result<()> {
+    pub async fn delete(&self, id: &str) -> Result<bool> {
         let sid = encode_path_segment(id);
         self.http
-            .request_empty(Method::DELETE, &format!("/session/{sid}"), None)
+            .request_json::<bool>(Method::DELETE, &format!("/session/{sid}"), None)
             .await
     }
 
@@ -88,10 +88,10 @@ impl SessionsApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn abort(&self, id: &str) -> Result<()> {
+    pub async fn abort(&self, id: &str) -> Result<bool> {
         let sid = encode_path_segment(id);
         self.http
-            .request_empty(
+            .request_json::<bool>(
                 Method::POST,
                 &format!("/session/{sid}/abort"),
                 Some(serde_json::json!({})),
@@ -225,11 +225,11 @@ impl SessionsApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn summarize(&self, id: &str, req: &SummarizeRequest) -> Result<Session> {
+    pub async fn summarize(&self, id: &str, req: &SummarizeRequest) -> Result<bool> {
         let sid = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
+            .request_json::<bool>(
                 Method::POST,
                 &format!("/session/{sid}/summarize"),
                 Some(body),
@@ -371,7 +371,7 @@ mod tests {
 
         Mock::given(method("DELETE"))
             .and(path("/session/del123"))
-            .respond_with(ResponseTemplate::new(204))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
             .mount(&mock_server)
             .await;
 
@@ -383,7 +383,8 @@ mod tests {
         .unwrap();
 
         let sessions = SessionsApi::new(http);
-        sessions.delete("del123").await.unwrap();
+        let ok = sessions.delete("del123").await.unwrap();
+        assert!(ok);
     }
 
     #[tokio::test]
@@ -553,15 +554,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/session/s1/summarize"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "id": "s1",
-                "slug": "s1",
-                "projectId": "p1",
-                "directory": "/path",
-                "title": "Summarized Session",
-                "version": "1.0",
-                "time": {"created": 1_234_567_890, "updated": 1_234_567_891}
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
             .mount(&mock_server)
             .await;
 
@@ -573,7 +566,7 @@ mod tests {
         .unwrap();
 
         let sessions = SessionsApi::new(http);
-        let session = sessions
+        let ok = sessions
             .summarize(
                 "s1",
                 &SummarizeRequest {
@@ -584,7 +577,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(session.id, "s1");
+        assert!(ok);
     }
 
     #[tokio::test]

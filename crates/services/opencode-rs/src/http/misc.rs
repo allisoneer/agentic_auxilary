@@ -101,9 +101,9 @@ impl MiscApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn global_dispose(&self) -> Result<()> {
+    pub async fn global_dispose(&self) -> Result<bool> {
         self.http
-            .request_empty(Method::POST, "/global/dispose", Some(serde_json::json!({})))
+            .request_json::<bool>(Method::POST, "/global/dispose", Some(serde_json::json!({})))
             .await
     }
 
