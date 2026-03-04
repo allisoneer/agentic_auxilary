@@ -16,6 +16,7 @@ use opencode_rs::types::permission::PermissionReplyRequest;
 use opencode_rs::types::session::{CreateSessionRequest, SummarizeRequest};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::task::JoinHandle;
 
 // ============================================================================
 // orchestrator_run
@@ -37,7 +38,7 @@ impl OrchestratorRunTool {
         Self { server }
     }
 
-    async fn run_impl(
+    pub async fn run_impl(
         &self,
         input: OrchestratorRunInput,
     ) -> Result<OrchestratorRunOutput, ToolError> {
@@ -168,22 +169,30 @@ impl OrchestratorRunTool {
             .map_err(|e| ToolError::Internal(format!("Failed to subscribe to session: {e}")))?;
 
         // 6. Kick off the work
+        let mut command_task: Option<JoinHandle<Result<(), String>>> = None;
+        let mut command_name_for_logging: Option<String> = None;
+
         if let Some(command) = &input.command {
-            // Spawn command in background (it's synchronous/blocking)
+            command_name_for_logging = Some(command.clone());
+
             let cmd_client = client.clone();
             let cmd_session_id = session_id.clone();
             let cmd_name = command.clone();
             let cmd_args = message.clone().map(|m| serde_json::json!(m));
 
-            tokio::spawn(async move {
+            command_task = Some(tokio::spawn(async move {
                 let req = CommandRequest {
                     command: cmd_name,
                     args: cmd_args,
                 };
-                if let Err(e) = cmd_client.messages().command(&cmd_session_id, &req).await {
-                    tracing::error!("Command execution error: {}", e);
-                }
-            });
+
+                cmd_client
+                    .messages()
+                    .command(&cmd_session_id, &req)
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }));
         } else if let Some(msg) = &message {
             // Send prompt asynchronously
             let req = PromptRequest {
@@ -229,6 +238,8 @@ impl OrchestratorRunTool {
                         .into(),
                 ));
             }
+
+            let command_task_active = command_task.is_some();
 
             tokio::select! {
                 maybe_event = subscription.recv() => {
@@ -357,6 +368,53 @@ impl OrchestratorRunTool {
                             permission_patterns: perm.patterns,
                             warnings,
                         });
+                    }
+                }
+
+                cmd_result = async {
+                    match command_task.as_mut() {
+                        Some(handle) => Some(handle.await),
+                        None => {
+                            std::future::pending::<
+                                Option<Result<Result<(), String>, tokio::task::JoinError>>,
+                            >()
+                            .await
+                        }
+                    }
+                }, if command_task_active => {
+                    match cmd_result {
+                        Some(Ok(Ok(()))) => {
+                            tracing::debug!(
+                                session_id = %session_id,
+                                command = ?command_name_for_logging,
+                                "orchestrator_run: command dispatch completed successfully"
+                            );
+                            command_task = None;
+                        }
+                        Some(Ok(Err(e))) => {
+                            tracing::error!(
+                                session_id = %session_id,
+                                command = ?command_name_for_logging,
+                                error = %e,
+                                "orchestrator_run: command dispatch failed"
+                            );
+                            return Err(ToolError::Internal(format!(
+                                "Failed to execute command '{}': {e}",
+                                command_name_for_logging.as_deref().unwrap_or("unknown")
+                            )));
+                        }
+                        Some(Err(join_err)) => {
+                            tracing::error!(
+                                session_id = %session_id,
+                                command = ?command_name_for_logging,
+                                error = %join_err,
+                                "orchestrator_run: command task panicked"
+                            );
+                            return Err(ToolError::Internal(format!("Command task panicked: {join_err}")));
+                        }
+                        None => {
+                            unreachable!("command_task_active guard should prevent None");
+                        }
                     }
                 }
             }
