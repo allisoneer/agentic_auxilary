@@ -256,7 +256,7 @@ mod tests {
                 "s1",
                 &CommandRequest {
                     command: "test_command".to_string(),
-                    args: None,
+                    arguments: String::new(),
                 },
             )
             .await
@@ -504,7 +504,7 @@ mod tests {
                 "missing",
                 &CommandRequest {
                     command: "test".to_string(),
-                    args: None,
+                    arguments: String::new(),
                 },
             )
             .await;

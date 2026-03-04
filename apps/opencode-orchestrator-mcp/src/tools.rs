@@ -178,12 +178,12 @@ impl OrchestratorRunTool {
             let cmd_client = client.clone();
             let cmd_session_id = session_id.clone();
             let cmd_name = command.clone();
-            let cmd_args = message.clone().map(|m| serde_json::json!(m));
+            let cmd_arguments = message.clone().unwrap_or_default();
 
             command_task = Some(tokio::spawn(async move {
                 let req = CommandRequest {
                     command: cmd_name,
-                    args: cmd_args,
+                    arguments: cmd_arguments,
                 };
 
                 cmd_client
