@@ -1,0 +1,164 @@
+//! Token tracking for context limit safeguard.
+//!
+//! Monitors token usage during session runs and detects when the 80% threshold
+//! is reached to trigger server-side summarization.
+
+use opencode_rs::types::event::Event;
+use opencode_rs::types::message::{Part, TokenUsage};
+
+/// Tracks token usage during a session run to detect context limit threshold.
+#[derive(Debug, Default, Clone)]
+pub struct TokenTracker {
+    /// Provider ID from message events
+    pub provider_id: Option<String>,
+    /// Model ID from message events
+    pub model_id: Option<String>,
+    /// Context limit for the current model (from cached limits)
+    pub context_limit: Option<u64>,
+    /// Latest observed input token count
+    pub latest_input_tokens: Option<u64>,
+    /// Flag indicating compaction/summarization is needed
+    pub compaction_needed: bool,
+}
+
+impl TokenTracker {
+    /// Threshold at which to trigger summarization (80%)
+    pub const THRESHOLD: f64 = 0.80;
+
+    /// Create a new token tracker.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Observe an SSE event and update token tracking.
+    ///
+    /// The `context_limit_lookup` function is called to look up the context limit
+    /// for a given (`provider_id`, `model_id`) pair from the cached limits.
+    pub fn observe_event<F>(&mut self, ev: &Event, context_limit_lookup: F)
+    where
+        F: Fn(&str, &str) -> Option<u64>,
+    {
+        match ev {
+            Event::MessageUpdated { properties } => {
+                // Extract provider/model info
+                if let Some(pid) = properties.info.provider_id.as_ref()
+                    && let Some(mid) = properties.info.model_id.as_ref()
+                {
+                    self.provider_id = Some(pid.clone());
+                    self.model_id = Some(mid.clone());
+                    self.context_limit = context_limit_lookup(pid, mid);
+                }
+
+                // Extract token usage
+                if let Some(tokens) = &properties.info.tokens {
+                    self.observe_tokens(tokens);
+                }
+            }
+            Event::MessagePartUpdated { properties } => {
+                // Check for StepFinish with token info
+                if let Some(part) = properties.part.as_ref()
+                    && let Part::StepFinish {
+                        tokens: Some(tokens),
+                        ..
+                    } = part
+                {
+                    self.observe_tokens(tokens);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Observe token usage and update threshold flag.
+    pub fn observe_tokens(&mut self, tokens: &TokenUsage) {
+        self.latest_input_tokens = Some(tokens.input);
+        self.recompute_flag();
+    }
+
+    /// Recompute the `compaction_needed` flag based on current state.
+    fn recompute_flag(&mut self) {
+        if let (Some(input), Some(limit)) = (self.latest_input_tokens, self.context_limit)
+            && limit > 0
+        {
+            let ratio = input as f64 / limit as f64;
+            if ratio >= Self::THRESHOLD {
+                self.compaction_needed = true;
+                tracing::info!(
+                    "Context limit threshold reached: {}/{} ({:.1}%)",
+                    input,
+                    limit,
+                    ratio * 100.0
+                );
+            }
+        }
+    }
+}
+
+// Test-only helper methods
+#[cfg(test)]
+impl TokenTracker {
+    /// Reset after compaction/summarization.
+    pub fn reset_after_compaction(&mut self) {
+        self.compaction_needed = false;
+        self.latest_input_tokens = None;
+    }
+
+    /// Get the current usage ratio (0.0 to 1.0+).
+    pub fn usage_ratio(&self) -> Option<f64> {
+        match (self.latest_input_tokens, self.context_limit) {
+            (Some(input), Some(limit)) if limit > 0 => Some(input as f64 / limit as f64),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn triggers_compaction_at_80_percent() {
+        let mut tracker = TokenTracker::new();
+        tracker.context_limit = Some(1000);
+
+        // 79.9% - should not trigger
+        tracker.latest_input_tokens = Some(799);
+        tracker.recompute_flag();
+        assert!(!tracker.compaction_needed);
+
+        // 80.0% - should trigger
+        tracker.latest_input_tokens = Some(800);
+        tracker.recompute_flag();
+        assert!(tracker.compaction_needed);
+    }
+
+    #[test]
+    fn does_not_trigger_without_limit() {
+        let mut tracker = TokenTracker::new();
+        tracker.latest_input_tokens = Some(10000);
+        tracker.recompute_flag();
+        assert!(!tracker.compaction_needed);
+    }
+
+    #[test]
+    fn reset_clears_flag() {
+        let mut tracker = TokenTracker::new();
+        tracker.context_limit = Some(100);
+        tracker.latest_input_tokens = Some(90);
+        tracker.recompute_flag();
+        assert!(tracker.compaction_needed);
+
+        tracker.reset_after_compaction();
+        assert!(!tracker.compaction_needed);
+        assert!(tracker.latest_input_tokens.is_none());
+    }
+
+    #[test]
+    fn usage_ratio_calculation() {
+        let mut tracker = TokenTracker::new();
+        tracker.context_limit = Some(1000);
+        tracker.latest_input_tokens = Some(500);
+
+        assert_eq!(tracker.usage_ratio(), Some(0.5));
+    }
+}
