@@ -341,9 +341,6 @@ impl OrchestratorRunTool {
                         continue; // The poll_interval branch will now drive completion detection
                     };
 
-                    // Update observed_busy on any event, since receiving events means session is active
-                    observed_busy = true;
-
                     // Track tokens
                     token_tracker.observe_event(&event, |pid, mid| {
                         self.server.context_limit(pid, mid)
@@ -373,6 +370,8 @@ impl OrchestratorRunTool {
                         }
 
                         Event::MessagePartUpdated { properties } => {
+                            // Message streaming means session is actively processing
+                            observed_busy = true;
                             // Collect streaming text
                             if let Some(delta) = &properties.delta {
                                 partial_response.push_str(delta);
@@ -447,13 +446,19 @@ impl OrchestratorRunTool {
                             // Check if this is our session and it's not busy
                             let is_our_session = status.active_session_id.as_ref() == Some(&session_id);
 
-                            if status.busy {
-                                // Session is busy - record that we've observed it working
+                            if status.busy && is_our_session {
+                                // OUR session is busy - record that we've observed it working
                                 observed_busy = true;
                                 tracing::trace!(
                                     session_id = %session_id,
+                                    "our session is busy, waiting"
+                                );
+                            } else if status.busy {
+                                // Some other session is busy, not ours - just wait
+                                tracing::trace!(
+                                    session_id = %session_id,
                                     active_session = ?status.active_session_id,
-                                    "session still busy"
+                                    "different session is busy, waiting"
                                 );
                             } else if !dispatched_new_work || observed_busy {
                                 // Session is idle AND either:
