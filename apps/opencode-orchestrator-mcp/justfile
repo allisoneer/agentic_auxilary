@@ -3,13 +3,14 @@
 default:
     @just --list
 
+# Integration tests must run single-threaded to avoid server contention
 integration-test:
-    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
 
 integration-test-verbose:
     RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
-    cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture
+    cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
 
 integration-test-one TEST:
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture
