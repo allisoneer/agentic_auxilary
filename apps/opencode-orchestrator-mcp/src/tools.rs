@@ -38,6 +38,63 @@ impl OrchestratorRunTool {
         Self { server }
     }
 
+    /// Finalize a completed session by fetching messages and optionally triggering summarization.
+    ///
+    /// This is called when we detect the session is idle, either via SSE `SessionIdle` event
+    /// or via polling `sessions().status()`.
+    async fn finalize_completed(
+        client: &opencode_rs::Client,
+        session_id: String,
+        token_tracker: &TokenTracker,
+        mut warnings: Vec<String>,
+    ) -> Result<OrchestratorRunOutput, ToolError> {
+        // Fetch final messages to extract assistant response
+        let messages = client
+            .messages()
+            .list(&session_id)
+            .await
+            .map_err(|e| ToolError::Internal(format!("Failed to list messages: {e}")))?;
+
+        let response = OrchestratorServer::extract_assistant_text(&messages);
+
+        // Handle context limit summarization if needed
+        if token_tracker.compaction_needed
+            && let (Some(pid), Some(mid)) = (&token_tracker.provider_id, &token_tracker.model_id)
+        {
+            let summarize_req = SummarizeRequest {
+                provider_id: pid.clone(),
+                model_id: mid.clone(),
+                auto: None,
+            };
+
+            match client
+                .sessions()
+                .summarize(&session_id, &summarize_req)
+                .await
+            {
+                Ok(_) => {
+                    tracing::info!(session_id = %session_id, "context summarization triggered");
+                    warnings.push("Context limit reached; summarization triggered".into());
+                }
+                Err(e) => {
+                    tracing::warn!(session_id = %session_id, error = %e, "summarization failed");
+                    warnings.push(format!("Summarization failed: {e}"));
+                }
+            }
+        }
+
+        Ok(OrchestratorRunOutput {
+            session_id,
+            status: RunStatus::Completed,
+            response,
+            partial_response: None,
+            permission_request_id: None,
+            permission_type: None,
+            permission_patterns: vec![],
+            warnings,
+        })
+    }
+
     pub async fn run_impl(
         &self,
         input: OrchestratorRunInput,
@@ -224,10 +281,39 @@ impl OrchestratorRunTool {
         tracing::debug!(session_id = %session_id, "orchestrator_run: entering event loop");
         let mut token_tracker = TokenTracker::new();
         let mut partial_response = String::new();
-        let mut warnings = Vec::new();
+        let warnings = Vec::new();
 
         let mut poll_interval = tokio::time::interval(Duration::from_secs(1));
         poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        // Track whether this call is dispatching new work (command or message)
+        // vs just resuming/monitoring an existing session
+        let dispatched_new_work = input.command.is_some() || message.is_some();
+
+        // Track whether we've observed the session as busy at least once.
+        // This prevents completing immediately if we call run_impl on an already-idle
+        // session before our new work has started processing.
+        let mut observed_busy = false;
+
+        // Track whether SSE is still active. If the stream closes, we fall back
+        // to polling-only mode rather than returning an error.
+        let mut sse_active = true;
+
+        // === Post-subscribe status re-check (latency optimization) ===
+        // If we're just monitoring (no new work dispatched), check if session is already idle.
+        // This handles the race where session completed between our initial status check
+        // and SSE subscription becoming ready.
+        if !dispatched_new_work
+            && let Ok(status) = client.sessions().status().await
+            && !status.busy
+        {
+            tracing::debug!(
+                session_id = %session_id,
+                "session already idle on post-subscribe check"
+            );
+            return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
+        }
+        // If check fails or session is busy, continue to event loop
 
         loop {
             // Check timeout before processing
@@ -242,11 +328,21 @@ impl OrchestratorRunTool {
             let command_task_active = command_task.is_some();
 
             tokio::select! {
-                maybe_event = subscription.recv() => {
+                maybe_event = subscription.recv(), if sse_active => {
                     let Some(event) = maybe_event else {
-                        // SSE stream closed unexpectedly
-                        return Err(ToolError::Internal("SSE stream closed unexpectedly".into()));
+                        // SSE stream closed - this can happen due to network issues,
+                        // server restarts, or connection timeouts. Fall back to polling
+                        // rather than failing immediately.
+                        tracing::warn!(
+                            session_id = %session_id,
+                            "SSE stream closed unexpectedly; falling back to polling-only mode"
+                        );
+                        sse_active = false;
+                        continue; // The poll_interval branch will now drive completion detection
                     };
+
+                    // Update observed_busy on any event, since receiving events means session is active
+                    observed_busy = true;
 
                     // Track tokens
                     token_tracker.observe_event(&event, |pid, mid| {
@@ -296,47 +392,8 @@ impl OrchestratorRunTool {
                         }
 
                         Event::SessionIdle { .. } => {
-                            tracing::info!(session_id = %session_id, "orchestrator_run: session idle, completing");
-                            // Session completed - reconcile via HTTP
-                            let messages = client
-                                .messages()
-                                .list(&session_id)
-                                .await
-                                .map_err(|e| ToolError::Internal(format!("Failed to list messages: {e}")))?;
-
-                            let response = OrchestratorServer::extract_assistant_text(&messages);
-
-                            // Trigger summarization if needed
-                            if token_tracker.compaction_needed
-                                && let (Some(pid), Some(mid)) =
-                                    (&token_tracker.provider_id, &token_tracker.model_id)
-                            {
-                                let summarize_req = SummarizeRequest {
-                                    provider_id: pid.clone(),
-                                    model_id: mid.clone(),
-                                    auto: None,
-                                };
-
-                                match client.sessions().summarize(&session_id, &summarize_req).await {
-                                    Ok(_) => {
-                                        warnings.push("Context limit reached; summarization triggered".into());
-                                    }
-                                    Err(e) => {
-                                        warnings.push(format!("Summarization failed: {e}"));
-                                    }
-                                }
-                            }
-
-                            return Ok(OrchestratorRunOutput {
-                                session_id,
-                                status: RunStatus::Completed,
-                                response,
-                                partial_response: None,
-                                permission_request_id: None,
-                                permission_type: None,
-                                permission_patterns: vec![],
-                                warnings,
-                            });
+                            tracing::debug!(session_id = %session_id, "received SessionIdle event");
+                            return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
                         }
 
                         _ => {
@@ -346,14 +403,26 @@ impl OrchestratorRunTool {
                 }
 
                 _ = poll_interval.tick() => {
-                    // Fallback: poll for permissions in case SSE missed it
-                    let pending = client
-                        .permissions()
-                        .list()
-                        .await
-                        .unwrap_or_default();
+                    // === 1. Permission fallback (check first, permissions take priority) ===
+                    let pending = match client.permissions().list().await {
+                        Ok(p) => p,
+                        Err(e) => {
+                            // Log but continue - permission list failure shouldn't block completion detection
+                            tracing::warn!(
+                                session_id = %session_id,
+                                error = %e,
+                                "failed to list permissions during poll fallback"
+                            );
+                            vec![]
+                        }
+                    };
 
                     if let Some(perm) = pending.into_iter().find(|p| p.session_id == session_id) {
+                        tracing::debug!(
+                            session_id = %session_id,
+                            permission_id = %perm.id,
+                            "detected pending permission via polling fallback"
+                        );
                         return Ok(OrchestratorRunOutput {
                             session_id,
                             status: RunStatus::PermissionRequired,
@@ -368,6 +437,56 @@ impl OrchestratorRunTool {
                             permission_patterns: perm.patterns,
                             warnings,
                         });
+                    }
+
+                    // === 2. Session idle detection fallback (NEW) ===
+                    // This is the key fix for race conditions. If SSE missed SessionIdle,
+                    // we detect completion via polling sessions().status().
+                    match client.sessions().status().await {
+                        Ok(status) => {
+                            // Check if this is our session and it's not busy
+                            let is_our_session = status.active_session_id.as_ref() == Some(&session_id);
+
+                            if status.busy {
+                                // Session is busy - record that we've observed it working
+                                observed_busy = true;
+                                tracing::trace!(
+                                    session_id = %session_id,
+                                    active_session = ?status.active_session_id,
+                                    "session still busy"
+                                );
+                            } else if !dispatched_new_work || observed_busy {
+                                // Session is idle AND either:
+                                // - We didn't dispatch new work (just monitoring), OR
+                                // - We did dispatch work and have seen it become busy at least once
+                                //
+                                // This guards against completing before our work starts processing.
+                                tracing::debug!(
+                                    session_id = %session_id,
+                                    is_our_session = is_our_session,
+                                    dispatched_new_work = dispatched_new_work,
+                                    observed_busy = observed_busy,
+                                    "detected session idle via polling fallback"
+                                );
+                                return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
+                            } else {
+                                // Session is idle but we dispatched work and haven't seen busy yet.
+                                // This likely means our work hasn't started processing.
+                                // Wait for next poll tick.
+                                tracing::trace!(
+                                    session_id = %session_id,
+                                    "session idle but work may not have started yet, waiting"
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            // Log but continue - status check failure shouldn't block the loop
+                            tracing::warn!(
+                                session_id = %session_id,
+                                error = %e,
+                                "failed to get session status during poll fallback"
+                            );
+                        }
                     }
                 }
 

@@ -24,3 +24,16 @@ test:
 
 build:
     cargo build -p opencode-orchestrator-mcp
+
+# Run permission-specific integration tests (requires opencode binary)
+integration-test-permissions:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
+        --test integration -- --ignored --nocapture --test-threads=1 \
+        permission
+
+# Run permission tests with debug logging
+integration-test-permissions-debug:
+    RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
+        --test integration -- --ignored --nocapture --test-threads=1 \
+        permission

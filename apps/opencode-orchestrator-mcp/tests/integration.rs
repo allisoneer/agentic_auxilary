@@ -4,9 +4,12 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+use agentic_tools_core::Tool;
 use opencode_orchestrator_mcp::server::OrchestratorServer;
-use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
-use opencode_orchestrator_mcp::types::{OrchestratorRunInput, RunStatus};
+use opencode_orchestrator_mcp::tools::{OrchestratorRunTool, RespondPermissionTool};
+use opencode_orchestrator_mcp::types::{
+    OrchestratorRunInput, PermissionReply, RespondPermissionInput, RunStatus,
+};
 use opencode_rs::types::session::CreateSessionRequest;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -45,6 +48,16 @@ async fn create_session(server: &OrchestratorServer) -> String {
 
 async fn cleanup_session(server: &OrchestratorServer, session_id: &str) {
     let _ = server.client().sessions().delete(session_id).await;
+}
+
+/// Generate a unique temporary file path to avoid conflicts between test runs.
+/// Uses nanosecond timestamp for uniqueness.
+fn unique_tmp_path(prefix: &str) -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time before unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("{prefix}-{nanos}.txt"))
 }
 
 #[tokio::test]
@@ -161,4 +174,186 @@ async fn session_resumption_works() {
 
     assert!(matches!(result2.status, RunStatus::Completed));
     assert_eq!(result2.session_id, session_id);
+}
+
+/// Test that a prompt requiring file write triggers a permission request.
+///
+/// This test verifies:
+/// 1. Running a prompt that writes to /tmp triggers `PermissionRequired` status
+/// 2. The `permission_request_id` is populated
+/// 3. The response comes back within a reasonable timeout (not hanging)
+#[tokio::test]
+#[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
+async fn permission_request_returns_status() {
+    if !should_run() {
+        return;
+    }
+    init_tracing();
+
+    let server = start_server().await;
+    let session_id = create_session(&server).await;
+
+    // Generate unique temp file path to avoid conflicts
+    let tmp_file = unique_tmp_path("orch-perm-test");
+
+    // Prompt that should trigger a file.write permission request
+    let prompt = format!(
+        "Create a file at '{}' with the exact content 'test'. Use the write_file tool.",
+        tmp_file.display()
+    );
+
+    let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
+
+    // Should return PermissionRequired within 60 seconds, not hang
+    let result = timeout(
+        Duration::from_secs(60),
+        run_tool.run_impl(OrchestratorRunInput {
+            session_id: Some(session_id.clone()),
+            command: None,
+            message: Some(prompt),
+        }),
+    )
+    .await
+    .expect("timed out waiting for permission request - possible hang")
+    .expect("orchestrator_run returned error");
+
+    // Verify we got a permission request, not completion
+    assert!(
+        matches!(result.status, RunStatus::PermissionRequired),
+        "expected PermissionRequired status, got {:?}",
+        result.status
+    );
+
+    // Verify permission request ID is populated
+    assert!(
+        result.permission_request_id.is_some(),
+        "permission_request_id should be set when status is PermissionRequired"
+    );
+
+    // Log for debugging
+    tracing::info!(
+        permission_id = ?result.permission_request_id,
+        permission_type = ?result.permission_type,
+        patterns = ?result.permission_patterns,
+        "received permission request"
+    );
+
+    // Cleanup - best effort, don't fail test if cleanup fails
+    let _ = std::fs::remove_file(&tmp_file);
+    cleanup_session(&server, &session_id).await;
+}
+
+/// Test the full permission request → response → completion flow.
+///
+/// This test verifies:
+/// 1. A prompt triggers `PermissionRequired`
+/// 2. Responding with Once allows the session to continue
+/// 3. The session completes (doesn't hang after permission reply)
+///
+/// This is the key regression test for Bug 1 (race conditions causing hangs).
+/// Pre-fix, this test will timeout. Post-fix, it should complete reliably.
+#[tokio::test]
+#[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
+async fn permission_response_resumes_and_completes() {
+    const MAX_PERMISSION_ROUNDS: usize = 5;
+
+    if !should_run() {
+        return;
+    }
+    init_tracing();
+
+    let server = start_server().await;
+    let session_id = create_session(&server).await;
+
+    let tmp_file = unique_tmp_path("orch-perm-flow");
+    let prompt = format!(
+        "Create a file at '{}' containing exactly 'hello'. Use write_file tool.",
+        tmp_file.display()
+    );
+
+    let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
+
+    // Step 1: Trigger permission request
+    let result1 = timeout(
+        Duration::from_secs(60),
+        run_tool.run_impl(OrchestratorRunInput {
+            session_id: Some(session_id.clone()),
+            command: None,
+            message: Some(prompt),
+        }),
+    )
+    .await
+    .expect("timed out waiting for initial permission request")
+    .expect("orchestrator_run failed");
+
+    assert!(
+        matches!(result1.status, RunStatus::PermissionRequired),
+        "expected PermissionRequired, got {:?}",
+        result1.status
+    );
+
+    tracing::info!(
+        permission_id = ?result1.permission_request_id,
+        "received permission request, responding with Once"
+    );
+
+    // Step 2: Respond to permission and wait for completion
+    // This is where Bug 1 causes hangs - the race between permission reply
+    // and SSE subscription can cause SessionIdle to be missed.
+    //
+    // We use a loop to handle potential multiple permissions (e.g., directory + file)
+    let current_session_id = session_id.clone();
+    let mut attempts = 0;
+
+    loop {
+        attempts += 1;
+        assert!(
+            attempts <= MAX_PERMISSION_ROUNDS,
+            "exceeded {MAX_PERMISSION_ROUNDS} permission rounds - possible infinite permission loop"
+        );
+
+        let respond_result = timeout(
+            Duration::from_secs(120),
+            respond_tool.call(
+                RespondPermissionInput {
+                    session_id: current_session_id.clone(),
+                    reply: PermissionReply::Once,
+                    message: Some(format!("test approval round {attempts}")),
+                },
+                &agentic_tools_core::ToolContext::default(),
+            ),
+        )
+        .await
+        .expect("REGRESSION: timed out after permission reply - Bug 1 hang detected")
+        .expect("respond_permission failed");
+
+        match respond_result.status {
+            RunStatus::Completed => {
+                tracing::info!(
+                    response = ?respond_result.response,
+                    "session completed successfully after {attempts} permission round(s)"
+                );
+                break;
+            }
+            RunStatus::PermissionRequired => {
+                tracing::info!(
+                    permission_id = ?respond_result.permission_request_id,
+                    permission_type = ?respond_result.permission_type,
+                    "additional permission required, continuing loop"
+                );
+                // Continue to next iteration
+            }
+        }
+    }
+
+    // Verify the file was created (optional - confirms the work was done)
+    if tmp_file.exists() {
+        let contents = std::fs::read_to_string(&tmp_file).unwrap_or_default();
+        tracing::info!(file = %tmp_file.display(), contents = %contents, "file created");
+    }
+
+    // Cleanup
+    let _ = std::fs::remove_file(&tmp_file);
+    cleanup_session(&server, &session_id).await;
 }
