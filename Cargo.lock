@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "agentic-tools-core",
  "coding_agent_tools",
@@ -4113,7 +4113,7 @@ dependencies = [
 
 [[package]]
 name = "opencode_rs"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "backon",
@@ -6831,7 +6831,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "agentic-tools-core",
  "anthropic-async",
