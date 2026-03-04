@@ -163,24 +163,6 @@ pub struct UpdatePartResponse {
     pub extra: serde_json::Value,
 }
 
-// ==================== Permission API Responses ====================
-
-/// Response from permission reply endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionReplyResponse {
-    /// Session ID.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-    /// Request ID that was replied to.
-    pub request_id: String,
-    /// The reply that was sent.
-    pub reply: crate::types::permission::PermissionReply,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,17 +252,5 @@ mod tests {
         let json = r#"{"delta":"Hello"}"#;
         let resp: UpdatePartResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.delta, Some("Hello".to_string()));
-    }
-
-    #[test]
-    fn test_permission_reply_response_deserialize() {
-        let json = r#"{"sessionId":"sess-123","requestId":"req-456","reply":"always"}"#;
-        let resp: PermissionReplyResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.session_id, Some("sess-123".to_string()));
-        assert_eq!(resp.request_id, "req-456");
-        assert_eq!(
-            resp.reply,
-            crate::types::permission::PermissionReply::Always
-        );
     }
 }

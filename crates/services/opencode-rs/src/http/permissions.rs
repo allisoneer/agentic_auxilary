@@ -4,7 +4,6 @@
 
 use crate::error::Result;
 use crate::http::{HttpClient, encode_path_segment};
-use crate::types::api::PermissionReplyResponse;
 use crate::types::permission::{PermissionReplyRequest, PermissionRequest};
 use reqwest::Method;
 
@@ -36,11 +35,7 @@ impl PermissionsApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn reply(
-        &self,
-        request_id: &str,
-        reply: &PermissionReplyRequest,
-    ) -> Result<PermissionReplyResponse> {
+    pub async fn reply(&self, request_id: &str, reply: &PermissionReplyRequest) -> Result<bool> {
         let rid = encode_path_segment(request_id);
         let body = serde_json::to_value(reply)?;
         self.http
