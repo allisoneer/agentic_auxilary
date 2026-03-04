@@ -23,6 +23,15 @@
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
+    "Orchestrator": {
+      "prompt": "{file:./.opencode/sysprompt.md}",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "orchestrator_*": "allow",
+        "tools_ask_*": "allow"
+      }
+    },
     "Bash": {
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary",
@@ -114,6 +123,13 @@
       "type": "local",
       "command": [
         "agentic-mcp"
+      ],
+      "enabled": true
+    },
+    "orchestrator": {
+      "type": "local",
+      "command": [
+        "opencode-orchestrator-mcp"
       ],
       "enabled": true
     },
