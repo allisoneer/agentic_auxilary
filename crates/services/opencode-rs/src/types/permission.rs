@@ -2,7 +2,34 @@
 //!
 //! Matches TypeScript `PermissionNext` schema from permission/next.ts.
 
+use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
+
+/// Custom deserializer for `Option<PermissionToolRef>` that handles edge cases:
+/// - `null` → `None`
+/// - `{}` (empty object) → `None`
+/// - Valid object with both fields → `Some(PermissionToolRef)`
+///
+/// This is necessary because `OpenCode` may send `"tool": {}` in certain scenarios
+/// (doom loop detection, subtask execution) where no tool context exists.
+fn deserialize_tool_ref_opt<'de, D>(deserializer: D) -> Result<Option<PermissionToolRef>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Deserialize into an optional JSON value so we can inspect the structure
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+
+    match value {
+        // Explicit null or missing field
+        None => Ok(None),
+        // Empty object `{}` - treat as "no tool context"
+        Some(serde_json::Value::Object(ref map)) if map.is_empty() => Ok(None),
+        // Non-empty value - attempt to deserialize as PermissionToolRef
+        Some(other) => serde_json::from_value::<PermissionToolRef>(other)
+            .map(Some)
+            .map_err(de::Error::custom),
+    }
+}
 
 /// Permission action (allow, deny, ask).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -57,7 +84,14 @@ pub struct PermissionRequest {
     #[serde(default)]
     pub always: Vec<String>,
     /// Tool reference if this permission is for a tool invocation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ///
+    /// Uses custom deserializer to handle edge cases where `OpenCode` sends
+    /// `"tool": {}` or `"tool": null` instead of omitting the field.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_tool_ref_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub tool: Option<PermissionToolRef>,
 }
 
@@ -195,5 +229,101 @@ mod tests {
         let req: PermissionReplyRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.reply, PermissionReply::Once);
         assert!(req.message.is_none());
+    }
+
+    #[test]
+    fn test_permission_request_tool_absent_deserializes_to_none() {
+        // Tool field completely missing from JSON
+        let json = r#"{
+            "id": "perm_test123",
+            "sessionId": "sess_abc",
+            "permission": "file.write",
+            "patterns": ["/tmp/**"]
+        }"#;
+
+        let req: PermissionRequest =
+            serde_json::from_str(json).expect("should deserialize without tool field");
+        assert!(
+            req.tool.is_none(),
+            "absent tool field should deserialize to None"
+        );
+    }
+
+    #[test]
+    fn test_permission_request_tool_null_deserializes_to_none() {
+        // Tool field explicitly set to null
+        let json = r#"{
+            "id": "perm_test123",
+            "sessionId": "sess_abc",
+            "permission": "file.write",
+            "patterns": ["/tmp/**"],
+            "tool": null
+        }"#;
+
+        let req: PermissionRequest =
+            serde_json::from_str(json).expect("should deserialize with null tool");
+        assert!(req.tool.is_none(), "null tool should deserialize to None");
+    }
+
+    #[test]
+    fn test_permission_request_tool_empty_object_deserializes_to_none() {
+        // Tool field set to empty object {} - the problematic case from OpenCode
+        let json = r#"{
+            "id": "perm_test123",
+            "sessionId": "sess_abc",
+            "permission": "file.write",
+            "patterns": ["/tmp/**"],
+            "tool": {}
+        }"#;
+
+        let req: PermissionRequest =
+            serde_json::from_str(json).expect("should deserialize with empty tool object");
+        assert!(
+            req.tool.is_none(),
+            "empty object tool should deserialize to None"
+        );
+    }
+
+    #[test]
+    fn test_permission_request_tool_valid_object_deserializes_to_some() {
+        // Tool field with valid messageId and callId
+        let json = r#"{
+            "id": "perm_test123",
+            "sessionId": "sess_abc",
+            "permission": "file.write",
+            "patterns": ["/tmp/**"],
+            "tool": {
+                "messageId": "msg_xyz",
+                "callId": "call_789"
+            }
+        }"#;
+
+        let req: PermissionRequest =
+            serde_json::from_str(json).expect("should deserialize with valid tool");
+
+        let tool = req.tool.expect("tool should be Some");
+        assert_eq!(tool.message_id, "msg_xyz");
+        assert_eq!(tool.call_id, "call_789");
+    }
+
+    #[test]
+    fn test_permission_request_tool_partial_object_fails() {
+        // Tool field with only one of the required fields - should fail
+        // This ensures PermissionToolRef remains strict
+        let json = r#"{
+            "id": "perm_test123",
+            "sessionId": "sess_abc",
+            "permission": "file.write",
+            "patterns": ["/tmp/**"],
+            "tool": {
+                "messageId": "msg_xyz"
+            }
+        }"#;
+
+        let result: Result<PermissionRequest, _> = serde_json::from_str(json);
+        assert!(
+            result.is_err(),
+            "partial tool object (missing callId) should fail deserialization"
+        );
     }
 }
