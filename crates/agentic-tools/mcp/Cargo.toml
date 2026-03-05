@@ -9,7 +9,7 @@ repository = "https://github.com/allisoneer/agentic_auxilary"
 
 [dependencies]
 agentic-tools-core = { workspace = true }
-rmcp = { version = "0.12.0", features = ["server", "transport-io"] }
+rmcp = { workspace = true, features = ["server", "transport-io"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
