@@ -61,6 +61,9 @@ anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
 schemars = { version = "1", features = ["derive"] }
 
+# MCP SDK (centralized version - features set per-crate)
+rmcp = { version = "1.1.0" }
+
 # Internal crates
 agentic-tools-core = { version = "0.1.0", path = "crates/agentic-tools/core" }
 agentic-tools-macros = { version = "0.1.0", path = "crates/agentic-tools/macros" }

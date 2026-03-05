@@ -128,28 +128,23 @@ impl RegistryServer {
 impl ServerHandler for RegistryServer {
     fn initialize(
         &self,
-        _params: m::InitializeRequestParam,
+        _params: m::InitializeRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::InitializeResult, m::ErrorData>> + Send + '_
     {
         async move {
-            Ok(m::InitializeResult {
-                server_info: m::Implementation {
-                    name: self.name.clone(),
-                    title: self.name.clone().into(),
-                    version: self.version.clone(),
-                    website_url: None,
-                    icons: None,
-                },
-                capabilities: m::ServerCapabilities::builder().enable_tools().build(),
-                ..Default::default()
-            })
+            let server_info =
+                m::Implementation::new(&self.name, &self.version).with_title(&self.name);
+            Ok(
+                m::InitializeResult::new(m::ServerCapabilities::builder().enable_tools().build())
+                    .with_server_info(server_info),
+            )
         }
     }
 
     fn list_tools(
         &self,
-        _req: Option<m::PaginatedRequestParam>,
+        _req: Option<m::PaginatedRequestParams>,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::ListToolsResult, m::ErrorData>> + Send + '_
     {
@@ -176,32 +171,26 @@ impl ServerHandler for RegistryServer {
                         None
                     };
 
-                    let tool = m::Tool {
-                        name: name.clone().into(),
-                        title: name.into(),
-                        description: Some(erased.description().to_string().into()),
-                        input_schema: Arc::new(
-                            schema_json.as_object().cloned().unwrap_or_default(),
-                        ),
-                        annotations: None,
-                        output_schema,
-                        icons: None,
-                        meta: None,
-                    };
+                    let input_schema =
+                        Arc::new(schema_json.as_object().cloned().unwrap_or_default());
+                    let mut tool = m::Tool::new(name.clone(), erased.description(), input_schema)
+                        .with_title(name);
+
+                    // Attach output_schema only in Structured mode
+                    if let Some(schema) = output_schema {
+                        tool = tool.with_raw_output_schema(schema);
+                    }
+
                     tools.push(tool);
                 }
             }
-            Ok(m::ListToolsResult {
-                tools,
-                next_cursor: None,
-                meta: None,
-            })
+            Ok(m::ListToolsResult::with_all_items(tools))
         }
     }
 
     fn call_tool(
         &self,
-        req: m::CallToolRequestParam,
+        req: m::CallToolRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::CallToolResult, m::ErrorData>> + Send + '_
     {
@@ -245,12 +234,9 @@ impl ServerHandler for RegistryServer {
                     };
 
                     // Build result with both text content and optional structured_content
-                    Ok(m::CallToolResult {
-                        content: contents,
-                        structured_content,
-                        is_error: Some(false),
-                        meta: None,
-                    })
+                    let mut result = m::CallToolResult::success(contents);
+                    result.structured_content = structured_content;
+                    Ok(result)
                 }
                 Err(e) => Ok(m::CallToolResult::error(vec![m::Content::text(
                     e.to_string(),
@@ -268,7 +254,7 @@ impl ServerHandler for RegistryServer {
 
     fn complete(
         &self,
-        _req: m::CompleteRequestParam,
+        _req: m::CompleteRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::CompleteResult, m::ErrorData>> + Send + '_
     {
@@ -282,7 +268,7 @@ impl ServerHandler for RegistryServer {
 
     fn set_level(
         &self,
-        _req: m::SetLevelRequestParam,
+        _req: m::SetLevelRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<(), m::ErrorData>> + Send + '_ {
         async { Ok(()) }
@@ -290,7 +276,7 @@ impl ServerHandler for RegistryServer {
 
     fn get_prompt(
         &self,
-        _req: m::GetPromptRequestParam,
+        _req: m::GetPromptRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::GetPromptResult, m::ErrorData>> + Send + '_
     {
@@ -304,53 +290,35 @@ impl ServerHandler for RegistryServer {
 
     fn list_prompts(
         &self,
-        _req: Option<m::PaginatedRequestParam>,
+        _req: Option<m::PaginatedRequestParams>,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::ListPromptsResult, m::ErrorData>> + Send + '_
     {
-        async {
-            Ok(m::ListPromptsResult {
-                prompts: vec![],
-                next_cursor: None,
-                meta: None,
-            })
-        }
+        async { Ok(m::ListPromptsResult::with_all_items(vec![])) }
     }
 
     fn list_resources(
         &self,
-        _req: Option<m::PaginatedRequestParam>,
+        _req: Option<m::PaginatedRequestParams>,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::ListResourcesResult, m::ErrorData>> + Send + '_
     {
-        async {
-            Ok(m::ListResourcesResult {
-                resources: vec![],
-                next_cursor: None,
-                meta: None,
-            })
-        }
+        async { Ok(m::ListResourcesResult::with_all_items(vec![])) }
     }
 
     fn list_resource_templates(
         &self,
-        _req: Option<m::PaginatedRequestParam>,
+        _req: Option<m::PaginatedRequestParams>,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::ListResourceTemplatesResult, m::ErrorData>>
     + Send
     + '_ {
-        async {
-            Ok(m::ListResourceTemplatesResult {
-                resource_templates: vec![],
-                next_cursor: None,
-                meta: None,
-            })
-        }
+        async { Ok(m::ListResourceTemplatesResult::with_all_items(vec![])) }
     }
 
     fn read_resource(
         &self,
-        _req: m::ReadResourceRequestParam,
+        _req: m::ReadResourceRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::ReadResourceResult, m::ErrorData>> + Send + '_
     {
@@ -364,7 +332,7 @@ impl ServerHandler for RegistryServer {
 
     fn subscribe(
         &self,
-        _req: m::SubscribeRequestParam,
+        _req: m::SubscribeRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<(), m::ErrorData>> + Send + '_ {
         async {
@@ -377,7 +345,7 @@ impl ServerHandler for RegistryServer {
 
     fn unsubscribe(
         &self,
-        _req: m::UnsubscribeRequestParam,
+        _req: m::UnsubscribeRequestParams,
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<(), m::ErrorData>> + Send + '_ {
         async {
