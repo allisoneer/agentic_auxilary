@@ -8,6 +8,7 @@
 
 use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 mod server;
 mod token_tracker;
@@ -32,13 +33,14 @@ async fn main() -> anyhow::Result<()> {
     // if it can't auto-select a single provider.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    let orchestrator = OrchestratorServer::start().await?;
+    // Lazy initialization: server is spawned on first tool call, not at startup.
+    // This saves resources when orchestrator tools are never invoked (~90% of cases).
+    let orchestrator: Arc<OnceCell<OrchestratorServer>> = Arc::new(OnceCell::new());
     let registry = tools::build_registry(&orchestrator);
 
     eprintln!(
-        "opencode-orchestrator-mcp started ({} tools, server at {})",
+        "opencode-orchestrator-mcp started ({} tools; embedded server is lazy-initialized on first tool call)",
         registry.len(),
-        orchestrator.base_url()
     );
 
     let server = RegistryServer::new(Arc::new(registry))

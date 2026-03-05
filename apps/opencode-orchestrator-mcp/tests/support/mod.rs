@@ -10,19 +10,26 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use tokio::sync::OnceCell;
 use wiremock::{MockServer, Request, Respond, ResponseTemplate};
 
-/// Build an `OrchestratorServer` connected to a wiremock `MockServer`.
+/// Build an `OrchestratorServer` cell connected to a wiremock `MockServer`.
 ///
+/// The cell is pre-initialized with a server backed by the mock.
 /// Uses a short 5-second timeout suitable for tests.
-pub fn test_orchestrator_server(mock: &MockServer) -> Arc<OrchestratorServer> {
+pub fn test_orchestrator_server(mock: &MockServer) -> Arc<OnceCell<OrchestratorServer>> {
     let base_url = mock.uri().trim_end_matches('/').to_string();
     let client = opencode_rs::ClientBuilder::new()
         .base_url(&base_url)
         .timeout_secs(5) // Short timeout for tests
         .build()
         .unwrap();
-    OrchestratorServer::from_client(client, base_url)
+
+    let cell = Arc::new(OnceCell::new());
+    // Pre-initialize with the mock-backed server (bypasses managed server spawn)
+    cell.set(OrchestratorServer::from_client_unshared(client, base_url))
+        .unwrap_or_else(|_| panic!("cell should be empty"));
+    cell
 }
 
 /// Respond with different responses in sequence; after exhausting, repeat last.

@@ -342,9 +342,15 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .timeout_secs(1) // 1 second timeout
         .build()
         .unwrap();
-    let server =
-        opencode_orchestrator_mcp::server::OrchestratorServer::from_client(client, &base_url);
-    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let server_cell = Arc::new(tokio::sync::OnceCell::new());
+    server_cell
+        .set(
+            opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
+                client, &base_url,
+            ),
+        )
+        .unwrap_or_else(|_| panic!("cell should be empty"));
+    let tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
     let sid = "s4";
 
     // GET /session/s4

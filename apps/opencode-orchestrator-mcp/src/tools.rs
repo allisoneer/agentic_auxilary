@@ -16,6 +16,7 @@ use opencode_rs::types::permission::PermissionReplyRequest;
 use opencode_rs::types::session::{CreateSessionRequest, SummarizeRequest};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 
 // ============================================================================
@@ -29,12 +30,12 @@ use tokio::task::JoinHandle;
 /// when a permission is requested.
 #[derive(Clone)]
 pub struct OrchestratorRunTool {
-    server: Arc<OrchestratorServer>,
+    server: Arc<OnceCell<OrchestratorServer>>,
 }
 
 impl OrchestratorRunTool {
-    /// Create a new `OrchestratorRunTool` with the given server.
-    pub fn new(server: Arc<OrchestratorServer>) -> Self {
+    /// Create a new `OrchestratorRunTool` with the given server cell.
+    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
         Self { server }
     }
 
@@ -156,7 +157,14 @@ impl OrchestratorRunTool {
             ));
         }
 
-        let client = self.server.client();
+        // Lazy initialization: spawn server on first tool call
+        let server = self
+            .server
+            .get_or_try_init(OrchestratorServer::start_lazy)
+            .await
+            .map_err(|e| ToolError::Internal(e.to_string()))?;
+
+        let client = server.client();
 
         tracing::debug!(
             command = ?input.command,
@@ -357,9 +365,9 @@ impl OrchestratorRunTool {
                         continue; // The poll_interval branch will now drive completion detection
                     };
 
-                    // Track tokens
+                    // Track tokens (server is already initialized at this point)
                     token_tracker.observe_event(&event, |pid, mid| {
-                        self.server.context_limit(pid, mid)
+                        server.context_limit(pid, mid)
                     });
 
                     match event {
@@ -600,12 +608,12 @@ Examples:
 /// Tool for listing available `OpenCode` sessions in the current directory.
 #[derive(Clone)]
 pub struct ListSessionsTool {
-    server: Arc<OrchestratorServer>,
+    server: Arc<OnceCell<OrchestratorServer>>,
 }
 
 impl ListSessionsTool {
-    /// Create a new `ListSessionsTool` with the given server.
-    pub fn new(server: Arc<OrchestratorServer>) -> Self {
+    /// Create a new `ListSessionsTool` with the given server cell.
+    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
         Self { server }
     }
 }
@@ -622,8 +630,13 @@ impl Tool for ListSessionsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server = Arc::clone(&self.server);
+        let server_cell = Arc::clone(&self.server);
         Box::pin(async move {
+            let server = server_cell
+                .get_or_try_init(OrchestratorServer::start_lazy)
+                .await
+                .map_err(|e| ToolError::Internal(e.to_string()))?;
+
             let sessions = server
                 .client()
                 .sessions()
@@ -656,12 +669,12 @@ impl Tool for ListSessionsTool {
 /// Tool for listing available `OpenCode` commands that can be executed.
 #[derive(Clone)]
 pub struct ListCommandsTool {
-    server: Arc<OrchestratorServer>,
+    server: Arc<OnceCell<OrchestratorServer>>,
 }
 
 impl ListCommandsTool {
-    /// Create a new `ListCommandsTool` with the given server.
-    pub fn new(server: Arc<OrchestratorServer>) -> Self {
+    /// Create a new `ListCommandsTool` with the given server cell.
+    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
         Self { server }
     }
 }
@@ -678,8 +691,13 @@ impl Tool for ListCommandsTool {
         _input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server = Arc::clone(&self.server);
+        let server_cell = Arc::clone(&self.server);
         Box::pin(async move {
+            let server = server_cell
+                .get_or_try_init(OrchestratorServer::start_lazy)
+                .await
+                .map_err(|e| ToolError::Internal(e.to_string()))?;
+
             let commands = server
                 .client()
                 .tools()
@@ -712,12 +730,12 @@ impl Tool for ListCommandsTool {
 /// when the session completes or another permission is requested.
 #[derive(Clone)]
 pub struct RespondPermissionTool {
-    server: Arc<OrchestratorServer>,
+    server: Arc<OnceCell<OrchestratorServer>>,
 }
 
 impl RespondPermissionTool {
-    /// Create a new `RespondPermissionTool` with the given server.
-    pub fn new(server: Arc<OrchestratorServer>) -> Self {
+    /// Create a new `RespondPermissionTool` with the given server cell.
+    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
         Self { server }
     }
 }
@@ -740,8 +758,13 @@ Parameters:
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server = Arc::clone(&self.server);
+        let server_cell = Arc::clone(&self.server);
         Box::pin(async move {
+            let server = server_cell
+                .get_or_try_init(OrchestratorServer::start_lazy)
+                .await
+                .map_err(|e| ToolError::Internal(e.to_string()))?;
+
             let client = server.client();
 
             // Find the pending permission for this session
@@ -805,7 +828,7 @@ Parameters:
                 .map_err(|e| ToolError::Internal(format!("Failed to reply to permission: {e}")))?;
 
             // Now continue monitoring the session using orchestrator_run logic
-            let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
+            let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
             let mut out = run_tool
                 .run_impl(OrchestratorRunInput {
                     session_id: Some(input.session_id),
@@ -851,7 +874,9 @@ Parameters:
 // ============================================================================
 
 /// Build the tool registry with all orchestrator tools.
-pub fn build_registry(server: &Arc<OrchestratorServer>) -> ToolRegistry {
+///
+/// The server cell is lazily initialized on first tool call.
+pub fn build_registry(server: &Arc<OnceCell<OrchestratorServer>>) -> ToolRegistry {
     ToolRegistry::builder()
         .register::<OrchestratorRunTool, ()>(OrchestratorRunTool::new(Arc::clone(server)))
         .register::<ListSessionsTool, ()>(ListSessionsTool::new(Arc::clone(server)))

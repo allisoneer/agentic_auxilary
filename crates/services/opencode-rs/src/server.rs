@@ -128,6 +128,11 @@ impl ManagedServer {
         if let Some(dir) = &opts.directory {
             cmd.current_dir(dir);
         }
+
+        // Recursion guard: any MCP servers spawned by this `opencode serve` should
+        // know they're in an orchestrator-managed context.
+        cmd.env("OPENCODE_ORCHESTRATOR_MANAGED", "1");
+
         if let Some(cfg) = &opts.config_json {
             cmd.env("OPENCODE_CONFIG_CONTENT", cfg);
         }

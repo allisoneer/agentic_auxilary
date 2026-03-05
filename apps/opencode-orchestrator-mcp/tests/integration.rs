@@ -13,6 +13,7 @@ use opencode_orchestrator_mcp::types::{
 use opencode_rs::types::session::CreateSessionRequest;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::OnceCell;
 use tokio::time::timeout;
 
 fn should_run() -> bool {
@@ -29,15 +30,22 @@ fn init_tracing() {
         .try_init();
 }
 
-async fn start_server() -> Arc<OrchestratorServer> {
-    timeout(Duration::from_secs(30), OrchestratorServer::start())
+async fn start_server() -> Arc<OnceCell<OrchestratorServer>> {
+    // Use the lazy init path and pre-initialize for integration tests
+    let cell = Arc::new(OnceCell::new());
+    let server = timeout(Duration::from_secs(30), OrchestratorServer::start_lazy())
         .await
         .expect("timeout starting embedded opencode server")
-        .expect("failed to start embedded opencode server")
+        .expect("failed to start embedded opencode server");
+    cell.set(server)
+        .unwrap_or_else(|_| panic!("cell should be empty"));
+    cell
 }
 
-async fn create_session(server: &OrchestratorServer) -> String {
+async fn create_session(server: &OnceCell<OrchestratorServer>) -> String {
     server
+        .get()
+        .expect("server should be initialized")
         .client()
         .sessions()
         .create(&CreateSessionRequest::default())
@@ -46,8 +54,10 @@ async fn create_session(server: &OrchestratorServer) -> String {
         .id
 }
 
-async fn cleanup_session(server: &OrchestratorServer, session_id: &str) {
-    let _ = server.client().sessions().delete(session_id).await;
+async fn cleanup_session(server: &OnceCell<OrchestratorServer>, session_id: &str) {
+    if let Some(s) = server.get() {
+        let _ = s.client().sessions().delete(session_id).await;
+    }
 }
 
 /// Generate a unique temporary file path to avoid conflicts between test runs.
