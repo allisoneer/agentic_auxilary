@@ -670,9 +670,8 @@ async fn validate_stdio_server(
             };
             let tools_list_ms = tools_start.elapsed().as_millis() as u64;
 
-            // Cleanup: gracefully close transport, then cancel as a fallback
+            // Cleanup: gracefully close transport
             let _ = handshake_result.close().await;
-            let _ = handshake_result.cancel().await;
 
             Ok(McpServerValidationSuccess {
                 info: server_info,
