@@ -334,6 +334,15 @@ async fn permission_response_resumes_and_completes() {
                     response = ?respond_result.response,
                     "session completed successfully after {attempts} permission round(s)"
                 );
+                // Assert response is present and non-empty after permission approval
+                let resp = respond_result
+                    .response
+                    .as_deref()
+                    .expect("expected response after permission approval");
+                assert!(
+                    !resp.trim().is_empty(),
+                    "response should not be empty after permission approval"
+                );
                 break;
             }
             RunStatus::PermissionRequired => {
@@ -352,6 +361,94 @@ async fn permission_response_resumes_and_completes() {
         let contents = std::fs::read_to_string(&tmp_file).unwrap_or_default();
         tracing::info!(file = %tmp_file.display(), contents = %contents, "file created");
     }
+
+    // Cleanup
+    let _ = std::fs::remove_file(&tmp_file);
+    cleanup_session(&server, &session_id).await;
+}
+
+/// Test that rejecting a permission returns response=None with appropriate warning.
+///
+/// This validates that rejection doesn't return stale pre-rejection text.
+#[tokio::test]
+#[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
+async fn permission_reject_returns_none_with_warning() {
+    if !should_run() {
+        return;
+    }
+    init_tracing();
+
+    let server = start_server().await;
+    let session_id = create_session(&server).await;
+
+    let tmp_file = unique_tmp_path("orch-reject-test");
+    let prompt = format!(
+        "Create a file at '{}' containing 'test'. Use write_file tool.",
+        tmp_file.display()
+    );
+
+    let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
+
+    // Step 1: Trigger permission request
+    let result = timeout(
+        Duration::from_secs(60),
+        run_tool.run_impl(OrchestratorRunInput {
+            session_id: Some(session_id.clone()),
+            command: None,
+            message: Some(prompt),
+        }),
+    )
+    .await
+    .expect("timed out waiting for permission request")
+    .expect("orchestrator_run failed");
+
+    assert!(
+        matches!(result.status, RunStatus::PermissionRequired),
+        "expected PermissionRequired, got {:?}",
+        result.status
+    );
+
+    // Step 2: Reject the permission
+    let reject_result = timeout(
+        Duration::from_secs(60),
+        respond_tool.call(
+            RespondPermissionInput {
+                session_id: session_id.clone(),
+                reply: PermissionReply::Reject,
+                message: None,
+            },
+            &agentic_tools_core::ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("timed out after rejection")
+    .expect("respond_permission failed");
+
+    // Assert rejection behavior
+    assert!(
+        matches!(reject_result.status, RunStatus::Completed),
+        "expected Completed after rejection, got {:?}",
+        reject_result.status
+    );
+    assert!(
+        reject_result.response.is_none(),
+        "expected response=None after rejection, got {:?}",
+        reject_result.response
+    );
+    assert!(
+        reject_result
+            .warnings
+            .iter()
+            .any(|w| w.to_lowercase().contains("reject")),
+        "expected warning about rejection, got {:?}",
+        reject_result.warnings
+    );
+
+    tracing::info!(
+        warnings = ?reject_result.warnings,
+        "rejection completed with expected warnings"
+    );
 
     // Cleanup
     let _ = std::fs::remove_file(&tmp_file);

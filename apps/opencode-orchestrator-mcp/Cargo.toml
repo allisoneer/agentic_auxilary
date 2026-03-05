@@ -7,6 +7,11 @@ description = "MCP server for orchestrator-style agents to spawn and manage Open
 repository = "https://github.com/allisoneer/agentic_auxilary"
 publish = false
 
+[features]
+default = []
+# Enable test utilities like OrchestratorServer::from_client for wiremock tests
+test-support = []
+
 [package.metadata.repo]
 role = "app"
 family = "agentic-tools"
@@ -40,6 +45,12 @@ rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] 
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+wiremock = "0.6"
+
+# Enable test-support feature for integration tests
+[dev-dependencies.opencode-orchestrator-mcp]
+path = "."
+features = ["test-support"]
 
 [lints]
 workspace = true

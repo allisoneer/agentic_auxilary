@@ -42,20 +42,52 @@ impl OrchestratorRunTool {
     ///
     /// This is called when we detect the session is idle, either via SSE `SessionIdle` event
     /// or via polling `sessions().status()`.
+    ///
+    /// Uses bounded retry with backoff (0/50/100/200/400ms) if assistant text is not immediately
+    /// available, handling the race condition where the session becomes idle before messages
+    /// are fully persisted.
     async fn finalize_completed(
         client: &opencode_rs::Client,
         session_id: String,
         token_tracker: &TokenTracker,
         mut warnings: Vec<String>,
     ) -> Result<OrchestratorRunOutput, ToolError> {
-        // Fetch final messages to extract assistant response
-        let messages = client
-            .messages()
-            .list(&session_id)
-            .await
-            .map_err(|e| ToolError::Internal(format!("Failed to list messages: {e}")))?;
+        // Bounded backoff delays for message extraction retry (~750ms total budget)
+        const BACKOFFS_MS: &[u64] = &[0, 50, 100, 200, 400];
 
-        let response = OrchestratorServer::extract_assistant_text(&messages);
+        let mut response: Option<String> = None;
+
+        for (attempt, &delay_ms) in BACKOFFS_MS.iter().enumerate() {
+            if delay_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            }
+
+            let messages = client
+                .messages()
+                .list(&session_id)
+                .await
+                .map_err(|e| ToolError::Internal(format!("Failed to list messages: {e}")))?;
+
+            response = OrchestratorServer::extract_assistant_text(&messages);
+
+            if response.is_some() {
+                if attempt > 0 {
+                    tracing::debug!(
+                        session_id = %session_id,
+                        attempt,
+                        "assistant response became available after retry"
+                    );
+                }
+                break;
+            }
+        }
+
+        if response.is_none() {
+            tracing::debug!(
+                session_id = %session_id,
+                "no assistant response found after bounded retry"
+            );
+        }
 
         // Handle context limit summarization if needed
         if token_tracker.compaction_needed
@@ -198,26 +230,10 @@ impl OrchestratorRunTool {
         }
 
         // 4. If no message/command and session is idle, just return current state
+        // Uses finalize_completed to get retry logic for message extraction
         if message.is_none() && input.command.is_none() && is_idle {
-            // Fetch and return last assistant message
-            let messages = client
-                .messages()
-                .list(&session_id)
-                .await
-                .map_err(|e| ToolError::Internal(format!("Failed to list messages: {e}")))?;
-
-            let response = OrchestratorServer::extract_assistant_text(&messages);
-
-            return Ok(OrchestratorRunOutput {
-                session_id,
-                status: RunStatus::Completed,
-                response,
-                partial_response: None,
-                permission_request_id: None,
-                permission_type: None,
-                permission_patterns: vec![],
-                warnings: vec![],
-            });
+            let token_tracker = TokenTracker::new();
+            return Self::finalize_completed(client, session_id, &token_tracker, vec![]).await;
         }
 
         // 5. Subscribe to SSE BEFORE sending prompt/command
@@ -746,6 +762,28 @@ Parameters:
                     ))
                 })?;
 
+            // Track if this is a rejection for post-processing
+            let is_reject = matches!(input.reply, PermissionReply::Reject);
+
+            // Capture permission details for warning message
+            let permission_type = perm.permission.clone();
+            let permission_patterns = perm.patterns.clone();
+
+            // Capture baseline assistant text BEFORE sending reject
+            // This lets us detect stale text after rejection
+            let mut pre_warnings: Vec<String> = Vec::new();
+            let baseline = if is_reject {
+                match client.messages().list(&input.session_id).await {
+                    Ok(msgs) => OrchestratorServer::extract_assistant_text(&msgs),
+                    Err(e) => {
+                        pre_warnings.push(format!("Failed to fetch baseline messages: {e}"));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
             // Convert our reply type to API type
             let api_reply = match input.reply {
                 PermissionReply::Once => ApiPermissionReply::Once,
@@ -767,14 +805,43 @@ Parameters:
                 .map_err(|e| ToolError::Internal(format!("Failed to reply to permission: {e}")))?;
 
             // Now continue monitoring the session using orchestrator_run logic
-            let run_tool = OrchestratorRunTool::new(server);
-            run_tool
+            let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
+            let mut out = run_tool
                 .run_impl(OrchestratorRunInput {
                     session_id: Some(input.session_id),
                     command: None,
                     message: None,
                 })
-                .await
+                .await?;
+
+            // Merge pre-warnings
+            out.warnings.extend(pre_warnings);
+
+            // Apply rejection-aware output mutation
+            if is_reject && matches!(out.status, RunStatus::Completed) {
+                let final_resp = out.response.as_deref();
+                let baseline_resp = baseline.as_deref();
+
+                // If response unchanged or None, it's stale pre-rejection text
+                if final_resp.is_none() || final_resp == baseline_resp {
+                    out.response = None;
+                    let patterns_str = if permission_patterns.is_empty() {
+                        "(none)".to_string()
+                    } else {
+                        permission_patterns.join(", ")
+                    };
+                    out.warnings.push(format!(
+                        "Permission rejected for '{permission_type}'. Patterns: {patterns_str}. \
+                         Session stopped without generating a new assistant response."
+                    ));
+                    tracing::debug!(
+                        permission_type = %permission_type,
+                        "rejection override applied: response set to None"
+                    );
+                }
+            }
+
+            Ok(out)
         })
     }
 }

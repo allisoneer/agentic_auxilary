@@ -15,8 +15,9 @@ pub type ModelKey = (String, String);
 
 /// Shared state wrapping the managed `OpenCode` server and HTTP client.
 pub struct OrchestratorServer {
-    /// Keep alive for lifecycle; Drop kills the opencode serve process
-    _managed: ManagedServer,
+    /// Keep alive for lifecycle; Drop kills the opencode serve process.
+    /// `None` when using an external client (e.g., wiremock tests).
+    _managed: Option<ManagedServer>,
     /// HTTP client for `OpenCode` API
     client: Client,
     /// Cached model context limits from GET /provider
@@ -61,7 +62,7 @@ impl OrchestratorServer {
         tracing::info!("Loaded {} model context limits", model_context_limits.len());
 
         Ok(Arc::new(Self {
-            _managed: managed,
+            _managed: Some(managed),
             client,
             model_context_limits,
             base_url,
@@ -125,5 +126,27 @@ impl OrchestratorServer {
         } else {
             Some(text)
         }
+    }
+}
+
+/// Test support utilities (requires `test-support` feature).
+///
+/// These functions may appear unused when compiling non-test targets because
+/// cargo's feature unification enables the feature for all targets when tests
+/// are compiled. The `dead_code` warning is expected and suppressed.
+#[cfg(feature = "test-support")]
+#[allow(dead_code, clippy::allow_attributes)]
+impl OrchestratorServer {
+    /// Build an `OrchestratorServer` wrapper around an existing client.
+    ///
+    /// Does NOT manage an opencode process (intended for wiremock tests).
+    /// Model context limits are not loaded and will return `None` for all lookups.
+    pub fn from_client(client: Client, base_url: impl Into<String>) -> Arc<Self> {
+        Arc::new(Self {
+            _managed: None,
+            client,
+            model_context_limits: HashMap::new(),
+            base_url: base_url.into().trim_end_matches('/').to_string(),
+        })
     }
 }

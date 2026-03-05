@@ -4100,6 +4100,7 @@ dependencies = [
  "agentic-tools-mcp",
  "anyhow",
  "futures",
+ "opencode-orchestrator-mcp",
  "opencode_rs",
  "pretty_assertions",
  "rustls",
@@ -4109,6 +4110,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "wiremock",
 ]
 
 [[package]]
