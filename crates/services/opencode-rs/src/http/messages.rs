@@ -80,14 +80,17 @@ impl MessagesApi {
 
     /// Execute a command in a session.
     ///
+    /// Uses transport-level retry for transient network failures (connect/timeout).
+    /// This is safe because command dispatch is idempotent at the session level.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the request fails.
+    /// Returns an error if the request fails after retries.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
         let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::POST, &format!("/session/{sid}/command"), Some(body))
+            .post_json_with_retry(&format!("/session/{sid}/command"), Some(body))
             .await
     }
 
