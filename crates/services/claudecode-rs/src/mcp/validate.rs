@@ -625,22 +625,22 @@ async fn validate_stdio_server(
             let start = Instant::now();
 
             // Perform handshake with timeout
-            let handshake_result = match timeout(opts.handshake_timeout, ().serve(transport)).await
-            {
-                Err(_) => {
-                    return Err(McpServerValidationError::HandshakeTimeout(
-                        opts.handshake_timeout,
-                    ));
-                }
-                Ok(Ok(svc)) => svc,
-                Ok(Err(e)) => {
-                    let tail = snapshot_tail(&stderr_buf).await;
-                    return Err(McpServerValidationError::HandshakeProtocol {
-                        message: format!("{e}"),
-                        stderr_tail: tail,
-                    });
-                }
-            };
+            let mut handshake_result =
+                match timeout(opts.handshake_timeout, ().serve(transport)).await {
+                    Err(_) => {
+                        return Err(McpServerValidationError::HandshakeTimeout(
+                            opts.handshake_timeout,
+                        ));
+                    }
+                    Ok(Ok(svc)) => svc,
+                    Ok(Err(e)) => {
+                        let tail = snapshot_tail(&stderr_buf).await;
+                        return Err(McpServerValidationError::HandshakeProtocol {
+                            message: format!("{e}"),
+                            stderr_tail: tail,
+                        });
+                    }
+                };
             let handshake_ms = start.elapsed().as_millis() as u64;
 
             // Get server info
@@ -670,8 +670,8 @@ async fn validate_stdio_server(
             };
             let tools_list_ms = tools_start.elapsed().as_millis() as u64;
 
-            // Cleanup: cancel the service
-            let _ = handshake_result.cancel().await;
+            // Cleanup: gracefully close transport
+            let _ = handshake_result.close().await;
 
             Ok(McpServerValidationSuccess {
                 info: server_info,

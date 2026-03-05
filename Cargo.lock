@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -38,12 +38,12 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures",
  "inventory",
  "json-patch",
- "rmcp 0.12.0",
+ "rmcp 1.1.0",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -63,11 +63,11 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "agentic-tools-core",
  "futures",
- "rmcp 0.12.0",
+ "rmcp 1.1.0",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "agentic-tools-core",
  "coding_agent_tools",
@@ -956,14 +956,14 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "claudecode"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
  "futures",
  "libc",
  "num_cpus",
- "rmcp 0.12.0",
+ "rmcp 1.1.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -2738,7 +2738,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -3577,7 +3577,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -4527,7 +4527,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -5138,9 +5138,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "0.12.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "528d42f8176e6e5e71ea69182b17d1d0a19a6b3b894b564678b74cd7cab13cfa"
+checksum = "d2cb14cb9278a12eae884c9f3c0cfeca2cc28f361211206424a1d7abed95f090"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5149,7 +5149,7 @@ dependencies = [
  "pastey",
  "pin-project-lite",
  "process-wrap",
- "rmcp-macros 0.12.0",
+ "rmcp-macros 1.1.0",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -5175,9 +5175,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "0.12.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3f81daaa494eb8e985c9462f7d6ce1ab05e5299f48aafd76cdd3d8b060e6f59"
+checksum = "6a02ea81d9482b07e1fe156ac7cf98b6823d51fb84531936a5e1cbb4eec31ad5"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -6054,7 +6054,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -6074,7 +6074,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-mcp-tools"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6091,7 +6091,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6833,7 +6833,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "agentic-tools-core",
  "anthropic-async",
