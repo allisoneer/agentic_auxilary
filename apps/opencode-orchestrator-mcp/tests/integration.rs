@@ -86,6 +86,7 @@ async fn unknown_command_errors_fast() {
         session_id: Some(session_id.clone()),
         command: Some("___definitely_not_a_real_command___".into()),
         message: Some("test argument".into()),
+        wait_for_activity: None,
     };
 
     let start = Instant::now();
@@ -121,6 +122,7 @@ async fn prompt_completes_and_extracts_response() {
         session_id: Some(session_id.clone()),
         command: None,
         message: Some("Say exactly 'hello' and nothing else.".into()),
+        wait_for_activity: None,
     };
 
     let result = timeout(Duration::from_secs(180), tool.run_impl(input))
@@ -160,6 +162,7 @@ async fn session_resumption_works() {
         session_id: Some(session_id.clone()),
         command: None,
         message: Some("Say 'first' and nothing else.".into()),
+        wait_for_activity: None,
     };
 
     let result1 = timeout(Duration::from_secs(180), tool.run_impl(input1))
@@ -173,6 +176,7 @@ async fn session_resumption_works() {
         session_id: Some(session_id.clone()),
         command: None,
         message: Some("Say 'second' and nothing else.".into()),
+        wait_for_activity: None,
     };
 
     let result2 = timeout(Duration::from_secs(180), tool.run_impl(input2))
@@ -221,6 +225,7 @@ async fn permission_request_returns_status() {
             session_id: Some(session_id.clone()),
             command: None,
             message: Some(prompt),
+            wait_for_activity: None,
         }),
     )
     .await
@@ -291,6 +296,7 @@ async fn permission_response_resumes_and_completes() {
             session_id: Some(session_id.clone()),
             command: None,
             message: Some(prompt),
+            wait_for_activity: None,
         }),
     )
     .await
@@ -407,6 +413,7 @@ async fn permission_reject_returns_none_with_warning() {
             session_id: Some(session_id.clone()),
             command: None,
             message: Some(prompt),
+            wait_for_activity: None,
         }),
     )
     .await

@@ -78,6 +78,7 @@ impl SequenceResponder {
 }
 
 /// Handle to a shared call counter for checking how many times a responder was invoked.
+#[derive(Clone)]
 pub struct CallCounter {
     inner: Arc<AtomicUsize>,
 }
@@ -86,6 +87,42 @@ impl CallCounter {
     /// Get the current call count.
     pub fn get(&self) -> usize {
         self.inner.load(Ordering::SeqCst)
+    }
+}
+
+/// Respond with one template until a call threshold is reached, then switch templates.
+#[derive(Clone)]
+pub struct SwitchAfterCallsResponder {
+    counter: CallCounter,
+    min_calls: usize,
+    before: ResponseTemplate,
+    after: ResponseTemplate,
+}
+
+impl SwitchAfterCallsResponder {
+    /// Create a responder that switches to `after` once `counter.get() >= min_calls`.
+    pub fn new(
+        counter: CallCounter,
+        min_calls: usize,
+        before: ResponseTemplate,
+        after: ResponseTemplate,
+    ) -> Self {
+        Self {
+            counter,
+            min_calls,
+            before,
+            after,
+        }
+    }
+}
+
+impl Respond for SwitchAfterCallsResponder {
+    fn respond(&self, _req: &Request) -> ResponseTemplate {
+        if self.counter.get() >= self.min_calls {
+            self.after.clone()
+        } else {
+            self.before.clone()
+        }
     }
 }
 
@@ -116,11 +153,27 @@ pub fn session_fixture(session_id: &str) -> serde_json::Value {
     })
 }
 
-/// Create a session status fixture.
-pub fn status_fixture(busy: bool, active_session_id: Option<&str>) -> serde_json::Value {
+/// Create a v2 session status fixture (idle map).
+pub fn status_v2_idle() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+/// Create a v2 session status fixture (busy map).
+pub fn status_v2_busy(session_id: &str) -> serde_json::Value {
     serde_json::json!({
-        "busy": busy,
-        "activeSessionId": active_session_id
+        session_id: { "type": "busy" }
+    })
+}
+
+/// Create a v2 session status fixture (retry map).
+pub fn status_v2_retry(session_id: &str, attempt: u64) -> serde_json::Value {
+    serde_json::json!({
+        session_id: {
+            "type": "retry",
+            "attempt": attempt,
+            "message": "retrying",
+            "next": 0
+        }
     })
 }
 

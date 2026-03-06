@@ -46,6 +46,7 @@ rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] 
 [dev-dependencies]
 pretty_assertions = "1.4"
 wiremock = "0.6"
+tokio = { workspace = true, features = ["test-util"] }
 
 # Enable test-support feature for integration tests
 [dev-dependencies.opencode-orchestrator-mcp]

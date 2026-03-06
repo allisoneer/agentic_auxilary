@@ -13,7 +13,7 @@ use opencode_rs::types::event::Event;
 use opencode_rs::types::message::{CommandRequest, PromptPart, PromptRequest};
 use opencode_rs::types::permission::PermissionReply as ApiPermissionReply;
 use opencode_rs::types::permission::PermissionReplyRequest;
-use opencode_rs::types::session::{CreateSessionRequest, SummarizeRequest};
+use opencode_rs::types::session::{CreateSessionRequest, SessionStatusInfo, SummarizeRequest};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -157,6 +157,8 @@ impl OrchestratorRunTool {
             ));
         }
 
+        let wait_for_activity = input.wait_for_activity.unwrap_or(false);
+
         // Lazy initialization: spawn server on first tool call
         let server = self
             .server
@@ -202,11 +204,11 @@ impl OrchestratorRunTool {
         // 2. Check if session is already idle (for resume-only case)
         let status = client
             .sessions()
-            .status()
+            .status_for(&session_id)
             .await
             .map_err(|e| ToolError::Internal(format!("Failed to get session status: {e}")))?;
 
-        let is_idle = !status.busy;
+        let is_idle = matches!(status, SessionStatusInfo::Idle);
 
         // 3. Check for pending permissions before doing anything else
         let pending_permissions = client
@@ -239,7 +241,7 @@ impl OrchestratorRunTool {
 
         // 4. If no message/command and session is idle, just return current state
         // Uses finalize_completed to get retry logic for message extraction
-        if message.is_none() && input.command.is_none() && is_idle {
+        if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
             let token_tracker = TokenTracker::new();
             return Self::finalize_completed(client, session_id, &token_tracker, vec![]).await;
         }
@@ -301,6 +303,8 @@ impl OrchestratorRunTool {
         // 7. Event loop: wait for completion or permission
         // Overall timeout to prevent infinite hangs (1 hour)
         let deadline = tokio::time::Instant::now() + Duration::from_secs(3600);
+        let inactivity_timeout = Duration::from_secs(300);
+        let mut last_activity_time = tokio::time::Instant::now();
 
         tracing::debug!(session_id = %session_id, "orchestrator_run: entering event loop");
         let mut token_tracker = TokenTracker::new();
@@ -312,7 +316,7 @@ impl OrchestratorRunTool {
 
         // Track whether this call is dispatching new work (command or message)
         // vs just resuming/monitoring an existing session
-        let dispatched_new_work = input.command.is_some() || message.is_some();
+        let dispatched_new_work = input.command.is_some() || message.is_some() || wait_for_activity;
 
         // Track whether we've observed the session as busy at least once.
         // This prevents completing immediately if we call run_impl on an already-idle
@@ -328,8 +332,8 @@ impl OrchestratorRunTool {
         // This handles the race where session completed between our initial status check
         // and SSE subscription becoming ready.
         if !dispatched_new_work
-            && let Ok(status) = client.sessions().status().await
-            && !status.busy
+            && let Ok(status) = client.sessions().status_for(&session_id).await
+            && matches!(status, SessionStatusInfo::Idle)
         {
             tracing::debug!(
                 session_id = %session_id,
@@ -341,7 +345,16 @@ impl OrchestratorRunTool {
 
         loop {
             // Check timeout before processing
-            if tokio::time::Instant::now() >= deadline {
+            let now = tokio::time::Instant::now();
+
+            if now.duration_since(last_activity_time) >= inactivity_timeout {
+                return Err(ToolError::Internal(format!(
+                    "Session idle timeout: no activity for 5 minutes (session_id={session_id}). \
+                     The session may still be running; use orchestrator_run(session_id=...) to check status."
+                )));
+            }
+
+            if now >= deadline {
                 return Err(ToolError::Internal(
                     "Session execution timed out after 1 hour. \
                      The session may still be running; use orchestrator_run with the session_id to check status."
@@ -394,6 +407,7 @@ impl OrchestratorRunTool {
                         }
 
                         Event::MessagePartUpdated { properties } => {
+                            last_activity_time = tokio::time::Instant::now();
                             // Message streaming means session is actively processing
                             observed_busy = true;
                             // Collect streaming text
@@ -464,27 +478,18 @@ impl OrchestratorRunTool {
 
                     // === 2. Session idle detection fallback (NEW) ===
                     // This is the key fix for race conditions. If SSE missed SessionIdle,
-                    // we detect completion via polling sessions().status().
-                    match client.sessions().status().await {
-                        Ok(status) => {
-                            // Check if this is our session and it's not busy
-                            let is_our_session = status.active_session_id.as_ref() == Some(&session_id);
-
-                            if status.busy && is_our_session {
-                                // OUR session is busy - record that we've observed it working
-                                observed_busy = true;
-                                tracing::trace!(
-                                    session_id = %session_id,
-                                    "our session is busy, waiting"
-                                );
-                            } else if status.busy {
-                                // Some other session is busy, not ours - just wait
-                                tracing::trace!(
-                                    session_id = %session_id,
-                                    active_session = ?status.active_session_id,
-                                    "different session is busy, waiting"
-                                );
-                            } else if !dispatched_new_work || observed_busy {
+                    // we detect completion via polling sessions().status_for(session_id).
+                    match client.sessions().status_for(&session_id).await {
+                        Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }) => {
+                            last_activity_time = tokio::time::Instant::now();
+                            observed_busy = true;
+                            tracing::trace!(
+                                session_id = %session_id,
+                                "our session is busy/retry, waiting"
+                            );
+                        }
+                        Ok(SessionStatusInfo::Idle) => {
+                            if !dispatched_new_work || observed_busy {
                                 // Session is idle AND either:
                                 // - We didn't dispatch new work (just monitoring), OR
                                 // - We did dispatch work and have seen it become busy at least once
@@ -492,21 +497,20 @@ impl OrchestratorRunTool {
                                 // This guards against completing before our work starts processing.
                                 tracing::debug!(
                                     session_id = %session_id,
-                                    is_our_session = is_our_session,
                                     dispatched_new_work = dispatched_new_work,
                                     observed_busy = observed_busy,
                                     "detected session idle via polling fallback"
                                 );
                                 return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
-                            } else {
-                                // Session is idle but we dispatched work and haven't seen busy yet.
-                                // This likely means our work hasn't started processing.
-                                // Wait for next poll tick.
-                                tracing::trace!(
-                                    session_id = %session_id,
-                                    "session idle but work may not have started yet, waiting"
-                                );
                             }
+
+                            // Session is idle but we dispatched work and haven't seen busy yet.
+                            // This likely means our work hasn't started processing.
+                            // Wait for next poll tick.
+                            tracing::trace!(
+                                session_id = %session_id,
+                                "session idle but work may not have started yet, waiting"
+                            );
                         }
                         Err(e) => {
                             // Log but continue - status check failure shouldn't block the loop
@@ -829,11 +833,13 @@ Parameters:
 
             // Now continue monitoring the session using orchestrator_run logic
             let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
+            let wait_for_activity = (!is_reject).then_some(true);
             let mut out = run_tool
                 .run_impl(OrchestratorRunInput {
                     session_id: Some(input.session_id),
                     command: None,
                     message: None,
+                    wait_for_activity,
                 })
                 .await?;
 

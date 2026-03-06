@@ -26,6 +26,11 @@ pub struct OrchestratorRunInput {
     /// For resume-only calls (checking status), can be omitted.
     #[serde(default)]
     pub message: Option<String>,
+
+    /// When true, do not early-exit simply because the session is currently idle.
+    /// Used by permission replies to wait for post-permission activity.
+    #[serde(default)]
+    pub wait_for_activity: Option<bool>,
 }
 
 /// Completion status for `orchestrator_run`.

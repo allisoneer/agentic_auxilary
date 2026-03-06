@@ -25,8 +25,8 @@ use wiremock::matchers::{method, path, path_regex};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use support::{
-    SequenceResponder, messages_fixture, permission_fixture, session_fixture, status_fixture,
-    test_orchestrator_server,
+    SequenceResponder, SwitchAfterCallsResponder, messages_fixture, permission_fixture,
+    session_fixture, status_v2_busy, status_v2_idle, status_v2_retry, test_orchestrator_server,
 };
 
 /// IT-BUG1: Completion should retry message extraction when first attempt returns no assistant text.
@@ -52,9 +52,9 @@ async fn it_bug1_completion_retries_messages_until_visible() {
     // Second call: poll interval check (observed_busy=true since our session is busy)
     // Third+ calls: idle (triggers finalize_completed)
     let status_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(status_fixture(true, Some(sid))), // initial check
-        ResponseTemplate::new(200).set_body_json(status_fixture(true, Some(sid))), // poll: sets observed_busy=true
-        ResponseTemplate::new(200).set_body_json(status_fixture(false, None)), // poll: idle, triggers completion
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // initial check
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // poll: sets observed_busy=true
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // poll: idle, triggers completion
     ]);
     Mock::given(method("GET"))
         .and(path("/session/status"))
@@ -107,6 +107,7 @@ async fn it_bug1_completion_retries_messages_until_visible() {
             session_id: Some(sid.into()),
             command: None,
             message: Some("test prompt".into()),
+            wait_for_activity: None,
         }),
     )
     .await
@@ -155,7 +156,7 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
     // GET /session/status - idle after rejection
     Mock::given(method("GET"))
         .and(path("/session/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(status_fixture(false, None)))
+        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
@@ -250,10 +251,16 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         .mount(&mock)
         .await;
 
-    // GET /session/status - idle after permission granted
+    // GET /session/status - starts idle (pre-fix early-exit #1), then busy, then idle.
+    let status_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // initial check: idle
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // later: busy
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // later: idle -> completion
+    ]);
+    let status_calls = status_seq.call_counter();
     Mock::given(method("GET"))
         .and(path("/session/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(status_fixture(false, None)))
+        .respond_with(status_seq)
         .mount(&mock)
         .await;
 
@@ -280,16 +287,19 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         .mount(&mock)
         .await;
 
-    // GET /session/s3/message - FIRST: no response yet, SECOND: has response
-    let messages_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(messages_fixture(sid, None)),
-        ResponseTemplate::new(200)
-            .set_body_json(messages_fixture(sid, Some("PERMISSION_GRANTED_RESPONSE"))),
-    ]);
-    let messages_call_counter = messages_seq.call_counter();
+    // Message endpoint: if we finalize after only one status call, no assistant message yet.
+    // After additional status polls (fixed path), return final assistant text.
+    let msg_before = ResponseTemplate::new(200).set_body_json(messages_fixture(sid, None));
+    let msg_after = ResponseTemplate::new(200)
+        .set_body_json(messages_fixture(sid, Some("PERMISSION_GRANTED_RESPONSE")));
     Mock::given(method("GET"))
         .and(path("/session/s3/message"))
-        .respond_with(messages_seq)
+        .respond_with(SwitchAfterCallsResponder::new(
+            status_calls.clone(),
+            2,
+            msg_before,
+            msg_after,
+        ))
         .mount(&mock)
         .await;
 
@@ -320,12 +330,122 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
     assert_eq!(
         result.response.as_deref(),
         Some("PERMISSION_GRANTED_RESPONSE"),
-        "Pre-fix: response is None; Post-fix: response is Some after retry"
+        "Pre-fix: response is None (early exit); Post-fix: response is Some after waiting"
     );
+}
+
+/// IT-BUG5: `respond_permission` should not return stale pre-permission text.
+///
+/// Pre-fix behavior: Returns `PRE_PERMISSION_TEXT` due to post-subscribe early-exit (#2).
+/// Post-fix behavior: Waits for post-permission activity and returns `POST_PERMISSION_TEXT`.
+#[tokio::test]
+async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permission_text() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+    let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
+    let sid = "s5";
+    let perm_id = "perm-999";
+
+    // GET /session/s5
+    Mock::given(method("GET"))
+        .and(path("/session/s5"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    // GET /permission - pending permission before reply, then empty after
+    let perm_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            &["/tmp/out.txt"],
+        )])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(perm_seq)
+        .mount(&mock)
+        .await;
+
+    // POST /permission/{id}/reply
+    Mock::given(method("POST"))
+        .and(path_regex(r"/permission/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .mount(&mock)
+        .await;
+
+    // GET /session/status
+    // 1) busy  (avoid early-exit #1)
+    // 2) idle  (pre-fix early-exit #2)
+    // 3) retry (fixed path observes activity)
+    // 4) idle  (fixed path finalizes)
+    let status_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ResponseTemplate::new(200).set_body_json(status_v2_retry(sid, 1)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    let status_calls = status_seq.call_counter();
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_seq)
+        .mount(&mock)
+        .await;
+
+    // GET /session/s5/message
+    // Before enough status calls, return stale pre-permission text.
+    // After waiting, return post-permission text.
+    let msg_pre = ResponseTemplate::new(200)
+        .set_body_json(messages_fixture(sid, Some("PRE_PERMISSION_TEXT")));
+    let msg_post = ResponseTemplate::new(200)
+        .set_body_json(messages_fixture(sid, Some("POST_PERMISSION_TEXT")));
+    Mock::given(method("GET"))
+        .and(path("/session/s5/message"))
+        .respond_with(SwitchAfterCallsResponder::new(
+            status_calls.clone(),
+            3,
+            msg_pre,
+            msg_post,
+        ))
+        .mount(&mock)
+        .await;
+
+    // GET /event - delay SSE so polling drives completion
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    // Act
+    let result = timeout(
+        Duration::from_secs(10),
+        respond_tool.call(
+            RespondPermissionInput {
+                session_id: sid.into(),
+                reply: PermissionReply::Once,
+                message: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("timed out")
+    .expect("tool error");
+
+    // Assert
     assert!(
-        messages_call_counter.get() >= 2,
-        "expected retry on messages.list"
+        matches!(result.status, RunStatus::Completed),
+        "expected Completed status, got {:?}",
+        result.status
     );
+    assert_eq!(result.response.as_deref(), Some("POST_PERMISSION_TEXT"));
 }
 
 /// IT-BUG4: Command dispatch should retry on transport-level timeout.
@@ -363,9 +483,9 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
     // GET /session/status - busy initially, then idle (after command succeeds)
     // Multiple busy responses to handle initial check + polling
     let status_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(status_fixture(true, Some(sid))), // initial check
-        ResponseTemplate::new(200).set_body_json(status_fixture(true, Some(sid))), // poll: sets observed_busy=true
-        ResponseTemplate::new(200).set_body_json(status_fixture(false, None)), // poll: idle, triggers completion
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // initial check
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // poll: sets observed_busy=true
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // poll: idle, triggers completion
     ]);
     Mock::given(method("GET"))
         .and(path("/session/status"))
@@ -431,6 +551,7 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
             session_id: Some(sid.into()),
             command: Some("test_cmd".into()),
             message: Some("test args".into()),
+            wait_for_activity: None,
         }),
     )
     .await
