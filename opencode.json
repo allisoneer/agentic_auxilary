@@ -28,8 +28,7 @@
       "mode": "primary",
       "permission": {
         "*": "deny",
-        "orchestrator_*": "allow",
-        "tools_ask_*": "allow"
+        "orchestrator_*": "allow"
       }
     },
     "Bash": {
