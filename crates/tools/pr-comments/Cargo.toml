@@ -23,11 +23,11 @@ futures = "0.3"
 tokio = { workspace = true }
 
 # GitHub API client
-octocrab = { version = "0.41", features = ["timeout"] }
+octocrab = { version = "0.49", features = ["timeout"] }
 gh-config = "0.5.1"
 
 # Git operations
-git2 = { version = "0.18", features = ["vendored-openssl"] }
+git2 = { version = "0.20", features = ["vendored-openssl"] }
 
 # Serialization
 serde = { workspace = true }
@@ -36,7 +36,7 @@ schemars = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
-thiserror = "1"
+thiserror = { workspace = true }
 
 # CLI
 clap = { workspace = true, features = ["env"] }
