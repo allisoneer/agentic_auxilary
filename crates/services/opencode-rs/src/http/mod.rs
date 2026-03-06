@@ -84,7 +84,7 @@ impl HttpClient {
         directory: Option<PathBuf>,
         http: Option<ReqClient>,
     ) -> Result<Self> {
-        let timeout = Duration::from_secs(300);
+        let timeout = Duration::from_secs(1800);
         let inner = match http {
             Some(client) => client,
             None => ReqClient::builder()

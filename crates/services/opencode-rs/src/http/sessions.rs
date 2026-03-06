@@ -5,8 +5,8 @@
 use crate::error::Result;
 use crate::http::{HttpClient, encode_path_segment};
 use crate::types::session::{
-    CreateSessionRequest, RevertRequest, Session, SessionDiff, SessionStatus, ShareInfo,
-    SummarizeRequest, TodoItem, UpdateSessionRequest,
+    CreateSessionRequest, RevertRequest, Session, SessionDiff, SessionStatus, SessionStatusInfo,
+    SessionStatusResponse, ShareInfo, SummarizeRequest, TodoItem, UpdateSessionRequest,
 };
 use reqwest::Method;
 
@@ -105,9 +105,24 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn status(&self) -> Result<SessionStatus> {
-        self.http
+        let response: SessionStatusResponse = self
+            .http
             .request_json(Method::GET, "/session/status", None)
-            .await
+            .await?;
+        Ok(response.into_legacy_summary())
+    }
+
+    /// Get status for a specific session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn status_for(&self, session_id: &str) -> Result<SessionStatusInfo> {
+        let response: SessionStatusResponse = self
+            .http
+            .request_json(Method::GET, "/session/status", None)
+            .await?;
+        Ok(response.status_for(session_id))
     }
 
     /// Get children of a session (forked sessions).
