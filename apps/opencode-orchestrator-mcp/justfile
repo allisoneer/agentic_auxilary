@@ -1,0 +1,39 @@
+# Justfile for opencode-orchestrator-mcp
+
+default:
+    @just --list
+
+# Integration tests must run single-threaded to avoid server contention
+integration-test:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
+
+integration-test-verbose:
+    RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
+    cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
+
+integration-test-one TEST:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture
+
+check:
+    cargo fmt -p opencode-orchestrator-mcp -- --check
+    cargo clippy -p opencode-orchestrator-mcp --all-targets -- -D warnings
+
+test:
+    cargo test -p opencode-orchestrator-mcp --lib
+
+build:
+    cargo build -p opencode-orchestrator-mcp
+
+# Run permission-specific integration tests (requires opencode binary)
+integration-test-permissions:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
+        --test integration -- --ignored --nocapture --test-threads=1 \
+        permission
+
+# Run permission tests with debug logging
+integration-test-permissions-debug:
+    RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
+        --test integration -- --ignored --nocapture --test-threads=1 \
+        permission

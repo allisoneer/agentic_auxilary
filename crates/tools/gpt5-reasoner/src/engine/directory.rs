@@ -87,6 +87,7 @@ pub fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<V
                 path.to_string_lossy().to_string()
             } else {
                 std::env::current_dir()
+                    .and_then(|cwd| std::fs::canonicalize(&cwd).or(Ok(cwd)))
                     .map(|cwd| cwd.join(path))
                     .unwrap_or_else(|_| path.to_path_buf())
                     .to_string_lossy()

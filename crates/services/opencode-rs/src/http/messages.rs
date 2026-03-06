@@ -58,23 +58,19 @@ impl MessagesApi {
             .await
     }
 
-    /// Send a prompt asynchronously (returns immediately).
+    /// Send a prompt asynchronously (returns immediately with 204 No Content).
     ///
     /// Unlike `prompt`, this endpoint returns immediately and the response
-    /// is streamed via SSE events.
+    /// is streamed via SSE events. The server returns HTTP 204 with no body.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn prompt_async(
-        &self,
-        session_id: &str,
-        req: &PromptRequest,
-    ) -> Result<PromptResponse> {
+    pub async fn prompt_async(&self, session_id: &str, req: &PromptRequest) -> Result<()> {
         let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
+            .request_empty(
                 Method::POST,
                 &format!("/session/{sid}/prompt_async"),
                 Some(body),
@@ -84,14 +80,17 @@ impl MessagesApi {
 
     /// Execute a command in a session.
     ///
+    /// Uses transport-level retry for transient network failures (connect/timeout).
+    /// This is safe because command dispatch is idempotent at the session level.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the request fails.
+    /// Returns an error if the request fails after retries.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
         let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::POST, &format!("/session/{sid}/command"), Some(body))
+            .post_json_with_retry(&format!("/session/{sid}/command"), Some(body))
             .await
     }
 
@@ -198,11 +197,10 @@ mod tests {
     async fn test_prompt_async() {
         let mock_server = MockServer::start().await;
 
+        // Server returns 204 No Content (fire-and-forget pattern)
         Mock::given(method("POST"))
             .and(path("/session/s1/prompt_async"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "messageId": "m123"
-            })))
+            .respond_with(ResponseTemplate::new(204))
             .mount(&mock_server)
             .await;
 
@@ -214,7 +212,7 @@ mod tests {
         .unwrap();
 
         let messages = MessagesApi::new(http);
-        let result = messages
+        messages
             .prompt_async(
                 "s1",
                 &PromptRequest {
@@ -234,7 +232,6 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result.message_id, Some("m123".to_string()));
     }
 
     #[tokio::test]
@@ -262,7 +259,7 @@ mod tests {
                 "s1",
                 &CommandRequest {
                     command: "test_command".to_string(),
-                    args: None,
+                    arguments: String::new(),
                 },
             )
             .await
@@ -510,7 +507,7 @@ mod tests {
                 "missing",
                 &CommandRequest {
                     command: "test".to_string(),
-                    args: None,
+                    arguments: String::new(),
                 },
             )
             .await;

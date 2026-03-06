@@ -50,26 +50,6 @@ pub struct FindResponse {
     pub extra: serde_json::Value,
 }
 
-// ==================== Provider API Responses ====================
-
-/// Response from OAuth callback endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OAuthCallbackResponse {
-    /// Whether the operation succeeded.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ok: Option<bool>,
-    /// Message from server.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Response from set auth endpoint.
-pub type SetAuthResponse = OAuthCallbackResponse;
-
 // ==================== MCP API Responses ====================
 
 /// Response from MCP action endpoints (add, `auth_callback`, authenticate, connect, disconnect).
@@ -163,24 +143,6 @@ pub struct UpdatePartResponse {
     pub extra: serde_json::Value,
 }
 
-// ==================== Permission API Responses ====================
-
-/// Response from permission reply endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionReplyResponse {
-    /// Session ID.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-    /// Request ID that was replied to.
-    pub request_id: String,
-    /// The reply that was sent.
-    pub reply: crate::types::permission::PermissionReply,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,14 +174,6 @@ mod tests {
         let json = r#"{"results":[{"file":"test.rs","line":10}]}"#;
         let resp: FindResponse = serde_json::from_str(json).unwrap();
         assert!(resp.results.is_some());
-    }
-
-    #[test]
-    fn test_oauth_callback_response_deserialize() {
-        let json = r#"{"ok":true,"message":"Authentication successful"}"#;
-        let resp: OAuthCallbackResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.ok, Some(true));
-        assert_eq!(resp.message, Some("Authentication successful".to_string()));
     }
 
     #[test]
@@ -270,17 +224,5 @@ mod tests {
         let json = r#"{"delta":"Hello"}"#;
         let resp: UpdatePartResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.delta, Some("Hello".to_string()));
-    }
-
-    #[test]
-    fn test_permission_reply_response_deserialize() {
-        let json = r#"{"sessionId":"sess-123","requestId":"req-456","reply":"always"}"#;
-        let resp: PermissionReplyResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.session_id, Some("sess-123".to_string()));
-        assert_eq!(resp.request_id, "req-456");
-        assert_eq!(
-            resp.reply,
-            crate::types::permission::PermissionReply::Always
-        );
     }
 }

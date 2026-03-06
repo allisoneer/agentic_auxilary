@@ -1,0 +1,57 @@
+[package]
+name = "opencode-orchestrator-mcp"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "MCP server for orchestrator-style agents to spawn and manage OpenCode sessions"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+
+[features]
+default = []
+# Enable test utilities like OrchestratorServer::from_client for wiremock tests
+test-support = []
+
+[package.metadata.repo]
+role = "app"
+family = "agentic-tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = false
+napi = false
+
+[[bin]]
+name = "opencode-orchestrator-mcp"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+futures = "0.3"
+opencode_rs = { workspace = true, features = ["server"] }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "sync"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# TLS backend - explicit dependency for CryptoProvider initialization
+# Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
+# in without explicit provider selection (due to Cargo's additive features)
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+wiremock = "0.6"
+tokio = { workspace = true, features = ["test-util"] }
+
+# Enable test-support feature for integration tests
+[dev-dependencies.opencode-orchestrator-mcp]
+path = "."
+features = ["test-support"]
+
+[lints]
+workspace = true

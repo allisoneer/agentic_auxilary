@@ -34,7 +34,7 @@ impl Default for ClientBuilder {
         Self {
             base_url: "http://127.0.0.1:4096".to_string(),
             directory: None,
-            timeout: Duration::from_secs(300), // 5 min for long AI requests
+            timeout: Duration::from_secs(1800), // 30 min for long-running tool calls
         }
     }
 }
@@ -44,7 +44,7 @@ impl ClientBuilder {
     ///
     /// Default settings:
     /// - Base URL: `http://127.0.0.1:4096`
-    /// - Timeout: 300 seconds (5 minutes)
+    /// - Timeout: 1800 seconds (30 minutes)
     pub fn new() -> Self {
         Self::default()
     }
@@ -357,7 +357,7 @@ mod tests {
     fn test_client_builder_defaults() {
         let builder = ClientBuilder::new();
         assert_eq!(builder.base_url, "http://127.0.0.1:4096");
-        assert_eq!(builder.timeout, Duration::from_secs(300));
+        assert_eq!(builder.timeout, Duration::from_secs(1800));
         assert!(builder.directory.is_none());
     }
 

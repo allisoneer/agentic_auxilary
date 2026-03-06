@@ -18,9 +18,6 @@ pub enum ReasonerError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("XML error: {0}")]
-    Xml(String), // quick-xml errors not always stable types; wrap as string
-
     #[error("OpenAI client error: {0}")]
     OpenAI(#[from] async_openai::error::OpenAIError),
 
@@ -44,10 +41,9 @@ impl From<ReasonerError> for ToolError {
             ReasonerError::MissingFile(_) => ToolError::NotFound(e.to_string()),
             ReasonerError::NonUtf8(_) => ToolError::InvalidInput(e.to_string()),
             ReasonerError::TokenLimit { .. } => ToolError::InvalidInput(e.to_string()),
-            ReasonerError::Template(_)
-            | ReasonerError::Yaml(_)
-            | ReasonerError::Xml(_)
-            | ReasonerError::Json(_) => ToolError::InvalidInput(e.to_string()),
+            ReasonerError::Template(_) | ReasonerError::Yaml(_) | ReasonerError::Json(_) => {
+                ToolError::InvalidInput(e.to_string())
+            }
             ReasonerError::OpenAI(_) => ToolError::External(e.to_string()),
             ReasonerError::Io(_) => ToolError::Internal(e.to_string()),
         }

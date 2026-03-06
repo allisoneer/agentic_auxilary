@@ -68,9 +68,9 @@ impl PtyApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn delete(&self, id: &str) -> Result<()> {
+    pub async fn delete(&self, id: &str) -> Result<bool> {
         self.http
-            .request_empty(Method::DELETE, &format!("/pty/{id}"), None)
+            .request_json::<bool>(Method::DELETE, &format!("/pty/{id}"), None)
             .await
     }
 }
