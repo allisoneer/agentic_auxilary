@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 
 // ============================================================================
-// orchestrator_run
+// run
 // ============================================================================
 
-/// Input for the `orchestrator_run` tool.
+/// Input for the `run` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct OrchestratorRunInput {
     /// Existing session ID to resume. Omit to create a new session.
@@ -33,7 +33,7 @@ pub struct OrchestratorRunInput {
     pub wait_for_activity: Option<bool>,
 }
 
-/// Completion status for `orchestrator_run`.
+/// Completion status for `run`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunStatus {
@@ -43,7 +43,7 @@ pub enum RunStatus {
     PermissionRequired,
 }
 
-/// Output from the `orchestrator_run` tool.
+/// Output from the `run` tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct OrchestratorRunOutput {
     /// Session ID for future resume calls
@@ -113,6 +113,8 @@ impl TextFormat for OrchestratorRunOutput {
             if let Some(req_id) = &self.permission_request_id {
                 let _ = writeln!(out, "Request ID: {req_id}");
             }
+            // NOTE: Keep the `orchestrator_*` prefix in user-facing instructions because OpenCode
+            // displays tool names as `<server>_<tool>` (server name is "orchestrator").
             out.push_str("\nTo respond: orchestrator_respond_permission(session_id, reply)\n");
             out.push_str("  reply options: once | always | reject\n");
         }
@@ -133,10 +135,10 @@ impl TextFormat for OrchestratorRunOutput {
 }
 
 // ============================================================================
-// orchestrator_list_sessions
+// list_sessions
 // ============================================================================
 
-/// Input for the `orchestrator_list_sessions` tool.
+/// Input for the `list_sessions` tool.
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 pub struct ListSessionsInput {
     /// Maximum number of sessions to return (default: 20)
@@ -155,7 +157,7 @@ pub struct SessionSummary {
     pub updated: Option<i64>,
 }
 
-/// Output from the `orchestrator_list_sessions` tool.
+/// Output from the `list_sessions` tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ListSessionsOutput {
     /// List of sessions
@@ -182,10 +184,10 @@ impl TextFormat for ListSessionsOutput {
 }
 
 // ============================================================================
-// orchestrator_list_commands
+// list_commands
 // ============================================================================
 
-/// Input for the `orchestrator_list_commands` tool.
+/// Input for the `list_commands` tool.
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 pub struct ListCommandsInput {}
 
@@ -199,7 +201,7 @@ pub struct CommandInfo {
     pub description: Option<String>,
 }
 
-/// Output from the `orchestrator_list_commands` tool.
+/// Output from the `list_commands` tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ListCommandsOutput {
     /// List of available commands
@@ -225,16 +227,17 @@ impl TextFormat for ListCommandsOutput {
             out.push_str("  (no commands available)\n");
         }
 
+        // NOTE: Keep prefixed name for OpenCode UX (client-visible tool name).
         out.push_str("\nUse orchestrator_run(command=<name>, message=<args>) to execute\n");
         out
     }
 }
 
 // ============================================================================
-// orchestrator_respond_permission
+// respond_permission
 // ============================================================================
 
-/// Input for the `orchestrator_respond_permission` tool.
+/// Input for the `respond_permission` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct RespondPermissionInput {
     /// Session ID with pending permission

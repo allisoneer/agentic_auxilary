@@ -20,7 +20,7 @@ use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 
 // ============================================================================
-// orchestrator_run
+// run
 // ============================================================================
 
 /// Tool for starting or resuming `OpenCode` sessions.
@@ -172,7 +172,7 @@ impl OrchestratorRunTool {
             command = ?input.command,
             message = ?message,
             session_id = ?input.session_id,
-            "orchestrator_run: starting"
+            "run: starting"
         );
 
         // 1. Resolve session: validate existing or create new
@@ -181,7 +181,7 @@ impl OrchestratorRunTool {
             client.sessions().get(&sid).await.map_err(|e| {
                 if e.is_not_found() {
                     ToolError::InvalidInput(format!(
-                        "Session '{sid}' not found. Use orchestrator_list_sessions to discover sessions, \
+                        "Session '{sid}' not found. Use list_sessions to discover sessions, \
                          or omit session_id to create a new session."
                     ))
                 } else {
@@ -199,7 +199,7 @@ impl OrchestratorRunTool {
             session.id
         };
 
-        tracing::info!(session_id = %session_id, "orchestrator_run: session resolved");
+        tracing::info!(session_id = %session_id, "run: session resolved");
 
         // 2. Check if session is already idle (for resume-only case)
         let status = client
@@ -225,7 +225,7 @@ impl OrchestratorRunTool {
             tracing::info!(
                 session_id = %session_id,
                 permission_type = %perm.permission,
-                "orchestrator_run: pending permission found"
+                "run: pending permission found"
             );
             return Ok(OrchestratorRunOutput {
                 session_id,
@@ -306,7 +306,7 @@ impl OrchestratorRunTool {
         let inactivity_timeout = Duration::from_secs(300);
         let mut last_activity_time = tokio::time::Instant::now();
 
-        tracing::debug!(session_id = %session_id, "orchestrator_run: entering event loop");
+        tracing::debug!(session_id = %session_id, "run: entering event loop");
         let mut token_tracker = TokenTracker::new();
         let mut partial_response = String::new();
         let warnings = Vec::new();
@@ -350,14 +350,14 @@ impl OrchestratorRunTool {
             if now.duration_since(last_activity_time) >= inactivity_timeout {
                 return Err(ToolError::Internal(format!(
                     "Session idle timeout: no activity for 5 minutes (session_id={session_id}). \
-                     The session may still be running; use orchestrator_run(session_id=...) to check status."
+                     The session may still be running; use run(session_id=...) to check status."
                 )));
             }
 
             if now >= deadline {
                 return Err(ToolError::Internal(
                     "Session execution timed out after 1 hour. \
-                     The session may still be running; use orchestrator_run with the session_id to check status."
+                     The session may still be running; use run with the session_id to check status."
                         .into(),
                 ));
             }
@@ -388,7 +388,7 @@ impl OrchestratorRunTool {
                             tracing::info!(
                                 session_id = %session_id,
                                 permission_type = %properties.request.permission,
-                                "orchestrator_run: permission requested"
+                                "run: permission requested"
                             );
                             return Ok(OrchestratorRunOutput {
                                 session_id,
@@ -423,7 +423,7 @@ impl OrchestratorRunTool {
                             tracing::error!(
                                 session_id = %session_id,
                                 error = %error_msg,
-                                "orchestrator_run: session error"
+                                "run: session error"
                             );
                             return Err(ToolError::Internal(format!("Session error: {error_msg}")));
                         }
@@ -539,7 +539,7 @@ impl OrchestratorRunTool {
                             tracing::debug!(
                                 session_id = %session_id,
                                 command = ?command_name_for_logging,
-                                "orchestrator_run: command dispatch completed successfully"
+                                "run: command dispatch completed successfully"
                             );
                             command_task = None;
                         }
@@ -548,7 +548,7 @@ impl OrchestratorRunTool {
                                 session_id = %session_id,
                                 command = ?command_name_for_logging,
                                 error = %e,
-                                "orchestrator_run: command dispatch failed"
+                                "run: command dispatch failed"
                             );
                             return Err(ToolError::Internal(format!(
                                 "Failed to execute command '{}': {e}",
@@ -560,7 +560,7 @@ impl OrchestratorRunTool {
                                 session_id = %session_id,
                                 command = ?command_name_for_logging,
                                 error = %join_err,
-                                "orchestrator_run: command task panicked"
+                                "run: command task panicked"
                             );
                             return Err(ToolError::Internal(format!("Command task panicked: {join_err}")));
                         }
@@ -577,12 +577,12 @@ impl OrchestratorRunTool {
 impl Tool for OrchestratorRunTool {
     type Input = OrchestratorRunInput;
     type Output = OrchestratorRunOutput;
-    const NAME: &'static str = "orchestrator_run";
+    const NAME: &'static str = "run";
     const DESCRIPTION: &'static str = r#"Start or resume an OpenCode session. Optionally run a named command or send a raw prompt.
 
 Returns when:
 - status=completed: Session finished executing. Response contains final assistant output.
-- status=permission_required: Session needs permission approval. Call orchestrator_respond_permission to continue.
+- status=permission_required: Session needs permission approval. Call respond_permission to continue.
 
 Parameters:
 - session_id: Existing session to resume (omit to create new)
@@ -590,10 +590,10 @@ Parameters:
 - message: Prompt text or $ARGUMENTS for command template
 
 Examples:
-- New session with prompt: orchestrator_run(message="explain this code")
-- New session with command: orchestrator_run(command="research", message="caching strategies")
-- Resume session: orchestrator_run(session_id="...", message="continue")
-- Check status: orchestrator_run(session_id="...")"#;
+- New session with prompt: run(message="explain this code")
+- New session with command: run(command="research", message="caching strategies")
+- Resume session: run(session_id="...", message="continue")
+- Check status: run(session_id="...")"#;
 
     fn call(
         &self,
@@ -606,7 +606,7 @@ Examples:
 }
 
 // ============================================================================
-// orchestrator_list_sessions
+// list_sessions
 // ============================================================================
 
 /// Tool for listing available `OpenCode` sessions in the current directory.
@@ -625,7 +625,7 @@ impl ListSessionsTool {
 impl Tool for ListSessionsTool {
     type Input = ListSessionsInput;
     type Output = ListSessionsOutput;
-    const NAME: &'static str = "orchestrator_list_sessions";
+    const NAME: &'static str = "list_sessions";
     const DESCRIPTION: &'static str =
         "List available OpenCode sessions in the current directory context.";
 
@@ -667,7 +667,7 @@ impl Tool for ListSessionsTool {
 }
 
 // ============================================================================
-// orchestrator_list_commands
+// list_commands
 // ============================================================================
 
 /// Tool for listing available `OpenCode` commands that can be executed.
@@ -686,9 +686,8 @@ impl ListCommandsTool {
 impl Tool for ListCommandsTool {
     type Input = ListCommandsInput;
     type Output = ListCommandsOutput;
-    const NAME: &'static str = "orchestrator_list_commands";
-    const DESCRIPTION: &'static str =
-        "List available OpenCode commands that can be used with orchestrator_run.";
+    const NAME: &'static str = "list_commands";
+    const DESCRIPTION: &'static str = "List available OpenCode commands that can be used with run.";
 
     fn call(
         &self,
@@ -725,7 +724,7 @@ impl Tool for ListCommandsTool {
 }
 
 // ============================================================================
-// orchestrator_respond_permission
+// respond_permission
 // ============================================================================
 
 /// Tool for responding to permission requests from `OpenCode` sessions.
@@ -747,7 +746,7 @@ impl RespondPermissionTool {
 impl Tool for RespondPermissionTool {
     type Input = RespondPermissionInput;
     type Output = RespondPermissionOutput;
-    const NAME: &'static str = "orchestrator_respond_permission";
+    const NAME: &'static str = "respond_permission";
     const DESCRIPTION: &'static str = r#"Respond to a permission request from an OpenCode session.
 
 After responding, continues monitoring the session and returns when complete or when another permission is required.
@@ -831,7 +830,7 @@ Parameters:
                 .await
                 .map_err(|e| ToolError::Internal(format!("Failed to reply to permission: {e}")))?;
 
-            // Now continue monitoring the session using orchestrator_run logic
+            // Now continue monitoring the session using run logic
             let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
             let wait_for_activity = (!is_reject).then_some(true);
             let mut out = run_tool
@@ -889,4 +888,18 @@ pub fn build_registry(server: &Arc<OnceCell<OrchestratorServer>>) -> ToolRegistr
         .register::<ListCommandsTool, ()>(ListCommandsTool::new(Arc::clone(server)))
         .register::<RespondPermissionTool, ()>(RespondPermissionTool::new(Arc::clone(server)))
         .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agentic_tools_core::Tool;
+
+    #[test]
+    fn tool_names_are_short() {
+        assert_eq!(<OrchestratorRunTool as Tool>::NAME, "run");
+        assert_eq!(<ListSessionsTool as Tool>::NAME, "list_sessions");
+        assert_eq!(<ListCommandsTool as Tool>::NAME, "list_commands");
+        assert_eq!(<RespondPermissionTool as Tool>::NAME, "respond_permission");
+    }
 }

@@ -128,7 +128,7 @@ async fn prompt_completes_and_extracts_response() {
     let result = timeout(Duration::from_secs(180), tool.run_impl(input))
         .await
         .expect("timed out waiting for normal completion")
-        .expect("orchestrator_run returned error");
+        .expect("run returned error");
 
     cleanup_session(&server, &session_id).await;
 
@@ -230,7 +230,7 @@ async fn permission_request_returns_status() {
     )
     .await
     .expect("timed out waiting for permission request - possible hang")
-    .expect("orchestrator_run returned error");
+    .expect("run returned error");
 
     // Verify we got a permission request, not completion
     assert!(
@@ -301,7 +301,7 @@ async fn permission_response_resumes_and_completes() {
     )
     .await
     .expect("timed out waiting for initial permission request")
-    .expect("orchestrator_run failed");
+    .expect("run failed");
 
     assert!(
         matches!(result1.status, RunStatus::PermissionRequired),
@@ -418,7 +418,7 @@ async fn permission_reject_returns_none_with_warning() {
     )
     .await
     .expect("timed out waiting for permission request")
-    .expect("orchestrator_run failed");
+    .expect("run failed");
 
     assert!(
         matches!(result.status, RunStatus::PermissionRequired),

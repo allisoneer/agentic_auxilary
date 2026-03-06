@@ -12,6 +12,7 @@ Guidance for Claude Code when working with this repository.
 - `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
 - `agentic-tools-registry` (lib) - `crates/agentic-tools/registry/`
 - `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
+- `opencode-orchestrator-mcp` (app) - `apps/opencode-orchestrator-mcp/`
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 

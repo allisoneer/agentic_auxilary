@@ -1,10 +1,10 @@
 //! MCP server for orchestrator-style agents to spawn and manage `OpenCode` sessions.
 //!
 //! This binary exposes four tools for orchestrator agents:
-//! - `orchestrator_run` - start or resume an `OpenCode` session
-//! - `orchestrator_list_sessions` - list existing sessions
-//! - `orchestrator_list_commands` - discover available `OpenCode` commands
-//! - `orchestrator_respond_permission` - reply to permission requests
+//! - `run` - start or resume an `OpenCode` session
+//! - `list_sessions` - list existing sessions
+//! - `list_commands` - discover available `OpenCode` commands
+//! - `respond_permission` - reply to permission requests
 
 use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
 use std::sync::Arc;

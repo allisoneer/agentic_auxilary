@@ -192,6 +192,13 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "opencode-orchestrator-mcp"
+changelog_path = "apps/opencode-orchestrator-mcp/CHANGELOG.md"
+git_tag_name = "opencode-orchestrator-mcp-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "agentic-tools-napi"
 changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
 git_tag_name = "agentic-tools-napi-v{{ version }}"
