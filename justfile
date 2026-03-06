@@ -20,6 +20,12 @@ nextest_args := if output_mode == "minimal" { "--status-level fail --failure-out
 
 nextest_profile := if output_mode == "minimal" { "minimal" } else if ci == "true" { "ci" } else { env("NEXTEST_PROFILE", "default") }
 
+# BEGIN:xtask:autogen justfile:mcp-servers
+
+MCP_SERVERS := "agentic-mcp opencode-orchestrator-mcp"
+
+# END:xtask:autogen
+
 default: help
 
 help:
@@ -331,35 +337,9 @@ mcp-inspector method="tools/list":
     echo "Launching MCP Inspector with method: {{ method }}"
     npx -y @modelcontextprotocol/inspector --cli --transport stdio --method "{{ method }}" "$BIN"
 
-# CI-friendly MCP schema validation
-# TODO(1): This stuff needs to be quieter/less verbose.
-
-# Builds agentic-mcp and validates with MCP Inspector, failing on any errors
+# CI-friendly MCP schema validation (validates all MCP servers in MCP_SERVERS)
 mcp-test:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Building agentic-mcp..."
-    cargo build -p agentic-mcp
-    BIN="./target/debug/agentic-mcp"
-
-    echo "Validating schemas with MCP Inspector..."
-    OUTPUT=$(npx -y @modelcontextprotocol/inspector --cli --transport stdio --method tools/list "$BIN" 2>&1) || true
-
-    # Check for the fatal error pattern
-    if echo "$OUTPUT" | grep -q "Failed to list tools"; then
-      echo "MCP Inspector validation FAILED:"
-      echo "$OUTPUT"
-      exit 1
-    fi
-
-    # Check for schema errors (nullable without type, etc.)
-    if echo "$OUTPUT" | grep -qi "cannot be used without"; then
-      echo "MCP Inspector found schema errors:"
-      echo "$OUTPUT"
-      exit 1
-    fi
-
-    echo "MCP schema validation passed"
+    {{ exec }}tools/mcp-validate.sh {{ MCP_SERVERS }}
 
 # ------------------------------------------------------------------------------
 # PR Description Management
