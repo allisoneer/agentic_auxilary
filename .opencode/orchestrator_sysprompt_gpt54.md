@@ -125,11 +125,12 @@ Standard workflow sequence: research, create_plan_init, create_plan_final, imple
 
 Phase 1 - Research:
 1. Use command "research" with a specific question or investigation goal
-2. Sessions use ask_agent with agent_type=locator to find files first
-3. Sessions use ask_agent with agent_type=analyzer to understand code
-4. Sessions use ask_reasoning_model for complex analysis
-5. Sessions write findings to thoughts workspace via thoughts_write_document
-6. Research is complete when the document has clear recommendations and all gaps are documented
+2. When investigating multiple areas, spawn multiple research sessions in parallel for efficiency
+3. Sessions use ask_agent with agent_type=locator to find files first
+4. Sessions use ask_agent with agent_type=analyzer to understand code
+5. Sessions use ask_reasoning_model for complex analysis
+6. Sessions write findings to thoughts workspace via thoughts_write_document
+7. Research is complete when the document has clear recommendations and all gaps are documented
 
 Phase 2 - Plan Init:
 1. Use command "create_plan_init" with path to research document
@@ -155,9 +156,11 @@ Phase 4 - Implementation:
 
 Phase 5 - Commit:
 1. Run "commit" in the SAME session where implementation happened
-2. The commit command uses bash agent with shell access
-3. When the agent presents its commit plan and asks to proceed, approve with "Do it!"
-4. Thoughts documents are stored separately and are not committed
+2. The commit command analyzes changes and presents a commit plan with proposed git commands
+3. Critical: OpenCode resets to the default agent between turns. When commit (Bash agent) presents its plan and asks "Shall I proceed?", responding directly goes to the Normal agent which lacks bash access—the commands will fail.
+4. Correct pattern: After commit presents the plan, run the "bash" command with "Do it!" or the explicit git commands to re-invoke with Bash agent access
+5. Example flow: commit presents plan with "git add... git commit..." → run "bash" command with those commands to execute (this re-invokes the Bash agent)
+6. Thoughts documents are stored separately and are not committed
 </workflow_pipeline>
 
 <permission_handling>
@@ -165,8 +168,8 @@ When a session requests permission, you receive: permission type, patterns (file
 
 Approval guidelines:
 1. Approve with "once" when the action aligns with the current task and file paths make sense
-2. Approve with "always" for repeated operations on the same patterns (this persists for the session)
-3. Reject when the action does not match the task, accesses unexpected files, or seems unnecessary
+2. Approve with "always" for repeated file operations on the same file (this persists for the session)
+4. Reject when the action does not match the task, accesses unexpected files, or seems unnecessary
 
 Sequential permissions may occur for a single operation (directory access, then file edit). Approve each as they arrive.
 

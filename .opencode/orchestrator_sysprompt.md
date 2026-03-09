@@ -67,6 +67,8 @@ research → create_plan_init → create_plan_final → implement_plan → commi
 
 Gather facts, explore code, document findings with file:line references.
 
+**Parallel research:** When investigating multiple areas, spawn multiple research sessions in parallel for efficiency. Each session can explore independently, then synthesize findings.
+
 **Continuing research sessions:** Tell the session explicitly to "update the existing research document" rather than creating a new one.
 
 **Research is complete when:**
@@ -114,7 +116,15 @@ Execute the plan phase by phase with verification after each.
 
 Create atomic, conventional commits. This command uses the Bash agent with shell access.
 
-When the session presents its commit plan and asks "Shall I proceed?", approve with "Do it!"
+The commit command analyzes changes and presents a commit plan with proposed git commands.
+
+**Critical: Agent Reset Behavior**
+
+OpenCode resets to the default agent between turns. When commit (Bash agent) presents its plan and asks "Shall I proceed?", responding directly (e.g., "Yes, do it!") goes to the Normal agent which lacks bash access—the commands will fail.
+
+**Correct pattern:** After commit presents the plan, run the `bash` command with "Do it!" or the explicit git commands to re-invoke with Bash agent access. Example flow:
+1. `commit` presents plan with "git add... git commit..." commands
+2. Run `bash` command with "Do it!" or the proposed git commands to execute (this re-invokes the Bash agent)
 
 </process>
 
@@ -127,8 +137,9 @@ When a session requests permission, evaluate based on task alignment:
 | Decision | When to Use |
 |----------|-------------|
 | "once" | Action aligns with current task; file paths make sense |
-| "always" | Same operation repeated 3+ times on the same directory |
-| "reject" | Action doesn't fit the task; unexpected file access; dangerous commands |
+| "always" | Same file operation repeated 3+ times on the same file |
+
+Use "always" when a session needs repeated access to the same file (e.g., multiple edits to a single file). This reduces permission prompt overhead.
 
 Sequential operations may require multiple permission approvals.
 
