@@ -47,6 +47,10 @@ impl TokenTracker {
                     self.provider_id = Some(pid.clone());
                     self.model_id = Some(mid.clone());
                     self.context_limit = context_limit_lookup(pid, mid);
+                    // Recompute threshold if this event didn't carry tokens
+                    if properties.info.tokens.is_none() {
+                        self.recompute_flag();
+                    }
                 }
 
                 // Extract token usage
@@ -115,6 +119,74 @@ impl TokenTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opencode_rs::types::event::{MessagePartEventProps, MessageUpdatedProps};
+    use opencode_rs::types::message::{MessageInfo, MessageTime};
+
+    fn mk_token_usage(input: u64) -> TokenUsage {
+        TokenUsage {
+            total: None,
+            input,
+            output: 0,
+            reasoning: 0,
+            cache: None,
+            extra: serde_json::Value::Null,
+        }
+    }
+
+    fn mk_message_updated(
+        provider_id: Option<&str>,
+        model_id: Option<&str>,
+        tokens: Option<TokenUsage>,
+    ) -> Event {
+        Event::MessageUpdated {
+            properties: MessageUpdatedProps {
+                info: MessageInfo {
+                    id: "msg-1".to_string(),
+                    session_id: None,
+                    role: "assistant".to_string(),
+                    time: MessageTime {
+                        created: 0,
+                        completed: None,
+                    },
+                    agent: None,
+                    variant: None,
+                    format: None,
+                    model: None,
+                    system: None,
+                    tools: vec![],
+                    parent_id: None,
+                    model_id: model_id.map(str::to_string),
+                    provider_id: provider_id.map(str::to_string),
+                    path: None,
+                    cost: None,
+                    tokens,
+                    structured: None,
+                    finish: None,
+                    extra: serde_json::Value::Null,
+                },
+                extra: serde_json::Value::Null,
+            },
+        }
+    }
+
+    fn mk_message_part_step_finish(tokens: Option<TokenUsage>) -> Event {
+        Event::MessagePartUpdated {
+            properties: Box::new(MessagePartEventProps {
+                session_id: None,
+                message_id: None,
+                index: None,
+                part: Some(Part::StepFinish {
+                    id: None,
+                    reason: "done".to_string(),
+                    snapshot: None,
+                    cost: 0.0,
+                    tokens,
+                }),
+                delta: None,
+                extra: serde_json::Value::Null,
+            }),
+        }
+    }
 
     #[test]
     fn triggers_compaction_at_80_percent() {
@@ -160,5 +232,73 @@ mod tests {
         tracker.latest_input_tokens = Some(500);
 
         assert_eq!(tracker.usage_ratio(), Some(0.5));
+    }
+
+    #[test]
+    fn observe_event_tokens_first_limit_later_triggers_compaction() {
+        let lookup = |_: &str, _: &str| Some(1000);
+        let mut tracker = TokenTracker::new();
+
+        // Tokens arrive first via StepFinish, but no context_limit yet
+        let ev_tokens = mk_message_part_step_finish(Some(mk_token_usage(800)));
+        tracker.observe_event(&ev_tokens, lookup);
+        assert!(!tracker.compaction_needed); // Can't trigger without limit
+
+        // Model info arrives later without tokens
+        let ev_limit = mk_message_updated(Some("provider-1"), Some("model-1"), None);
+        tracker.observe_event(&ev_limit, lookup);
+
+        // Should now trigger because 800/1000 = 80%
+        assert!(tracker.compaction_needed);
+    }
+
+    #[test]
+    fn observe_event_limit_first_tokens_later_triggers_compaction() {
+        let lookup = |_: &str, _: &str| Some(1000);
+        let mut tracker = TokenTracker::new();
+
+        // Model info arrives first
+        let ev_limit = mk_message_updated(Some("provider-1"), Some("model-1"), None);
+        tracker.observe_event(&ev_limit, lookup);
+        assert!(!tracker.compaction_needed); // No tokens yet
+
+        // Tokens arrive later
+        let ev_tokens = mk_message_part_step_finish(Some(mk_token_usage(800)));
+        tracker.observe_event(&ev_tokens, lookup);
+
+        // Should trigger because 800/1000 = 80%
+        assert!(tracker.compaction_needed);
+    }
+
+    #[test]
+    fn observe_event_combined_message_updated_event_triggers_compaction() {
+        let lookup = |_: &str, _: &str| Some(1000);
+        let mut tracker = TokenTracker::new();
+
+        // Single event with both model info and tokens
+        let ev = mk_message_updated(
+            Some("provider-1"),
+            Some("model-1"),
+            Some(mk_token_usage(800)),
+        );
+        tracker.observe_event(&ev, lookup);
+
+        // Should trigger because 800/1000 = 80%
+        assert!(tracker.compaction_needed);
+    }
+
+    #[test]
+    fn observe_event_tokens_without_any_limit_does_not_trigger_compaction() {
+        // Lookup won't be called since no model info event arrives
+        let lookup = |_: &str, _: &str| Some(1000);
+        let mut tracker = TokenTracker::new();
+
+        // Tokens arrive but no model info ever comes
+        let ev_tokens = mk_message_part_step_finish(Some(mk_token_usage(10_000)));
+        tracker.observe_event(&ev_tokens, lookup);
+
+        // Should NOT trigger because context_limit is None
+        assert!(!tracker.compaction_needed);
+        assert_eq!(tracker.context_limit, None);
     }
 }
