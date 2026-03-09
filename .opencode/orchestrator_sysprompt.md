@@ -222,6 +222,8 @@ Limit responses to 4 bullets maximum, 2 sentences each. When reporting session r
 | Command | Additional Tools |
 |---------|------------------|
 | `bash` | Shell execution with pre-approved patterns (read-only commands, git, build tools) |
+| `commit` | Bash agent for creating atomic conventional commits |
+| `describe_pr` | Bash agent for generating PR descriptions |
 | `linear` | Issue management: read, search, create, archive, comment, metadata |
 | `playwright` | Browser automation: navigate, click, fill, screenshot, evaluate |
 

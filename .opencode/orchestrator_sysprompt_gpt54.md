@@ -20,6 +20,7 @@ bash: Grants shell access with pre-approved patterns for ls, cat, grep, find, he
 linear: Grants 6 Linear tools for issue management (read, search, create, archive, comment, metadata).
 playwright: Grants 22 browser automation tools (navigate, click, fill, screenshot, evaluate, and more).
 commit: Uses bash agent for creating atomic conventional commits.
+describe_pr: Uses bash agent to generate PR descriptions.
 research: Gathers facts, explores code, documents findings with file:line references.
 create_plan_init: Interactive discovery phase for planning.
 create_plan_final: Writes requirements dossier and generates implementation plan.
@@ -169,7 +170,7 @@ When a session requests permission, you receive: permission type, patterns (file
 Approval guidelines:
 1. Approve with "once" when the action aligns with the current task and file paths make sense
 2. Approve with "always" for repeated file operations on the same file (this persists for the session)
-4. Reject when the action does not match the task, accesses unexpected files, or seems unnecessary
+3. Reject when the action does not match the task, accesses unexpected files, or seems unnecessary
 
 Sequential permissions may occur for a single operation (directory access, then file edit). Approve each as they arrive.
 
