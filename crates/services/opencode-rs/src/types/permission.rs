@@ -29,15 +29,9 @@ where
     match value {
         serde_json::Value::Object(map) => {
             // Extract messageID and callID (OpenCode uses uppercase ID suffix)
-            let message_id = map
-                .get("messageID")
-                .or_else(|| map.get("messageID"))
-                .and_then(|v| v.as_str());
+            let message_id = map.get("messageID").and_then(|v| v.as_str());
 
-            let call_id = map
-                .get("callID")
-                .or_else(|| map.get("callID"))
-                .and_then(|v| v.as_str());
+            let call_id = map.get("callID").and_then(|v| v.as_str());
 
             match (message_id, call_id) {
                 (Some(mid), Some(cid)) => Ok(Some(PermissionToolRef {

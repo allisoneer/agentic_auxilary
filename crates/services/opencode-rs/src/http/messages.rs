@@ -114,7 +114,7 @@ mod tests {
     use crate::http::HttpConfig;
     use crate::types::message::{CommandRequest, PromptPart, ShellRequest};
     use std::time::Duration;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -200,6 +200,11 @@ mod tests {
         // Server returns 204 No Content (fire-and-forget pattern)
         Mock::given(method("POST"))
             .and(path("/session/s1/prompt_async"))
+            .and(body_json(serde_json::json!({
+                "parts": [
+                    { "type": "text", "text": "Hello async" }
+                ]
+            })))
             .respond_with(ResponseTemplate::new(204))
             .mount(&mock_server)
             .await;
