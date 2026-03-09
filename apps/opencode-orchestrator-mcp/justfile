@@ -1,4 +1,7 @@
-# Justfile for opencode-orchestrator-mcp
+# Crate-specific recipes for opencode-orchestrator-mcp
+#
+# These commands are specific to this crate and don't generalize to the workspace.
+# For standard operations, use the root justfile: `just crate-check opencode-orchestrator-mcp`
 
 default:
     @just --list
@@ -13,17 +16,7 @@ integration-test-verbose:
     cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
 
 integration-test-one TEST:
-    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture
-
-check:
-    cargo fmt -p opencode-orchestrator-mcp -- --check
-    cargo clippy -p opencode-orchestrator-mcp --all-targets -- -D warnings
-
-test:
-    cargo test -p opencode-orchestrator-mcp --lib
-
-build:
-    cargo build -p opencode-orchestrator-mcp
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture --test-threads=1
 
 # Run permission-specific integration tests (requires opencode binary)
 integration-test-permissions:

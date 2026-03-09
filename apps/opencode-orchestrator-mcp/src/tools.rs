@@ -170,7 +170,8 @@ impl OrchestratorRunTool {
 
         tracing::debug!(
             command = ?input.command,
-            message = ?message,
+            has_message = message.is_some(),
+            message_len = message.as_ref().map(String::len),
             session_id = ?input.session_id,
             "run: starting"
         );
