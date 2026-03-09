@@ -23,12 +23,24 @@
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
-    "Orchestrator": {
-      "prompt": "{file:./.opencode/sysprompt.md}",
+    "OrchestratorClaude": {
+      "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
+      "model": "anthropic/claude-opus-4-5-20251101",
       "mode": "primary",
       "permission": {
         "*": "deny",
-        "orchestrator_*": "allow"
+        "orchestrator_*": "allow",
+        "read": "allow"
+      }
+    },
+    "OrchestratorOpenAI": {
+      "prompt": "{file:./.opencode/orchestrator_sysprompt_gpt54.md}",
+      "model": "openai/gpt-5.4",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "orchestrator_*": "allow",
+        "read": "allow"
       }
     },
     "Bash": {
