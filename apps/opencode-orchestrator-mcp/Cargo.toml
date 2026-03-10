@@ -51,6 +51,7 @@ tokio = { workspace = true, features = ["test-util"] }
 # Enable test-support feature for integration tests
 [dev-dependencies.opencode-orchestrator-mcp]
 path = "."
+version = "0.1.0"
 features = ["test-support"]
 
 [lints]
