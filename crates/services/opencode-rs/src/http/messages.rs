@@ -7,6 +7,7 @@ use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::{CommandResponse, PromptResponse, ShellResponse};
 use crate::types::message::{CommandRequest, Message, PromptRequest, ShellRequest};
 use reqwest::Method;
+use uuid::Uuid;
 
 /// Messages API client.
 #[derive(Clone)]
@@ -81,14 +82,21 @@ impl MessagesApi {
     /// Execute a command in a session.
     ///
     /// Uses transport-level retry for transient network failures (connect/timeout).
-    /// This is safe because command dispatch is idempotent at the session level.
+    /// To make retries safe, the SDK ensures each dispatch includes a stable `message_id`
+    /// (generated UUID if not provided) so the server can deduplicate repeated requests.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails after retries.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
         let sid = encode_path_segment(session_id);
-        let body = serde_json::to_value(req)?;
+
+        let mut req = req.clone();
+        if req.message_id.is_none() {
+            req.message_id = Some(Uuid::new_v4().to_string());
+        }
+
+        let body = serde_json::to_value(&req)?;
         self.http
             .post_json_with_retry(&format!("/session/{sid}/command"), Some(body))
             .await
@@ -265,6 +273,7 @@ mod tests {
                 &CommandRequest {
                     command: "test_command".to_string(),
                     arguments: String::new(),
+                    message_id: None,
                 },
             )
             .await
@@ -513,6 +522,7 @@ mod tests {
                 &CommandRequest {
                     command: "test".to_string(),
                     arguments: String::new(),
+                    message_id: None,
                 },
             )
             .await;

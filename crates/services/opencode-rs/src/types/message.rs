@@ -676,6 +676,9 @@ pub struct CommandRequest {
     pub command: String,
     /// Command arguments (passed as `$ARGUMENTS` for template expansion).
     pub arguments: String,
+    /// Client-generated message ID (used for idempotency/deduplication).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
 }
 
 /// Request to execute a shell command in a session.

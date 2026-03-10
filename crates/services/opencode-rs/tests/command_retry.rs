@@ -51,6 +51,7 @@ async fn command_retries_on_timeout() {
     let req = CommandRequest {
         command: "test".into(),
         arguments: String::new(),
+        message_id: None,
     };
 
     let result = client.messages().command("s1", &req).await;
@@ -68,4 +69,13 @@ async fn command_retries_on_timeout() {
         "expected 2 command requests (1 timeout + 1 success), got {}",
         command_requests.len()
     );
+
+    // Verify both retry attempts share identical messageId
+    let b1: serde_json::Value = serde_json::from_slice(&command_requests[0].body).unwrap();
+    let b2: serde_json::Value = serde_json::from_slice(&command_requests[1].body).unwrap();
+
+    let mid1 = b1.get("messageId").and_then(|v| v.as_str()).unwrap();
+    let mid2 = b2.get("messageId").and_then(|v| v.as_str()).unwrap();
+    assert!(!mid1.is_empty());
+    assert_eq!(mid1, mid2, "expected stable messageId across retries");
 }

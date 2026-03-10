@@ -28,6 +28,7 @@ async fn default_timeout_allows_301s_command_response() {
     let req = CommandRequest {
         command: "test".into(),
         arguments: String::new(),
+        message_id: None,
     };
 
     let result = client.messages().command("s1", &req).await;
@@ -35,4 +36,9 @@ async fn default_timeout_allows_301s_command_response() {
         result.is_ok(),
         "request should not time out with 1800s default, got: {result:?}"
     );
+
+    // Verify messageId was sent
+    let received = server.received_requests().await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
+    assert!(body.get("messageId").and_then(|v| v.as_str()).is_some());
 }
