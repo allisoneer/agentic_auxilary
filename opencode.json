@@ -162,7 +162,43 @@
           "options": {
             "thinking": {
               "type": "enabled",
-              "budgetTokens": 36000
+              "budgetTokens": 32000
+            }
+          },
+          "variants": {
+            "high": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 48000
+              }
+            },
+            "max": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 64000
+              }
+            }
+          }
+        },
+        "claude-opus-4-5-20251101": {
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 32000
+            }
+          },
+          "variants": {
+            "high": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 48000
+              }
+            },
+            "max": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 64000
+              }
             }
           }
         }

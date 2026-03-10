@@ -228,6 +228,7 @@
       "remote": "https://github.com/alexliesenfeld/httpmock",
       "description": "HTTP mocking library with built-in recording/playback support for conformance testing"
     },
-    "https://github.com/openai/codex"
+    "https://github.com/openai/codex",
+    "git@github.com:allisoneer/vidya_game.git"
   ]
 }

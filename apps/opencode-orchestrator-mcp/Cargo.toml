@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "MCP server for orchestrator-style agents to spawn and manage OpenCode sessions"
 repository = "https://github.com/allisoneer/agentic_auxilary"
-publish = false
+publish = true
 
 [features]
 default = []
