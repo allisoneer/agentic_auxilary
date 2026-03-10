@@ -1,6 +1,6 @@
-//! Example showing how to spawn and manage an OpenCode server.
+//! Example showing how to spawn and manage an `OpenCode` server.
 //!
-//! Run with: cargo run --example managed_server --features server
+//! Run with: `cargo run --example managed_server --features server`
 //!
 //! This example requires the `opencode` binary to be installed and in PATH.
 
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check health
     let health = client.misc().health().await?;
-    println!("Server health: {:?}", health);
+    println!("Server health: {health:?}");
 
     // List any existing sessions
     let sessions = client.sessions().list().await?;

@@ -630,7 +630,7 @@ mod tests {
             "type": "permission.asked",
             "properties": {
                 "id": "req-123",
-                "sessionId": "sess-456",
+                "sessionID": "sess-456",
                 "permission": "file.write",
                 "patterns": ["**/*.rs"]
             }

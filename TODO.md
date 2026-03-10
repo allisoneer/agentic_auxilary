@@ -114,6 +114,11 @@ a standard output formatter? Or should pagination messaging be part of the MCP r
 `xtask-sync` and thus out of date things aren't really caught
 until the next cycle of PR. That's obviouslly unideal but I'm
 unsure what the best fix would be.
+- Need way to select different branches for references. For the
+  time latest branch isn't the same as latest release of a
+project. Either than or tooling for interacting with cargo cache
+in a clean/streamlined abstraction. Probably both would be ideal
+long term.
 
 ## To validate:
 - ENG-397: Linear MCP should return issue URL after creation. May already be implemented - needs verification.

@@ -1,0 +1,32 @@
+# Crate-specific recipes for opencode-orchestrator-mcp
+#
+# These commands are specific to this crate and don't generalize to the workspace.
+# For standard operations, use the root justfile: `just crate-check opencode-orchestrator-mcp`
+
+default:
+    @just --list
+
+# Integration tests must run single-threaded to avoid server contention
+integration-test:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
+
+integration-test-verbose:
+    RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
+    cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
+
+integration-test-one TEST:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture --test-threads=1
+
+# Run permission-specific integration tests (requires opencode binary)
+integration-test-permissions:
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
+        --test integration -- --ignored --nocapture --test-threads=1 \
+        permission
+
+# Run permission tests with debug logging
+integration-test-permissions-debug:
+    RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
+        --test integration -- --ignored --nocapture --test-threads=1 \
+        permission
