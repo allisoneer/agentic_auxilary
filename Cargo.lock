@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "agentic-tools-core",
  "coding_agent_tools",
@@ -109,7 +109,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-utils"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "reqwest 0.13.2",
  "thiserror 2.0.18",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "anthropic-async"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "backon",
@@ -953,7 +953,7 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "claudecode"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "chrono",
  "dirs",
@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -1604,7 +1604,7 @@ dependencies = [
 
 [[package]]
 name = "exa-async"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "backon",
@@ -2714,7 +2714,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -3516,7 +3516,7 @@ dependencies = [
 
 [[package]]
 name = "linear-queries"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "cynic",
@@ -3528,7 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "linear-schema"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cynic",
  "cynic-codegen",
@@ -3536,7 +3536,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -4092,7 +4092,7 @@ dependencies = [
 
 [[package]]
 name = "opencode_rs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "backon",
@@ -4504,7 +4504,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -6007,7 +6007,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -6027,7 +6027,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-mcp-tools"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6044,7 +6044,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6804,7 +6804,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "agentic-tools-core",
  "anthropic-async",
