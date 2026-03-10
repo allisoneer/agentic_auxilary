@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.2.6] - 2026-03-10
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: coding_agent_tools, gpt5_reasoner, linear-tools, pr_comments, web-retrieval, thoughts-mcp-tools
 ## [0.2.5] - 2026-03-05
 
 ### ⚙️  Miscellaneous

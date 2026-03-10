@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [0.5.1] - 2026-03-10
+
+### ⚙️  Miscellaneous
+- *(deps)* Upgrade 13 dependencies to latest versions
 ## [0.5.0] - 2026-02-26
 
 ### ⛰️  Features
