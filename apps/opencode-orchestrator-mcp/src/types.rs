@@ -117,6 +117,7 @@ impl TextFormat for OrchestratorRunOutput {
             // displays tool names as `<server>_<tool>` (server name is "orchestrator").
             out.push_str("\nTo respond: orchestrator_respond_permission(session_id, reply)\n");
             out.push_str("  reply options: once | always | reject\n");
+            out.push_str("  tip: include permission_request_id=<Request ID> when provided\n");
         }
 
         // Response content
@@ -243,6 +244,11 @@ pub struct RespondPermissionInput {
     /// Session ID with pending permission
     pub session_id: String,
 
+    /// Permission request ID to respond to (returned by `run` when `status=permission_required`).
+    /// Recommended when present to avoid replying to the wrong request.
+    #[serde(default)]
+    pub permission_request_id: Option<String>,
+
     /// How to respond: "once", "always", or "reject"
     pub reply: PermissionReply,
 
@@ -332,6 +338,7 @@ mod tests {
         assert!(text.contains("src/**/*.rs"));
         assert!(text.contains("perm-789"));
         assert!(text.contains("orchestrator_respond_permission"));
+        assert!(text.contains("permission_request_id"));
     }
 
     #[test]

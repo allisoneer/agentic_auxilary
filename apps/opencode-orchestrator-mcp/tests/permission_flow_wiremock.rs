@@ -199,6 +199,7 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
         respond_tool.call(
             RespondPermissionInput {
                 session_id: sid.into(),
+                permission_request_id: None,
                 reply: PermissionReply::Reject,
                 message: None,
             },
@@ -309,6 +310,7 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         respond_tool.call(
             RespondPermissionInput {
                 session_id: sid.into(),
+                permission_request_id: None,
                 reply: PermissionReply::Once,
                 message: None,
             },
@@ -429,6 +431,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         respond_tool.call(
             RespondPermissionInput {
                 session_id: sid.into(),
+                permission_request_id: None,
                 reply: PermissionReply::Once,
                 message: None,
             },

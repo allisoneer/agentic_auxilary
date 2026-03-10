@@ -334,6 +334,7 @@ async fn permission_response_resumes_and_completes() {
             respond_tool.call(
                 RespondPermissionInput {
                     session_id: current_session_id.clone(),
+                    permission_request_id: None,
                     reply: PermissionReply::Once,
                     message: Some(format!("test approval round {attempts}")),
                 },
@@ -432,6 +433,7 @@ async fn permission_reject_returns_none_with_warning() {
         respond_tool.call(
             RespondPermissionInput {
                 session_id: session_id.clone(),
+                permission_request_id: None,
                 reply: PermissionReply::Reject,
                 message: None,
             },

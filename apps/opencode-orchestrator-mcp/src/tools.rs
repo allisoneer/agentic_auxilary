@@ -268,6 +268,7 @@ impl OrchestratorRunTool {
                 let req = CommandRequest {
                     command: cmd_name,
                     arguments: cmd_arguments,
+                    message_id: None,
                 };
 
                 cmd_client
@@ -772,22 +773,60 @@ Parameters:
             let client = server.client();
 
             // Find the pending permission for this session
-            let pending = client
+            let mut pending = client
                 .permissions()
                 .list()
                 .await
                 .map_err(|e| ToolError::Internal(format!("Failed to list permissions: {e}")))?;
 
-            let perm = pending
-                .into_iter()
-                .find(|p| p.session_id == input.session_id)
-                .ok_or_else(|| {
+            let perm = if let Some(req_id) = input.permission_request_id.as_deref() {
+                let idx = pending.iter().position(|p| p.id == req_id).ok_or_else(|| {
                     ToolError::InvalidInput(format!(
-                        "No pending permission found for session '{}'. \
-                         The permission may have already been responded to.",
+                        "No pending permission found with id '{req_id}'. \
+                         (session_id='{}')",
                         input.session_id
                     ))
                 })?;
+
+                let perm = pending.remove(idx);
+
+                if perm.session_id != input.session_id {
+                    return Err(ToolError::InvalidInput(format!(
+                        "Permission request '{req_id}' belongs to session '{}', not '{}'.",
+                        perm.session_id, input.session_id
+                    )));
+                }
+
+                perm
+            } else {
+                let mut perms: Vec<_> = pending
+                    .into_iter()
+                    .filter(|p| p.session_id == input.session_id)
+                    .collect();
+
+                match perms.as_slice() {
+                    [] => {
+                        return Err(ToolError::InvalidInput(format!(
+                            "No pending permission found for session '{}'. \
+                             The permission may have already been responded to.",
+                            input.session_id
+                        )));
+                    }
+                    [_single] => perms.swap_remove(0),
+                    multiple => {
+                        let ids = multiple
+                            .iter()
+                            .map(|p| p.id.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        return Err(ToolError::InvalidInput(format!(
+                            "Multiple pending permissions found for session '{}': {ids}. \
+                             Please retry with permission_request_id (returned by run).",
+                            input.session_id
+                        )));
+                    }
+                }
+            };
 
             // Track if this is a rejection for post-processing
             let is_reject = matches!(input.reply, PermissionReply::Reject);
