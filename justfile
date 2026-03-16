@@ -110,6 +110,10 @@ thoughts_sync:
 cp src dst:
     {{ exec }}cp "{{ src }}" "{{ dst }}"
 
+# Remove a file
+rm path:
+    rm -f "{{ path }}"
+
 # Create a directory (with parents)
 mkdir path:
     {{ exec }}mkdir -p "{{ path }}"
@@ -316,6 +320,14 @@ git-files patterns="":
     fi
 
     git --no-pager ls-files -- {{ patterns }}
+
+# ------------------------------------------------------------------------------
+# Schema Generation
+# ------------------------------------------------------------------------------
+
+# Generate agentic.schema.json from Rust types
+schema-generate:
+    cargo run -p agentic-bin -- config schema > agentic.schema.json
 
 # ------------------------------------------------------------------------------
 # MCP Inspector Recipes

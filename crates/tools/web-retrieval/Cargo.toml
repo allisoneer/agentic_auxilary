@@ -10,6 +10,7 @@ repository = "https://github.com/allisoneer/agentic_auxilary"
 dist = false
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 exa-async = { workspace = true }
 anthropic-async = { workspace = true }

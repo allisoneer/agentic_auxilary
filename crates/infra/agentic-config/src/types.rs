@@ -1,8 +1,8 @@
 //! Configuration types for the agentic tools ecosystem.
 //!
 //! The root type is [`AgenticConfig`], which contains namespaced sub-configs
-//! for different concerns: thoughts workspace, external services, model selection,
-//! and logging.
+//! for different concerns: subagents, reasoning, services, orchestrator,
+//! web retrieval, CLI tools, and logging.
 
 use schemars::JsonSchema;
 use secrecy::SecretString;
@@ -10,18 +10,15 @@ use serde::{Deserialize, Serialize};
 
 /// Root configuration for all agentic tools.
 ///
-/// This is the unified configuration that gets loaded from `agentic.json` files.
+/// This is the unified configuration that gets loaded from `agentic.toml` files.
 /// All fields use `#[serde(default)]` so partial configs work correctly.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct AgenticConfig {
     /// Optional JSON Schema URL for IDE autocomplete support.
-    /// When present, editors can validate and provide completions.
+    /// In TOML: `"$schema" = "file://./agentic.schema.json"`
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
-
-    /// Thoughts workspace configuration (directories, mounts, references).
-    pub thoughts: ThoughtsConfig,
 
     /// Tool-specific config for coding-agent-tools subagents.
     pub subagents: SubagentsConfig,
@@ -29,121 +26,211 @@ pub struct AgenticConfig {
     /// Tool-specific config for gpt5-reasoner.
     pub reasoning: ReasoningConfig,
 
-    /// External service configurations (Anthropic, Exa, etc.).
+    /// External service configurations (Anthropic, Exa, OpenCode, Linear, GitHub).
     pub services: ServicesConfig,
+
+    /// Orchestrator session and timing configuration.
+    pub orchestrator: OrchestratorConfig,
+
+    /// Web retrieval tool configuration.
+    pub web_retrieval: WebRetrievalConfig,
+
+    /// CLI tools (grep, glob, ls) configuration.
+    pub cli_tools: CliToolsConfig,
 
     /// Logging and diagnostics configuration.
     pub logging: LoggingConfig,
 }
 
-/// Configuration for the thoughts workspace system.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct ThoughtsConfig {
-    /// Directory names within the repo for each mount type.
-    pub mount_dirs: ThoughtsMountDirs,
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBAGENTS CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
 
-    /// Optional thoughts repository mount (personal workspace).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thoughts_mount: Option<ThoughtsMount>,
-
-    /// Context mounts (team-shared documentation repositories).
-    pub context_mounts: Vec<ContextMount>,
-
-    /// Reference repositories (read-only external code).
-    pub references: Vec<ReferenceEntry>,
-}
-
-/// Directory names for the three-space architecture.
+/// Configuration for coding-agent-tools subagents (ask_agent tool).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
-pub struct ThoughtsMountDirs {
-    /// Directory for personal thoughts workspace.
-    pub thoughts: String,
-
-    /// Directory for team-shared context.
-    pub context: String,
-
-    /// Directory for read-only references.
-    pub references: String,
+pub struct SubagentsConfig {
+    /// Model for Locator subagent (fast discovery). Uses Claude CLI format.
+    pub locator_model: String,
+    /// Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
+    pub analyzer_model: String,
 }
 
-impl Default for ThoughtsMountDirs {
+impl Default for SubagentsConfig {
     fn default() -> Self {
         Self {
-            thoughts: "thoughts".into(),
-            context: "context".into(),
-            references: "references".into(),
+            locator_model: "claude-haiku-4-5".into(),
+            analyzer_model: "claude-sonnet-4-6".into(),
         }
     }
 }
 
-/// Personal thoughts repository mount configuration.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// REASONING CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
+
+/// Configuration for gpt5-reasoner tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ThoughtsMount {
-    /// Git remote URL for the thoughts repository.
-    pub remote: String,
-
-    /// Optional subpath within the repository.
+#[serde(default)]
+pub struct ReasoningConfig {
+    /// OpenRouter model ID for optimizer step.
+    pub optimizer_model: String,
+    /// OpenRouter model ID for executor/reasoner step.
+    pub executor_model: String,
+    /// Optional reasoning effort level: low, medium, high, xhigh.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub subpath: Option<String>,
-
-    /// Sync strategy for this mount.
-    #[serde(default)]
-    pub sync: SyncStrategy,
+    pub reasoning_effort: Option<String>,
+    /// Optional API base URL override for reasoning service.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_base_url: Option<String>,
+    /// Optional token limit for reasoning requests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_limit: Option<u32>,
 }
 
-/// Context mount configuration (team-shared documentation).
+impl Default for ReasoningConfig {
+    fn default() -> Self {
+        Self {
+            optimizer_model: "anthropic/claude-sonnet-4.6".into(),
+            executor_model: "openai/gpt-5.2".into(),
+            reasoning_effort: None,
+            api_base_url: None,
+            token_limit: None,
+        }
+    }
+}
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// ORCHESTRATOR CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
+
+/// Configuration for opencode-orchestrator-mcp.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ContextMount {
-    /// Git remote URL.
-    pub remote: String,
+#[serde(default)]
+pub struct OrchestratorConfig {
+    /// Maximum session duration in seconds (default: 3600 = 1 hour).
+    pub session_deadline_secs: u64,
+    /// Inactivity timeout in seconds before session ends (default: 300 = 5 minutes).
+    pub inactivity_timeout_secs: u64,
+    /// Context compaction threshold as fraction 0.0-1.0 (default: 0.80).
+    pub compaction_threshold: f64,
+}
 
-    /// Optional subpath within the repository.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subpath: Option<String>,
+impl Default for OrchestratorConfig {
+    fn default() -> Self {
+        Self {
+            session_deadline_secs: 3600,
+            inactivity_timeout_secs: 300,
+            compaction_threshold: 0.80,
+        }
+    }
+}
 
-    /// Mount path (directory name under context/).
-    pub mount_path: String,
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// WEB RETRIEVAL CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
 
-    /// Sync strategy for this mount.
+/// Configuration for web-retrieval tools (web_fetch, web_search).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct WebRetrievalConfig {
+    /// HTTP request timeout in seconds (default: 30).
+    pub request_timeout_secs: u64,
+    /// Default maximum bytes to fetch (default: 5MB).
+    pub default_max_bytes: u64,
+    /// Default number of search results (default: 8).
+    pub default_search_results: u32,
+    /// Maximum number of search results allowed (default: 20).
+    pub max_search_results: u32,
+    /// Summarizer configuration for Haiku-based summarization.
+    pub summarizer: WebSummarizerConfig,
+}
+
+impl Default for WebRetrievalConfig {
+    fn default() -> Self {
+        Self {
+            request_timeout_secs: 30,
+            default_max_bytes: 5 * 1024 * 1024, // 5MB
+            default_search_results: 8,
+            max_search_results: 20,
+            summarizer: WebSummarizerConfig::default(),
+        }
+    }
+}
+
+/// Configuration for the web summarizer (Haiku).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct WebSummarizerConfig {
+    /// Model to use for summarization (default: claude-haiku-4-5).
+    pub model: String,
+    /// Maximum tokens for summary output (default: 300).
+    pub max_tokens: u32,
+    /// Temperature for summary generation (default: 0.2).
+    pub temperature: f64,
+}
+
+impl Default for WebSummarizerConfig {
+    fn default() -> Self {
+        Self {
+            model: "claude-haiku-4-5".into(),
+            max_tokens: 300,
+            temperature: 0.2,
+        }
+    }
+}
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// CLI TOOLS CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
+
+/// Configuration for CLI tools (grep, glob, ls).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct CliToolsConfig {
+    /// Default page size for ls results (default: 100).
+    pub ls_page_size: u32,
+    /// Default head_limit for grep results (default: 200).
+    pub grep_default_limit: u32,
+    /// Default head_limit for glob results (default: 500).
+    pub glob_default_limit: u32,
+    /// Maximum directory traversal depth (default: 10).
+    pub max_depth: u32,
+    /// Pagination cache TTL in seconds (default: 300 = 5 minutes).
+    pub pagination_cache_ttl_secs: u64,
+    /// Additional ignore patterns to append to builtin ignores.
     #[serde(default)]
-    pub sync: SyncStrategy,
+    pub extra_ignore_patterns: Vec<String>,
 }
 
-/// Reference entry - either a simple URL string or with metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(untagged)]
-pub enum ReferenceEntry {
-    /// Simple URL string.
-    Simple(String),
-
-    /// URL with optional metadata.
-    WithMetadata(ReferenceMount),
+impl Default for CliToolsConfig {
+    fn default() -> Self {
+        Self {
+            ls_page_size: 100,
+            grep_default_limit: 200,
+            glob_default_limit: 500,
+            max_depth: 10,
+            pagination_cache_ttl_secs: 300,
+            extra_ignore_patterns: vec![],
+        }
+    }
 }
 
-/// Reference mount with optional metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ReferenceMount {
-    /// Git remote URL.
-    pub remote: String,
-
-    /// Optional description of the reference.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-/// Sync strategy for git-backed mounts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum SyncStrategy {
-    /// No automatic syncing.
-    #[default]
-    None,
-
-    /// Automatic sync on access.
-    Auto,
-}
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// SERVICES CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
 
 /// External service configurations.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -151,9 +238,14 @@ pub enum SyncStrategy {
 pub struct ServicesConfig {
     /// Anthropic API configuration.
     pub anthropic: AnthropicServiceConfig,
-
     /// Exa search API configuration.
     pub exa: ExaServiceConfig,
+    /// OpenCode API configuration.
+    pub opencode: OpenCodeServiceConfig,
+    /// Linear API configuration.
+    pub linear: LinearServiceConfig,
+    /// GitHub API configuration.
+    pub github: GitHubServiceConfig,
 }
 
 /// Anthropic API service configuration.
@@ -162,6 +254,10 @@ pub struct ServicesConfig {
 pub struct AnthropicServiceConfig {
     /// Base URL for the Anthropic API.
     pub base_url: String,
+    /// Connection timeout in seconds.
+    pub connect_timeout_secs: u64,
+    /// Request timeout in seconds.
+    pub request_timeout_secs: u64,
 
     /// API key (env-only, never serialized to config files).
     #[serde(skip)]
@@ -173,6 +269,8 @@ impl Default for AnthropicServiceConfig {
     fn default() -> Self {
         Self {
             base_url: "https://api.anthropic.com".into(),
+            connect_timeout_secs: 5,
+            request_timeout_secs: 600,
             api_key: None,
         }
     }
@@ -200,47 +298,101 @@ impl Default for ExaServiceConfig {
     }
 }
 
-/// Configuration for coding-agent-tools subagents (ask_agent tool).
+/// OpenCode API service configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
-pub struct SubagentsConfig {
-    /// Model for Locator subagent (fast discovery). Uses Claude CLI format.
-    pub locator_model: String,
-    /// Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
-    pub analyzer_model: String,
+pub struct OpenCodeServiceConfig {
+    /// Base URL for the OpenCode API (default: localhost:4096).
+    pub base_url: String,
+    /// Request timeout in seconds (default: 1800 = 30 minutes).
+    pub request_timeout_secs: u64,
+
+    /// API key (env-only, never serialized to config files).
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub api_key: Option<SecretString>,
 }
 
-impl Default for SubagentsConfig {
+impl Default for OpenCodeServiceConfig {
     fn default() -> Self {
         Self {
-            locator_model: "claude-haiku-4-5".into(),
-            analyzer_model: "claude-sonnet-4-6".into(),
+            base_url: "http://127.0.0.1:4096".into(),
+            request_timeout_secs: 1800,
+            api_key: None,
         }
     }
 }
 
-/// Configuration for gpt5-reasoner tool.
+/// Linear API service configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
-pub struct ReasoningConfig {
-    /// OpenRouter model ID for optimizer step.
-    pub optimizer_model: String,
-    /// OpenRouter model ID for executor/reasoner step.
-    pub executor_model: String,
-    /// Optional reasoning effort level: low, medium, high, xhigh.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
+pub struct LinearServiceConfig {
+    /// Base URL for the Linear GraphQL API.
+    pub base_url: String,
+    /// Connection timeout in seconds.
+    pub connect_timeout_secs: u64,
+    /// Request timeout in seconds.
+    pub request_timeout_secs: u64,
+    /// Default page size for paginated queries.
+    pub default_page_size: u32,
+
+    /// API key (env-only, never serialized to config files).
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub api_key: Option<SecretString>,
 }
 
-impl Default for ReasoningConfig {
+impl Default for LinearServiceConfig {
     fn default() -> Self {
         Self {
-            optimizer_model: "anthropic/claude-sonnet-4.6".into(),
-            executor_model: "openai/gpt-5.2".into(),
-            reasoning_effort: None,
+            base_url: "https://api.linear.app/graphql".into(),
+            connect_timeout_secs: 10,
+            request_timeout_secs: 30,
+            default_page_size: 50,
+            api_key: None,
         }
     }
 }
+
+/// GitHub API service configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct GitHubServiceConfig {
+    /// Base URL for the GitHub API.
+    pub base_url: String,
+    /// Connection timeout in seconds.
+    pub connect_timeout_secs: u64,
+    /// Request timeout in seconds.
+    pub request_timeout_secs: u64,
+    /// Cache TTL for API responses in seconds.
+    pub cache_ttl_secs: u64,
+    /// Prefix for AI-generated replies (for attribution).
+    pub ai_reply_prefix: String,
+
+    /// GitHub token (env-only, never serialized to config files).
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub token: Option<SecretString>,
+}
+
+impl Default for GitHubServiceConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "https://api.github.com".into(),
+            connect_timeout_secs: 10,
+            request_timeout_secs: 30,
+            cache_ttl_secs: 300,
+            ai_reply_prefix: "[AI] ".into(),
+            token: None,
+        }
+    }
+}
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGGING CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
 
 /// Logging and diagnostics configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -269,14 +421,19 @@ mod tests {
     #[test]
     fn test_default_config_serializes() {
         let config = AgenticConfig::default();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        assert!(json.contains("\"thoughts\""));
-        assert!(json.contains("\"subagents\""));
-        assert!(json.contains("\"reasoning\""));
-        assert!(json.contains("\"services\""));
-        assert!(json.contains("\"logging\""));
-        // Ensure old "models" section is NOT present
-        assert!(!json.contains("\"models\""));
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        assert!(toml_str.contains("[subagents]"));
+        assert!(toml_str.contains("[reasoning]"));
+        // Services sections serialize as [services.anthropic], [services.exa], etc.
+        assert!(toml_str.contains("[services.anthropic]"));
+        assert!(toml_str.contains("[services.exa]"));
+        assert!(toml_str.contains("[orchestrator]"));
+        assert!(toml_str.contains("[web_retrieval]"));
+        assert!(toml_str.contains("[cli_tools]"));
+        assert!(toml_str.contains("[logging]"));
+        // Ensure old sections are NOT present
+        assert!(!toml_str.contains("[thoughts]"));
+        assert!(!toml_str.contains("[models]"));
     }
 
     #[test]
@@ -292,11 +449,14 @@ mod tests {
 
     #[test]
     fn test_partial_config_deserializes() {
-        let json = r#"{"thoughts": {"mount_dirs": {"thoughts": "my-thoughts"}}}"#;
-        let config: AgenticConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.thoughts.mount_dirs.thoughts, "my-thoughts");
+        let toml_str = r#"
+[subagents]
+locator_model = "custom-model"
+"#;
+        let config: AgenticConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.subagents.locator_model, "custom-model");
         // Other fields get defaults
-        assert_eq!(config.thoughts.mount_dirs.context, "context");
+        assert_eq!(config.subagents.analyzer_model, "claude-sonnet-4-6");
         assert_eq!(
             config.services.anthropic.base_url,
             "https://api.anthropic.com"
@@ -305,43 +465,87 @@ mod tests {
 
     #[test]
     fn test_schema_field_optional() {
-        let json = r#"{"$schema": "file://./agentic.schema.json"}"#;
-        let config: AgenticConfig = serde_json::from_str(json).unwrap();
+        let toml_str = r#""$schema" = "file://./agentic.schema.json""#;
+        let config: AgenticConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.schema, Some("file://./agentic.schema.json".into()));
-    }
-
-    #[test]
-    fn test_reference_entry_simple() {
-        let json = r#""git@github.com:org/repo.git""#;
-        let entry: ReferenceEntry = serde_json::from_str(json).unwrap();
-        assert!(matches!(entry, ReferenceEntry::Simple(_)));
-    }
-
-    #[test]
-    fn test_reference_entry_with_metadata() {
-        let json = r#"{"remote": "https://github.com/org/repo", "description": "Test"}"#;
-        let entry: ReferenceEntry = serde_json::from_str(json).unwrap();
-        match entry {
-            ReferenceEntry::WithMetadata(rm) => {
-                assert_eq!(rm.remote, "https://github.com/org/repo");
-                assert_eq!(rm.description.as_deref(), Some("Test"));
-            }
-            _ => panic!("Expected WithMetadata"),
-        }
-    }
-
-    #[test]
-    fn test_sync_strategy_default() {
-        assert_eq!(SyncStrategy::default(), SyncStrategy::None);
     }
 
     #[test]
     fn test_api_keys_not_serialized() {
         let mut config = AgenticConfig::default();
         config.services.anthropic.api_key = Some(SecretString::from("secret-key".to_string()));
+        config.services.github.token = Some(SecretString::from("gh-token".to_string()));
 
-        let json = serde_json::to_string(&config).unwrap();
-        assert!(!json.contains("secret-key"));
-        assert!(!json.contains("api_key"));
+        let toml_str = toml::to_string(&config).unwrap();
+        // The actual secret values should never appear
+        assert!(!toml_str.contains("secret-key"));
+        assert!(!toml_str.contains("gh-token"));
+        // The field names with #[serde(skip)] should not appear as keys
+        assert!(!toml_str.contains("api_key"));
+        // Note: "token" can appear in field names like "max_tokens", so we check
+        // specifically that the github.token field is not serialized
+        assert!(!toml_str.contains("token ="));
+    }
+
+    // Default value assertion tests - ensure defaults match current hardcoded behavior
+    #[test]
+    fn test_web_retrieval_defaults_match_hardcoded() {
+        let cfg = WebRetrievalConfig::default();
+        assert_eq!(cfg.request_timeout_secs, 30);
+        assert_eq!(cfg.default_max_bytes, 5 * 1024 * 1024); // 5MB
+        assert_eq!(cfg.default_search_results, 8);
+        assert_eq!(cfg.max_search_results, 20);
+        assert_eq!(cfg.summarizer.model, "claude-haiku-4-5");
+        assert_eq!(cfg.summarizer.max_tokens, 300);
+        assert!((cfg.summarizer.temperature - 0.2).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_cli_tools_defaults_match_hardcoded() {
+        let cfg = CliToolsConfig::default();
+        assert_eq!(cfg.ls_page_size, 100);
+        assert_eq!(cfg.grep_default_limit, 200);
+        assert_eq!(cfg.glob_default_limit, 500);
+        assert_eq!(cfg.max_depth, 10);
+        assert_eq!(cfg.pagination_cache_ttl_secs, 300);
+        assert!(cfg.extra_ignore_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_orchestrator_defaults_match_hardcoded() {
+        let cfg = OrchestratorConfig::default();
+        assert_eq!(cfg.session_deadline_secs, 3600);
+        assert_eq!(cfg.inactivity_timeout_secs, 300);
+        assert!((cfg.compaction_threshold - 0.80).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_services_defaults_match_hardcoded() {
+        let cfg = ServicesConfig::default();
+
+        // Anthropic
+        assert_eq!(cfg.anthropic.base_url, "https://api.anthropic.com");
+        assert_eq!(cfg.anthropic.connect_timeout_secs, 5);
+        assert_eq!(cfg.anthropic.request_timeout_secs, 600);
+
+        // Exa
+        assert_eq!(cfg.exa.base_url, "https://api.exa.ai");
+
+        // OpenCode
+        assert_eq!(cfg.opencode.base_url, "http://127.0.0.1:4096");
+        assert_eq!(cfg.opencode.request_timeout_secs, 1800);
+
+        // Linear
+        assert_eq!(cfg.linear.base_url, "https://api.linear.app/graphql");
+        assert_eq!(cfg.linear.connect_timeout_secs, 10);
+        assert_eq!(cfg.linear.request_timeout_secs, 30);
+        assert_eq!(cfg.linear.default_page_size, 50);
+
+        // GitHub
+        assert_eq!(cfg.github.base_url, "https://api.github.com");
+        assert_eq!(cfg.github.connect_timeout_secs, 10);
+        assert_eq!(cfg.github.request_timeout_secs, 30);
+        assert_eq!(cfg.github.cache_ttl_secs, 300);
+        assert_eq!(cfg.github.ai_reply_prefix, "[AI] ");
     }
 }

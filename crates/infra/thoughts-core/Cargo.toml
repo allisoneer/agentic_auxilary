@@ -17,7 +17,6 @@ linux = []
 macos = []
 
 [dependencies]
-agentic-config = { workspace = true }
 agentic_logging = { version = "0.1.2", path = "../agentic-logging" }
 agentic-tools-core = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }

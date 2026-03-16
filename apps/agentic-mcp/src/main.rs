@@ -169,19 +169,7 @@ async fn main() -> anyhow::Result<()> {
     let cwd = std::env::current_dir()?;
     let loaded = load_merged(&cwd)?;
 
-    // Print config feedback (migration events + warnings)
-    for event in &loaded.events {
-        match event {
-            agentic_config::loader::LoadEvent::MigratedThoughtsV2 { from, to } => {
-                eprintln!(
-                    "{} Migrated config from {} to {}",
-                    "INFO".blue(),
-                    from.display(),
-                    to.display()
-                );
-            }
-        }
-    }
+    // Print config warnings
     for w in &loaded.warnings {
         eprintln!("{} {}", "WARN".yellow(), w);
     }

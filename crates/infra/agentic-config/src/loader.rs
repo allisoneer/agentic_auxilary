@@ -1,42 +1,50 @@
 //! Configuration loader with two-layer merge and env overrides.
 //!
 //! The loading process:
-//! 1. Read global config from `~/.config/agentic/agentic.json`
-//! 2. Read local config from `./agentic.json`
-//! 3. Deep merge at JSON Value level (RFC 7396)
+//! 1. Read global config from `~/.config/agentic/agentic.toml`
+//! 2. Read local config from `./agentic.toml`
+//! 3. Deep merge at TOML Value level (tables merge, arrays/scalars replace)
 //! 4. Deserialize once into typed AgenticConfig
 //! 5. Apply env var overrides (highest precedence)
 //! 6. Run advisory validation
 
-use crate::{merge::merge_patch, types::AgenticConfig, validation::AdvisoryWarning};
+use crate::{merge::deep_merge, types::AgenticConfig, validation::AdvisoryWarning};
 use anyhow::{Context, Result};
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-/// Filename for local config.
-pub const LOCAL_FILE: &str = "agentic.json";
+/// Filename for local config (TOML format).
+pub const LOCAL_FILE: &str = "agentic.toml";
 
 /// Directory name under config_dir for global config.
 pub const GLOBAL_DIR: &str = "agentic";
 
-/// Filename for global config.
-pub const GLOBAL_FILE: &str = "agentic.json";
+/// Filename for global config (TOML format).
+pub const GLOBAL_FILE: &str = "agentic.toml";
+
+/// Legacy JSON filename (warn if found).
+const LEGACY_JSON_FILE: &str = "agentic.json";
+
+/// Known top-level keys for unknown key detection.
+/// Unknown keys at root level produce advisory warnings.
+const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
+    "$schema",
+    "subagents",
+    "reasoning",
+    "services",
+    "orchestrator",
+    "web_retrieval",
+    "cli_tools",
+    "logging",
+];
 
 /// Resolved paths for config files.
 #[derive(Debug, Clone)]
 pub struct AgenticConfigPaths {
-    /// Path to local config (./agentic.json).
+    /// Path to local config (./agentic.toml).
     pub local: PathBuf,
 
-    /// Path to global config (~/.config/agentic/agentic.json).
+    /// Path to global config (~/.config/agentic/agentic.toml).
     pub global: PathBuf,
-}
-
-/// Events that occurred during config loading.
-#[derive(Debug, Clone)]
-pub enum LoadEvent {
-    /// V2 thoughts config was migrated to agentic.json.
-    MigratedThoughtsV2 { from: PathBuf, to: PathBuf },
 }
 
 /// Result of loading configuration.
@@ -48,16 +56,13 @@ pub struct LoadedAgenticConfig {
     /// Advisory warnings from validation.
     pub warnings: Vec<AdvisoryWarning>,
 
-    /// Events that occurred during loading (e.g., migration).
-    pub events: Vec<LoadEvent>,
-
     /// Resolved config file paths.
     pub paths: AgenticConfigPaths,
 }
 
 /// Get the global config file path.
 ///
-/// Returns `~/.config/agentic/agentic.json` on Unix-like systems.
+/// Returns `~/.config/agentic/agentic.toml` on Unix-like systems.
 ///
 /// # Test Hook
 ///
@@ -78,47 +83,41 @@ pub fn local_config_path(local_dir: &Path) -> PathBuf {
 ///
 /// # Precedence (lowest to highest)
 /// 1. Default values
-/// 2. Global config (`~/.config/agentic/agentic.json`)
-/// 3. Local config (`./agentic.json`)
+/// 2. Global config (`~/.config/agentic/agentic.toml`)
+/// 3. Local config (`./agentic.toml`)
 /// 4. Environment variables
-///
-/// # Legacy fallback (read-only)
-/// If `./agentic.json` doesn't exist but `./.thoughts/config.json` does (V2 format),
-/// the legacy config is loaded in-memory and mapped to agentic.json structure.
-/// No files are written during config loading.
 pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     let global_path = global_config_path()?;
     let local_path = local_config_path(local_dir);
 
-    // No auto-migration; loader is strictly read-only.
-    let events = vec![];
+    // Collect warnings
+    let mut warnings = Vec::new();
 
-    // Read configs as JSON Values
-    let global_v = read_json_object_or_empty(&global_path)?;
+    // Warn if legacy agentic.json exists (it's now ignored)
+    warn_legacy_json_if_present(&local_path, &global_path, &mut warnings);
 
-    let legacy_path = crate::migration::should_migrate(local_dir, &local_path);
-    let (local_v, legacy_used) = if let Some(legacy_path) = legacy_path {
-        let mapped = read_legacy_v2_as_agentic_object(&legacy_path)?;
-        (mapped, Some(legacy_path))
-    } else {
-        (read_json_object_or_empty(&local_path)?, None)
-    };
+    // Read configs as TOML Values
+    let global_v = read_toml_table_or_empty(&global_path)?;
+    let local_v = read_toml_table_or_empty(&local_path)?;
 
     // Merge: global as base, local as patch
-    let merged = merge_patch(global_v, local_v);
+    let merged = deep_merge(global_v, local_v);
 
-    // Detect deprecated keys from raw JSON (before deserialization)
-    let mut warnings = crate::validation::detect_deprecated_keys(&merged);
+    // Detect unknown top-level keys
+    warn_unknown_top_level_keys(&merged, &mut warnings);
 
-    if let Some(legacy_path) = legacy_used.as_deref() {
-        warnings.push(legacy_config_warning(legacy_path));
-    }
+    // Detect deprecated keys from merged config (before deserialization)
+    warnings.extend(crate::validation::detect_deprecated_keys_toml(&merged));
 
-    // Deserialize to typed config
-    let mut cfg: AgenticConfig =
-        serde_json::from_value(merged).context("Failed to deserialize merged agentic config")?;
+    // Deserialize to typed config using serde_path_to_error for better error messages
+    let cfg: AgenticConfig = {
+        let deserializer = merged.clone();
+        serde_path_to_error::deserialize(deserializer)
+            .with_context(|| "Failed to deserialize merged agentic config")?
+    };
 
     // Apply env var overrides (highest precedence)
+    let mut cfg = cfg;
     apply_env_overrides(&mut cfg);
 
     // Run advisory validation and add to warnings
@@ -127,7 +126,6 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     Ok(LoadedAgenticConfig {
         config: cfg,
         warnings,
-        events,
         paths: AgenticConfigPaths {
             local: local_path,
             global: global_path,
@@ -137,23 +135,41 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
 
 /// Apply environment variable overrides to the config.
 fn apply_env_overrides(cfg: &mut AgenticConfig) {
-    // Service URLs
+    // --- Service URLs ---
     if let Some(v) = env_trimmed("ANTHROPIC_BASE_URL") {
         cfg.services.anthropic.base_url = v;
     }
     if let Some(v) = env_trimmed("EXA_BASE_URL") {
         cfg.services.exa.base_url = v;
     }
+    if let Some(v) = env_trimmed("OPENCODE_BASE_URL") {
+        cfg.services.opencode.base_url = v;
+    }
+    if let Some(v) = env_trimmed("LINEAR_BASE_URL") {
+        cfg.services.linear.base_url = v;
+    }
+    if let Some(v) = env_trimmed("GITHUB_BASE_URL") {
+        cfg.services.github.base_url = v;
+    }
 
-    // API keys (env-only)
+    // --- API keys (env-only) ---
     if let Some(k) = env_trimmed("ANTHROPIC_API_KEY") {
         cfg.services.anthropic.api_key = Some(secrecy::SecretString::from(k));
     }
     if let Some(k) = env_trimmed("EXA_API_KEY") {
         cfg.services.exa.api_key = Some(secrecy::SecretString::from(k));
     }
+    if let Some(k) = env_trimmed("OPENCODE_API_KEY") {
+        cfg.services.opencode.api_key = Some(secrecy::SecretString::from(k));
+    }
+    if let Some(k) = env_trimmed("LINEAR_API_KEY") {
+        cfg.services.linear.api_key = Some(secrecy::SecretString::from(k));
+    }
+    if let Some(k) = env_trimmed("GITHUB_TOKEN") {
+        cfg.services.github.token = Some(secrecy::SecretString::from(k));
+    }
 
-    // Subagents model overrides
+    // --- Subagents model overrides ---
     if let Some(v) = env_trimmed("AGENTIC_SUBAGENTS_LOCATOR_MODEL") {
         cfg.subagents.locator_model = v;
     }
@@ -161,7 +177,7 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
         cfg.subagents.analyzer_model = v;
     }
 
-    // Reasoning model overrides
+    // --- Reasoning model overrides ---
     if let Some(v) = env_trimmed("AGENTIC_REASONING_OPTIMIZER_MODEL") {
         cfg.reasoning.optimizer_model = v;
     }
@@ -171,8 +187,16 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     if let Some(v) = env_trimmed("AGENTIC_REASONING_EFFORT") {
         cfg.reasoning.reasoning_effort = Some(v);
     }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_API_BASE_URL") {
+        cfg.reasoning.api_base_url = Some(v);
+    }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_TOKEN_LIMIT")
+        && let Ok(n) = v.parse()
+    {
+        cfg.reasoning.token_limit = Some(n);
+    }
 
-    // Logging overrides
+    // --- Logging overrides ---
     if let Some(v) = env_trimmed("AGENTIC_LOG_LEVEL") {
         cfg.logging.level = v;
     }
@@ -189,47 +213,72 @@ fn env_trimmed(name: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-/// Read legacy V2 config and map it to agentic.json format (in-memory).
-fn read_legacy_v2_as_agentic_object(legacy_path: &Path) -> Result<Value> {
-    let v2 = crate::migration::read_legacy_v2(legacy_path)?;
-    let mapped = crate::migration::map_v2_to_agentic_value(v2);
-
-    match mapped {
-        Value::Object(_) => Ok(mapped),
-        _ => anyhow::bail!(
-            "Internal error: mapped legacy config must be a JSON object (source: {})",
-            legacy_path.display()
-        ),
+/// Warn about unknown top-level keys in the merged config.
+fn warn_unknown_top_level_keys(v: &toml::Value, warnings: &mut Vec<AdvisoryWarning>) {
+    let Some(tbl) = v.as_table() else { return };
+    for key in tbl.keys() {
+        if !KNOWN_TOP_LEVEL_KEYS.contains(&key.as_str()) {
+            warnings.push(AdvisoryWarning::new(
+                "config.unknown_top_level_key",
+                "$",
+                format!("Unknown top-level key '{}' will be ignored", key),
+            ));
+        }
     }
 }
 
-/// Create an advisory warning for legacy config usage.
-fn legacy_config_warning(legacy_path: &Path) -> AdvisoryWarning {
-    AdvisoryWarning::new(
-        "legacy_config.used",
-        "$",
-        format!(
-            "Using legacy config at {}. To migrate: `agentic config migrate`",
-            legacy_path.display()
-        ),
-    )
+/// Warn if legacy agentic.json files exist (they are now ignored).
+fn warn_legacy_json_if_present(
+    local_path: &Path,
+    global_path: &Path,
+    warnings: &mut Vec<AdvisoryWarning>,
+) {
+    // Check local directory for legacy JSON
+    if let Some(parent) = local_path.parent() {
+        let legacy_local = parent.join(LEGACY_JSON_FILE);
+        if legacy_local.exists() {
+            warnings.push(AdvisoryWarning::new(
+                "config.legacy_json_ignored",
+                "$",
+                format!(
+                    "Found legacy config {} (ignored). Use agentic.toml instead.",
+                    legacy_local.display()
+                ),
+            ));
+        }
+    }
+
+    // Check global directory for legacy JSON
+    if let Some(parent) = global_path.parent() {
+        let legacy_global = parent.join(LEGACY_JSON_FILE);
+        if legacy_global.exists() {
+            warnings.push(AdvisoryWarning::new(
+                "config.legacy_json_ignored",
+                "$",
+                format!(
+                    "Found legacy config {} (ignored). Use agentic.toml instead.",
+                    legacy_global.display()
+                ),
+            ));
+        }
+    }
 }
 
-/// Read a JSON file as a Value, returning empty object if file doesn't exist.
-fn read_json_object_or_empty(path: &Path) -> Result<Value> {
+/// Read a TOML file as a Value, returning empty table if file doesn't exist.
+fn read_toml_table_or_empty(path: &Path) -> Result<toml::Value> {
     if !path.exists() {
-        return Ok(Value::Object(Default::default()));
+        return Ok(toml::Value::Table(Default::default()));
     }
 
     let raw = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file {}", path.display()))?;
 
-    let v: Value = serde_json::from_str(&raw)
-        .with_context(|| format!("Invalid JSON in {}", path.display()))?;
+    let v: toml::Value =
+        toml::from_str(&raw).with_context(|| format!("Invalid TOML in {}", path.display()))?;
 
     match v {
-        Value::Object(_) => Ok(v),
-        _ => anyhow::bail!("Config root must be a JSON object: {}", path.display()),
+        toml::Value::Table(_) => Ok(v),
+        _ => anyhow::bail!("Config root must be a TOML table: {}", path.display()),
     }
 }
 
@@ -256,7 +305,7 @@ mod tests {
             loaded.config.services.anthropic.base_url,
             "https://api.anthropic.com"
         );
-        assert_eq!(loaded.config.thoughts.mount_dirs.thoughts, "thoughts");
+        assert_eq!(loaded.config.orchestrator.session_deadline_secs, 3600);
         assert!(loaded.warnings.is_empty());
     }
 
@@ -269,14 +318,17 @@ mod tests {
         let local_path = temp.path().join(LOCAL_FILE);
         std::fs::write(
             &local_path,
-            r#"{"thoughts": {"mount_dirs": {"thoughts": "my-thoughts"}}}"#,
+            r#"
+[orchestrator]
+session_deadline_secs = 7200
+"#,
         )
         .unwrap();
 
         let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(loaded.config.thoughts.mount_dirs.thoughts, "my-thoughts");
+        assert_eq!(loaded.config.orchestrator.session_deadline_secs, 7200);
         // Other fields should be defaults
-        assert_eq!(loaded.config.thoughts.mount_dirs.context, "context");
+        assert_eq!(loaded.config.orchestrator.inactivity_timeout_secs, 300);
     }
 
     #[test]
@@ -293,7 +345,11 @@ mod tests {
         std::fs::create_dir_all(&global_dir).unwrap();
         std::fs::write(
             global_dir.join(GLOBAL_FILE),
-            r#"{"subagents": {"locator_model": "global-model", "analyzer_model": "global-analyzer"}}"#,
+            r#"
+[subagents]
+locator_model = "global-model"
+analyzer_model = "global-analyzer"
+"#,
         )
         .unwrap();
 
@@ -302,7 +358,10 @@ mod tests {
         std::fs::create_dir_all(&local_dir).unwrap();
         std::fs::write(
             local_dir.join(LOCAL_FILE),
-            r#"{"subagents": {"locator_model": "local-model"}}"#,
+            r#"
+[subagents]
+locator_model = "local-model"
+"#,
         )
         .unwrap();
 
@@ -320,7 +379,10 @@ mod tests {
         let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
         std::fs::write(
             temp.path().join(LOCAL_FILE),
-            r#"{"reasoning": {"optimizer_model": "file-model"}}"#,
+            r#"
+[reasoning]
+optimizer_model = "file-model"
+"#,
         )
         .unwrap();
 
@@ -329,6 +391,31 @@ mod tests {
 
         let loaded = load_merged(temp.path()).unwrap();
         assert_eq!(loaded.config.reasoning.optimizer_model, "env-model");
+    }
+
+    #[test]
+    #[serial]
+    fn test_env_overrides_new_services() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        let _env1 = EnvGuard::set("OPENCODE_BASE_URL", "http://localhost:9999");
+        let _env2 = EnvGuard::set("LINEAR_BASE_URL", "https://custom.linear.app/graphql");
+        let _env3 = EnvGuard::set("GITHUB_BASE_URL", "https://github.example.com/api");
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert_eq!(
+            loaded.config.services.opencode.base_url,
+            "http://localhost:9999"
+        );
+        assert_eq!(
+            loaded.config.services.linear.base_url,
+            "https://custom.linear.app/graphql"
+        );
+        assert_eq!(
+            loaded.config.services.github.base_url,
+            "https://github.example.com/api"
+        );
     }
 
     #[test]
@@ -346,51 +433,34 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_invalid_json_errors() {
+    fn test_invalid_toml_errors() {
         let temp = TempDir::new().unwrap();
         let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-        std::fs::write(temp.path().join(LOCAL_FILE), "not valid json").unwrap();
+        std::fs::write(temp.path().join(LOCAL_FILE), "not valid toml [[[").unwrap();
 
         let result = load_merged(temp.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid JSON"));
-    }
-
-    #[test]
-    #[serial]
-    fn test_non_object_root_errors() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-        std::fs::write(temp.path().join(LOCAL_FILE), "[1, 2, 3]").unwrap();
-
-        let result = load_merged(temp.path());
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("must be a JSON object")
-        );
+        assert!(result.unwrap_err().to_string().contains("Invalid TOML"));
     }
 
     #[test]
     #[serial]
     fn test_local_value_overrides_struct_default() {
-        // Test that local config values override struct defaults (not RFC 7396 null deletion,
-        // which is tested in merge.rs). This verifies the merge behavior for nested objects.
-
         let temp = TempDir::new().unwrap();
         let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
 
         // Create local config that overrides a nested value
         std::fs::write(
             temp.path().join(LOCAL_FILE),
-            r#"{"thoughts": {"mount_dirs": {"thoughts": "custom"}}}"#,
+            r#"
+[web_retrieval]
+request_timeout_secs = 60
+"#,
         )
         .unwrap();
 
         let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(loaded.config.thoughts.mount_dirs.thoughts, "custom");
+        assert_eq!(loaded.config.web_retrieval.request_timeout_secs, 60);
     }
 
     #[test]
@@ -411,110 +481,101 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_load_legacy_only_is_read_only_and_uses_legacy_values() {
+    fn test_warns_on_unknown_top_level_key() {
         let temp = TempDir::new().unwrap();
         let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
 
-        // Create legacy config
-        let thoughts_dir = temp.path().join(".thoughts");
-        std::fs::create_dir_all(&thoughts_dir).unwrap();
-        std::fs::write(
-            thoughts_dir.join("config.json"),
-            r#"{
-                "version": "2.0",
-                "mount_dirs": {
-                    "thoughts": "legacy-thoughts",
-                    "context": "legacy-context",
-                    "references": "legacy-refs"
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let loaded = load_merged(temp.path()).unwrap();
-
-        // Legacy values are applied
-        assert_eq!(
-            loaded.config.thoughts.mount_dirs.thoughts,
-            "legacy-thoughts"
-        );
-
-        // Read-only: loader must not create agentic.json
-        assert!(!temp.path().join(LOCAL_FILE).exists());
-
-        // Warning must point to migration command
-        assert!(loaded.warnings.iter().any(
-            |w| w.code == "legacy_config.used" && w.message.contains("agentic config migrate")
-        ));
-    }
-
-    #[test]
-    #[serial]
-    fn test_agentic_json_wins_over_legacy_and_no_legacy_warning() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        // Create legacy config
-        let thoughts_dir = temp.path().join(".thoughts");
-        std::fs::create_dir_all(&thoughts_dir).unwrap();
-        std::fs::write(
-            thoughts_dir.join("config.json"),
-            r#"{"version":"2.0","mount_dirs":{"thoughts":"legacy-thoughts"}}"#,
-        )
-        .unwrap();
-
-        // Create local agentic.json that should win
         std::fs::write(
             temp.path().join(LOCAL_FILE),
-            r#"{"thoughts":{"mount_dirs":{"thoughts":"agentic-thoughts"}}}"#,
+            r#"
+typo = 1
+unknown_section = "value"
+"#,
         )
         .unwrap();
 
         let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(
-            loaded.config.thoughts.mount_dirs.thoughts,
-            "agentic-thoughts"
-        );
-
-        // Legacy warning should not appear because legacy was not used
         assert!(
-            !loaded
+            loaded
                 .warnings
                 .iter()
-                .any(|w| w.code == "legacy_config.used")
+                .any(|w| w.code == "config.unknown_top_level_key" && w.message.contains("typo"))
         );
-    }
-
-    #[test]
-    #[serial]
-    fn test_invalid_legacy_json_errors() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-        let thoughts_dir = temp.path().join(".thoughts");
-        std::fs::create_dir_all(&thoughts_dir).unwrap();
-        std::fs::write(thoughts_dir.join("config.json"), "not valid json").unwrap();
-
-        let result = load_merged(temp.path());
-        assert!(result.is_err());
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid JSON in legacy config")
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.code == "config.unknown_top_level_key"
+                    && w.message.contains("unknown_section"))
         );
     }
 
     #[test]
     #[serial]
-    fn test_legacy_v1_errors() {
+    fn test_warns_on_deprecated_thoughts_section() {
         let temp = TempDir::new().unwrap();
         let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-        let thoughts_dir = temp.path().join(".thoughts");
-        std::fs::create_dir_all(&thoughts_dir).unwrap();
-        std::fs::write(thoughts_dir.join("config.json"), r#"{"version":"1.0"}"#).unwrap();
 
-        let result = load_merged(temp.path());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("only v2"));
+        std::fs::write(
+            temp.path().join(LOCAL_FILE),
+            r#"
+[thoughts]
+mount_dirs = {}
+"#,
+        )
+        .unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.code == "config.deprecated.thoughts")
+        );
+        // Also warns as unknown key
+        assert!(loaded
+            .warnings
+            .iter()
+            .any(|w| w.code == "config.unknown_top_level_key" && w.message.contains("thoughts")));
+    }
+
+    #[test]
+    #[serial]
+    fn test_warns_on_legacy_json_local() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        // Create a legacy agentic.json file
+        std::fs::write(temp.path().join("agentic.json"), "{}").unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.code == "config.legacy_json_ignored"
+                    && w.message.contains("agentic.json"))
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_warns_on_legacy_json_global() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        // Create global dir with legacy agentic.json
+        let global_dir = temp.path().join(GLOBAL_DIR);
+        std::fs::create_dir_all(&global_dir).unwrap();
+        std::fs::write(global_dir.join("agentic.json"), "{}").unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.code == "config.legacy_json_ignored"
+                    && w.message.contains("agentic.json"))
+        );
     }
 }

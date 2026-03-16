@@ -1,7 +1,7 @@
 //! Configuration management commands.
 //!
 //! Provides init, show, schema, edit, and validate subcommands for
-//! managing agentic.json configuration files.
+//! managing agentic.toml configuration files.
 
 use agentic_config::{
     loader::{LoadedAgenticConfig, global_config_path, load_merged, local_config_path},
@@ -36,10 +36,10 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Create default config and serialize to pretty JSON.
-fn default_config_json_pretty() -> Result<String> {
+/// Create default config and serialize to pretty TOML.
+fn default_config_toml_pretty() -> Result<String> {
     let cfg = AgenticConfig::default();
-    serde_json::to_string_pretty(&cfg).context("Failed to serialize default config")
+    toml::to_string_pretty(&cfg).context("Failed to serialize default config")
 }
 
 /// Write string contents to file atomically.
@@ -54,25 +54,13 @@ fn write_atomic_str(path: &Path, contents: &str) -> Result<()> {
 fn ensure_config_exists_with_defaults(path: &Path) -> Result<()> {
     if !path.exists() {
         ensure_parent_dir(path)?;
-        write_atomic_str(path, &default_config_json_pretty()?)?;
+        write_atomic_str(path, &default_config_toml_pretty()?)?;
     }
     Ok(())
 }
 
-/// Print migration events and warnings from loaded config.
+/// Print warnings from loaded config.
 fn print_load_feedback(loaded: &LoadedAgenticConfig) {
-    for event in &loaded.events {
-        match event {
-            agentic_config::loader::LoadEvent::MigratedThoughtsV2 { from, to } => {
-                eprintln!(
-                    "{} Migrated config from {} to {}",
-                    "INFO".blue(),
-                    from.display(),
-                    to.display()
-                );
-            }
-        }
-    }
     for warning in &loaded.warnings {
         eprintln!("{} {}", "WARN".yellow(), warning);
     }
@@ -122,17 +110,6 @@ pub enum ConfigCommands {
         #[arg(long)]
         path: Option<PathBuf>,
     },
-
-    /// Migrate legacy `.thoughts/config.json` (v2) to `agentic.json`
-    Migrate {
-        /// Print migrated JSON to stdout without writing files
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Path to use as local directory (defaults to current dir)
-        #[arg(long)]
-        path: Option<PathBuf>,
-    },
 }
 
 pub fn execute(cmd: ConfigCommands) -> Result<()> {
@@ -142,7 +119,6 @@ pub fn execute(cmd: ConfigCommands) -> Result<()> {
         ConfigCommands::Schema => cmd_schema(),
         ConfigCommands::Edit { global } => cmd_edit(global),
         ConfigCommands::Validate { path } => cmd_validate(path),
-        ConfigCommands::Migrate { dry_run, path } => cmd_migrate(dry_run, path),
     }
 }
 
@@ -158,7 +134,7 @@ fn cmd_init(global: bool, force: bool) -> Result<()> {
             );
         }
 
-        write_atomic_str(&path, &default_config_json_pretty()?)?;
+        write_atomic_str(&path, &default_config_toml_pretty()?)?;
         println!(
             "{} Created {}",
             "OK".green(),
@@ -170,18 +146,6 @@ fn cmd_init(global: bool, force: bool) -> Result<()> {
     let dir = std::env::current_dir()?;
     let path = local_config_path(&dir);
 
-    // Protect users from accidentally shadowing legacy config with fresh defaults.
-    let legacy_path = dir.join(".thoughts").join("config.json");
-    if legacy_path.exists() && !force && !path.exists() {
-        let legacy_display = legacy_path.strip_prefix(&dir).unwrap_or(&legacy_path);
-        anyhow::bail!(
-            "Legacy config found at {}\n\
-             To migrate: agentic config migrate\n\
-             To create fresh defaults instead: agentic config init --force",
-            legacy_display.display()
-        );
-    }
-
     if path.exists() && !force {
         anyhow::bail!(
             "Config file already exists: {}\nUse --force to overwrite",
@@ -189,7 +153,7 @@ fn cmd_init(global: bool, force: bool) -> Result<()> {
         );
     }
 
-    write_atomic_str(&path, &default_config_json_pretty()?)?;
+    write_atomic_str(&path, &default_config_toml_pretty()?)?;
 
     println!(
         "{} Created {}",
@@ -207,9 +171,11 @@ fn cmd_show(json_output: bool, path: Option<PathBuf>) -> Result<()> {
 
     // Output the config
     if json_output {
+        // JSON output for scripting
         println!("{}", serde_json::to_string(&loaded.config)?);
     } else {
-        println!("{}", serde_json::to_string_pretty(&loaded.config)?);
+        // TOML output (default)
+        println!("{}", toml::to_string_pretty(&loaded.config)?);
     }
 
     Ok(())
@@ -247,12 +213,12 @@ fn cmd_edit(global: bool) -> Result<()> {
     let raw = std::fs::read_to_string(&path)?;
     let mut warnings = vec![];
 
-    // Check for deprecated keys in raw JSON
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-        warnings.extend(agentic_config::validation::detect_deprecated_keys(&v));
+    // Check for deprecated keys in raw TOML
+    if let Ok(v) = toml::from_str::<toml::Value>(&raw) {
+        warnings.extend(agentic_config::validation::detect_deprecated_keys_toml(&v));
     }
 
-    match serde_json::from_str::<AgenticConfig>(&raw) {
+    match toml::from_str::<AgenticConfig>(&raw) {
         Ok(config) => {
             warnings.extend(agentic_config::validation::validate(&config));
             if warnings.is_empty() {
@@ -266,7 +232,7 @@ fn cmd_edit(global: bool) -> Result<()> {
         }
         Err(e) => {
             eprintln!("{} Configuration has errors: {}", "ERROR".red(), e);
-            anyhow::bail!("Invalid JSON in configuration file");
+            anyhow::bail!("Invalid TOML in configuration file");
         }
     }
 
@@ -296,40 +262,6 @@ fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
         println!("  Local:  {}", loaded.paths.local.display());
     }
 
-    Ok(())
-}
-
-fn cmd_migrate(dry_run: bool, path: Option<PathBuf>) -> Result<()> {
-    let dir = resolve_dir(path)?;
-    let legacy_path = agentic_config::migration::legacy_thoughts_v2_path(&dir);
-    let target_path = local_config_path(&dir);
-
-    if !legacy_path.exists() {
-        anyhow::bail!("No legacy config found at {}", legacy_path.display());
-    }
-
-    if target_path.exists() {
-        anyhow::bail!(
-            "Target already exists: {}\nNo migration needed.",
-            target_path.display()
-        );
-    }
-
-    let mapped = agentic_config::migration::read_legacy_v2_as_agentic_value(&legacy_path)?;
-    let json = serde_json::to_string_pretty(&mapped)?;
-
-    if dry_run {
-        println!("{json}");
-        return Ok(());
-    }
-
-    write_atomic_str(&target_path, &json)?;
-    println!(
-        "{} Migrated {} -> {}",
-        "OK".green(),
-        legacy_path.display(),
-        target_path.display()
-    );
     Ok(())
 }
 
@@ -385,41 +317,14 @@ mod tests {
         }
     }
 
-    fn write_legacy_v2(dir: &Path) {
-        let thoughts = dir.join(".thoughts");
-        std::fs::create_dir_all(&thoughts).unwrap();
-        std::fs::write(thoughts.join("config.json"), r#"{"version":"2.0"}"#).unwrap();
-    }
-
     #[test]
-    fn test_init_refuses_when_legacy_exists() {
+    fn test_init_creates_config() {
         let _lock = CWD_LOCK.lock().unwrap();
 
         let temp = TestDir::new("agentic-init-");
-        write_legacy_v2(&temp.path);
-
         let _cwd = CwdGuard::set(&temp.path);
 
-        let err = cmd_init(false, false).unwrap_err();
-        let msg = err.to_string();
-
-        assert!(msg.contains("Legacy config found"));
-        assert!(msg.contains("agentic config migrate"));
-        assert!(msg.contains("agentic config init --force"));
-        assert!(!temp.path.join("agentic.json").exists());
-    }
-
-    #[test]
-    fn test_init_force_creates_defaults_even_when_legacy_exists() {
-        let _lock = CWD_LOCK.lock().unwrap();
-
-        let temp = TestDir::new("agentic-init-");
-        write_legacy_v2(&temp.path);
-
-        let _cwd = CwdGuard::set(&temp.path);
-
-        cmd_init(false, true).unwrap();
-        assert!(temp.path.join("agentic.json").exists());
-        assert!(temp.path.join(".thoughts").join("config.json").exists());
+        cmd_init(false, false).unwrap();
+        assert!(temp.path.join("agentic.toml").exists());
     }
 }

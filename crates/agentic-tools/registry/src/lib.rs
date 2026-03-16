@@ -27,7 +27,10 @@ compile_error!(
     "agentic-tools-registry only supports Unix-like platforms (Linux/macOS). Windows is not supported."
 );
 
-use agentic_config::types::{ReasoningConfig, SubagentsConfig};
+use agentic_config::types::{
+    AnthropicServiceConfig, CliToolsConfig, ExaServiceConfig, ReasoningConfig, SubagentsConfig,
+    WebRetrievalConfig,
+};
 use agentic_tools_core::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -46,9 +49,25 @@ pub struct AgenticToolsConfig {
     #[serde(default)]
     pub subagents: SubagentsConfig,
 
+    /// Tool-specific config for CLI tools (limits, ignore patterns).
+    #[serde(default)]
+    pub cli_tools: CliToolsConfig,
+
     /// Tool-specific config for gpt5-reasoner.
     #[serde(default)]
     pub reasoning: ReasoningConfig,
+
+    /// Tool-specific config for web retrieval tools.
+    #[serde(default)]
+    pub web_retrieval: WebRetrievalConfig,
+
+    /// Anthropic service configuration for web summarization.
+    #[serde(default)]
+    pub anthropic: AnthropicServiceConfig,
+
+    /// Exa service configuration for web search.
+    #[serde(default)]
+    pub exa: ExaServiceConfig,
 
     /// Reserved for future use (e.g., schema strictness, patches).
     #[serde(default)]
@@ -111,7 +130,10 @@ impl AgenticTools {
 
         // coding_agent_tools (6 tools)
         if domain_wanted(CODING_NAMES) {
-            regs.push(coding_agent_tools::build_registry(config.subagents.clone()));
+            regs.push(coding_agent_tools::build_registry(
+                config.subagents.clone(),
+                config.cli_tools.clone(),
+            ));
         }
 
         // pr_comments (3 tools)
@@ -149,7 +171,11 @@ impl AgenticTools {
 
         // web-retrieval (2 tools)
         if domain_wanted(WEB_NAMES) {
-            let web = Arc::new(web_retrieval::WebTools::new());
+            let web = Arc::new(web_retrieval::WebTools::with_config(
+                config.web_retrieval.clone(),
+                config.exa.clone(),
+                config.anthropic.clone(),
+            ));
             regs.push(web_retrieval::build_registry(web));
         }
 
@@ -377,6 +403,8 @@ mod tests {
                 optimizer_model: "anthropic/custom-optimizer".into(),
                 executor_model: "openai/custom-executor".into(),
                 reasoning_effort: Some("high".into()),
+                api_base_url: None,
+                token_limit: None,
             },
             ..Default::default()
         };

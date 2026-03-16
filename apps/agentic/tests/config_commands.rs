@@ -45,21 +45,40 @@ fn test_schema_outputs_valid_json() {
 }
 
 #[test]
-fn test_show_outputs_json() {
+fn test_show_outputs_toml() {
     let temp = TempDir::new().unwrap();
 
     let mut cmd = agentic_cmd();
     cmd.args(["config", "show", "--path", temp.path().to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"thoughts\""))
-        .stdout(predicate::str::contains("\"services\""));
+        .stdout(predicate::str::contains("[subagents]"))
+        .stdout(predicate::str::contains("[services.anthropic]"));
+}
+
+#[test]
+fn test_show_json_flag() {
+    let temp = TempDir::new().unwrap();
+
+    let mut cmd = agentic_cmd();
+    cmd.args([
+        "config",
+        "show",
+        "--json",
+        "--path",
+        temp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success()
+    // JSON output should contain typical JSON structure
+    .stdout(predicate::str::contains("\"subagents\""))
+    .stdout(predicate::str::contains("\"services\""));
 }
 
 #[test]
 fn test_init_creates_config_file() {
     let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("agentic.json");
+    let config_path = temp.path().join("agentic.toml");
 
     // Init should create the file
     let mut cmd = agentic_cmd();
@@ -72,18 +91,18 @@ fn test_init_creates_config_file() {
     // File should exist
     assert!(config_path.exists());
 
-    // File should be valid JSON
+    // File should be valid TOML
     let content = std::fs::read_to_string(&config_path).unwrap();
-    let _: serde_json::Value = serde_json::from_str(&content).unwrap();
+    let _: toml::Value = toml::from_str(&content).unwrap();
 }
 
 #[test]
 fn test_init_fails_if_exists_without_force() {
     let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("agentic.json");
+    let config_path = temp.path().join("agentic.toml");
 
     // Create a file first
-    std::fs::write(&config_path, "{}").unwrap();
+    std::fs::write(&config_path, "# existing config").unwrap();
 
     // Init without force should fail
     let mut cmd = agentic_cmd();
@@ -97,10 +116,10 @@ fn test_init_fails_if_exists_without_force() {
 #[test]
 fn test_init_succeeds_with_force() {
     let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("agentic.json");
+    let config_path = temp.path().join("agentic.toml");
 
     // Create a file first
-    std::fs::write(&config_path, "{}").unwrap();
+    std::fs::write(&config_path, "# old config").unwrap();
 
     // Init with force should succeed
     let mut cmd = agentic_cmd();
@@ -111,7 +130,7 @@ fn test_init_succeeds_with_force() {
 
     // File should have default config content now
     let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(content.contains("\"thoughts\""));
+    assert!(content.contains("[subagents]"));
 }
 
 #[test]
@@ -133,12 +152,15 @@ fn test_validate_succeeds_on_valid_config() {
 #[test]
 fn test_validate_shows_warnings() {
     let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("agentic.json");
+    let config_path = temp.path().join("agentic.toml");
 
     // Create config with invalid value
     std::fs::write(
         &config_path,
-        r#"{"services": {"anthropic": {"base_url": "not-a-url"}}}"#,
+        r#"
+[services.anthropic]
+base_url = "not-a-url"
+"#,
     )
     .unwrap();
 
@@ -157,12 +179,15 @@ fn test_validate_shows_warnings() {
 #[test]
 fn test_show_with_local_config() {
     let temp = TempDir::new().unwrap();
-    let config_path = temp.path().join("agentic.json");
+    let config_path = temp.path().join("agentic.toml");
 
-    // Create local config with custom value (using new subagents config structure)
+    // Create local config with custom value
     std::fs::write(
         &config_path,
-        r#"{"subagents": {"locator_model": "custom-locator-model"}}"#,
+        r#"
+[subagents]
+locator_model = "custom-locator-model"
+"#,
     )
     .unwrap();
 
@@ -205,77 +230,47 @@ fn test_help_flag() {
         .stdout(predicate::str::contains("Configuration"));
 }
 
-// =============================================================================
-// Migrate command tests
-// =============================================================================
-
 #[test]
-fn test_migrate_dry_run_does_not_write() {
+fn test_warns_on_legacy_json() {
     let temp = TempDir::new().unwrap();
-    let legacy_dir = temp.path().join(".thoughts");
-    std::fs::create_dir_all(&legacy_dir).unwrap();
-    std::fs::write(
-        legacy_dir.join("config.json"),
-        r#"{"version": "2.0", "mount_dirs": {"thoughts": "t"}}"#,
-    )
-    .unwrap();
 
-    let mut cmd = agentic_cmd_isolated(temp.path());
+    // Create a legacy agentic.json file
+    std::fs::write(temp.path().join("agentic.json"), "{}").unwrap();
+
+    let mut cmd = agentic_cmd();
     cmd.args([
         "config",
-        "migrate",
-        "--dry-run",
+        "validate",
         "--path",
         temp.path().to_str().unwrap(),
     ])
     .assert()
     .success()
-    .stdout(predicate::str::contains("\"thoughts\""));
-
-    assert!(!temp.path().join("agentic.json").exists());
+    .stdout(predicate::str::contains("legacy").or(predicate::str::contains("agentic.json")));
 }
 
 #[test]
-fn test_migrate_creates_file() {
+fn test_warns_on_unknown_top_level_key() {
     let temp = TempDir::new().unwrap();
-    let legacy_dir = temp.path().join(".thoughts");
-    std::fs::create_dir_all(&legacy_dir).unwrap();
+    let config_path = temp.path().join("agentic.toml");
+
+    // Create config with unknown key
     std::fs::write(
-        legacy_dir.join("config.json"),
-        r#"{"version": "2.0", "mount_dirs": {"thoughts": "docs"}}"#,
+        &config_path,
+        r#"
+unknown_section = "value"
+"#,
     )
     .unwrap();
 
-    let mut cmd = agentic_cmd_isolated(temp.path());
-    cmd.args(["config", "migrate", "--path", temp.path().to_str().unwrap()])
-        .assert()
-        .success();
-
-    assert!(temp.path().join("agentic.json").exists());
-}
-
-#[test]
-fn test_migrate_fails_if_target_exists() {
-    let temp = TempDir::new().unwrap();
-    let legacy_dir = temp.path().join(".thoughts");
-    std::fs::create_dir_all(&legacy_dir).unwrap();
-    std::fs::write(legacy_dir.join("config.json"), r#"{"version": "2.0"}"#).unwrap();
-    std::fs::write(temp.path().join("agentic.json"), "{}").unwrap();
-
-    let mut cmd = agentic_cmd_isolated(temp.path());
-    cmd.args(["config", "migrate", "--path", temp.path().to_str().unwrap()])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("already exists"));
-}
-
-#[test]
-fn test_migrate_fails_if_no_legacy() {
-    let temp = TempDir::new().unwrap();
-
-    let mut cmd = agentic_cmd_isolated(temp.path());
-    cmd.args(["config", "migrate", "--path", temp.path().to_str().unwrap()])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("No legacy config"));
+    let mut cmd = agentic_cmd();
+    cmd.args([
+        "config",
+        "validate",
+        "--path",
+        temp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("unknown").or(predicate::str::contains("Unknown")));
 }

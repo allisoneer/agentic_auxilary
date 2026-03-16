@@ -243,7 +243,7 @@ impl OrchestratorRunTool {
         // 4. If no message/command and session is idle, just return current state
         // Uses finalize_completed to get retry logic for message extraction
         if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
-            let token_tracker = TokenTracker::new();
+            let token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
             return Self::finalize_completed(client, session_id, &token_tracker, vec![]).await;
         }
 
@@ -303,13 +303,13 @@ impl OrchestratorRunTool {
         }
 
         // 7. Event loop: wait for completion or permission
-        // Overall timeout to prevent infinite hangs (1 hour)
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(3600);
-        let inactivity_timeout = Duration::from_secs(300);
+        // Overall timeout to prevent infinite hangs (configurable, default 1 hour)
+        let deadline = tokio::time::Instant::now() + server.session_deadline();
+        let inactivity_timeout = server.inactivity_timeout();
         let mut last_activity_time = tokio::time::Instant::now();
 
         tracing::debug!(session_id = %session_id, "run: entering event loop");
-        let mut token_tracker = TokenTracker::new();
+        let mut token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
         let mut partial_response = String::new();
         let warnings = Vec::new();
 

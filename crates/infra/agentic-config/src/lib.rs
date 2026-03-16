@@ -3,13 +3,13 @@
 //! This crate provides:
 //! - [`AgenticConfig`]: The root configuration type with namespaced sub-configs
 //! - [`load_merged`]: Two-layer config loading (global + local) with env overrides
-//! - [`schema`]: JSON Schema generation for IDE autocomplete
+//! - [`schema`]: JSON Schema generation for IDE autocomplete (Taplo support)
 //! - [`validation`]: Advisory validation that produces warnings
 //!
 //! # Configuration Precedence (lowest to highest)
 //! 1. Default values
-//! 2. Global config (`~/.config/agentic/agentic.json`)
-//! 3. Local config (`./agentic.json`)
+//! 2. Global config (`~/.config/agentic/agentic.toml`)
+//! 3. Local config (`./agentic.toml`)
 //! 4. Environment variables
 //!
 //! # Example
@@ -45,7 +45,6 @@ compile_error!(
 
 pub mod loader;
 pub mod merge;
-pub mod migration;
 pub mod paths;
 pub mod schema;
 #[cfg(test)]

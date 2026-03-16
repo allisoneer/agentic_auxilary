@@ -5,7 +5,6 @@
 //! configs while still surfacing potential issues.
 
 use crate::types::AgenticConfig;
-use serde_json::Value;
 
 /// An advisory warning about a configuration issue.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,7 +15,7 @@ pub struct AdvisoryWarning {
     /// Human-readable warning message.
     pub message: String,
 
-    /// JSON path to the problematic config field.
+    /// Config path to the problematic field.
     pub path: &'static str,
 }
 
@@ -37,14 +36,60 @@ impl std::fmt::Display for AdvisoryWarning {
     }
 }
 
-/// Detect deprecated config keys in raw JSON before deserialization.
+/// Detect deprecated config keys in raw TOML before deserialization.
 ///
-/// This inspects the merged JSON Value to detect keys that are no longer
+/// This inspects the merged TOML Value to detect keys that are no longer
 /// used and emit advisory warnings. The config will still load successfully,
 /// but users will be notified that they should update their configuration.
-pub fn detect_deprecated_keys(_v: &Value) -> Vec<AdvisoryWarning> {
-    // Intentionally empty: reserved for future schema deprecations.
-    Vec::new()
+pub fn detect_deprecated_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarning> {
+    let mut warnings = Vec::new();
+
+    // Warn if old "thoughts" section exists (removed in this version)
+    if let Some(tbl) = v.as_table() {
+        if tbl.contains_key("thoughts") {
+            warnings.push(AdvisoryWarning::new(
+                "config.deprecated.thoughts",
+                "thoughts",
+                "The 'thoughts' section has been removed. thoughts-core now has its own config.",
+            ));
+        }
+        if tbl.contains_key("models") {
+            warnings.push(AdvisoryWarning::new(
+                "config.deprecated.models",
+                "models",
+                "The 'models' section has been replaced by 'subagents' and 'reasoning'.",
+            ));
+        }
+    }
+
+    warnings
+}
+
+/// Detect deprecated config keys in raw JSON before deserialization.
+///
+/// This is a backward-compatibility shim for CLI code that still uses JSON.
+/// Will be removed when the CLI is updated to use TOML in Phase 4.
+pub fn detect_deprecated_keys(v: &serde_json::Value) -> Vec<AdvisoryWarning> {
+    let mut warnings = Vec::new();
+
+    if let Some(obj) = v.as_object() {
+        if obj.contains_key("thoughts") {
+            warnings.push(AdvisoryWarning::new(
+                "config.deprecated.thoughts",
+                "thoughts",
+                "The 'thoughts' section has been removed. thoughts-core now has its own config.",
+            ));
+        }
+        if obj.contains_key("models") {
+            warnings.push(AdvisoryWarning::new(
+                "config.deprecated.models",
+                "models",
+                "The 'models' section has been replaced by 'subagents' and 'reasoning'.",
+            ));
+        }
+    }
+
+    warnings
 }
 
 /// Validate a configuration and return advisory warnings.
@@ -69,60 +114,26 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         &mut warnings,
     );
 
-    // Validate mount directories are non-empty
-    validate_non_empty(
-        &cfg.thoughts.mount_dirs.thoughts,
-        "thoughts.mount_dirs.thoughts",
-        "thoughts.mount_dirs.thoughts.empty",
+    validate_url(
+        &cfg.services.opencode.base_url,
+        "services.opencode.base_url",
+        "services.opencode.base_url.invalid",
         &mut warnings,
     );
 
-    validate_non_empty(
-        &cfg.thoughts.mount_dirs.context,
-        "thoughts.mount_dirs.context",
-        "thoughts.mount_dirs.context.empty",
+    validate_url(
+        &cfg.services.linear.base_url,
+        "services.linear.base_url",
+        "services.linear.base_url.invalid",
         &mut warnings,
     );
 
-    validate_non_empty(
-        &cfg.thoughts.mount_dirs.references,
-        "thoughts.mount_dirs.references",
-        "thoughts.mount_dirs.references.empty",
+    validate_url(
+        &cfg.services.github.base_url,
+        "services.github.base_url",
+        "services.github.base_url.invalid",
         &mut warnings,
     );
-
-    // Validate mount directories are distinct
-    let dirs = &cfg.thoughts.mount_dirs;
-    if dirs.thoughts == dirs.context {
-        warnings.push(AdvisoryWarning {
-            code: "thoughts.mount_dirs.duplicate",
-            path: "thoughts.mount_dirs",
-            message: format!(
-                "thoughts and context directories are the same: '{}'",
-                dirs.thoughts
-            ),
-        });
-    }
-    if dirs.thoughts == dirs.references {
-        warnings.push(AdvisoryWarning {
-            code: "thoughts.mount_dirs.duplicate",
-            path: "thoughts.mount_dirs",
-            message: format!(
-                "thoughts and references directories are the same: '{}'",
-                dirs.thoughts
-            ),
-        });
-    }
-    if dirs.context == dirs.references {
-        warnings.push(AdvisoryWarning {
-            code: "thoughts.mount_dirs.duplicate",
-            path: "thoughts.mount_dirs",
-            message: format!(
-                "context and references directories are the same: '{}'",
-                dirs.context
-            ),
-        });
-    }
 
     // Validate log level
     let valid_levels = ["trace", "debug", "info", "warn", "error"];
@@ -215,6 +226,51 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         }
     }
 
+    // Validate orchestrator.compaction_threshold is in (0,1]
+    if !(0.0..=1.0).contains(&cfg.orchestrator.compaction_threshold) {
+        warnings.push(AdvisoryWarning::new(
+            "orchestrator.compaction_threshold.out_of_range",
+            "orchestrator.compaction_threshold",
+            "expected a value between 0.0 and 1.0",
+        ));
+    }
+
+    // Validate web_retrieval: default_search_results <= max_search_results
+    if cfg.web_retrieval.default_search_results > cfg.web_retrieval.max_search_results {
+        warnings.push(AdvisoryWarning::new(
+            "web_retrieval.default_exceeds_max",
+            "web_retrieval.default_search_results",
+            "default_search_results exceeds max_search_results",
+        ));
+    }
+
+    // Validate web_retrieval.summarizer.model is not empty
+    if cfg.web_retrieval.summarizer.model.trim().is_empty() {
+        warnings.push(AdvisoryWarning::new(
+            "web_retrieval.summarizer.model.empty",
+            "web_retrieval.summarizer.model",
+            "value is empty",
+        ));
+    }
+
+    // Validate cli_tools.max_depth is reasonable
+    if cfg.cli_tools.max_depth == 0 {
+        warnings.push(AdvisoryWarning::new(
+            "cli_tools.max_depth.zero",
+            "cli_tools.max_depth",
+            "max_depth is 0, directory listing may be limited",
+        ));
+    }
+
+    // Validate github.ai_reply_prefix is not empty (could cause attribution issues)
+    if cfg.services.github.ai_reply_prefix.trim().is_empty() {
+        warnings.push(AdvisoryWarning::new(
+            "services.github.ai_reply_prefix.empty",
+            "services.github.ai_reply_prefix",
+            "empty prefix may cause AI replies to be unmarked",
+        ));
+    }
+
     warnings
 }
 
@@ -229,21 +285,6 @@ fn validate_url(
             code,
             path,
             message: format!("Expected an http(s) URL, got: '{}'", url),
-        });
-    }
-}
-
-fn validate_non_empty(
-    value: &str,
-    path: &'static str,
-    code: &'static str,
-    warnings: &mut Vec<AdvisoryWarning>,
-) {
-    if value.trim().is_empty() {
-        warnings.push(AdvisoryWarning {
-            code,
-            path,
-            message: "Value cannot be empty".into(),
         });
     }
 }
@@ -271,33 +312,6 @@ mod tests {
         let warnings = validate(&config);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].code, "services.anthropic.base_url.invalid");
-    }
-
-    #[test]
-    fn test_empty_mount_dir_warns() {
-        let mut config = AgenticConfig::default();
-        config.thoughts.mount_dirs.thoughts = "".into();
-
-        let warnings = validate(&config);
-        assert!(
-            warnings
-                .iter()
-                .any(|w| w.code == "thoughts.mount_dirs.thoughts.empty")
-        );
-    }
-
-    #[test]
-    fn test_duplicate_mount_dirs_warn() {
-        let mut config = AgenticConfig::default();
-        config.thoughts.mount_dirs.thoughts = "same".into();
-        config.thoughts.mount_dirs.context = "same".into();
-
-        let warnings = validate(&config);
-        assert!(
-            warnings
-                .iter()
-                .any(|w| w.code == "thoughts.mount_dirs.duplicate")
-        );
     }
 
     #[test]
@@ -382,6 +396,67 @@ mod tests {
             !warnings
                 .iter()
                 .any(|w| w.code == "reasoning.reasoning_effort.invalid")
+        );
+    }
+
+    #[test]
+    fn test_orchestrator_compaction_threshold_out_of_range() {
+        let mut config = AgenticConfig::default();
+        config.orchestrator.compaction_threshold = 1.5; // Invalid
+
+        let warnings = validate(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "orchestrator.compaction_threshold.out_of_range")
+        );
+    }
+
+    #[test]
+    fn test_web_retrieval_default_exceeds_max() {
+        let mut config = AgenticConfig::default();
+        config.web_retrieval.default_search_results = 100;
+        config.web_retrieval.max_search_results = 20;
+
+        let warnings = validate(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "web_retrieval.default_exceeds_max")
+        );
+    }
+
+    #[test]
+    fn test_detect_deprecated_thoughts_toml() {
+        let toml_val: toml::Value = toml::from_str(
+            r#"
+[thoughts]
+mount_dirs = {}
+"#,
+        )
+        .unwrap();
+
+        let warnings = detect_deprecated_keys_toml(&toml_val);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "config.deprecated.thoughts")
+        );
+    }
+
+    #[test]
+    fn test_detect_deprecated_models_json() {
+        let json_val: serde_json::Value = serde_json::json!({
+            "models": {
+                "default_model": "some-model"
+            }
+        });
+
+        let warnings = detect_deprecated_keys(&json_val);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "config.deprecated.models")
         );
     }
 }

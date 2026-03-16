@@ -6,9 +6,6 @@ use chrono::Utc;
 use crate::WebTools;
 use crate::types::{WebFetchInput, WebFetchOutput};
 
-/// Default maximum download size: 5 MB
-const DEFAULT_MAX_BYTES: usize = 5 * 1024 * 1024;
-
 /// Hard maximum allowed `max_bytes`: 20 MB
 pub const HARD_MAX_BYTES: usize = 20 * 1024 * 1024;
 
@@ -20,7 +17,9 @@ pub async fn web_fetch(
     tools: &WebTools,
     input: WebFetchInput,
 ) -> Result<WebFetchOutput, ToolError> {
-    let max_bytes = input.max_bytes.unwrap_or(DEFAULT_MAX_BYTES);
+    #[allow(clippy::cast_possible_truncation)]
+    let default_max_bytes = tools.cfg.default_max_bytes as usize;
+    let max_bytes = input.max_bytes.unwrap_or(default_max_bytes);
 
     if max_bytes > HARD_MAX_BYTES {
         return Err(ToolError::invalid_input(format!(

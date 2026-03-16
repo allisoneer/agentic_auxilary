@@ -28,8 +28,8 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
         .map_err(|e| ToolError::external(format!("Failed to initialize Anthropic client: {e}")))?;
 
     let req = MessagesCreateRequest {
-        model: "claude-haiku-4-5".into(),
-        max_tokens: 300,
+        model: tools.cfg.summarizer.model.clone(),
+        max_tokens: tools.cfg.summarizer.max_tokens,
         messages: vec![MessageParam {
             role: MessageRole::User,
             content: format!(
@@ -38,7 +38,8 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
             )
             .into(),
         }],
-        temperature: Some(0.2),
+        #[allow(clippy::cast_possible_truncation)]
+        temperature: Some(tools.cfg.summarizer.temperature as f32),
         ..Default::default()
     };
 

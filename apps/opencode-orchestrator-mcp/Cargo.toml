@@ -26,6 +26,7 @@ name = "opencode-orchestrator-mcp"
 path = "src/main.rs"
 
 [dependencies]
+agentic-config = { workspace = true }
 anyhow = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }

@@ -64,11 +64,23 @@ pub fn get_repo_rules_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".thoughts").join("rules.json")
 }
 
+/// Get the XDG config home directory.
+///
+/// Returns `$XDG_CONFIG_HOME` if set, otherwise `~/.config`.
+fn xdg_config_home() -> Result<PathBuf> {
+    if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME") {
+        return Ok(PathBuf::from(dir));
+    }
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    Ok(home.join(".config"))
+}
+
 /// Get the repository mapping file path.
 ///
-/// Returns the new location at `~/.config/agentic/repos.json`.
+/// Returns the location at `~/.config/agentic/repos.json`.
 pub fn get_repo_mapping_path() -> Result<PathBuf> {
-    Ok(agentic_config::agentic_config_dir()?.join("repos.json"))
+    Ok(xdg_config_home()?.join("agentic").join("repos.json"))
 }
 
 /// Get the legacy repository mapping file path.

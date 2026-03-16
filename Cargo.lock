@@ -34,6 +34,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]
@@ -51,8 +52,10 @@ dependencies = [
  "secrecy 0.8.0",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "serial_test",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -4264,6 +4267,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "opencode-orchestrator-mcp"
 version = "0.1.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "anyhow",
@@ -6278,7 +6282,6 @@ dependencies = [
 name = "thoughts-tool"
 version = "0.8.3"
 dependencies = [
- "agentic-config",
  "agentic-tools-core",
  "agentic_logging",
  "anyhow",
@@ -7105,6 +7108,7 @@ dependencies = [
 name = "web-retrieval"
 version = "0.1.5"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "anthropic-async",
  "chrono",

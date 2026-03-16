@@ -1,0 +1,16 @@
+# Taplo configuration for TOML schema validation and formatting
+# https://taplo.tamasfe.dev/
+
+[formatting]
+align_entries = false
+array_auto_collapse = true
+indent_string = "  "
+
+# Associate agentic.toml files with the schema
+[[rule]]
+include = ["agentic.toml", "**/agentic.toml"]
+
+[rule.schema]
+# Schema can be generated via: agentic config schema > agentic.schema.json
+# Or: cargo run -p agentic-bin -- config schema > agentic.schema.json
+path = "agentic.schema.json"
