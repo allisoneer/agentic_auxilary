@@ -339,6 +339,8 @@ fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
         "CLAUDE.md".to_string(),
         "release-plz.toml".to_string(),
         "README.md".to_string(),
+        "justfile".to_string(),
+        "agentic.schema.json".to_string(),
     ];
     let ws_root = metadata.workspace_root.as_std_path();
 

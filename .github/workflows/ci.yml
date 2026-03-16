@@ -184,9 +184,6 @@ jobs:
         with:
           tool: just
 
-      - name: xtask sync --check
-        run: just xtask-sync-check
-
       - name: xtask verify --check
         run: just xtask-verify-check
 
