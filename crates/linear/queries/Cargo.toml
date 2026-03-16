@@ -1,20 +1,20 @@
 [package]
 name = "linear-queries"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "MIT"
 description = "Cynic queries and input types for Linear"
 repository = "https://github.com/allisoneer/agentic_auxilary"
 
 [dependencies]
-cynic = { version = "3.12.0", features = ["rkyv"] }
+cynic = { version = "3.13.1", features = ["rkyv"] }
 linear-schema = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
-cynic-codegen = { version = "3.12.0", features = ["rkyv"] }
+cynic-codegen = { version = "3.13.1", features = ["rkyv"] }
 
 [package.metadata.repo]
 role = "lib"

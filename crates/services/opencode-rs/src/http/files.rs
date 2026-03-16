@@ -1,4 +1,4 @@
-//! Files API for OpenCode.
+//! Files API for `OpenCode`.
 //!
 //! Endpoints for file operations.
 
@@ -36,11 +36,7 @@ impl FilesApi {
     pub async fn read(&self, path: &str) -> Result<FileContent> {
         let encoded = urlencoding::encode(path);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/file/content?path={}", encoded),
-                None,
-            )
+            .request_json(Method::GET, &format!("/file/content?path={encoded}"), None)
             .await
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "claudecode"
-version = "0.1.11"
+version = "0.1.13"
 edition = "2024"
 authors = ["ClaudeCode-RS Contributors"]
 description = "A Rust SDK for programmatically interacting with Claude Code"
@@ -34,7 +34,7 @@ tracing = "0.1"
 
 # Path and environment handling
 dirs = { workspace = true }
-which = "6.0"
+which = "8"
 
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
@@ -49,7 +49,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 libc = "0.2"
 
 # MCP validation
-rmcp = { version = "0.12.0", features = ["client", "transport-child-process"] }
+rmcp = { workspace = true, features = ["client", "transport-child-process"] }
 num_cpus = "1.16"
 
 [dev-dependencies]

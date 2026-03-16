@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.5] - 2026-03-10
+
+### ⚙️  Miscellaneous
+- *(deps)* Upgrade 13 dependencies to latest versions
+## [0.1.4] - 2026-03-05
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: agentic-tools-core
+## [0.1.3] - 2026-02-27
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: opencode_rs
 ## [0.1.2] - 2026-02-26
 
 ### ⛰️  Features

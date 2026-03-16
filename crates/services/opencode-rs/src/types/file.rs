@@ -1,4 +1,4 @@
-//! File types for opencode_rs.
+//! File types for `opencode_rs`.
 
 use serde::{Deserialize, Serialize};
 

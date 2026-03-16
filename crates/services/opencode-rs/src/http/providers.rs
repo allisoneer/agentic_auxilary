@@ -1,10 +1,9 @@
-//! Providers API for OpenCode.
+//! Providers API for `OpenCode`.
 //!
 //! Endpoints for managing LLM providers.
 
 use crate::error::Result;
-use crate::http::HttpClient;
-use crate::types::api::{OAuthCallbackResponse, SetAuthResponse};
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::provider::{
     OAuthAuthorizeResponse, OAuthCallbackRequest, ProviderAuth, ProviderListResponse,
     SetAuthRequest,
@@ -52,10 +51,11 @@ impl ProvidersApi {
     ///
     /// Returns an error if the request fails.
     pub async fn oauth_authorize(&self, provider_id: &str) -> Result<OAuthAuthorizeResponse> {
+        let pid = encode_path_segment(provider_id);
         self.http
             .request_json(
                 Method::POST,
-                &format!("/provider/{}/oauth/authorize", provider_id),
+                &format!("/provider/{pid}/oauth/authorize"),
                 Some(serde_json::json!({})),
             )
             .await
@@ -70,12 +70,13 @@ impl ProvidersApi {
         &self,
         provider_id: &str,
         req: &OAuthCallbackRequest,
-    ) -> Result<OAuthCallbackResponse> {
+    ) -> Result<bool> {
+        let pid = encode_path_segment(provider_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
+            .request_json::<bool>(
                 Method::POST,
-                &format!("/provider/{}/oauth/callback", provider_id),
+                &format!("/provider/{pid}/oauth/callback"),
                 Some(body),
             )
             .await
@@ -86,14 +87,23 @@ impl ProvidersApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn set_auth(
-        &self,
-        provider_id: &str,
-        req: &SetAuthRequest,
-    ) -> Result<SetAuthResponse> {
+    pub async fn set_auth(&self, provider_id: &str, req: &SetAuthRequest) -> Result<bool> {
+        let pid = encode_path_segment(provider_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(Method::PUT, &format!("/auth/{}", provider_id), Some(body))
+            .request_json::<bool>(Method::PUT, &format!("/auth/{pid}"), Some(body))
+            .await
+    }
+
+    /// Delete authentication for a provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn delete_auth(&self, provider_id: &str) -> Result<bool> {
+        let pid = encode_path_segment(provider_id);
+        self.http
+            .request_json::<bool>(Method::DELETE, &format!("/auth/{pid}"), None)
             .await
     }
 }

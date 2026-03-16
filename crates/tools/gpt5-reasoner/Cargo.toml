@@ -1,6 +1,6 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
@@ -16,15 +16,14 @@ agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 thoughts-tool = { workspace = true }
 agentic_logging = { workspace = true }
-async-openai = { version = "0.32", features = ["chat-completion"] }
+async-openai = { version = "0.33", features = ["chat-completion"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = "0.9"
 schemars = { workspace = true }
-quick-xml = "0.31"
 regex = "1"
-tiktoken-rs = "0.5"
+tiktoken-rs = "0.9.1"
 dotenvy = "0.15"
 thiserror = { workspace = true }
 clap = { workspace = true }

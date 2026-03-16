@@ -23,6 +23,28 @@
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
+    "OrchestratorClaude": {
+      "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
+      "model": "anthropic/claude-opus-4-5-20251101",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "orchestrator_*": "allow",
+        "read": "allow",
+        "todowrite": "allow"
+      }
+    },
+    "OrchestratorOpenAI": {
+      "prompt": "{file:./.opencode/orchestrator_sysprompt_gpt54.md}",
+      "model": "opencode/gpt-5.4",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "orchestrator_*": "allow",
+        "read": "allow",
+        "todowrite": "allow"
+      }
+    },
     "Bash": {
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary",
@@ -117,6 +139,13 @@
       ],
       "enabled": true
     },
+    "orchestrator": {
+      "type": "local",
+      "command": [
+        "opencode-orchestrator-mcp"
+      ],
+      "enabled": true
+    },
     "playwright": {
       "type": "local",
       "command": [
@@ -133,7 +162,43 @@
           "options": {
             "thinking": {
               "type": "enabled",
-              "budgetTokens": 36000
+              "budgetTokens": 32000
+            }
+          },
+          "variants": {
+            "high": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 48000
+              }
+            },
+            "max": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 64000
+              }
+            }
+          }
+        },
+        "claude-opus-4-5-20251101": {
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 32000
+            }
+          },
+          "variants": {
+            "high": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 48000
+              }
+            },
+            "max": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 64000
+              }
             }
           }
         }
@@ -141,6 +206,6 @@
     }
   },
   "experimental": {
-    "mcp_timeout": 3600000
+    "mcp_timeout": 7200000
   }
 }

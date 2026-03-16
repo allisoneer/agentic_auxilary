@@ -1,4 +1,4 @@
-//! Miscellaneous API endpoints for OpenCode.
+//! Miscellaneous API endpoints for `OpenCode`.
 //!
 //! Includes: VCS, path, instance, log, LSP, formatter, global endpoints.
 
@@ -101,13 +101,13 @@ impl MiscApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn global_dispose(&self) -> Result<()> {
+    pub async fn global_dispose(&self) -> Result<bool> {
         self.http
-            .request_empty(Method::POST, "/global/dispose", Some(serde_json::json!({})))
+            .request_json::<bool>(Method::POST, "/global/dispose", Some(serde_json::json!({})))
             .await
     }
 
-    /// Get OpenAPI spec.
+    /// Get `OpenAPI` spec.
     ///
     /// # Errors
     ///

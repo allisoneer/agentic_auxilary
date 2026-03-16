@@ -1,13 +1,16 @@
-//! Integration tests for opencode_rs.
+//! Integration tests for `opencode_rs`.
 //!
-//! These tests run against a real OpenCode server and are gated by environment variables.
+//! These tests run against a real `OpenCode` server and are gated by environment variables.
 //!
 //! To run:
-//!   OPENCODE_INTEGRATION=1 cargo test --test integration -- --ignored
+//!   `OPENCODE_INTEGRATION=1` cargo test --test integration -- --ignored
 //!
 //! Optional environment variables:
-//!   OPENCODE_BASE_URL - Base URL of the OpenCode server (default: http://127.0.0.1:4096)
-//!   OPENCODE_DIRECTORY - Directory context for requests (default: current directory)
+//!   `OPENCODE_BASE_URL` - Base URL of the `OpenCode` server (default: <http://127.0.0.1:4096>)
+//!   `OPENCODE_DIRECTORY` - Directory context for requests (default: current directory)
+
+// Integration tests are allowed to use unwrap/expect for test assertions
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 // Include submodule tests from integration/ directory
 #[path = "integration/mod.rs"]
@@ -24,7 +27,7 @@ fn should_run() -> bool {
     std::env::var("OPENCODE_INTEGRATION").is_ok()
 }
 
-/// Get the base URL for the OpenCode server.
+/// Get the base URL for the `OpenCode` server.
 fn base_url() -> String {
     std::env::var("OPENCODE_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:4096".to_string())
 }
@@ -33,8 +36,7 @@ fn base_url() -> String {
 fn directory() -> String {
     std::env::var("OPENCODE_DIRECTORY").unwrap_or_else(|_| {
         std::env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "/tmp".to_string())
+            .map_or_else(|_| "/tmp".to_string(), |p| p.to_string_lossy().to_string())
     })
 }
 
@@ -45,12 +47,12 @@ fn build_client() -> opencode_rs::Client {
         .directory(directory())
         .timeout_secs(300)
         .build()
-        .expect("Failed to build client")
+        .unwrap()
 }
 
 /// Test server health endpoint.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_server_health() {
     if !should_run() {
         return;
@@ -63,7 +65,7 @@ async fn test_server_health() {
 
 /// Test full session lifecycle: create -> list -> get -> delete.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_lifecycle() {
     if !should_run() {
         return;
@@ -96,7 +98,7 @@ async fn test_session_lifecycle() {
             println!("Found {} sessions", sessions.len());
         }
         Err(e) => {
-            println!("List sessions failed: {:?}", e);
+            println!("List sessions failed: {e:?}");
         }
     }
 
@@ -110,7 +112,7 @@ async fn test_session_lifecycle() {
 
 /// Test session with prompt and SSE streaming.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_prompt_and_stream() {
     if !should_run() {
         return;
@@ -128,7 +130,6 @@ async fn test_session_prompt_and_stream() {
     // Subscribe to events BEFORE sending prompt
     let mut subscription = client
         .subscribe_session(&session.id)
-        .await
         .expect("Failed to subscribe");
 
     // Send a simple prompt
@@ -157,7 +158,7 @@ async fn test_session_prompt_and_stream() {
         // Prompt may fail if no provider is configured
         println!("Prompt failed (no provider?): {:?}", prompt_result.err());
         subscription.close();
-        client.sessions().delete(&session.id).await.ok();
+        let _ = client.sessions().delete(&session.id).await;
         return;
     }
 
@@ -170,28 +171,18 @@ async fn test_session_prompt_and_stream() {
         tokio::select! {
             event = subscription.recv() => {
                 match event {
-                    Some(Event::SessionIdle { .. }) => {
+                    Some(Event::SessionIdle { .. } | Event::SessionError { .. }) => {
                         got_any_event = true;
                         break;
-                    }
-                    Some(Event::MessagePartUpdated { .. }) => {
-                        got_any_event = true;
-                    }
-                    Some(Event::SessionError { .. }) => {
-                        got_any_event = true;
-                        break;
-                    }
-                    Some(Event::ServerHeartbeat { .. }) => {
-                        // Heartbeat is also a valid event
-                        got_any_event = true;
                     }
                     Some(_) => {
+                        // Any other event (MessagePartUpdated, ServerHeartbeat, etc.)
                         got_any_event = true;
                     }
                     None => break,
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(100)) => {}
+            () = tokio::time::sleep(Duration::from_millis(100)) => {}
         }
     }
 
@@ -214,7 +205,7 @@ async fn test_session_prompt_and_stream() {
 
 /// Test session abort.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_abort() {
     if !should_run() {
         return;
@@ -247,7 +238,7 @@ async fn test_session_abort() {
 
 /// Test permissions API.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_permissions_list() {
     if !should_run() {
         return;
@@ -268,7 +259,7 @@ async fn test_permissions_list() {
 
 /// Test files API.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_files_list() {
     if !should_run() {
         return;
@@ -286,14 +277,14 @@ async fn test_files_list() {
         }
         Err(e) => {
             // Some OpenCode configurations may not support this endpoint
-            println!("Files list not available: {:?}", e);
+            println!("Files list not available: {e:?}");
         }
     }
 }
 
 /// Test file status.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_files_status() {
     if !should_run() {
         return;
@@ -314,7 +305,7 @@ async fn test_files_status() {
 
 /// Test project API.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_project_list() {
     if !should_run() {
         return;
@@ -335,7 +326,7 @@ async fn test_project_list() {
 
 /// Test current project.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_project_current() {
     if !should_run() {
         return;
@@ -355,7 +346,7 @@ async fn test_project_current() {
 
 /// Test providers API.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_providers_list() {
     if !should_run() {
         return;
@@ -388,7 +379,7 @@ async fn test_providers_list() {
 
 /// Test MCP status.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_mcp_status() {
     if !should_run() {
         return;
@@ -409,7 +400,7 @@ async fn test_mcp_status() {
 
 /// Test config API.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_config_get() {
     if !should_run() {
         return;
@@ -427,7 +418,7 @@ async fn test_config_get() {
 
 /// Test tools/agents API.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_agents_list() {
     if !should_run() {
         return;
@@ -448,7 +439,7 @@ async fn test_agents_list() {
 
 /// Test commands list.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_commands_list() {
     if !should_run() {
         return;
@@ -469,7 +460,7 @@ async fn test_commands_list() {
 
 /// Test VCS info.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_vcs_info() {
     if !should_run() {
         return;
@@ -486,7 +477,7 @@ async fn test_vcs_info() {
 
 /// Test path info.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_path_info() {
     if !should_run() {
         return;
@@ -500,9 +491,9 @@ async fn test_path_info() {
     assert!(!path.directory.is_empty(), "Directory should not be empty");
 }
 
-/// Test OpenAPI doc endpoint.
+/// Test `OpenAPI` doc endpoint.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_openapi_doc() {
     if !should_run() {
         return;
@@ -527,7 +518,7 @@ async fn test_openapi_doc() {
 
 /// Test session fork.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_fork() {
     if !should_run() {
         return;
@@ -570,7 +561,7 @@ async fn test_session_fork() {
 
 /// Test session children.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_children() {
     if !should_run() {
         return;
@@ -621,7 +612,7 @@ async fn test_session_children() {
 
 /// Test session diff.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_diff() {
     if !should_run() {
         return;
@@ -645,7 +636,7 @@ async fn test_session_diff() {
         }
         Err(e) => {
             // Some versions return different format
-            println!("Diff returned unexpected format: {:?}", e);
+            println!("Diff returned unexpected format: {e:?}");
         }
     }
 
@@ -659,7 +650,7 @@ async fn test_session_diff() {
 
 /// Test session todos.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_session_todos() {
     if !should_run() {
         return;
@@ -694,7 +685,7 @@ async fn test_session_todos() {
 
 /// Test global event subscription.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires: opencode serve"]
 async fn test_global_events() {
     if !should_run() {
         return;
@@ -705,7 +696,6 @@ async fn test_global_events() {
     // Subscribe to global events
     let mut subscription = client
         .subscribe_global()
-        .await
         .expect("Failed to subscribe to global events");
 
     // Wait briefly for any events (heartbeat, etc.)
@@ -724,7 +714,7 @@ async fn test_global_events() {
                     None => break,
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(100)) => {}
+            () = tokio::time::sleep(Duration::from_millis(100)) => {}
         }
     }
 

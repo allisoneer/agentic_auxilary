@@ -1,11 +1,11 @@
-//! API error types for opencode_rs.
+//! API error types for `opencode_rs`.
 //!
 //! Contains typed error structures matching TypeScript MessageV2.APIError.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// API error from the OpenCode server.
+/// API error from the `OpenCode` server.
 ///
 /// Matches the TypeScript `MessageV2.APIError` schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -33,7 +33,7 @@ impl std::fmt::Display for APIError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)?;
         if let Some(code) = self.status_code {
-            write!(f, " (status: {})", code)?;
+            write!(f, " (status: {code})")?;
         }
         Ok(())
     }

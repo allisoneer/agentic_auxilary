@@ -1,14 +1,17 @@
-//! Session types for opencode_rs.
+//! Session types for `opencode_rs`.
 
 use crate::types::permission::Ruleset;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-/// A session in OpenCode.
+/// A session in `OpenCode`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
+    /// URL-safe session slug (upstream-required).
+    pub slug: String,
     /// Project identifier (may not be present in all responses).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
@@ -184,6 +187,112 @@ pub struct SessionStatus {
     pub busy: bool,
 }
 
+/// Rich per-session status information returned by modern `/session/status` responses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum SessionStatusInfo {
+    /// Session is idle.
+    Idle,
+    /// Session is busy processing work.
+    Busy,
+    /// Session is retrying work.
+    Retry {
+        /// Retry attempt number.
+        attempt: u64,
+        /// Retry message/reason.
+        message: String,
+        /// Next retry timestamp.
+        next: u64,
+    },
+}
+
+/// Backward-compatible `/session/status` response wrapper.
+#[derive(Debug, Clone)]
+pub enum SessionStatusResponse {
+    /// Legacy global status shape.
+    Legacy(SessionStatus),
+    /// Modern per-session map shape.
+    Map(HashMap<String, SessionStatusInfo>),
+}
+
+impl SessionStatusResponse {
+    /// Get status for a specific session ID.
+    pub fn status_for(&self, session_id: &str) -> SessionStatusInfo {
+        match self {
+            Self::Map(map) => map
+                .get(session_id)
+                .cloned()
+                .unwrap_or(SessionStatusInfo::Idle),
+            Self::Legacy(status) => {
+                if status.busy && status.active_session_id.as_deref() == Some(session_id) {
+                    SessionStatusInfo::Busy
+                } else if status.busy && status.active_session_id.is_none() {
+                    // Conservative fallback for legacy busy-without-active-session responses.
+                    SessionStatusInfo::Busy
+                } else {
+                    SessionStatusInfo::Idle
+                }
+            }
+        }
+    }
+
+    /// Convert to a legacy summary for compatibility with existing API consumers.
+    pub fn into_legacy_summary(self) -> SessionStatus {
+        match self {
+            Self::Legacy(status) => status,
+            Self::Map(map) => {
+                let active: Vec<String> = map
+                    .into_iter()
+                    .filter_map(|(sid, status)| {
+                        if matches!(
+                            status,
+                            SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }
+                        ) {
+                            Some(sid)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                let busy = !active.is_empty();
+                let active_session_id = if active.len() == 1 {
+                    active.into_iter().next()
+                } else {
+                    None
+                };
+
+                SessionStatus {
+                    active_session_id,
+                    busy,
+                }
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionStatusResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let is_legacy = value.get("busy").is_some()
+            || value.get("activeSessionId").is_some()
+            || value.get("active_session_id").is_some();
+
+        if is_legacy {
+            let legacy: SessionStatus =
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            Ok(Self::Legacy(legacy))
+        } else {
+            let map: HashMap<String, SessionStatusInfo> =
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            Ok(Self::Map(map))
+        }
+    }
+}
+
 /// Session diff response.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -223,6 +332,7 @@ mod tests {
     fn test_session_deserialize() {
         let json = r#"{
             "id": "s1",
+            "slug": "s1",
             "projectId": "p1",
             "directory": "/path/to/project",
             "title": "Test Session",
@@ -231,22 +341,32 @@ mod tests {
         }"#;
         let session: Session = serde_json::from_str(json).unwrap();
         assert_eq!(session.id, "s1");
+        assert_eq!(session.slug, "s1");
         assert_eq!(session.title, "Test Session");
     }
 
     #[test]
-    fn test_session_minimal() {
-        // Session with only required field (id)
-        let json = r#"{"id": "s1"}"#;
+    fn test_session_minimal_upstream() {
+        // Session with only required fields (id + slug)
+        let json = r#"{"id": "s1", "slug": "s1"}"#;
         let session: Session = serde_json::from_str(json).unwrap();
         assert_eq!(session.id, "s1");
+        assert_eq!(session.slug, "s1");
         assert!(session.project_id.is_none());
+    }
+
+    #[test]
+    fn test_session_missing_slug_fails() {
+        // Session without slug should fail deserialization (slug is upstream-required)
+        let json = r#"{"id": "s1"}"#;
+        assert!(serde_json::from_str::<Session>(json).is_err());
     }
 
     #[test]
     fn test_session_with_optional_fields() {
         let json = r#"{
             "id": "s1",
+            "slug": "s1",
             "projectId": "p1",
             "directory": "/path",
             "title": "Test",
@@ -256,7 +376,41 @@ mod tests {
             "share": {"url": "https://example.com/share/s1"}
         }"#;
         let session: Session = serde_json::from_str(json).unwrap();
+        assert_eq!(session.slug, "s1");
         assert_eq!(session.parent_id, Some("s0".to_string()));
         assert!(session.share.is_some());
+    }
+
+    #[test]
+    fn parse_legacy_status() {
+        let json = r#"{"busy": true, "activeSessionId": "s1"}"#;
+        let resp: SessionStatusResponse = serde_json::from_str(json).unwrap();
+
+        assert!(matches!(resp, SessionStatusResponse::Legacy(_)));
+        assert!(matches!(resp.status_for("s1"), SessionStatusInfo::Busy));
+        assert!(matches!(resp.status_for("s2"), SessionStatusInfo::Idle));
+    }
+
+    #[test]
+    fn parse_map_status() {
+        let json = r#"{"s1": {"type": "busy"}, "s2": {"type": "retry", "attempt": 2, "message": "rate limited", "next": 12345}}"#;
+        let resp: SessionStatusResponse = serde_json::from_str(json).unwrap();
+
+        assert!(matches!(resp, SessionStatusResponse::Map(_)));
+        assert!(matches!(resp.status_for("s1"), SessionStatusInfo::Busy));
+        assert!(matches!(
+            resp.status_for("s2"),
+            SessionStatusInfo::Retry { attempt: 2, .. }
+        ));
+        assert!(matches!(resp.status_for("s3"), SessionStatusInfo::Idle));
+    }
+
+    #[test]
+    fn parse_empty_map_status() {
+        let json = r"{}";
+        let resp: SessionStatusResponse = serde_json::from_str(json).unwrap();
+
+        assert!(matches!(resp, SessionStatusResponse::Map(_)));
+        assert!(matches!(resp.status_for("any"), SessionStatusInfo::Idle));
     }
 }

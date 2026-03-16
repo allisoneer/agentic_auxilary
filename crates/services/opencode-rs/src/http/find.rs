@@ -1,4 +1,4 @@
-//! Find API for OpenCode.
+//! Find API for `OpenCode`.
 //!
 //! Endpoints for searching files and symbols.
 
@@ -27,7 +27,7 @@ impl FindApi {
     pub async fn text(&self, pattern: &str) -> Result<FindResponse> {
         let encoded = urlencoding::encode(pattern);
         self.http
-            .request_json(Method::GET, &format!("/find?pattern={}", encoded), None)
+            .request_json(Method::GET, &format!("/find?pattern={encoded}"), None)
             .await
     }
 
@@ -39,7 +39,7 @@ impl FindApi {
     pub async fn files(&self, query: &str) -> Result<FindResponse> {
         let encoded = urlencoding::encode(query);
         self.http
-            .request_json(Method::GET, &format!("/find/file?query={}", encoded), None)
+            .request_json(Method::GET, &format!("/find/file?query={encoded}"), None)
             .await
     }
 
@@ -51,11 +51,7 @@ impl FindApi {
     pub async fn symbols(&self, query: &str) -> Result<FindResponse> {
         let encoded = urlencoding::encode(query);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/find/symbol?query={}", encoded),
-                None,
-            )
+            .request_json(Method::GET, &format!("/find/symbol?query={encoded}"), None)
             .await
     }
 }

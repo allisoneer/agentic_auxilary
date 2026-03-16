@@ -1,9 +1,14 @@
-//! HTTP client for OpenCode REST API.
+//! HTTP client for `OpenCode` REST API.
 //!
 //! This module provides the core HTTP client and resource API modules.
 
-// TODO(2): Add encode_path_segment() helper and apply to all path parameter interpolations
-// across sessions, messages, parts, providers, pty, mcp, and project modules (~38 call sites)
+/// Percent-encode a single URL path segment (NOT a full path).
+///
+/// Use this for path parameters to prevent injection (e.g., IDs containing `/`).
+/// The full rollout across all HTTP modules will happen in Phase 9.
+pub(crate) fn encode_path_segment(raw: &str) -> String {
+    urlencoding::encode(raw).into_owned()
+}
 
 use crate::error::{OpencodeError, Result};
 use reqwest::{Client as ReqClient, Method, Response};
@@ -14,6 +19,7 @@ use std::time::Duration;
 pub mod config;
 pub mod files;
 pub mod find;
+pub mod global;
 pub mod mcp;
 pub mod messages;
 pub mod misc;
@@ -22,14 +28,18 @@ pub mod permissions;
 pub mod project;
 pub mod providers;
 pub mod pty;
+pub mod question;
+pub mod resource;
 pub mod sessions;
+pub mod skills;
+pub mod snapshots;
 pub mod tools;
 pub mod worktree;
 
 /// Configuration for the HTTP client.
 #[derive(Clone)]
 pub struct HttpConfig {
-    /// Base URL for the OpenCode server.
+    /// Base URL for the `OpenCode` server.
     pub base_url: String,
     /// Optional directory context header.
     pub directory: Option<String>,
@@ -37,7 +47,7 @@ pub struct HttpConfig {
     pub timeout: Duration,
 }
 
-/// HTTP client for OpenCode REST API.
+/// HTTP client for `OpenCode` REST API.
 #[derive(Clone)]
 pub struct HttpClient {
     inner: ReqClient,
@@ -56,6 +66,11 @@ impl HttpClient {
             .timeout(cfg.timeout)
             .build()
             .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        // Normalize base_url to not have trailing slash (paths start with /)
+        let cfg = HttpConfig {
+            base_url: cfg.base_url.trim_end_matches('/').to_string(),
+            ..cfg
+        };
         Ok(Self { inner, cfg })
     }
 
@@ -65,11 +80,11 @@ impl HttpClient {
     ///
     /// Returns an error if the HTTP client cannot be built.
     pub fn from_parts(
-        base_url: url::Url,
+        base_url: &url::Url,
         directory: Option<PathBuf>,
         http: Option<ReqClient>,
     ) -> Result<Self> {
-        let timeout = Duration::from_secs(300);
+        let timeout = Duration::from_secs(1800);
         let inner = match http {
             Some(client) => client,
             None => ReqClient::builder()
@@ -159,7 +174,7 @@ impl HttpClient {
     /// # Errors
     ///
     /// Returns an error if the request fails or response cannot be deserialized.
-    pub async fn post<TReq: serde::Serialize, TRes: DeserializeOwned>(
+    pub async fn post<TReq: serde::Serialize + Sync, TRes: DeserializeOwned>(
         &self,
         path: &str,
         body: &TReq,
@@ -178,7 +193,11 @@ impl HttpClient {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn post_empty<TReq: serde::Serialize>(&self, path: &str, body: &TReq) -> Result<()> {
+    pub async fn post_empty<TReq: serde::Serialize + Sync>(
+        &self,
+        path: &str,
+        body: &TReq,
+    ) -> Result<()> {
         let resp = self
             .build_request(Method::POST, path)
             .json(body)
@@ -193,7 +212,7 @@ impl HttpClient {
     /// # Errors
     ///
     /// Returns an error if the request fails or response cannot be deserialized.
-    pub async fn patch<TReq: serde::Serialize, TRes: DeserializeOwned>(
+    pub async fn patch<TReq: serde::Serialize + Sync, TRes: DeserializeOwned>(
         &self,
         path: &str,
         body: &TReq,
@@ -212,7 +231,7 @@ impl HttpClient {
     /// # Errors
     ///
     /// Returns an error if the request fails or response cannot be deserialized.
-    pub async fn put<TReq: serde::Serialize, TRes: DeserializeOwned>(
+    pub async fn put<TReq: serde::Serialize + Sync, TRes: DeserializeOwned>(
         &self,
         path: &str,
         body: &TReq,
@@ -278,7 +297,7 @@ impl HttpClient {
 
     // ==================== Response Handling ====================
 
-    /// Map response to JSON, handling errors with NamedError parsing.
+    /// Map response to JSON, handling errors with `NamedError` parsing.
     async fn map_json_response<T: DeserializeOwned>(resp: Response) -> Result<T> {
         let status = resp.status();
         let bytes = resp
@@ -294,7 +313,7 @@ impl HttpClient {
         serde_json::from_slice(&bytes).map_err(OpencodeError::from)
     }
 
-    /// Check response status, returning error with NamedError parsing on failure.
+    /// Check response status, returning error with `NamedError` parsing on failure.
     async fn check_status(resp: Response) -> Result<()> {
         let status = resp.status();
 
@@ -304,6 +323,73 @@ impl HttpClient {
         }
 
         Ok(())
+    }
+
+    // ==================== Transport Retry ====================
+
+    /// Send request with bounded retry for transport-level failures.
+    ///
+    /// Retries on connect/timeout errors; does NOT retry HTTP 4xx/5xx status codes.
+    /// This is specifically for handling transient network issues, not server errors.
+    ///
+    /// # Arguments
+    ///
+    /// * `build` - A closure that creates a fresh `RequestBuilder` for each attempt.
+    ///   The closure is called multiple times if retries are needed.
+    async fn send_with_transport_retry(
+        &self,
+        mut build: impl FnMut() -> reqwest::RequestBuilder,
+    ) -> Result<Response> {
+        const MAX_ATTEMPTS: usize = 2;
+        const BACKOFF_MS: u64 = 50;
+
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            match build().send().await {
+                Ok(resp) => return Ok(resp),
+                Err(e) => {
+                    // Retry only on transport-level errors (before HTTP response received)
+                    let retryable = e.is_connect() || e.is_timeout() || e.is_request();
+                    if retryable && attempt < MAX_ATTEMPTS {
+                        tracing::debug!(
+                            attempt,
+                            error = %e,
+                            "transport error, retrying after {}ms",
+                            BACKOFF_MS
+                        );
+                        tokio::time::sleep(Duration::from_millis(BACKOFF_MS)).await;
+                        continue;
+                    }
+                    return Err(OpencodeError::Network(e.to_string()));
+                }
+            }
+        }
+    }
+
+    /// POST with JSON body and transport retry.
+    ///
+    /// Use this for idempotent POST operations where transport-level retry is safe.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails after retries or response cannot be deserialized.
+    pub async fn post_json_with_retry<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<T> {
+        let resp = self
+            .send_with_transport_retry(|| {
+                let mut req = self.build_request(Method::POST, path);
+                if let Some(ref b) = body {
+                    req = req.json(b);
+                }
+                req
+            })
+            .await?;
+
+        Self::map_json_response(resp).await
     }
 }
 

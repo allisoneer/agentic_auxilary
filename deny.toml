@@ -32,6 +32,8 @@ confidence-threshold = 0.93
 multiple-versions = "warn"
 # Deny wildcard dependencies
 wildcards = "deny"
+# Allow path/git dev-dependencies without version (e.g., self-referential test-support deps)
+allow-wildcard-paths = true
 # Allow specific version duplicates that are transitive dependencies we can't control
 skip = [
     # heck is used by different proc-macro crates with different major versions

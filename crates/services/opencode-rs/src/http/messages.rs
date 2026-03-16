@@ -1,12 +1,13 @@
-//! Messages API for OpenCode.
+//! Messages API for `OpenCode`.
 //!
 //! This module provides methods for message endpoints (6 total).
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::api::{CommandResponse, PromptResponse, ShellResponse};
 use crate::types::message::{CommandRequest, Message, PromptRequest, ShellRequest};
 use reqwest::Method;
+use uuid::Uuid;
 
 /// Messages API client.
 #[derive(Clone)]
@@ -26,13 +27,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn prompt(&self, session_id: &str, req: &PromptRequest) -> Result<PromptResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/message", session_id),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/session/{sid}/message"), Some(body))
             .await
     }
 
@@ -42,12 +40,9 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn list(&self, session_id: &str) -> Result<Vec<Message>> {
+        let sid = encode_path_segment(session_id);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/session/{}/message", session_id),
-                None,
-            )
+            .request_json(Method::GET, &format!("/session/{sid}/message"), None)
             .await
     }
 
@@ -57,33 +52,28 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn get(&self, session_id: &str, message_id: &str) -> Result<Message> {
+        let sid = encode_path_segment(session_id);
+        let mid = encode_path_segment(message_id);
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/session/{}/message/{}", session_id, message_id),
-                None,
-            )
+            .request_json(Method::GET, &format!("/session/{sid}/message/{mid}"), None)
             .await
     }
 
-    /// Send a prompt asynchronously (returns immediately).
+    /// Send a prompt asynchronously (returns immediately with 204 No Content).
     ///
     /// Unlike `prompt`, this endpoint returns immediately and the response
-    /// is streamed via SSE events.
+    /// is streamed via SSE events. The server returns HTTP 204 with no body.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn prompt_async(
-        &self,
-        session_id: &str,
-        req: &PromptRequest,
-    ) -> Result<PromptResponse> {
+    pub async fn prompt_async(&self, session_id: &str, req: &PromptRequest) -> Result<()> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
+            .request_empty(
                 Method::POST,
-                &format!("/session/{}/prompt_async", session_id),
+                &format!("/session/{sid}/prompt_async"),
                 Some(body),
             )
             .await
@@ -91,17 +81,24 @@ impl MessagesApi {
 
     /// Execute a command in a session.
     ///
+    /// Uses transport-level retry for transient network failures (connect/timeout).
+    /// To make retries safe, the SDK ensures each dispatch includes a stable `message_id`
+    /// (generated UUID if not provided) so the server can deduplicate repeated requests.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the request fails.
+    /// Returns an error if the request fails after retries.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
-        let body = serde_json::to_value(req)?;
+        let sid = encode_path_segment(session_id);
+
+        let mut req = req.clone();
+        if req.message_id.is_none() {
+            req.message_id = Some(Uuid::new_v4().to_string());
+        }
+
+        let body = serde_json::to_value(&req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/command", session_id),
-                Some(body),
-            )
+            .post_json_with_retry(&format!("/session/{sid}/command"), Some(body))
             .await
     }
 
@@ -111,13 +108,10 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn shell(&self, session_id: &str, req: &ShellRequest) -> Result<ShellResponse> {
+        let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::POST,
-                &format!("/session/{}/shell", session_id),
-                Some(body),
-            )
+            .request_json(Method::POST, &format!("/session/{sid}/shell"), Some(body))
             .await
     }
 }
@@ -128,7 +122,7 @@ mod tests {
     use crate::http::HttpConfig;
     use crate::types::message::{CommandRequest, PromptPart, ShellRequest};
     use std::time::Duration;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -182,11 +176,11 @@ mod tests {
             .and(path("/session/s1/message"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
-                    "info": {"id": "m1", "sessionId": "s1", "role": "user", "time": {"created": 1234567890}},
+                    "info": {"id": "m1", "sessionId": "s1", "role": "user", "time": {"created": 1_234_567_890}},
                     "parts": []
                 },
                 {
-                    "info": {"id": "m2", "sessionId": "s1", "role": "assistant", "time": {"created": 1234567891}},
+                    "info": {"id": "m2", "sessionId": "s1", "role": "assistant", "time": {"created": 1_234_567_891}},
                     "parts": []
                 }
             ])))
@@ -211,11 +205,15 @@ mod tests {
     async fn test_prompt_async() {
         let mock_server = MockServer::start().await;
 
+        // Server returns 204 No Content (fire-and-forget pattern)
         Mock::given(method("POST"))
             .and(path("/session/s1/prompt_async"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "messageId": "m123"
+            .and(body_json(serde_json::json!({
+                "parts": [
+                    { "type": "text", "text": "Hello async" }
+                ]
             })))
+            .respond_with(ResponseTemplate::new(204))
             .mount(&mock_server)
             .await;
 
@@ -227,7 +225,7 @@ mod tests {
         .unwrap();
 
         let messages = MessagesApi::new(http);
-        let result = messages
+        messages
             .prompt_async(
                 "s1",
                 &PromptRequest {
@@ -247,7 +245,6 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result.message_id, Some("m123".to_string()));
     }
 
     #[tokio::test]
@@ -275,7 +272,8 @@ mod tests {
                 "s1",
                 &CommandRequest {
                     command: "test_command".to_string(),
-                    args: None,
+                    arguments: String::new(),
+                    message_id: None,
                 },
             )
             .await
@@ -523,7 +521,8 @@ mod tests {
                 "missing",
                 &CommandRequest {
                     command: "test".to_string(),
-                    args: None,
+                    arguments: String::new(),
+                    message_id: None,
                 },
             )
             .await;
@@ -556,7 +555,7 @@ mod tests {
             .shell(
                 "s1",
                 &ShellRequest {
-                    command: "".to_string(),
+                    command: String::new(),
                     model: None,
                 },
             )

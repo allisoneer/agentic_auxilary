@@ -1,6 +1,6 @@
-//! Rust SDK for OpenCode (HTTP-first hybrid with SSE streaming).
+//! Rust SDK for `OpenCode` (HTTP-first hybrid with SSE streaming).
 //!
-//! This crate provides a native Rust interface to OpenCode's HTTP REST API
+//! This crate provides a native Rust interface to `OpenCode`'s HTTP REST API
 //! and SSE streaming capabilities.
 
 #![deny(rust_2018_idioms)]

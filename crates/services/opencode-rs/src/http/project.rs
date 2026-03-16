@@ -1,9 +1,9 @@
-//! Project API for OpenCode.
+//! Project API for `OpenCode`.
 //!
 //! Endpoints for project management.
 
 use crate::error::Result;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, encode_path_segment};
 use crate::types::project::{Project, UpdateProjectRequest};
 use reqwest::Method;
 
@@ -45,13 +45,10 @@ impl ProjectApi {
     ///
     /// Returns an error if the request fails.
     pub async fn update(&self, project_id: &str, req: &UpdateProjectRequest) -> Result<Project> {
+        let pid = encode_path_segment(project_id);
         let body = serde_json::to_value(req)?;
         self.http
-            .request_json(
-                Method::PATCH,
-                &format!("/project/{}", project_id),
-                Some(body),
-            )
+            .request_json(Method::PATCH, &format!("/project/{pid}"), Some(body))
             .await
     }
 }

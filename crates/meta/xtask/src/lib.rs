@@ -2,6 +2,7 @@
 
 pub mod autogen;
 pub mod claude;
+pub mod justfile;
 pub mod marker;
 pub mod policy;
 pub mod readme;
