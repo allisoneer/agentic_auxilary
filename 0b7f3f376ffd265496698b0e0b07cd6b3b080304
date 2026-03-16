@@ -1,0 +1,27 @@
+.gitignore
+  434f16a73c622f0b 42-45
+justfile
+  434f16a73c622f0b 321-487
+.opencode/command/review.md
+  434f16a73c622f0b 1-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "0b7f3f376ffd265496698b0e0b07cd6b3b080304",
+  "prompts": {
+    "434f16a73c622f0b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_30760dc14ffegedInienrDItfO",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 456,
+      "total_deletions": 86,
+      "accepted_lines": 370,
+      "overriden_lines": 0
+    }
+  }
+}
