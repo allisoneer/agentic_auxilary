@@ -1,0 +1,39 @@
+.opencode/review_sysprompt_gpt54.md
+  252bf4c2b2c9c85b 1-56
+CLAUDE.md
+  252bf4c2b2c9c85b 152-158
+apps/review-agent-mcp/Cargo.toml
+  252bf4c2b2c9c85b 39-41
+apps/review-agent-mcp/src/tools.rs
+  252bf4c2b2c9c85b 9-10,19-48,54-83,91-92,165,170-177,180-181,210,213-214,217-219,298,316-375,377-407
+.opencode/review_sysprompt.md
+  252bf4c2b2c9c85b 1-59
+opencode.json
+  252bf4c2b2c9c85b 20,49-80
+apps/review-agent-mcp/src/prompts.rs
+  252bf4c2b2c9c85b 85-95,107,109,119,122
+workflow.md
+  252bf4c2b2c9c85b 36-42,44-45,55,212-228
+.opencode/command/review.md
+  252bf4c2b2c9c85b 3,137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "5798c4a908f9f87a012825b95957e814dab5a262",
+  "prompts": {
+    "252bf4c2b2c9c85b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_30354a934ffeq318zx2A2rMaQk",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 387,
+      "total_deletions": 48,
+      "accepted_lines": 376,
+      "overriden_lines": 0
+    }
+  }
+}
