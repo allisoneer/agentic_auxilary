@@ -10,7 +10,7 @@
 
 ## Overview
 
-Unified configuration system for the agentic tools ecosystem. Handles loading, merging, and validating `agentic.json` configuration files with support for global/local precedence, environment variable overrides, and advisory warnings.
+Unified configuration system for the agentic tools ecosystem. Handles loading, merging, and validating `agentic.toml` configuration files with support for global/local precedence, environment variable overrides, and advisory warnings.
 
 ## Quick Commands
 
@@ -32,11 +32,11 @@ cargo build -p agentic-config
 
 Configuration is loaded from two locations and merged (local wins):
 
-1. **Global**: `~/.config/agentic/agentic.json` (user-wide defaults)
-2. **Local**: `./agentic.json` (per-project overrides)
+1. **Global**: `~/.config/agentic/agentic.toml` (user-wide defaults)
+2. **Local**: `./agentic.toml` (per-project overrides)
 3. **Environment variables**: Override any value (highest precedence)
 
-The loader (`loader::load_merged()`) performs a JSON merge-patch of global into local, then applies env var overrides.
+The loader (`loader::load_merged()`) performs a TOML deep-merge of global into local, then applies env var overrides.
 
 ## Tool-Specific Config Sections
 
@@ -100,7 +100,7 @@ Follow the pattern of `subagents` and `reasoning`:
 4. Add validation rules in `validation.rs` `validate()`
 5. Thread config to consumers via `AgenticToolsConfig` in registry
 
-## Example agentic.json
+## Example agentic.toml
 
 ```json
 {

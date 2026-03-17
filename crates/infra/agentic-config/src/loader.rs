@@ -24,19 +24,6 @@ pub const GLOBAL_FILE: &str = "agentic.toml";
 /// Legacy JSON filename (warn if found).
 const LEGACY_JSON_FILE: &str = "agentic.json";
 
-/// Known top-level keys for unknown key detection.
-/// Unknown keys at root level produce advisory warnings.
-const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
-    "$schema",
-    "subagents",
-    "reasoning",
-    "services",
-    "orchestrator",
-    "web_retrieval",
-    "cli_tools",
-    "logging",
-];
-
 /// Resolved paths for config files.
 #[derive(Debug, Clone)]
 pub struct AgenticConfigPaths {
@@ -104,7 +91,9 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     let merged = deep_merge(global_v, local_v);
 
     // Detect unknown top-level keys
-    warn_unknown_top_level_keys(&merged, &mut warnings);
+    warnings.extend(crate::validation::detect_unknown_top_level_keys_toml(
+        &merged,
+    ));
 
     // Detect deprecated keys from merged config (before deserialization)
     warnings.extend(crate::validation::detect_deprecated_keys_toml(&merged));
@@ -211,20 +200,6 @@ fn env_trimmed(name: &str) -> Option<String> {
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
-}
-
-/// Warn about unknown top-level keys in the merged config.
-fn warn_unknown_top_level_keys(v: &toml::Value, warnings: &mut Vec<AdvisoryWarning>) {
-    let Some(tbl) = v.as_table() else { return };
-    for key in tbl.keys() {
-        if !KNOWN_TOP_LEVEL_KEYS.contains(&key.as_str()) {
-            warnings.push(AdvisoryWarning::new(
-                "config.unknown_top_level_key",
-                "$",
-                format!("Unknown top-level key '{}' will be ignored", key),
-            ));
-        }
-    }
 }
 
 /// Warn if legacy agentic.json files exist (they are now ignored).

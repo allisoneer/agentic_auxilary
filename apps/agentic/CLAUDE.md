@@ -10,7 +10,7 @@
 
 ## Overview
 
-CLI application for managing `agentic.json` configuration files. Provides commands for creating, viewing, editing, and validating configuration with support for global/local config precedence and advisory warnings.
+CLI application for managing `agentic.toml` configuration files. Provides commands for creating, viewing, editing, and validating configuration with support for global/local config precedence and advisory warnings.
 
 ## Quick Commands
 
@@ -31,7 +31,7 @@ cargo build -p agentic-bin
 ## CLI Subcommands
 
 ### `config init [--global] [--force]`
-Create a new `agentic.json` with default values.
+Create a new `agentic.toml` with default values.
 - `--global`: Create in `~/.config/agentic/` instead of current directory
 - `--force`: Overwrite existing file
 
@@ -43,7 +43,7 @@ Display the merged configuration (global + local + env overrides).
 Also prints any migration events and advisory warnings.
 
 ### `config schema`
-Output the JSON Schema for `agentic.json`. Useful for IDE autocomplete setup.
+Output the JSON Schema for `agentic.toml`. Useful for IDE autocomplete setup.
 
 ```bash
 agentic config schema > agentic.schema.json
@@ -63,9 +63,9 @@ Check configuration for errors and warnings without modifying.
 ## How Config Loading Works
 
 The CLI uses `agentic_config::loader::load_merged()` which:
-1. Finds global config at `~/.config/agentic/agentic.json`
-2. Finds local config at `./agentic.json` (or `--path`)
-3. Performs JSON merge-patch (local wins)
+1. Finds global config at `~/.config/agentic/agentic.toml`
+2. Finds local config at `./agentic.toml` (or `--path`)
+3. Performs TOML deep-merge (local wins)
 4. Applies environment variable overrides
 5. Runs validation and collects warnings
 

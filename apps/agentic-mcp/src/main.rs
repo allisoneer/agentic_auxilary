@@ -177,9 +177,13 @@ async fn main() -> anyhow::Result<()> {
     // Parse server config (allowlist, output mode)
     let (mut reg_cfg, file_output) = parse_config(&args);
 
-    // Attach tool config sections from agentic.json
+    // Attach tool config sections from agentic.toml
     reg_cfg.subagents = loaded.config.subagents.clone();
     reg_cfg.reasoning = loaded.config.reasoning.clone();
+    reg_cfg.web_retrieval = loaded.config.web_retrieval.clone();
+    reg_cfg.cli_tools = loaded.config.cli_tools.clone();
+    reg_cfg.exa = loaded.config.services.exa.clone();
+    reg_cfg.anthropic = loaded.config.services.anthropic.clone();
 
     let reg = AgenticTools::new(reg_cfg);
 

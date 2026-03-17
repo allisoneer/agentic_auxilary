@@ -5,9 +5,3 @@
 
 // NOTE: select_optimizer_model was removed. Model selection now comes from
 // ReasoningConfig passed through the tool registry.
-
-#[cfg(test)]
-mod tests {
-    // All model selection tests have been moved to use ReasoningConfig.
-    // Reasoning effort parsing tests are in orchestration.rs.
-}

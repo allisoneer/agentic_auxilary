@@ -360,7 +360,8 @@ pub async fn gpt5_reasoner_impl(
                     // NEW: Treat as retryable anomaly once, then return helpful error
                     if attempt < EXECUTOR_RETRIES {
                         tracing::warn!(
-                            "Empty response from GPT-5; retrying once (attempt {} of {})",
+                            "Empty response from executor model {}; retrying (attempt {} of {})",
+                            executor_model,
                             attempt + 2,
                             EXECUTOR_RETRIES + 1
                         );

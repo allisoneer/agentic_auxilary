@@ -73,6 +73,17 @@ impl Default for SubagentsConfig {
 // ─────────────────────────────────────────────────────────────────────────────
 //
 
+/// Schema-only enum for reasoning_effort IDE autocomplete.
+/// Runtime storage remains Option<String> for advisory validation semantics.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum ReasoningEffortLevel {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+}
+
 /// Configuration for gpt5-reasoner tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
@@ -83,6 +94,7 @@ pub struct ReasoningConfig {
     pub executor_model: String,
     /// Optional reasoning effort level: low, medium, high, xhigh.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<ReasoningEffortLevel>")]
     pub reasoning_effort: Option<String>,
     /// Optional API base URL override for reasoning service.
     #[serde(skip_serializing_if = "Option::is_none")]

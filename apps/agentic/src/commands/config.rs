@@ -23,8 +23,18 @@ use std::{
 
 /// Resolve optional --path argument to current directory if not provided.
 fn resolve_dir(path: Option<PathBuf>) -> Result<PathBuf> {
-    path.map(Ok)
-        .unwrap_or_else(|| std::env::current_dir().context("Failed to determine current directory"))
+    match path {
+        None => std::env::current_dir().context("Failed to determine current directory"),
+        Some(p) => {
+            if !p.exists() {
+                anyhow::bail!("--path does not exist: {}", p.display());
+            }
+            if !p.is_dir() {
+                anyhow::bail!("--path is not a directory: {}", p.display());
+            }
+            Ok(p)
+        }
+    }
 }
 
 /// Ensure parent directory exists for a config file path.
@@ -78,7 +88,7 @@ pub enum ConfigCommands {
         #[arg(long)]
         global: bool,
 
-        /// Overwrite existing config file (or ignore legacy `.thoughts/config.json`)
+        /// Overwrite existing config file
         #[arg(long)]
         force: bool,
     },
@@ -94,7 +104,7 @@ pub enum ConfigCommands {
         path: Option<PathBuf>,
     },
 
-    /// Output the JSON Schema for agentic.json
+    /// Output the JSON Schema for agentic.toml
     Schema,
 
     /// Open configuration in $EDITOR
@@ -213,9 +223,10 @@ fn cmd_edit(global: bool) -> Result<()> {
     let raw = std::fs::read_to_string(&path)?;
     let mut warnings = vec![];
 
-    // Check for deprecated keys in raw TOML
+    // Check for deprecated and unknown keys in raw TOML
     if let Ok(v) = toml::from_str::<toml::Value>(&raw) {
         warnings.extend(agentic_config::validation::detect_deprecated_keys_toml(&v));
+        warnings.extend(agentic_config::validation::detect_unknown_top_level_keys_toml(&v));
     }
 
     match toml::from_str::<AgenticConfig>(&raw) {

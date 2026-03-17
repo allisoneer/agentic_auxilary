@@ -65,6 +65,42 @@ pub fn detect_deprecated_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarning> {
     warnings
 }
 
+/// Known top-level keys for unknown key detection.
+/// Unknown keys at root level produce advisory warnings.
+const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
+    "$schema",
+    "subagents",
+    "reasoning",
+    "services",
+    "orchestrator",
+    "web_retrieval",
+    "cli_tools",
+    "logging",
+];
+
+/// Detect unknown top-level keys in raw TOML before deserialization.
+///
+/// Unknown keys at the root are ignored by serde, so we emit an advisory warning
+/// to help users catch typos like `[servics]` instead of `[services]`.
+pub fn detect_unknown_top_level_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarning> {
+    let mut warnings = Vec::new();
+    let Some(tbl) = v.as_table() else {
+        return warnings;
+    };
+
+    for key in tbl.keys() {
+        if !KNOWN_TOP_LEVEL_KEYS.contains(&key.as_str()) {
+            warnings.push(AdvisoryWarning::new(
+                "config.unknown_top_level_key",
+                "$",
+                format!("Unknown top-level key '{}' will be ignored", key),
+            ));
+        }
+    }
+
+    warnings
+}
+
 /// Detect deprecated config keys in raw JSON before deserialization.
 ///
 /// This is a backward-compatibility shim for CLI code that still uses JSON.
