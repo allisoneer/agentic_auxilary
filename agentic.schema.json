@@ -341,9 +341,13 @@
         },
         "reasoning_effort": {
           "description": "Optional reasoning effort level: low, medium, high, xhigh.",
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffortLevel"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "token_limit": {
@@ -356,6 +360,16 @@
           "minimum": 0
         }
       }
+    },
+    "ReasoningEffortLevel": {
+      "description": "Schema-only enum for reasoning_effort IDE autocomplete.\nRuntime storage remains Option<String> for advisory validation semantics.",
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
     },
     "ServicesConfig": {
       "description": "External service configurations.",
