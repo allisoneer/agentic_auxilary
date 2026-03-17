@@ -195,6 +195,32 @@ mod tests {
     }
 
     #[test]
+    fn locator_default_model_string_is_explicitly_recognized() {
+        let mut cfg = SubagentsConfig::default();
+
+        // Use the default locator model string for the Analyzer slot.
+        // If this string stops being explicitly recognized by `model_for()`,
+        // the Analyzer fallback would return Sonnet (wrong for this assertion).
+        let locator_default = cfg.locator_model.clone();
+        cfg.analyzer_model = locator_default;
+
+        assert_eq!(model_for(AgentType::Analyzer, &cfg), Model::Haiku);
+    }
+
+    #[test]
+    fn analyzer_default_model_string_is_explicitly_recognized() {
+        let mut cfg = SubagentsConfig::default();
+
+        // Use the default analyzer model string for the Locator slot.
+        // If this string stops being explicitly recognized by `model_for()`,
+        // the Locator fallback would return Haiku (wrong for this assertion).
+        let analyzer_default = cfg.analyzer_model.clone();
+        cfg.locator_model = analyzer_default;
+
+        assert_eq!(model_for(AgentType::Locator, &cfg), Model::Sonnet);
+    }
+
+    #[test]
     fn test_enabled_tools_locator_codebase() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Codebase);
         assert!(tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
