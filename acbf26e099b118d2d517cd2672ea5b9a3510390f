@@ -1,0 +1,37 @@
+apps/agentic-mcp/src/main.rs
+  23e41361765c9b41 180,183-186
+apps/agentic/CLAUDE.md
+  23e41361765c9b41 13,34,46,66-68
+crates/infra/agentic-config/src/loader.rs
+  23e41361765c9b41 94,96
+crates/infra/agentic-config/src/types.rs
+  23e41361765c9b41 76-86,97
+crates/infra/agentic-config/src/validation.rs
+  23e41361765c9b41 68-98
+crates/infra/agentic-config/CLAUDE.md
+  23e41361765c9b41 13,35-36,39,103
+apps/agentic/src/commands/config.rs
+  23e41361765c9b41 26-37,107,226,229
+crates/tools/gpt5-reasoner/src/engine/orchestration.rs
+  23e41361765c9b41 363-364
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "acbf26e099b118d2d517cd2672ea5b9a3510390f",
+  "prompts": {
+    "23e41361765c9b41": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_30306ef4affeitXxYpATiKrl4C",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 85,
+      "total_deletions": 52,
+      "accepted_lines": 83,
+      "overriden_lines": 0
+    }
+  }
+}
