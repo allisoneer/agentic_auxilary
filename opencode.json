@@ -16,7 +16,8 @@
     "tools_cli_*": true,
     "tools_ask_*": true,
     "tools_thoughts_*": true,
-    "tools_gh_*": true
+    "tools_gh_*": true,
+    "review_*": true
   },
   "agent": {
     "Normal": {
@@ -151,6 +152,13 @@
       "command": [
         "npx",
         "@playwright/mcp@latest"
+      ],
+      "enabled": true
+    },
+    "review": {
+      "type": "local",
+      "command": [
+        "review-agent-mcp"
       ],
       "enabled": true
     }

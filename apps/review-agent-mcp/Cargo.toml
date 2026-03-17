@@ -1,0 +1,40 @@
+[package]
+name = "review-agent-mcp"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "MCP server for spawning lens-specific Opus code reviewers"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = true
+
+[package.metadata.repo]
+role = "app"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = true
+logging = false
+napi = false
+
+[[bin]]
+name = "review-agent-mcp"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+agentic-tools-core = { workspace = true }
+agentic-tools-mcp = { workspace = true }
+claudecode = { workspace = true }
+futures = "0.3"
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# TLS backend - explicit dependency for CryptoProvider initialization
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+
+[lints]
+workspace = true

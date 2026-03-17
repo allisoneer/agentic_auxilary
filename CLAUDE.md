@@ -52,6 +52,7 @@ Guidance for Claude Code when working with this repository.
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
+- `review-agent-mcp` (app) - `apps/review-agent-mcp/`
 <!-- END:xtask:autogen -->
 
 

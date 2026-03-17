@@ -5038,6 +5038,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "review-agent-mcp"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-mcp",
+ "anyhow",
+ "claudecode",
+ "futures",
+ "rustls",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

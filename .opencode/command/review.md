@@ -89,40 +89,36 @@ If diff is very large (e.g., >1500 lines), note in the final artifact that resul
 
 ## Spawn 4 Lens Reviewers (Parallel)
 
-Spawn 4 `tools_ask_agent` calls IN PARALLEL, all with:
-- agent_type: analyzer
-- location: codebase
-- Must read `./review.diff` fully first
-- Must NOT use git/bash
-- Must output findings in the shared schema
+Spawn 4 `review_spawn` calls IN PARALLEL:
 
 ### Lens A: Security
-Focus on:
-- input validation, injection, authn/authz, secrets, crypto misuse
-- unsafe deserialization, SSRF, path traversal, command execution
-- privilege boundaries, multi-tenant safety, PII leaks
+```
+review_spawn(lens="security", focus="{focus}")
+```
 
-### Lens B: Correctness / Edge Cases
-Focus on:
-- logic bugs, off-by-one, wrong defaults, error handling
-- concurrency/races, timeouts/retries, resource leaks
-- API misuse, panic paths, invariants violated by new code
+### Lens B: Correctness
+```
+review_spawn(lens="correctness", focus="{focus}")
+```
 
-### Lens C: Maintainability / Patterns
-Focus on:
-- complexity, duplication, unclear naming, missing docs/comments
-- architectural drift, layering violations, "quick hacks"
-- performance footguns introduced by the diff (only when material)
+### Lens C: Maintainability
+```
+review_spawn(lens="maintainability", focus="{focus}")
+```
 
-### Lens D: Testing / Observability
-Focus on:
-- missing tests for new behavior/edge cases
-- regressions likely without coverage
-- logging/metrics/tracing gaps, debuggability, failure-mode visibility
+### Lens D: Testing
+```
+review_spawn(lens="testing", focus="{focus}")
+```
 
-Each lens should incorporate `focus` text (if provided) as an extra weighting, without ignoring the lens remit.
+Each call:
+- Uses `./review.diff` as the diff source (default)
+- Returns a validated `ReviewReport` with structured findings
+- May include `large_diff_warning` if diff exceeds 1500 lines
 
-Return 4 result blobs labeled clearly with lens name.
+The `focus` parameter incorporates user-provided focus text as extra weighting.
+
+Collect all 4 reports for consolidation in Step 4.
 
 </step>
 

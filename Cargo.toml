@@ -5,6 +5,7 @@ members = [
     "apps/thoughts",
     "apps/agentic-mcp",
     "apps/opencode-orchestrator-mcp",
+    "apps/review-agent-mcp",
 
     # Bindings
     "bindings/node/agentic-tools-napi",

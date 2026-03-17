@@ -22,7 +22,7 @@ nextest_profile := if output_mode == "minimal" { "minimal" } else if ci == "true
 
 # BEGIN:xtask:autogen justfile:mcp-servers
 
-MCP_SERVERS := "agentic-mcp opencode-orchestrator-mcp"
+MCP_SERVERS := "agentic-mcp opencode-orchestrator-mcp review-agent-mcp"
 
 # END:xtask:autogen
 

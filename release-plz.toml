@@ -199,6 +199,13 @@ git_tag_enable = true
 release = true
 
 [[package]]
+name = "review-agent-mcp"
+changelog_path = "apps/review-agent-mcp/CHANGELOG.md"
+git_tag_name = "review-agent-mcp-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "agentic-tools-napi"
 changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
 git_tag_name = "agentic-tools-napi-v{{ version }}"

@@ -1,0 +1,20 @@
+# Crate-specific recipes for review-agent-mcp
+#
+# These commands are specific to this crate and don't generalize to the workspace.
+# For standard operations, use the root justfile: `just crate-check review-agent-mcp`
+
+default:
+    @just --list
+
+check:
+    cargo fmt -p review-agent-mcp -- --check
+    cargo clippy -p review-agent-mcp --all-targets -- -D warnings
+
+test:
+    cargo test -p review-agent-mcp
+
+build:
+    cargo build -p review-agent-mcp
+
+run:
+    cargo run -p review-agent-mcp
