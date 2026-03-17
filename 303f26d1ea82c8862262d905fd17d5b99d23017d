@@ -1,0 +1,27 @@
+apps/review-agent-mcp/src/prompts.rs
+  2f443b0a31fc9368 12-15,152-167
+.opencode/command/review.md
+  2f443b0a31fc9368 125-128,131
+apps/review-agent-mcp/src/tools.rs
+  2f443b0a31fc9368 20-21,24-25,28,84,102-305,414,426,436-437,440,454-456,462-470,472-511,513-527,647-649,656,662-663,668-1034
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "303f26d1ea82c8862262d905fd17d5b99d23017d",
+  "prompts": {
+    "2f443b0a31fc9368": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_302a9249fffejWjkUmmzdMsL7j",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 719,
+      "total_deletions": 67,
+      "accepted_lines": 681,
+      "overriden_lines": 0
+    }
+  }
+}
