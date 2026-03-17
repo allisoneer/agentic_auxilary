@@ -36,5 +36,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # TLS backend - explicit dependency for CryptoProvider initialization
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 
+[dev-dependencies]
+tempfile = "3"
+
 [lints]
 workspace = true

@@ -1,5 +1,6 @@
 ---
-description: Adversarial review of local git changes (MVP)
+description: Adversarial review of local git changes
+agent: ReviewClaude
 ---
 
 <task>
@@ -16,17 +17,6 @@ Default output behavior:
 - If user passes --include-nits, include Low severity findings.
 
 You MUST follow ALL 6 steps EXACTLY.
-
-Finding schema (for all analysis outputs):
-- file: path
-- line: number (best-effort new-file line from diff; if unknown use 0 and explain)
-- category: security | correctness | maintainability | testing
-- severity: critical | high | medium | low
-- confidence: high | medium
-- title: short
-- evidence: quote relevant diff snippet (or describe hunk) + why it indicates the issue
-- suggested_fix: concrete next step (code-level when possible)
-- caveat: optional, required when confidence=medium
 </task>
 
 <userMessage>
@@ -144,7 +134,7 @@ Collect all 4 reports for consolidation in Step 4.
 
 5) Compute verdict (MVP heuristic):
 - needs_changes if any Critical severity OR (High severity count >= 3)
-- otherwise approved_with_notes
+- otherwise approved
 
 6) Sort final findings by severity desc, then file, then line.
 

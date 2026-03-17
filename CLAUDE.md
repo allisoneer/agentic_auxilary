@@ -149,6 +149,13 @@ cargo run -p xtask -- readme-sync --dry-run
 AUTODEPS_STRICT=1 cargo run -p xtask -- readme-sync
 ```
 
+## Review Workflow
+
+See `workflow.md` -> "Code Review (/review)" for:
+- Dedicated Review agents (ReviewClaude/ReviewOpenAI)
+- Tool isolation rules for `review_*`
+- End-to-end `/review` usage
+
 ## Code Style Guidelines
 
 Rules on comment annotations:

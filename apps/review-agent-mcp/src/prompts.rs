@@ -82,6 +82,17 @@ Return ONLY this JSON structure (no markdown fences):
 }
 "#;
 
+/// Durable reviewer philosophy shared across all lenses.
+/// Duplicated here because reviewer sub-agents do not see the parent Review agent sysprompt.
+pub const REVIEWER_PHILOSOPHY: &str = r#"
+Review philosophy:
+- Be adversarial but accurate; avoid speculation.
+- Every finding must be grounded in the diff (quote a snippet or describe the hunk).
+- Prefer actionable, minimal fixes with concrete next steps.
+- If uncertain, set confidence="medium" and include a caveat.
+- Respect tool boundaries: no git, no bash, no write/edit, no just_execute.
+"#;
+
 /// Compose the full system prompt for a given lens.
 pub fn compose_system_prompt(lens: ReviewLens) -> String {
     let lens_strategy = match lens {
@@ -91,7 +102,13 @@ pub fn compose_system_prompt(lens: ReviewLens) -> String {
         ReviewLens::Testing => STRATEGY_REVIEW_TESTING,
     };
 
-    [REVIEWER_BASE_PROMPT, lens_strategy, JSON_TEMPLATE].join("\n\n")
+    [
+        REVIEWER_BASE_PROMPT,
+        REVIEWER_PHILOSOPHY,
+        lens_strategy,
+        JSON_TEMPLATE,
+    ]
+    .join("\n\n")
 }
 
 #[cfg(test)]
@@ -99,9 +116,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compose_system_prompt_includes_base_and_lens() {
+    fn compose_system_prompt_includes_base_philosophy_and_lens() {
         let prompt = compose_system_prompt(ReviewLens::Security);
         assert!(prompt.contains("adversarial code reviewer"));
+        assert!(prompt.contains("Review philosophy"));
         assert!(prompt.contains("Security lens focus"));
         assert!(prompt.contains("JSON structure"));
     }

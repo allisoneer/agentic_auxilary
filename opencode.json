@@ -17,7 +17,7 @@
     "tools_ask_*": true,
     "tools_thoughts_*": true,
     "tools_gh_*": true,
-    "review_*": true
+    "review_*": false
   },
   "agent": {
     "Normal": {
@@ -44,6 +44,38 @@
         "orchestrator_*": "allow",
         "read": "allow",
         "todowrite": "allow"
+      }
+    },
+    "ReviewClaude": {
+      "prompt": "{file:./.opencode/review_sysprompt.md}",
+      "model": "anthropic/claude-opus-4-5",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "review_*": "allow",
+        "read": "allow",
+        "tools_cli_just_execute": "allow",
+        "tools_cli_ls": "allow",
+        "tools_cli_grep": "allow",
+        "tools_cli_glob": "allow",
+        "tools_thoughts_write_document": "allow",
+        "tools_ask_reasoning_model": "allow"
+      }
+    },
+    "ReviewOpenAI": {
+      "prompt": "{file:./.opencode/review_sysprompt_gpt54.md}",
+      "model": "opencode/gpt-5.4",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "review_*": "allow",
+        "read": "allow",
+        "tools_cli_just_execute": "allow",
+        "tools_cli_ls": "allow",
+        "tools_cli_grep": "allow",
+        "tools_cli_glob": "allow",
+        "tools_thoughts_write_document": "allow",
+        "tools_ask_reasoning_model": "allow"
       }
     },
     "Bash": {
