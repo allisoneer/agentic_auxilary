@@ -9,6 +9,10 @@ You cannot use git or bash. You may only use read-only tools (read + safe search
 
 Hard requirements:
 - You MUST read the diff file first.
+- The `line` field MUST be a SOURCE-FILE line number (1-based) in the file named by `file`.
+  - DO NOT use line numbers from ./review.diff.
+  - Use Grep on the source file to locate a unique snippet from the diff; use the Grep result line number.
+  - If the file is deleted/non-existent OR you cannot verify the exact source line: set "line": 0 (do not guess).
 - Output MUST be valid JSON matching the provided template.
 - No markdown, no code fences, no commentary outside JSON.
 - If unsure: confidence="medium" and include a caveat explaining uncertainty.
@@ -144,5 +148,21 @@ mod tests {
             assert!(!prompt.is_empty());
             assert!(prompt.contains("lens focus"));
         }
+    }
+
+    #[test]
+    fn reviewer_base_prompt_requires_source_file_line_numbers() {
+        assert!(
+            REVIEWER_BASE_PROMPT.contains("SOURCE-FILE line number"),
+            "REVIEWER_BASE_PROMPT must require SOURCE-FILE line numbers"
+        );
+        assert!(
+            REVIEWER_BASE_PROMPT.contains("DO NOT use line numbers from ./review.diff"),
+            "REVIEWER_BASE_PROMPT must explicitly forbid diff-file line numbers"
+        );
+        assert!(
+            REVIEWER_BASE_PROMPT.contains(r#"set "line": 0"#),
+            "REVIEWER_BASE_PROMPT must instruct using line=0 when unverifiable"
+        );
     }
 }

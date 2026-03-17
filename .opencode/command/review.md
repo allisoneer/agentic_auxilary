@@ -122,8 +122,13 @@ Collect all 4 reports for consolidation in Step 4.
 - `dedupe_key = "{file}:{line}"` (line is best-effort; if 0, treat as file-level and dedupe by file only)
 
 3) For any group with >1 finding OR conflicting severity/confidence/title:
+- Gather context for this dedupe_key:
+  - Diff context: include each candidate's `evidence` AND the surrounding hunk from `./review.diff` for `{file}`
+  - Source context: if `line > 0` and `{file}` exists, read ~20 lines around `{line}` (otherwise skip; treat as file-level)
+  - Reminder: `line` values are SOURCE-FILE line numbers; `0` means unknown/unverifiable.
 - Call `tools_ask_reasoning_model` with:
   - the grouped candidate findings
+  - the gathered diff + source context
   - instruction: output ONE merged finding per dedupe_key
   - rule: prefer highest severity when in doubt; require evidence; keep confidence=medium when uncertain
 
