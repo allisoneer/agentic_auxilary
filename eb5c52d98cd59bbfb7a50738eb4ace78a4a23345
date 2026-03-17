@@ -1,0 +1,23 @@
+crates/tools/coding-agent-tools/src/agent/config.rs
+  7bf8937544c14f4d 198-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "eb5c52d98cd59bbfb7a50738eb4ace78a4a23345",
+  "prompts": {
+    "7bf8937544c14f4d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_30218cbc5ffebHo9BCZuWQDxVV",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 26,
+      "total_deletions": 0,
+      "accepted_lines": 26,
+      "overriden_lines": 0
+    }
+  }
+}
