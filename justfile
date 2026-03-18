@@ -87,6 +87,9 @@ crate-test crate:
 crate-build crate:
     {{ exec }}cargo build -p {{ crate }}
 
+crate-run crate:
+    cargo run -p {{ crate }}
+
 # xtask commands
 
 xtask-sync:
@@ -424,7 +427,7 @@ review-prepare mode="default" paths="":
     insertions=0
     deletions=0
     if [ -n "$shortstat" ]; then
-      files_changed="$(echo "$shortstat" | awk '{print $1}' || echo 0)"
+      files_changed="$(echo "$shortstat" | awk '{print $1+0}')"
       insertions="$(echo "$shortstat" | sed -n 's/.* \([0-9]\+\) insertion.*/\1/p' || true)"
       deletions="$(echo "$shortstat" | sed -n 's/.* \([0-9]\+\) deletion.*/\1/p' || true)"
       insertions="${insertions:-0}"
@@ -454,9 +457,9 @@ review-prepare mode="default" paths="":
       --arg head_ref "$head_ref" \
       --argjson paths "$paths_json" \
       --argjson has_changes "$has_changes" \
-      --argjson diff_bytes "$diff_bytes" \
-      --argjson diff_lines "$diff_lines" \
-      --argjson files_changed "$files_changed" \
+      --argjson diff_bytes "${diff_bytes:-0}" \
+      --argjson diff_lines "${diff_lines:-0}" \
+      --argjson files_changed "${files_changed:-0}" \
       --argjson insertions "${insertions:-0}" \
       --argjson deletions "${deletions:-0}" \
       --argjson changed_files "$changed_files_json" \

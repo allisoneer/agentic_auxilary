@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+review-agent-mcp is an MCP server exposing a single `spawn` tool that launches a sandboxed Claude Opus sub-agent to review local git changes from a prepared `./review.diff` file. Each invocation targets one of four review lenses and validates the structured JSON ReviewReport for schema conformance and source-file line grounding.
 
 ## Quick Commands
 
