@@ -14,7 +14,7 @@ Constraints:
 Default output behavior:
 - Show only Medium+ severity findings.
 - If Low severity findings exist, hide them by default and report "hidden_low_count".
-- If user passes --include-nits, include Low severity findings.
+- If the user asks for a more exhaustive/pedantic pass (e.g., "include nits" or "include low severity"), include Low severity findings too.
 
 You MUST follow ALL 6 steps EXACTLY.
 </task>
@@ -27,24 +27,40 @@ $ARGUMENTS
 
 <step name="interpret_intent" id="1">
 
-## Interpret Intent & Parse Args
+## Interpret Intent (Free-text)
 
-Parse `$ARGUMENTS` for flags:
+Interpret `$ARGUMENTS` as a natural-language request. Do NOT require or advertise any special syntax.
 
-- `--staged` -> review staged-only changes (index)
-- `--files <paths...>` -> restrict review to these pathspecs (space-separated, up to next flag)
-- `--include-nits` -> include Low severity findings in output
-- `--focus <text>` -> additional focus guidance for reviewers
-
-Smart defaults:
-- If no flags provided: mode=default, include_nits=false, paths=[], focus=""
-- If user provides free text without `--focus`, treat it as focus text.
-
-Record resolved parameters explicitly:
+Resolve these internal parameters (used in later steps):
 - mode: default | staged
 - paths: [...]
 - include_nits: true/false
 - focus: "..."
+
+Smart defaults if the user doesn't specify:
+- mode=default (review all local changes)
+- paths=[] (no path restriction)
+- include_nits=false (hide Low severity; still report hidden_low_count)
+- focus="" (no extra focus weighting)
+
+Examples of what the user might say (illustrative only, not required formats):
+- "review my changes"
+- "review just the staged changes"
+- "review src/auth.rs and src/db/; focus on error handling"
+- "be pedantic and include nits"
+
+How to infer intent:
+- Set mode=staged when the user asks for "staged", "index", or "only what's been added"
+- Populate paths when the user explicitly names file/dir paths
+  - Prefer NOT restricting paths unless the user is explicit; if ambiguous, treat it as focus instead
+- Set include_nits=true when the user asks to "include nits", "include low severity", "be exhaustive/pedantic", or similar
+- Treat any remaining free-form request as focus (e.g., "focus on security", "focus on edge cases")
+
+Ambiguity policy (match `/review_pr_comments` pattern):
+- Only ask a clarifying question if intent is truly ambiguous and a wrong assumption would materially change review scope.
+- Otherwise proceed with defaults and disclose assumptions in the final chat response (Step 6).
+
+Record the resolved parameters explicitly (and note any assumptions for Step 6 disclosure).
 
 </step>
 
@@ -55,7 +71,7 @@ Record resolved parameters explicitly:
 Call `tools_cli_just_execute`:
 - Recipe: `review-prepare`
 - Args (positional):
-  - First arg (mode): `"staged"` if --staged, else `"default"` (or omit for default)
+  - First arg (mode): `"staged"` if mode=staged, else `"default"` (or omit for default)
   - Second arg (paths): `"path1 path2 ..."` if paths set, else omit
 
 Examples:
@@ -218,12 +234,15 @@ If status=`incomplete`:
 
 If status=`approved` or `needs_changes`:
 - Provide a concise overview:
+  - Start with a 1–2 line scope summary so the user can confirm what you reviewed:
+    - mode (default vs staged), any paths restriction, whether Low severity is included/hidden, and any focus text
+    - if you made assumptions in Step 1, disclose them here
   - counts by severity (and note hidden Low count if applicable)
   - top 3 most severe findings with `file:line - title`
 
 Include the artifact filename so the user can reference it.
 
-End with: "What would you like to do next?" (fix issues, focus on a file, rerun with --include-nits, etc.)
+End with: "What would you like to do next?" (fix issues, focus on a file, rerun asking to include nits/low-severity items, review staged changes only, etc.)
 
 </step>
 
