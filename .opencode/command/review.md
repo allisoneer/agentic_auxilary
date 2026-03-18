@@ -79,7 +79,13 @@ If diff is very large (e.g., >1500 lines), note in the final artifact that resul
 
 ## Spawn 4 Lens Reviewers (Parallel)
 
-Spawn 4 `review_spawn` calls IN PARALLEL:
+Required lenses (must all succeed for a complete verdict):
+- security
+- correctness
+- maintainability
+- testing
+
+Spawn 4 `review_spawn` calls IN PARALLEL, but RECORD outcome per lens:
 
 ### Lens A: Security
 ```
@@ -108,7 +114,13 @@ Each call:
 
 The `focus` parameter incorporates user-provided focus text as extra weighting.
 
-Collect all 4 reports for consolidation in Step 4.
+For each lens, store one execution record:
+- On success: `{ lens: "<name>", ok: true, report: <ReviewReport>, large_diff_warning?: <string> }`
+- On failure: `{ lens: "<name>", ok: false, error: "<tool error message>" }`
+
+Proceed even if some lenses fail (best-effort); do NOT treat missing lenses as success.
+
+Collect all 4 execution records for consolidation in Step 4.
 
 </step>
 
@@ -116,7 +128,20 @@ Collect all 4 reports for consolidation in Step 4.
 
 ## Consolidate + Deduplicate Findings (file:line)
 
-1) Normalize all lens outputs into a single list of findings using the shared schema.
+### Completeness Check (REQUIRED FIRST)
+
+Compute completeness from execution records:
+- `succeeded_lenses` = lenses where `ok=true`
+- `failed_lenses` = lenses where `ok=false` OR missing from execution records
+
+If `failed_lenses` is non-empty:
+- Final status MUST be `incomplete`
+- DO NOT output `approved` under any circumstances
+- Still consolidate findings from succeeded lenses (partial signal), but clearly label results as incomplete
+
+### Consolidation (only from succeeded lenses)
+
+1) Normalize all succeeded lens outputs into a single list of findings using the shared schema.
 
 2) Group by dedupe key:
 - `dedupe_key = "{file}:{line}"` (line is best-effort; if 0, treat as file-level and dedupe by file only)
@@ -137,11 +162,16 @@ Collect all 4 reports for consolidation in Step 4.
 - If include_nits=true: include Low too.
 - Always compute `hidden_low_count`.
 
-5) Compute verdict (MVP heuristic):
-- needs_changes if any Critical severity OR (High severity count >= 3)
-- otherwise approved
+### Verdict Computation (with completeness gating)
 
-6) Sort final findings by severity desc, then file, then line.
+If `failed_lenses` is non-empty:
+- status = `incomplete`
+
+Else (all 4 lenses succeeded):
+- status = `needs_changes` if any Critical severity OR (High severity count >= 3)
+- otherwise status = `approved`
+
+Sort final findings by severity desc, then file, then line.
 
 </step>
 
@@ -156,6 +186,11 @@ Artifact must include:
 - Parameters used: mode, paths, include_nits, focus
 - Metadata summary from review.meta.json
 - Verdict + counts by severity + hidden_low_count
+- **Lens Execution Summary (REQUIRED)**:
+  - For each lens (security, correctness, maintainability, testing):
+    - If success: findings count + lens verdict + any large_diff_warning
+    - If failure: include error message (verbatim, truncate if extremely long >500 chars)
+  - If status=`incomplete`: include a note explaining that approval is impossible until all required lenses succeed (recommend rerun)
 - Findings list (deduped), each with:
   - category, severity, confidence, file:line, title
   - evidence (quote/snippet from diff)
@@ -176,9 +211,15 @@ After writing, call `tools_cli_just_execute` with recipe `thoughts_sync`.
 
 ## Present Overview in Chat
 
-Provide a concise overview:
-- counts by severity (and note hidden Low count if applicable)
-- top 3 most severe findings with `file:line - title`
+If status=`incomplete`:
+- Explicitly say: "Verdict: incomplete (failed lenses: <list of failed lens names>)."
+- Provide top findings from succeeded lenses, but caveat that review is partial
+- Recommend rerunning `/review` to attempt the failed lenses again
+
+If status=`approved` or `needs_changes`:
+- Provide a concise overview:
+  - counts by severity (and note hidden Low count if applicable)
+  - top 3 most severe findings with `file:line - title`
 
 Include the artifact filename so the user can reference it.
 

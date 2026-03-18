@@ -8,6 +8,9 @@ use futures::future::BoxFuture;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use std::time::Duration;
+use tokio::sync::Semaphore;
 
 use crate::prompts::compose_system_prompt;
 use crate::types::{ReviewReport, ReviewVerdict, SpawnInput, SpawnOutput};
@@ -15,6 +18,23 @@ use crate::validation::parse_and_validate_report;
 
 /// Diff line count threshold for large diff warning.
 const LARGE_DIFF_THRESHOLD: usize = 1500;
+
+/// Maximum concurrent Claude reviewer sessions.
+const MAX_CONCURRENT_SESSIONS: usize = 2;
+
+/// Wall-clock timeout for a single reviewer session (30 minutes).
+const SESSION_TIMEOUT: Duration = Duration::from_secs(1800);
+
+/// Global semaphore limiting concurrent reviewer sessions.
+static SESSION_SEMAPHORE: LazyLock<Semaphore> =
+    LazyLock::new(|| Semaphore::new(MAX_CONCURRENT_SESSIONS));
+
+/// Fixed retry delays for session attempts: 3 total attempts with [0ms, 500ms, 1000ms].
+const RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_millis(0),
+    Duration::from_millis(500),
+    Duration::from_millis(1000),
+];
 
 /// Reviewer sub-agent builtin tools (Claude Code native).
 /// Aligned with analyzer pattern: Read + Grep + Glob for better source citations.
@@ -358,6 +378,120 @@ async fn run_reviewer_session(
     Ok(text)
 }
 
+/// Generic helper that acquires a semaphore permit and wraps an operation in a timeout.
+///
+/// This is a testable building block: tests can inject a local semaphore and short timeout
+/// to verify behavior without real Claude sessions.
+async fn with_permit_and_timeout<F, Fut, T>(
+    semaphore: &Semaphore,
+    timeout_dur: Duration,
+    op: F,
+) -> Result<T, ToolError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<T, ToolError>>,
+{
+    let _permit = semaphore
+        .acquire()
+        .await
+        .map_err(|_| ToolError::Internal("Semaphore closed".into()))?;
+
+    match tokio::time::timeout(timeout_dur, op()).await {
+        Ok(res) => res,
+        Err(_) => Err(ToolError::Internal(format!(
+            "Timed out after {}s",
+            timeout_dur.as_secs()
+        ))),
+    }
+}
+
+/// Run a reviewer session with semaphore-guarded concurrency and wall-clock timeout.
+///
+/// Acquires a permit from the global `SESSION_SEMAPHORE` (max 2 concurrent sessions),
+/// then wraps the session in a 30-minute timeout.
+async fn run_reviewer_session_guarded(
+    system_prompt: &str,
+    user_prompt: &str,
+    builtin_tools: Vec<String>,
+    all_tools: Vec<String>,
+    mcp_config: MCPConfig,
+) -> Result<String, ToolError> {
+    with_permit_and_timeout(&SESSION_SEMAPHORE, SESSION_TIMEOUT, || {
+        run_reviewer_session(
+            system_prompt,
+            user_prompt,
+            builtin_tools,
+            all_tools,
+            mcp_config,
+        )
+    })
+    .await
+}
+
+/// Generic retry helper with fixed delays.
+///
+/// This is a testable building block: tests can inject a custom sleep function
+/// to verify retry behavior without real waits.
+async fn retry_fixed_delays<F, Fut, SleepFn, SleepFut, T>(
+    delays: &[Duration],
+    mut sleep_fn: SleepFn,
+    mut op: F,
+) -> Result<T, ToolError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, ToolError>>,
+    SleepFn: FnMut(Duration) -> SleepFut,
+    SleepFut: std::future::Future<Output = ()>,
+{
+    let mut last_err = None;
+
+    for (attempt_idx, delay) in delays.iter().enumerate() {
+        // Fixed delay schedule; do not hold semaphore during sleep
+        sleep_fn(*delay).await;
+
+        match op().await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                tracing::warn!(
+                    "Reviewer session attempt {} of {} failed: {}",
+                    attempt_idx + 1,
+                    delays.len(),
+                    e
+                );
+                last_err = Some(e);
+            }
+        }
+    }
+
+    // Preserve the last underlying error (no wrapping)
+    Err(last_err
+        .unwrap_or_else(|| ToolError::Internal("Reviewer session failed after retries".into())))
+}
+
+/// Run a reviewer session with retry logic.
+///
+/// Uses up to 3 attempts with fixed delays [0ms, 500ms, 1000ms].
+/// Each attempt uses semaphore-guarded concurrency and wall-clock timeout.
+/// If all attempts fail, returns the last underlying error (not a generic wrapper).
+async fn run_reviewer_session_with_retry(
+    system_prompt: &str,
+    user_prompt: &str,
+    builtin_tools: Vec<String>,
+    all_tools: Vec<String>,
+    mcp_config: MCPConfig,
+) -> Result<String, ToolError> {
+    retry_fixed_delays(&RETRY_DELAYS, tokio::time::sleep, || {
+        run_reviewer_session_guarded(
+            system_prompt,
+            user_prompt,
+            builtin_tools.clone(),
+            all_tools.clone(),
+            mcp_config.clone(),
+        )
+    })
+    .await
+}
+
 /// Tool for spawning a lens-specific Opus code reviewer.
 #[derive(Clone, Default)]
 pub struct SpawnTool;
@@ -423,8 +557,8 @@ impl SpawnTool {
 
         let mcp_config = build_reviewer_mcp_config();
 
-        // Attempt #1: Run reviewer session
-        let raw1 = run_reviewer_session(
+        // Attempt #1: Run reviewer session (with retry, semaphore, and timeout)
+        let raw1 = run_reviewer_session_with_retry(
             &system_prompt,
             &user_prompt,
             builtin_tools.clone(),
@@ -448,7 +582,7 @@ impl SpawnTool {
                      Do not use markdown fences. Do not add new findings; only repair formatting/fields."
                 );
 
-                let raw2 = run_reviewer_session(
+                let raw2 = run_reviewer_session_with_retry(
                     &system_prompt,
                     &repair_prompt,
                     builtin_tools.clone(),
@@ -491,7 +625,7 @@ impl SpawnTool {
             serde_json::to_string(&report1).unwrap_or_else(|_| "<serialization error>".into())
         );
 
-        let raw2 = run_reviewer_session(
+        let raw2 = run_reviewer_session_with_retry(
             &system_prompt,
             &grounding_repair_prompt,
             builtin_tools,
@@ -1031,5 +1165,186 @@ mod tests {
             issues_after.is_empty(),
             "No grounding issues should remain after fallback"
         );
+    }
+
+    // --- Session semaphore and timeout tests ---
+
+    #[test]
+    fn max_concurrent_sessions_is_2() {
+        assert_eq!(MAX_CONCURRENT_SESSIONS, 2);
+    }
+
+    #[test]
+    fn session_timeout_is_1800_seconds() {
+        assert_eq!(SESSION_TIMEOUT, Duration::from_secs(1800));
+    }
+
+    #[tokio::test]
+    async fn semaphore_limits_concurrency_to_max() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let semaphore = Semaphore::new(2);
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_observed = Arc::new(AtomicUsize::new(0));
+
+        // Spawn 4 tasks, each should only proceed 2 at a time
+        let mut handles = vec![];
+        for _ in 0..4 {
+            let sem = &semaphore;
+            let in_flight = Arc::clone(&in_flight);
+            let max_observed = Arc::clone(&max_observed);
+
+            handles.push(async move {
+                let result: Result<(), ToolError> =
+                    with_permit_and_timeout(sem, Duration::from_secs(10), || async {
+                        let current = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                        max_observed.fetch_max(current, Ordering::SeqCst);
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        in_flight.fetch_sub(1, Ordering::SeqCst);
+                        Ok(())
+                    })
+                    .await;
+                result
+            });
+        }
+
+        futures::future::join_all(handles).await;
+
+        // Max in-flight should be exactly 2 (the semaphore limit)
+        assert_eq!(max_observed.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn timeout_returns_error_when_exceeded() {
+        let semaphore = Semaphore::new(1);
+
+        let result: Result<(), ToolError> =
+            with_permit_and_timeout(&semaphore, Duration::from_millis(10), || async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Ok(())
+            })
+            .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ToolError::Internal(msg) => {
+                assert!(
+                    msg.contains("Timed out"),
+                    "Expected timeout error, got: {msg}"
+                );
+            }
+            _ => panic!("Expected ToolError::Internal, got: {err:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn timeout_returns_success_when_op_completes_in_time() {
+        let semaphore = Semaphore::new(1);
+
+        let result: Result<i32, ToolError> =
+            with_permit_and_timeout(&semaphore, Duration::from_secs(10), || async { Ok(42) }).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    // --- Retry tests ---
+
+    #[test]
+    fn retry_delays_are_correct() {
+        assert_eq!(
+            RETRY_DELAYS,
+            [
+                Duration::from_millis(0),
+                Duration::from_millis(500),
+                Duration::from_millis(1000)
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_succeeds_on_third_attempt() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let attempt_count = Arc::new(AtomicUsize::new(0));
+        let delays_observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        let delays = [
+            Duration::from_millis(0),
+            Duration::from_millis(10),
+            Duration::from_millis(20),
+        ];
+
+        let result: Result<&str, ToolError> = retry_fixed_delays(
+            &delays,
+            |d| {
+                let delays_observed = Arc::clone(&delays_observed);
+                async move {
+                    delays_observed.lock().unwrap().push(d);
+                }
+            },
+            || {
+                let attempt_count = Arc::clone(&attempt_count);
+                async move {
+                    let attempt = attempt_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    if attempt < 3 {
+                        Err(ToolError::Internal(format!("Attempt {attempt} failed")))
+                    } else {
+                        Ok("success")
+                    }
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "success");
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+        assert_eq!(*delays_observed.lock().unwrap(), delays.to_vec());
+    }
+
+    #[tokio::test]
+    async fn retry_preserves_last_error_on_exhaustion() {
+        let delays = [Duration::from_millis(0), Duration::from_millis(0)];
+
+        let result: Result<(), ToolError> = retry_fixed_delays(
+            &delays,
+            |_| async {},
+            || async { Err(ToolError::Internal("final error message".into())) },
+        )
+        .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ToolError::Internal(msg) => {
+                assert_eq!(msg, "final error message");
+            }
+            _ => panic!("Expected ToolError::Internal, got: {err:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn retry_records_all_delays() {
+        use std::sync::Arc;
+
+        let delays_observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        let _ = retry_fixed_delays::<_, _, _, _, ()>(
+            &RETRY_DELAYS,
+            |d| {
+                let delays_observed = Arc::clone(&delays_observed);
+                async move {
+                    delays_observed.lock().unwrap().push(d);
+                }
+            },
+            || async { Err(ToolError::Internal("fail".into())) },
+        )
+        .await;
+
+        assert_eq!(*delays_observed.lock().unwrap(), RETRY_DELAYS.to_vec());
     }
 }

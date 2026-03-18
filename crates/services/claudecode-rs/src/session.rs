@@ -318,11 +318,9 @@ impl Session {
             let _ = task.await;
         }
 
-        // Check for errors first
-        if let Some(error) = self.error.read().await.as_ref() {
-            return Err(ClaudeError::SessionError {
-                message: error.to_string(),
-            });
+        // Check for errors first - preserve original error variant (e.g., ProcessFailed{stderr})
+        if let Some(error) = self.error.write().await.take() {
+            return Err(error);
         }
 
         // Return result
@@ -406,6 +404,47 @@ impl Drop for Session {
         // Ensure all tasks are aborted on drop
         for task in &self.tasks {
             task.abort();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::SessionConfig;
+    use crate::error::ClaudeError;
+    use crate::types::OutputFormat;
+
+    #[tokio::test]
+    async fn wait_returns_processfailed_preserving_stderr() {
+        let cfg = SessionConfig::builder("test".to_string())
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let session = Session {
+            id: "test".into(),
+            config: cfg,
+            start_time: Utc::now(),
+            process: Arc::new(Mutex::new(None)),
+            events_tx: None,
+            events: None,
+            tasks: vec![],
+            result: Arc::new(RwLock::new(None)),
+            error: Arc::new(RwLock::new(Some(ClaudeError::ProcessFailed {
+                code: 1,
+                stderr: "stderr details".into(),
+            }))),
+            _mcp_temp_file: None,
+        };
+
+        let err = session.wait().await.unwrap_err();
+        match err {
+            ClaudeError::ProcessFailed { code, stderr } => {
+                assert_eq!(code, 1);
+                assert!(stderr.contains("stderr details"));
+            }
+            other => panic!("expected ProcessFailed, got {other:?}"),
         }
     }
 }
