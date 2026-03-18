@@ -1,0 +1,27 @@
+apps/review-agent-mcp/src/tools.rs
+  d9252f6c827cdf86 11-13,22-38,381-494,560-561,585,628,1169-1349
+.opencode/command/review.md
+  d9252f6c827cdf86 82-86,88,117-121,123,131,133-144,165-168,170-172,189-193,214-220
+crates/services/claudecode-rs/src/session.rs
+  d9252f6c827cdf86 321-322,410-450
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "865e59974b10267b1768ac83d8bec3dd468321cb",
+  "prompts": {
+    "d9252f6c827cdf86": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fdf0a923ffeqyOJq27PUY4N7F",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 421,
+      "total_deletions": 26,
+      "accepted_lines": 410,
+      "overriden_lines": 0
+    }
+  }
+}
