@@ -447,4 +447,92 @@ mod tests {
             other => panic!("expected ProcessFailed, got {other:?}"),
         }
     }
+
+    #[tokio::test]
+    async fn wait_returns_sessionerror_preserving_message() {
+        let cfg = SessionConfig::builder("test".to_string())
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let session = Session {
+            id: "test".into(),
+            config: cfg,
+            start_time: Utc::now(),
+            process: Arc::new(Mutex::new(None)),
+            events_tx: None,
+            events: None,
+            tasks: vec![],
+            result: Arc::new(RwLock::new(None)),
+            error: Arc::new(RwLock::new(Some(ClaudeError::SessionError {
+                message: "custom session error".into(),
+            }))),
+            _mcp_temp_file: None,
+        };
+
+        let err = session.wait().await.unwrap_err();
+        match err {
+            ClaudeError::SessionError { message } => assert_eq!(message, "custom session error"),
+            other => panic!("expected SessionError, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_returns_ioerror_preserving_source() {
+        let cfg = SessionConfig::builder("test".to_string())
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let io = std::io::Error::other("disk full");
+
+        let session = Session {
+            id: "test".into(),
+            config: cfg,
+            start_time: Utc::now(),
+            process: Arc::new(Mutex::new(None)),
+            events_tx: None,
+            events: None,
+            tasks: vec![],
+            result: Arc::new(RwLock::new(None)),
+            error: Arc::new(RwLock::new(Some(io.into()))),
+            _mcp_temp_file: None,
+        };
+
+        let err = session.wait().await.unwrap_err();
+        match err {
+            ClaudeError::IoError { source } => {
+                assert_eq!(source.kind(), std::io::ErrorKind::Other);
+                assert!(source.to_string().contains("disk full"));
+            }
+            other => panic!("expected IoError, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_returns_no_result_available_when_result_and_error_missing() {
+        let cfg = SessionConfig::builder("test".to_string())
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let session = Session {
+            id: "test".into(),
+            config: cfg,
+            start_time: Utc::now(),
+            process: Arc::new(Mutex::new(None)),
+            events_tx: None,
+            events: None,
+            tasks: vec![],
+            result: Arc::new(RwLock::new(None)),
+            error: Arc::new(RwLock::new(None)),
+            _mcp_temp_file: None,
+        };
+
+        let err = session.wait().await.unwrap_err();
+        match err {
+            ClaudeError::SessionError { message } => assert_eq!(message, "No result available"),
+            other => panic!("expected SessionError, got {other:?}"),
+        }
+    }
 }

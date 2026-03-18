@@ -3,7 +3,7 @@
 use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
 use claudecode::client::Client;
 use claudecode::config::{MCPConfig, MCPServer, SessionConfig};
-use claudecode::types::{Model, OutputFormat, PermissionMode};
+use claudecode::types::{Model, OutputFormat, PermissionMode, Result as ClaudeResult};
 use futures::future::BoxFuture;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 
 use crate::prompts::compose_system_prompt;
-use crate::types::{ReviewReport, ReviewVerdict, SpawnInput, SpawnOutput};
+use crate::types::{ReviewLens, ReviewReport, ReviewVerdict, SpawnInput, SpawnOutput};
 use crate::validation::parse_and_validate_report;
 
 /// Diff line count threshold for large diff warning.
@@ -364,6 +364,44 @@ fn apply_grounding_fallback(report: &mut ReviewReport, issues: &[GroundingIssue]
     changed
 }
 
+/// Extract text from a `ClaudeResult`, handling error states and fallback logic.
+///
+/// Returns `Err` if:
+/// - `result.is_error` is true (with message from `.error` or default)
+/// - Both `.result` and `.content` are None or whitespace-only
+///
+/// Precedence: `.result` > `.content` (first non-empty wins)
+fn claude_result_to_text(result: ClaudeResult) -> Result<String, ToolError> {
+    if result.is_error {
+        return Err(ToolError::Internal(
+            result
+                .error
+                .unwrap_or_else(|| "Reviewer session error".into()),
+        ));
+    }
+
+    result
+        .result
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| result.content.filter(|s| !s.trim().is_empty()))
+        .ok_or_else(|| ToolError::Internal("Reviewer produced no text output".into()))
+}
+
+/// Construct the output for an empty diff.
+///
+/// Returns an Approved verdict with no findings and a note explaining the empty diff.
+fn empty_diff_output(lens: ReviewLens) -> SpawnOutput {
+    SpawnOutput {
+        report: ReviewReport {
+            lens,
+            verdict: ReviewVerdict::Approved,
+            findings: vec![],
+            notes: vec!["No changes to review (diff empty)".into()],
+        },
+        large_diff_warning: None,
+    }
+}
+
 /// Run a single reviewer session and return the raw text output.
 async fn run_reviewer_session(
     system_prompt: &str,
@@ -400,30 +438,7 @@ async fn run_reviewer_session(
         .await
         .map_err(|e| ToolError::Internal(format!("Failed to run Claude session: {e}")))?;
 
-    if result.is_error {
-        return Err(ToolError::Internal(
-            result
-                .error
-                .unwrap_or_else(|| "Reviewer session error".into()),
-        ));
-    }
-
-    // Prefer result.result, then result.content; reject empty/whitespace
-    let text = result
-        .result
-        .as_ref()
-        .filter(|s| !s.trim().is_empty())
-        .cloned()
-        .or_else(|| {
-            result
-                .content
-                .as_ref()
-                .filter(|s| !s.trim().is_empty())
-                .cloned()
-        })
-        .ok_or_else(|| ToolError::Internal("Reviewer produced no text output".into()))?;
-
-    Ok(text)
+    claude_result_to_text(result)
 }
 
 /// Generic helper that acquires a semaphore permit and wraps an operation in a timeout.
@@ -568,15 +583,7 @@ impl SpawnTool {
 
         // Handle empty diff
         if diff.trim().is_empty() {
-            return Ok(SpawnOutput {
-                report: ReviewReport {
-                    lens: input.lens,
-                    verdict: ReviewVerdict::Approved,
-                    findings: vec![],
-                    notes: vec!["No changes to review (diff empty)".into()],
-                },
-                large_diff_warning: None,
-            });
+            return Ok(empty_diff_output(input.lens));
         }
 
         // Check for large diff
@@ -1451,5 +1458,197 @@ mod tests {
         let (out, truncated) = truncate_for_prompt("", 5);
         assert_eq!(out, "");
         assert!(!truncated);
+    }
+
+    // --- resolve_finding_file_path direct tests ---
+
+    mod resolve_finding_file_path_tests {
+        use super::*;
+        use tempfile::tempdir;
+
+        #[test]
+        fn empty_or_whitespace_returns_display_and_none() {
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            std::fs::create_dir_all(&repo).unwrap();
+
+            let (display, abs) = resolve_finding_file_path(&repo, "   ").unwrap();
+            assert_eq!(display, "");
+            assert!(abs.is_none());
+        }
+
+        #[test]
+        fn unwraps_backticks_and_resolves_existing_file() {
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            std::fs::create_dir_all(&repo).unwrap();
+            std::fs::write(repo.join("src.rs"), "fn main() {}\n").unwrap();
+
+            let (display, abs) = resolve_finding_file_path(&repo, "`src.rs`").unwrap();
+            assert_eq!(display, "src.rs");
+            assert!(abs.unwrap().starts_with(repo.canonicalize().unwrap()));
+        }
+
+        #[test]
+        fn strips_dot_slash_prefix() {
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            std::fs::create_dir_all(&repo).unwrap();
+            std::fs::write(repo.join("src.rs"), "fn main() {}\n").unwrap();
+
+            let (display, abs) = resolve_finding_file_path(&repo, "./src.rs").unwrap();
+            assert_eq!(display, "src.rs");
+            assert!(abs.is_some());
+        }
+
+        #[test]
+        fn rejects_absolute_paths() {
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            std::fs::create_dir_all(&repo).unwrap();
+
+            let err = resolve_finding_file_path(&repo, "/etc/passwd").unwrap_err();
+            assert!(format!("{err:?}").contains("must be repo-relative"));
+        }
+
+        #[test]
+        fn rejects_parent_dir_traversal() {
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            std::fs::create_dir_all(&repo).unwrap();
+
+            let err = resolve_finding_file_path(&repo, "../secret").unwrap_err();
+            assert!(format!("{err:?}").contains("must be repo-relative"));
+        }
+
+        #[test]
+        fn strips_b_prefix_from_diff_notation() {
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            std::fs::create_dir_all(&repo).unwrap();
+            std::fs::write(repo.join("src.rs"), "fn main() {}\n").unwrap();
+
+            let (display, abs) = resolve_finding_file_path(&repo, "b/src.rs").unwrap();
+            assert_eq!(display, "src.rs");
+            assert!(abs.is_some());
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn rejects_symlink_escape_outside_repo() {
+            use std::os::unix::fs::symlink;
+
+            let dir = tempdir().unwrap();
+            let repo = dir.path().join("repo");
+            let outside = dir.path().join("outside");
+            std::fs::create_dir_all(&repo).unwrap();
+            std::fs::create_dir_all(&outside).unwrap();
+
+            std::fs::write(outside.join("target.rs"), "x\n").unwrap();
+            symlink(outside.join("target.rs"), repo.join("link.rs")).unwrap();
+
+            let err = resolve_finding_file_path(&repo, "link.rs").unwrap_err();
+            assert!(format!("{err:?}").contains("outside repo root"));
+        }
+    }
+
+    // --- claude_result_to_text tests ---
+
+    mod claude_result_to_text_tests {
+        use super::*;
+
+        #[test]
+        fn returns_error_when_is_error_true_with_message() {
+            let r = ClaudeResult {
+                is_error: true,
+                error: Some("boom".into()),
+                ..Default::default()
+            };
+
+            let err = claude_result_to_text(r).unwrap_err();
+            assert!(matches!(err, ToolError::Internal(msg) if msg == "boom"));
+        }
+
+        #[test]
+        fn returns_default_error_when_is_error_true_without_message() {
+            let r = ClaudeResult {
+                is_error: true,
+                ..Default::default()
+            };
+
+            let err = claude_result_to_text(r).unwrap_err();
+            assert!(matches!(err, ToolError::Internal(msg) if msg == "Reviewer session error"));
+        }
+
+        #[test]
+        fn prefers_result_over_content() {
+            let r = ClaudeResult {
+                result: Some("from result".into()),
+                content: Some("from content".into()),
+                ..Default::default()
+            };
+
+            assert_eq!(claude_result_to_text(r).unwrap(), "from result");
+        }
+
+        #[test]
+        fn uses_content_when_result_is_none() {
+            let r = ClaudeResult {
+                content: Some("from content".into()),
+                ..Default::default()
+            };
+
+            assert_eq!(claude_result_to_text(r).unwrap(), "from content");
+        }
+
+        #[test]
+        fn uses_content_when_result_is_whitespace() {
+            let r = ClaudeResult {
+                result: Some("   \n\t".into()),
+                content: Some("from content".into()),
+                ..Default::default()
+            };
+
+            assert_eq!(claude_result_to_text(r).unwrap(), "from content");
+        }
+
+        #[test]
+        fn returns_error_when_both_none() {
+            let r = ClaudeResult::default();
+
+            let err = claude_result_to_text(r).unwrap_err();
+            assert!(matches!(err, ToolError::Internal(msg) if msg.contains("no text output")));
+        }
+
+        #[test]
+        fn returns_error_when_both_whitespace() {
+            let r = ClaudeResult {
+                result: Some("  ".into()),
+                content: Some("\n\t".into()),
+                ..Default::default()
+            };
+
+            let err = claude_result_to_text(r).unwrap_err();
+            assert!(matches!(err, ToolError::Internal(msg) if msg.contains("no text output")));
+        }
+    }
+
+    // --- empty_diff_output tests ---
+
+    mod empty_diff_output_tests {
+        use super::*;
+
+        #[test]
+        fn empty_diff_output_is_approved_and_forwards_lens() {
+            let out = empty_diff_output(ReviewLens::Security);
+            assert_eq!(out.large_diff_warning, None);
+            assert_eq!(out.report.lens, ReviewLens::Security);
+            assert_eq!(out.report.verdict, ReviewVerdict::Approved);
+            assert!(out.report.findings.is_empty());
+            assert_eq!(
+                out.report.notes,
+                vec!["No changes to review (diff empty)".to_string()]
+            );
+        }
     }
 }
