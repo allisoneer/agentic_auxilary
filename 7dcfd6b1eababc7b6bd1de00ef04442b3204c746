@@ -1,0 +1,29 @@
+crates/tools/web-retrieval/src/haiku.rs
+  33b9198fff4a43b4 24,27,85-86,88,96-97,106-107
+crates/infra/agentic-config/src/types.rs
+  33b9198fff4a43b4 28
+crates/agentic-tools/registry/src/lib.rs
+  33b9198fff4a43b4 176
+crates/tools/web-retrieval/src/lib.rs
+  33b9198fff4a43b4 28,40,43-44,51,66,85-86,89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "7dcfd6b1eababc7b6bd1de00ef04442b3204c746",
+  "prompts": {
+    "33b9198fff4a43b4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fd048122ffendclHuiQ7RsOme",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 28,
+      "total_deletions": 254,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
