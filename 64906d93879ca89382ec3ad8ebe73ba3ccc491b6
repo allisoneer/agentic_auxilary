@@ -1,0 +1,23 @@
+apps/review-agent-mcp/src/tools.rs
+  d8141a9b7072ac68 22-31,82-112,378-384,625-628,631-633,636-638,670-677,680-681,691-692,1417-1454
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "64906d93879ca89382ec3ad8ebe73ba3ccc491b6",
+  "prompts": {
+    "d8141a9b7072ac68": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fcbce317ffe39tw9Jl8c5FtLr",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 110,
+      "total_deletions": 5,
+      "accepted_lines": 108,
+      "overriden_lines": 0
+    }
+  }
+}
