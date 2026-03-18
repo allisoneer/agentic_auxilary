@@ -1,0 +1,31 @@
+crates/infra/agentic-config/src/merge.rs
+  0eb1f8805e6a28c6 203,205-220
+TODO.md
+  0eb1f8805e6a28c6 59-79
+apps/agentic/tests/config_commands.rs
+  0eb1f8805e6a28c6 23-27
+crates/infra/agentic-config/src/types.rs
+  0eb1f8805e6a28c6 54-57,90-98
+crates/infra/agentic-config/src/validation.rs
+  0eb1f8805e6a28c6 68-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "6eaf414adac2c4a5b3cbccb3b6eaefd9dcb8eeb3",
+  "prompts": {
+    "0eb1f8805e6a28c6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fcf8bf21ffeXhXKCNkx2AvYZu",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 62,
+      "total_deletions": 0,
+      "accepted_lines": 62,
+      "overriden_lines": 0
+    }
+  }
+}
