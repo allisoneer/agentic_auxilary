@@ -123,27 +123,6 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         &mut warnings,
     );
 
-    validate_url(
-        &cfg.services.opencode.base_url,
-        "services.opencode.base_url",
-        "services.opencode.base_url.invalid",
-        &mut warnings,
-    );
-
-    validate_url(
-        &cfg.services.linear.base_url,
-        "services.linear.base_url",
-        "services.linear.base_url.invalid",
-        &mut warnings,
-    );
-
-    validate_url(
-        &cfg.services.github.base_url,
-        "services.github.base_url",
-        "services.github.base_url.invalid",
-        &mut warnings,
-    );
-
     // Validate log level
     let valid_levels = ["trace", "debug", "info", "warn", "error"];
     if !valid_levels.contains(&cfg.logging.level.to_lowercase().as_str()) {
@@ -268,15 +247,6 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
             "cli_tools.max_depth.zero",
             "cli_tools.max_depth",
             "max_depth is 0, directory listing may be limited",
-        ));
-    }
-
-    // Validate github.ai_reply_prefix is not empty (could cause attribution issues)
-    if cfg.services.github.ai_reply_prefix.trim().is_empty() {
-        warnings.push(AdvisoryWarning::new(
-            "services.github.ai_reply_prefix.empty",
-            "services.github.ai_reply_prefix",
-            "empty prefix may cause AI replies to be unmarked",
         ));
     }
 

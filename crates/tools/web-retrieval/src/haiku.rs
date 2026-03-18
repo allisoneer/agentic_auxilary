@@ -21,9 +21,10 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
     const MAX_MARKDOWN_CHARS: usize = 100_000;
     let markdown: String = markdown.chars().take(MAX_MARKDOWN_CHARS).collect();
 
+    let base_url = tools.anthropic_cfg.base_url.clone();
     let client = tools
         .anthropic
-        .get_or_try_init(|| async { init_anthropic_client().await })
+        .get_or_try_init(|| async { init_anthropic_client(&base_url).await })
         .await
         .map_err(|e| ToolError::external(format!("Failed to initialize Anthropic client: {e}")))?;
 
@@ -81,14 +82,19 @@ fn normalize_key(s: &str) -> Option<String> {
 /// Attempts to find an API key from:
 /// 1. `ANTHROPIC_API_KEY` environment variable (must be non-empty after trim)
 /// 2. `OpenCode` provider discovery (fallback)
-async fn init_anthropic_client()
--> Result<anthropic_async::Client<anthropic_async::AnthropicConfig>, ToolError> {
+///
+/// Uses the provided `base_url` for API endpoint override.
+async fn init_anthropic_client(
+    base_url: &str,
+) -> Result<anthropic_async::Client<anthropic_async::AnthropicConfig>, ToolError> {
     // Try env var first (only if non-empty after trim)
     if let Ok(key) = std::env::var("ANTHROPIC_API_KEY")
         && let Some(key) = normalize_key(&key)
     {
         debug!("Using ANTHROPIC_API_KEY from environment");
-        let config = anthropic_async::AnthropicConfig::new().with_api_key(key);
+        let config = anthropic_async::AnthropicConfig::new()
+            .with_api_base(base_url)
+            .with_api_key(key);
         return Ok(anthropic_async::Client::with_config(config));
     }
 
@@ -96,7 +102,9 @@ async fn init_anthropic_client()
     match get_anthropic_key_from_opencode().await {
         Ok(key) => {
             debug!("Using Anthropic key from OpenCode provider");
-            let config = anthropic_async::AnthropicConfig::new().with_api_key(key);
+            let config = anthropic_async::AnthropicConfig::new()
+                .with_api_base(base_url)
+                .with_api_key(key);
             Ok(anthropic_async::Client::with_config(config))
         }
         Err(e) => Err(ToolError::external(format!(

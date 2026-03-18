@@ -125,32 +125,6 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     if let Some(v) = env_trimmed("EXA_BASE_URL") {
         cfg.services.exa.base_url = v;
     }
-    if let Some(v) = env_trimmed("OPENCODE_BASE_URL") {
-        cfg.services.opencode.base_url = v;
-    }
-    if let Some(v) = env_trimmed("LINEAR_BASE_URL") {
-        cfg.services.linear.base_url = v;
-    }
-    if let Some(v) = env_trimmed("GITHUB_BASE_URL") {
-        cfg.services.github.base_url = v;
-    }
-
-    // --- API keys (env-only) ---
-    if let Some(k) = env_trimmed("ANTHROPIC_API_KEY") {
-        cfg.services.anthropic.api_key = Some(secrecy::SecretString::from(k));
-    }
-    if let Some(k) = env_trimmed("EXA_API_KEY") {
-        cfg.services.exa.api_key = Some(secrecy::SecretString::from(k));
-    }
-    if let Some(k) = env_trimmed("OPENCODE_API_KEY") {
-        cfg.services.opencode.api_key = Some(secrecy::SecretString::from(k));
-    }
-    if let Some(k) = env_trimmed("LINEAR_API_KEY") {
-        cfg.services.linear.api_key = Some(secrecy::SecretString::from(k));
-    }
-    if let Some(k) = env_trimmed("GITHUB_TOKEN") {
-        cfg.services.github.token = Some(secrecy::SecretString::from(k));
-    }
 
     // --- Subagents model overrides ---
     if let Some(v) = env_trimmed("AGENTIC_SUBAGENTS_LOCATOR_MODEL") {
@@ -323,31 +297,6 @@ optimizer_model = "file-model"
 
         let loaded = load_merged(temp.path()).unwrap();
         assert_eq!(loaded.config.reasoning.optimizer_model, "env-model");
-    }
-
-    #[test]
-    #[serial]
-    fn test_env_overrides_new_services() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        let _env1 = EnvGuard::set("OPENCODE_BASE_URL", "http://localhost:9999");
-        let _env2 = EnvGuard::set("LINEAR_BASE_URL", "https://custom.linear.app/graphql");
-        let _env3 = EnvGuard::set("GITHUB_BASE_URL", "https://github.example.com/api");
-
-        let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(
-            loaded.config.services.opencode.base_url,
-            "http://localhost:9999"
-        );
-        assert_eq!(
-            loaded.config.services.linear.base_url,
-            "https://custom.linear.app/graphql"
-        );
-        assert_eq!(
-            loaded.config.services.github.base_url,
-            "https://github.example.com/api"
-        );
     }
 
     #[test]

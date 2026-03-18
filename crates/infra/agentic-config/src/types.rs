@@ -5,7 +5,6 @@
 //! web retrieval, CLI tools, and logging.
 
 use schemars::JsonSchema;
-use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 /// Root configuration for all agentic tools.
@@ -26,7 +25,7 @@ pub struct AgenticConfig {
     /// Tool-specific config for gpt5-reasoner.
     pub reasoning: ReasoningConfig,
 
-    /// External service configurations (Anthropic, Exa, OpenCode, Linear, GitHub).
+    /// External service configurations (Anthropic, Exa).
     pub services: ServicesConfig,
 
     /// Orchestrator session and timing configuration.
@@ -252,12 +251,6 @@ pub struct ServicesConfig {
     pub anthropic: AnthropicServiceConfig,
     /// Exa search API configuration.
     pub exa: ExaServiceConfig,
-    /// OpenCode API configuration.
-    pub opencode: OpenCodeServiceConfig,
-    /// Linear API configuration.
-    pub linear: LinearServiceConfig,
-    /// GitHub API configuration.
-    pub github: GitHubServiceConfig,
 }
 
 /// Anthropic API service configuration.
@@ -266,24 +259,12 @@ pub struct ServicesConfig {
 pub struct AnthropicServiceConfig {
     /// Base URL for the Anthropic API.
     pub base_url: String,
-    /// Connection timeout in seconds.
-    pub connect_timeout_secs: u64,
-    /// Request timeout in seconds.
-    pub request_timeout_secs: u64,
-
-    /// API key (env-only, never serialized to config files).
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub api_key: Option<SecretString>,
 }
 
 impl Default for AnthropicServiceConfig {
     fn default() -> Self {
         Self {
             base_url: "https://api.anthropic.com".into(),
-            connect_timeout_secs: 5,
-            request_timeout_secs: 600,
-            api_key: None,
         }
     }
 }
@@ -294,108 +275,12 @@ impl Default for AnthropicServiceConfig {
 pub struct ExaServiceConfig {
     /// Base URL for the Exa API.
     pub base_url: String,
-
-    /// API key (env-only, never serialized to config files).
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub api_key: Option<SecretString>,
 }
 
 impl Default for ExaServiceConfig {
     fn default() -> Self {
         Self {
             base_url: "https://api.exa.ai".into(),
-            api_key: None,
-        }
-    }
-}
-
-/// OpenCode API service configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct OpenCodeServiceConfig {
-    /// Base URL for the OpenCode API (default: localhost:4096).
-    pub base_url: String,
-    /// Request timeout in seconds (default: 1800 = 30 minutes).
-    pub request_timeout_secs: u64,
-
-    /// API key (env-only, never serialized to config files).
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub api_key: Option<SecretString>,
-}
-
-impl Default for OpenCodeServiceConfig {
-    fn default() -> Self {
-        Self {
-            base_url: "http://127.0.0.1:4096".into(),
-            request_timeout_secs: 1800,
-            api_key: None,
-        }
-    }
-}
-
-/// Linear API service configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct LinearServiceConfig {
-    /// Base URL for the Linear GraphQL API.
-    pub base_url: String,
-    /// Connection timeout in seconds.
-    pub connect_timeout_secs: u64,
-    /// Request timeout in seconds.
-    pub request_timeout_secs: u64,
-    /// Default page size for paginated queries.
-    pub default_page_size: u32,
-
-    /// API key (env-only, never serialized to config files).
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub api_key: Option<SecretString>,
-}
-
-impl Default for LinearServiceConfig {
-    fn default() -> Self {
-        Self {
-            base_url: "https://api.linear.app/graphql".into(),
-            connect_timeout_secs: 10,
-            request_timeout_secs: 30,
-            default_page_size: 50,
-            api_key: None,
-        }
-    }
-}
-
-/// GitHub API service configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct GitHubServiceConfig {
-    /// Base URL for the GitHub API.
-    pub base_url: String,
-    /// Connection timeout in seconds.
-    pub connect_timeout_secs: u64,
-    /// Request timeout in seconds.
-    pub request_timeout_secs: u64,
-    /// Cache TTL for API responses in seconds.
-    pub cache_ttl_secs: u64,
-    /// Prefix for AI-generated replies (for attribution).
-    pub ai_reply_prefix: String,
-
-    /// GitHub token (env-only, never serialized to config files).
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub token: Option<SecretString>,
-}
-
-impl Default for GitHubServiceConfig {
-    fn default() -> Self {
-        Self {
-            base_url: "https://api.github.com".into(),
-            connect_timeout_secs: 10,
-            request_timeout_secs: 30,
-            cache_ttl_secs: 300,
-            ai_reply_prefix: "[AI] ".into(),
-            token: None,
         }
     }
 }
@@ -482,23 +367,6 @@ locator_model = "custom-model"
         assert_eq!(config.schema, Some("file://./agentic.schema.json".into()));
     }
 
-    #[test]
-    fn test_api_keys_not_serialized() {
-        let mut config = AgenticConfig::default();
-        config.services.anthropic.api_key = Some(SecretString::from("secret-key".to_string()));
-        config.services.github.token = Some(SecretString::from("gh-token".to_string()));
-
-        let toml_str = toml::to_string(&config).unwrap();
-        // The actual secret values should never appear
-        assert!(!toml_str.contains("secret-key"));
-        assert!(!toml_str.contains("gh-token"));
-        // The field names with #[serde(skip)] should not appear as keys
-        assert!(!toml_str.contains("api_key"));
-        // Note: "token" can appear in field names like "max_tokens", so we check
-        // specifically that the github.token field is not serialized
-        assert!(!toml_str.contains("token ="));
-    }
-
     // Default value assertion tests - ensure defaults match current hardcoded behavior
     #[test]
     fn test_web_retrieval_defaults_match_hardcoded() {
@@ -537,27 +405,8 @@ locator_model = "custom-model"
 
         // Anthropic
         assert_eq!(cfg.anthropic.base_url, "https://api.anthropic.com");
-        assert_eq!(cfg.anthropic.connect_timeout_secs, 5);
-        assert_eq!(cfg.anthropic.request_timeout_secs, 600);
 
         // Exa
         assert_eq!(cfg.exa.base_url, "https://api.exa.ai");
-
-        // OpenCode
-        assert_eq!(cfg.opencode.base_url, "http://127.0.0.1:4096");
-        assert_eq!(cfg.opencode.request_timeout_secs, 1800);
-
-        // Linear
-        assert_eq!(cfg.linear.base_url, "https://api.linear.app/graphql");
-        assert_eq!(cfg.linear.connect_timeout_secs, 10);
-        assert_eq!(cfg.linear.request_timeout_secs, 30);
-        assert_eq!(cfg.linear.default_page_size, 50);
-
-        // GitHub
-        assert_eq!(cfg.github.base_url, "https://api.github.com");
-        assert_eq!(cfg.github.connect_timeout_secs, 10);
-        assert_eq!(cfg.github.request_timeout_secs, 30);
-        assert_eq!(cfg.github.cache_ttl_secs, 300);
-        assert_eq!(cfg.github.ai_reply_prefix, "[AI] ");
     }
 }

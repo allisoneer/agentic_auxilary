@@ -49,33 +49,14 @@
       }
     },
     "services": {
-      "description": "External service configurations (Anthropic, Exa, OpenCode, Linear, GitHub).",
+      "description": "External service configurations (Anthropic, Exa).",
       "$ref": "#/$defs/ServicesConfig",
       "default": {
         "anthropic": {
-          "base_url": "https://api.anthropic.com",
-          "connect_timeout_secs": 5,
-          "request_timeout_secs": 600
+          "base_url": "https://api.anthropic.com"
         },
         "exa": {
           "base_url": "https://api.exa.ai"
-        },
-        "github": {
-          "ai_reply_prefix": "[AI] ",
-          "base_url": "https://api.github.com",
-          "cache_ttl_secs": 300,
-          "connect_timeout_secs": 10,
-          "request_timeout_secs": 30
-        },
-        "linear": {
-          "base_url": "https://api.linear.app/graphql",
-          "connect_timeout_secs": 10,
-          "default_page_size": 50,
-          "request_timeout_secs": 30
-        },
-        "opencode": {
-          "base_url": "http://127.0.0.1:4096",
-          "request_timeout_secs": 1800
         }
       }
     },
@@ -112,20 +93,6 @@
           "description": "Base URL for the Anthropic API.",
           "type": "string",
           "default": "https://api.anthropic.com"
-        },
-        "connect_timeout_secs": {
-          "description": "Connection timeout in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 5,
-          "minimum": 0
-        },
-        "request_timeout_secs": {
-          "description": "Request timeout in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 600,
-          "minimum": 0
         }
       }
     },
@@ -189,75 +156,6 @@
         }
       }
     },
-    "GitHubServiceConfig": {
-      "description": "GitHub API service configuration.",
-      "type": "object",
-      "properties": {
-        "ai_reply_prefix": {
-          "description": "Prefix for AI-generated replies (for attribution).",
-          "type": "string",
-          "default": "[AI] "
-        },
-        "base_url": {
-          "description": "Base URL for the GitHub API.",
-          "type": "string",
-          "default": "https://api.github.com"
-        },
-        "cache_ttl_secs": {
-          "description": "Cache TTL for API responses in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 300,
-          "minimum": 0
-        },
-        "connect_timeout_secs": {
-          "description": "Connection timeout in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 10,
-          "minimum": 0
-        },
-        "request_timeout_secs": {
-          "description": "Request timeout in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 30,
-          "minimum": 0
-        }
-      }
-    },
-    "LinearServiceConfig": {
-      "description": "Linear API service configuration.",
-      "type": "object",
-      "properties": {
-        "base_url": {
-          "description": "Base URL for the Linear GraphQL API.",
-          "type": "string",
-          "default": "https://api.linear.app/graphql"
-        },
-        "connect_timeout_secs": {
-          "description": "Connection timeout in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 10,
-          "minimum": 0
-        },
-        "default_page_size": {
-          "description": "Default page size for paginated queries.",
-          "type": "integer",
-          "format": "uint32",
-          "default": 50,
-          "minimum": 0
-        },
-        "request_timeout_secs": {
-          "description": "Request timeout in seconds.",
-          "type": "integer",
-          "format": "uint64",
-          "default": 30,
-          "minimum": 0
-        }
-      }
-    },
     "LoggingConfig": {
       "description": "Logging and diagnostics configuration.",
       "type": "object",
@@ -271,24 +169,6 @@
           "description": "Log level (trace, debug, info, warn, error).",
           "type": "string",
           "default": "info"
-        }
-      }
-    },
-    "OpenCodeServiceConfig": {
-      "description": "OpenCode API service configuration.",
-      "type": "object",
-      "properties": {
-        "base_url": {
-          "description": "Base URL for the OpenCode API (default: localhost:4096).",
-          "type": "string",
-          "default": "http://127.0.0.1:4096"
-        },
-        "request_timeout_secs": {
-          "description": "Request timeout in seconds (default: 1800 = 30 minutes).",
-          "type": "integer",
-          "format": "uint64",
-          "default": 1800,
-          "minimum": 0
         }
       }
     },
@@ -379,9 +259,7 @@
           "description": "Anthropic API configuration.",
           "$ref": "#/$defs/AnthropicServiceConfig",
           "default": {
-            "base_url": "https://api.anthropic.com",
-            "connect_timeout_secs": 5,
-            "request_timeout_secs": 600
+            "base_url": "https://api.anthropic.com"
           }
         },
         "exa": {
@@ -389,35 +267,6 @@
           "$ref": "#/$defs/ExaServiceConfig",
           "default": {
             "base_url": "https://api.exa.ai"
-          }
-        },
-        "github": {
-          "description": "GitHub API configuration.",
-          "$ref": "#/$defs/GitHubServiceConfig",
-          "default": {
-            "ai_reply_prefix": "[AI] ",
-            "base_url": "https://api.github.com",
-            "cache_ttl_secs": 300,
-            "connect_timeout_secs": 10,
-            "request_timeout_secs": 30
-          }
-        },
-        "linear": {
-          "description": "Linear API configuration.",
-          "$ref": "#/$defs/LinearServiceConfig",
-          "default": {
-            "base_url": "https://api.linear.app/graphql",
-            "connect_timeout_secs": 10,
-            "default_page_size": 50,
-            "request_timeout_secs": 30
-          }
-        },
-        "opencode": {
-          "description": "OpenCode API configuration.",
-          "$ref": "#/$defs/OpenCodeServiceConfig",
-          "default": {
-            "base_url": "http://127.0.0.1:4096",
-            "request_timeout_secs": 1800
           }
         }
       }

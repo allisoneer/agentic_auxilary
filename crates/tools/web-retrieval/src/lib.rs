@@ -25,11 +25,7 @@ pub struct WebTools {
     pub(crate) anthropic: OnceCell<anthropic_async::Client<anthropic_async::AnthropicConfig>>,
     /// Web retrieval configuration (timeouts, limits, summarizer settings)
     pub(crate) cfg: WebRetrievalConfig,
-    /// Exa service configuration
-    #[allow(dead_code)] // Will be used when Exa client supports custom base URLs
-    pub(crate) exa_cfg: ExaServiceConfig,
-    /// Anthropic service configuration
-    #[allow(dead_code)] // Will be used when Anthropic client supports custom config
+    /// Anthropic service configuration (`base_url` for API endpoint override)
     pub(crate) anthropic_cfg: AnthropicServiceConfig,
 }
 
@@ -41,19 +37,20 @@ impl WebTools {
     #[must_use]
     pub fn with_config(
         cfg: WebRetrievalConfig,
-        exa_cfg: ExaServiceConfig,
+        exa_cfg: &ExaServiceConfig,
         anthropic_cfg: AnthropicServiceConfig,
     ) -> Self {
+        // Create Exa client with configured base_url
+        let exa_config = exa_async::ExaConfig::new().with_api_base(&exa_cfg.base_url);
         Self {
             http: reqwest::Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(5))
                 .timeout(std::time::Duration::from_secs(cfg.request_timeout_secs))
                 .build()
                 .expect("reqwest client"),
-            exa: exa_async::Client::new(),
+            exa: exa_async::Client::with_config(exa_config),
             anthropic: OnceCell::new(),
             cfg,
-            exa_cfg,
             anthropic_cfg,
         }
     }
@@ -66,7 +63,7 @@ impl WebTools {
     pub fn new() -> Self {
         Self::with_config(
             WebRetrievalConfig::default(),
-            ExaServiceConfig::default(),
+            &ExaServiceConfig::default(),
             AnthropicServiceConfig::default(),
         )
     }
@@ -85,12 +82,13 @@ pub use tools::build_registry;
 impl WebTools {
     /// Create a `WebTools` instance with a custom HTTP client for testing.
     pub(crate) fn with_http_client(http: reqwest::Client) -> Self {
+        let exa_cfg = ExaServiceConfig::default();
+        let exa_config = exa_async::ExaConfig::new().with_api_base(&exa_cfg.base_url);
         Self {
             http,
-            exa: exa_async::Client::new(),
+            exa: exa_async::Client::with_config(exa_config),
             anthropic: OnceCell::new(),
             cfg: WebRetrievalConfig::default(),
-            exa_cfg: ExaServiceConfig::default(),
             anthropic_cfg: AnthropicServiceConfig::default(),
         }
     }

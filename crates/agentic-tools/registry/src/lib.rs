@@ -173,7 +173,7 @@ impl AgenticTools {
         if domain_wanted(WEB_NAMES) {
             let web = Arc::new(web_retrieval::WebTools::with_config(
                 config.web_retrieval.clone(),
-                config.exa.clone(),
+                &config.exa,
                 config.anthropic.clone(),
             ));
             regs.push(web_retrieval::build_registry(web));
