@@ -26,6 +26,7 @@ agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 claudecode = { workspace = true }
 futures = "0.3"
+git2 = "0.20"
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

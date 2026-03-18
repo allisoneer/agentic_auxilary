@@ -125,4 +125,25 @@ mod tests {
         let result = extract_json_best_effort(s);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn extracts_fenced_json_without_language_tag() {
+        let s = "Preamble\n```\n{\"lens\":\"security\",\"verdict\":\"approved\",\"findings\":[],\"notes\":[]}\n```\n";
+        let j = extract_json_best_effort(s).unwrap();
+        assert!(j.contains("\"lens\":\"security\""));
+    }
+
+    #[test]
+    fn extracts_json_from_second_fence_when_first_is_not_json() {
+        let s = "```text\nnot json\n```\n```json\n{\"lens\":\"security\",\"verdict\":\"approved\",\"findings\":[],\"notes\":[]}\n```\n";
+        let j = extract_json_best_effort(s).unwrap();
+        assert!(j.contains("\"verdict\":\"approved\""));
+    }
+
+    #[test]
+    fn extracts_json_outside_fences_when_fences_contain_no_json() {
+        let s = "```text\nhello\n```\nTrailing:\n{\"lens\":\"security\",\"verdict\":\"approved\",\"findings\":[],\"notes\":[]}\n";
+        let j = extract_json_best_effort(s).unwrap();
+        assert!(j.contains("\"lens\":\"security\""));
+    }
 }

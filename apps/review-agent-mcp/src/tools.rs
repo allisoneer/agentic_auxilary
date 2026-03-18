@@ -5,6 +5,7 @@ use claudecode::client::Client;
 use claudecode::config::{MCPConfig, MCPServer, SessionConfig};
 use claudecode::types::{Model, OutputFormat, PermissionMode, Result as ClaudeResult};
 use futures::future::BoxFuture;
+use git2::Repository;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -74,9 +75,46 @@ fn reviewer_all_tools() -> Vec<String> {
         .collect()
 }
 
-/// Count lines in a string.
+/// Count logical lines in a string using Rust's `str::lines()`.
+///
+/// Note: `lines()` treats a trailing `\n` as not producing an extra empty line
+/// (e.g. `"a\n"` counts as 1 line).
 fn count_lines(s: &str) -> usize {
     s.lines().count()
+}
+
+/// Discover the git repository root (working directory) starting from the current directory.
+///
+/// Uses `git2::Repository::discover` to walk up parent directories until a repository is found.
+///
+/// # Errors
+///
+/// Returns `ToolError::Internal` if:
+/// - the current directory cannot be determined
+/// - no git repository can be discovered from the current directory
+/// - the discovered repository is bare (no working directory)
+fn find_repo_root() -> Result<PathBuf, ToolError> {
+    let start = std::env::current_dir().map_err(|e| {
+        ToolError::Internal(format!("Failed to get current_dir for repo discovery: {e}"))
+    })?;
+
+    let repo = Repository::discover(&start).map_err(|e| {
+        ToolError::Internal(format!(
+            "Failed to discover git repository from {}: {e}",
+            start.display()
+        ))
+    })?;
+
+    let workdir = repo.workdir().ok_or_else(|| {
+        ToolError::Internal("Discovered git repository is bare (no working directory)".into())
+    })?;
+
+    workdir.canonicalize().map_err(|e| {
+        ToolError::Internal(format!(
+            "Failed to canonicalize discovered repo root {}: {e}",
+            workdir.display()
+        ))
+    })
 }
 
 /// Truncate a string for safe embedding into LLM prompts.
@@ -182,6 +220,15 @@ struct GroundingIssue {
 /// Count lines in a file using byte-based newline counting.
 ///
 /// This is more robust than UTF-8 line iteration and handles binary files.
+///
+/// Behavior:
+/// - Empty files return 0
+/// - Newlines are counted by scanning for `b'\n'`
+/// - If the file does not end with `\n`, the final partial line is still counted
+///
+/// # Errors
+///
+/// Returns `ToolError::Internal` if the file cannot be read.
 fn count_file_lines_bytes(path: &Path) -> Result<usize, ToolError> {
     let bytes = std::fs::read(path).map_err(|e| {
         ToolError::Internal(format!(
@@ -470,16 +517,17 @@ where
 
 /// Run a reviewer session with semaphore-guarded concurrency and wall-clock timeout.
 ///
-/// Acquires a permit from the global `SESSION_SEMAPHORE` (max 2 concurrent sessions),
-/// then wraps the session in a 30-minute timeout.
+/// Uses the provided `semaphore` to limit concurrent sessions,
+/// and wraps the session in the fixed `SESSION_TIMEOUT`.
 async fn run_reviewer_session_guarded(
+    semaphore: &Semaphore,
     system_prompt: &str,
     user_prompt: &str,
     builtin_tools: Vec<String>,
     all_tools: Vec<String>,
     mcp_config: MCPConfig,
 ) -> Result<String, ToolError> {
-    with_permit_and_timeout(&SESSION_SEMAPHORE, SESSION_TIMEOUT, || {
+    with_permit_and_timeout(semaphore, SESSION_TIMEOUT, || {
         run_reviewer_session(
             system_prompt,
             user_prompt,
@@ -545,6 +593,7 @@ async fn run_reviewer_session_with_retry(
 ) -> Result<String, ToolError> {
     retry_fixed_delays(&RETRY_DELAYS, tokio::time::sleep, || {
         run_reviewer_session_guarded(
+            &SESSION_SEMAPHORE,
             system_prompt,
             user_prompt,
             builtin_tools.clone(),
@@ -566,20 +615,32 @@ impl SpawnTool {
             .clone()
             .unwrap_or_else(|| "./review.diff".into());
 
-        // Validate diff_path: must resolve to review.diff within repo root
-        let repo_root = std::env::current_dir().map_err(|e| {
-            ToolError::Internal(format!("Failed to determine repo root (current_dir): {e}"))
-        })?;
+        // Discover repo root + validate diff_path + read diff off the async runtime.
+        // Hard constraint: use spawn_blocking (not tokio::fs).
+        let (repo_root, diff_path, diff) = tokio::task::spawn_blocking({
+            let diff_path_input = diff_path_input.clone();
+            move || -> Result<(PathBuf, PathBuf, String), ToolError> {
+                // Priority 1: correctness (repo root discovery)
+                let repo_root = find_repo_root()?;
 
-        let diff_path = validate_diff_path(&repo_root, &diff_path_input)?;
+                // Validate diff_path: must resolve to review.diff within repo root
+                let diff_path = validate_diff_path(&repo_root, &diff_path_input)?;
 
-        // Read diff file (path is now validated)
-        let diff = std::fs::read_to_string(&diff_path).map_err(|e| {
-            ToolError::InvalidInput(format!(
-                "Failed to read diff at {}: {e}",
-                diff_path.display()
-            ))
-        })?;
+                // Read diff file (path is now validated)
+                let diff = std::fs::read_to_string(&diff_path).map_err(|e| {
+                    ToolError::InvalidInput(format!(
+                        "Failed to read diff at {}: {e}",
+                        diff_path.display()
+                    ))
+                })?;
+
+                Ok((repo_root, diff_path, diff))
+            }
+        })
+        .await
+        .map_err(|e| {
+            ToolError::Internal(format!("Blocking task failed while loading diff: {e}"))
+        })??;
 
         // Handle empty diff
         if diff.trim().is_empty() {
@@ -658,8 +719,19 @@ impl SpawnTool {
             }
         };
 
-        // Grounding validation: check file:line plausibility
-        let issues1 = collect_grounding_issues(&repo_root, &report1)?;
+        // Grounding validation: check file:line plausibility (performs filesystem reads)
+        let issues1 = tokio::task::spawn_blocking({
+            let repo_root = repo_root.clone();
+            let report1 = report1.clone();
+            move || collect_grounding_issues(&repo_root, &report1)
+        })
+        .await
+        .map_err(|e| {
+            ToolError::Internal(format!(
+                "Blocking task failed during grounding validation: {e}"
+            ))
+        })??;
+
         if issues1.is_empty() {
             return Ok(SpawnOutput {
                 report: report1,
@@ -710,8 +782,19 @@ impl SpawnTool {
 
         let mut report2 = parse_and_validate_report(&raw2, input.lens)?;
 
-        // Check grounding again after retry
-        let issues2 = collect_grounding_issues(&repo_root, &report2)?;
+        // Check grounding again after retry (performs filesystem reads)
+        let issues2 = tokio::task::spawn_blocking({
+            let repo_root = repo_root.clone();
+            let report2 = report2.clone();
+            move || collect_grounding_issues(&repo_root, &report2)
+        })
+        .await
+        .map_err(|e| {
+            ToolError::Internal(format!(
+                "Blocking task failed during grounding validation: {e}"
+            ))
+        })??;
+
         if issues2.is_empty() {
             return Ok(SpawnOutput {
                 report: report2,
@@ -777,6 +860,19 @@ mod tests {
         assert_eq!(count_lines("a\nb\nc"), 3);
         assert_eq!(count_lines(""), 0);
         assert_eq!(count_lines("single line"), 1);
+    }
+
+    #[test]
+    fn find_repo_root_returns_ancestor_of_manifest_dir() {
+        let repo_root = find_repo_root().unwrap();
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        assert!(
+            manifest_dir.starts_with(&repo_root),
+            "repo_root={} should be an ancestor of manifest_dir={}",
+            repo_root.display(),
+            manifest_dir.display()
+        );
     }
 
     #[test]

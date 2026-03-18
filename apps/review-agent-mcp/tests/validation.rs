@@ -1,29 +1,7 @@
 //! Integration tests for JSON extraction and validation.
 
 use review_agent_mcp::types::ReviewLens;
-use review_agent_mcp::validation::{extract_json_best_effort, parse_and_validate_report};
-
-#[test]
-fn extracts_raw_json() {
-    let s = r#"{"lens":"security","verdict":"approved","findings":[],"notes":[]}"#;
-    let j = extract_json_best_effort(s).unwrap();
-    assert!(j.starts_with('{'));
-    assert!(j.ends_with('}'));
-}
-
-#[test]
-fn extracts_fenced_json() {
-    let s = "Here is the review:\n```json\n{\"lens\":\"security\",\"verdict\":\"approved\",\"findings\":[],\"notes\":[]}\n```\nDone.";
-    let j = extract_json_best_effort(s).unwrap();
-    assert!(j.contains("\"lens\":\"security\""));
-}
-
-#[test]
-fn extracts_json_with_preamble() {
-    let s = "I found the following issues:\n{\"lens\":\"correctness\",\"verdict\":\"needs_changes\",\"findings\":[],\"notes\":[]}";
-    let j = extract_json_best_effort(s).unwrap();
-    assert!(j.starts_with('{'));
-}
+use review_agent_mcp::validation::parse_and_validate_report;
 
 #[test]
 fn requires_caveat_when_confidence_medium() {

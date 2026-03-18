@@ -5046,6 +5046,7 @@ dependencies = [
  "anyhow",
  "claudecode",
  "futures",
+ "git2",
  "rustls",
  "schemars 1.2.1",
  "serde",
