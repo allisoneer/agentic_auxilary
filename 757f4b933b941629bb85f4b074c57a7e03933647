@@ -1,0 +1,29 @@
+apps/review-agent-mcp/src/tools.rs
+  853ee38777e7d016 8,78-81,86-117,223-231,520-521,523,530,596,618-624,626,636-643,722-734,785-797,866-878
+apps/review-agent-mcp/tests/validation.rs
+  853ee38777e7d016 4
+apps/review-agent-mcp/Cargo.toml
+  853ee38777e7d016 29
+apps/review-agent-mcp/src/validation.rs
+  853ee38777e7d016 128-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "757f4b933b941629bb85f4b074c57a7e03933647",
+  "prompts": {
+    "853ee38777e7d016": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fcaa8e24ffe6KjQyu2FRBBfjY",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 140,
+      "total_deletions": 44,
+      "accepted_lines": 131,
+      "overriden_lines": 0
+    }
+  }
+}
