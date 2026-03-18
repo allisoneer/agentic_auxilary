@@ -56,6 +56,27 @@ These items have dependencies and should be done in order.
 
 ## To classify/investigate:
 
+### CLAUDE.md cargo commands → just commands
+The xtask autogen system generates raw cargo commands in per-crate CLAUDE.md files (`crates/meta/xtask/src/claude.rs:183-196`), but our primary agents don't use bash and the root CLAUDE.md already documents the preferred `just crate-*` commands. This creates inconsistency where per-crate docs show cargo commands while root docs show just commands. Update xtask to generate:
+- `just crate-check <crate>` instead of `cargo fmt -p ... && cargo clippy -p ...`
+- `just crate-test <crate>` instead of `cargo test -p ...`
+- `just crate-build <crate>` instead of `cargo build -p ...`
+
+Affects 32 CLAUDE.md files. Low effort change in xtask, automatic propagation via `just xtask-sync`.
+
+### Test-support crate consolidation
+EnvGuard (RAII environment variable isolation) is duplicated across 6 crates:
+- `agentic-config/src/test_support.rs` (pub(crate), impl AsRef<Path>)
+- `anthropic-async/src/test_support.rs` (pub, with_set/with_removed closures, #[must_use])
+- `gpt5-reasoner/src/test_support.rs` (pub(crate), includes DirGuard)
+- `exa-async/src/test_support.rs` (pub, minimal)
+- `linear-tools/src/test_support.rs` (pub, plus JSON fixture builders)
+- `agentic-logging/src/lib.rs:206-217` (inline, weaker variant)
+
+Consider creating `crates/infra/test-support/` with unified EnvGuard adopting anthropic-async's pattern (closure API, #[must_use]) and optionally DirGuard from gpt5-reasoner. Domain-specific fixtures (linear-tools JSON builders) should remain local.
+
+Existing TODO(2) at `agentic-config/src/test_support.rs:23-25` acknowledges this.
+
 ### References cleanup commands (follow-up work after ENG-454)
 The core ENG-454 issues have been addressed. Remaining follow-up work:
 

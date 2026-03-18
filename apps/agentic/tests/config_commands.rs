@@ -20,6 +20,11 @@ fn agentic_cmd_isolated(config_dir: &std::path::Path) -> Command {
     let mut cmd = agentic_cmd();
     cmd.env(CONFIG_DIR_TEST_VAR, config_dir);
     // Prevent developer/CI env from affecting assertions
+    // TODO(2): ENV-to-config mappings need improvement:
+    // - Consider a centralized registry instead of this hardcoded array
+    // - Mapping logic in loader.rs:apply_env_overrides() should derive from typed config
+    // - Reference General-Wisdom/monorepo's #[derive(EnvVars)] pattern for inspiration
+    // - Not all config values should necessarily have ENV equivalents; clarify policy
     for k in [
         "AGENTIC_SUBAGENTS_LOCATOR_MODEL",
         "AGENTIC_SUBAGENTS_ANALYZER_MODEL",

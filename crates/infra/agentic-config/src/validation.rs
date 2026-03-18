@@ -65,6 +65,12 @@ pub fn detect_deprecated_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarning> {
     warnings
 }
 
+// TODO(2): This list must be kept in sync with AgenticConfig fields in types.rs.
+// Consider generating dynamically via schemars introspection, or adding a compile-time
+// test that extracts field names from AgenticConfig's JsonSchema and verifies they
+// match this list. Currently requires manual updates when adding new config sections.
+// See research/pr127-group7-type-safety-external-type-dependencies.md for analysis.
+
 /// Known top-level keys for unknown key detection.
 /// Unknown keys at root level produce advisory warnings.
 const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[

@@ -51,6 +51,10 @@ pub struct AgenticConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct SubagentsConfig {
+    // TODO(3): Model name handling could be more type-safe:
+    // - Consider documenting supported models in code (enum or const list)
+    // - Standardize approach between anthropic-async, claudecode_rs, and consumers
+    // - Current string-based approach works but lacks IDE completion and validation
     /// Model for Locator subagent (fast discovery). Uses Claude CLI format.
     pub locator_model: String,
     /// Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
@@ -82,6 +86,15 @@ enum ReasoningEffortLevel {
     High,
     Xhigh,
 }
+
+// Note on external type dependencies: We investigated using model types from the
+// async-openai crate but found they use plain `String` for most model fields (chat
+// completions, embeddings, assistants, fine-tuning, audio transcription). Only image
+// generation (ImageModel) and TTS (SpeechModel) have typed enums, and those include
+// `Other(String)` escape hatches with #[serde(untagged)]. Their Model struct (for
+// listing available models) also uses `id: String`. Copying their types would not
+// improve our type safety since they face the same constraints we do and chose the
+// same approach. See research/pr127-group7-type-safety-external-type-dependencies.md.
 
 /// Configuration for gpt5-reasoner tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

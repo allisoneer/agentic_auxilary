@@ -200,7 +200,24 @@ mod tests {
         assert_eq!(level3.get("c").unwrap().as_integer(), Some(3));
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Property-based tests using proptest
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // Proptest generates random inputs to verify algebraic properties of deep_merge().
+    // This catches edge cases that unit tests might miss (e.g., deeply nested structures,
+    // unusual key combinations).
+    //
+    // The `proptest-regressions/merge.txt` file stores seeds for inputs that previously
+    // caused failures. Proptest replays these seeds before generating new random inputs,
+    // ensuring regressions are caught immediately.
+    //
+    // Two properties are tested:
+    // 1. Identity: deep_merge(base, {}) == base (empty patch is no-op)
+    // 2. Idempotence: deep_merge(deep_merge(base, patch), patch) == deep_merge(base, patch)
+    //    (re-applying the same patch doesn't change the result)
+    //
+    // These properties validate that our merge semantics are sound for config overlays.
     proptest! {
         /// Identity property: merging with empty table returns original
         #[test]
