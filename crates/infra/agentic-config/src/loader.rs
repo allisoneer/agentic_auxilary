@@ -21,9 +21,6 @@ pub const GLOBAL_DIR: &str = "agentic";
 /// Filename for global config (TOML format).
 pub const GLOBAL_FILE: &str = "agentic.toml";
 
-/// Legacy JSON filename (warn if found).
-const LEGACY_JSON_FILE: &str = "agentic.json";
-
 /// Resolved paths for config files.
 #[derive(Debug, Clone)]
 pub struct AgenticConfigPaths {
@@ -79,9 +76,6 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
 
     // Collect warnings
     let mut warnings = Vec::new();
-
-    // Warn if legacy agentic.json exists (it's now ignored)
-    warn_legacy_json_if_present(&local_path, &global_path, &mut warnings);
 
     // Read configs as TOML Values
     let global_v = read_toml_table_or_empty(&global_path)?;
@@ -200,43 +194,6 @@ fn env_trimmed(name: &str) -> Option<String> {
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
-}
-
-/// Warn if legacy agentic.json files exist (they are now ignored).
-fn warn_legacy_json_if_present(
-    local_path: &Path,
-    global_path: &Path,
-    warnings: &mut Vec<AdvisoryWarning>,
-) {
-    // Check local directory for legacy JSON
-    if let Some(parent) = local_path.parent() {
-        let legacy_local = parent.join(LEGACY_JSON_FILE);
-        if legacy_local.exists() {
-            warnings.push(AdvisoryWarning::new(
-                "config.legacy_json_ignored",
-                "$",
-                format!(
-                    "Found legacy config {} (ignored). Use agentic.toml instead.",
-                    legacy_local.display()
-                ),
-            ));
-        }
-    }
-
-    // Check global directory for legacy JSON
-    if let Some(parent) = global_path.parent() {
-        let legacy_global = parent.join(LEGACY_JSON_FILE);
-        if legacy_global.exists() {
-            warnings.push(AdvisoryWarning::new(
-                "config.legacy_json_ignored",
-                "$",
-                format!(
-                    "Found legacy config {} (ignored). Use agentic.toml instead.",
-                    legacy_global.display()
-                ),
-            ));
-        }
-    }
 }
 
 /// Read a TOML file as a Value, returning empty table if file doesn't exist.
@@ -512,45 +469,5 @@ mount_dirs = {}
             .warnings
             .iter()
             .any(|w| w.code == "config.unknown_top_level_key" && w.message.contains("thoughts")));
-    }
-
-    #[test]
-    #[serial]
-    fn test_warns_on_legacy_json_local() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        // Create a legacy agentic.json file
-        std::fs::write(temp.path().join("agentic.json"), "{}").unwrap();
-
-        let loaded = load_merged(temp.path()).unwrap();
-        assert!(
-            loaded
-                .warnings
-                .iter()
-                .any(|w| w.code == "config.legacy_json_ignored"
-                    && w.message.contains("agentic.json"))
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_warns_on_legacy_json_global() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        // Create global dir with legacy agentic.json
-        let global_dir = temp.path().join(GLOBAL_DIR);
-        std::fs::create_dir_all(&global_dir).unwrap();
-        std::fs::write(global_dir.join("agentic.json"), "{}").unwrap();
-
-        let loaded = load_merged(temp.path()).unwrap();
-        assert!(
-            loaded
-                .warnings
-                .iter()
-                .any(|w| w.code == "config.legacy_json_ignored"
-                    && w.message.contains("agentic.json"))
-        );
     }
 }

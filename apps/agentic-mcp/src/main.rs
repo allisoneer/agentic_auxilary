@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    // Load agentic.json for tool-specific config (subagents, reasoning)
+    // Load agentic.toml for tool-specific config (subagents, reasoning)
     let cwd = std::env::current_dir()?;
     let loaded = load_merged(&cwd)?;
 

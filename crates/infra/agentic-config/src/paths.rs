@@ -28,7 +28,7 @@ fn env_path(var: &str) -> Option<PathBuf> {
 ///
 /// This function explicitly implements XDG Base Directory behavior rather than
 /// relying on `dirs::config_dir()`, which returns `~/Library/Application Support`
-/// on macOS. Our documented path is `~/.config/agentic/agentic.json` across all
+/// on macOS. Our documented path is `~/.config/agentic/agentic.toml` across all
 /// Unix systems.
 pub fn xdg_config_home() -> Result<PathBuf> {
     if let Some(p) = env_path(TEST_CONFIG_DIR_VAR) {

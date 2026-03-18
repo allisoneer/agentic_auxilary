@@ -231,25 +231,6 @@ fn test_help_flag() {
 }
 
 #[test]
-fn test_warns_on_legacy_json() {
-    let temp = TempDir::new().unwrap();
-
-    // Create a legacy agentic.json file
-    std::fs::write(temp.path().join("agentic.json"), "{}").unwrap();
-
-    let mut cmd = agentic_cmd();
-    cmd.args([
-        "config",
-        "validate",
-        "--path",
-        temp.path().to_str().unwrap(),
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("legacy").or(predicate::str::contains("agentic.json")));
-}
-
-#[test]
 fn test_warns_on_unknown_top_level_key() {
     let temp = TempDir::new().unwrap();
     let config_path = temp.path().join("agentic.toml");

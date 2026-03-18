@@ -66,10 +66,8 @@ mod tests {
     fn test_partial_config_validates_against_schema() {
         let schema = schema();
         let config_json = serde_json::json!({
-            "thoughts": {
-                "mount_dirs": {
-                    "thoughts": "my-thoughts"
-                }
+            "subagents": {
+                "locator_model": "claude-haiku-4-5"
             }
         });
 

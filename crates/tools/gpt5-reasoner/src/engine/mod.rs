@@ -1,4 +1,3 @@
-pub mod config;
 pub mod directory;
 pub mod guards;
 pub mod memory;

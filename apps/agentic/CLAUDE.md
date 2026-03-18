@@ -103,7 +103,7 @@ export AGENTIC_REASONING_OPTIMIZER_MODEL=anthropic/claude-sonnet-4.6
 
 ### Warnings vs Errors
 - **Warnings**: Advisory only, config still loads (e.g., deprecated keys, suspicious values)
-- **Errors**: Config cannot be parsed (e.g., invalid JSON syntax)
+- **Errors**: Config cannot be parsed (e.g., invalid TOML syntax)
 
 ### Common Warnings
 - `invalid_value: reasoning.optimizer_model`: Should use OpenRouter format (`provider/model`)

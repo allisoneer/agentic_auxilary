@@ -40,9 +40,6 @@ The loader (`loader::load_merged()`) performs a TOML deep-merge of global into l
 
 ## Tool-Specific Config Sections
 
-### `thoughts` - Workspace Configuration
-Configures the three-space thoughts architecture (thoughts/context/references mounts).
-
 ### `subagents` - Coding Agent Tools
 Model selection for `ask_agent` tool subagents:
 - `locator_model`: Fast discovery agent (default: `claude-haiku-4-5`)
@@ -85,7 +82,6 @@ Warnings are returned via `LoadedAgenticConfig.warnings` and printed by CLI comm
 - `loader.rs`: Load, merge, and env override logic
 - `merge.rs`: RFC 7396 JSON merge-patch implementation
 - `migration.rs`: Legacy v2 mapping helpers
-- `writer.rs`: Atomic config writing utilities
 - `validation.rs`: Advisory validation and deprecated key detection
 - `schema.rs`: JSON schema generation
 - `test_support.rs`: Test-only env guards (crate-private)
@@ -102,35 +98,24 @@ Follow the pattern of `subagents` and `reasoning`:
 
 ## Example agentic.toml
 
-```json
-{
-  "$schema": "https://example.com/agentic.schema.json",
-  "thoughts": {
-    "mount_dirs": {
-      "thoughts": "thoughts",
-      "context": "context",
-      "references": "references"
-    }
-  },
-  "subagents": {
-    "locator_model": "claude-haiku-4-5",
-    "analyzer_model": "claude-sonnet-4-6"
-  },
-  "reasoning": {
-    "optimizer_model": "anthropic/claude-sonnet-4.6",
-    "executor_model": "openai/gpt-5.2",
-    "reasoning_effort": "high"
-  },
-  "services": {
-    "anthropic": {
-      "base_url": "https://api.anthropic.com"
-    }
-  },
-  "logging": {
-    "level": "info",
-    "json": false
-  }
-}
+```toml
+"$schema" = "file://./agentic.schema.json"
+
+[subagents]
+locator_model = "claude-haiku-4-5"
+analyzer_model = "claude-sonnet-4-6"
+
+[reasoning]
+optimizer_model = "anthropic/claude-sonnet-4.6"
+executor_model = "openai/gpt-5.2"
+reasoning_effort = "high"
+
+[services.anthropic]
+base_url = "https://api.anthropic.com"
+
+[logging]
+level = "info"
+json = false
 ```
 
 ## Notes

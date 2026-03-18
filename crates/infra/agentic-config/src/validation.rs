@@ -101,33 +101,6 @@ pub fn detect_unknown_top_level_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarnin
     warnings
 }
 
-/// Detect deprecated config keys in raw JSON before deserialization.
-///
-/// This is a backward-compatibility shim for CLI code that still uses JSON.
-/// Will be removed when the CLI is updated to use TOML in Phase 4.
-pub fn detect_deprecated_keys(v: &serde_json::Value) -> Vec<AdvisoryWarning> {
-    let mut warnings = Vec::new();
-
-    if let Some(obj) = v.as_object() {
-        if obj.contains_key("thoughts") {
-            warnings.push(AdvisoryWarning::new(
-                "config.deprecated.thoughts",
-                "thoughts",
-                "The 'thoughts' section has been removed. thoughts-core now has its own config.",
-            ));
-        }
-        if obj.contains_key("models") {
-            warnings.push(AdvisoryWarning::new(
-                "config.deprecated.models",
-                "models",
-                "The 'models' section has been replaced by 'subagents' and 'reasoning'.",
-            ));
-        }
-    }
-
-    warnings
-}
-
 /// Validate a configuration and return advisory warnings.
 ///
 /// This does NOT fail on issues - it only collects warnings that
@@ -477,22 +450,6 @@ mount_dirs = {}
             warnings
                 .iter()
                 .any(|w| w.code == "config.deprecated.thoughts")
-        );
-    }
-
-    #[test]
-    fn test_detect_deprecated_models_json() {
-        let json_val: serde_json::Value = serde_json::json!({
-            "models": {
-                "default_model": "some-model"
-            }
-        });
-
-        let warnings = detect_deprecated_keys(&json_val);
-        assert!(
-            warnings
-                .iter()
-                .any(|w| w.code == "config.deprecated.models")
         );
     }
 }

@@ -180,7 +180,6 @@ enum ConfigCommands {
 
     /// Validate configuration
     Validate,
-    // Note: MigrateToV2 command removed. V1 configs are no longer supported.
 }
 
 #[derive(Subcommand)]

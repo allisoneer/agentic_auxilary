@@ -51,7 +51,6 @@ pub mod schema;
 pub(crate) mod test_support;
 pub mod types;
 pub mod validation;
-pub mod writer;
 
 // Re-exports for convenient access
 pub use loader::{LoadedAgenticConfig, load_merged};
