@@ -1,0 +1,27 @@
+apps/review-agent-mcp/CLAUDE.md
+  382fcd1c5976937c 13
+apps/review-agent-mcp/src/lib.rs
+  382fcd1c5976937c 3-7
+justfile
+  382fcd1c5976937c 90-92,430,460-462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "b86919ccaa9dba42c21bab35b40835857cd281d4",
+  "prompts": {
+    "382fcd1c5976937c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fcb866baffe4vtj12G1o768UF",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 13,
+      "total_deletions": 25,
+      "accepted_lines": 13,
+      "overriden_lines": 0
+    }
+  }
+}
