@@ -1,0 +1,31 @@
+apps/agentic/CLAUDE.md
+  66e6d04c0a5f3ec4 106
+crates/infra/agentic-config/CLAUDE.md
+  66e6d04c0a5f3ec4 101-118
+crates/infra/agentic-config/src/schema.rs
+  66e6d04c0a5f3ec4 69-70
+apps/agentic-mcp/src/main.rs
+  66e6d04c0a5f3ec4 168
+crates/infra/agentic-config/src/paths.rs
+  66e6d04c0a5f3ec4 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "6bc1757175f98615b07936a6d4b7055cc59b2ed6",
+  "prompts": {
+    "66e6d04c0a5f3ec4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2fd104996ffeQ5PxZ9OHBOWj8L",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 189,
+      "accepted_lines": 23,
+      "overriden_lines": 0
+    }
+  }
+}
