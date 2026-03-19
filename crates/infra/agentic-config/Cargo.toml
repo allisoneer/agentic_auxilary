@@ -31,3 +31,6 @@ proptest = "1.6"
 tempfile = "3"
 serial_test = "3"
 jsonschema = "0.29"
+
+[lints]
+workspace = true

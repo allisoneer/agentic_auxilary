@@ -63,10 +63,10 @@ build:
     {{ exec }}cargo build --workspace
 
 fmt:
-    {{ exec }}cargo fmt --all
+    {{ exec }}cargo +nightly fmt --all
 
 fmt-check:
-    {{ exec }}cargo fmt --all -- --check
+    {{ exec }}cargo +nightly fmt --all -- --check
 
 # Security audit with cargo-deny
 deny:
@@ -78,7 +78,7 @@ fmt-check-just:
 
 # Per-crate commands
 crate-check crate:
-    {{ exec }}cargo fmt -p {{ crate }} -- --check
+    {{ exec }}cargo +nightly fmt -p {{ crate }} -- --check
     {{ exec }}cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
 crate-test crate:
