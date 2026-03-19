@@ -1,0 +1,31 @@
+crates/agentic-tools/utils/src/pagination.rs
+  2e56bb316ec7113f 91,93-94,104
+crates/tools/web-retrieval/src/lib.rs
+  2e56bb316ec7113f 40-43
+crates/tools/web-retrieval/src/tools.rs
+  2e56bb316ec7113f 47,82,94
+apps/agentic-mcp/src/main.rs
+  2e56bb316ec7113f 205
+crates/infra/agentic-config/src/test_support.rs
+  2e56bb316ec7113f 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "4b99c04b82d343baaa494c27911576761e817a10",
+  "prompts": {
+    "2e56bb316ec7113f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f90342f8ffe7xxQdOmY2llldZ",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 13,
+      "overriden_lines": 0
+    }
+  }
+}
