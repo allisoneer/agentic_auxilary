@@ -1,0 +1,59 @@
+apps/agentic-mcp/Cargo.toml
+  644d6422d2b7a30f 37-39
+crates/agentic-tools/utils/Cargo.toml
+  644d6422d2b7a30f 19,21,26-28
+crates/infra/agentic-config/Cargo.toml
+  644d6422d2b7a30f 34-36
+crates/tools/web-retrieval/Cargo.toml
+  644d6422d2b7a30f 34-35
+justfile
+  7e1b6fc92e95f79d 66,69,81
+apps/agentic/Cargo.toml
+  644d6422d2b7a30f 40-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "d591771235c1134bb1f4aa88635555ef2099d9dc",
+  "prompts": {
+    "2e56bb316ec7113f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f90342f8ffe7xxQdOmY2llldZ",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 18,
+      "total_deletions": 18,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    },
+    "644d6422d2b7a30f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f93852f0ffe9nfmPt33kowKKK",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 16,
+      "total_deletions": 9,
+      "accepted_lines": 16,
+      "overriden_lines": 0
+    },
+    "7e1b6fc92e95f79d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f90735edffebdKK4mHYJ1cN7j",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 3,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
