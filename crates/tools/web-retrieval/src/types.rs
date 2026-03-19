@@ -2,10 +2,13 @@
 
 use std::fmt::Write;
 
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
-use chrono::{DateTime, Utc};
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
+use chrono::DateTime;
+use chrono::Utc;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // ============================================================================
 // web_fetch types

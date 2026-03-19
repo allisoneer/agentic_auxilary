@@ -89,18 +89,18 @@ mod tests {
     #[test]
     fn test_merge_nested_tables() {
         let base = toml_from_str(
-            r#"
+            r"
             [section]
             x = 1
             y = 2
-            "#,
+            ",
         );
         let patch = toml_from_str(
-            r#"
+            r"
             [section]
             y = 3
             z = 4
-            "#,
+            ",
         );
         let result = deep_merge(base, patch);
         let section = result.get("section").unwrap().as_table().unwrap();
@@ -123,10 +123,10 @@ mod tests {
     #[test]
     fn test_scalar_replaces_table() {
         let base = toml_from_str(
-            r#"
+            r"
             [section]
             nested = true
-            "#,
+            ",
         );
         let patch = toml_from_str("section = 42");
         let result = deep_merge(base, patch);
@@ -137,10 +137,10 @@ mod tests {
     fn test_table_replaces_scalar() {
         let base = toml_from_str("section = 42");
         let patch = toml_from_str(
-            r#"
+            r"
             [section]
             nested = true
-            "#,
+            ",
         );
         let result = deep_merge(base, patch);
         let section = result.get("section").unwrap().as_table().unwrap();
@@ -150,11 +150,11 @@ mod tests {
     #[test]
     fn test_empty_patch_is_identity() {
         let base = toml_from_str(
-            r#"
+            r"
             a = 1
             [section]
             b = 2
-            "#,
+            ",
         );
         let patch = toml_from_str("");
         let result = deep_merge(base.clone(), patch);
@@ -172,18 +172,18 @@ mod tests {
     #[test]
     fn test_deeply_nested_merge() {
         let base = toml_from_str(
-            r#"
+            r"
             [level1.level2.level3]
             a = 1
             b = 2
-            "#,
+            ",
         );
         let patch = toml_from_str(
-            r#"
+            r"
             [level1.level2.level3]
             b = 99
             c = 3
-            "#,
+            ",
         );
         let result = deep_merge(base, patch);
         let level3 = result
@@ -230,7 +230,7 @@ mod tests {
         /// Idempotence property: applying same patch twice equals applying once
         #[test]
         fn prop_idempotent_merge(base in arb_toml_table(), patch in arb_toml_table()) {
-            let once = deep_merge(base.clone(), patch.clone());
+            let once = deep_merge(base, patch.clone());
             let twice = deep_merge(once.clone(), patch);
             prop_assert_eq!(once, twice);
         }

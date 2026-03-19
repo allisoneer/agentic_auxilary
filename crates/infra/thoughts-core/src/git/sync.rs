@@ -1,9 +1,12 @@
 use crate::git::shell_fetch;
 use crate::git::shell_push::push_current_branch;
 use crate::git::utils::is_worktree_dirty;
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use colored::*;
-use git2::{IndexAddOption, Repository, Signature};
+use git2::IndexAddOption;
+use git2::Repository;
+use git2::Signature;
 use std::path::Path;
 
 pub struct GitSync {

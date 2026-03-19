@@ -1,9 +1,17 @@
-use std::io::{self, Write};
+use std::io::Write;
+use std::io::{self};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
-use gix::progress::{Count, NestedProgress, Progress, StepShared, Unit};
+use gix::progress::Count;
+use gix::progress::NestedProgress;
+use gix::progress::Progress;
+use gix::progress::StepShared;
+use gix::progress::Unit;
 
 /// A simple inline progress reporter for gitoxide operations.
 /// Shows progress on a single line with carriage return updates.

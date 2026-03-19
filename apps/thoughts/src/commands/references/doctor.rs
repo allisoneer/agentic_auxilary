@@ -14,10 +14,13 @@ use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashMap;
 use std::path::Path;
+use thoughts_tool::config::RepoMapping;
+use thoughts_tool::config::RepoMappingManager;
 use thoughts_tool::config::repo_mapping_manager::parse_url_and_subpath;
-use thoughts_tool::config::{RepoMapping, RepoMappingManager};
-use thoughts_tool::git::utils::{is_git_repo, try_get_origin_identity};
-use thoughts_tool::repo_identity::{RepoIdentity, RepoIdentityKey};
+use thoughts_tool::git::utils::is_git_repo;
+use thoughts_tool::git::utils::try_get_origin_identity;
+use thoughts_tool::repo_identity::RepoIdentity;
+use thoughts_tool::repo_identity::RepoIdentityKey;
 use thoughts_tool::utils::paths::get_repo_mapping_path;
 
 /// Diagnostic issue found during doctor check.

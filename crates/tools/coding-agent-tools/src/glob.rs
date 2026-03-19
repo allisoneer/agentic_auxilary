@@ -1,7 +1,9 @@
 //! Glob-based file matching with sorting.
 
-use crate::types::{GlobOutput, SortOrder};
-use crate::walker::{self, BUILTIN_IGNORES};
+use crate::types::GlobOutput;
+use crate::types::SortOrder;
+use crate::walker::BUILTIN_IGNORES;
+use crate::walker::{self};
 use agentic_tools_core::ToolError;
 use globset::Glob;
 use ignore::WalkBuilder;

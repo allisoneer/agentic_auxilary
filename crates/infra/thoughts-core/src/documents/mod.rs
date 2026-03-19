@@ -3,13 +3,18 @@
 //! This module provides reusable functions for writing and listing documents,
 //! and is used by both the MCP layer and other crates that depend on thoughts_tool.
 
-use crate::error::{Result as TResult, ThoughtsError};
+use crate::error::Result as TResult;
+use crate::error::ThoughtsError;
 use crate::utils::validation::validate_simple_filename;
-use crate::workspace::{ActiveWork, ensure_active_work};
-use atomicwrites::{AtomicFile, OverwriteBehavior};
-use chrono::{DateTime, Utc};
+use crate::workspace::ActiveWork;
+use crate::workspace::ensure_active_work;
+use atomicwrites::AtomicFile;
+use atomicwrites::OverwriteBehavior;
+use chrono::DateTime;
+use chrono::Utc;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 

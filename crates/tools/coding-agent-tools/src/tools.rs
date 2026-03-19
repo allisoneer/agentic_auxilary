@@ -2,13 +2,24 @@
 //!
 //! Each tool delegates to the corresponding method on [`CodingAgentTools`].
 
-use crate::types::{
-    AgentLocation, AgentOutput, AgentType, Depth, GlobOutput, GrepOutput, LsOutput, OutputMode,
-    Show, SortOrder,
-};
-use crate::{CodingAgentTools, just};
-use agentic_config::types::{CliToolsConfig, SubagentsConfig};
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use crate::CodingAgentTools;
+use crate::just;
+use crate::types::AgentLocation;
+use crate::types::AgentOutput;
+use crate::types::AgentType;
+use crate::types::Depth;
+use crate::types::GlobOutput;
+use crate::types::GrepOutput;
+use crate::types::LsOutput;
+use crate::types::OutputMode;
+use crate::types::Show;
+use crate::types::SortOrder;
+use agentic_config::types::CliToolsConfig;
+use agentic_config::types::SubagentsConfig;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;

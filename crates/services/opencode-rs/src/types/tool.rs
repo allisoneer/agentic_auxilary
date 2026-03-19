@@ -2,7 +2,8 @@
 
 use crate::types::permission::Ruleset;
 use crate::types::project::ModelRef;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// A tool definition.

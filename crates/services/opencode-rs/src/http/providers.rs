@@ -3,11 +3,13 @@
 //! Endpoints for managing LLM providers.
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::provider::{
-    OAuthAuthorizeResponse, OAuthCallbackRequest, ProviderAuth, ProviderListResponse,
-    SetAuthRequest,
-};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::provider::OAuthAuthorizeResponse;
+use crate::types::provider::OAuthCallbackRequest;
+use crate::types::provider::ProviderAuth;
+use crate::types::provider::ProviderListResponse;
+use crate::types::provider::SetAuthRequest;
 use reqwest::Method;
 
 /// Providers API client.

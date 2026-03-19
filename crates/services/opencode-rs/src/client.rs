@@ -10,7 +10,9 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[cfg(feature = "http")]
-use crate::http::{HttpClient, HttpConfig};
+use crate::http::HttpClient;
+#[cfg(feature = "http")]
+use crate::http::HttpConfig;
 
 /// `OpenCode` client for interacting with the server.
 #[derive(Clone)]
@@ -239,7 +241,8 @@ impl Client {
         &self,
         text: impl Into<String>,
     ) -> Result<crate::types::session::Session> {
-        use crate::types::message::{PromptPart, PromptRequest};
+        use crate::types::message::PromptPart;
+        use crate::types::message::PromptRequest;
         use crate::types::session::CreateSessionRequest;
 
         let session = self

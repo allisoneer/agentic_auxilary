@@ -16,10 +16,18 @@ pub mod walker;
 
 pub use tools::build_registry;
 
-use agentic_config::types::{CliToolsConfig, SubagentsConfig};
+use agentic_config::types::CliToolsConfig;
+use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::ToolError;
 use std::sync::Arc;
-use types::{AgentOutput, Depth, GlobOutput, GrepOutput, LsOutput, OutputMode, Show, SortOrder};
+use types::AgentOutput;
+use types::Depth;
+use types::GlobOutput;
+use types::GrepOutput;
+use types::LsOutput;
+use types::OutputMode;
+use types::Show;
+use types::SortOrder;
 
 /// Select the first non-empty (after trimming) text from result.result or result.content.
 /// Prefers `result.result` over `result.content`, but rejects empty/whitespace-only strings.
@@ -257,8 +265,10 @@ impl CodingAgentTools {
     ) -> Result<AgentOutput, ToolError> {
         use claudecode::client::Client;
         use claudecode::config::SessionConfig;
-        use claudecode::mcp::validate::{ValidateOptions, ensure_valid_mcp_config};
-        use claudecode::types::{OutputFormat, PermissionMode};
+        use claudecode::mcp::validate::ValidateOptions;
+        use claudecode::mcp::validate::ensure_valid_mcp_config;
+        use claudecode::types::OutputFormat;
+        use claudecode::types::PermissionMode;
 
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("ask_agent");

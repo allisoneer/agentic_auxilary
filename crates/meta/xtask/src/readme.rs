@@ -4,7 +4,8 @@
 //! Supports hybrid tiering: role-based defaults with optional `readme_tier` overrides.
 
 use crate::autogen::replace_named_block;
-use cargo_metadata::{Metadata, Package};
+use cargo_metadata::Metadata;
+use cargo_metadata::Package;
 use std::collections::BTreeMap;
 use std::path::Path;
 

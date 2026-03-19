@@ -158,7 +158,8 @@ pub enum ProgressStyle {
 impl ProgressReporter {
     /// Create a new progress reporter
     pub fn new(style: ProgressStyle, total: Option<u64>) -> Self {
-        use indicatif::{ProgressBar, ProgressStyle as IndicatifStyle};
+        use indicatif::ProgressBar;
+        use indicatif::ProgressStyle as IndicatifStyle;
 
         let bar = match style {
             ProgressStyle::Bar => {
@@ -242,7 +243,8 @@ impl ProgressReporter {
 
 /// Interactive prompt utilities
 pub mod interactive {
-    use crate::error::{ErrorCode, ToolError};
+    use crate::error::ErrorCode;
+    use crate::error::ToolError;
 
     /// Prompt for text input
     pub fn input(prompt: &str) -> Result<String, ToolError> {

@@ -4,18 +4,22 @@
 //! 1. Read global config from `~/.config/agentic/agentic.toml`
 //! 2. Read local config from `./agentic.toml`
 //! 3. Deep merge at TOML Value level (tables merge, arrays/scalars replace)
-//! 4. Deserialize once into typed AgenticConfig
+//! 4. Deserialize once into typed `AgenticConfig`
 //! 5. Apply env var overrides (highest precedence)
 //! 6. Run advisory validation
 
-use crate::{merge::deep_merge, types::AgenticConfig, validation::AdvisoryWarning};
-use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use crate::merge::deep_merge;
+use crate::types::AgenticConfig;
+use crate::validation::AdvisoryWarning;
+use anyhow::Context;
+use anyhow::Result;
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Filename for local config (TOML format).
 pub const LOCAL_FILE: &str = "agentic.toml";
 
-/// Directory name under config_dir for global config.
+/// Directory name under `config_dir` for global config.
 pub const GLOBAL_DIR: &str = "agentic";
 
 /// Filename for global config (TOML format).
@@ -94,7 +98,7 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
 
     // Deserialize to typed config using serde_path_to_error for better error messages
     let cfg: AgenticConfig = {
-        let deserializer = merged.clone();
+        let deserializer = merged;
         serde_path_to_error::deserialize(deserializer)
             .with_context(|| "Failed to deserialize merged agentic config")?
     };
@@ -224,10 +228,10 @@ mod tests {
         let local_path = temp.path().join(LOCAL_FILE);
         std::fs::write(
             &local_path,
-            r#"
+            r"
 [orchestrator]
 session_deadline_secs = 7200
-"#,
+",
         )
         .unwrap();
 
@@ -333,10 +337,10 @@ optimizer_model = "file-model"
         // Create local config that overrides a nested value
         std::fs::write(
             temp.path().join(LOCAL_FILE),
-            r#"
+            r"
 [web_retrieval]
 request_timeout_secs = 60
-"#,
+",
         )
         .unwrap();
 
@@ -399,10 +403,10 @@ unknown_section = "value"
 
         std::fs::write(
             temp.path().join(LOCAL_FILE),
-            r#"
+            r"
 [thoughts]
 mount_dirs = {}
-"#,
+",
         )
         .unwrap();
 

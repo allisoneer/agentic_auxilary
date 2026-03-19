@@ -1,7 +1,11 @@
 #[cfg(feature = "streaming")]
 #[test]
 fn streaming_feature_compiles() {
-    use anthropic_async::streaming::{Accumulator, Event, EventStream, SSEDecoder, SseFrame};
+    use anthropic_async::streaming::Accumulator;
+    use anthropic_async::streaming::Event;
+    use anthropic_async::streaming::EventStream;
+    use anthropic_async::streaming::SSEDecoder;
+    use anthropic_async::streaming::SseFrame;
 
     // Verify types are accessible and constructible by explicitly dropping instances.
     // The turbofish annotation ensures type resolution at compile time.

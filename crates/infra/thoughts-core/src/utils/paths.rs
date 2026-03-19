@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dirs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Expand tilde (~) in paths to home directory
 pub fn expand_path(path: &Path) -> Result<PathBuf> {

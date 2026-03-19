@@ -53,7 +53,9 @@ pub mod types;
 pub mod validation;
 
 // Re-exports for convenient access
-pub use loader::{LoadedAgenticConfig, load_merged};
-pub use paths::{agentic_config_dir, xdg_config_home};
+pub use loader::LoadedAgenticConfig;
+pub use loader::load_merged;
+pub use paths::agentic_config_dir;
+pub use paths::xdg_config_home;
 pub use schema::schema_json_pretty;
 pub use types::AgenticConfig;

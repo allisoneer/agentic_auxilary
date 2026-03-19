@@ -1,4 +1,5 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
+use anyhow::bail;
 use colored::Colorize;
 use std::path::PathBuf;
 use std::process::Command;

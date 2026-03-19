@@ -1,14 +1,15 @@
 //! Tests for structured outputs beta functionality
 
 use anthropic_async::BetaFeature;
-use anthropic_async::types::{
-    content::{
-        ContentBlockParam, ImageSource, MessageParam, MessageRole, ToolResultContent,
-        ToolResultContentBlock,
-    },
-    messages::{MessagesCreateRequest, OutputFormat},
-    tools::Tool,
-};
+use anthropic_async::types::content::ContentBlockParam;
+use anthropic_async::types::content::ImageSource;
+use anthropic_async::types::content::MessageParam;
+use anthropic_async::types::content::MessageRole;
+use anthropic_async::types::content::ToolResultContent;
+use anthropic_async::types::content::ToolResultContentBlock;
+use anthropic_async::types::messages::MessagesCreateRequest;
+use anthropic_async::types::messages::OutputFormat;
+use anthropic_async::types::tools::Tool;
 
 #[test]
 fn test_output_format_json_schema_serialization() {

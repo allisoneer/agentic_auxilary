@@ -27,12 +27,15 @@ compile_error!(
     "agentic-tools-registry only supports Unix-like platforms (Linux/macOS). Windows is not supported."
 );
 
-use agentic_config::types::{
-    AnthropicServiceConfig, CliToolsConfig, ExaServiceConfig, ReasoningConfig, SubagentsConfig,
-    WebRetrievalConfig,
-};
+use agentic_config::types::AnthropicServiceConfig;
+use agentic_config::types::CliToolsConfig;
+use agentic_config::types::ExaServiceConfig;
+use agentic_config::types::ReasoningConfig;
+use agentic_config::types::SubagentsConfig;
+use agentic_config::types::WebRetrievalConfig;
 use agentic_tools_core::ToolRegistry;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::warn;

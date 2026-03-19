@@ -1,13 +1,21 @@
-use super::types::{RepoLocation, RepoMapping};
-use crate::repo_identity::{
-    RepoIdentity, RepoIdentityKey, parse_url_and_subpath as identity_parse_url_and_subpath,
-};
+use super::types::RepoLocation;
+use super::types::RepoMapping;
+use crate::repo_identity::RepoIdentity;
+use crate::repo_identity::RepoIdentityKey;
+use crate::repo_identity::parse_url_and_subpath as identity_parse_url_and_subpath;
 use crate::utils::locks::FileLock;
-use crate::utils::paths::{self, sanitize_dir_name};
-use anyhow::{Context, Result, bail};
-use atomicwrites::{AllowOverwrite, AtomicFile};
-use std::io::{ErrorKind, Write};
-use std::path::{Component, Path, PathBuf};
+use crate::utils::paths::sanitize_dir_name;
+use crate::utils::paths::{self};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use atomicwrites::AllowOverwrite;
+use atomicwrites::AtomicFile;
+use std::io::ErrorKind;
+use std::io::Write;
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Indicates how a URL was resolved to a mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

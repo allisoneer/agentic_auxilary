@@ -1,8 +1,12 @@
 use crate::error::ThoughtsError;
 use crate::repo_identity::RepoIdentity;
-use anyhow::{Context, Result};
-use git2::{ErrorCode, Repository, StatusOptions};
-use std::path::{Path, PathBuf};
+use anyhow::Context;
+use anyhow::Result;
+use git2::ErrorCode;
+use git2::Repository;
+use git2::StatusOptions;
+use std::path::Path;
+use std::path::PathBuf;
 use tracing::debug;
 
 /// Get the current repository path, starting from current directory

@@ -2,7 +2,10 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, Expr, Lit, parse2};
+use syn::DeriveInput;
+use syn::Expr;
+use syn::Lit;
+use syn::parse2;
 
 /// Expand the #[derive(TextFormat)] macro.
 ///

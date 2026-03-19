@@ -4,7 +4,10 @@
 //! Haiku summarization via Anthropic API.
 
 use agentic_tools_core::error::ToolError;
-use anthropic_async::types::{ContentBlock, MessageParam, MessageRole, MessagesCreateRequest};
+use anthropic_async::types::ContentBlock;
+use anthropic_async::types::MessageParam;
+use anthropic_async::types::MessageRole;
+use anthropic_async::types::MessagesCreateRequest;
 use tracing::debug;
 
 use crate::WebTools;
@@ -39,7 +42,7 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
             )
             .into(),
         }],
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(clippy::cast_possible_truncation)]
         temperature: Some(tools.cfg.summarizer.temperature as f32),
         ..Default::default()
     };

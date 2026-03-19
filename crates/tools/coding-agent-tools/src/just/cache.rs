@@ -1,9 +1,12 @@
 //! Mtime-based cache for parsed justfile recipes.
 
-use super::discovery::{JustfilePath, find_justfiles};
-use super::parser::{ParsedRecipe, parse_justfile};
+use super::discovery::JustfilePath;
+use super::discovery::find_justfiles;
+use super::parser::ParsedRecipe;
+use super::parser::parse_justfile;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 #[derive(Clone)]

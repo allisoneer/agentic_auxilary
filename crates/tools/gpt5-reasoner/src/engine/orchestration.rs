@@ -1,26 +1,32 @@
-use crate::engine::{
-    directory::expand_directories_to_filemeta,
-    guards::{ensure_plan_template_group, maybe_inject_plan_structure_meta},
-    memory::{auto_inject_claude_memories, injection_enabled_from_env},
-    paths::{dedup_files_in_place, normalize_paths_in_place, precheck_files},
-};
+use crate::client::OrClient;
+use crate::engine::directory::expand_directories_to_filemeta;
+use crate::engine::guards::ensure_plan_template_group;
+use crate::engine::guards::maybe_inject_plan_structure_meta;
+use crate::engine::memory::auto_inject_claude_memories;
+use crate::engine::memory::injection_enabled_from_env;
+use crate::engine::paths::dedup_files_in_place;
+use crate::engine::paths::normalize_paths_in_place;
+use crate::engine::paths::precheck_files;
+use crate::errors::*;
+use crate::optimizer::call_optimizer;
 use crate::optimizer::parser::OptimizerOutput;
-use crate::{
-    client::OrClient,
-    errors::*,
-    optimizer::{call_optimizer, parser::parse_optimizer_output},
-    template::inject_files,
-    token::enforce_limit,
-    types::{DirectoryMeta, FileMeta, PromptType},
-};
+use crate::optimizer::parser::parse_optimizer_output;
+use crate::template::inject_files;
+use crate::token::enforce_limit;
+use crate::types::DirectoryMeta;
+use crate::types::FileMeta;
+use crate::types::PromptType;
 use agentic_config::types::ReasoningConfig;
-use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
+use agentic_logging::CallTimer;
+use agentic_logging::LogWriter;
+use agentic_logging::ToolCallRecord;
 use agentic_tools_core::ToolError;
-use async_openai::types::chat::{
-    ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,
-    CreateChatCompletionRequestArgs, ReasoningEffort,
-};
-use thoughts_tool::{DocumentType, write_document};
+use async_openai::types::chat::ChatCompletionRequestMessage;
+use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
+use async_openai::types::chat::CreateChatCompletionRequestArgs;
+use async_openai::types::chat::ReasoningEffort;
+use thoughts_tool::DocumentType;
+use thoughts_tool::write_document;
 
 /// Parse reasoning effort string to enum, defaulting to Xhigh.
 fn parse_reasoning_effort(v: Option<&str>) -> ReasoningEffort {

@@ -4,7 +4,8 @@
 //! consistent paths across all Unix systems, including macOS (which doesn't
 //! use `~/Library/Application Support` for XDG-style applications).
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use std::path::PathBuf;
 
 /// Environment variable for test isolation of config paths.

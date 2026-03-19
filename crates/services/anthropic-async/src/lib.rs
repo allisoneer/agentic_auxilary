@@ -61,23 +61,35 @@ pub mod test_support;
 pub mod types;
 
 pub use crate::client::Client;
-pub use crate::config::{AnthropicAuth, AnthropicConfig, BetaFeature};
-pub use crate::error::{AnthropicError, ApiErrorObject};
+pub use crate::config::AnthropicAuth;
+pub use crate::config::AnthropicConfig;
+pub use crate::config::BetaFeature;
+pub use crate::error::AnthropicError;
+pub use crate::error::ApiErrorObject;
 
 /// Streaming types (requires `streaming` feature)
 #[cfg(feature = "streaming")]
 pub mod streaming {
-    pub use crate::sse::streaming::{
-        Accumulator, ContentBlockDeltaData, ContentBlockStartData, Event, EventError, EventStream,
-        MessageDeltaPayload, MessageDeltaUsage, MessageStartPayload, MessageStartUsage, SSEDecoder,
-        SseFrame, event_stream_from_response,
-    };
+    pub use crate::sse::streaming::Accumulator;
+    pub use crate::sse::streaming::ContentBlockDeltaData;
+    pub use crate::sse::streaming::ContentBlockStartData;
+    pub use crate::sse::streaming::Event;
+    pub use crate::sse::streaming::EventError;
+    pub use crate::sse::streaming::EventStream;
+    pub use crate::sse::streaming::MessageDeltaPayload;
+    pub use crate::sse::streaming::MessageDeltaUsage;
+    pub use crate::sse::streaming::MessageStartPayload;
+    pub use crate::sse::streaming::MessageStartUsage;
+    pub use crate::sse::streaming::SSEDecoder;
+    pub use crate::sse::streaming::SseFrame;
+    pub use crate::sse::streaming::event_stream_from_response;
 }
 
 /// Prelude module for convenient imports
 pub mod prelude {
+    pub use crate::AnthropicConfig;
+    pub use crate::Client;
     pub use crate::types::common::*;
     pub use crate::types::messages::*;
     pub use crate::types::models::*;
-    pub use crate::{AnthropicConfig, Client};
 }

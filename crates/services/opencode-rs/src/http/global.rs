@@ -100,11 +100,15 @@ impl GlobalEventEnvelope {
 mod tests {
     use super::*;
     use crate::http::HttpConfig;
-    use crate::types::event::{Event, QuestionAskedProps};
+    use crate::types::event::Event;
+    use crate::types::event::QuestionAskedProps;
     use crate::types::question::QuestionRequest;
     use std::time::Duration;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_global_api_event_stream_url() {

@@ -3,8 +3,10 @@
 //! Endpoints for project management.
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::project::{Project, UpdateProjectRequest};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::project::Project;
+use crate::types::project::UpdateProjectRequest;
 use reqwest::Method;
 
 /// Project API client.

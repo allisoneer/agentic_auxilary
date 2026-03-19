@@ -3,19 +3,21 @@
 //! Provides init, show, schema, edit, and validate subcommands for
 //! managing agentic.toml configuration files.
 
-use agentic_config::{
-    loader::{LoadedAgenticConfig, global_config_path, load_merged, local_config_path},
-    types::AgenticConfig,
-};
-use anyhow::{Context, Result};
-use atomicwrites::{AtomicFile, OverwriteBehavior};
+use agentic_config::loader::LoadedAgenticConfig;
+use agentic_config::loader::global_config_path;
+use agentic_config::loader::load_merged;
+use agentic_config::loader::local_config_path;
+use agentic_config::types::AgenticConfig;
+use anyhow::Context;
+use anyhow::Result;
+use atomicwrites::AtomicFile;
+use atomicwrites::OverwriteBehavior;
 use clap::Subcommand;
 use colored::Colorize;
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
 
 // =============================================================================
 // Helper functions (DRY refactor)
@@ -237,7 +239,7 @@ fn cmd_edit(global: bool) -> Result<()> {
             } else {
                 println!("{} Configuration has warnings:", "WARN".yellow());
                 for w in warnings {
-                    println!("  - {}", w);
+                    println!("  - {w}");
                 }
             }
         }
@@ -256,9 +258,6 @@ fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
 
     if loaded.warnings.is_empty() {
         println!("{} Configuration is valid", "OK".green());
-        println!("\nConfig files:");
-        println!("  Global: {}", loaded.paths.global.display());
-        println!("  Local:  {}", loaded.paths.local.display());
     } else {
         println!(
             "{} Configuration has {} warning(s):",
@@ -266,12 +265,13 @@ fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
             loaded.warnings.len()
         );
         for w in &loaded.warnings {
-            println!("  - {}", w);
+            println!("  - {w}");
         }
-        println!("\nConfig files:");
-        println!("  Global: {}", loaded.paths.global.display());
-        println!("  Local:  {}", loaded.paths.local.display());
     }
+
+    println!("\nConfig files:");
+    println!("  Global: {}", loaded.paths.global.display());
+    println!("  Local:  {}", loaded.paths.local.display());
 
     Ok(())
 }
@@ -279,11 +279,11 @@ fn cmd_validate(path: Option<PathBuf>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        path::{Path, PathBuf},
-        sync::Mutex,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
 
     static CWD_LOCK: Mutex<()> = Mutex::new(());
 

@@ -3,7 +3,8 @@
 // TODO(3): Add unit tests for Message, Part variants, and PromptPart serialization/deserialization
 // TODO(3): Consider using enum for `role` field (User/Assistant/System) with #[serde(other)] for forward-compat
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Message info (metadata).
 #[derive(Debug, Clone, Serialize, Deserialize)]

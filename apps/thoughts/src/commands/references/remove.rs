@@ -1,4 +1,5 @@
-use crate::config::{ReferenceEntry, RepoConfigManager};
+use crate::config::ReferenceEntry;
+use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;

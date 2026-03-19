@@ -2,7 +2,8 @@
 //!
 //! Types for file snapshots and diffs.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Request to track files for snapshotting.
 #[derive(Debug, Clone, Serialize, Deserialize)]

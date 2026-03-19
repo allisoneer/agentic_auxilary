@@ -1,6 +1,7 @@
 //! Config types for `opencode_rs`.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// `OpenCode` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]

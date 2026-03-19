@@ -5,10 +5,11 @@
 
 pub mod tools;
 
-pub use tools::{
-    AddReferenceTool, GetTemplateTool, ListActiveDocumentsTool, ListReferencesTool,
-    WriteDocumentTool,
-};
+pub use tools::AddReferenceTool;
+pub use tools::GetTemplateTool;
+pub use tools::ListActiveDocumentsTool;
+pub use tools::ListReferencesTool;
+pub use tools::WriteDocumentTool;
 
 use agentic_tools_core::ToolRegistry;
 

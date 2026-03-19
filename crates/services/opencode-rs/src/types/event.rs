@@ -3,9 +3,11 @@
 //! Contains 40 event variants matching `OpenCode`'s server.ts.
 
 use crate::types::error::APIError;
-use crate::types::permission::{PermissionReply, PermissionRequest};
+use crate::types::permission::PermissionReply;
+use crate::types::permission::PermissionRequest;
 use crate::types::session::Session;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Wrapper for events from /global/event which include directory context.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,9 @@
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
-use schemars::{JsonSchema, Schema};
-use serde::{Deserialize, Serialize};
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
+use schemars::JsonSchema;
+use schemars::Schema;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Agent type determines the model and behavior characteristics.
 /// - Locator: Fast discovery (haiku), finds WHERE things are

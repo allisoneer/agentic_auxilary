@@ -3,12 +3,17 @@
 //! These tests verify that tools can be called without JSON serialization
 //! when using the ToolHandle API for cross-crate composition.
 
-use agentic_tools_core::{
-    TextFormat, Tool, ToolCodec, ToolContext, ToolError, ToolHandle, ToolRegistry,
-};
+use agentic_tools_core::TextFormat;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolCodec;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolHandle;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // =============================================================================
 // Test Tool Definitions

@@ -3,8 +3,14 @@
 //! Updates autogen blocks in CLAUDE.md files, release-plz.toml, README.md, justfile,
 //! and agentic.schema.json.
 
-use crate::{claude, justfile, policy::Policy, readme, release_plz, schema};
-use anyhow::{Context, Result};
+use crate::claude;
+use crate::justfile;
+use crate::policy::Policy;
+use crate::readme;
+use crate::release_plz;
+use crate::schema;
+use anyhow::Context;
+use anyhow::Result;
 use cargo_metadata::MetadataCommand;
 use std::fs;
 

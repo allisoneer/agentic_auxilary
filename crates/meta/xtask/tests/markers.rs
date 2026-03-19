@@ -1,5 +1,6 @@
 use cargo_metadata::MetadataCommand;
-use xtask::marker::{RenderContext, apply_autodeps_markers};
+use xtask::marker::RenderContext;
+use xtask::marker::apply_autodeps_markers;
 
 #[test]
 fn malformed_json_is_warning_by_default() {

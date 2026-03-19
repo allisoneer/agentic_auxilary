@@ -1,16 +1,18 @@
-use anthropic_async::{
-    AnthropicConfig, Client,
-    types::{
-        common::CacheControl,
-        content::{
-            ContentBlockParam, DocumentSource, ImageSource, MessageContentParam, MessageParam,
-            MessageRole,
-        },
-        messages::MessagesCreateRequest,
-    },
-};
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::Client;
+use anthropic_async::types::common::CacheControl;
+use anthropic_async::types::content::ContentBlockParam;
+use anthropic_async::types::content::DocumentSource;
+use anthropic_async::types::content::ImageSource;
+use anthropic_async::types::content::MessageContentParam;
+use anthropic_async::types::content::MessageParam;
+use anthropic_async::types::content::MessageRole;
+use anthropic_async::types::messages::MessagesCreateRequest;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 #[tokio::test]
 async fn test_multimodal_content_serialization() {

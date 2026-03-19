@@ -30,7 +30,7 @@ use std::path::Path;
 ///
 /// The variable is automatically restored to its previous state (or removed if it
 /// was not set) when the guard is dropped.
-pub(crate) struct EnvGuard {
+pub struct EnvGuard {
     key: &'static str,
     prev: Option<String>,
 }
@@ -61,7 +61,6 @@ impl EnvGuard {
     /// This function uses `unsafe` because `std::env::remove_var` can cause data races
     /// if called concurrently with other environment variable operations. However,
     /// this is safe when used with `#[serial]` which ensures no concurrent execution.
-    #[allow(dead_code)]
     pub(crate) fn remove(key: &'static str) -> Self {
         let prev = std::env::var(key).ok();
         // SAFETY: Serialized by #[serial] attribute on tests
@@ -75,6 +74,7 @@ impl Drop for EnvGuard {
         match &self.prev {
             // SAFETY: Serialized by #[serial] attribute on tests
             Some(v) => unsafe { std::env::set_var(self.key, v) },
+            // SAFETY: Serialized by #[serial] attribute on tests
             None => unsafe { std::env::remove_var(self.key) },
         }
     }

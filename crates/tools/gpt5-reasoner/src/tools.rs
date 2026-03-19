@@ -2,9 +2,15 @@
 //!
 //! Provides the `request` tool that wraps the reasoning model functionality.
 
-use crate::{DirectoryMeta, FileMeta, PromptType, gpt5_reasoner_impl};
+use crate::DirectoryMeta;
+use crate::FileMeta;
+use crate::PromptType;
+use crate::gpt5_reasoner_impl;
 use agentic_config::types::ReasoningConfig;
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;

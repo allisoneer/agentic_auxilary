@@ -3,7 +3,8 @@
 //! This module provides `RepoIdentity` as the single source of truth for repository identity,
 //! enabling consistent URL normalization across SSH, HTTPS, and various git hosting formats.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
+use anyhow::bail;
 
 /// Maximum allowed subgroup nesting depth (GitLab supports up to 20 levels).
 const MAX_SUBGROUP_DEPTH: usize = 20;

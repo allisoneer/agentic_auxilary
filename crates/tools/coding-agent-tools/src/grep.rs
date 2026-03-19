@@ -1,14 +1,20 @@
 //! Regex-based content search with multiple output modes.
 
-use crate::types::{GrepOutput, OutputMode};
-use crate::walker::{self, BUILTIN_IGNORES};
+use crate::types::GrepOutput;
+use crate::types::OutputMode;
+use crate::walker::BUILTIN_IGNORES;
+use crate::walker::{self};
 use agentic_tools_core::ToolError;
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::Glob;
+use globset::GlobSet;
+use globset::GlobSetBuilder;
 use ignore::WalkBuilder;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
 use std::path::Path;
 
 /// Configuration for grep search.

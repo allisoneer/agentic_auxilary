@@ -3,12 +3,18 @@
 //! These tests verify the RegistryServer logic without requiring
 //! a full MCP transport layer.
 
+use agentic_tools_core::TextFormat;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use agentic_tools_core::fmt::TextOptions;
-use agentic_tools_core::{TextFormat, Tool, ToolContext, ToolError, ToolRegistry};
-use agentic_tools_mcp::{OutputMode, RegistryServer};
+use agentic_tools_mcp::OutputMode;
+use agentic_tools_mcp::RegistryServer;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::sync::Arc;
 
 // =============================================================================

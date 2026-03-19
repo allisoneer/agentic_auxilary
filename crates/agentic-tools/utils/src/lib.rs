@@ -6,4 +6,5 @@ pub mod pagination;
 pub mod secrets;
 
 // Re-exports for convenient access
-pub use cli::{Argv, editor_argv};
+pub use cli::Argv;
+pub use cli::editor_argv;

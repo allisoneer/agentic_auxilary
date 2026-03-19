@@ -2,11 +2,15 @@
 //!
 //! This module provides functionality to spawn and manage `opencode serve`.
 
-use crate::error::{OpencodeError, Result};
+use crate::error::OpencodeError;
+use crate::error::Result;
 use std::process::Stdio;
-use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use std::time::Duration;
+use std::time::Instant;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
+use tokio::process::Child;
+use tokio::process::Command;
 use url::Url;
 
 /// Options for starting a managed server.

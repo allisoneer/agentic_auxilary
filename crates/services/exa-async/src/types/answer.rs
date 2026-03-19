@@ -1,6 +1,7 @@
 //! Types for the Exa `/answer` endpoint (non-streaming)
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Request body for `POST /answer`
 #[derive(Debug, Clone, Serialize, Deserialize)]

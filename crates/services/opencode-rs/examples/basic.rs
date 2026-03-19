@@ -6,7 +6,8 @@
 //!   opencode serve
 
 use opencode_rs::ClientBuilder;
-use opencode_rs::types::message::{PromptPart, PromptRequest};
+use opencode_rs::types::message::PromptPart;
+use opencode_rs::types::message::PromptRequest;
 use opencode_rs::types::session::CreateSessionRequest;
 
 #[tokio::main]

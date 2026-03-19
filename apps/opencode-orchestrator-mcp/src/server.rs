@@ -5,8 +5,10 @@
 use agentic_config::types::OrchestratorConfig;
 use anyhow::Context;
 use opencode_rs::Client;
-use opencode_rs::server::{ManagedServer, ServerOptions};
-use opencode_rs::types::message::{Message, Part};
+use opencode_rs::server::ManagedServer;
+use opencode_rs::server::ServerOptions;
+use opencode_rs::types::message::Message;
+use opencode_rs::types::message::Part;
 use opencode_rs::types::provider::ProviderListResponse;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -275,8 +277,10 @@ impl OrchestratorServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     /// Mutex to serialize env var tests (env vars are process-global).
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();

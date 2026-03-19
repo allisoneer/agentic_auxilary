@@ -1,6 +1,8 @@
 use crate::errors::*;
-use crate::optimizer::parser::{FileGroup, FileGrouping};
-use futures::stream::{self, StreamExt};
+use crate::optimizer::parser::FileGroup;
+use crate::optimizer::parser::FileGrouping;
+use futures::stream::StreamExt;
+use futures::stream::{self};
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -97,7 +99,8 @@ pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optimizer::parser::{FileGroup, FileGrouping};
+    use crate::optimizer::parser::FileGroup;
+    use crate::optimizer::parser::FileGrouping;
     use tempfile::TempDir;
     use tokio::fs;
 

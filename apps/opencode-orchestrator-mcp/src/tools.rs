@@ -2,18 +2,32 @@
 
 use crate::server::OrchestratorServer;
 use crate::token_tracker::TokenTracker;
-use crate::types::{
-    CommandInfo, ListCommandsInput, ListCommandsOutput, ListSessionsInput, ListSessionsOutput,
-    OrchestratorRunInput, OrchestratorRunOutput, PermissionReply, RespondPermissionInput,
-    RespondPermissionOutput, RunStatus, SessionSummary,
-};
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use crate::types::CommandInfo;
+use crate::types::ListCommandsInput;
+use crate::types::ListCommandsOutput;
+use crate::types::ListSessionsInput;
+use crate::types::ListSessionsOutput;
+use crate::types::OrchestratorRunInput;
+use crate::types::OrchestratorRunOutput;
+use crate::types::PermissionReply;
+use crate::types::RespondPermissionInput;
+use crate::types::RespondPermissionOutput;
+use crate::types::RunStatus;
+use crate::types::SessionSummary;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use opencode_rs::types::event::Event;
-use opencode_rs::types::message::{CommandRequest, PromptPart, PromptRequest};
+use opencode_rs::types::message::CommandRequest;
+use opencode_rs::types::message::PromptPart;
+use opencode_rs::types::message::PromptRequest;
 use opencode_rs::types::permission::PermissionReply as ApiPermissionReply;
 use opencode_rs::types::permission::PermissionReplyRequest;
-use opencode_rs::types::session::{CreateSessionRequest, SessionStatusInfo, SummarizeRequest};
+use opencode_rs::types::session::CreateSessionRequest;
+use opencode_rs::types::session::SessionStatusInfo;
+use opencode_rs::types::session::SummarizeRequest;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;

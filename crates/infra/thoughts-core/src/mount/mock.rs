@@ -3,8 +3,10 @@ use super::types::*;
 use crate::error::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 /// Mock mount manager for testing
 #[derive(Clone)]

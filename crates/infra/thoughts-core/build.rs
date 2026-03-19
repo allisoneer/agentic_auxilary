@@ -1,4 +1,5 @@
-use rustc_version::{Channel, version_meta};
+use rustc_version::Channel;
+use rustc_version::version_meta;
 
 fn main() {
     // Set platform-specific compilation flags

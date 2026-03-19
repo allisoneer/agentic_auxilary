@@ -6,11 +6,13 @@
 /// Streaming API implementation
 pub mod streaming {
     use futures::Stream;
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
+    use serde::Serialize;
     use std::pin::Pin;
 
     use crate::error::AnthropicError;
-    use crate::types::content::{ContentBlock, MessageRole};
+    use crate::types::content::ContentBlock;
+    use crate::types::content::MessageRole;
     use crate::types::messages::MessagesCreateResponse;
 
     /// Type alias for the event stream returned by streaming APIs

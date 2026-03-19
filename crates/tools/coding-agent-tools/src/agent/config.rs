@@ -3,11 +3,13 @@
 use std::collections::HashMap;
 
 use agentic_config::types::SubagentsConfig;
-use claudecode::config::{MCPConfig, MCPServer};
+use claudecode::config::MCPConfig;
+use claudecode::config::MCPServer;
 use claudecode::types::Model;
 
 use super::prompts::compose_prompt_impl;
-use crate::types::{AgentLocation, AgentType};
+use crate::types::AgentLocation;
+use crate::types::AgentType;
 
 /// Select model for agent type based on config.
 ///
@@ -40,8 +42,12 @@ pub fn model_for(agent_type: AgentType, cfg: &SubagentsConfig) -> Model {
 /// Get the enabled tools for a given type × location combination.
 /// This list includes both built-in tools and MCP tools (prefixed with "mcp__").
 pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
-    use AgentLocation::{Codebase, References, Thoughts, Web};
-    use AgentType::{Analyzer, Locator};
+    use AgentLocation::Codebase;
+    use AgentLocation::References;
+    use AgentLocation::Thoughts;
+    use AgentLocation::Web;
+    use AgentType::Analyzer;
+    use AgentType::Locator;
 
     match (agent_type, location) {
         (Locator, Codebase) => vec![

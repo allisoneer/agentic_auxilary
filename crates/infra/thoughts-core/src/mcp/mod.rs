@@ -1,14 +1,18 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 mod templates;
 
-use crate::config::validation::{canonical_reference_key, validate_reference_url_https_only};
-use crate::config::{
-    ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
-    extract_org_repo_from_url,
-};
+use crate::config::ReferenceEntry;
+use crate::config::ReferenceMount;
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
+use crate::config::extract_org_repo_from_url;
+use crate::config::validation::canonical_reference_key;
+use crate::config::validation::validate_reference_url_https_only;
 use crate::git::utils::get_control_repo_root;
 use crate::mount::auto_mount::update_active_mounts;
 use crate::mount::get_mount_manager;
@@ -259,9 +263,12 @@ pub async fn add_reference_impl_adapter(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::documents::{ActiveDocuments, DocumentInfo, WriteDocumentOk};
+    use crate::documents::ActiveDocuments;
+    use crate::documents::DocumentInfo;
+    use crate::documents::WriteDocumentOk;
     use crate::utils::human_size;
-    use agentic_tools_core::fmt::{TextFormat, TextOptions};
+    use agentic_tools_core::fmt::TextFormat;
+    use agentic_tools_core::fmt::TextOptions;
 
     #[test]
     fn test_human_size_formatting() {

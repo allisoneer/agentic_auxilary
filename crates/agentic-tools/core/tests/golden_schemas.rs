@@ -3,9 +3,13 @@
 //! These tests verify that schema rendering produces consistent output
 //! across all supported providers (OpenAI, Anthropic, MCP).
 
-use agentic_tools_core::providers::{anthropic, mcp, openai};
-use schemars::{JsonSchema, schema_for};
-use serde::{Deserialize, Serialize};
+use agentic_tools_core::providers::anthropic;
+use agentic_tools_core::providers::mcp;
+use agentic_tools_core::providers::openai;
+use schemars::JsonSchema;
+use schemars::schema_for;
+use serde::Deserialize;
+use serde::Serialize;
 
 // =============================================================================
 // Test Schema Definitions
@@ -236,7 +240,8 @@ fn golden_cross_provider_consistency() {
 
 #[test]
 fn golden_schema_with_transforms() {
-    use agentic_tools_core::{FieldConstraint, SchemaEngine};
+    use agentic_tools_core::FieldConstraint;
+    use agentic_tools_core::SchemaEngine;
 
     let schema = schema_for!(SimpleInput);
     let mut engine = SchemaEngine::new();
@@ -261,7 +266,8 @@ fn golden_schema_with_transforms() {
 
 #[test]
 fn golden_schema_with_range_constraint() {
-    use agentic_tools_core::{FieldConstraint, SchemaEngine};
+    use agentic_tools_core::FieldConstraint;
+    use agentic_tools_core::SchemaEngine;
 
     let schema = schema_for!(SimpleInput);
     let mut engine = SchemaEngine::new();

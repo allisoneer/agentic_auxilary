@@ -1,4 +1,4 @@
-//! Advisory validation for AgenticConfig.
+//! Advisory validation for `AgenticConfig`.
 //!
 //! Validation is advisory - it produces warnings but doesn't prevent
 //! the config from being used. This allows tools to work with imperfect
@@ -99,7 +99,7 @@ pub fn detect_unknown_top_level_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarnin
             warnings.push(AdvisoryWarning::new(
                 "config.unknown_top_level_key",
                 "$",
-                format!("Unknown top-level key '{}' will be ignored", key),
+                format!("Unknown top-level key '{key}' will be ignored"),
             ));
         }
     }
@@ -269,7 +269,7 @@ fn validate_url(
         warnings.push(AdvisoryWarning {
             code,
             path,
-            message: format!("Expected an http(s) URL, got: '{}'", url),
+            message: format!("Expected an http(s) URL, got: '{url}'"),
         });
     }
 }
@@ -284,8 +284,7 @@ mod tests {
         let warnings = validate(&config);
         assert!(
             warnings.is_empty(),
-            "Default config should have no warnings: {:?}",
-            warnings
+            "Default config should have no warnings: {warnings:?}"
         );
     }
 
@@ -315,14 +314,14 @@ mod tests {
             path: "test.path",
             message: "Test message".into(),
         };
-        let display = format!("{}", warning);
+        let display = format!("{warning}");
         assert_eq!(display, "[test.code] test.path: Test message");
     }
 
     #[test]
     fn test_empty_subagent_model_warns() {
         let mut config = AgenticConfig::default();
-        config.subagents.locator_model = "".into();
+        config.subagents.locator_model = String::new();
 
         let warnings = validate(&config);
         assert!(
@@ -414,10 +413,10 @@ mod tests {
     #[test]
     fn test_detect_deprecated_thoughts_toml() {
         let toml_val: toml::Value = toml::from_str(
-            r#"
+            r"
 [thoughts]
 mount_dirs = {}
-"#,
+",
         )
         .unwrap();
 

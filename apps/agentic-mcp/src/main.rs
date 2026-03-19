@@ -9,8 +9,12 @@ compile_error!(
 );
 
 use agentic_config::loader::load_merged;
-use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
-use agentic_tools_registry::{AgenticTools, AgenticToolsConfig};
+use agentic_tools_mcp::OutputMode;
+use agentic_tools_mcp::RegistryServer;
+use agentic_tools_mcp::ServiceExt;
+use agentic_tools_mcp::stdio;
+use agentic_tools_registry::AgenticTools;
+use agentic_tools_registry::AgenticToolsConfig;
 use clap::Parser;
 use colored::Colorize;
 use serde::Deserialize;
@@ -22,7 +26,7 @@ use std::sync::Arc;
 #[command(name = "agentic-mcp")]
 #[command(about = "Unified MCP server for all agentic-tools", version)]
 struct Args {
-    /// Comma-separated allowlist (case-insensitive). Example: cli_ls,cli_grep,ask_reasoning_model
+    /// Comma-separated allowlist (case-insensitive). Example: `cli_ls,cli_grep,ask_reasoning_model`
     #[arg(long, value_name = "NAMES")]
     allow: Option<String>,
 
@@ -45,27 +49,27 @@ struct Args {
     // Convenience flags for individual tool filtering
     // TODO(3): Probably don't need these convenience flags. They are kinda archaic for the old
     // agentic-tools setup. We likely can remove them after ensuring no one else uses them.
-    /// Enable cli_ls tool
+    /// Enable `cli_ls` tool
     #[arg(long)]
     cli_ls: bool,
 
-    /// Enable ask_agent tool
+    /// Enable `ask_agent` tool
     #[arg(long)]
     ask_agent: bool,
 
-    /// Enable cli_grep tool
+    /// Enable `cli_grep` tool
     #[arg(long)]
     cli_grep: bool,
 
-    /// Enable cli_glob tool
+    /// Enable `cli_glob` tool
     #[arg(long)]
     cli_glob: bool,
 
-    /// Enable cli_just_search tool
+    /// Enable `cli_just_search` tool
     #[arg(long)]
     cli_just_search: bool,
 
-    /// Enable cli_just_execute tool
+    /// Enable `cli_just_execute` tool
     #[arg(long)]
     cli_just_execute: bool,
 }
@@ -102,7 +106,7 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to read config file: {}; ignoring", e);
+                eprintln!("Warning: Failed to read config file: {e}; ignoring");
             }
         }
     }
@@ -192,16 +196,13 @@ async fn main() -> anyhow::Result<()> {
         names.sort();
         eprintln!("Available tools ({}):", names.len());
         for n in names {
-            eprintln!("  - {}", n);
+            eprintln!("  - {n}");
         }
         return Ok(());
     }
 
     let output_mode = match (args.output.as_deref(), file_output.as_deref()) {
-        (Some("structured"), _) => OutputMode::Structured,
-        (Some("text"), _) => OutputMode::Text,
-        (None, Some("structured")) => OutputMode::Structured,
-        (None, Some("text")) => OutputMode::Text,
+        (Some("structured"), _) | (None, Some("structured")) => OutputMode::Structured,
         _ => OutputMode::Text, // default
     };
 

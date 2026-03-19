@@ -1,6 +1,8 @@
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::sync::OnceLock;

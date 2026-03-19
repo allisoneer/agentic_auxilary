@@ -1,12 +1,18 @@
 use derive_builder::Builder;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::common::{Metadata, Usage};
-use super::content::{
-    ContentBlock, ContentBlockConversionError, ContentBlockParam, MessageContentParam,
-    MessageParam, MessageRole, SystemParam,
-};
-use super::tools::{Tool, ToolChoice};
+use super::common::Metadata;
+use super::common::Usage;
+use super::content::ContentBlock;
+use super::content::ContentBlockConversionError;
+use super::content::ContentBlockParam;
+use super::content::MessageContentParam;
+use super::content::MessageParam;
+use super::content::MessageRole;
+use super::content::SystemParam;
+use super::tools::Tool;
+use super::tools::ToolChoice;
 
 /// Output format for structured outputs (beta)
 ///
@@ -291,7 +297,8 @@ pub struct MessageTokensCountResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::content::{ContentBlockParam, MessageContentParam};
+    use crate::types::content::ContentBlockParam;
+    use crate::types::content::MessageContentParam;
 
     #[test]
     fn message_request_ser() {
@@ -586,7 +593,8 @@ mod tests {
 
     #[test]
     fn try_into_message_param_fails_on_unknown_block() {
-        use crate::types::content::{ContentBlock, ContentBlockConversionError};
+        use crate::types::content::ContentBlock;
+        use crate::types::content::ContentBlockConversionError;
 
         let response = MessagesCreateResponse {
             id: "msg_789".into(),

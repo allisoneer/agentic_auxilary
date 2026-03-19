@@ -4,7 +4,8 @@
 //! is reached to trigger server-side summarization.
 
 use opencode_rs::types::event::Event;
-use opencode_rs::types::message::{Part, TokenUsage};
+use opencode_rs::types::message::Part;
+use opencode_rs::types::message::TokenUsage;
 
 /// Tracks token usage during a session run to detect context limit threshold.
 #[derive(Debug, Clone)]
@@ -139,8 +140,10 @@ impl TokenTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opencode_rs::types::event::{MessagePartEventProps, MessageUpdatedProps};
-    use opencode_rs::types::message::{MessageInfo, MessageTime};
+    use opencode_rs::types::event::MessagePartEventProps;
+    use opencode_rs::types::event::MessageUpdatedProps;
+    use opencode_rs::types::message::MessageInfo;
+    use opencode_rs::types::message::MessageTime;
 
     fn mk_token_usage(input: u64) -> TokenUsage {
         TokenUsage {

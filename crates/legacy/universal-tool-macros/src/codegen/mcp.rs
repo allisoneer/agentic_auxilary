@@ -5,7 +5,9 @@
 
 use crate::codegen::shared::is_optional_type;
 use crate::codegen::validation;
-use crate::model::{ParamDef, RouterDef, ToolDef};
+use crate::model::ParamDef;
+use crate::model::RouterDef;
+use crate::model::ToolDef;
 use proc_macro2::TokenStream;
 use quote::quote;
 

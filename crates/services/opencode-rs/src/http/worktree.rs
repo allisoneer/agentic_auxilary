@@ -5,7 +5,8 @@
 use crate::error::Result;
 use crate::http::HttpClient;
 use reqwest::Method;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Worktree API client.
 #[derive(Clone)]
@@ -135,8 +136,11 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use std::time::Duration;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_worktree_delete() {

@@ -1,10 +1,13 @@
 //! MCP server handler backed by ToolRegistry.
 
-use agentic_tools_core::fmt::{TextOptions, fallback_text_from_json};
-use agentic_tools_core::{ToolContext, ToolRegistry};
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolRegistry;
+use agentic_tools_core::fmt::TextOptions;
+use agentic_tools_core::fmt::fallback_text_from_json;
+use rmcp::RoleServer;
+use rmcp::ServerHandler;
 use rmcp::model as m;
 use rmcp::service::RequestContext;
-use rmcp::{RoleServer, ServerHandler};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -360,8 +363,9 @@ impl ServerHandler for RegistryServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agentic_tools_core::Tool;
+    use agentic_tools_core::ToolError;
     use agentic_tools_core::fmt::TextFormat;
-    use agentic_tools_core::{Tool, ToolError};
     use futures::future::BoxFuture;
 
     #[test]

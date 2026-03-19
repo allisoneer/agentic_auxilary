@@ -3,7 +3,8 @@
 //! This module provides utilities for parsing environment variables
 //! and CLI inputs in consistent ways.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use std::collections::BTreeSet;
 
 /// Parse a comma/whitespace separated string into a lowercase-trimmed set.

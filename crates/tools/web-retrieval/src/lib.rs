@@ -9,7 +9,9 @@ pub mod search;
 pub mod tools;
 pub mod types;
 
-use agentic_config::types::{AnthropicServiceConfig, ExaServiceConfig, WebRetrievalConfig};
+use agentic_config::types::AnthropicServiceConfig;
+use agentic_config::types::ExaServiceConfig;
+use agentic_config::types::WebRetrievalConfig;
 use tokio::sync::OnceCell;
 
 /// Shared state container for web tools.
@@ -35,6 +37,10 @@ impl WebTools {
     /// # Panics
     /// Panics if the reqwest HTTP client cannot be built.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "reqwest client build failure is rare (TLS/resolver init) and fatal; matches reqwest::Client::new() pattern"
+    )]
     pub fn with_config(
         cfg: WebRetrievalConfig,
         exa_cfg: &ExaServiceConfig,

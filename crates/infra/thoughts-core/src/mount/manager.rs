@@ -1,8 +1,11 @@
-use super::types::{MountInfo, MountOptions};
+use super::types::MountInfo;
+use super::types::MountOptions;
 use crate::error::Result;
-use crate::platform::{Platform, PlatformInfo};
+use crate::platform::Platform;
+use crate::platform::PlatformInfo;
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(target_os = "linux")]
 use super::mergerfs::MergerfsManager;
@@ -85,12 +88,14 @@ pub fn get_mount_manager(platform_info: &PlatformInfo) -> Result<Box<dyn MountMa
 mod tests {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use super::get_mount_manager;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    use crate::platform::Platform;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    use crate::platform::PlatformInfo;
     #[cfg(target_os = "linux")]
     use crate::platform::detector::LinuxInfo;
     #[cfg(target_os = "macos")]
     use crate::platform::detector::MacOSInfo;
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    use crate::platform::{Platform, PlatformInfo};
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use std::path::PathBuf;
 

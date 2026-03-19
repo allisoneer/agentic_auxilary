@@ -1,9 +1,15 @@
-use anthropic_async::{AnthropicConfig, Client, types::ModelListParams};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::Client;
+use anthropic_async::types::ModelListParams;
 use serde_json::json;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 #[tokio::test]
 async fn test_models_list_retries_on_429_then_success() {

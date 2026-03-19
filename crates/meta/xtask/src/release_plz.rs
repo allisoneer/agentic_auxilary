@@ -4,7 +4,8 @@
 
 use crate::autogen::replace_named_block_toml;
 use crate::policy::Policy;
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use cargo_metadata::Metadata;
 use std::fs;
 

@@ -1,5 +1,7 @@
-use anyhow::{Result, bail};
-use std::path::{Component, Path};
+use anyhow::Result;
+use anyhow::bail;
+use std::path::Component;
+use std::path::Path;
 
 /// Validate a simple filename: no directories, no traversal, not absolute.
 /// Allows [A-Za-z0-9._-] only, must not be empty.

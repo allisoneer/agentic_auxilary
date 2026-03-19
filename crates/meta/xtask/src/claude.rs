@@ -3,8 +3,10 @@
 //! Generates root and per-crate CLAUDE.md content from workspace metadata.
 
 use crate::autogen::replace_named_block;
-use anyhow::{Context, Result};
-use cargo_metadata::{Metadata, Package};
+use anyhow::Context;
+use anyhow::Result;
+use cargo_metadata::Metadata;
+use cargo_metadata::Package;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

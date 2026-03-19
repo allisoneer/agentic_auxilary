@@ -5,7 +5,9 @@ use chrono::Utc;
 use url::Url;
 
 use crate::WebTools;
-use crate::types::{WebSearchInput, WebSearchOutput, WebSearchResultCard};
+use crate::types::WebSearchInput;
+use crate::types::WebSearchOutput;
+use crate::types::WebSearchResultCard;
 
 /// Max chars for context trimming
 const MAX_CONTEXT_CHARS: usize = 1500;
@@ -94,7 +96,7 @@ fn extract_domain(url_str: &str) -> String {
 
 /// Scale Exa score (0.0-1.0 float) to 0-100 integer.
 fn scale_score(score: f64) -> u32 {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let scaled = (score * 100.0).round() as u32;
     scaled.min(100)
 }

@@ -1,14 +1,21 @@
-use crate::config::{
-    ContextMount, Mount, MountDirsV2, ReferenceEntry, ReferenceMount, RepoConfigV2, SyncStrategy,
-    ThoughtsMount,
-};
+use crate::config::ContextMount;
+use crate::config::Mount;
+use crate::config::MountDirsV2;
+use crate::config::ReferenceEntry;
+use crate::config::ReferenceMount;
+use crate::config::RepoConfigV2;
+use crate::config::SyncStrategy;
+use crate::config::ThoughtsMount;
 use crate::mount::MountSpace;
 use crate::utils::paths;
-use anyhow::{Context, Result};
-use atomicwrites::{AtomicFile, OverwriteBehavior};
+use anyhow::Context;
+use anyhow::Result;
+use atomicwrites::AtomicFile;
+use atomicwrites::OverwriteBehavior;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct DesiredState {
@@ -322,7 +329,8 @@ impl RepoConfigManager {
         }
 
         // references: validate and ensure uniqueness by canonical key
-        use crate::config::validation::{canonical_reference_key, validate_reference_url};
+        use crate::config::validation::canonical_reference_key;
+        use crate::config::validation::validate_reference_url;
         let mut seen_refs = std::collections::HashSet::new();
         for r in &cfg.references {
             let url = match r {

@@ -2,8 +2,9 @@
 //!
 //! Matches TypeScript `PermissionNext` schema from permission/next.ts.
 
+use serde::Deserialize;
+use serde::Serialize;
 use serde::de::Deserializer;
-use serde::{Deserialize, Serialize};
 
 /// Custom deserializer for `Option<PermissionToolRef>` that handles edge cases:
 /// - `null` → `None`

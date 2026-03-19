@@ -1,8 +1,10 @@
 //! Types for the Exa `/findSimilar` endpoint
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::common::{ContentsOptions, SearchResult};
+use super::common::ContentsOptions;
+use super::common::SearchResult;
 
 /// Request body for `POST /findSimilar`
 #[derive(Debug, Clone, Serialize, Deserialize)]

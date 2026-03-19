@@ -2,7 +2,8 @@ use crate::error::Result;
 use crate::platform::common::MOUNT_POINT_PERMISSIONS;
 use std::path::Path;
 use tokio::fs;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
 /// Ensure a mount point directory exists with proper permissions
 pub async fn ensure_mount_point(path: &Path) -> Result<()> {
@@ -221,10 +222,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_with_polling_eventually_true() {
-        use std::sync::{
-            Arc,
-            atomic::{AtomicUsize, Ordering},
-        };
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
         use std::time::Duration;
 
         let counter = Arc::new(AtomicUsize::new(0));

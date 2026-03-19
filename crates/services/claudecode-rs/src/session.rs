@@ -1,16 +1,24 @@
 use crate::config::SessionConfig;
-use crate::error::{ClaudeError, Result};
+use crate::error::ClaudeError;
+use crate::error::Result;
 use crate::process::ProcessHandle;
-use crate::stream::{JsonStreamParser, SingleJsonParser, TextParser};
-use crate::types::{Event, OutputFormat, Result as ClaudeResult};
+use crate::stream::JsonStreamParser;
+use crate::stream::SingleJsonParser;
+use crate::stream::TextParser;
+use crate::types::Event;
+use crate::types::OutputFormat;
+use crate::types::Result as ClaudeResult;
 use chrono::Utc;
 use futures::StreamExt;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::io::AsyncBufReadExt;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 use uuid::Uuid;
 
 pub struct Session {

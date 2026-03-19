@@ -1,12 +1,13 @@
-//! JSON Schema generation for AgenticConfig.
+//! JSON Schema generation for `AgenticConfig`.
 //!
 //! Uses schemars to generate a JSON Schema that can be used for
 //! IDE autocomplete and validation.
 
 use crate::types::AgenticConfig;
-use schemars::{Schema, generate::SchemaSettings};
+use schemars::Schema;
+use schemars::generate::SchemaSettings;
 
-/// Generate the JSON Schema for AgenticConfig.
+/// Generate the JSON Schema for `AgenticConfig`.
 pub fn schema() -> Schema {
     SchemaSettings::default()
         .into_generator()

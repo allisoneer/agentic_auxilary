@@ -3,7 +3,9 @@
 //! Important: xtask shells out to the canonical generator to preserve xtask's
 //! "no workspace deps" boundary.
 
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;

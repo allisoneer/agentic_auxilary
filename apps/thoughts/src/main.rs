@@ -4,15 +4,22 @@ compile_error!(
 );
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
+use clap::Subcommand;
 use colored::Colorize;
 use tracing::info;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod commands;
 
 // Re-export library modules into binary's namespace
-pub use thoughts_tool::{config, error, git, mount, platform, utils};
+pub use thoughts_tool::config;
+pub use thoughts_tool::error;
+pub use thoughts_tool::git;
+pub use thoughts_tool::mount;
+pub use thoughts_tool::platform;
+pub use thoughts_tool::utils;
 
 use crate::config::SyncStrategy;
 
@@ -330,7 +337,8 @@ async fn main() -> Result<()> {
             WorkCommands::Complete => commands::work::complete::execute().await,
             WorkCommands::List { recent } => commands::work::list::execute(recent).await,
             WorkCommands::Open { subdir } => {
-                use commands::work::open::{OpenSubdir, execute};
+                use commands::work::open::OpenSubdir;
+                use commands::work::open::execute;
                 let which = match subdir.as_deref() {
                     Some("research") => OpenSubdir::Research,
                     Some("plans") => OpenSubdir::Plans,

@@ -5,7 +5,8 @@
 //! web retrieval, CLI tools, and logging.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Root configuration for all agentic tools.
 ///
@@ -47,7 +48,7 @@ pub struct AgenticConfig {
 // ─────────────────────────────────────────────────────────────────────────────
 //
 
-/// Configuration for coding-agent-tools subagents (ask_agent tool).
+/// Configuration for coding-agent-tools subagents (`ask_agent` tool).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct SubagentsConfig {
@@ -76,7 +77,7 @@ impl Default for SubagentsConfig {
 // ─────────────────────────────────────────────────────────────────────────────
 //
 
-/// Schema-only enum for reasoning_effort IDE autocomplete.
+/// Schema-only enum for `reasoning_effort` IDE autocomplete.
 /// Runtime storage remains Option<String> for advisory validation semantics.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -100,9 +101,9 @@ enum ReasoningEffortLevel {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct ReasoningConfig {
-    /// OpenRouter model ID for optimizer step.
+    /// `OpenRouter` model ID for optimizer step.
     pub optimizer_model: String,
-    /// OpenRouter model ID for executor/reasoner step.
+    /// `OpenRouter` model ID for executor/reasoner step.
     pub executor_model: String,
     /// Optional reasoning effort level: low, medium, high, xhigh.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,7 +163,7 @@ impl Default for OrchestratorConfig {
 // ─────────────────────────────────────────────────────────────────────────────
 //
 
-/// Configuration for web-retrieval tools (web_fetch, web_search).
+/// Configuration for web-retrieval tools (`web_fetch`, `web_search`).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct WebRetrievalConfig {
@@ -224,9 +225,9 @@ impl Default for WebSummarizerConfig {
 pub struct CliToolsConfig {
     /// Default page size for ls results (default: 100).
     pub ls_page_size: u32,
-    /// Default head_limit for grep results (default: 200).
+    /// Default `head_limit` for grep results (default: 200).
     pub grep_default_limit: u32,
-    /// Default head_limit for glob results (default: 500).
+    /// Default `head_limit` for glob results (default: 500).
     pub glob_default_limit: u32,
     /// Maximum directory traversal depth (default: 10).
     pub max_depth: u32,

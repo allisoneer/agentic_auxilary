@@ -4,11 +4,18 @@
 
 #![cfg(feature = "streaming")]
 
-use anthropic_async::streaming::{
-    Accumulator, ContentBlockDeltaData, ContentBlockStartData, Event, MessageDeltaPayload,
-    MessageDeltaUsage, MessageStartPayload, MessageStartUsage, SSEDecoder, SseFrame,
-};
-use anthropic_async::types::content::{ContentBlock, MessageRole};
+use anthropic_async::streaming::Accumulator;
+use anthropic_async::streaming::ContentBlockDeltaData;
+use anthropic_async::streaming::ContentBlockStartData;
+use anthropic_async::streaming::Event;
+use anthropic_async::streaming::MessageDeltaPayload;
+use anthropic_async::streaming::MessageDeltaUsage;
+use anthropic_async::streaming::MessageStartPayload;
+use anthropic_async::streaming::MessageStartUsage;
+use anthropic_async::streaming::SSEDecoder;
+use anthropic_async::streaming::SseFrame;
+use anthropic_async::types::content::ContentBlock;
+use anthropic_async::types::content::MessageRole;
 
 // =============================================================================
 // SSE Decoder Tests

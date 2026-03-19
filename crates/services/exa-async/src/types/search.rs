@@ -1,11 +1,17 @@
 //! Types for the Exa `/search` endpoint
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::common::{ContentsOptions, LivecrawlOption, SearchResult, SearchType};
+use super::common::ContentsOptions;
+use super::common::LivecrawlOption;
+use super::common::SearchResult;
+use super::common::SearchType;
 
 // Backward-compatible re-exports (CostDollars previously lived in this module)
-pub use super::common::{CostDollars, CostDollarsContents, CostDollarsSearch};
+pub use super::common::CostDollars;
+pub use super::common::CostDollarsContents;
+pub use super::common::CostDollarsSearch;
 
 /// Request body for `POST /search`
 #[derive(Debug, Clone, Serialize, Deserialize)]

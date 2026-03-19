@@ -4,7 +4,8 @@
 //! agentic tools ecosystem.
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
+use clap::Subcommand;
 
 mod commands;
 
