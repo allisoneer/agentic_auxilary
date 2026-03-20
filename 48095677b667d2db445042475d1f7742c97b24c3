@@ -1,0 +1,23 @@
+opencode.json
+  fe5f07cadb69a500 28,206-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "48095677b667d2db445042475d1f7742c97b24c3",
+  "prompts": {
+    "fe5f07cadb69a500": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f33571d2ffeELLhGV34WuMVDx",
+        "model": "github-copilot/claude-opus-4.5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 89,
+      "total_deletions": 69,
+      "accepted_lines": 68,
+      "overriden_lines": 0
+    }
+  }
+}
