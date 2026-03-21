@@ -1,4 +1,6 @@
 use super::types::{RepoLocation, RepoMapping};
+use crate::config::validation::{canonical_reference_instance_key, canonical_reference_key};
+use crate::git::ref_key::encode_ref_key;
 use crate::repo_identity::{
     RepoIdentity, RepoIdentityKey, parse_url_and_subpath as identity_parse_url_and_subpath,
 };
@@ -8,6 +10,8 @@ use anyhow::{Context, Result, bail};
 use atomicwrites::{AllowOverwrite, AtomicFile};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+
+const REFERENCE_MAPPING_MARKER: &str = "#thoughts-ref=";
 
 /// Indicates how a URL was resolved to a mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,6 +166,40 @@ impl RepoMappingManager {
         Ok(None)
     }
 
+    pub fn resolve_reference_url(
+        &self,
+        url: &str,
+        ref_name: Option<&str>,
+    ) -> Result<Option<PathBuf>> {
+        let mapping = self.load()?;
+        let wanted_key = canonical_reference_instance_key(url, ref_name)?;
+        let (_, subpath) = parse_url_and_subpath(url);
+
+        let mut matches: Vec<(String, RepoLocation)> = mapping
+            .mappings
+            .iter()
+            .filter_map(|(stored_key, location)| {
+                let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
+                let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
+                let actual = (host, org_path, repo, stored_ref_key);
+                (actual == wanted_key).then(|| (stored_key.clone(), location.clone()))
+            })
+            .collect();
+
+        matches.sort_by(|a, b| a.0.cmp(&b.0));
+
+        if let Some((_stored_key, location)) = matches.into_iter().next() {
+            let mut p = location.path;
+            if let Some(ref sub) = subpath {
+                validate_subpath(sub)?;
+                p = p.join(sub);
+            }
+            return Ok(Some(p));
+        }
+
+        Ok(None)
+    }
+
     /// Add a URL-to-path mapping with identity-based upsert.
     ///
     /// If a mapping with the same canonical identity already exists,
@@ -219,6 +257,60 @@ impl RepoMappingManager {
         Ok(())
     }
 
+    pub fn add_reference_mapping(
+        &mut self,
+        url: String,
+        ref_name: Option<&str>,
+        path: PathBuf,
+        auto_managed: bool,
+    ) -> Result<()> {
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
+        let mut mapping = self.load()?;
+
+        if !path.exists() {
+            bail!("Path does not exist: {}", path.display());
+        }
+
+        if !path.is_dir() {
+            bail!("Path is not a directory: {}", path.display());
+        }
+
+        let storage_key = reference_mapping_storage_key(&url, ref_name)?;
+        let new_key = canonical_reference_instance_key(&url, ref_name)?;
+
+        let matching_urls: Vec<String> = mapping
+            .mappings
+            .keys()
+            .filter_map(|stored_key| {
+                let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
+                let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
+                let existing = (host, org_path, repo, stored_ref_key);
+                (existing == new_key).then(|| stored_key.clone())
+            })
+            .collect();
+
+        let preserved_last_sync = matching_urls
+            .iter()
+            .filter_map(|k| mapping.mappings.get(k).and_then(|loc| loc.last_sync))
+            .max();
+
+        for k in matching_urls {
+            mapping.mappings.remove(&k);
+        }
+
+        mapping.mappings.insert(
+            storage_key,
+            RepoLocation {
+                path,
+                auto_managed,
+                last_sync: preserved_last_sync,
+            },
+        );
+
+        self.save(&mapping)?;
+        Ok(())
+    }
+
     /// Remove a URL mapping
     #[allow(dead_code)]
     // TODO(2): Add "thoughts mount unmap" command for cleanup
@@ -262,6 +354,20 @@ impl RepoMappingManager {
         }
         p = p.join(sanitize_dir_name(&key.repo));
         Ok(p)
+    }
+
+    pub fn get_default_reference_clone_path(url: &str, ref_name: Option<&str>) -> Result<PathBuf> {
+        let mut path = Self::get_default_clone_path(url)?;
+        if let Some(ref_name) = ref_name {
+            let ref_key = encode_ref_key(ref_name)?;
+            let repo_dir = path
+                .file_name()
+                .ok_or_else(|| anyhow::anyhow!("Default clone path had no repository segment"))?
+                .to_string_lossy()
+                .to_string();
+            path.set_file_name(format!("{}@{}", sanitize_dir_name(&repo_dir), ref_key));
+        }
+        Ok(path)
     }
 
     /// Update last sync time for a URL.
@@ -312,6 +418,25 @@ impl RepoMappingManager {
     pub fn get_canonical_key(url: &str) -> Option<RepoIdentityKey> {
         let (base, _) = parse_url_and_subpath(url);
         RepoIdentity::parse(&base).ok().map(|id| id.canonical_key())
+    }
+}
+
+fn reference_mapping_storage_key(url: &str, ref_name: Option<&str>) -> Result<String> {
+    let (base_url, _) = parse_url_and_subpath(url);
+    match ref_name {
+        Some(ref_name) => Ok(format!(
+            "{}{REFERENCE_MAPPING_MARKER}{}",
+            base_url,
+            encode_ref_key(ref_name)?
+        )),
+        None => Ok(base_url),
+    }
+}
+
+fn parse_reference_mapping_storage_key(stored_key: &str) -> (String, Option<String>) {
+    match stored_key.split_once(REFERENCE_MAPPING_MARKER) {
+        Some((base_url, ref_key)) => (base_url.to_string(), Some(ref_key.to_string())),
+        None => (stored_key.to_string(), None),
     }
 }
 
@@ -387,6 +512,7 @@ pub fn extract_org_repo_from_url(url: &str) -> anyhow::Result<(String, String)> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_parse_url_and_subpath() {
@@ -471,6 +597,18 @@ mod tests {
     }
 
     #[test]
+    fn test_default_reference_clone_path_appends_ref_key() {
+        let p = RepoMappingManager::get_default_reference_clone_path(
+            "https://github.com/org/repo.git",
+            Some("refs/tags/v1.2.3"),
+        )
+        .unwrap();
+        assert!(p.ends_with(std::path::Path::new(
+            ".thoughts/clones/github.com/org/repo@r-refs~2ftags~2fv1.2.3"
+        )));
+    }
+
+    #[test]
     fn test_canonical_key_consistency() {
         let ssh_key = RepoMappingManager::get_canonical_key("git@github.com:Org/Repo.git").unwrap();
         let https_key =
@@ -479,6 +617,51 @@ mod tests {
             ssh_key, https_key,
             "SSH and HTTPS should have same canonical key"
         );
+    }
+
+    #[test]
+    fn test_add_reference_mapping_keeps_different_refs_separate() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager { mapping_path };
+
+        let main_path = temp_dir.path().join("repo-main");
+        let tag_path = temp_dir.path().join("repo-tag");
+        std::fs::create_dir_all(&main_path).unwrap();
+        std::fs::create_dir_all(&tag_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/heads/main"),
+                main_path.clone(),
+                true,
+            )
+            .unwrap();
+        manager
+            .add_reference_mapping(
+                "git@github.com:Org/Repo.git".to_string(),
+                Some("refs/tags/v1.0.0"),
+                tag_path.clone(),
+                true,
+            )
+            .unwrap();
+
+        assert_eq!(
+            manager
+                .resolve_reference_url("https://github.com/org/repo", Some("refs/heads/main"))
+                .unwrap(),
+            Some(main_path)
+        );
+        assert_eq!(
+            manager
+                .resolve_reference_url("https://github.com/org/repo", Some("refs/tags/v1.0.0"))
+                .unwrap(),
+            Some(tag_path)
+        );
+
+        let mapping = manager.load().unwrap();
+        assert_eq!(mapping.mappings.len(), 2);
     }
 
     // TODO(2): Add integration test for resolve_url_with_details canonical fallback path.

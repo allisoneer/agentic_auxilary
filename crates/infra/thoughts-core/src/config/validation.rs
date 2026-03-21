@@ -1,3 +1,4 @@
+use crate::git::ref_key::encode_ref_key;
 use crate::repo_identity::{RepoIdentity, parse_url_and_subpath};
 use anyhow::{Result, bail};
 
@@ -36,6 +37,12 @@ pub fn get_host_from_url(url: &str) -> Result<String> {
 /// Validate that a reference URL is well-formed and points to org/repo (repo-level only)
 pub fn validate_reference_url(url: &str) -> Result<()> {
     let url = url.trim();
+    if url.contains('?') || url.contains('#') {
+        bail!(
+            "Reference URLs cannot contain '?' or '#' alternate ref encodings: {}",
+            url
+        );
+    }
     let (base, subpath) = parse_url_and_subpath(url);
     if subpath.is_some() {
         bail!(
@@ -74,6 +81,16 @@ pub fn canonical_reference_key(url: &str) -> Result<(String, String, String)> {
     Ok((key.host, key.org_path, key.repo))
 }
 
+/// Canonical key for a specific reference instance: repository identity plus optional ref key.
+pub fn canonical_reference_instance_key(
+    url: &str,
+    ref_name: Option<&str>,
+) -> Result<(String, String, String, Option<String>)> {
+    let (host, org_path, repo) = canonical_reference_key(url)?;
+    let ref_key = ref_name.map(encode_ref_key).transpose()?;
+    Ok((host, org_path, repo, ref_key))
+}
+
 // --- MCP HTTPS-only validation helpers ---
 
 /// True if the URL uses SSH schemes we do not support in MCP
@@ -94,6 +111,13 @@ pub fn is_https_url(s: &str) -> bool {
 /// - Accept generic https://*.git clone URLs
 pub fn validate_reference_url_https_only(url: &str) -> Result<()> {
     let url = url.trim();
+
+    if url.contains('?') || url.contains('#') {
+        bail!(
+            "Reference URLs cannot contain '?' or '#' alternate ref encodings: {}",
+            url
+        );
+    }
 
     // Reject subpaths (URL:subpath)
     let (base, subpath) = parse_url_and_subpath(url);
@@ -183,6 +207,32 @@ mod ref_validation_tests {
         assert_eq!(a, b);
         assert_eq!(a, ("github.com".into(), "user".into(), "repo".into()));
     }
+
+    #[test]
+    fn test_canonical_reference_instance_key_distinguishes_refs() {
+        let main = canonical_reference_instance_key(
+            "https://github.com/user/repo",
+            Some("refs/heads/main"),
+        )
+        .unwrap();
+        let tag = canonical_reference_instance_key(
+            "https://github.com/user/repo",
+            Some("refs/tags/v1.0.0"),
+        )
+        .unwrap();
+        let unpinned =
+            canonical_reference_instance_key("https://github.com/user/repo", None).unwrap();
+
+        assert_ne!(main, tag);
+        assert_ne!(main, unpinned);
+        assert_ne!(tag, unpinned);
+    }
+
+    #[test]
+    fn test_validate_reference_url_rejects_query_and_fragment() {
+        assert!(validate_reference_url("https://github.com/org/repo?ref=main").is_err());
+        assert!(validate_reference_url("https://github.com/org/repo#main").is_err());
+    }
 }
 
 #[cfg(test)]
@@ -228,5 +278,11 @@ mod mcp_https_validation_tests {
     fn test_https_only_rejects_non_github_without_dot_git() {
         // Non-GitHub without .git suffix should be rejected
         assert!(validate_reference_url_https_only("https://gitlab.com/group/proj").is_err());
+    }
+
+    #[test]
+    fn test_https_only_rejects_query_and_fragment() {
+        assert!(validate_reference_url_https_only("https://github.com/org/repo?ref=main").is_err());
+        assert!(validate_reference_url_https_only("https://github.com/org/repo#main").is_err());
     }
 }

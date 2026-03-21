@@ -362,6 +362,7 @@ mod tests {
             ReferenceEntry::WithMetadata(rm) => {
                 assert_eq!(rm.remote, "https://github.com/org/repo.git");
                 assert_eq!(rm.description.as_deref(), Some("Test repo"));
+                assert_eq!(rm.ref_name, None);
             }
             _ => panic!("Expected WithMetadata"),
         }
@@ -375,6 +376,20 @@ mod tests {
             ReferenceEntry::WithMetadata(rm) => {
                 assert_eq!(rm.remote, "https://github.com/org/repo.git");
                 assert_eq!(rm.description, None);
+                assert_eq!(rm.ref_name, None);
+            }
+            _ => panic!("Expected WithMetadata"),
+        }
+    }
+
+    #[test]
+    fn test_reference_entry_deserialize_with_ref_metadata() {
+        let json = r#"{"remote": "https://github.com/org/repo.git", "ref": "refs/tags/v1.2.3"}"#;
+        let entry: ReferenceEntry = serde_json::from_str(json).unwrap();
+        match entry {
+            ReferenceEntry::WithMetadata(rm) => {
+                assert_eq!(rm.remote, "https://github.com/org/repo.git");
+                assert_eq!(rm.ref_name.as_deref(), Some("refs/tags/v1.2.3"));
             }
             _ => panic!("Expected WithMetadata"),
         }
@@ -397,6 +412,7 @@ mod tests {
             ReferenceEntry::WithMetadata(rm) => {
                 assert_eq!(rm.remote, "https://github.com/org/ref2.git");
                 assert_eq!(rm.description.as_deref(), Some("Ref 2"));
+                assert_eq!(rm.ref_name, None);
             }
             _ => panic!("Expected WithMetadata"),
         }
@@ -425,6 +441,7 @@ mod tests {
         match &config.references[1] {
             ReferenceEntry::WithMetadata(rm) => {
                 assert_eq!(rm.description.as_deref(), Some("Reference 2"));
+                assert_eq!(rm.ref_name, None);
             }
             _ => panic!("Expected WithMetadata"),
         }
@@ -440,6 +457,7 @@ mod tests {
             ReferenceEntry::WithMetadata(ReferenceMount {
                 remote: "https://github.com/user/repo".to_string(),
                 description: Some("Same repo".into()),
+                ref_name: None,
             }),
         ];
 
@@ -513,6 +531,8 @@ pub struct ReferenceMount {
     pub remote: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
+    pub ref_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

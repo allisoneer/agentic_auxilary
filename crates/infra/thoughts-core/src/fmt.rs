@@ -6,7 +6,7 @@
 use agentic_tools_core::fmt::{TextFormat, TextOptions};
 
 use crate::documents::{ActiveDocuments, WriteDocumentOk};
-use crate::mcp::{AddReferenceOk, ReferencesList, TemplateResponse};
+use crate::mcp::{AddReferenceOk, ReferencesList, RepoRefsList, TemplateResponse};
 use crate::utils::human_size;
 
 impl TextFormat for WriteDocumentOk {
@@ -70,6 +70,40 @@ impl TextFormat for ReferencesList {
     }
 }
 
+impl TextFormat for RepoRefsList {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        if self.entries.is_empty() {
+            return format!("Remote refs for {}\n<none>", self.url);
+        }
+
+        let mut out = if self.truncated {
+            format!(
+                "Remote refs for {} (showing {} of {}):",
+                self.url,
+                self.entries.len(),
+                self.total
+            )
+        } else {
+            format!("Remote refs for {} ({}):", self.url, self.total)
+        };
+
+        for entry in &self.entries {
+            out.push_str(&format!("\n{}", entry.name));
+            if let Some(oid) = &entry.oid {
+                out.push_str(&format!(" oid={oid}"));
+            }
+            if let Some(peeled) = &entry.peeled {
+                out.push_str(&format!(" peeled={peeled}"));
+            }
+            if let Some(target) = &entry.target {
+                out.push_str(&format!(" target={target}"));
+            }
+        }
+
+        out
+    }
+}
+
 impl TextFormat for AddReferenceOk {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
         let mut out = String::new();
@@ -79,8 +113,15 @@ impl TextFormat for AddReferenceOk {
             out.push_str("\u{2713} Added reference\n");
         }
         out.push_str(&format!(
-            "  URL: {}\n  Org/Repo: {}/{}\n  Mount: {}\n  Target: {}",
-            self.url, self.org, self.repo, self.mount_path, self.mount_target
+            "  URL: {}\n  Org/Repo: {}/{}",
+            self.url, self.org, self.repo
+        ));
+        if let Some(ref_name) = &self.ref_name {
+            out.push_str(&format!("\n  Ref: {}", ref_name));
+        }
+        out.push_str(&format!(
+            "\n  Mount: {}\n  Target: {}",
+            self.mount_path, self.mount_target
         ));
         if let Some(mp) = &self.mapping_path {
             out.push_str(&format!("\n  Mapping: {}", mp));
@@ -117,6 +158,7 @@ impl TextFormat for TemplateResponse {
 mod tests {
     use super::*;
     use crate::documents::DocumentInfo;
+    use crate::git::remote_refs::RemoteRef;
     use crate::mcp::{ReferenceItem, TemplateType};
 
     #[test]
@@ -186,9 +228,37 @@ mod tests {
     }
 
     #[test]
+    fn repo_refs_list_text_format() {
+        let refs = RepoRefsList {
+            url: "https://github.com/org/repo".into(),
+            total: 2,
+            truncated: false,
+            entries: vec![
+                RemoteRef {
+                    name: "refs/heads/main".into(),
+                    oid: Some("abc123".into()),
+                    peeled: None,
+                    target: None,
+                },
+                RemoteRef {
+                    name: "HEAD".into(),
+                    oid: Some("abc123".into()),
+                    peeled: None,
+                    target: Some("refs/heads/main".into()),
+                },
+            ],
+        };
+        let tf = refs.fmt_text(&TextOptions::default());
+        assert!(tf.contains("Remote refs for https://github.com/org/repo"));
+        assert!(tf.contains("refs/heads/main oid=abc123"));
+        assert!(tf.contains("HEAD oid=abc123 target=refs/heads/main"));
+    }
+
+    #[test]
     fn add_reference_ok_text_format() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: Some("refs/heads/main".into()),
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
@@ -202,6 +272,7 @@ mod tests {
         };
         let tf = ok.fmt_text(&TextOptions::default());
         assert!(tf.contains("\u{2713} Added reference"));
+        assert!(tf.contains("Ref: refs/heads/main"));
         assert!(tf.contains("Warnings:\n- note"));
     }
 
@@ -209,6 +280,7 @@ mod tests {
     fn add_reference_ok_already_existed_text_format() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: None,
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),

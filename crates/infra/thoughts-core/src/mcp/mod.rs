@@ -4,15 +4,23 @@ use serde::{Deserialize, Serialize};
 
 mod templates;
 
-use crate::config::validation::{canonical_reference_key, validate_reference_url_https_only};
+use crate::config::validation::{
+    canonical_reference_instance_key, validate_reference_url_https_only,
+};
 use crate::config::{
     ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
     extract_org_repo_from_url,
 };
+use crate::git::ref_key::encode_ref_key;
+use crate::git::remote_refs::{RemoteRef, discover_remote_refs};
 use crate::git::utils::get_control_repo_root;
+use crate::mount::MountSpace;
 use crate::mount::auto_mount::update_active_mounts;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
+
+const DEFAULT_REPO_REFS_LIMIT: usize = 100;
+const MAX_REPO_REFS_LIMIT: usize = 200;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -66,8 +74,18 @@ pub struct ReferencesList {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RepoRefsList {
+    pub url: String,
+    pub total: usize,
+    pub truncated: bool,
+    pub entries: Vec<RemoteRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AddReferenceOk {
     pub url: String,
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+    pub ref_name: Option<String>,
     pub org: String,
     pub repo: String,
     pub mount_path: String,
@@ -89,6 +107,47 @@ pub struct TemplateResponse {
 
 // Note: Tool implementations are in thoughts-mcp-tools crate using agentic-tools framework.
 
+pub fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<RepoRefsList> {
+    let input_url = url.trim().to_string();
+    validate_reference_url_https_only(&input_url)
+        .context("invalid input: URL failed HTTPS validation")?;
+
+    let repo_root =
+        get_control_repo_root(&std::env::current_dir().context("failed to get current directory")?)
+            .context("failed to get control repo root")?;
+    let mut refs = discover_remote_refs(&repo_root, &input_url)?;
+    refs.sort_by(|a, b| {
+        a.name
+            .cmp(&b.name)
+            .then_with(|| a.target.cmp(&b.target))
+            .then_with(|| a.oid.cmp(&b.oid))
+            .then_with(|| a.peeled.cmp(&b.peeled))
+    });
+
+    let limit = normalize_repo_ref_limit(limit)?;
+    let total = refs.len();
+    let truncated = total > limit;
+    refs.truncate(limit);
+
+    Ok(RepoRefsList {
+        url: input_url,
+        total,
+        truncated,
+        entries: refs,
+    })
+}
+
+fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
+    match limit.unwrap_or(DEFAULT_REPO_REFS_LIMIT) {
+        0 => anyhow::bail!("invalid input: limit must be at least 1"),
+        limit if limit > MAX_REPO_REFS_LIMIT => anyhow::bail!(
+            "invalid input: limit must be at most {}",
+            MAX_REPO_REFS_LIMIT
+        ),
+        limit => Ok(limit),
+    }
+}
+
 /// Public adapter for add_reference implementation.
 ///
 /// This function is callable by agentic-tools wrappers. It contains the actual
@@ -97,14 +156,27 @@ pub struct TemplateResponse {
 /// # Arguments
 /// * `url` - HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL
 /// * `description` - Optional description for why this reference was added
+/// * `ref_name` - Optional named git ref (branch, tag, or full ref name)
 ///
 /// # Returns
 /// `AddReferenceOk` on success, `anyhow::Error` on failure.
 pub async fn add_reference_impl_adapter(
     url: String,
     description: Option<String>,
+    ref_name: Option<String>,
 ) -> Result<AddReferenceOk> {
     let input_url = url.trim().to_string();
+    let ref_name = match ref_name {
+        Some(ref_name) => {
+            let trimmed = ref_name.trim();
+            if trimmed.is_empty() {
+                anyhow::bail!("invalid input: ref cannot be empty");
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+    let ref_key = ref_name.as_deref().map(encode_ref_key).transpose()?;
 
     // Validate URL per MCP HTTPS-only rules
     validate_reference_url_https_only(&input_url)
@@ -127,16 +199,16 @@ pub async fn add_reference_impl_adapter(
     // Build existing canonical keys set for duplicate detection
     let mut existing_keys = std::collections::HashSet::new();
     for e in &cfg.references {
-        let existing_url = match e {
-            ReferenceEntry::Simple(s) => s.as_str(),
-            ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+        let (existing_url, existing_ref_name) = match e {
+            ReferenceEntry::Simple(s) => (s.as_str(), None),
+            ReferenceEntry::WithMetadata(rm) => (rm.remote.as_str(), rm.ref_name.as_deref()),
         };
-        if let Ok(k) = canonical_reference_key(existing_url) {
+        if let Ok(k) = canonical_reference_instance_key(existing_url, existing_ref_name) {
             existing_keys.insert(k);
         }
     }
-    let this_key =
-        canonical_reference_key(&input_url).context("invalid input: failed to canonicalize URL")?;
+    let this_key = canonical_reference_instance_key(&input_url, ref_name.as_deref())
+        .context("invalid input: failed to canonicalize URL")?;
     let already_existed = existing_keys.contains(&this_key);
 
     // Compute paths for response
@@ -144,7 +216,12 @@ pub async fn add_reference_impl_adapter(
         .load_desired_state()
         .context("failed to load desired state")?
         .ok_or_else(|| anyhow::anyhow!("not found: no repository configuration found"))?;
-    let mount_path = format!("{}/{}/{}", ds.mount_dirs.references, org, repo);
+    let mount_space = MountSpace::Reference {
+        org_path: org.clone(),
+        repo: repo.clone(),
+        ref_key: ref_key.clone(),
+    };
+    let mount_path = mount_space.relative_path(&ds.mount_dirs);
     let mount_target = repo_root
         .join(".thoughts-data")
         .join(&mount_path)
@@ -155,7 +232,7 @@ pub async fn add_reference_impl_adapter(
     let repo_mapping =
         RepoMappingManager::new().context("failed to create repo mapping manager")?;
     let pre_mapping = repo_mapping
-        .resolve_url(&input_url)
+        .resolve_reference_url(&input_url, ref_name.as_deref())
         .ok()
         .flatten()
         .map(|p| p.to_string_lossy().to_string());
@@ -163,16 +240,17 @@ pub async fn add_reference_impl_adapter(
     // Update config if new
     let mut config_updated = false;
     let mut warnings: Vec<String> = Vec::new();
+    let description = description.and_then(|desc| {
+        let trimmed = desc.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    });
     if !already_existed {
-        if let Some(desc) = description.clone() {
+        if description.is_some() || ref_name.is_some() {
             cfg.references
                 .push(ReferenceEntry::WithMetadata(ReferenceMount {
                     remote: input_url.clone(),
-                    description: if desc.trim().is_empty() {
-                        None
-                    } else {
-                        Some(desc)
-                    },
+                    description: description.clone(),
+                    ref_name: ref_name.clone(),
                 }));
         } else {
             cfg.references
@@ -184,9 +262,9 @@ pub async fn add_reference_impl_adapter(
             .context("failed to save config")?;
         warnings.extend(ws);
         config_updated = true;
-    } else if description.is_some() {
+    } else if description.is_some() || ref_name.is_some() {
         warnings.push(
-            "Reference already exists; description was not updated (use CLI to modify metadata)"
+            "Reference already exists; metadata was not updated (use CLI to modify metadata)"
                 .to_string(),
         );
     }
@@ -200,7 +278,7 @@ pub async fn add_reference_impl_adapter(
     let repo_mapping_post =
         RepoMappingManager::new().context("failed to create repo mapping manager")?;
     let post_mapping = repo_mapping_post
-        .resolve_url(&input_url)
+        .resolve_reference_url(&input_url, ref_name.as_deref())
         .ok()
         .flatten()
         .map(|p| p.to_string_lossy().to_string());
@@ -241,6 +319,7 @@ pub async fn add_reference_impl_adapter(
 
     Ok(AddReferenceOk {
         url: input_url,
+        ref_name,
         org,
         repo,
         mount_path,
@@ -262,6 +341,23 @@ mod tests {
     use crate::documents::{ActiveDocuments, DocumentInfo, WriteDocumentOk};
     use crate::utils::human_size;
     use agentic_tools_core::fmt::{TextFormat, TextOptions};
+
+    fn sample_remote_ref(name: &str) -> RemoteRef {
+        RemoteRef {
+            name: name.to_string(),
+            oid: Some("abc123".to_string()),
+            peeled: None,
+            target: None,
+        }
+    }
+
+    #[test]
+    fn normalize_repo_ref_limit_defaults_and_validates() {
+        assert_eq!(normalize_repo_ref_limit(None).unwrap(), 100);
+        assert_eq!(normalize_repo_ref_limit(Some(1)).unwrap(), 1);
+        assert!(normalize_repo_ref_limit(Some(0)).is_err());
+        assert!(normalize_repo_ref_limit(Some(201)).is_err());
+    }
 
     #[test]
     fn test_human_size_formatting() {
@@ -368,9 +464,56 @@ mod tests {
     }
 
     #[test]
+    fn test_repo_ref_sorting_is_deterministic() {
+        let mut refs = [
+            sample_remote_ref("refs/tags/v2"),
+            sample_remote_ref("refs/heads/main"),
+        ];
+        refs.sort_by(|a, b| {
+            a.name
+                .cmp(&b.name)
+                .then_with(|| a.target.cmp(&b.target))
+                .then_with(|| a.oid.cmp(&b.oid))
+                .then_with(|| a.peeled.cmp(&b.peeled))
+        });
+        assert_eq!(refs[0].name, "refs/heads/main");
+        assert_eq!(refs[1].name, "refs/tags/v2");
+    }
+
+    #[test]
+    fn test_repo_refs_list_format() {
+        let refs = RepoRefsList {
+            url: "https://github.com/org/repo".into(),
+            total: 2,
+            truncated: false,
+            entries: vec![
+                RemoteRef {
+                    name: "refs/heads/main".into(),
+                    oid: Some("abc123".into()),
+                    peeled: None,
+                    target: None,
+                },
+                RemoteRef {
+                    name: "refs/tags/v1.0.0".into(),
+                    oid: Some("def456".into()),
+                    peeled: Some("fedcba".into()),
+                    target: None,
+                },
+            ],
+        };
+
+        let text = refs.fmt_text(&TextOptions::default());
+        assert!(text.contains("Remote refs for https://github.com/org/repo"));
+        assert!(text.contains("refs/heads/main"));
+        assert!(text.contains("oid=abc123"));
+        assert!(text.contains("peeled=fedcba"));
+    }
+
+    #[test]
     fn test_add_reference_ok_format() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: Some("refs/heads/main".into()),
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
@@ -385,6 +528,7 @@ mod tests {
         let s = ok.fmt_text(&TextOptions::default());
         assert!(s.contains("\u{2713} Added reference")); // ✓
         assert!(s.contains("Org/Repo: org/repo"));
+        assert!(s.contains("Ref: refs/heads/main"));
         assert!(s.contains("Cloned: true"));
         assert!(s.contains("Mounted: true"));
         assert!(s.contains("Warnings:\n- note"));
@@ -394,6 +538,7 @@ mod tests {
     fn test_add_reference_ok_format_already_existed() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: None,
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
@@ -415,6 +560,7 @@ mod tests {
     fn test_add_reference_ok_format_no_mapping() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: None,
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
