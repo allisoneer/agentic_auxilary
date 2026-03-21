@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Standalone Anthropic-backed library for optimizing a raw message into GPT-5.4 prompt components. It validates model output, retries output-contract violations, and assembles the final system and user prompts into a single rendered prompt.
 
 ## Quick Commands
 

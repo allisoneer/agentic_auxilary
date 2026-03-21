@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Thin CLI for optimizing a single message into GPT-5.4 prompt components. Pass the message as an argument or `-` to read from stdin, and use `--json` or `--pretty` for structured output.
 
 ## Quick Commands
 

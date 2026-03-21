@@ -9,6 +9,7 @@ use message_optimizer::{OptimizeMessageRequest, OptimizedPrompt, optimize_messag
 #[command(about = "Optimize a single message into a GPT-5.4 prompt")]
 #[command(version)]
 struct Cli {
+    /// Message to optimize, or "-" to read from stdin
     message: String,
 
     #[arg(long)]
