@@ -23,6 +23,11 @@
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
+    "NormalOpenAI": {
+      "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
+      "model": "opencode/gpt-5.4",
+      "mode": "primary"
+    },
     "OrchestratorClaude": {
       "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
       "model": "github-copilot/claude-opus-4.5",

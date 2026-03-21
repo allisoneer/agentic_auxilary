@@ -13,6 +13,8 @@ use std::fs;
 /// - Root CLAUDE.md crate-index
 /// - Per-crate CLAUDE.md files
 /// - release-plz.toml packages block
+/// - README.md version markers
+/// - justfile generated sections
 pub fn run(dry_run: bool, check: bool) -> Result<()> {
     eprintln!("[sync] Loading workspace metadata...");
     let metadata = MetadataCommand::new()
