@@ -63,6 +63,7 @@ $ARGUMENTS
 1. Prefer auto-detection by calling `tools_gh_get_comments` without `pr_number` first.
 2. If auto-detection fails or the user specified a PR number, use that explicit PR.
 3. If the PR is still unknown, call `tools_gh_get_prs`, present the candidates, and ask the user to choose.
+4. Treat GitHub tool output as the authoritative source for PR identification and PR metadata in this workflow.
 
 </step_2>
 
@@ -81,7 +82,8 @@ $ARGUMENTS
    - `html_url`
    - author metadata (`login`, `is_bot`)
    - ordered replies with authors and bodies
-4. If no matching threads exist, continue through artifact writing with a grounded `no unresolved comments` summary.
+4. If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
+5. If no matching threads exist, continue through artifact writing with a grounded `no unresolved comments` summary.
 
 </step_3>
 
@@ -173,7 +175,7 @@ $ARGUMENTS
 4. Structure the artifact like this:
 
 ### Header
-- PR number, URL, timestamp
+- PR number, URL if available from GitHub tool output, timestamp
 - scope assumptions
 - triage counts by category and severity
 
