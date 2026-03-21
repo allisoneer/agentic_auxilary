@@ -1,0 +1,25 @@
+[package]
+name = "message_optimizer"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Standalone GPT-5.4 message optimizer library"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[dependencies]
+anthropic-async = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

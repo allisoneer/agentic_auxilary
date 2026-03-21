@@ -3770,6 +3770,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "message-optimizer-bin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "message_optimizer",
+ "predicates",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "message_optimizer"
+version = "0.1.0"
+dependencies = [
+ "anthropic-async",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"

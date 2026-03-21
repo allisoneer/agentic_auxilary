@@ -192,6 +192,20 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "message-optimizer-bin"
+changelog_path = "apps/message-optimizer/CHANGELOG.md"
+git_tag_name = "message-optimizer-bin-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "message_optimizer"
+changelog_path = "crates/tools/message-optimizer/CHANGELOG.md"
+git_tag_name = "message_optimizer-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "opencode-orchestrator-mcp"
 changelog_path = "apps/opencode-orchestrator-mcp/CHANGELOG.md"
 git_tag_name = "opencode-orchestrator-mcp-v{{ version }}"

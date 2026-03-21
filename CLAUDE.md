@@ -52,6 +52,8 @@ Guidance for Claude Code when working with this repository.
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
+- `message-optimizer-bin` (app) - `apps/message-optimizer/`
+- `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 <!-- END:xtask:autogen -->
 
 
