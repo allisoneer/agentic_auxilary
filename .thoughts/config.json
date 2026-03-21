@@ -229,6 +229,30 @@
       "description": "HTTP mocking library with built-in recording/playback support for conformance testing"
     },
     "https://github.com/openai/codex",
-    "git@github.com:allisoneer/vidya_game.git"
+    "git@github.com:allisoneer/vidya_game.git",
+    {
+      "remote": "https://github.com/gepa-ai/gepa",
+      "description": "GEPA AI repository for comparison with our GPT-5 reasoner optimization strategies"
+    },
+    {
+      "remote": "https://github.com/stanfordnlp/dspy",
+      "description": "DSPy framework for programming with foundation models - for comparison with our GPT-5 reasoner optimization"
+    },
+    {
+      "remote": "https://github.com/allisoneer/allison-nvim",
+      "description": "Reference for Neovim/TOML configuration patterns relevant to configuration system rewrite"
+    },
+    {
+      "remote": "https://github.com/Stebalien/tempfile",
+      "description": "Rust tempfile crate - de facto standard for atomic file writes via NamedTempFile::persist(), recommended replacement for atomicwrites"
+    },
+    {
+      "remote": "https://github.com/openai/openai-cookbook",
+      "description": "Official OpenAI cookbook with GPT-5, Codex, and prompting guide notebooks relevant to OpenAI-optimized command design"
+    },
+    {
+      "remote": "https://github.com/openai/openai-agents-python",
+      "description": "Official OpenAI multi-agent SDK with instructions patterns, handoffs, and agent/tool orchestration behavior"
+    }
   ]
 }
