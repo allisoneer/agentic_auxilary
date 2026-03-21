@@ -6,8 +6,10 @@ pub mod pagination;
 pub mod tools;
 
 use anyhow::{Context, Result};
-use models::{CommentSourceType, PrSummaryList, ReviewComment, ReviewCommentList, Thread};
-use pagination::{PaginationCache, make_key, paginate_slice};
+use models::{
+    CommentSourceType, PrSummary, PrSummaryList, ReviewComment, ReviewCommentList, Thread,
+};
+use pagination::{PaginationCache, make_key, make_pr_list_key, paginate_slice};
 use std::sync::Arc;
 
 // Re-export agentic-tools types for MCP server usage
@@ -32,6 +34,7 @@ pub struct PrComments {
     repo: String,
     token: Option<String>,
     pager: Arc<PaginationCache<Thread>>,
+    pr_list_pager: Arc<PaginationCache<PrSummary>>,
     init_error: Option<String>,
 }
 
@@ -85,6 +88,7 @@ impl PrComments {
             repo: git_info.repo,
             token,
             pager: Arc::new(PaginationCache::new()),
+            pr_list_pager: Arc::new(PaginationCache::new()),
             init_error: None,
         })
     }
@@ -96,6 +100,7 @@ impl PrComments {
             repo,
             token,
             pager: Arc::new(PaginationCache::new()),
+            pr_list_pager: Arc::new(PaginationCache::new()),
             init_error: None,
         }
     }
@@ -109,6 +114,7 @@ impl PrComments {
             repo: String::new(),
             token,
             pager: Arc::new(PaginationCache::new()),
+            pr_list_pager: Arc::new(PaginationCache::new()),
             init_error: Some(init_error),
         }
     }
@@ -199,6 +205,10 @@ impl PrComments {
         let src = comment_source_type.unwrap_or_default();
         let include_resolved = include_resolved.unwrap_or(false);
         let page_size = Self::page_size_from_env();
+        let pr_url = format!(
+            "https://github.com/{}/{}/pull/{}",
+            self.owner, self.repo, pr
+        );
 
         // Sweep expired cache entries opportunistically
         self.pager.sweep_expired();
@@ -300,6 +310,10 @@ impl PrComments {
         }
 
         Ok(ReviewCommentList {
+            owner: self.owner.clone(),
+            repo: self.repo.clone(),
+            pr_number: pr,
+            pr_url,
             comments,
             shown_threads,
             total_threads,
@@ -313,22 +327,77 @@ impl PrComments {
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;
 
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let state = state.unwrap_or_else(|| "open".to_string());
+        let page_size = Self::page_size_from_env();
 
-        let prs = client.list_prs(state).await.map_err(|e| {
-            let msg = e.to_string();
-            if msg.contains("401") || msg.contains("403") {
-                anyhow::anyhow!(
-                    "{}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.",
-                    msg
-                )
-            } else {
-                anyhow::anyhow!("{}", msg)
-            }
-        })?;
-        Ok(PrSummaryList { prs })
+        self.pr_list_pager.sweep_expired();
+
+        let key = make_pr_list_key(&self.owner, &self.repo, &state, page_size);
+        let query_lock = self.pr_list_pager.get_or_create(&key);
+
+        let needs_fetch = {
+            let state = query_lock.state.lock().unwrap();
+            state.is_empty() || state.is_expired()
+        };
+
+        if needs_fetch {
+            let client = github::GitHubClient::new(
+                self.owner.clone(),
+                self.repo.clone(),
+                self.token.clone(),
+            )
+            .context("internal: failed to create GitHub client")?;
+
+            let prs = client.list_prs(Some(state.clone())).await.map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("401") || msg.contains("403") {
+                    anyhow::anyhow!(
+                        "{}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.",
+                        msg
+                    )
+                } else {
+                    anyhow::anyhow!("{}", msg)
+                }
+            })?;
+
+            let mut pager_state = query_lock.state.lock().unwrap();
+            pager_state.reset(prs, (), page_size);
+        }
+
+        let mut pager_state = query_lock.state.lock().unwrap();
+        let (prs, has_more) = paginate_slice(
+            &pager_state.results,
+            pager_state.next_offset,
+            pager_state.page_size,
+        );
+        pager_state.next_offset += prs.len();
+
+        let total_prs = pager_state.results.len();
+        let shown_prs = pager_state.next_offset;
+        let message = if has_more {
+            Some(format!(
+                "Showing {} out of {} pull requests. Call gh_get_prs again for more.",
+                shown_prs, total_prs
+            ))
+        } else {
+            None
+        };
+
+        if !has_more {
+            drop(pager_state);
+            self.pr_list_pager.remove_if_same(&key, &query_lock);
+        }
+
+        Ok(PrSummaryList {
+            owner: self.owner.clone(),
+            repo: self.repo.clone(),
+            state,
+            prs,
+            shown_prs,
+            total_prs,
+            has_more,
+            message,
+        })
     }
 
     /// Reply to a PR review comment. Automatically prefixes with AI identifier.
@@ -385,6 +454,45 @@ impl PrComments {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    fn sample_comment(id: u64) -> ReviewComment {
+        ReviewComment {
+            id,
+            user: "alice".into(),
+            is_bot: false,
+            body: format!("Comment {id}"),
+            path: "src/lib.rs".into(),
+            line: Some(id),
+            side: Some("RIGHT".into()),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: "2025-01-01T00:00:00Z".into(),
+            html_url: format!("https://example.com/review/{id}"),
+            pull_request_review_id: Some(42),
+            in_reply_to_id: None,
+        }
+    }
+
+    fn sample_thread(id: u64) -> Thread {
+        Thread {
+            parent: sample_comment(id),
+            replies: vec![],
+            is_resolved: false,
+        }
+    }
+
+    fn sample_pr_summary(number: u64) -> PrSummary {
+        PrSummary {
+            number,
+            title: format!("PR {number}"),
+            author: "alice".into(),
+            state: "open".into(),
+            created_at: "2025-01-01T00:00:00Z".into(),
+            updated_at: "2025-01-01T00:00:00Z".into(),
+            comment_count: 0,
+            review_comment_count: 0,
+        }
+    }
 
     #[test]
     fn with_ai_prefix_adds_prefix() {
@@ -452,5 +560,61 @@ mod tests {
         let valid = PrComments::with_repo("owner".into(), "repo".into());
         let result = valid.ensure_repo_configured();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn completed_comment_pagination_restarts_with_fresh_state_on_next_identical_call() {
+        let cache: PaginationCache<Thread> = PaginationCache::new();
+        let key = make_key("owner", "repo", 123, CommentSourceType::All, false, 10);
+
+        let first_lock = cache.get_or_create(&key);
+        {
+            let mut state = first_lock.state.lock().unwrap();
+            state.reset(vec![sample_thread(1), sample_thread(2)], (), 10);
+
+            let (page_threads, has_more) =
+                paginate_slice(&state.results, state.next_offset, state.page_size);
+            state.next_offset += page_threads.len();
+
+            assert_eq!(page_threads.len(), 2);
+            assert!(!has_more);
+        }
+
+        cache.remove_if_same(&key, &first_lock);
+
+        let restarted_lock = cache.get_or_create(&key);
+        assert!(!Arc::ptr_eq(&first_lock, &restarted_lock));
+
+        let restarted_state = restarted_lock.state.lock().unwrap();
+        assert!(restarted_state.is_empty());
+        assert_eq!(restarted_state.next_offset, 0);
+    }
+
+    #[test]
+    fn completed_pr_list_pagination_restarts_with_fresh_state_on_next_identical_call() {
+        let cache: PaginationCache<PrSummary> = PaginationCache::new();
+        let key = make_pr_list_key("owner", "repo", "open", 10);
+
+        let first_lock = cache.get_or_create(&key);
+        {
+            let mut state = first_lock.state.lock().unwrap();
+            state.reset(vec![sample_pr_summary(1), sample_pr_summary(2)], (), 10);
+
+            let (page_prs, has_more) =
+                paginate_slice(&state.results, state.next_offset, state.page_size);
+            state.next_offset += page_prs.len();
+
+            assert_eq!(page_prs.len(), 2);
+            assert!(!has_more);
+        }
+
+        cache.remove_if_same(&key, &first_lock);
+
+        let restarted_lock = cache.get_or_create(&key);
+        assert!(!Arc::ptr_eq(&first_lock, &restarted_lock));
+
+        let restarted_state = restarted_lock.state.lock().unwrap();
+        assert!(restarted_state.is_empty());
+        assert_eq!(restarted_state.next_offset, 0);
     }
 }

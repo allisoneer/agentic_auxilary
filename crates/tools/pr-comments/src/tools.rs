@@ -45,7 +45,7 @@ impl Tool for GetCommentsTool {
     type Input = GetCommentsInput;
     type Output = ReviewCommentList;
     const NAME: &'static str = "gh_get_comments";
-    const DESCRIPTION: &'static str = "Get PR review comments with thread-level pagination. Repeated calls with same params return next page.";
+    const DESCRIPTION: &'static str = "Get PR review comments with thread-level implicit pagination. Repeated calls with the same params return the next page; tool output tells you whether to call again or stop, and another identical call after completion restarts from page 1.";
 
     fn call(
         &self,
@@ -125,7 +125,7 @@ impl Tool for ListPrsTool {
     type Input = ListPrsInput;
     type Output = PrSummaryList;
     const NAME: &'static str = "gh_get_prs";
-    const DESCRIPTION: &'static str = "List pull requests in the repository";
+    const DESCRIPTION: &'static str = "List pull requests in the repository with implicit pagination. Repeated calls with the same params return the next page; tool output tells you whether to call again or stop, and another identical call after completion restarts from page 1.";
 
     fn call(
         &self,
