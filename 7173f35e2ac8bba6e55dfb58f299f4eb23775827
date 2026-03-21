@@ -1,0 +1,25 @@
+.opencode/sysprompt_gpt54.md
+  d1b2ad7fba4d666b 1,3-178
+opencode.json
+  d1b2ad7fba4d666b 26-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "7173f35e2ac8bba6e55dfb58f299f4eb23775827",
+  "prompts": {
+    "d1b2ad7fba4d666b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f2facf7fffecKKBJFKQkcqgk3",
+        "model": "github-copilot/claude-opus-4.5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 184,
+      "total_deletions": 1,
+      "accepted_lines": 182,
+      "overriden_lines": 1
+    }
+  }
+}
