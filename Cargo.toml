@@ -4,6 +4,7 @@ members = [
     # Apps
     "apps/thoughts",
     "apps/agentic-mcp",
+    "apps/message-optimizer",
     "apps/opencode-orchestrator-mcp",
 
     # Bindings
@@ -31,6 +32,7 @@ members = [
     "crates/tools/coding-agent-tools",
     "crates/tools/pr-comments",
     "crates/tools/gpt5-reasoner",
+    "crates/tools/message-optimizer",
     "crates/tools/thoughts-mcp-tools",
     "crates/tools/web-retrieval",
 
