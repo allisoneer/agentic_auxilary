@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.14] - 2026-03-21
+
+### ⚙️  Miscellaneous
+- Update Cargo.lock dependencies
 ## [0.1.13] - 2026-03-10
 
 ### ⚙️  Miscellaneous
