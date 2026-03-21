@@ -140,7 +140,7 @@ The 2 targeted approaches and 2 comprehensive approaches should give the plannin
 2. Call out unresolved gaps or risks briefly and explicitly.
 3. Summarize the recommendations compactly.
 4. Give the saved research path.
-5. If they want to continue into planning, tell them to run `/create_plan_init {path/to/saved/research.md}`.
+5. If they want to continue into planning, tell them to run `/create_plan_init_openai {path/to/saved/research.md}`.
 6. If they want more research instead, wait for direction.
 
 </step_7>
