@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "agentic-tools-core",
  "coding_agent_tools",
@@ -964,7 +964,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "claudecode"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "chrono",
  "dirs",
@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -4117,7 +4117,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -6063,7 +6063,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "assert_cmd",
