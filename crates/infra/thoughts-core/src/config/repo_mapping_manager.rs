@@ -172,24 +172,14 @@ impl RepoMappingManager {
         ref_name: Option<&str>,
     ) -> Result<Option<PathBuf>> {
         let mapping = self.load()?;
-        let wanted_key = canonical_reference_instance_key(url, ref_name)?;
         let (_, subpath) = parse_url_and_subpath(url);
 
-        let mut matches: Vec<(String, RepoLocation)> = mapping
-            .mappings
-            .iter()
-            .filter_map(|(stored_key, location)| {
-                let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
-                let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
-                let actual = (host, org_path, repo, stored_ref_key);
-                (actual == wanted_key).then(|| (stored_key.clone(), location.clone()))
-            })
-            .collect();
+        let matches = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
 
-        matches.sort_by(|a, b| a.0.cmp(&b.0));
-
-        if let Some((_stored_key, location)) = matches.into_iter().next() {
-            let mut p = location.path;
+        if let Some(stored_key) = matches.first()
+            && let Some(location) = mapping.mappings.get(stored_key)
+        {
+            let mut p = location.path.clone();
             if let Some(ref sub) = subpath {
                 validate_subpath(sub)?;
                 p = p.join(sub);
@@ -276,18 +266,7 @@ impl RepoMappingManager {
         }
 
         let storage_key = reference_mapping_storage_key(&url, ref_name)?;
-        let new_key = canonical_reference_instance_key(&url, ref_name)?;
-
-        let matching_urls: Vec<String> = mapping
-            .mappings
-            .keys()
-            .filter_map(|stored_key| {
-                let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
-                let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
-                let existing = (host, org_path, repo, stored_ref_key);
-                (existing == new_key).then(|| stored_key.clone())
-            })
-            .collect();
+        let matching_urls = Self::matching_reference_storage_keys(&mapping, &url, ref_name)?;
 
         let preserved_last_sync = matching_urls
             .iter()
@@ -328,6 +307,16 @@ impl RepoMappingManager {
         Ok(mapping
             .mappings
             .get(url)
+            .map(|loc| loc.auto_managed)
+            .unwrap_or(false))
+    }
+
+    pub fn is_reference_auto_managed(&self, url: &str, ref_name: Option<&str>) -> Result<bool> {
+        let mapping = self.load()?;
+        let keys = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
+        Ok(keys
+            .first()
+            .and_then(|key| mapping.mappings.get(key))
             .map(|loc| loc.auto_managed)
             .unwrap_or(false))
     }
@@ -414,10 +403,46 @@ impl RepoMappingManager {
         Ok(())
     }
 
+    pub fn update_reference_sync_time(&mut self, url: &str, ref_name: Option<&str>) -> Result<()> {
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
+        let mut mapping = self.load()?;
+        let now = chrono::Utc::now();
+
+        let keys = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
+        if let Some(key) = keys.first()
+            && let Some(loc) = mapping.mappings.get_mut(key)
+        {
+            loc.last_sync = Some(now);
+            self.save(&mapping)?;
+        }
+
+        Ok(())
+    }
+
     /// Get the canonical identity key for a URL, if parseable.
     pub fn get_canonical_key(url: &str) -> Option<RepoIdentityKey> {
         let (base, _) = parse_url_and_subpath(url);
         RepoIdentity::parse(&base).ok().map(|id| id.canonical_key())
+    }
+
+    fn matching_reference_storage_keys(
+        mapping: &RepoMapping,
+        url: &str,
+        ref_name: Option<&str>,
+    ) -> Result<Vec<String>> {
+        let wanted = canonical_reference_instance_key(url, ref_name)?;
+        let mut keys: Vec<String> = mapping
+            .mappings
+            .keys()
+            .filter_map(|stored_key| {
+                let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
+                let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
+                let actual = (host, org_path, repo, stored_ref_key);
+                (actual == wanted).then(|| stored_key.clone())
+            })
+            .collect();
+        keys.sort();
+        Ok(keys)
     }
 }
 
@@ -433,7 +458,7 @@ fn reference_mapping_storage_key(url: &str, ref_name: Option<&str>) -> Result<St
     }
 }
 
-fn parse_reference_mapping_storage_key(stored_key: &str) -> (String, Option<String>) {
+pub fn parse_reference_mapping_storage_key(stored_key: &str) -> (String, Option<String>) {
     match stored_key.split_once(REFERENCE_MAPPING_MARKER) {
         Some((base_url, ref_key)) => (base_url.to_string(), Some(ref_key.to_string())),
         None => (stored_key.to_string(), None),
@@ -662,6 +687,65 @@ mod tests {
 
         let mapping = manager.load().unwrap();
         assert_eq!(mapping.mappings.len(), 2);
+    }
+
+    #[test]
+    fn test_update_reference_sync_time_updates_ref_specific_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager { mapping_path };
+
+        let repo_path = temp_dir.path().join("repo-main");
+        std::fs::create_dir_all(&repo_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/heads/main"),
+                repo_path,
+                true,
+            )
+            .unwrap();
+
+        manager
+            .update_reference_sync_time("git@github.com:Org/Repo.git", Some("refs/heads/main"))
+            .unwrap();
+
+        let mapping = manager.load().unwrap();
+        let found = mapping
+            .mappings
+            .iter()
+            .find(|(key, _)| key.contains("#thoughts-ref="))
+            .unwrap();
+        assert!(found.1.last_sync.is_some());
+    }
+
+    #[test]
+    fn test_is_reference_auto_managed_matches_ref_specific_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let repo_path = temp_dir.path().join("repo-main");
+        std::fs::create_dir_all(&repo_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/heads/main"),
+                repo_path,
+                true,
+            )
+            .unwrap();
+
+        let mgr_ro = RepoMappingManager { mapping_path };
+        assert!(
+            mgr_ro
+                .is_reference_auto_managed("git@github.com:Org/Repo.git", Some("refs/heads/main"))
+                .unwrap()
+        );
     }
 
     // TODO(2): Add integration test for resolve_url_with_details canonical fallback path.

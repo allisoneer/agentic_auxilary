@@ -91,6 +91,26 @@ pub fn canonical_reference_instance_key(
     Ok((host, org_path, repo, ref_key))
 }
 
+pub fn validate_pinned_ref_full_name(ref_name: &str) -> Result<()> {
+    let ref_name = ref_name.trim();
+    if ref_name.is_empty() {
+        bail!("ref cannot be empty");
+    }
+
+    let allowed = ref_name.starts_with("refs/heads/")
+        || ref_name.starts_with("refs/tags/")
+        || ref_name.starts_with("refs/remotes/");
+
+    if !allowed {
+        bail!(
+            "Pinned refs must be full ref names starting with 'refs/heads/', 'refs/tags/', or 'refs/remotes/' (got '{}')",
+            ref_name
+        );
+    }
+
+    Ok(())
+}
+
 // --- MCP HTTPS-only validation helpers ---
 
 /// True if the URL uses SSH schemes we do not support in MCP
@@ -284,5 +304,25 @@ mod mcp_https_validation_tests {
     fn test_https_only_rejects_query_and_fragment() {
         assert!(validate_reference_url_https_only("https://github.com/org/repo?ref=main").is_err());
         assert!(validate_reference_url_https_only("https://github.com/org/repo#main").is_err());
+    }
+}
+
+#[cfg(test)]
+mod pinned_ref_name_tests {
+    use super::validate_pinned_ref_full_name;
+
+    #[test]
+    fn accepts_allowed_full_refs() {
+        assert!(validate_pinned_ref_full_name("refs/heads/main").is_ok());
+        assert!(validate_pinned_ref_full_name("refs/tags/v1.0.0").is_ok());
+        assert!(validate_pinned_ref_full_name("refs/remotes/origin/main").is_ok());
+    }
+
+    #[test]
+    fn rejects_shorthand_and_other_namespaces() {
+        assert!(validate_pinned_ref_full_name("main").is_err());
+        assert!(validate_pinned_ref_full_name("v1.0.0").is_err());
+        assert!(validate_pinned_ref_full_name("origin/main").is_err());
+        assert!(validate_pinned_ref_full_name("refs/pull/123/head").is_err());
     }
 }

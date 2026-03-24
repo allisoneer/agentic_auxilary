@@ -76,7 +76,7 @@ fn truncate_on_char_boundary(value: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::encode_ref_key;
+    use super::{MAX_REF_KEY_LEN, encode_ref_key};
 
     #[test]
     fn encodes_safe_ascii_directly() {
@@ -98,12 +98,29 @@ mod tests {
     }
 
     #[test]
-    fn truncates_long_values_deterministically() {
-        let input = "refs/heads/".to_string() + &"very-long-".repeat(30);
-        let first = encode_ref_key(&input).unwrap();
-        let second = encode_ref_key(&input).unwrap();
-        assert_eq!(first, second);
-        assert!(first.len() <= 120);
-        assert!(first.contains("--"));
+    fn truncates_long_values_with_stable_structure() {
+        let input = "refs/heads/".to_string() + &"very-long-".repeat(40);
+        let out = encode_ref_key(&input).unwrap();
+
+        assert!(out.starts_with("r-"), "must retain r- prefix");
+        assert!(
+            out.len() <= MAX_REF_KEY_LEN,
+            "must be bounded by MAX_REF_KEY_LEN"
+        );
+
+        let (_prefix_part, hash) = out.rsplit_once("--").expect("expected --{hash} suffix");
+        assert_eq!(hash.len(), 16, "expected 16 hex chars");
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn truncation_hash_makes_long_keys_unique() {
+        let base = "refs/heads/".to_string() + &"a".repeat(300);
+        let a = format!("{}-x", base);
+        let b = format!("{}-y", base);
+
+        let ka = encode_ref_key(&a).unwrap();
+        let kb = encode_ref_key(&b).unwrap();
+        assert_ne!(ka, kb, "distinct long refs must not collide");
     }
 }

@@ -539,7 +539,9 @@ impl RepoConfigManager {
         }
 
         // references: validate and ensure uniqueness by canonical key
-        use crate::config::validation::{canonical_reference_instance_key, validate_reference_url};
+        use crate::config::validation::{
+            canonical_reference_instance_key, validate_pinned_ref_full_name, validate_reference_url,
+        };
         let mut seen_refs = std::collections::HashSet::new();
         for r in &cfg.references {
             let (url, ref_name) = match r {
@@ -547,6 +549,11 @@ impl RepoConfigManager {
                 ReferenceEntry::WithMetadata(rm) => (rm.remote.as_str(), rm.ref_name.as_deref()),
             };
             validate_reference_url(url).with_context(|| format!("Invalid reference '{}'", url))?;
+            if let Some(ref_name) = ref_name {
+                validate_pinned_ref_full_name(ref_name).with_context(|| {
+                    format!("Invalid pinned ref '{}' for reference '{}'", ref_name, url)
+                })?;
+            }
             let key = canonical_reference_instance_key(url, ref_name)?;
             if !seen_refs.insert(key) {
                 anyhow::bail!("Duplicate reference detected: {}", url);
@@ -1331,6 +1338,30 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("Duplicate reference")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_shorthand_pinned_ref() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".to_string(),
+                description: None,
+                ref_name: Some("main".to_string()),
+            })],
+        };
+
+        let err = mgr.validate_v2_hard(&cfg).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("Pinned refs must be full ref names"),
+            "unexpected error chain: {err:#}"
         );
     }
 

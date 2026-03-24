@@ -14,11 +14,19 @@ use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashMap;
 use std::path::Path;
-use thoughts_tool::config::repo_mapping_manager::parse_url_and_subpath;
+use thoughts_tool::config::repo_mapping_manager::{
+    parse_reference_mapping_storage_key, parse_url_and_subpath,
+};
 use thoughts_tool::config::{RepoMapping, RepoMappingManager};
 use thoughts_tool::git::utils::{is_git_repo, try_get_origin_identity};
 use thoughts_tool::repo_identity::{RepoIdentity, RepoIdentityKey};
 use thoughts_tool::utils::paths::get_repo_mapping_path;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct InstanceKey {
+    repo: RepoIdentityKey,
+    ref_key: Option<String>,
+}
 
 /// Diagnostic issue found during doctor check.
 #[derive(Debug)]
@@ -179,12 +187,13 @@ pub async fn execute(fix: bool) -> Result<()> {
     let mut issues: Vec<Issue> = Vec::new();
 
     // Build canonical identity map to detect duplicates
-    let mut identity_map: HashMap<RepoIdentityKey, Vec<String>> = HashMap::new();
+    let identity_map = build_identity_groups(&mapping);
 
     for (url, location) in &mapping.mappings {
         let path = &location.path;
         let path_str = path.display().to_string();
-        let (base_url, _) = parse_url_and_subpath(url);
+        let (stored_url, _) = parse_reference_mapping_storage_key(url);
+        let (base_url, _) = parse_url_and_subpath(&stored_url);
 
         // Check if URL parses
         let identity = match RepoIdentity::parse(&base_url) {
@@ -194,12 +203,6 @@ pub async fn execute(fix: bool) -> Result<()> {
                 None
             }
         };
-
-        // Track canonical identity for duplicate detection
-        if let Some(ref id) = identity {
-            let key = id.canonical_key();
-            identity_map.entry(key).or_default().push(url.clone());
-        }
 
         // Check if path exists
         if !path.exists() {
@@ -280,7 +283,7 @@ pub async fn execute(fix: bool) -> Result<()> {
                     .unwrap_or(false)
             });
             issues.push(Issue::DuplicateIdentity {
-                canonical_key: format!("{}/{}/{}", key.host, key.org_path, key.repo),
+                canonical_key: format_instance_key(key),
                 urls: urls.clone(),
                 auto_managed: all_auto,
             });
@@ -332,7 +335,8 @@ fn health_rank(url: &str, path: &Path) -> u8 {
     }
 
     // Git repo: determine origin status
-    let (base_url, _) = parse_url_and_subpath(url);
+    let (stored_url, _) = parse_reference_mapping_storage_key(url);
+    let (base_url, _) = parse_url_and_subpath(&stored_url);
     let expected = match RepoIdentity::parse(&base_url) {
         Ok(id) => id.canonical_key(),
         Err(_) => return 3, // treat as origin unknown
@@ -348,6 +352,32 @@ fn health_rank(url: &str, path: &Path) -> u8 {
         }
         Ok(None) => 3, // origin unknown (missing or unparsable)
         Err(_) => 3,   // origin unknown on error
+    }
+}
+
+fn build_identity_groups(mapping: &RepoMapping) -> HashMap<InstanceKey, Vec<String>> {
+    let mut identity_map: HashMap<InstanceKey, Vec<String>> = HashMap::new();
+
+    for url in mapping.mappings.keys() {
+        let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(url);
+        let (base_url, _) = parse_url_and_subpath(&stored_url);
+        if let Ok(identity) = RepoIdentity::parse(&base_url) {
+            let key = InstanceKey {
+                repo: identity.canonical_key(),
+                ref_key: stored_ref_key,
+            };
+            identity_map.entry(key).or_default().push(url.clone());
+        }
+    }
+
+    identity_map
+}
+
+fn format_instance_key(key: &InstanceKey) -> String {
+    let repo = format!("{}/{}/{}", key.repo.host, key.repo.org_path, key.repo.repo);
+    match &key.ref_key {
+        Some(ref_key) => format!("{} [ref_key={}]", repo, ref_key),
+        None => repo,
     }
 }
 
@@ -439,6 +469,7 @@ fn apply_fixes(issues: &[Issue]) -> Result<()> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+    use thoughts_tool::config::RepoLocation;
 
     // ===== health_rank tests =====
 
@@ -476,6 +507,18 @@ mod tests {
             .unwrap();
 
         let rank = health_rank("https://github.com/org/repo", repo_path);
+        assert_eq!(rank, 4);
+    }
+
+    #[test]
+    fn test_health_rank_ref_specific_key_matching_origin_returns_4() {
+        let dir = tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        repo.remote("origin", "https://github.com/org/repo.git")
+            .unwrap();
+
+        let key = "https://github.com/org/repo#thoughts-ref=r-refs~2fheads~2fmain";
+        let rank = health_rank(key, dir.path());
         assert_eq!(rank, 4);
     }
 
@@ -614,5 +657,29 @@ mod tests {
         assert_eq!(candidates[1].0, "url_b");
         assert_eq!(candidates[2].0, "url_a");
         assert_eq!(candidates[3].0, "url_z");
+    }
+
+    #[test]
+    fn test_duplicate_grouping_scopes_by_ref_identity() {
+        let mut mapping = RepoMapping::default();
+        mapping.mappings.insert(
+            "https://github.com/org/repo#thoughts-ref=r-refs~2fheads~2fmain".into(),
+            RepoLocation {
+                path: "/tmp/a".into(),
+                auto_managed: true,
+                last_sync: None,
+            },
+        );
+        mapping.mappings.insert(
+            "https://github.com/org/repo#thoughts-ref=r-refs~2ftags~2fv1.0.0".into(),
+            RepoLocation {
+                path: "/tmp/b".into(),
+                auto_managed: true,
+                last_sync: None,
+            },
+        );
+
+        let groups = build_identity_groups(&mapping);
+        assert_eq!(groups.len(), 2);
     }
 }

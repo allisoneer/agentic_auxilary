@@ -1,11 +1,14 @@
 use anyhow::{Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Semaphore;
 
 mod templates;
 
 use crate::config::validation::{
-    canonical_reference_instance_key, validate_reference_url_https_only,
+    canonical_reference_instance_key, validate_pinned_ref_full_name,
+    validate_reference_url_https_only,
 };
 use crate::config::{
     ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
@@ -21,6 +24,10 @@ use crate::platform::detect_platform;
 
 const DEFAULT_REPO_REFS_LIMIT: usize = 100;
 const MAX_REPO_REFS_LIMIT: usize = 200;
+const REPO_REFS_MAX_CONCURRENCY: usize = 4;
+const REPO_REFS_TIMEOUT_SECS: u64 = 20;
+
+static REPO_REFS_SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -107,11 +114,13 @@ pub struct TemplateResponse {
 
 // Note: Tool implementations are in thoughts-mcp-tools crate using agentic-tools framework.
 
-pub fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<RepoRefsList> {
-    let input_url = url.trim().to_string();
-    validate_reference_url_https_only(&input_url)
-        .context("invalid input: URL failed HTTPS validation")?;
+fn repo_refs_semaphore() -> Arc<Semaphore> {
+    REPO_REFS_SEM
+        .get_or_init(|| Arc::new(Semaphore::new(REPO_REFS_MAX_CONCURRENCY)))
+        .clone()
+}
 
+fn get_repo_refs_blocking(input_url: String, limit: usize) -> Result<RepoRefsList> {
     let repo_root =
         get_control_repo_root(&std::env::current_dir().context("failed to get current directory")?)
             .context("failed to get control repo root")?;
@@ -124,7 +133,6 @@ pub fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<R
             .then_with(|| a.peeled.cmp(&b.peeled))
     });
 
-    let limit = normalize_repo_ref_limit(limit)?;
     let total = refs.len();
     let truncated = total > limit;
     refs.truncate(limit);
@@ -135,6 +143,34 @@ pub fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<R
         truncated,
         entries: refs,
     })
+}
+
+pub async fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<RepoRefsList> {
+    let input_url = url.trim().to_string();
+    validate_reference_url_https_only(&input_url)
+        .context("invalid input: URL failed HTTPS validation")?;
+    let limit = normalize_repo_ref_limit(limit)?;
+
+    let sem = repo_refs_semaphore();
+    let permit = sem.acquire_owned().await.expect("semaphore closed");
+    let url_for_task = input_url.clone();
+
+    let handle = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        get_repo_refs_blocking(url_for_task, limit)
+    });
+
+    let timeout = std::time::Duration::from_secs(REPO_REFS_TIMEOUT_SECS);
+    let result = match tokio::time::timeout(timeout, handle).await {
+        Ok(joined) => joined.context("remote ref discovery task failed")??,
+        Err(_) => anyhow::bail!(
+            "timeout while discovering remote refs for {} after {}s",
+            input_url,
+            REPO_REFS_TIMEOUT_SECS
+        ),
+    };
+
+    Ok(result)
 }
 
 fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
@@ -156,7 +192,7 @@ fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
 /// # Arguments
 /// * `url` - HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL
 /// * `description` - Optional description for why this reference was added
-/// * `ref_name` - Optional named git ref (branch, tag, or full ref name)
+/// * `ref_name` - Optional full git ref name (for example refs/heads/main)
 ///
 /// # Returns
 /// `AddReferenceOk` on success, `anyhow::Error` on failure.
@@ -176,6 +212,16 @@ pub async fn add_reference_impl_adapter(
         }
         None => None,
     };
+    if let Some(ref_name) = ref_name.as_deref()
+        && let Err(e) = validate_pinned_ref_full_name(ref_name)
+    {
+        anyhow::bail!(
+            "invalid input: ref must be a full ref name like 'refs/heads/main' or 'refs/tags/v1.2.3' \
+(shorthand like 'main' is not supported). Details: {}. \
+Tip: call thoughts_get_repo_refs to discover full refs.",
+            e
+        );
+    }
     let ref_key = ref_name.as_deref().map(encode_ref_key).transpose()?;
 
     // Validate URL per MCP HTTPS-only rules
@@ -480,6 +526,25 @@ mod tests {
         assert_eq!(refs[1].name, "refs/tags/v2");
     }
 
+    #[tokio::test]
+    async fn get_repo_refs_rejects_invalid_limit_async() {
+        let err = get_repo_refs_impl_adapter("https://github.com/org/repo".into(), Some(0))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("limit must be at least 1"));
+    }
+
+    #[tokio::test]
+    async fn get_repo_refs_rejects_ssh_url_async() {
+        let err = get_repo_refs_impl_adapter("git@github.com:org/repo.git".into(), None)
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").to_lowercase().contains("ssh"),
+            "unexpected error chain: {err:#}"
+        );
+    }
+
     #[test]
     fn test_repo_refs_list_format() {
         let refs = RepoRefsList {
@@ -576,6 +641,22 @@ mod tests {
         assert!(s.contains("Mapping: <none>"));
         assert!(s.contains("Mounted: false"));
         assert!(s.contains("- Clone failed"));
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_shorthand_ref_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("main".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name")
+        );
     }
 
     #[test]

@@ -5,7 +5,6 @@ use crate::git::pull::pull_ff_only;
 use crate::git::utils::{get_control_repo_root, get_current_branch};
 use anyhow::Result;
 use colored::Colorize;
-use thoughts_tool::config::repo_mapping_manager::UrlResolutionKind;
 use thoughts_tool::repo_identity::RepoIdentity;
 
 pub async fn execute(verbose: bool) -> Result<()> {
@@ -29,6 +28,7 @@ pub async fn execute(verbose: bool) -> Result<()> {
 
     for rm in &ds.references {
         let url = &rm.remote;
+        let ref_name = rm.ref_name.as_deref();
 
         if let Err(e) = validate_reference_url(url) {
             println!(
@@ -46,23 +46,14 @@ pub async fn execute(verbose: bool) -> Result<()> {
             let key = id.canonical_key();
             println!("Reference: {}", url);
             println!("  canonical: {}/{}/{}", key.host, key.org_path, key.repo);
+            if let Some(ref_name) = ref_name {
+                println!("  ref: {}", ref_name);
+            }
         }
 
-        // Use resolve_url_with_details for verbose output
-        if let Some((resolved, _sub)) = mapping_mgr.resolve_url_with_details(url)? {
-            let local_path = resolved.location.path.clone();
-
+        if let Some(local_path) = mapping_mgr.resolve_reference_url(url, ref_name)? {
             if verbose {
-                let resolution_str = match resolved.resolution {
-                    UrlResolutionKind::Exact => "exact",
-                    UrlResolutionKind::CanonicalFallback => "canonical-fallback",
-                };
-                println!(
-                    "  mapping: {} ({}) -> {}",
-                    resolved.matched_url,
-                    resolution_str,
-                    local_path.display()
-                );
+                println!("  mapping: {}", local_path.display());
             }
 
             // Try fast-forward-only pull; skip detached head
@@ -76,9 +67,10 @@ pub async fn execute(verbose: bool) -> Result<()> {
                                 println!("{} Updated {} (ff-only)", "↻".green(), url);
                             }
                             updated_count += 1;
-                            if let Err(e) = mapping_mgr.update_sync_time(url) {
+                            if let Err(e) = mapping_mgr.update_reference_sync_time(url, ref_name) {
                                 tracing::warn!(
                                     url = %url,
+                                    ref_name = ?ref_name,
                                     error = ?e,
                                     "Failed to update repos.json last_sync (continuing)"
                                 );
@@ -112,7 +104,7 @@ pub async fn execute(verbose: bool) -> Result<()> {
         }
 
         // Not mapped locally - clone to default path
-        let default_path = RepoMappingManager::get_default_clone_path(url)?;
+        let default_path = RepoMappingManager::get_default_reference_clone_path(url, ref_name)?;
 
         if verbose {
             println!("  mapping: (none)");
@@ -122,18 +114,19 @@ pub async fn execute(verbose: bool) -> Result<()> {
         match clone_repository(&CloneOptions {
             url: url.to_string(),
             target_path: default_path.clone(),
-            branch: None,
+            branch: ref_name.map(|value| value.to_string()),
         }) {
             Ok(_) => {
                 // Add mapping
-                mapping_mgr.add_mapping(url.to_string(), default_path, true)?;
+                mapping_mgr.add_reference_mapping(url.to_string(), ref_name, default_path, true)?;
                 if !verbose {
                     println!("{} Cloned {}", "✓".green(), url);
                 }
                 cloned_count += 1;
-                if let Err(e) = mapping_mgr.update_sync_time(url) {
+                if let Err(e) = mapping_mgr.update_reference_sync_time(url, ref_name) {
                     tracing::warn!(
                         url = %url,
+                        ref_name = ?ref_name,
                         error = ?e,
                         "Failed to update repos.json last_sync (continuing)"
                     );

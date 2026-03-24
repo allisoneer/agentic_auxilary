@@ -317,6 +317,7 @@ impl Tool for GetRepoRefsTool {
             });
 
             let result = get_repo_refs_impl_adapter(input.url, input.limit)
+                .await
                 .map_err(map_anyhow_to_tool_error);
 
             match &result {
@@ -361,7 +362,9 @@ impl Tool for GetRepoRefsTool {
 pub struct AddReferenceInput {
     /// HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL
     pub url: String,
-    /// Optional named git ref to clone, such as main or refs/tags/v1.2.3
+    /// Optional full git ref name to clone, which must start with refs/heads/,
+    /// refs/tags/, or refs/remotes/ (for example refs/heads/main).
+    /// Shorthand values like "main" are rejected.
     #[serde(rename = "ref", default)]
     pub ref_name: Option<String>,
     /// Optional description for why this reference was added
@@ -377,7 +380,7 @@ impl Tool for AddReferenceTool {
     type Input = AddReferenceInput;
     type Output = AddReferenceOk;
     const NAME: &'static str = "thoughts_add_reference";
-    const DESCRIPTION: &'static str = "Add a GitHub repository as a reference and ensure it is cloned and mounted. Input must be an HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL. Optional ref selects a named branch, tag, or full ref. SSH URLs (git@\u{2026}) are rejected. Idempotent and safe to retry; first-time clones may take time.";
+    const DESCRIPTION: &'static str = "Add a GitHub repository as a reference and ensure it is cloned and mounted. Input must be an HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL. Optional ref selects a full ref name (for example refs/heads/main). SSH URLs (git@\u{2026}) are rejected. Idempotent and safe to retry; first-time clones may take time.";
 
     fn call(
         &self,
