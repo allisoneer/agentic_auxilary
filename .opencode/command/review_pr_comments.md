@@ -81,8 +81,12 @@ Stop immediately when the tool output says the result is complete.
 For each thread, capture:
 - thread_id (parent comment id)
 - path, line, top-level thread URL
-- author login
-- ordered list of replies with authors and bodies
+- ordered thread comments (parent first, then replies), each with:
+  - comment_id (numeric ID if present in tool output; parent comment_id == thread_id)
+  - author_login
+  - body
+
+If per-comment IDs are not visible in the tool output (e.g., `PR_COMMENTS_EXTRAS=noid`), record reply `comment_id` as unknown and rely on the Step 6 fallback (`target_comment_id = thread_id`). Do NOT guess IDs.
 
 Also capture PR metadata from the tool output:
 - owner/repo
@@ -145,7 +149,7 @@ Each sub-agent returns:
 - Why it matters (risk/impact)
 - Proposed resolution path
 - reply_draft (if reply_worthy) — do NOT include "🤖" prefix
-- target_comment_id to reply to (typically last comment in thread)
+- target_comment_id to reply to (prefer the last comment_id in the thread; if per-comment IDs are unavailable or missing, set `target_comment_id = thread_id` and explicitly note that per-comment IDs were not available — do NOT guess)
 
 Spawn all sub-agents in parallel for efficiency.
 

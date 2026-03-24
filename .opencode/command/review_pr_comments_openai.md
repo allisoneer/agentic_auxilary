@@ -79,11 +79,14 @@ $ARGUMENTS
 3. Stop immediately when the tool output says the result is complete.
    - Do not call again after completion, because another identical call restarts pagination from page 1.
 4. For each thread, capture:
-    - thread ID (parent comment ID)
+    - thread_id (parent comment ID)
     - file path and line
     - top-level thread URL
-    - author login
-    - ordered replies with authors and bodies
+    - ordered thread comments (parent first, then replies), each with:
+      - comment_id (numeric ID if present in tool output; parent comment_id == thread_id)
+      - author_login
+      - body
+    - If per-comment IDs are not visible (e.g., `PR_COMMENTS_EXTRAS=noid`), keep reply comment_id unknown and rely on the Step 6 fallback; do NOT guess IDs.
 5. Also capture PR metadata from the tool output:
     - owner/repo
     - PR number
@@ -132,7 +135,7 @@ $ARGUMENTS
    - why it matters
    - a proposed resolution path
    - a `reply_draft` if the thread is reply-worthy — do NOT include a `🤖` or bot-marker prefix
-   - the best target comment ID for a future reply
+   - the best target comment ID for a future reply (prefer the last comment_id in the provided thread; if per-comment IDs are missing or unavailable, set `target_comment_id = thread_id` and explicitly note the limitation — do NOT guess)
 3. Launch independent thread analyzers in parallel.
 
 </step_6>
