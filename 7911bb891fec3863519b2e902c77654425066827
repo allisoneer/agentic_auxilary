@@ -1,0 +1,23 @@
+crates/infra/thoughts-core/src/git/remote_refs.rs
+  a0851c9c37c6f4c6 31-40,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "7911bb891fec3863519b2e902c77654425066827",
+  "prompts": {
+    "a0851c9c37c6f4c6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2e3c24813ffePc6q3HTWFWXjVd",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 4,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}
