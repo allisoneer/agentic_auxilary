@@ -28,11 +28,18 @@ pub fn discover_remote_refs(repo_root: &Path, url: &str) -> Result<Vec<RemoteRef
     let connection = remote
         .connect(gix::remote::Direction::Fetch)
         .with_context(|| format!("Failed to connect to remote: {url}"))?;
+    // Disable server-side prefix filtering so we receive ALL refs.
+    // With `remote_at()` there are no configured refspecs, so the default
+    // behavior (prefix_from_spec_as_filter_on_remote: true) would cause the
+    // server to return very few refs. Setting it to false ensures we get
+    // the complete ref advertisement (branches, tags, HEAD, etc.).
+    let options = gix::remote::ref_map::Options {
+        prefix_from_spec_as_filter_on_remote: false,
+        ..Default::default()
+    };
+
     let (ref_map, _handshake) = connection
-        .ref_map(
-            gix::progress::Discard,
-            gix::remote::ref_map::Options::default(),
-        )
+        .ref_map(gix::progress::Discard, options)
         .with_context(|| format!("Failed to list remote refs for: {url}"))?;
 
     Ok(ref_map
