@@ -1,0 +1,61 @@
+crates/tools/review-tools/src/reviewer.rs
+  b5b0b008bce86028 1-245
+crates/agentic-tools/utils/src/prompt.rs
+  b5b0b008bce86028 1-79
+.opencode/command/review.md
+  b5b0b008bce86028 11-12,67,69,71-73,75-87,89,91-92,94,100,108,112,117,122,127,131,133-134,172,208
+crates/agentic-tools/registry/src/lib.rs
+  b5b0b008bce86028 80-81,145-150,176,202-203,243,245-246,327
+crates/agentic-tools/utils/Cargo.toml
+  b5b0b008bce86028 19-20,22,26
+crates/agentic-tools/utils/src/llm_output.rs
+  b5b0b008bce86028 1-106
+crates/tools/review-tools/src/cache.rs
+  b5b0b008bce86028 1-130
+crates/tools/review-tools/src/git.rs
+  b5b0b008bce86028 1-389
+crates/tools/review-tools/src/lib.rs
+  b5b0b008bce86028 1-414
+crates/tools/review-tools/src/prompts.rs
+  b5b0b008bce86028 1-211
+crates/tools/review-tools/src/validation.rs
+  b5b0b008bce86028 1-354
+crates/tools/review-tools/src/types.rs
+  b5b0b008bce86028 173-298
+crates/agentic-tools/utils/src/async_control.rs
+  b5b0b008bce86028 1-241
+crates/agentic-tools/utils/src/lib.rs
+  b5b0b008bce86028 3,6,8
+crates/tools/review-tools/Cargo.toml
+  b5b0b008bce86028 21
+crates/agentic-tools/registry/Cargo.toml
+  b5b0b008bce86028 22-24,27,29
+workflow.md
+  b5b0b008bce86028 215-221,223-229,233
+crates/tools/review-tools/src/tools.rs
+  b5b0b008bce86028 1-128
+Cargo.toml
+  b5b0b008bce86028 34,89
+justfile
+  b5b0b008bce86028 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "a2a779cdce0f9e867c941f47da54370d0f44deaf",
+  "prompts": {
+    "b5b0b008bce86028": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2f85f9798ffesMpf5h1EfKXvnJ",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 2571,
+      "total_deletions": 355,
+      "accepted_lines": 2514,
+      "overriden_lines": 0
+    }
+  }
+}
