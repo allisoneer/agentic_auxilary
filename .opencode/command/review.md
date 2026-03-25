@@ -73,7 +73,8 @@ Call `review_diff_snapshot` with:
 - paths: array of path strings if paths set, else empty array
 
 Example:
-```
+
+```text
 review_diff_snapshot(mode="default", paths=[])
 review_diff_snapshot(mode="staged", paths=["src/foo.rs", "src/bar.rs"])
 ```
@@ -108,22 +109,26 @@ Required lenses (must all succeed for a complete verdict):
 Call `review_run` 4 times IN PARALLEL, but RECORD outcome per lens:
 
 ### Lens A: Security
-```
+
+```text
 review_run(diff_handle=<handle>, lens="security", focus="{focus}")
 ```
 
 ### Lens B: Correctness
-```
+
+```text
 review_run(diff_handle=<handle>, lens="correctness", focus="{focus}")
 ```
 
 ### Lens C: Maintainability
-```
+
+```text
 review_run(diff_handle=<handle>, lens="maintainability", focus="{focus}")
 ```
 
 ### Lens D: Testing
-```
+
+```text
 review_run(diff_handle=<handle>, lens="testing", focus="{focus}")
 ```
 

@@ -104,7 +104,7 @@ The `tools/agent-wrap.sh` wrapper controls output:
 
 ### Git Navigation (Read-Only)
 
-For agents without shell access, these just recipes provide safe, read-only git inspection. All commands use `--no-pager` to avoid interactive hangs. Paths with spaces must be quoted.
+For agents without shell access, these just recipes provide safe, read-only git inspection. All commands use `--no-pager` to avoid interactive hangs. Paths with spaces must be quoted for single-path parameters. Note: `git-files` takes whitespace-separated pathspec patterns, so paths containing spaces are not supported there.
 
 | Recipe | Parameters | Description |
 |--------|------------|-------------|
