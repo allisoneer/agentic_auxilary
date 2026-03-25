@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod glob;
 pub mod grep;
+pub mod instant_grep;
 pub mod just;
 mod logging;
 pub mod pagination;
@@ -483,6 +484,92 @@ impl CodingAgentTools {
         };
 
         match grep::run(cfg) {
+            Ok(output) => {
+                let summary = serde_json::json!({
+                    "lines": output.lines.len(),
+                    "mode": format!("{:?}", output.mode).to_lowercase(),
+                    "has_more": output.has_more,
+                });
+                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+                Ok(output)
+            }
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+                Err(e)
+            }
+        }
+    }
+
+    /// Search the codebase using the instant-grep entrypoint.
+    #[expect(
+        clippy::unused_async,
+        reason = "Must remain async for Tool trait BoxFuture dispatch pattern."
+    )]
+    pub async fn search_instant_grep(
+        &self,
+        pattern: String,
+        path: Option<String>,
+        mode: Option<OutputMode>,
+        globs: Option<Vec<String>>,
+        ignore: Option<Vec<String>>,
+        include_hidden: Option<bool>,
+        case_insensitive: Option<bool>,
+        multiline: Option<bool>,
+        line_numbers: Option<bool>,
+        context: Option<u32>,
+        context_before: Option<u32>,
+        context_after: Option<u32>,
+        include_binary: Option<bool>,
+        head_limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<GrepOutput, ToolError> {
+        let log_ctx = logging::ToolLogCtx::start("cli_instant_grep");
+        let req_json = serde_json::json!({
+            "pattern": &pattern,
+            "path": &path,
+            "mode": mode.map(|m| format!("{m:?}").to_lowercase()),
+            "globs": &globs,
+            "ignore": &ignore,
+            "include_hidden": include_hidden,
+            "case_insensitive": case_insensitive,
+            "multiline": multiline,
+            "line_numbers": line_numbers,
+            "context": context,
+            "context_before": context_before,
+            "context_after": context_after,
+            "include_binary": include_binary,
+            "head_limit": head_limit,
+            "offset": offset,
+        });
+
+        let path_str = path.unwrap_or_else(|| ".".into());
+        let abs_root = match paths::to_abs_string(&path_str) {
+            Ok(s) => s,
+            Err(msg) => {
+                log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
+                return Err(ToolError::InvalidInput(msg));
+            }
+        };
+
+        let cfg = grep::GrepConfig {
+            root: abs_root,
+            pattern,
+            mode: mode.unwrap_or_default(),
+            include_globs: globs.unwrap_or_default(),
+            ignore_globs: ignore.unwrap_or_default(),
+            include_hidden: include_hidden.unwrap_or(false),
+            case_insensitive: case_insensitive.unwrap_or(false),
+            multiline: multiline.unwrap_or(false),
+            line_numbers: line_numbers.unwrap_or(true),
+            context,
+            context_before,
+            context_after,
+            include_binary: include_binary.unwrap_or(false),
+            head_limit: head_limit.unwrap_or(200),
+            offset: offset.unwrap_or(0),
+        };
+
+        match instant_grep::run(cfg) {
             Ok(output) => {
                 let summary = serde_json::json!({
                     "lines": output.lines.len(),

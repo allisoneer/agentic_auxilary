@@ -39,6 +39,8 @@ clap = { workspace = true, features = ["env"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "6"
+git2 = "0.20"
+memmap2 = "0.9"
 
 [dev-dependencies]
 tempfile = "3"

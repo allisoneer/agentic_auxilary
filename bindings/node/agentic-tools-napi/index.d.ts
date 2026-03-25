@@ -329,6 +329,14 @@ export function callAskAgent(argsJson: string): Promise<ToolCallResult>;
 export function callGrep(argsJson: string): Promise<ToolCallResult>;
 
 /**
+ * Indexed-first regex-based code search.
+ *
+ * @param argsJson - JSON string with SearchGrepInput
+ * @returns Promise resolving to a ToolCallResult with GrepOutput in data
+ */
+export function callInstantGrep(argsJson: string): Promise<ToolCallResult>;
+
+/**
  * Glob-based file matching.
  *
  * @param argsJson - JSON string with SearchGlobInput
@@ -386,6 +394,11 @@ export function callAskAgentTyped(input: AskAgentInput): Promise<AgentOutput>;
  * Helper to call search_grep with typed input and output.
  */
 export function callGrepTyped(input: SearchGrepInput): Promise<GrepOutput>;
+
+/**
+ * Helper to call indexed-first search_grep with typed input and output.
+ */
+export function callInstantGrepTyped(input: SearchGrepInput): Promise<GrepOutput>;
 
 /**
  * Helper to call search_glob with typed input and output.
