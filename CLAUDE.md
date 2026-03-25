@@ -50,9 +50,9 @@ Guidance for Claude Code when working with this repository.
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
+- `review_tools` (tool-lib) - `crates/tools/review-tools/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
-- `review-agent-mcp` (app) - `apps/review-agent-mcp/`
 <!-- END:xtask:autogen -->
 
 

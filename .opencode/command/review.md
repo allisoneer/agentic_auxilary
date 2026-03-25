@@ -8,8 +8,8 @@ You are performing adversarial code review on LOCAL git changes, producing origi
 
 Constraints:
 - Sub-agents have NO git access and NO bash access.
-- Sub-agents MUST read from ./review.diff (repo root) as their primary input.
-- You (main agent) may call `tools_cli_just_execute` to run `just review-prepare` to generate ./review.diff and ./review.meta.json.
+- Diff content is embedded in the reviewer prompt (fileless operation).
+- You (main agent) call `review_diff_snapshot` to generate a cached diff, then `review_run` for each lens.
 
 Default output behavior:
 - Show only Medium+ severity findings.
@@ -64,36 +64,40 @@ Record the resolved parameters explicitly (and note any assumptions for Step 6 d
 
 </step>
 
-<step name="prepare_diff_and_metadata" id="2">
+<step name="prepare_diff_snapshot" id="2">
 
-## Prepare Diff Snapshot (just review-prepare)
+## Generate Diff Snapshot (review_diff_snapshot)
 
-Call `tools_cli_just_execute`:
-- Recipe: `review-prepare`
-- Args (positional):
-  - First arg (mode): `"staged"` if mode=staged, else `"default"` (or omit for default)
-  - Second arg (paths): `"path1 path2 ..."` if paths set, else omit
+Call `review_diff_snapshot` with:
+- mode: `"staged"` if mode=staged, else `"default"`
+- paths: array of path strings if paths set, else empty array
 
-Examples:
-- Default mode, no paths: `just review-prepare`
-- Staged mode, no paths: `just review-prepare staged`
-- Default mode with paths: `just review-prepare default "src/foo.rs src/bar.rs"`
-- Staged mode with paths: `just review-prepare staged "src/foo.rs"`
+Example:
+```
+review_diff_snapshot(mode="default", paths=[])
+review_diff_snapshot(mode="staged", paths=["src/foo.rs", "src/bar.rs"])
+```
 
-Then read BOTH files fully:
-- `./review.meta.json`
-- `./review.diff`
+This returns:
+- `diff_handle`: opaque handle for subsequent calls
+- `has_changes`: boolean
+- `branch_slug`: for artifact naming
+- `stats`: files_changed, insertions, deletions
+- `paging`: total_pages, total_lines, page_index
+- `changed_files`: list of file paths
 
-If `has_changes=false` (or diff is empty), continue anyway:
-- Still write an artifact stating "No changes to review".
+Store the `diff_handle` and `branch_slug` for use in Steps 3-5.
 
-If diff is very large (e.g., >1500 lines), note in the final artifact that results may be incomplete.
+If `has_changes=false`:
+- Continue anyway; write an artifact stating "No changes to review".
+
+If total_lines is very large (e.g., >1500), note in the final artifact that results may be incomplete.
 
 </step>
 
 <step name="spawn_reviewers" id="3">
 
-## Spawn 4 Lens Reviewers (Parallel)
+## Run 4 Lens Reviews (Parallel)
 
 Required lenses (must all succeed for a complete verdict):
 - security
@@ -101,32 +105,33 @@ Required lenses (must all succeed for a complete verdict):
 - maintainability
 - testing
 
-Spawn 4 `review_spawn` calls IN PARALLEL, but RECORD outcome per lens:
+Call `review_run` 4 times IN PARALLEL, but RECORD outcome per lens:
 
 ### Lens A: Security
 ```
-review_spawn(lens="security", focus="{focus}")
+review_run(diff_handle=<handle>, lens="security", focus="{focus}")
 ```
 
 ### Lens B: Correctness
 ```
-review_spawn(lens="correctness", focus="{focus}")
+review_run(diff_handle=<handle>, lens="correctness", focus="{focus}")
 ```
 
 ### Lens C: Maintainability
 ```
-review_spawn(lens="maintainability", focus="{focus}")
+review_run(diff_handle=<handle>, lens="maintainability", focus="{focus}")
 ```
 
 ### Lens D: Testing
 ```
-review_spawn(lens="testing", focus="{focus}")
+review_run(diff_handle=<handle>, lens="testing", focus="{focus}")
 ```
 
 Each call:
-- Uses `./review.diff` as the diff source (default)
+- Uses the cached diff snapshot (embedded in prompt; fileless)
 - Returns a validated `ReviewReport` with structured findings
-- May include `large_diff_warning` if diff exceeds 1500 lines
+- May include `large_diff_warning` if diff exceeds threshold
+- Includes `paging` info showing pages reviewed
 
 The `focus` parameter incorporates user-provided focus text as extra weighting.
 
@@ -164,7 +169,7 @@ If `failed_lenses` is non-empty:
 
 3) For any group with >1 finding OR conflicting severity/confidence/title:
 - Gather context for this dedupe_key:
-  - Diff context: include each candidate's `evidence` AND the surrounding hunk from `./review.diff` for `{file}`
+  - Diff context: call `review_diff_page(diff_handle, page)` to get relevant page content for the file
   - Source context: if `line > 0` and `{file}` exists, read ~20 lines around `{line}` (otherwise skip; treat as file-level)
   - Reminder: `line` values are SOURCE-FILE line numbers; `0` means unknown/unverifiable.
 - Call `tools_ask_reasoning_model` with:
@@ -200,7 +205,7 @@ Artifact filename:
 
 Artifact must include:
 - Parameters used: mode, paths, include_nits, focus
-- Metadata summary from review.meta.json
+- Diff summary: files_changed, insertions, deletions, total_pages
 - Verdict + counts by severity + hidden_low_count
 - **Lens Execution Summary (REQUIRED)**:
   - For each lens (security, correctness, maintainability, testing):

@@ -157,6 +157,13 @@ git_tag_enable = true
 release = true
 
 [[package]]
+name = "review_tools"
+changelog_path = "crates/tools/review-tools/CHANGELOG.md"
+git_tag_name = "review_tools-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "thoughts-mcp-tools"
 changelog_path = "crates/tools/thoughts-mcp-tools/CHANGELOG.md"
 git_tag_name = "thoughts-mcp-tools-v{{ version }}"
@@ -195,13 +202,6 @@ release = true
 name = "opencode-orchestrator-mcp"
 changelog_path = "apps/opencode-orchestrator-mcp/CHANGELOG.md"
 git_tag_name = "opencode-orchestrator-mcp-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "review-agent-mcp"
-changelog_path = "apps/review-agent-mcp/CHANGELOG.md"
-git_tag_name = "review-agent-mcp-v{{ version }}"
 git_tag_enable = true
 release = true
 

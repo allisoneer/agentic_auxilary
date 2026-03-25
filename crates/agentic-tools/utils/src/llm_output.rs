@@ -1,15 +1,23 @@
-//! JSON extraction and semantic validation for reviewer outputs.
+//! LLM output extraction utilities.
 
-use crate::types::{Confidence, ReviewLens, ReviewReport};
-use agentic_tools_core::ToolError;
+use thiserror::Error;
 
-/// Extract JSON from model output, handling raw JSON, fenced blocks, and preamble/trailing text.
+/// Error type for LLM output extraction.
+#[derive(Debug, Error)]
+#[error("Failed to extract valid JSON from model output")]
+pub struct JsonExtractionError;
+
+/// Best-effort JSON extraction from model output.
 ///
 /// Tries multiple extraction strategies in order:
 /// 1. Whole string as valid JSON
 /// 2. Fenced code blocks (```json or ```)
 /// 3. First `{` to last `}` fallback
-pub fn extract_json_best_effort(text: &str) -> Result<String, ToolError> {
+///
+/// # Errors
+///
+/// Returns an error if no valid JSON can be extracted from the input.
+pub fn extract_json_best_effort(text: &str) -> Result<String, JsonExtractionError> {
     let t = text.trim();
 
     // 1) Try whole string as JSON
@@ -39,58 +47,7 @@ pub fn extract_json_best_effort(text: &str) -> Result<String, ToolError> {
         }
     }
 
-    Err(ToolError::Internal(
-        "Failed to extract valid JSON from reviewer output".into(),
-    ))
-}
-
-/// Parse JSON and validate semantic constraints (lens match, caveat requirement).
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - JSON extraction fails
-/// - JSON doesn't match the `ReviewReport` schema
-/// - Report lens doesn't match expected lens
-/// - Finding category doesn't match expected lens
-/// - Finding has confidence=medium without a non-empty caveat
-pub fn parse_and_validate_report(
-    text: &str,
-    expected_lens: ReviewLens,
-) -> Result<ReviewReport, ToolError> {
-    let json = extract_json_best_effort(text)?;
-    let report: ReviewReport = serde_json::from_str(&json)
-        .map_err(|e| ToolError::Internal(format!("JSON parsed but did not match schema: {e}")))?;
-
-    // Validate lens matches expected
-    if report.lens != expected_lens {
-        return Err(ToolError::Internal(format!(
-            "Lens mismatch: expected {:?}, got {:?}",
-            expected_lens, report.lens
-        )));
-    }
-
-    // Validate semantic constraints for each finding
-    for f in &report.findings {
-        // Validate caveat requirement for medium confidence
-        if f.confidence == Confidence::Medium && f.caveat.as_deref().unwrap_or("").trim().is_empty()
-        {
-            return Err(ToolError::Internal(format!(
-                "Invalid finding ({}:{}): confidence=medium requires non-empty caveat",
-                f.file, f.line
-            )));
-        }
-
-        // Validate category matches lens
-        if f.category != expected_lens {
-            return Err(ToolError::Internal(format!(
-                "Invalid finding ({}:{}): category {:?} does not match lens {:?}",
-                f.file, f.line, f.category, expected_lens
-            )));
-        }
-    }
-
-    Ok(report)
+    Err(JsonExtractionError)
 }
 
 #[cfg(test)]

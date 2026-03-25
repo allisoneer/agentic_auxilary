@@ -212,16 +212,25 @@ Need to do something?
 ## Code Review (/review)
 
 - `/review` runs under the dedicated `ReviewClaude` agent.
-- Review spawning tools (`review_*`, e.g., `review_spawn`) are **not available** to the Normal agent.
-- Workflow:
-  1. `just review-prepare` creates `./review.diff` + `./review.meta.json`
-  2. The Review agent spawns 4 read-only lens reviewers (security/correctness/maintainability/testing)
-  3. Findings are consolidated, deduped, and written as a thoughts artifact
-  4. `just thoughts_sync` is executed
+- Review tools (`review_*`) are **not available** to the Normal agent.
+- Workflow (fileless, cache-based):
+  1. `review_diff_snapshot` generates a paginated git diff via pure git2, caches it server-side, and returns a `diff_handle`
+  2. Four parallel `review_run(diff_handle, lens)` calls execute lens reviewers (security/correctness/maintainability/testing)
+  3. Diff content is embedded directly in reviewer prompts (no `review.diff` file created)
+  4. Findings are consolidated, deduped, and written as a thoughts artifact
+  5. `just thoughts_sync` is executed
+
+### Review Tools
+
+| Tool                   | Description                                                      |
+|------------------------|------------------------------------------------------------------|
+| `review_diff_snapshot` | Generate paginated diff, cache server-side, return handle        |
+| `review_run`           | Run lens-based review over cached diff (diff embedded in prompt) |
+| `review_diff_page`     | Fetch specific page content by handle for dedupe/artifacts       |
 
 ### Tool boundaries
 
-- Review orchestrator agent: may read files, run `just review-prepare` and `just thoughts_sync`, call `review_spawn`, and write the artifact.
+- Review orchestrator agent: may read files, run `just thoughts_sync`, call `review_*` tools, and write the artifact.
 - Reviewer sub-agents: **Read + cli_ls/cli_grep/cli_glob only** (no git/bash/write/edit/just_execute).
 
 ---

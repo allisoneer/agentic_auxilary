@@ -186,13 +186,6 @@
         "@playwright/mcp@latest"
       ],
       "enabled": true
-    },
-    "review": {
-      "type": "local",
-      "command": [
-        "review-agent-mcp"
-      ],
-      "enabled": true
     }
   },
   "provider": {

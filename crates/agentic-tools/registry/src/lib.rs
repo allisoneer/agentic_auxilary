@@ -77,6 +77,8 @@ const THOUGHTS_NAMES: &[&str] = &[
 
 const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
 
+const REVIEW_NAMES: &[&str] = &["diff_snapshot", "diff_page", "run"];
+
 impl AgenticTools {
     /// Build the unified ToolRegistry using domain registries.
     ///
@@ -140,6 +142,12 @@ impl AgenticTools {
             regs.push(web_retrieval::build_registry(web));
         }
 
+        // review_tools (3 tools)
+        if domain_wanted(REVIEW_NAMES) {
+            let svc = Arc::new(review_tools::ReviewTools::new());
+            regs.push(review_tools::build_registry(svc));
+        }
+
         let merged = ToolRegistry::merge_all(regs);
 
         // Final allowlist filtering at registry level (authoritative)
@@ -165,6 +173,7 @@ impl AgenticTools {
             + GPT5_NAMES.len()
             + THOUGHTS_NAMES.len()
             + WEB_NAMES.len()
+            + REVIEW_NAMES.len()
     }
 }
 
@@ -190,8 +199,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_23() {
-        assert_eq!(AgenticTools::total_tool_count(), 23);
+    fn total_tool_count_is_26() {
+        assert_eq!(AgenticTools::total_tool_count(), 26);
     }
 
     #[test]
@@ -231,10 +240,10 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 23 tools
+        // Should have all 26 tools
         assert!(
-            names.len() >= 23,
-            "expected at least 23 tools, got {}",
+            names.len() >= 26,
+            "expected at least 26 tools, got {}",
             names.len()
         );
 
@@ -315,7 +324,7 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Empty allowlist normalizes to None, enabling all tools
-        assert!(reg.len() >= 23);
+        assert!(reg.len() >= 26);
     }
 
     #[test]

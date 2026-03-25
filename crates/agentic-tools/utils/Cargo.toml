@@ -16,8 +16,11 @@ logging = false
 napi = false
 
 [dependencies]
+futures = "0.3"
+serde_json = { workspace = true }
 thiserror = "2"
+tokio = { workspace = true, features = ["time", "sync"] }
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "sync"] }

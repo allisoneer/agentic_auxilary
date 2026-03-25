@@ -1,16 +1,20 @@
 //! Review-native prompt architecture for lens-specific reviewers.
+//!
+//! Updated for fileless diff embedding (diff content is embedded in the prompt,
+//! not read from a file).
 
 use crate::types::ReviewLens;
 
-/// Base system prompt for all reviewers.
+/// Base system prompt for all reviewers (fileless version).
 pub const REVIEWER_BASE_PROMPT: &str = r#"
-You are an adversarial code reviewer. Your task is to review LOCAL git changes provided via a prepared diff file.
-You cannot use git or bash. You may only use read-only tools (read + safe search/list).
+You are an adversarial code reviewer. Your task is to review LOCAL git changes provided inline in this prompt.
+The diff content will be provided within <untrusted_diff> tags. You cannot use git or bash.
+You may only use read-only tools (Read, Grep, Glob) for source file inspection.
 
 Hard requirements:
-- You MUST read the diff file first.
+- Review the diff content provided in <untrusted_diff> tags.
 - The `line` field MUST be a SOURCE-FILE line number (1-based) in the file named by `file`.
-  - DO NOT use line numbers from ./review.diff.
+  - DO NOT use line numbers from the inline diff.
   - Use Grep on the source file to locate a unique snippet from the diff; use the Grep result line number.
   - If the file is deleted/non-existent OR you cannot verify the exact source line: set "line": 0 (do not guess).
 - Output MUST be valid JSON matching the provided template.
@@ -87,14 +91,13 @@ Return ONLY this JSON structure (no markdown fences):
 "#;
 
 /// Durable reviewer philosophy shared across all lenses.
-/// Duplicated here because reviewer sub-agents do not see the parent Review agent sysprompt.
 pub const REVIEWER_PHILOSOPHY: &str = r#"
 Review philosophy:
 - Be adversarial but accurate; avoid speculation.
 - Every finding must be grounded in the diff (quote a snippet or describe the hunk).
 - Prefer actionable, minimal fixes with concrete next steps.
 - If uncertain, set confidence="medium" and include a caveat.
-- Respect tool boundaries: no git, no bash, no write/edit, no just_execute.
+- Respect tool boundaries: no git, no bash, no write/edit.
 "#;
 
 /// Compose the full system prompt for a given lens.
@@ -113,6 +116,26 @@ pub fn compose_system_prompt(lens: ReviewLens) -> String {
         JSON_TEMPLATE,
     ]
     .join("\n\n")
+}
+
+/// Compose the user prompt with embedded diff content.
+pub fn compose_user_prompt(lens: ReviewLens, diff_content: &str, focus: Option<&str>) -> String {
+    let focus_text = focus.unwrap_or("(no specific focus guidance)");
+    let lens_name = match lens {
+        ReviewLens::Security => "security",
+        ReviewLens::Correctness => "correctness",
+        ReviewLens::Maintainability => "maintainability",
+        ReviewLens::Testing => "testing",
+    };
+
+    format!(
+        "Review these changes with the {lens_name} lens.\n\
+         Focus guidance: {focus_text}\n\
+         Line numbers MUST be SOURCE-FILE line numbers; use 0 if unknown.\n\
+         Requirements: analyze the diff below, then inspect referenced source files as needed.\n\
+         Output ONLY valid JSON matching the template.\n\n\
+         <untrusted_diff>\n{diff_content}\n</untrusted_diff>"
+    )
 }
 
 #[cfg(test)]
@@ -157,12 +180,32 @@ mod tests {
             "REVIEWER_BASE_PROMPT must require SOURCE-FILE line numbers"
         );
         assert!(
-            REVIEWER_BASE_PROMPT.contains("DO NOT use line numbers from ./review.diff"),
-            "REVIEWER_BASE_PROMPT must explicitly forbid diff-file line numbers"
+            REVIEWER_BASE_PROMPT.contains("DO NOT use line numbers from the inline diff"),
+            "REVIEWER_BASE_PROMPT must explicitly forbid inline diff line numbers"
         );
         assert!(
             REVIEWER_BASE_PROMPT.contains(r#"set "line": 0"#),
             "REVIEWER_BASE_PROMPT must instruct using line=0 when unverifiable"
         );
+    }
+
+    #[test]
+    fn compose_user_prompt_includes_diff() {
+        let prompt = compose_user_prompt(
+            ReviewLens::Security,
+            "diff --git a/test.rs b/test.rs",
+            Some("focus on auth"),
+        );
+        assert!(prompt.contains("<untrusted_diff>"));
+        assert!(prompt.contains("diff --git"));
+        assert!(prompt.contains("</untrusted_diff>"));
+        assert!(prompt.contains("security lens"));
+        assert!(prompt.contains("focus on auth"));
+    }
+
+    #[test]
+    fn compose_user_prompt_handles_no_focus() {
+        let prompt = compose_user_prompt(ReviewLens::Testing, "diff content", None);
+        assert!(prompt.contains("no specific focus guidance"));
     }
 }
