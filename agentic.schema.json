@@ -109,14 +109,14 @@
           }
         },
         "glob_default_limit": {
-          "description": "Default head_limit for glob results (default: 500).",
+          "description": "Default `head_limit` for glob results (default: 500).",
           "type": "integer",
           "format": "uint32",
           "default": 500,
           "minimum": 0
         },
         "grep_default_limit": {
-          "description": "Default head_limit for grep results (default: 200).",
+          "description": "Default `head_limit` for grep results (default: 200).",
           "type": "integer",
           "format": "uint32",
           "default": 200,
@@ -210,12 +210,12 @@
           ]
         },
         "executor_model": {
-          "description": "OpenRouter model ID for executor/reasoner step.",
+          "description": "`OpenRouter` model ID for executor/reasoner step.",
           "type": "string",
           "default": "openai/gpt-5.2"
         },
         "optimizer_model": {
-          "description": "OpenRouter model ID for optimizer step.",
+          "description": "`OpenRouter` model ID for optimizer step.",
           "type": "string",
           "default": "anthropic/claude-sonnet-4.6"
         },
@@ -242,7 +242,7 @@
       }
     },
     "ReasoningEffortLevel": {
-      "description": "Schema-only enum for reasoning_effort IDE autocomplete.\nRuntime storage remains Option<String> for advisory validation semantics.",
+      "description": "Schema-only enum for `reasoning_effort` IDE autocomplete.\nRuntime storage remains Option<String> for advisory validation semantics.",
       "type": "string",
       "enum": [
         "low",
@@ -272,7 +272,7 @@
       }
     },
     "SubagentsConfig": {
-      "description": "Configuration for coding-agent-tools subagents (ask_agent tool).",
+      "description": "Configuration for coding-agent-tools subagents (`ask_agent` tool).",
       "type": "object",
       "properties": {
         "analyzer_model": {
@@ -288,7 +288,7 @@
       }
     },
     "WebRetrievalConfig": {
-      "description": "Configuration for web-retrieval tools (web_fetch, web_search).",
+      "description": "Configuration for web-retrieval tools (`web_fetch`, `web_search`).",
       "type": "object",
       "properties": {
         "default_max_bytes": {
