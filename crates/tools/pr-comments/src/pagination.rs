@@ -28,6 +28,11 @@ pub fn make_key(
     )
 }
 
+/// Generate a cache key for PR list pagination from query parameters.
+pub fn make_pr_list_key(owner: &str, repo: &str, state: &str, page_size: usize) -> String {
+    format!("{}|{}|{}|{}", owner, repo, state, page_size)
+}
+
 // Re-export pagination types from utils for convenience
 pub use agentic_tools_utils::pagination::{
     DEFAULT_TTL, PaginationCache, QueryLock, QueryState, paginate_slice,
@@ -44,6 +49,16 @@ mod tests {
         assert_eq!(key1, key2);
 
         let key3 = make_key("owner", "repo", 123, CommentSourceType::Robot, false, 10);
+        assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn make_pr_list_key_generates_consistent_key() {
+        let key1 = make_pr_list_key("owner", "repo", "open", 10);
+        let key2 = make_pr_list_key("owner", "repo", "open", 10);
+        let key3 = make_pr_list_key("owner", "repo", "closed", 10);
+
+        assert_eq!(key1, key2);
         assert_ne!(key1, key3);
     }
 
