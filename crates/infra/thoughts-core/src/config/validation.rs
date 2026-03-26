@@ -111,6 +111,24 @@ pub fn validate_pinned_ref_full_name(ref_name: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn validate_pinned_ref_full_name_new_input(ref_name: &str) -> Result<()> {
+    let ref_name = ref_name.trim();
+    if ref_name.is_empty() {
+        bail!("ref cannot be empty");
+    }
+
+    let allowed = ref_name.starts_with("refs/heads/") || ref_name.starts_with("refs/tags/");
+
+    if !allowed {
+        bail!(
+            "Pinned refs must be full ref names starting with 'refs/heads/' or 'refs/tags/' (got '{}')",
+            ref_name
+        );
+    }
+
+    Ok(())
+}
+
 // --- MCP HTTPS-only validation helpers ---
 
 /// True if the URL uses SSH schemes we do not support in MCP
@@ -324,5 +342,23 @@ mod pinned_ref_name_tests {
         assert!(validate_pinned_ref_full_name("v1.0.0").is_err());
         assert!(validate_pinned_ref_full_name("origin/main").is_err());
         assert!(validate_pinned_ref_full_name("refs/pull/123/head").is_err());
+    }
+}
+
+#[cfg(test)]
+mod pinned_ref_name_new_input_tests {
+    use super::validate_pinned_ref_full_name_new_input;
+
+    #[test]
+    fn accepts_heads_and_tags_only() {
+        assert!(validate_pinned_ref_full_name_new_input("refs/heads/main").is_ok());
+        assert!(validate_pinned_ref_full_name_new_input("refs/tags/v1.0.0").is_ok());
+    }
+
+    #[test]
+    fn rejects_refs_remotes_and_shorthand() {
+        assert!(validate_pinned_ref_full_name_new_input("refs/remotes/origin/main").is_err());
+        assert!(validate_pinned_ref_full_name_new_input("main").is_err());
+        assert!(validate_pinned_ref_full_name_new_input("refs/pull/123/head").is_err());
     }
 }

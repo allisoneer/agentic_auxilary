@@ -2,12 +2,13 @@ use anyhow::{Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use tokio::sync::Semaphore;
 
 mod templates;
 
 use crate::config::validation::{
-    canonical_reference_instance_key, validate_pinned_ref_full_name,
+    canonical_reference_instance_key, validate_pinned_ref_full_name_new_input,
     validate_reference_url_https_only,
 };
 use crate::config::{
@@ -145,6 +146,39 @@ fn get_repo_refs_blocking(input_url: String, limit: usize) -> Result<RepoRefsLis
     })
 }
 
+async fn run_blocking_repo_refs_with_deadline<R, F>(
+    sem: Arc<Semaphore>,
+    timeout: Duration,
+    op_label: String,
+    work: F,
+) -> Result<R>
+where
+    R: Send + 'static,
+    F: FnOnce() -> Result<R> + Send + 'static,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+
+    let permit = match tokio::time::timeout_at(deadline, sem.acquire_owned()).await {
+        Ok(permit) => permit.expect("semaphore closed"),
+        Err(_) => anyhow::bail!("timeout while waiting to start {op_label} after {timeout:?}"),
+    };
+
+    let mut handle = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        work()
+    });
+
+    match tokio::time::timeout_at(deadline, &mut handle).await {
+        Ok(joined) => joined.context("remote ref discovery task failed")?,
+        Err(_) => {
+            tokio::spawn(async move {
+                let _ = handle.await;
+            });
+            anyhow::bail!("timeout while {op_label} after {timeout:?}");
+        }
+    }
+}
+
 pub async fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<RepoRefsList> {
     let input_url = url.trim().to_string();
     validate_reference_url_https_only(&input_url)
@@ -152,25 +186,14 @@ pub async fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Re
     let limit = normalize_repo_ref_limit(limit)?;
 
     let sem = repo_refs_semaphore();
-    let permit = sem.acquire_owned().await.expect("semaphore closed");
+    let timeout = Duration::from_secs(REPO_REFS_TIMEOUT_SECS);
+    let op_label = format!("discovering remote refs for {}", input_url);
     let url_for_task = input_url.clone();
 
-    let handle = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
+    run_blocking_repo_refs_with_deadline(sem, timeout, op_label, move || {
         get_repo_refs_blocking(url_for_task, limit)
-    });
-
-    let timeout = std::time::Duration::from_secs(REPO_REFS_TIMEOUT_SECS);
-    let result = match tokio::time::timeout(timeout, handle).await {
-        Ok(joined) => joined.context("remote ref discovery task failed")??,
-        Err(_) => anyhow::bail!(
-            "timeout while discovering remote refs for {} after {}s",
-            input_url,
-            REPO_REFS_TIMEOUT_SECS
-        ),
-    };
-
-    Ok(result)
+    })
+    .await
 }
 
 fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
@@ -213,7 +236,7 @@ pub async fn add_reference_impl_adapter(
         None => None,
     };
     if let Some(ref_name) = ref_name.as_deref()
-        && let Err(e) = validate_pinned_ref_full_name(ref_name)
+        && let Err(e) = validate_pinned_ref_full_name_new_input(ref_name)
     {
         anyhow::bail!(
             "invalid input: ref must be a full ref name like 'refs/heads/main' or 'refs/tags/v1.2.3' \
@@ -387,6 +410,8 @@ mod tests {
     use crate::documents::{ActiveDocuments, DocumentInfo, WriteDocumentOk};
     use crate::utils::human_size;
     use agentic_tools_core::fmt::{TextFormat, TextOptions};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
 
     fn sample_remote_ref(name: &str) -> RemoteRef {
         RemoteRef {
@@ -545,6 +570,99 @@ mod tests {
         );
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn repo_refs_deadline_includes_semaphore_acquire_time() {
+        let sem = Arc::new(Semaphore::new(1));
+        let _held = sem.clone().acquire_owned().await.unwrap();
+        let work_started = Arc::new(AtomicBool::new(false));
+        let started = work_started.clone();
+
+        let err = run_blocking_repo_refs_with_deadline(
+            sem,
+            Duration::from_millis(10),
+            "test operation".to_string(),
+            move || {
+                started.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("waiting to start test operation"));
+        assert!(!work_started.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn repo_refs_timeout_retains_permit_until_blocking_work_finishes() {
+        let sem = Arc::new(Semaphore::new(1));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+
+        let timed_out = tokio::spawn(run_blocking_repo_refs_with_deadline(
+            sem.clone(),
+            Duration::from_millis(20),
+            "test operation".to_string(),
+            move || {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                finished_tx.send(()).unwrap();
+                Ok(())
+            },
+        ));
+
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("blocking work should have started");
+
+        let err = timed_out.await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("timeout while test operation"));
+        assert_eq!(sem.available_permits(), 0, "permit should still be held");
+
+        let blocked_err = run_blocking_repo_refs_with_deadline(
+            sem.clone(),
+            Duration::from_millis(10),
+            "follow-up operation".to_string(),
+            || Ok(()),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            blocked_err
+                .to_string()
+                .contains("waiting to start follow-up operation"),
+            "unexpected error: {blocked_err:#}"
+        );
+
+        release_tx.send(()).unwrap();
+        finished_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("blocking work should finish after release");
+
+        for _ in 0..20 {
+            if sem.available_permits() == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert_eq!(
+            sem.available_permits(),
+            1,
+            "permit should be released after blocking work completes"
+        );
+
+        run_blocking_repo_refs_with_deadline(
+            sem,
+            Duration::from_secs(1),
+            "final operation".to_string(),
+            || Ok(()),
+        )
+        .await
+        .expect("follow-up work should succeed once permit is released");
+    }
+
     #[test]
     fn test_repo_refs_list_format() {
         let refs = RepoRefsList {
@@ -656,6 +774,27 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("invalid input: ref must be a full ref name")
+        );
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_refs_remotes_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("refs/remotes/origin/main".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name"),
+            "unexpected error: {err:#}"
+        );
+        assert!(
+            err.to_string().contains("refs/heads/main"),
+            "unexpected error: {err:#}"
         );
     }
 

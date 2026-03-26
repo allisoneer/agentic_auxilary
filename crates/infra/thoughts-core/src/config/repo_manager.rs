@@ -550,6 +550,12 @@ impl RepoConfigManager {
             };
             validate_reference_url(url).with_context(|| format!("Invalid reference '{}'", url))?;
             if let Some(ref_name) = ref_name {
+                if ref_name.starts_with("refs/remotes/") {
+                    warnings.push(format!(
+                        "Reference '{}' uses legacy pinned ref '{}'. New references should use refs/heads/* or refs/tags/*; refs/remotes/* is a local remote-tracking namespace.",
+                        url, ref_name
+                    ));
+                }
                 validate_pinned_ref_full_name(ref_name).with_context(|| {
                     format!("Invalid pinned ref '{}' for reference '{}'", ref_name, url)
                 })?;
@@ -1363,6 +1369,31 @@ mod tests {
             format!("{err:#}").contains("Pinned refs must be full ref names"),
             "unexpected error chain: {err:#}"
         );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_warns_on_legacy_refs_remotes() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".to_string(),
+                description: None,
+                ref_name: Some("refs/remotes/origin/main".to_string()),
+            })],
+        };
+
+        let warnings = mgr
+            .validate_v2_hard(&cfg)
+            .expect("legacy refs/remotes should warn");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("refs/remotes/origin/main"));
+        assert!(warnings[0].contains("legacy pinned ref"));
     }
 
     #[test]

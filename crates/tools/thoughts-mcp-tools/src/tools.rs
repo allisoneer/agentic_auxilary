@@ -362,9 +362,10 @@ impl Tool for GetRepoRefsTool {
 pub struct AddReferenceInput {
     /// HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL
     pub url: String,
-    /// Optional full git ref name to clone, which must start with refs/heads/,
-    /// refs/tags/, or refs/remotes/ (for example refs/heads/main).
+    /// Optional full git ref name to clone, which must start with refs/heads/
+    /// or refs/tags/ (for example refs/heads/main).
     /// Shorthand values like "main" are rejected.
+    /// Note: refs/remotes/* is a local remote-tracking namespace and is rejected for new inputs.
     #[serde(rename = "ref", default)]
     pub ref_name: Option<String>,
     /// Optional description for why this reference was added
