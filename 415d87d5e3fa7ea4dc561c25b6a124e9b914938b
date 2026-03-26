@@ -1,0 +1,52 @@
+justfile
+  9752ed4d4407ecc1 67,71
+apps/agentic-mcp/src/main.rs
+  9752ed4d4407ecc1 85
+apps/agentic/src/main.rs
+  9752ed4d4407ecc1 13-14
+.taplo.toml
+  bc0876288f7da456 4-6
+apps/agentic/src/commands/config.rs
+  9752ed4d4407ecc1 197-198
+crates/infra/agentic-config/CLAUDE.md
+  9752ed4d4407ecc1 83
+apps/thoughts/src/main.rs
+  9752ed4d4407ecc1 56
+Cargo.toml
+  9752ed4d4407ecc1 66-67
+.github/workflows/ci.yml
+  9752ed4d4407ecc1 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "415d87d5e3fa7ea4dc561c25b6a124e9b914938b",
+  "prompts": {
+    "9752ed4d4407ecc1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d4b71df9ffeFXf1v97y6FBpVD",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 7,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    },
+    "bc0876288f7da456": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d4b06630ffeWsglJLvrkvTzFP",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 1,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
