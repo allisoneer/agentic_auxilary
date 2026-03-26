@@ -1,18 +1,66 @@
 use anyhow::{Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
+use tokio::sync::Semaphore;
 
 mod templates;
 
-use crate::config::validation::{canonical_reference_key, validate_reference_url_https_only};
+use crate::config::validation::{
+    canonical_reference_instance_key, validate_pinned_ref_full_name_new_input,
+    validate_reference_url_https_only,
+};
 use crate::config::{
     ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
     extract_org_repo_from_url,
 };
+use crate::git::ref_key::encode_ref_key;
+use crate::git::remote_refs::{RemoteRef, discover_remote_refs};
 use crate::git::utils::get_control_repo_root;
+use crate::mount::MountSpace;
 use crate::mount::auto_mount::update_active_mounts;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
+
+const DEFAULT_REPO_REFS_LIMIT: usize = 100;
+const MAX_REPO_REFS_LIMIT: usize = 200;
+const REPO_REFS_MAX_CONCURRENCY: usize = 4;
+const REPO_REFS_TIMEOUT_SECS: u64 = 20;
+
+static REPO_REFS_SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
+
+fn find_matching_existing_reference(
+    cfg: &crate::config::RepoConfigV2,
+    input_url: &str,
+    requested_ref_name: Option<&str>,
+) -> Option<(String, Option<String>)> {
+    let wanted = canonical_reference_instance_key(input_url, requested_ref_name).ok()?;
+
+    for entry in &cfg.references {
+        let (existing_url, existing_ref_name) = match entry {
+            ReferenceEntry::Simple(url) => (url.as_str(), None),
+            ReferenceEntry::WithMetadata(reference_mount) => (
+                reference_mount.remote.as_str(),
+                reference_mount.ref_name.as_deref(),
+            ),
+        };
+
+        let Ok(existing_key) = canonical_reference_instance_key(existing_url, existing_ref_name)
+        else {
+            continue;
+        };
+
+        if existing_key == wanted {
+            return Some((
+                existing_url.to_string(),
+                existing_ref_name.map(ToString::to_string),
+            ));
+        }
+    }
+
+    None
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -66,8 +114,18 @@ pub struct ReferencesList {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RepoRefsList {
+    pub url: String,
+    pub total: usize,
+    pub truncated: bool,
+    pub entries: Vec<RemoteRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AddReferenceOk {
     pub url: String,
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+    pub ref_name: Option<String>,
     pub org: String,
     pub repo: String,
     pub mount_path: String,
@@ -89,6 +147,107 @@ pub struct TemplateResponse {
 
 // Note: Tool implementations are in thoughts-mcp-tools crate using agentic-tools framework.
 
+fn repo_refs_semaphore() -> Arc<Semaphore> {
+    REPO_REFS_SEM
+        .get_or_init(|| Arc::new(Semaphore::new(REPO_REFS_MAX_CONCURRENCY)))
+        .clone()
+}
+
+fn get_repo_refs_blocking(input_url: String, limit: usize) -> Result<RepoRefsList> {
+    let repo_root =
+        get_control_repo_root(&std::env::current_dir().context("failed to get current directory")?)
+            .context("failed to get control repo root")?;
+    let mut refs = discover_remote_refs(&repo_root, &input_url)?;
+    refs.sort_by(|a, b| {
+        a.name
+            .cmp(&b.name)
+            .then_with(|| a.target.cmp(&b.target))
+            .then_with(|| a.oid.cmp(&b.oid))
+            .then_with(|| a.peeled.cmp(&b.peeled))
+    });
+
+    let total = refs.len();
+    let truncated = total > limit;
+    refs.truncate(limit);
+
+    Ok(RepoRefsList {
+        url: input_url,
+        total,
+        truncated,
+        entries: refs,
+    })
+}
+
+async fn run_blocking_repo_refs_with_deadline<R, F>(
+    sem: Arc<Semaphore>,
+    timeout: Duration,
+    op_label: String,
+    work: F,
+) -> Result<R>
+where
+    R: Send + 'static,
+    F: FnOnce() -> Result<R> + Send + 'static,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+
+    let permit = match tokio::time::timeout_at(deadline, sem.acquire_owned()).await {
+        Ok(permit) => permit.expect("semaphore closed"),
+        Err(_) => anyhow::bail!("timeout while waiting to start {op_label} after {timeout:?}"),
+    };
+
+    let mut handle = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        work()
+    });
+
+    match tokio::time::timeout_at(deadline, &mut handle).await {
+        Ok(joined) => joined.context("remote ref discovery task failed")?,
+        Err(_) => {
+            tokio::spawn(async move {
+                let _ = handle.await;
+            });
+            anyhow::bail!("timeout while {op_label} after {timeout:?}");
+        }
+    }
+}
+
+pub async fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Result<RepoRefsList> {
+    let input_url = url.trim().to_string();
+    validate_reference_url_https_only(&input_url)
+        .context("invalid input: URL failed HTTPS validation")?;
+    let limit = normalize_repo_ref_limit(limit)?;
+
+    let sem = repo_refs_semaphore();
+    let timeout = Duration::from_secs(REPO_REFS_TIMEOUT_SECS);
+    let op_label = format!("discovering remote refs for {}", input_url);
+    let url_for_task = input_url.clone();
+
+    run_blocking_repo_refs_with_deadline(sem, timeout, op_label, move || {
+        get_repo_refs_blocking(url_for_task, limit)
+    })
+    .await
+}
+
+fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
+    match limit.unwrap_or(DEFAULT_REPO_REFS_LIMIT) {
+        0 => anyhow::bail!("invalid input: limit must be at least 1"),
+        limit if limit > MAX_REPO_REFS_LIMIT => anyhow::bail!(
+            "invalid input: limit must be at most {}",
+            MAX_REPO_REFS_LIMIT
+        ),
+        limit => Ok(limit),
+    }
+}
+
+fn response_identity_url<'a>(
+    input_url: &'a str,
+    matched_existing: Option<&'a (String, Option<String>)>,
+) -> &'a str {
+    matched_existing
+        .map(|(stored_url, _)| stored_url.as_str())
+        .unwrap_or(input_url)
+}
+
 /// Public adapter for add_reference implementation.
 ///
 /// This function is callable by agentic-tools wrappers. It contains the actual
@@ -97,22 +256,40 @@ pub struct TemplateResponse {
 /// # Arguments
 /// * `url` - HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL
 /// * `description` - Optional description for why this reference was added
+/// * `ref_name` - Optional full git ref name (for example refs/heads/main)
 ///
 /// # Returns
 /// `AddReferenceOk` on success, `anyhow::Error` on failure.
 pub async fn add_reference_impl_adapter(
     url: String,
     description: Option<String>,
+    ref_name: Option<String>,
 ) -> Result<AddReferenceOk> {
     let input_url = url.trim().to_string();
+    let requested_ref_name = match ref_name {
+        Some(ref_name) => {
+            let trimmed = ref_name.trim();
+            if trimmed.is_empty() {
+                anyhow::bail!("invalid input: ref cannot be empty");
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+    if let Some(ref_name) = requested_ref_name.as_deref()
+        && let Err(e) = validate_pinned_ref_full_name_new_input(ref_name)
+    {
+        anyhow::bail!(
+            "invalid input: ref must be a full ref name like 'refs/heads/main' or 'refs/tags/v1.2.3' \
+(shorthand like 'main' is not supported). Details: {}. \
+Tip: call thoughts_get_repo_refs to discover full refs.",
+            e
+        );
+    }
 
     // Validate URL per MCP HTTPS-only rules
     validate_reference_url_https_only(&input_url)
         .context("invalid input: URL failed HTTPS validation")?;
-
-    // Parse org/repo; safe after validation
-    let (org, repo) = extract_org_repo_from_url(&input_url)
-        .context("invalid input: failed to extract org/repo from URL")?;
 
     // Resolve repo root and config manager
     let repo_root =
@@ -124,27 +301,34 @@ pub async fn add_reference_impl_adapter(
         .ensure_v2_default()
         .context("failed to ensure v2 config")?;
 
-    // Build existing canonical keys set for duplicate detection
-    let mut existing_keys = std::collections::HashSet::new();
-    for e in &cfg.references {
-        let existing_url = match e {
-            ReferenceEntry::Simple(s) => s.as_str(),
-            ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
-        };
-        if let Ok(k) = canonical_reference_key(existing_url) {
-            existing_keys.insert(k);
-        }
-    }
-    let this_key =
-        canonical_reference_key(&input_url).context("invalid input: failed to canonicalize URL")?;
-    let already_existed = existing_keys.contains(&this_key);
+    canonical_reference_instance_key(&input_url, requested_ref_name.as_deref())
+        .context("invalid input: failed to canonicalize URL")?;
+    let matched_existing =
+        find_matching_existing_reference(&cfg, &input_url, requested_ref_name.as_deref());
+    let already_existed = matched_existing.is_some();
+    let effective_ref_name = matched_existing
+        .as_ref()
+        .and_then(|(_, ref_name)| ref_name.clone())
+        .or_else(|| requested_ref_name.clone());
+    let identity_url = response_identity_url(&input_url, matched_existing.as_ref());
+    let (org, repo) = extract_org_repo_from_url(identity_url)
+        .context("invalid input: failed to extract org/repo from URL")?;
+    let ref_key = effective_ref_name
+        .as_deref()
+        .map(encode_ref_key)
+        .transpose()?;
 
     // Compute paths for response
     let ds = mgr
         .load_desired_state()
         .context("failed to load desired state")?
         .ok_or_else(|| anyhow::anyhow!("not found: no repository configuration found"))?;
-    let mount_path = format!("{}/{}/{}", ds.mount_dirs.references, org, repo);
+    let mount_space = MountSpace::Reference {
+        org_path: org.clone(),
+        repo: repo.clone(),
+        ref_key: ref_key.clone(),
+    };
+    let mount_path = mount_space.relative_path(&ds.mount_dirs);
     let mount_target = repo_root
         .join(".thoughts-data")
         .join(&mount_path)
@@ -155,7 +339,7 @@ pub async fn add_reference_impl_adapter(
     let repo_mapping =
         RepoMappingManager::new().context("failed to create repo mapping manager")?;
     let pre_mapping = repo_mapping
-        .resolve_url(&input_url)
+        .resolve_reference_url(&input_url, effective_ref_name.as_deref())
         .ok()
         .flatten()
         .map(|p| p.to_string_lossy().to_string());
@@ -163,16 +347,17 @@ pub async fn add_reference_impl_adapter(
     // Update config if new
     let mut config_updated = false;
     let mut warnings: Vec<String> = Vec::new();
+    let description = description.and_then(|desc| {
+        let trimmed = desc.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    });
     if !already_existed {
-        if let Some(desc) = description.clone() {
+        if description.is_some() || requested_ref_name.is_some() {
             cfg.references
                 .push(ReferenceEntry::WithMetadata(ReferenceMount {
                     remote: input_url.clone(),
-                    description: if desc.trim().is_empty() {
-                        None
-                    } else {
-                        Some(desc)
-                    },
+                    description: description.clone(),
+                    ref_name: requested_ref_name.clone(),
                 }));
         } else {
             cfg.references
@@ -184,9 +369,9 @@ pub async fn add_reference_impl_adapter(
             .context("failed to save config")?;
         warnings.extend(ws);
         config_updated = true;
-    } else if description.is_some() {
+    } else if description.is_some() || requested_ref_name.is_some() {
         warnings.push(
-            "Reference already exists; description was not updated (use CLI to modify metadata)"
+            "Reference already exists; metadata was not updated (use CLI to modify metadata)"
                 .to_string(),
         );
     }
@@ -200,7 +385,7 @@ pub async fn add_reference_impl_adapter(
     let repo_mapping_post =
         RepoMappingManager::new().context("failed to create repo mapping manager")?;
     let post_mapping = repo_mapping_post
-        .resolve_url(&input_url)
+        .resolve_reference_url(&input_url, effective_ref_name.as_deref())
         .ok()
         .flatten()
         .map(|p| p.to_string_lossy().to_string());
@@ -241,6 +426,7 @@ pub async fn add_reference_impl_adapter(
 
     Ok(AddReferenceOk {
         url: input_url,
+        ref_name: effective_ref_name,
         org,
         repo,
         mount_path,
@@ -259,9 +445,29 @@ pub async fn add_reference_impl_adapter(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{MountDirsV2, RepoConfigV2};
     use crate::documents::{ActiveDocuments, DocumentInfo, WriteDocumentOk};
     use crate::utils::human_size;
     use agentic_tools_core::fmt::{TextFormat, TextOptions};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
+
+    fn sample_remote_ref(name: &str) -> RemoteRef {
+        RemoteRef {
+            name: name.to_string(),
+            oid: Some("abc123".to_string()),
+            peeled: None,
+            target: None,
+        }
+    }
+
+    #[test]
+    fn normalize_repo_ref_limit_defaults_and_validates() {
+        assert_eq!(normalize_repo_ref_limit(None).unwrap(), 100);
+        assert_eq!(normalize_repo_ref_limit(Some(1)).unwrap(), 1);
+        assert!(normalize_repo_ref_limit(Some(0)).is_err());
+        assert!(normalize_repo_ref_limit(Some(201)).is_err());
+    }
 
     #[test]
     fn test_human_size_formatting() {
@@ -368,9 +574,168 @@ mod tests {
     }
 
     #[test]
+    fn test_repo_ref_sorting_is_deterministic() {
+        let mut refs = [
+            sample_remote_ref("refs/tags/v2"),
+            sample_remote_ref("refs/heads/main"),
+        ];
+        refs.sort_by(|a, b| {
+            a.name
+                .cmp(&b.name)
+                .then_with(|| a.target.cmp(&b.target))
+                .then_with(|| a.oid.cmp(&b.oid))
+                .then_with(|| a.peeled.cmp(&b.peeled))
+        });
+        assert_eq!(refs[0].name, "refs/heads/main");
+        assert_eq!(refs[1].name, "refs/tags/v2");
+    }
+
+    #[tokio::test]
+    async fn get_repo_refs_rejects_invalid_limit_async() {
+        let err = get_repo_refs_impl_adapter("https://github.com/org/repo".into(), Some(0))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("limit must be at least 1"));
+    }
+
+    #[tokio::test]
+    async fn get_repo_refs_rejects_ssh_url_async() {
+        let err = get_repo_refs_impl_adapter("git@github.com:org/repo.git".into(), None)
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").to_lowercase().contains("ssh"),
+            "unexpected error chain: {err:#}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn repo_refs_deadline_includes_semaphore_acquire_time() {
+        let sem = Arc::new(Semaphore::new(1));
+        let _held = sem.clone().acquire_owned().await.unwrap();
+        let work_started = Arc::new(AtomicBool::new(false));
+        let started = work_started.clone();
+
+        let err = run_blocking_repo_refs_with_deadline(
+            sem,
+            Duration::from_millis(10),
+            "test operation".to_string(),
+            move || {
+                started.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("waiting to start test operation"));
+        assert!(!work_started.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn repo_refs_timeout_retains_permit_until_blocking_work_finishes() {
+        let sem = Arc::new(Semaphore::new(1));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+
+        let timed_out = tokio::spawn(run_blocking_repo_refs_with_deadline(
+            sem.clone(),
+            Duration::from_millis(20),
+            "test operation".to_string(),
+            move || {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                finished_tx.send(()).unwrap();
+                Ok(())
+            },
+        ));
+
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("blocking work should have started");
+
+        let err = timed_out.await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("timeout while test operation"));
+        assert_eq!(sem.available_permits(), 0, "permit should still be held");
+
+        let blocked_err = run_blocking_repo_refs_with_deadline(
+            sem.clone(),
+            Duration::from_millis(10),
+            "follow-up operation".to_string(),
+            || Ok(()),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            blocked_err
+                .to_string()
+                .contains("waiting to start follow-up operation"),
+            "unexpected error: {blocked_err:#}"
+        );
+
+        release_tx.send(()).unwrap();
+        finished_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("blocking work should finish after release");
+
+        for _ in 0..20 {
+            if sem.available_permits() == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert_eq!(
+            sem.available_permits(),
+            1,
+            "permit should be released after blocking work completes"
+        );
+
+        run_blocking_repo_refs_with_deadline(
+            sem,
+            Duration::from_secs(1),
+            "final operation".to_string(),
+            || Ok(()),
+        )
+        .await
+        .expect("follow-up work should succeed once permit is released");
+    }
+
+    #[test]
+    fn test_repo_refs_list_format() {
+        let refs = RepoRefsList {
+            url: "https://github.com/org/repo".into(),
+            total: 2,
+            truncated: false,
+            entries: vec![
+                RemoteRef {
+                    name: "refs/heads/main".into(),
+                    oid: Some("abc123".into()),
+                    peeled: None,
+                    target: None,
+                },
+                RemoteRef {
+                    name: "refs/tags/v1.0.0".into(),
+                    oid: Some("def456".into()),
+                    peeled: Some("fedcba".into()),
+                    target: None,
+                },
+            ],
+        };
+
+        let text = refs.fmt_text(&TextOptions::default());
+        assert!(text.contains("Remote refs for https://github.com/org/repo"));
+        assert!(text.contains("refs/heads/main"));
+        assert!(text.contains("oid=abc123"));
+        assert!(text.contains("peeled=fedcba"));
+    }
+
+    #[test]
     fn test_add_reference_ok_format() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: Some("refs/heads/main".into()),
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
@@ -385,6 +750,7 @@ mod tests {
         let s = ok.fmt_text(&TextOptions::default());
         assert!(s.contains("\u{2713} Added reference")); // ✓
         assert!(s.contains("Org/Repo: org/repo"));
+        assert!(s.contains("Ref: refs/heads/main"));
         assert!(s.contains("Cloned: true"));
         assert!(s.contains("Mounted: true"));
         assert!(s.contains("Warnings:\n- note"));
@@ -394,6 +760,7 @@ mod tests {
     fn test_add_reference_ok_format_already_existed() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: None,
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
@@ -415,6 +782,7 @@ mod tests {
     fn test_add_reference_ok_format_no_mapping() {
         let ok = AddReferenceOk {
             url: "https://github.com/org/repo".into(),
+            ref_name: None,
             org: "org".into(),
             repo: "repo".into(),
             mount_path: "references/org/repo".into(),
@@ -430,6 +798,125 @@ mod tests {
         assert!(s.contains("Mapping: <none>"));
         assert!(s.contains("Mounted: false"));
         assert!(s.contains("- Clone failed"));
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_shorthand_ref_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("main".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name")
+        );
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_refs_remotes_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("refs/remotes/origin/main".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name"),
+            "unexpected error: {err:#}"
+        );
+        assert!(
+            err.to_string().contains("refs/heads/main"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_bare_heads_prefix_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("refs/heads/".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name")
+        );
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_bare_tags_prefix_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("refs/tags/".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name")
+        );
+    }
+
+    #[test]
+    fn find_matching_existing_reference_returns_legacy_ref_name_when_equivalent() {
+        let cfg = RepoConfigV2 {
+            version: "2.0".into(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".into(),
+                description: None,
+                ref_name: Some("refs/remotes/origin/main".into()),
+            })],
+        };
+
+        let found = find_matching_existing_reference(
+            &cfg,
+            "https://github.com/org/repo",
+            Some("refs/heads/main"),
+        )
+        .expect("should match by canonical identity");
+
+        assert_eq!(found.0, "https://github.com/org/repo");
+        assert_eq!(found.1.as_deref(), Some("refs/remotes/origin/main"));
+    }
+
+    #[test]
+    fn idempotent_add_reference_response_uses_matched_stored_url_identity_for_paths() {
+        let input_url = "https://github.com/org/repo";
+        let stored_url = "https://github.com/Org/Repo";
+        let matched_existing = Some((stored_url.to_string(), None));
+
+        let identity_url = response_identity_url(input_url, matched_existing.as_ref());
+        assert_eq!(identity_url, stored_url);
+
+        let (org, repo) = extract_org_repo_from_url(identity_url).unwrap();
+        let mount_dirs = MountDirsV2::default();
+        let mount_space = MountSpace::Reference {
+            org_path: org.clone(),
+            repo: repo.clone(),
+            ref_key: None,
+        };
+
+        assert_eq!(org, "Org");
+        assert_eq!(repo, "Repo");
+        assert_eq!(
+            mount_space.relative_path(&mount_dirs),
+            format!("{}/{}/{}", mount_dirs.references, org, repo)
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@
 - Path: crates/legacy/universal-tool-core/
 - Role: legacy
 - Family: legacy
-- Integrations: mcp=true, logging=false, napi=false
+- Integrations: mcp=false, logging=false, napi=false
 <!-- END:xtask:autogen -->
 
 ## Overview

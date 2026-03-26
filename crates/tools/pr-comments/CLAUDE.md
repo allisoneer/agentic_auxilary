@@ -156,7 +156,7 @@ CLI returns JSON for programmatic use. MCP interface returns formatted text for 
 - Path: crates/tools/pr-comments/
 - Role: tool-lib
 - Family: tools
-- Integrations: mcp=true, logging=true, napi=false
+- Integrations: mcp=false, logging=true, napi=false
 <!-- END:xtask:autogen -->
 
 <!-- BEGIN:xtask:autogen commands -->

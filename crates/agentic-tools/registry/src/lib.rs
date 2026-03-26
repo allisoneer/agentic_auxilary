@@ -71,11 +71,14 @@ const THOUGHTS_NAMES: &[&str] = &[
     "thoughts_write_document",
     "thoughts_list_documents",
     "thoughts_list_references",
+    "thoughts_get_repo_refs",
     "thoughts_add_reference",
     "thoughts_get_template",
 ];
 
 const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
+
+const REVIEW_NAMES: &[&str] = &["diff_snapshot", "diff_page", "run"];
 
 impl AgenticTools {
     /// Build the unified ToolRegistry using domain registries.
@@ -129,7 +132,7 @@ impl AgenticTools {
             regs.push(gpt5_reasoner::build_registry());
         }
 
-        // thoughts-mcp-tools (5 tools)
+        // thoughts-mcp-tools (6 tools)
         if domain_wanted(THOUGHTS_NAMES) {
             regs.push(thoughts_mcp_tools::build_registry());
         }
@@ -138,6 +141,12 @@ impl AgenticTools {
         if domain_wanted(WEB_NAMES) {
             let web = Arc::new(web_retrieval::WebTools::new());
             regs.push(web_retrieval::build_registry(web));
+        }
+
+        // review_tools (3 tools)
+        if domain_wanted(REVIEW_NAMES) {
+            let svc = Arc::new(review_tools::ReviewTools::new());
+            regs.push(review_tools::build_registry(svc));
         }
 
         let merged = ToolRegistry::merge_all(regs);
@@ -165,6 +174,7 @@ impl AgenticTools {
             + GPT5_NAMES.len()
             + THOUGHTS_NAMES.len()
             + WEB_NAMES.len()
+            + REVIEW_NAMES.len()
     }
 }
 
@@ -190,8 +200,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_23() {
-        assert_eq!(AgenticTools::total_tool_count(), 23);
+    fn total_tool_count_is_27() {
+        assert_eq!(AgenticTools::total_tool_count(), 27);
     }
 
     #[test]
@@ -231,10 +241,10 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 23 tools
+        // Should have all 27 tools
         assert!(
-            names.len() >= 23,
-            "expected at least 23 tools, got {}",
+            names.len() >= 27,
+            "expected at least 27 tools, got {}",
             names.len()
         );
 
@@ -258,6 +268,10 @@ mod tests {
         assert!(
             reg.contains("thoughts_add_reference"),
             "missing thoughts_add_reference from thoughts_mcp_tools"
+        );
+        assert!(
+            reg.contains("thoughts_get_repo_refs"),
+            "missing thoughts_get_repo_refs from thoughts_mcp_tools"
         );
         assert!(
             reg.contains("web_fetch"),
@@ -315,7 +329,7 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Empty allowlist normalizes to None, enabling all tools
-        assert!(reg.len() >= 23);
+        assert!(reg.len() >= 27);
     }
 
     #[test]

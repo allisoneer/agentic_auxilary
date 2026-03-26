@@ -1,6 +1,6 @@
 [package]
 name = "universal-tool-core"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "DEPRECATED: Use agentic-tools-* crates and agentic-mcp instead. Core runtime library for Universal Tool Framework."
@@ -57,6 +57,6 @@ role = "legacy"
 family = "legacy"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = false
 napi = false

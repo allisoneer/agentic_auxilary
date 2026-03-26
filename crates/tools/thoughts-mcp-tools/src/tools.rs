@@ -13,11 +13,13 @@ use thoughts_tool::config::{RepoConfigManager, extract_org_repo_from_url};
 use thoughts_tool::documents::{
     ActiveDocuments, DocumentType, WriteDocumentOk, list_documents, write_document,
 };
+use thoughts_tool::git::ref_key::encode_ref_key;
 use thoughts_tool::git::utils::get_control_repo_root;
 use thoughts_tool::mcp::{
-    AddReferenceOk, ReferenceItem, ReferencesList, TemplateResponse, TemplateType,
-    add_reference_impl_adapter,
+    AddReferenceOk, ReferenceItem, ReferencesList, RepoRefsList, TemplateResponse, TemplateType,
+    add_reference_impl_adapter, get_repo_refs_impl_adapter,
 };
+use thoughts_tool::mount::MountSpace;
 use thoughts_tool::utils::logging::log_tool_call;
 
 /// Map anyhow::Error to agentic_tools_core::ToolError.
@@ -193,8 +195,7 @@ impl Tool for ListReferencesTool {
     type Input = ListReferencesInput;
     type Output = ReferencesList;
     const NAME: &'static str = "thoughts_list_references";
-    const DESCRIPTION: &'static str =
-        "List reference repository directory paths (references/org/repo)";
+    const DESCRIPTION: &'static str = "List reference repository directory paths (references/org/repo or references/org/repo@ref_key)";
 
     fn call(
         &self,
@@ -224,11 +225,21 @@ impl Tool for ListReferencesTool {
 
                 for rm in &ds.references {
                     let path = match extract_org_repo_from_url(&rm.remote) {
-                        Ok((org, repo)) => format!("{}/{}", org, repo),
+                        Ok((org_path, repo)) => MountSpace::Reference {
+                            org_path,
+                            repo,
+                            ref_key: rm
+                                .ref_name
+                                .as_deref()
+                                .map(encode_ref_key)
+                                .transpose()
+                                .map_err(|e| ToolError::Internal(e.to_string()))?,
+                        }
+                        .relative_path(&ds.mount_dirs),
                         Err(_) => rm.remote.clone(),
                     };
                     entries.push(ReferenceItem {
-                        path: format!("{}/{}", base, path),
+                        path,
                         description: rm.description.clone(),
                     });
                 }
@@ -269,6 +280,80 @@ impl Tool for ListReferencesTool {
 }
 
 // ============================================================================
+// GetRepoRefs Tool
+// ============================================================================
+
+/// Input for the get_repo_refs tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct GetRepoRefsInput {
+    /// HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL
+    pub url: String,
+    /// Maximum refs to return (1-200, default 100)
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+/// Tool for listing remote refs without cloning the repository.
+#[derive(Clone)]
+pub struct GetRepoRefsTool;
+
+impl Tool for GetRepoRefsTool {
+    type Input = GetRepoRefsInput;
+    type Output = RepoRefsList;
+    const NAME: &'static str = "thoughts_get_repo_refs";
+    const DESCRIPTION: &'static str =
+        "List remote branches, tags, and full ref names for a repository without cloning it";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        Box::pin(async move {
+            let timer = CallTimer::start();
+            let req_json = serde_json::json!({
+                "url": &input.url,
+                "limit": input.limit,
+            });
+
+            let result = get_repo_refs_impl_adapter(input.url, input.limit)
+                .await
+                .map_err(map_anyhow_to_tool_error);
+
+            match &result {
+                Ok(ok) => {
+                    let summary = serde_json::json!({
+                        "total": ok.total,
+                        "returned": ok.entries.len(),
+                        "truncated": ok.truncated,
+                    });
+                    log_tool_call(
+                        &timer,
+                        "thoughts_get_repo_refs",
+                        req_json,
+                        true,
+                        None,
+                        Some(summary),
+                    );
+                }
+                Err(e) => {
+                    log_tool_call(
+                        &timer,
+                        "thoughts_get_repo_refs",
+                        req_json,
+                        false,
+                        Some(e.to_string()),
+                        None,
+                    );
+                }
+            }
+
+            result
+        })
+    }
+}
+
+// ============================================================================
 // AddReference Tool
 // ============================================================================
 
@@ -277,6 +362,12 @@ impl Tool for ListReferencesTool {
 pub struct AddReferenceInput {
     /// HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL
     pub url: String,
+    /// Optional full git ref name to clone, which must start with refs/heads/
+    /// or refs/tags/ (for example refs/heads/main).
+    /// Shorthand values like "main" are rejected.
+    /// Note: refs/remotes/* is a local remote-tracking namespace and is rejected for new inputs.
+    #[serde(rename = "ref", default)]
+    pub ref_name: Option<String>,
     /// Optional description for why this reference was added
     #[serde(default)]
     pub description: Option<String>,
@@ -290,7 +381,7 @@ impl Tool for AddReferenceTool {
     type Input = AddReferenceInput;
     type Output = AddReferenceOk;
     const NAME: &'static str = "thoughts_add_reference";
-    const DESCRIPTION: &'static str = "Add a GitHub repository as a reference and ensure it is cloned and mounted. Input must be an HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL. SSH URLs (git@\u{2026}) are rejected. Idempotent and safe to retry; first-time clones may take time.";
+    const DESCRIPTION: &'static str = "Add a GitHub repository as a reference and ensure it is cloned and mounted. Input must be an HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL. Optional ref selects a full ref name (for example refs/heads/main). SSH URLs (git@\u{2026}) are rejected. Idempotent and safe to retry; first-time clones may take time.";
 
     fn call(
         &self,
@@ -301,17 +392,19 @@ impl Tool for AddReferenceTool {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
                 "url": &input.url,
+                "ref": &input.ref_name,
                 "description": &input.description,
             });
 
             // Delegate to the shared adapter function
-            let result = add_reference_impl_adapter(input.url, input.description)
+            let result = add_reference_impl_adapter(input.url, input.description, input.ref_name)
                 .await
                 .map_err(map_anyhow_to_tool_error);
 
             match &result {
                 Ok(ok) => {
                     let summary = serde_json::json!({
+                        "ref": &ok.ref_name,
                         "org": &ok.org,
                         "repo": &ok.repo,
                         "already_existed": ok.already_existed,

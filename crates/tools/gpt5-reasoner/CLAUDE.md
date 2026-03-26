@@ -125,7 +125,7 @@ fn my_env_test() {
 - Path: crates/tools/gpt5-reasoner/
 - Role: tool-lib
 - Family: tools
-- Integrations: mcp=true, logging=true, napi=false
+- Integrations: mcp=false, logging=true, napi=false
 <!-- END:xtask:autogen -->
 
 <!-- BEGIN:xtask:autogen commands -->
