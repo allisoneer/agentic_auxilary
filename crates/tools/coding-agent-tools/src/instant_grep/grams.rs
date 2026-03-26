@@ -62,6 +62,8 @@ pub fn gram_weight(gram: GramKey) -> u32 {
 mod tests {
     use super::*;
 
+    const STABLE_GRAM_WEIGHT_EXPECTED: u32 = 1_231_831_157;
+
     #[test]
     fn dense_grams_emit_overlapping_triples() {
         let grams: Vec<_> = dense_grams(b"abcd").collect();
@@ -86,6 +88,6 @@ mod tests {
     #[test]
     fn gram_weight_is_stable() {
         let gram = pack(KIND_DENSE, b'a', b'b', b'c');
-        assert_eq!(gram_weight(gram), gram_weight(gram));
+        assert_eq!(gram_weight(gram), STABLE_GRAM_WEIGHT_EXPECTED);
     }
 }

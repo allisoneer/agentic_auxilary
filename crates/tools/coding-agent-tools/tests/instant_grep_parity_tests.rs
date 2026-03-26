@@ -103,6 +103,8 @@ async fn instant_grep_matches_scan_grep_for_files_mode() {
     assert_eq!(grep.has_more, instant.has_more);
     assert_eq!(grep.warnings, instant.warnings);
     assert_eq!(grep.summary, instant.summary);
+    assert!(!grep.has_more);
+    assert!(!instant.has_more);
 }
 
 #[tokio::test]

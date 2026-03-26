@@ -77,6 +77,23 @@ fn build_include_globset(patterns: &[String]) -> Result<Option<GlobSet>, ToolErr
     Ok(Some(gs))
 }
 
+fn rel_path_for_output(root_path: &Path, path: &Path) -> String {
+    match path.strip_prefix(root_path) {
+        Ok(rel) => {
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if rel.is_empty() {
+                path.file_name().map_or_else(
+                    || path.to_string_lossy().to_string(),
+                    |name| name.to_string_lossy().to_string(),
+                )
+            } else {
+                rel
+            }
+        }
+        Err(_) => path.to_string_lossy().to_string(),
+    }
+}
+
 /// A match result from searching a file.
 #[derive(Debug)]
 struct FileMatch {
@@ -200,10 +217,7 @@ fn search_candidate_path(
     warnings: &mut Vec<String>,
     binary_skipped: &mut usize,
 ) -> Option<FileMatch> {
-    let rel_path = path.strip_prefix(root_path).map_or_else(
-        |_| path.to_string_lossy().to_string(),
-        |p| p.to_string_lossy().replace('\\', "/"),
-    );
+    let rel_path = rel_path_for_output(root_path, path);
 
     if !cfg.include_binary {
         match is_binary_file(path) {
@@ -286,7 +300,10 @@ fn format_output(
 
     let offset = cfg.offset;
     let paginated: Vec<String> = lines.into_iter().skip(offset).take(head_limit).collect();
-    let has_more = total_count > offset + paginated.len();
+    let has_more = match cfg.mode {
+        OutputMode::Count => false,
+        OutputMode::Files | OutputMode::Content => total_count > offset + paginated.len(),
+    };
 
     GrepOutput {
         root: cfg.root,

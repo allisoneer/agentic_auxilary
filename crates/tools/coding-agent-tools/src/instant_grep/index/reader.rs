@@ -22,14 +22,23 @@ pub struct InstantGrepIndex {
 fn decode_uvarint(bytes: &[u8], cursor: &mut usize) -> Option<u32> {
     let mut shift = 0u32;
     let mut value = 0u32;
+    let mut count = 0usize;
 
-    while *cursor < bytes.len() {
+    while *cursor < bytes.len() && count < 5 {
         let byte = bytes[*cursor];
         *cursor += 1;
-        value |= u32::from(byte & 0x7f) << shift;
+        count += 1;
+
+        let data = u32::from(byte & 0x7f);
+        if shift == 28 && data > 0x0f {
+            return None;
+        }
+
+        value |= data << shift;
         if byte & 0x80 == 0 {
             return Some(value);
         }
+
         shift += 7;
     }
 
@@ -91,6 +100,9 @@ impl InstantGrepIndex {
         // of the reader.
         let postings_mmap = unsafe { Mmap::map(&postings_file)? };
         let docs = read_docs(paths)?;
+        if docs.len() != meta.doc_count as usize {
+            anyhow::bail!("malformed instant-grep index: meta/doc count mismatch");
+        }
 
         Ok(Self {
             meta,
@@ -127,17 +139,31 @@ impl InstantGrepIndex {
             return None;
         }
 
-        let start = entry.postings_offset_bytes as usize;
-        let end = start + entry.postings_len_bytes as usize;
-        let bytes = &self.postings_mmap[start..end];
+        let start = usize::try_from(entry.postings_offset_bytes).ok()?;
+        let len = usize::try_from(entry.postings_len_bytes).ok()?;
+        let end = start.checked_add(len)?;
+        let bytes = self.postings_mmap.get(start..end)?;
         let mut cursor = 0usize;
         let mut prev = 0u32;
-        let mut docs = Vec::with_capacity(entry.doc_freq as usize);
-        while cursor < bytes.len() {
+        let doc_freq = usize::try_from(entry.doc_freq).ok()?;
+        if doc_freq > self.docs.len() {
+            return None;
+        }
+
+        let mut docs = Vec::with_capacity(doc_freq);
+        for _ in 0..doc_freq {
             let delta = decode_uvarint(bytes, &mut cursor)?;
-            prev += delta;
+            prev = prev.checked_add(delta)?;
+            if (prev as usize) >= self.docs.len() {
+                return None;
+            }
             docs.push(prev);
         }
+
+        if cursor != bytes.len() {
+            return None;
+        }
+
         Some(docs)
     }
 
@@ -170,6 +196,51 @@ mod tests {
     use git2::{Repository, Signature};
     use std::path::Path;
     use tempfile::TempDir;
+
+    fn write_lookup_entries(path: &std::path::Path, entries: &[LookupEntry]) {
+        let mut bytes = Vec::with_capacity(entries.len() * LOOKUP_ENTRY_WIDTH);
+        for entry in entries {
+            bytes.extend_from_slice(&entry.gram.to_le_bytes());
+            bytes.extend_from_slice(&entry.postings_offset_bytes.to_le_bytes());
+            bytes.extend_from_slice(&entry.postings_len_bytes.to_le_bytes());
+            bytes.extend_from_slice(&entry.doc_freq.to_le_bytes());
+        }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    fn write_docs_bin(path: &std::path::Path, docs: &[&str]) {
+        let mut bytes = Vec::new();
+        for doc in docs {
+            let doc = doc.as_bytes();
+            bytes.extend_from_slice(&(doc.len() as u32).to_le_bytes());
+            bytes.extend_from_slice(doc);
+        }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    fn write_generation(
+        tmp: &TempDir,
+        meta_doc_count: u32,
+        docs: &[&str],
+        lookup_entries: &[LookupEntry],
+        postings: &[u8],
+    ) -> GenerationPaths {
+        let generation = GenerationPaths::new(tmp.path().join("generation"));
+        std::fs::create_dir_all(&generation.dir).unwrap();
+        let meta = IndexMeta {
+            format_version: crate::instant_grep::INDEX_FORMAT_VERSION,
+            generation_version: crate::instant_grep::index::GENERATION_VERSION,
+            head_oid: "head".to_string(),
+            repo_root: tmp.path().to_string_lossy().to_string(),
+            branch_key: "branch".to_string(),
+            doc_count: meta_doc_count,
+        };
+        std::fs::write(&generation.meta_json, serde_json::to_vec(&meta).unwrap()).unwrap();
+        write_docs_bin(&generation.docs_bin, docs);
+        write_lookup_entries(&generation.lookup_bin, lookup_entries);
+        std::fs::write(&generation.postings_bin, postings).unwrap();
+        generation
+    }
 
     fn commit_file(repo: &Repository, root: &std::path::Path, rel: &str, content: &str) -> String {
         let path = root.join(rel);
@@ -224,5 +295,83 @@ mod tests {
         let second_generation = paths.current_generation_dir().unwrap().unwrap();
 
         assert_eq!(first_generation, second_generation);
+    }
+
+    #[test]
+    fn decode_uvarint_rejects_overlong_or_overflowing_values() {
+        let mut cursor = 0;
+        assert!(decode_uvarint(&[0x80; 6], &mut cursor).is_none());
+
+        let mut cursor = 0;
+        assert!(decode_uvarint(&[0xff, 0xff, 0xff, 0xff, 0x10], &mut cursor).is_none());
+    }
+
+    #[test]
+    fn open_rejects_docs_meta_count_mismatch() {
+        let tmp = TempDir::new().unwrap();
+        let generation = write_generation(&tmp, 2, &["only.txt"], &[], &[]);
+
+        let err = InstantGrepIndex::open(&generation).err().unwrap();
+        assert!(err.to_string().contains("meta/doc count mismatch"));
+    }
+
+    #[test]
+    fn postings_rejects_out_of_bounds_slice() {
+        let tmp = TempDir::new().unwrap();
+        let generation = write_generation(
+            &tmp,
+            1,
+            &["only.txt"],
+            &[LookupEntry {
+                gram: 7,
+                postings_offset_bytes: 2,
+                postings_len_bytes: 4,
+                doc_freq: 1,
+            }],
+            &[0],
+        );
+
+        let index = InstantGrepIndex::open(&generation).unwrap();
+        assert!(index.postings(GramKey(7)).is_none());
+    }
+
+    #[test]
+    fn postings_rejects_doc_id_out_of_range() {
+        let tmp = TempDir::new().unwrap();
+        let generation = write_generation(
+            &tmp,
+            1,
+            &["only.txt"],
+            &[LookupEntry {
+                gram: 9,
+                postings_offset_bytes: 0,
+                postings_len_bytes: 1,
+                doc_freq: 1,
+            }],
+            &[1],
+        );
+
+        let index = InstantGrepIndex::open(&generation).unwrap();
+        assert!(index.postings(GramKey(9)).is_none());
+    }
+
+    #[test]
+    fn postings_rejects_doc_freq_mismatch() {
+        let tmp = TempDir::new().unwrap();
+        let generation = write_generation(
+            &tmp,
+            2,
+            &["first.txt", "second.txt"],
+            &[LookupEntry {
+                gram: 11,
+                postings_offset_bytes: 0,
+                postings_len_bytes: 1,
+                doc_freq: 2,
+            }],
+            &[0],
+        );
+
+        let index = InstantGrepIndex::open(&generation).unwrap();
+        assert!(index.postings(GramKey(11)).is_none());
     }
 }

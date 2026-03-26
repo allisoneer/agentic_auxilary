@@ -207,6 +207,9 @@ async fn instant_grep_matches_scan_grep_for_git_backed_count_mode() {
 
     assert_eq!(grep.summary, instant.summary);
     assert_eq!(grep.lines, instant.lines);
+    assert_eq!(grep.has_more, instant.has_more);
+    assert!(!grep.has_more);
+    assert!(!instant.has_more);
 }
 
 #[tokio::test]
