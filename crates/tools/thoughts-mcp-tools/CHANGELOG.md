@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.2.0] - 2026-03-26
+
+### ⛰️  Features
+- *(thoughts_tool)* Add pinned reference refs and remote ref discovery
+
+### 🐛 Bug Fixes
+- *(thoughts_tool)* Unify pinned reference handling across mcp and cli
+- *(thoughts_tool)* Bound repo ref waits and split pinned ref validation
 ## [0.1.3] - 2026-03-10
 
 ### ⚙️  Miscellaneous
