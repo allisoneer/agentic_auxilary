@@ -34,10 +34,6 @@ struct Args {
     #[arg(long = "server-config", value_name = "PATH")]
     server_config: Option<String>,
 
-    /// DEPRECATED: use --server-config
-    #[arg(long, value_name = "PATH", hide = true)]
-    config: Option<String>,
-
     /// List available tools and exit
     #[arg(long)]
     list_tools: bool,
@@ -80,22 +76,11 @@ struct FileConfig {
     output: Option<String>,
 }
 
-/// Get effective server config path, preferring --server-config over deprecated --config.
-fn effective_server_config(args: &Args) -> Option<&str> {
-    if args.config.is_some() {
-        eprintln!(
-            "{} --config is deprecated; use --server-config",
-            "WARN".yellow()
-        );
-    }
-    args.server_config.as_deref().or(args.config.as_deref())
-}
-
 fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
     // Parse server config if provided
     let mut allowlist: Option<HashSet<String>> = None;
     let mut file_output: Option<String> = None;
-    if let Some(path) = effective_server_config(args) {
+    if let Some(path) = args.server_config.as_deref() {
         match fs::read_to_string(path) {
             Ok(s) => {
                 if let Ok(fc) = serde_json::from_str::<FileConfig>(&s) {

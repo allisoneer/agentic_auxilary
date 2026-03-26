@@ -165,6 +165,19 @@ See `workflow.md` -> "Code Review (/review)" for:
 
 ## Code Style Guidelines
 
+### Workspace Lint Conformance
+
+When modifying any crate, bring it toward workspace lint/rule conformance if it doesn't already use `lints.workspace = true`:
+
+1. **Check current state**: Look for `[lints]` section in the crate's `Cargo.toml`
+2. **Add workspace lints**: If missing, add `[lints]` with `workspace = true`
+3. **Fix violations**: Run `cargo clippy -p <crate> --all-targets -- -D warnings` and address issues
+4. **Incremental is acceptable**: Large crates may require multiple passes; use `#[allow(...)]` with TODO comments for complex fixes that need separate PRs
+
+This ensures the codebase moves toward consistent quality standards without requiring massive all-at-once migrations.
+
+### TODO Annotations
+
 Rules on comment annotations:
 
 - Keep TODO annotations tagged with severity/priority:

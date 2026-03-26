@@ -49,7 +49,7 @@ dependencies = [
  "jsonschema",
  "proptest",
  "schemars 1.2.1",
- "secrecy 0.8.0",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -302,7 +302,7 @@ dependencies = [
  "proptest",
  "reqwest 0.13.2",
  "schemars 1.2.1",
- "secrecy 0.10.3",
+ "secrecy",
  "serde",
  "serde_json",
  "serial_test",
@@ -459,7 +459,7 @@ dependencies = [
  "rand 0.9.2",
  "reqwest 0.12.28",
  "reqwest-eventsource",
- "secrecy 0.10.3",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -1718,7 +1718,7 @@ dependencies = [
  "futures",
  "reqwest 0.13.2",
  "schemars 1.2.1",
- "secrecy 0.10.3",
+ "secrecy",
  "serde",
  "serde_json",
  "serial_test",
@@ -2881,7 +2881,7 @@ dependencies = [
  "futures",
  "regex",
  "schemars 1.2.1",
- "secrecy 0.10.3",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -4288,7 +4288,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project",
- "secrecy 0.10.3",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -5718,15 +5718,6 @@ name = "sdd"
 version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
-
-[[package]]
-name = "secrecy"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
-dependencies = [
- "zeroize",
-]
 
 [[package]]
 name = "secrecy"
