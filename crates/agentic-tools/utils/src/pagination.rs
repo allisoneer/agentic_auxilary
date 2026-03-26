@@ -21,20 +21,32 @@
 //! ```
 //! use agentic_tools_utils::pagination::{PaginationCache, paginate_slice};
 //!
-//! // Create a cache for your result type
 //! let cache: PaginationCache<i32> = PaginationCache::new();
-//!
-//! // Get or create a lock for a query
 //! let lock = cache.get_or_create("my-query-key");
 //!
-//! // Work with the query state
-//! {
-//!     let mut state = lock.state.lock().unwrap();
-//!     if state.is_empty() {
-//!         // Fetch results and populate state
-//!         state.reset(vec![1, 2, 3, 4, 5], (), 2);
+//! let needs_fetch = {
+//!     let state = lock.lock_state();
+//!     state.is_empty() || state.is_expired()
+//! };
+//!
+//! if needs_fetch {
+//!     // Do expensive work outside the lock.
+//!     let fetched_entries = vec![1, 2, 3, 4, 5];
+//!     let page_size = 2;
+//!
+//!     let mut state = lock.lock_state();
+//!     if state.is_empty() || state.is_expired() {
+//!         state.reset(fetched_entries, (), page_size);
 //!     }
 //! }
+//!
+//! let (page, has_more) = {
+//!     let mut state = lock.lock_state();
+//!     let (page, has_more) =
+//!         paginate_slice(&state.results, state.next_offset, state.page_size);
+//!     state.next_offset += page.len();
+//!     (page, has_more)
+//! };
 //! ```
 
 use std::collections::HashMap;
