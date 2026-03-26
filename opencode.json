@@ -24,9 +24,14 @@
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
+    "NormalOpenAI": {
+      "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
+      "model": "opencode/gpt-5.4",
+      "mode": "primary"
+    },
     "OrchestratorClaude": {
       "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
-      "model": "anthropic/claude-opus-4-5-20251101",
+      "model": "github-copilot/claude-opus-4.5",
       "mode": "primary",
       "permission": {
         "*": "deny",
@@ -232,6 +237,26 @@
                 "type": "enabled",
                 "budgetTokens": 64000
               }
+            }
+          }
+        }
+      }
+    },
+    "github-copilot": {
+      "models": {
+        "claude-opus-4.5": {
+          "options": {
+            "thinking_budget": 31999
+          },
+          "variants": {
+            "thinking": {
+              "disabled": true
+            },
+            "medium": {
+              "thinking_budget": 16000
+            },
+            "max": {
+              "thinking_budget": 31999
             }
           }
         }

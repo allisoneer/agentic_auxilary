@@ -43,8 +43,10 @@ help:
     @echo "  just crate-build <c>  # build a single crate by name"
     @echo ""
     @echo "xtask commands:"
-    @echo "  just xtask-sync       # sync autogen content (CLAUDE.md, release-plz.toml)"
+    @echo "  just xtask-sync       # sync autogen content (CLAUDE.md, release-plz.toml, README.md, justfile)"
     @echo "  just xtask-verify     # verify metadata, policy, and file freshness"
+    @echo "  just xtask-sync-check # check if sync is needed (for CI)"
+    @echo "  just xtask-verify-check # full verification including generated files"
     @echo ""
     @echo "OUTPUT_MODE: minimal (local default) | normal (CI default) | verbose"
 

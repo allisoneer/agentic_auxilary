@@ -60,6 +60,8 @@ If auto-detection fails or user specified a PR number, use that.
 
 If still unknown, call `tools_gh_get_prs` and ask user to select. State assumptions clearly.
 
+Treat GitHub tool output as the authoritative source for PR identification and PR metadata in this workflow.
+
 </step>
 
 <step name="fetch_comments" id="3">
@@ -78,6 +80,8 @@ For each thread, capture:
 - path, line, html_url
 - author metadata (login, is_bot)
 - ordered list of replies with authors and bodies
+
+If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
 
 If zero threads found, proceed to artifact writing with "no unresolved comments" summary.
 
@@ -190,7 +194,7 @@ Determine artifact filename:
 Artifact content:
 
 ### Header
-- PR number, URL, timestamp
+- PR number, URL if available from GitHub tool output, timestamp
 - Triage summary: counts by category and severity
 
 ### Actionable Threads (Deep Analysis)

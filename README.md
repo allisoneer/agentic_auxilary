@@ -58,7 +58,7 @@ cargo install --path apps/thoughts
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-claudecode = "0.1.13"
+claudecode = "0.1.14"
 ```
 <!-- END:autodeps -->
 
@@ -88,6 +88,7 @@ opencode_rs = "0.3.0"
 ### tools
 
 - [`coding_agent_tools`](crates/tools/coding-agent-tools) - Coding agent tools (CLI + MCP). First tool: ls.
+- [`message_optimizer`](crates/tools/message-optimizer) - Standalone GPT-5.4 message optimizer library
 - [`pr_comments`](crates/tools/pr-comments) - Fetch GitHub PR comments via CLI and MCP
 - [`review_tools`](crates/tools/review-tools) - Review tools for agentic-mcp: diff snapshots, lens-based review, pagination
 - [`thoughts-mcp-tools`](crates/tools/thoughts-mcp-tools) - MCP tool wrappers for thoughts-tool using agentic-tools framework
