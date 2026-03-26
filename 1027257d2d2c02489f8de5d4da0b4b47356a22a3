@@ -1,0 +1,23 @@
+.opencode/command/frame_openai.md
+  93ed8d02cd2c074e 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "1027257d2d2c02489f8de5d4da0b4b47356a22a3",
+  "prompts": {
+    "93ed8d02cd2c074e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d473db75ffeipTPWWmmiOXrgw",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
