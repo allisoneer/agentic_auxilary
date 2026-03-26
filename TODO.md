@@ -2,6 +2,7 @@
 - (none)
 
 ## Researched / Ready for implementation:
+- Workspace lint inheritance rollout: Add `[lints] workspace = true` to all crates (currently only anthropic-async has it). Then add xtask policy check to `verify` command that ensures all workspace members have lint inheritance enabled. Prevents drift when new crates are added. Reference: OpenAI Codex repo has 100% lint inheritance across 58 crates.
 
 ## Blocked / Sequenced:
 These items have dependencies and should be done in order.

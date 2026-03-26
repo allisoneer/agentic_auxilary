@@ -5,6 +5,7 @@ use crate::config::SyncStrategy;
 use crate::config::extract_org_repo_from_url;
 use crate::git::clone::CloneOptions;
 use crate::git::clone::clone_repository;
+use crate::git::ref_key::encode_ref_key;
 use crate::git::utils::get_control_repo_root;
 use crate::mount::MountOptions;
 use crate::mount::MountResolver;
@@ -52,7 +53,7 @@ pub async fn update_active_mounts() -> Result<()> {
     println!("{} filesystem mounts...", "Synchronizing".cyan());
 
     // Build desired targets with MountSpace
-    let mut desired_targets: Vec<(MountSpace, Mount, bool)> = vec![];
+    let mut desired_targets: Vec<(MountSpace, Mount, bool, Option<String>)> = vec![];
 
     if let Some(tm) = &desired.thoughts_mount {
         let m = Mount::Git {
@@ -60,7 +61,7 @@ pub async fn update_active_mounts() -> Result<()> {
             subpath: tm.subpath.clone(),
             sync: tm.sync,
         };
-        desired_targets.push((MountSpace::Thoughts, m, false));
+        desired_targets.push((MountSpace::Thoughts, m, false, None));
     }
 
     for cm in &desired.context_mounts {
@@ -70,7 +71,7 @@ pub async fn update_active_mounts() -> Result<()> {
             sync: cm.sync,
         };
         let space = MountSpace::Context(cm.mount_path.clone());
-        desired_targets.push((space, m, false));
+        desired_targets.push((space, m, false, None));
     }
 
     for rm in &desired.references {
@@ -92,8 +93,13 @@ pub async fn update_active_mounts() -> Result<()> {
             subpath: None,
             sync: SyncStrategy::None,
         };
-        let space = MountSpace::Reference { org, repo };
-        desired_targets.push((space, m, true));
+        let ref_key = rm.ref_name.as_deref().map(encode_ref_key).transpose()?;
+        let space = MountSpace::Reference {
+            org_path: org,
+            repo,
+            ref_key,
+        };
+        desired_targets.push((space, m, true, rm.ref_name.clone()));
     }
 
     // Query active mounts and key them by relative path under .thoughts-data
@@ -114,7 +120,7 @@ pub async fn update_active_mounts() -> Result<()> {
     for (active_key, target_path) in &active_map {
         if !desired_targets
             .iter()
-            .any(|(space, _, _)| space.relative_path(&desired.mount_dirs) == *active_key)
+            .any(|(space, _, _, _)| space.relative_path(&desired.mount_dirs) == *active_key)
         {
             println!("  {} removed mount: {}", "Unmounting".yellow(), active_key);
             mount_manager.unmount(target_path, false).await?;
@@ -123,23 +129,35 @@ pub async fn update_active_mounts() -> Result<()> {
 
     // Mount missing targets
     let resolver = MountResolver::new()?;
-    for (space, m, _read_only) in &desired_targets {
+    for (space, m, _read_only, ref_name) in &desired_targets {
         let key = space.relative_path(&desired.mount_dirs);
         if !active_map.contains_key(&key) {
             let target = desired.get_mount_target(space, &repo_root);
             ensure_dir(target.parent().unwrap())?;
 
             // Resolve mount source
-            let src = match resolver.resolve_mount(m) {
-                Ok(p) => p,
-                Err(_) => {
-                    if let Mount::Git { url, .. } = &m {
-                        println!("  {} repository {} ...", "Cloning".yellow(), url);
-                        clone_and_map(url, &key).await?
-                    } else {
-                        continue;
+            let src = match (space, m) {
+                (MountSpace::Reference { .. }, Mount::Git { url, .. }) => {
+                    let repo_mapping = RepoMappingManager::new()?;
+                    match repo_mapping.resolve_reference_url(url, ref_name.as_deref())? {
+                        Some(path) => path,
+                        None => {
+                            println!("  {} repository {} ...", "Cloning".yellow(), url);
+                            clone_and_map(url, ref_name.as_deref()).await?
+                        }
                     }
                 }
+                _ => match resolver.resolve_mount(m) {
+                    Ok(p) => p,
+                    Err(_) => {
+                        if let Mount::Git { url, .. } = &m {
+                            println!("  {} repository {} ...", "Cloning".yellow(), url);
+                            clone_and_map(url, None).await?
+                        } else {
+                            continue;
+                        }
+                    }
+                },
             };
 
             // Mount with appropriate options
@@ -170,20 +188,20 @@ pub async fn update_active_mounts() -> Result<()> {
     Ok(())
 }
 
-async fn clone_and_map(url: &str, _key: &str) -> Result<PathBuf> {
+async fn clone_and_map(url: &str, ref_name: Option<&str>) -> Result<PathBuf> {
     let mut repo_mapping = RepoMappingManager::new()?;
-    let default_path = RepoMappingManager::get_default_clone_path(url)?;
+    let default_path = RepoMappingManager::get_default_reference_clone_path(url, ref_name)?;
 
     // Clone to default location
     let clone_opts = CloneOptions {
         url: url.to_string(),
         target_path: default_path.clone(),
-        branch: None,
+        branch: ref_name.map(str::to_string),
     };
     clone_repository(&clone_opts)?;
 
     // Add mapping
-    repo_mapping.add_mapping(url.to_string(), default_path.clone(), true)?;
+    repo_mapping.add_reference_mapping(url.to_string(), ref_name, default_path.clone(), true)?;
 
     Ok(default_path)
 }

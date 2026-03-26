@@ -1,6 +1,6 @@
 [package]
 name = "linear-tools"
-version = "0.4.3"
+version = "0.4.5"
 edition = "2024"
 license = "MIT"
 description = "Linear issue tools via CLI + MCP"
@@ -46,6 +46,6 @@ role = "tool-lib"
 family = "linear"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = false
 napi = false

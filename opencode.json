@@ -16,16 +16,23 @@
     "tools_cli_*": true,
     "tools_ask_*": true,
     "tools_thoughts_*": true,
-    "tools_gh_*": true
+    "tools_gh_*": true,
+    "review_*": false
   },
   "agent": {
     "Normal": {
       "prompt": "{file:./.opencode/sysprompt.md}",
+      "mode": "primary",
+      "model": "anthropic/claude-opus-4-5"
+    },
+    "NormalOpenAI": {
+      "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
+      "model": "opencode/gpt-5.4",
       "mode": "primary"
     },
     "OrchestratorClaude": {
       "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
-      "model": "anthropic/claude-opus-4-5-20251101",
+      "model": "anthropic/claude-opus-4-5",
       "mode": "primary",
       "permission": {
         "*": "deny",
@@ -43,6 +50,38 @@
         "orchestrator_*": "allow",
         "read": "allow",
         "todowrite": "allow"
+      }
+    },
+    "ReviewClaude": {
+      "prompt": "{file:./.opencode/review_sysprompt.md}",
+      "model": "anthropic/claude-opus-4-5",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "review_*": "allow",
+        "read": "allow",
+        "tools_cli_just_execute": "allow",
+        "tools_cli_ls": "allow",
+        "tools_cli_grep": "allow",
+        "tools_cli_glob": "allow",
+        "tools_thoughts_write_document": "allow",
+        "tools_ask_reasoning_model": "allow"
+      }
+    },
+    "ReviewOpenAI": {
+      "prompt": "{file:./.opencode/review_sysprompt_gpt54.md}",
+      "model": "opencode/gpt-5.4",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "review_*": "allow",
+        "read": "allow",
+        "tools_cli_just_execute": "allow",
+        "tools_cli_ls": "allow",
+        "tools_cli_grep": "allow",
+        "tools_cli_glob": "allow",
+        "tools_thoughts_write_document": "allow",
+        "tools_ask_reasoning_model": "allow"
       }
     },
     "Bash": {
@@ -199,6 +238,26 @@
                 "type": "enabled",
                 "budgetTokens": 64000
               }
+            }
+          }
+        }
+      }
+    },
+    "github-copilot": {
+      "models": {
+        "claude-opus-4.5": {
+          "options": {
+            "thinking_budget": 31999
+          },
+          "variants": {
+            "thinking": {
+              "disabled": true
+            },
+            "medium": {
+              "thinking_budget": 16000
+            },
+            "max": {
+              "thinking_budget": 31999
             }
           }
         }

@@ -171,6 +171,13 @@ git_tag_enable = true
 release = true
 
 [[package]]
+name = "review_tools"
+changelog_path = "crates/tools/review-tools/CHANGELOG.md"
+git_tag_name = "review_tools-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "thoughts-mcp-tools"
 changelog_path = "crates/tools/thoughts-mcp-tools/CHANGELOG.md"
 git_tag_name = "thoughts-mcp-tools-v{{ version }}"
@@ -203,6 +210,20 @@ name = "opencode_rs"
 changelog_path = "crates/services/opencode-rs/CHANGELOG.md"
 git_tag_name = "opencode_rs-v{{ version }}"
 git_tag_enable = false
+release = true
+
+[[package]]
+name = "message-optimizer-bin"
+changelog_path = "apps/message-optimizer/CHANGELOG.md"
+git_tag_name = "message-optimizer-bin-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "message_optimizer"
+changelog_path = "crates/tools/message-optimizer/CHANGELOG.md"
+git_tag_name = "message_optimizer-v{{ version }}"
+git_tag_enable = true
 release = true
 
 [[package]]

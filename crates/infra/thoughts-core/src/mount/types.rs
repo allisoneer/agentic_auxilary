@@ -141,10 +141,12 @@ pub enum MountSpace {
 
     /// A reference mount organized by organization and repository
     Reference {
-        /// Organization or user name
-        org: String,
+        /// Organization or user path
+        org_path: String,
         /// Repository name
         repo: String,
+        /// Filesystem-safe encoded ref identity for pinned references
+        ref_key: Option<String>,
     },
 }
 
@@ -154,15 +156,26 @@ impl MountSpace {
         if input == "thoughts" {
             Ok(MountSpace::Thoughts)
         } else if input.starts_with("references/") {
-            let parts: Vec<&str> = input.splitn(3, '/').collect();
-            if parts.len() == 3 && parts[0] == "references" {
-                Ok(MountSpace::Reference {
-                    org: parts[1].to_string(),
-                    repo: parts[2].to_string(),
-                })
-            } else {
-                anyhow::bail!("Invalid reference format: {}", input)
+            let rest = input.trim_start_matches("references/");
+            let (org_path, repo_segment) = rest
+                .rsplit_once('/')
+                .ok_or_else(|| anyhow::anyhow!("Invalid reference format: {}", input))?;
+            if org_path.is_empty() || repo_segment.is_empty() {
+                anyhow::bail!("Invalid reference format: {}", input);
             }
+
+            let (repo, ref_key) = match repo_segment.rsplit_once('@') {
+                Some((repo, ref_key)) if !repo.is_empty() && !ref_key.is_empty() => {
+                    (repo.to_string(), Some(ref_key.to_string()))
+                }
+                _ => (repo_segment.to_string(), None),
+            };
+
+            Ok(MountSpace::Reference {
+                org_path: org_path.to_string(),
+                repo,
+                ref_key,
+            })
         } else if let Some(rest) = input.strip_prefix("context/") {
             if rest.is_empty() {
                 anyhow::bail!(
@@ -182,7 +195,14 @@ impl MountSpace {
         match self {
             MountSpace::Thoughts => "thoughts".to_string(),
             MountSpace::Context(path) => path.clone(),
-            MountSpace::Reference { org, repo } => format!("references/{}/{}", org, repo),
+            MountSpace::Reference {
+                org_path,
+                repo,
+                ref_key,
+            } => match ref_key {
+                Some(ref_key) => format!("references/{}/{}@{}", org_path, repo, ref_key),
+                None => format!("references/{}/{}", org_path, repo),
+            },
         }
     }
 
@@ -191,9 +211,19 @@ impl MountSpace {
         match self {
             MountSpace::Thoughts => mount_dirs.thoughts.clone(),
             MountSpace::Context(path) => format!("{}/{}", mount_dirs.context, path),
-            MountSpace::Reference { org, repo } => {
-                format!("{}/{}/{}", mount_dirs.references, org, repo)
-            }
+            MountSpace::Reference {
+                org_path,
+                repo,
+                ref_key,
+            } => match ref_key {
+                Some(ref_key) => {
+                    format!(
+                        "{}/{}/{}@{}",
+                        mount_dirs.references, org_path, repo, ref_key
+                    )
+                }
+                None => format!("{}/{}/{}", mount_dirs.references, org_path, repo),
+            },
         }
     }
 
@@ -246,8 +276,9 @@ mod tests {
         assert_eq!(
             reference,
             MountSpace::Reference {
-                org: "github".to_string(),
+                org_path: "github".to_string(),
                 repo: "example".to_string(),
+                ref_key: None,
             }
         );
 
@@ -256,13 +287,29 @@ mod tests {
     }
 
     #[test]
+    fn test_mount_space_parse_reference_with_multi_segment_org_and_ref() {
+        let reference =
+            MountSpace::parse("references/gitlab/group/subgroup/repo@r-refs~2ftags~2fv1.0.0")
+                .unwrap();
+        assert_eq!(
+            reference,
+            MountSpace::Reference {
+                org_path: "gitlab/group/subgroup".to_string(),
+                repo: "repo".to_string(),
+                ref_key: Some("r-refs~2ftags~2fv1.0.0".to_string()),
+            }
+        );
+    }
+
+    #[test]
     fn test_mount_space_as_str() {
         assert_eq!(MountSpace::Thoughts.as_str(), "thoughts");
         assert_eq!(MountSpace::Context("docs".to_string()).as_str(), "docs");
         assert_eq!(
             MountSpace::Reference {
-                org: "org".to_string(),
+                org_path: "org".to_string(),
                 repo: "repo".to_string(),
+                ref_key: None,
             }
             .as_str(),
             "references/org/repo"
@@ -277,8 +324,17 @@ mod tests {
             (
                 "references/github/example",
                 MountSpace::Reference {
-                    org: "github".to_string(),
+                    org_path: "github".to_string(),
                     repo: "example".to_string(),
+                    ref_key: None,
+                },
+            ),
+            (
+                "references/gitlab/group/repo@r-main",
+                MountSpace::Reference {
+                    org_path: "gitlab/group".to_string(),
+                    repo: "repo".to_string(),
+                    ref_key: Some("r-main".to_string()),
                 },
             ),
         ];
@@ -296,8 +352,9 @@ mod tests {
         assert!(!MountSpace::Context("test".to_string()).is_read_only());
         assert!(
             MountSpace::Reference {
-                org: "test".to_string(),
+                org_path: "test".to_string(),
                 repo: "repo".to_string(),
+                ref_key: None,
             }
             .is_read_only()
         );

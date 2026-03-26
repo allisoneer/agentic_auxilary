@@ -52,8 +52,11 @@ Guidance for Claude Code when working with this repository.
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
+- `review_tools` (tool-lib) - `crates/tools/review-tools/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
+- `message-optimizer-bin` (app) - `apps/message-optimizer/`
+- `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 <!-- END:xtask:autogen -->
 
 ## Working Notes
@@ -80,7 +83,7 @@ just fmt-check      # Check formatting across entire workspace
 
 ### xtask commands
 ```bash
-just xtask-sync         # Sync autogen content (CLAUDE.md, release-plz.toml)
+just xtask-sync         # Sync autogen content (CLAUDE.md, release-plz.toml, README.md, justfile)
 just xtask-verify       # Verify metadata, policy, and file freshness
 just xtask-sync-check   # Check if sync is needed (for CI)
 just xtask-verify-check # Full verification including generated files
@@ -108,7 +111,7 @@ The `tools/agent-wrap.sh` wrapper controls output:
 
 ### Git Navigation (Read-Only)
 
-For agents without shell access, these just recipes provide safe, read-only git inspection. All commands use `--no-pager` to avoid interactive hangs. Paths with spaces must be quoted.
+For agents without shell access, these just recipes provide safe, read-only git inspection. All commands use `--no-pager` to avoid interactive hangs. Paths with spaces must be quoted for single-path parameters. Note: `git-files` takes whitespace-separated pathspec patterns, so paths containing spaces are not supported there.
 
 | Recipe | Parameters | Description |
 |--------|------------|-------------|
@@ -153,6 +156,13 @@ cargo run -p xtask -- readme-sync --dry-run
 AUTODEPS_STRICT=1 cargo run -p xtask -- readme-sync
 ```
 
+## Review Workflow
+
+See `workflow.md` -> "Code Review (/review)" for:
+- Dedicated Review agents (ReviewClaude/ReviewOpenAI)
+- Tool isolation rules for `review_*`
+- End-to-end `/review` usage
+
 ## Code Style Guidelines
 
 Rules on comment annotations:
@@ -162,4 +172,3 @@ Rules on comment annotations:
     - TODO(1): Significant architectural flaws, minor bugs
     - TODO(2): Minor design flaws, lacking elegance, missing functionality
     - TODO(3): Minor issues, e.g., lacking unit test coverage
-

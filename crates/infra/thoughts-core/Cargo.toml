@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-tool"
-version = "0.8.3"
+version = "0.9.0"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Flexible thought management using filesystem mounts for git repositories"
@@ -33,6 +33,7 @@ gix = { version = "0.80", default-features = false, features = [
   "interrupt",
   "blocking-http-transport-reqwest-rust-tls",
 ] }
+gix-protocol = "0.58"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = [
   "env-filter",
@@ -48,6 +49,7 @@ atomicwrites = "0.4"
 colored = "3"
 regex = "1"
 schemars = { workspace = true }
+sha2 = "0.10"
 
 [build-dependencies]
 rustc_version = "0.4"

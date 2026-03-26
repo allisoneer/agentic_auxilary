@@ -47,6 +47,9 @@ To add a new enum value:
 3) Run: cargo run -p xtask -- verify --check
 """
 
+# `integrations.mcp` semantics:
+# - Set `mcp = true` ONLY for runtime MCP server apps (role = "app") that run an MCP server process.
+# - Libraries and tool-libs that provide MCP tools/primitives should keep `mcp = false`.
 [integrations.mcp]
 # Require at least one of these deps if metadata.repo.integrations.mcp = true
 any_of = ["agentic-tools-mcp", "universal-tool-core", "rmcp"]
@@ -97,6 +100,7 @@ blocked_severities = [0]
 # Repo-relative path prefixes to exclude from scanning.
 ignore_paths = [
   "CLAUDE.md",                                            # Convention definition text
+  "AGENTS.md",                                            # Convention definition text
   "crates/meta/xtask/src/verify.rs",                      # Self-referential enforcement code
   "crates/infra/thoughts-core/CLAUDE.md",                 # Prose mention
   "crates/legacy/universal-tool-examples/",               # Legacy example READMEs with CLI examples

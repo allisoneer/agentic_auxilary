@@ -5,6 +5,7 @@ members = [
   "apps/agentic",
   "apps/thoughts",
   "apps/agentic-mcp",
+  "apps/message-optimizer",
   "apps/opencode-orchestrator-mcp",
 
   # Bindings
@@ -32,6 +33,8 @@ members = [
   "crates/tools/coding-agent-tools",
   "crates/tools/pr-comments",
   "crates/tools/gpt5-reasoner",
+  "crates/tools/review-tools",
+  "crates/tools/message-optimizer",
   "crates/tools/thoughts-mcp-tools",
   "crates/tools/web-retrieval",
 
@@ -75,24 +78,26 @@ rmcp = { version = "1.1.0" }
 agentic-config = { version = "0.1.0", path = "crates/infra/agentic-config" }
 agentic-tools-core = { version = "0.1.1", path = "crates/agentic-tools/core" }
 agentic-tools-macros = { version = "0.1.0", path = "crates/agentic-tools/macros" }
-agentic-tools-mcp = { version = "0.1.1", path = "crates/agentic-tools/mcp" }
-agentic-tools-utils = { version = "0.1.2", path = "crates/agentic-tools/utils" }
-agentic-tools-registry = { version = "0.2.6", path = "crates/agentic-tools/registry" }
+agentic-tools-mcp = { version = "0.1.2", path = "crates/agentic-tools/mcp" }
+agentic-tools-utils = { version = "0.1.4", path = "crates/agentic-tools/utils" }
+agentic-tools-registry = { version = "0.2.10", path = "crates/agentic-tools/registry" }
 agentic_logging = { version = "0.1.2", path = "crates/infra/agentic-logging" }
-thoughts-tool = { version = "0.8.3", path = "crates/infra/thoughts-core" }
-thoughts-mcp-tools = { version = "0.1.3", path = "crates/tools/thoughts-mcp-tools" }
-coding_agent_tools = { version = "0.2.5", path = "crates/tools/coding-agent-tools" }
-pr_comments = { version = "0.6.4", path = "crates/tools/pr-comments" }
-gpt5_reasoner = { version = "0.7.0", path = "crates/tools/gpt5-reasoner" }
-linear-tools = { version = "0.4.3", path = "crates/linear/tools" }
+thoughts-tool = { version = "0.9.0", path = "crates/infra/thoughts-core" }
+thoughts-mcp-tools = { version = "0.2.0", path = "crates/tools/thoughts-mcp-tools" }
+coding_agent_tools = { version = "0.2.9", path = "crates/tools/coding-agent-tools" }
+pr_comments = { version = "0.7.0", path = "crates/tools/pr-comments" }
+gpt5_reasoner = { version = "0.7.2", path = "crates/tools/gpt5-reasoner" }
+linear-tools = { version = "0.4.5", path = "crates/linear/tools" }
 linear-schema = { version = "0.1.2", path = "crates/linear/schema" }
 linear-queries = { version = "0.2.1", path = "crates/linear/queries" }
-claudecode = { version = "0.1.13", path = "crates/services/claudecode-rs" }
+claudecode = { version = "0.1.14", path = "crates/services/claudecode-rs" }
 anthropic-async = { version = "0.5.1", path = "crates/services/anthropic-async" }
 exa-async = { version = "0.1.1", path = "crates/services/exa-async" }
 opencode_rs = { version = "0.3.0", path = "crates/services/opencode-rs" }
 web-retrieval = { version = "0.1.5", path = "crates/tools/web-retrieval" }
-universal-tool-core = { version = "0.2.6", path = "crates/legacy/universal-tool-core" }
+review_tools = { version = "0.1.1", path = "crates/tools/review-tools" }
+message_optimizer = { version = "0.1.0", path = "crates/tools/message-optimizer" }
+universal-tool-core = { version = "0.2.7", path = "crates/legacy/universal-tool-core" }
 universal-tool-macros = { version = "0.1.9", path = "crates/legacy/universal-tool-macros" }
 
 # The profile that 'dist' will build with

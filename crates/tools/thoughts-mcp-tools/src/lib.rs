@@ -1,11 +1,12 @@
 //! Agentic-tools integration for thoughts_tool.
 //!
-//! This module provides Tool wrappers for the 5 thoughts MCP tools using the
+//! This module provides Tool wrappers for the 6 thoughts MCP tools using the
 //! agentic-tools-core framework, enabling registration in the unified registry.
 
 pub mod tools;
 
 pub use tools::AddReferenceTool;
+pub use tools::GetRepoRefsTool;
 pub use tools::GetTemplateTool;
 pub use tools::ListActiveDocumentsTool;
 pub use tools::ListReferencesTool;
@@ -22,6 +23,7 @@ pub fn build_registry() -> ToolRegistry {
         .register::<WriteDocumentTool, ()>(WriteDocumentTool)
         .register::<ListActiveDocumentsTool, ()>(ListActiveDocumentsTool)
         .register::<ListReferencesTool, ()>(ListReferencesTool)
+        .register::<GetRepoRefsTool, ()>(GetRepoRefsTool)
         .register::<AddReferenceTool, ()>(AddReferenceTool)
         .register::<GetTemplateTool, ()>(GetTemplateTool)
         .finish()

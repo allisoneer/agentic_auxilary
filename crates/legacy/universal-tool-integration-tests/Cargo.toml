@@ -6,7 +6,7 @@ publish = false
 license = "MIT"
 
 [dev-dependencies]
-universal-tool-core = { version = "0.2.6", path = "../universal-tool-core", features = [
+universal-tool-core = { version = "0.2.7", path = "../universal-tool-core", features = [
   "cli",
 ] }
 universal-tool-macros = { version = "0.1.9", path = "../universal-tool-macros" }
