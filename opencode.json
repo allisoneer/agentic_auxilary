@@ -22,7 +22,8 @@
   "agent": {
     "Normal": {
       "prompt": "{file:./.opencode/sysprompt.md}",
-      "mode": "primary"
+      "mode": "primary",
+      "model": "anthropic/claude-opus-4-5"
     },
     "NormalOpenAI": {
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
@@ -31,7 +32,7 @@
     },
     "OrchestratorClaude": {
       "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
-      "model": "github-copilot/claude-opus-4.5",
+      "model": "anthropic/claude-opus-4-5",
       "mode": "primary",
       "permission": {
         "*": "deny",
