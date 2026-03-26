@@ -334,9 +334,9 @@ impl RepoConfigManager {
         }
 
         // references: validate and ensure uniqueness by canonical key
-        use crate::config::validation::{
-            canonical_reference_instance_key, validate_pinned_ref_full_name, validate_reference_url,
-        };
+        use crate::config::validation::canonical_reference_instance_key;
+        use crate::config::validation::validate_pinned_ref_full_name;
+        use crate::config::validation::validate_reference_url;
         let mut seen_refs = std::collections::HashSet::new();
         for r in &cfg.references {
             let (url, ref_name) = match r {

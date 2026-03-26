@@ -1,8 +1,15 @@
 # Taplo configuration for TOML schema validation and formatting
 # https://taplo.tamasfe.dev/
 
-# Exclude cloned reference repos and other non-project files
-exclude = [".thoughts-data/**", "references/**", "target/**"]
+# Explicitly include only project TOML files (avoids traversing slow mounts)
+include = [
+  "Cargo.toml",
+  "apps/**/Cargo.toml",
+  "bindings/**/Cargo.toml",
+  "crates/**/Cargo.toml",
+  "*.toml",
+  "tools/*.toml",
+]
 
 [formatting]
 align_entries = false

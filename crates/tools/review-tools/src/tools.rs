@@ -1,14 +1,19 @@
 //! MCP tool implementations for review tools.
 
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use std::sync::Arc;
 
 use crate::ReviewTools;
-use crate::types::{
-    ReviewDiffPageInput, ReviewDiffPageOutput, ReviewDiffSnapshotInput, ReviewDiffSnapshotOutput,
-    ReviewRunInput, ReviewRunOutput,
-};
+use crate::types::ReviewDiffPageInput;
+use crate::types::ReviewDiffPageOutput;
+use crate::types::ReviewDiffSnapshotInput;
+use crate::types::ReviewDiffSnapshotOutput;
+use crate::types::ReviewRunInput;
+use crate::types::ReviewRunOutput;
 
 /// Tool for generating a paginated git diff snapshot.
 #[derive(Clone)]

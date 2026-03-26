@@ -4,7 +4,9 @@ use agentic_tools_core::ToolError;
 use agentic_tools_utils::llm_output::extract_json_best_effort as extract_json_impl;
 use std::path::Path;
 
-use crate::types::{Confidence, ReviewLens, ReviewReport};
+use crate::types::Confidence;
+use crate::types::ReviewLens;
+use crate::types::ReviewReport;
 
 /// Extract JSON from model output, wrapping the utility function.
 fn extract_json_best_effort(text: &str) -> Result<String, ToolError> {
@@ -244,7 +246,9 @@ pub fn apply_grounding_fallback(report: &mut ReviewReport, issues: &[GroundingIs
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ReviewFinding, ReviewVerdict, Severity};
+    use crate::types::ReviewFinding;
+    use crate::types::ReviewVerdict;
+    use crate::types::Severity;
     use tempfile::tempdir;
 
     #[test]

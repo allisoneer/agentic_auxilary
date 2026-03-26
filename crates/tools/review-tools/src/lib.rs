@@ -19,17 +19,27 @@ use uuid::Uuid;
 use agentic_tools_core::ToolError;
 use agentic_tools_utils::prompt::wrap_untrusted;
 use cache::SnapshotCache;
-use prompts::{compose_system_prompt, compose_user_prompt};
-use reviewer::{ClaudeCliRunner, RETRY_DELAYS, ReviewerRunner};
-use types::{
-    DEFAULT_PAGE_SIZE_LINES, DiffPageIndex, DiffPaging, ReviewDiffPageInput, ReviewDiffPageOutput,
-    ReviewDiffSnapshotInput, ReviewDiffSnapshotOutput, ReviewReport, ReviewRunInput,
-    ReviewRunOutput, ReviewRunPaging, ReviewVerdict,
-};
-use validation::{
-    apply_grounding_fallback, collect_grounding_issues, format_grounding_issues_for_prompt,
-    parse_and_validate_report,
-};
+use prompts::compose_system_prompt;
+use prompts::compose_user_prompt;
+use reviewer::ClaudeCliRunner;
+use reviewer::RETRY_DELAYS;
+use reviewer::ReviewerRunner;
+use types::DEFAULT_PAGE_SIZE_LINES;
+use types::DiffPageIndex;
+use types::DiffPaging;
+use types::ReviewDiffPageInput;
+use types::ReviewDiffPageOutput;
+use types::ReviewDiffSnapshotInput;
+use types::ReviewDiffSnapshotOutput;
+use types::ReviewReport;
+use types::ReviewRunInput;
+use types::ReviewRunOutput;
+use types::ReviewRunPaging;
+use types::ReviewVerdict;
+use validation::apply_grounding_fallback;
+use validation::collect_grounding_issues;
+use validation::format_grounding_issues_for_prompt;
+use validation::parse_and_validate_report;
 
 /// Large diff line count threshold for warning.
 const LARGE_DIFF_THRESHOLD: usize = 1500;

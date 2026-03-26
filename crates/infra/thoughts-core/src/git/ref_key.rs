@@ -1,5 +1,7 @@
-use anyhow::{Result, bail};
-use sha2::{Digest, Sha256};
+use anyhow::Result;
+use anyhow::bail;
+use sha2::Digest;
+use sha2::Sha256;
 
 const MAX_REF_KEY_LEN: usize = 120;
 const HASH_HEX_LEN: usize = 16;
@@ -76,7 +78,8 @@ fn truncate_on_char_boundary(value: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_REF_KEY_LEN, encode_ref_key};
+    use super::MAX_REF_KEY_LEN;
+    use super::encode_ref_key;
 
     #[test]
     fn encodes_safe_ascii_directly() {

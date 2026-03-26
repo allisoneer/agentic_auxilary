@@ -1,13 +1,18 @@
-use anthropic_async::{
-    AnthropicConfig, BetaFeature, Client,
-    types::{
-        content::{ContentBlock, MessageParam, MessageRole, SystemParam},
-        messages::{MessagesCreateRequest, MessagesCreateResponse},
-        tools::{Tool, ToolChoice},
-    },
-};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::BetaFeature;
+use anthropic_async::Client;
+use anthropic_async::types::content::ContentBlock;
+use anthropic_async::types::content::MessageParam;
+use anthropic_async::types::content::MessageRole;
+use anthropic_async::types::content::SystemParam;
+use anthropic_async::types::messages::MessagesCreateRequest;
+use anthropic_async::types::messages::MessagesCreateResponse;
+use anthropic_async::types::tools::Tool;
+use anthropic_async::types::tools::ToolChoice;
 
-use crate::{error::MessageOptimizerError, prompts::OPTIMIZER_SYSTEM, types::ModelOutput};
+use crate::error::MessageOptimizerError;
+use crate::prompts::OPTIMIZER_SYSTEM;
+use crate::types::ModelOutput;
 
 pub const OPTIMIZER_MODEL: &str = "claude-sonnet-4-6";
 pub const TOOL_NAME: &str = "emit_optimized_prompt";

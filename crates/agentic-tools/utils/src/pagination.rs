@@ -8,7 +8,7 @@
 //!
 //! Uses two-level locking for thread safety:
 //! - Level 1: Brief lock on outer `HashMap` to get/create per-query state
-//! - Level 2: Per-query mutex protects shared QueryState access. Callers
+//! - Level 2: Per-query mutex protects shared `QueryState` access. Callers
 //!   typically lock only to read or update pagination state and may perform
 //!   expensive work outside the lock.
 //!

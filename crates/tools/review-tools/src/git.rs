@@ -1,10 +1,16 @@
 //! Git diff generation using git2.
 
 use agentic_tools_core::ToolError;
-use git2::{Diff, DiffFormat, DiffOptions, Repository};
+use git2::Diff;
+use git2::DiffFormat;
+use git2::DiffOptions;
+use git2::Repository;
 use std::path::Path;
 
-use crate::types::{DiffPage, DiffStats, ReviewDiffMode, ReviewSnapshot};
+use crate::types::DiffPage;
+use crate::types::DiffStats;
+use crate::types::ReviewDiffMode;
+use crate::types::ReviewSnapshot;
 
 /// Base ref fallback order for finding merge-base.
 const BASE_REF_FALLBACKS: &[&str] = &["origin/main", "origin/master", "main", "master"];

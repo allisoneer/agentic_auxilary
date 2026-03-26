@@ -1,8 +1,10 @@
 //! Snapshot cache with TTL-based expiration.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 use crate::types::ReviewSnapshot;
 
@@ -79,7 +81,8 @@ impl SnapshotCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{DiffPage, DiffStats};
+    use crate::types::DiffPage;
+    use crate::types::DiffStats;
     use std::path::PathBuf;
 
     fn make_snapshot() -> ReviewSnapshot {
