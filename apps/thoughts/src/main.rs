@@ -13,7 +13,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod commands;
 
-// Re-export library modules into binary's namespace
 pub use thoughts_tool::config;
 pub use thoughts_tool::error;
 pub use thoughts_tool::git;
@@ -54,7 +53,7 @@ enum Commands {
         /// Specific mount to sync (syncs current repository's mounts if not specified)
         mount: Option<String>,
 
-        /// Commit message for sync
+        /// Commit message for sync (currently ignored)
         #[arg(short, long)]
         message: Option<String>,
 
@@ -282,7 +281,6 @@ async fn main() -> Result<()> {
         );
     }
 
-    // Execute command
     match cli.command {
         Commands::Init { force } => commands::init::execute(force).await,
         Commands::Sync {

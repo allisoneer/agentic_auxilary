@@ -37,7 +37,7 @@ jobs:
       - name: Install tools
         uses: taiki-e/install-action@v2
         with:
-          tool: just
+          tool: just,taplo-cli
 
       - name: Check justfile formatting
         run: just --fmt --check --unstable

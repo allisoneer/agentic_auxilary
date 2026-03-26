@@ -33,7 +33,9 @@ anyhow = { workspace = true }
 # TLS backend - explicit dependency for CryptoProvider initialization
 # Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
 # in without explicit provider selection (due to Cargo's additive features)
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+] }
 
 [lints]
 workspace = true

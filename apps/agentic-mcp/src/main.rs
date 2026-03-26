@@ -82,7 +82,7 @@ struct FileConfig {
 
 /// Get effective server config path, preferring --server-config over deprecated --config.
 fn effective_server_config(args: &Args) -> Option<&str> {
-    if args.config.is_some() && args.server_config.is_none() {
+    if args.config.is_some() {
         eprintln!(
             "{} --config is deprecated; use --server-config",
             "WARN".yellow()

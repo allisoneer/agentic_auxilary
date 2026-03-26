@@ -10,6 +10,8 @@ use clap::Subcommand;
 mod commands;
 
 #[derive(Parser)]
+// TODO(3): Avoid coupling the clap command name to the binary name; derive from package metadata
+// when feasible to reduce rename friction.
 #[command(name = "agentic")]
 #[command(about = "Agentic unified CLI for configuration management")]
 #[command(version)]

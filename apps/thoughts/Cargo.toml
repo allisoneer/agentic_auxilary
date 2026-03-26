@@ -26,7 +26,11 @@ agentic-tools-utils = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "time",
+] }
 colored = "3"
 tokio = { workspace = true }
 chrono = { workspace = true }

@@ -64,9 +64,11 @@ build:
 
 fmt:
     {{ exec }}cargo +nightly fmt --all
+    {{ exec }}taplo fmt
 
 fmt-check:
     {{ exec }}cargo +nightly fmt --all -- --check
+    {{ exec }}taplo fmt --check
 
 # Security audit with cargo-deny
 deny:

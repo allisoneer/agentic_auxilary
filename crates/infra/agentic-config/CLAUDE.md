@@ -80,8 +80,7 @@ Warnings are returned via `LoadedAgenticConfig.warnings` and printed by CLI comm
 - `types.rs`: Config structs and serialization
 - `paths.rs`: XDG path resolution and config directory helpers
 - `loader.rs`: Load, merge, and env override logic
-- `merge.rs`: RFC 7396 JSON merge-patch implementation
-- `migration.rs`: Legacy v2 mapping helpers
+- `merge.rs`: TOML deep-merge implementation
 - `validation.rs`: Advisory validation and deprecated key detection
 - `schema.rs`: JSON schema generation
 - `test_support.rs`: Test-only env guards (crate-private)

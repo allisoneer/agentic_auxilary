@@ -194,6 +194,8 @@ fn cmd_show(json_output: bool, path: Option<PathBuf>) -> Result<()> {
 }
 
 fn cmd_schema() -> Result<()> {
+    // TODO(2): Host this schema at a stable, versioned URL so users can reference it via "$schema"
+    // without generating a local file.
     println!("{}", agentic_config::schema_json_pretty()?);
     Ok(())
 }
