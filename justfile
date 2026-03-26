@@ -89,6 +89,9 @@ crate-test crate:
 crate-build crate:
     {{ exec }}cargo build -p {{ crate }}
 
+crate-run crate:
+    cargo run -p {{ crate }}
+
 # xtask commands
 
 xtask-sync:
@@ -307,7 +310,7 @@ git-show ref path="":
       git --no-pager show "${REF}:${P}" || true
     fi
 
-# git-files: List tracked files, optionally filtered by pathspec patterns (quote paths with spaces).
+# git-files: List tracked files, optionally filtered by whitespace-separated git pathspec patterns (paths containing spaces not supported).
 git-files patterns="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -317,6 +320,8 @@ git-files patterns="":
       exit 0
     fi
 
+    # Disable glob expansion so patterns are passed literally to git
+    set -f
     git --no-pager ls-files -- {{ patterns }}
 
 # ------------------------------------------------------------------------------

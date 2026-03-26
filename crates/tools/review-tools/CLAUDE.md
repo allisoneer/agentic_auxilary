@@ -1,10 +1,10 @@
-# CLAUDE.md - linear-tools
+# CLAUDE.md - review_tools
 
 <!-- BEGIN:xtask:autogen header -->
-- Crate: linear-tools
-- Path: crates/linear/tools/
+- Crate: review_tools
+- Path: crates/tools/review-tools/
 - Role: tool-lib
-- Family: linear
+- Family: tools
 - Integrations: mcp=false, logging=false, napi=false
 <!-- END:xtask:autogen -->
 
@@ -17,14 +17,14 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p linear-tools -- --check
-cargo clippy -p linear-tools --all-targets -- -D warnings
+cargo fmt -p review_tools -- --check
+cargo clippy -p review_tools --all-targets -- -D warnings
 
 # Tests
-cargo test -p linear-tools
+cargo test -p review_tools
 
 # Build
-cargo build -p linear-tools
+cargo build -p review_tools
 ```
 <!-- END:xtask:autogen -->
 

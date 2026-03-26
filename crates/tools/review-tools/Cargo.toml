@@ -1,0 +1,36 @@
+[package]
+name = "review_tools"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+description = "Review tools for agentic-mcp: diff snapshots, lens-based review, pagination"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[dependencies]
+agentic-tools-core = { workspace = true }
+agentic-tools-utils = { workspace = true }
+claudecode = { workspace = true }
+futures = "0.3"
+git2 = "0.20"
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time", "sync"] }
+tracing = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

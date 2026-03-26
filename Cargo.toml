@@ -32,6 +32,7 @@ members = [
     "crates/tools/coding-agent-tools",
     "crates/tools/pr-comments",
     "crates/tools/gpt5-reasoner",
+    "crates/tools/review-tools",
     "crates/tools/message-optimizer",
     "crates/tools/thoughts-mcp-tools",
     "crates/tools/web-retrieval",
@@ -87,6 +88,7 @@ anthropic-async = { version = "0.5.1", path = "crates/services/anthropic-async" 
 exa-async = { version = "0.1.1", path = "crates/services/exa-async" }
 opencode_rs = { version = "0.3.0", path = "crates/services/opencode-rs" }
 web-retrieval = { version = "0.1.5", path = "crates/tools/web-retrieval" }
+review_tools = { version = "0.1.0", path = "crates/tools/review-tools" }
 message_optimizer = { version = "0.1.0", path = "crates/tools/message-optimizer" }
 universal-tool-core = { version = "0.2.6", path = "crates/legacy/universal-tool-core" }
 universal-tool-macros = { version = "0.1.9", path = "crates/legacy/universal-tool-macros" }

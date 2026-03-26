@@ -99,6 +99,7 @@ dependencies = [
  "gpt5_reasoner",
  "linear-tools",
  "pr_comments",
+ "review_tools",
  "serde",
  "serde_json",
  "thoughts-mcp-tools",
@@ -111,7 +112,9 @@ dependencies = [
 name = "agentic-tools-utils"
 version = "0.1.2"
 dependencies = [
+ "futures",
  "reqwest 0.13.2",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -5118,6 +5121,24 @@ dependencies = [
  "pin-project-lite",
  "reqwest 0.12.28",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "review_tools"
+version = "0.1.0"
+dependencies = [
+ "agentic-tools-core",
+ "agentic-tools-utils",
+ "claudecode",
+ "futures",
+ "git2",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

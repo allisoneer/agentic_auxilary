@@ -47,6 +47,6 @@ family = "tools"
 readme_tier = "featured"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = true
 napi = false

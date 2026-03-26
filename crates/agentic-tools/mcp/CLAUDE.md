@@ -5,7 +5,7 @@
 - Path: crates/agentic-tools/mcp/
 - Role: lib
 - Family: agentic-tools
-- Integrations: mcp=true, logging=false, napi=false
+- Integrations: mcp=false, logging=false, napi=false
 <!-- END:xtask:autogen -->
 
 ## Overview
