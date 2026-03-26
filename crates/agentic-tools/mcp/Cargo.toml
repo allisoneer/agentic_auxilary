@@ -1,6 +1,6 @@
 [package]
 name = "agentic-tools-mcp"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "MCP server integration for agentic-tools library family"
@@ -21,6 +21,6 @@ role = "lib"
 family = "agentic-tools"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = false
 napi = false
