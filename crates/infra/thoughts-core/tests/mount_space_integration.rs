@@ -10,8 +10,17 @@ mod tests {
             (
                 "references/github/example",
                 MountSpace::Reference {
-                    org: "github".to_string(),
+                    org_path: "github".to_string(),
                     repo: "example".to_string(),
+                    ref_key: None,
+                },
+            ),
+            (
+                "references/github/example@r-main",
+                MountSpace::Reference {
+                    org_path: "github".to_string(),
+                    repo: "example".to_string(),
+                    ref_key: Some("r-main".to_string()),
                 },
             ),
         ];
@@ -29,8 +38,9 @@ mod tests {
         assert!(!MountSpace::Context("test".to_string()).is_read_only());
         assert!(
             MountSpace::Reference {
-                org: "test".to_string(),
+                org_path: "test".to_string(),
                 repo: "repo".to_string(),
+                ref_key: None,
             }
             .is_read_only()
         );
@@ -49,8 +59,9 @@ mod tests {
         assert_eq!(MountSpace::Context("docs".to_string()).to_string(), "docs");
         assert_eq!(
             MountSpace::Reference {
-                org: "anthropic".to_string(),
+                org_path: "anthropic".to_string(),
                 repo: "claude".to_string(),
+                ref_key: None,
             }
             .to_string(),
             "references/anthropic/claude"

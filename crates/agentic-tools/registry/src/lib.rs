@@ -71,6 +71,7 @@ const THOUGHTS_NAMES: &[&str] = &[
     "thoughts_write_document",
     "thoughts_list_documents",
     "thoughts_list_references",
+    "thoughts_get_repo_refs",
     "thoughts_add_reference",
     "thoughts_get_template",
 ];
@@ -131,7 +132,7 @@ impl AgenticTools {
             regs.push(gpt5_reasoner::build_registry());
         }
 
-        // thoughts-mcp-tools (5 tools)
+        // thoughts-mcp-tools (6 tools)
         if domain_wanted(THOUGHTS_NAMES) {
             regs.push(thoughts_mcp_tools::build_registry());
         }
@@ -199,8 +200,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_26() {
-        assert_eq!(AgenticTools::total_tool_count(), 26);
+    fn total_tool_count_is_27() {
+        assert_eq!(AgenticTools::total_tool_count(), 27);
     }
 
     #[test]
@@ -240,10 +241,10 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 26 tools
+        // Should have all 27 tools
         assert!(
-            names.len() >= 26,
-            "expected at least 26 tools, got {}",
+            names.len() >= 27,
+            "expected at least 27 tools, got {}",
             names.len()
         );
 
@@ -267,6 +268,10 @@ mod tests {
         assert!(
             reg.contains("thoughts_add_reference"),
             "missing thoughts_add_reference from thoughts_mcp_tools"
+        );
+        assert!(
+            reg.contains("thoughts_get_repo_refs"),
+            "missing thoughts_get_repo_refs from thoughts_mcp_tools"
         );
         assert!(
             reg.contains("web_fetch"),
@@ -324,7 +329,7 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Empty allowlist normalizes to None, enabling all tools
-        assert!(reg.len() >= 26);
+        assert!(reg.len() >= 27);
     }
 
     #[test]

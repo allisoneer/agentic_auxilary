@@ -37,7 +37,11 @@ impl DesiredState {
                     sync: cm.sync,
                     subpath: cm.subpath.clone(),
                 }),
-            MountSpace::Reference { org: _, repo: _ } => {
+            MountSpace::Reference {
+                org_path: _,
+                repo: _,
+                ref_key: _,
+            } => {
                 // References need URL lookup - for now return None
                 // This will be addressed when references commands are implemented
                 None
@@ -148,6 +152,7 @@ impl RepoConfigManager {
                     ReferenceEntry::Simple(url) => ReferenceMount {
                         remote: url,
                         description: None,
+                        ref_name: None,
                     },
                     ReferenceEntry::WithMetadata(rm) => rm,
                 })
@@ -279,6 +284,7 @@ impl RepoConfigManager {
                 references.push(ReferenceMount {
                     remote: req.remote.clone(),
                     description: Some(req.description.clone()),
+                    ref_name: None,
                 });
             } else {
                 context_mounts.push(ContextMount {
@@ -391,7 +397,7 @@ impl RepoConfigManager {
                     .references
                     .into_iter()
                     .map(|rm| {
-                        if rm.description.is_some() {
+                        if rm.description.is_some() || rm.ref_name.is_some() {
                             ReferenceEntry::WithMetadata(rm)
                         } else {
                             ReferenceEntry::Simple(rm.remote)
@@ -533,15 +539,28 @@ impl RepoConfigManager {
         }
 
         // references: validate and ensure uniqueness by canonical key
-        use crate::config::validation::{canonical_reference_key, validate_reference_url};
+        use crate::config::validation::{
+            canonical_reference_instance_key, validate_pinned_ref_full_name, validate_reference_url,
+        };
         let mut seen_refs = std::collections::HashSet::new();
         for r in &cfg.references {
-            let url = match r {
-                ReferenceEntry::Simple(s) => s.as_str(),
-                ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
+            let (url, ref_name) = match r {
+                ReferenceEntry::Simple(s) => (s.as_str(), None),
+                ReferenceEntry::WithMetadata(rm) => (rm.remote.as_str(), rm.ref_name.as_deref()),
             };
             validate_reference_url(url).with_context(|| format!("Invalid reference '{}'", url))?;
-            let key = canonical_reference_key(url)?;
+            if let Some(ref_name) = ref_name {
+                if ref_name.starts_with("refs/remotes/") {
+                    warnings.push(format!(
+                        "Reference '{}' uses legacy pinned ref '{}'. New references should use refs/heads/* or refs/tags/*; refs/remotes/* is a local remote-tracking namespace.",
+                        url, ref_name
+                    ));
+                }
+                validate_pinned_ref_full_name(ref_name).with_context(|| {
+                    format!("Invalid pinned ref '{}' for reference '{}'", ref_name, url)
+                })?;
+            }
+            let key = canonical_reference_instance_key(url, ref_name)?;
             if !seen_refs.insert(key) {
                 anyhow::bail!("Duplicate reference detected: {}", url);
             }
@@ -940,6 +959,7 @@ mod tests {
                 ReferenceEntry::WithMetadata(ReferenceMount {
                     remote: "git@github.com:org/repo.git:docs".into(), // invalid: subpath
                     description: None,
+                    ref_name: None,
                 }),
             ],
         };
@@ -1004,6 +1024,31 @@ mod tests {
                 .to_string()
                 .contains("Unsupported configuration version: 3.0")
         );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_pinned_ref_with_whitespace_or_trailing_slash() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        for bad_ref in [" refs/heads/main", "refs/heads/main ", "refs/heads/main/"] {
+            let cfg = RepoConfigV2 {
+                version: "2.0".to_string(),
+                mount_dirs: MountDirsV2::default(),
+                thoughts_mount: None,
+                context_mounts: vec![],
+                references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "https://github.com/org/repo".to_string(),
+                    description: None,
+                    ref_name: Some(bad_ref.to_string()),
+                })],
+            };
+
+            assert!(
+                mgr.validate_v2_hard(&cfg).is_err(),
+                "expected {bad_ref:?} to fail hard validation"
+            );
+        }
     }
 
     #[test]
@@ -1268,6 +1313,163 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_v2_hard_allows_same_repo_with_different_refs() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "https://github.com/org/repo".to_string(),
+                    description: None,
+                    ref_name: Some("refs/heads/main".to_string()),
+                }),
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "git@github.com:Org/Repo.git".to_string(),
+                    description: None,
+                    ref_name: Some("refs/tags/v1.0.0".to_string()),
+                }),
+            ],
+        };
+
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_duplicate_references_with_same_ref() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "https://github.com/org/repo".to_string(),
+                    description: None,
+                    ref_name: Some("refs/heads/main".to_string()),
+                }),
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "git@github.com:Org/Repo.git".to_string(),
+                    description: Some("duplicate".to_string()),
+                    ref_name: Some("refs/heads/main".to_string()),
+                }),
+            ],
+        };
+
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate reference")
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_duplicate_references_legacy_remotes_vs_heads() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "https://github.com/org/repo".to_string(),
+                    description: None,
+                    ref_name: Some("refs/remotes/origin/main".to_string()),
+                }),
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "git@github.com:Org/Repo.git".to_string(),
+                    description: None,
+                    ref_name: Some("refs/heads/main".to_string()),
+                }),
+            ],
+        };
+
+        let err = mgr.validate_v2_hard(&cfg).unwrap_err();
+        assert!(err.to_string().contains("Duplicate reference"));
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_shorthand_pinned_ref() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".to_string(),
+                description: None,
+                ref_name: Some("main".to_string()),
+            })],
+        };
+
+        let err = mgr.validate_v2_hard(&cfg).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("Pinned refs must be full ref names"),
+            "unexpected error chain: {err:#}"
+        );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_incomplete_pinned_ref_prefix() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".to_string(),
+                description: None,
+                ref_name: Some("refs/heads/".to_string()),
+            })],
+        };
+
+        assert!(mgr.validate_v2_hard(&cfg).is_err());
+    }
+
+    #[test]
+    fn test_validate_v2_hard_warns_on_legacy_refs_remotes() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".to_string(),
+                description: None,
+                ref_name: Some("refs/remotes/origin/main".to_string()),
+            })],
+        };
+
+        let warnings = mgr
+            .validate_v2_hard(&cfg)
+            .expect("legacy refs/remotes should warn");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("refs/remotes/origin/main"));
+        assert!(warnings[0].contains("legacy pinned ref"));
+    }
+
+    #[test]
     fn test_validate_v2_hard_accepts_valid_config() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
@@ -1290,6 +1492,7 @@ mod tests {
                 ReferenceEntry::WithMetadata(ReferenceMount {
                     remote: "https://github.com/org/repo2".to_string(),
                     description: Some("Reference 2".to_string()),
+                    ref_name: None,
                 }),
             ],
         };

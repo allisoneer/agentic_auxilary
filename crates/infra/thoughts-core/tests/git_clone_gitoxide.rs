@@ -46,6 +46,29 @@ fn init_bare_remote_with_commit() -> (TempDir, String) {
         &["push", "-u", "origin", "HEAD:refs/heads/main"],
     );
 
+    support::git_ok(work.path(), &["tag", "v1.0.0"]);
+    support::git_ok(work.path(), &["push", "origin", "refs/tags/v1.0.0"]);
+
+    support::git_ok(work.path(), &["checkout", "-b", "feature/demo"]);
+    fs::write(work.path().join("README.md"), "feature").unwrap();
+    support::git_ok(work.path(), &["add", "."]);
+    support::git_ok(
+        work.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "feature",
+        ],
+    );
+    support::git_ok(
+        work.path(),
+        &["push", "-u", "origin", "HEAD:refs/heads/feature/demo"],
+    );
+
     (remote_dir, remote_path.to_string_lossy().into())
 }
 
@@ -113,4 +136,46 @@ fn clone_fails_on_nonempty_directory() {
     let result = clone_repository(&opts);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("not empty"));
+}
+
+#[test]
+fn clone_named_branch_from_file_remote() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    let (_remote_guard, remote_path) = init_bare_remote_with_commit();
+    let target = TempDir::new().unwrap();
+
+    let opts = CloneOptions {
+        url: remote_path,
+        target_path: target.path().join("cloned-feature"),
+        branch: Some("refs/heads/feature/demo".to_string()),
+    };
+    clone_repository(&opts).expect("clone should succeed");
+
+    let content = fs::read_to_string(target.path().join("cloned-feature/README.md")).unwrap();
+    assert_eq!(content, "feature");
+}
+
+#[test]
+fn clone_tag_ref_from_file_remote() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    let (_remote_guard, remote_path) = init_bare_remote_with_commit();
+    let target = TempDir::new().unwrap();
+
+    let opts = CloneOptions {
+        url: remote_path,
+        target_path: target.path().join("cloned-tag"),
+        branch: Some("refs/tags/v1.0.0".to_string()),
+    };
+    clone_repository(&opts).expect("clone should succeed");
+
+    let content = fs::read_to_string(target.path().join("cloned-tag/README.md")).unwrap();
+    assert_eq!(content, "hello");
 }

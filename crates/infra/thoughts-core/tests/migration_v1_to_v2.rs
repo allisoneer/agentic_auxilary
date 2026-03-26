@@ -235,7 +235,7 @@ fn test_mount_space_compatibility_with_v1_targets() -> Result<()> {
     let reference = MountSpace::parse("references/rust-lang/rust");
     assert!(matches!(
         reference,
-        Ok(MountSpace::Reference { org, repo }) if org == "rust-lang" && repo == "rust"
+        Ok(MountSpace::Reference { org_path, repo, ref_key: None }) if org_path == "rust-lang" && repo == "rust"
     ));
 
     // Thoughts mount
