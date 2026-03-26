@@ -253,6 +253,22 @@
     {
       "remote": "https://github.com/openai/openai-agents-python",
       "description": "Official OpenAI multi-agent SDK with instructions patterns, handoffs, and agent/tool orchestration behavior"
+    },
+    {
+      "remote": "https://github.com/google/codesearch",
+      "description": "Canonical trigram-index regex search implementation from Russ Cox; reference for regex-to-trigram query planning and mmap-friendly on-disk indexing."
+    },
+    {
+      "remote": "https://github.com/reflex-search/reflex",
+      "description": "Rust trigram-based code search engine with local indexing and incremental updates; strong fit for instant grep replacement ideas."
+    },
+    {
+      "remote": "https://github.com/sourcegraph/zoekt",
+      "description": "Production trigram-based code search engine; useful reference for large-scale index layout, candidate filtering, and regex verification."
+    },
+    {
+      "remote": "https://github.com/livegrep/livegrep",
+      "description": "Suffix-array-based regex code search system discussed in the instant grep article; highest-value missing architectural alternative to trigram/sparse-ngram indexing."
     }
   ]
 }
