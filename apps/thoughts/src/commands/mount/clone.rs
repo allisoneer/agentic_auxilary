@@ -1,6 +1,8 @@
 use crate::config::RepoMappingManager;
 use crate::utils::paths::expand_path;
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use colored::*;
 use std::path::PathBuf;
 

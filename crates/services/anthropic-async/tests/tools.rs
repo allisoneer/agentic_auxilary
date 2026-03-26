@@ -1,8 +1,10 @@
-use anthropic_async::types::{
-    content::{ContentBlock, ContentBlockParam, MessageParam, MessageRole},
-    messages::MessagesCreateRequest,
-    tools::{Tool, ToolChoice},
-};
+use anthropic_async::types::content::ContentBlock;
+use anthropic_async::types::content::ContentBlockParam;
+use anthropic_async::types::content::MessageParam;
+use anthropic_async::types::content::MessageRole;
+use anthropic_async::types::messages::MessagesCreateRequest;
+use anthropic_async::types::tools::Tool;
+use anthropic_async::types::tools::ToolChoice;
 
 #[test]
 fn tool_serialization() {
@@ -64,7 +66,7 @@ fn message_request_with_tools() {
     };
 
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 128,
         messages: vec![MessageParam {
             role: MessageRole::User,
@@ -141,7 +143,8 @@ fn tool_use_response_deserialization() {
 fn schema_generation() {
     use anthropic_async::types::tools::schema;
     use schemars::JsonSchema;
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
+    use serde::Serialize;
 
     #[derive(Serialize, Deserialize, JsonSchema)]
     #[serde(tag = "action", content = "params")]
@@ -161,7 +164,8 @@ fn schema_generation() {
 fn tool_use_parsing() {
     use anthropic_async::types::tools::schema;
     use schemars::JsonSchema;
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
+    use serde::Serialize;
 
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
     #[serde(tag = "action", content = "params")]
@@ -184,7 +188,8 @@ fn tool_use_parsing() {
 fn tool_use_parsing_snake_case() {
     use anthropic_async::types::tools::schema;
     use schemars::JsonSchema;
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
+    use serde::Serialize;
 
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
     #[serde(tag = "action", content = "params", rename_all = "snake_case")]

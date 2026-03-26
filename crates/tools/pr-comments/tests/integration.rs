@@ -1,4 +1,5 @@
-use pr_comments::{git, models::*};
+use pr_comments::git;
+use pr_comments::models::*;
 
 #[test]
 fn test_url_parsing() {
@@ -46,7 +47,8 @@ async fn test_model_serialization() {
 
 #[cfg(test)]
 mod resolution_tests {
-    use pr_comments::models::{GraphQLResponse, PullRequestData};
+    use pr_comments::models::GraphQLResponse;
+    use pr_comments::models::PullRequestData;
 
     #[test]
     fn test_include_resolved_default() {
@@ -101,7 +103,8 @@ mod resolution_tests {
 
 #[cfg(test)]
 mod filter_pipeline_tests {
-    use pr_comments::github::test_helpers::{FilterParams, apply_filters};
+    use pr_comments::github::test_helpers::FilterParams;
+    use pr_comments::github::test_helpers::apply_filters;
     use pr_comments::models::ReviewComment;
     use std::collections::HashMap;
 
@@ -253,7 +256,9 @@ mod filter_pipeline_tests {
 
 #[cfg(test)]
 mod thread_tests {
-    use pr_comments::models::{CommentSourceType, ReviewComment, Thread};
+    use pr_comments::models::CommentSourceType;
+    use pr_comments::models::ReviewComment;
+    use pr_comments::models::Thread;
     use std::collections::HashMap;
 
     fn make_comment(id: u64, user: &str, is_bot: bool, in_reply_to: Option<u64>) -> ReviewComment {

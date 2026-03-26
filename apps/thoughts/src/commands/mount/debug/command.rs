@@ -1,9 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use tracing::info;
 
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
-use crate::mount::{MountResolver, MountSpace, get_mount_manager};
+use crate::mount::MountResolver;
+use crate::mount::MountSpace;
+use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
 
 pub async fn execute(mount_name: String) -> Result<()> {

@@ -3,9 +3,12 @@
 //! This module generates `create_cli_command()` and `execute_cli()` methods
 //! that integrate tools with clap-based CLI applications.
 
-use crate::codegen::shared::{to_kebab_case, type_to_string};
+use crate::codegen::shared::to_kebab_case;
+use crate::codegen::shared::type_to_string;
 use crate::codegen::validation;
-use crate::model::{ParamSource, RouterDef, ToolDef};
+use crate::model::ParamSource;
+use crate::model::RouterDef;
+use crate::model::ToolDef;
 use proc_macro2::TokenStream;
 use quote::quote;
 

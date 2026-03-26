@@ -3,9 +3,11 @@
 //! Experimental endpoint for resource access.
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
 use reqwest::Method;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Resource API client.
 #[derive(Clone)]
@@ -66,8 +68,12 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use std::time::Duration;
-    use wiremock::matchers::{method, path, query_param};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+    use wiremock::matchers::query_param;
 
     #[tokio::test]
     async fn test_get_resource() {

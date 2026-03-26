@@ -1,8 +1,11 @@
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
 use crate::config::validation::validate_reference_url;
-use crate::config::{RepoConfigManager, RepoMappingManager};
-use crate::git::clone::{CloneOptions, clone_repository};
+use crate::git::clone::CloneOptions;
+use crate::git::clone::clone_repository;
 use crate::git::pull::pull_ff_only;
-use crate::git::utils::{get_control_repo_root, get_current_branch};
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_current_branch;
 use anyhow::Result;
 use colored::Colorize;
 use thoughts_tool::repo_identity::RepoIdentity;

@@ -1,9 +1,8 @@
-use crate::{
-    client::Client,
-    config::Config,
-    error::ExaError,
-    types::find_similar::{FindSimilarRequest, FindSimilarResponse},
-};
+use crate::client::Client;
+use crate::config::Config;
+use crate::error::ExaError;
+use crate::types::find_similar::FindSimilarRequest;
+use crate::types::find_similar::FindSimilarResponse;
 
 /// API resource for the `/findSimilar` endpoint
 pub struct FindSimilar<'c, C: Config> {

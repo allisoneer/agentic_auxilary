@@ -1,4 +1,7 @@
-use claudecode::{Client, Event, OutputFormat, SessionConfig};
+use claudecode::Client;
+use claudecode::Event;
+use claudecode::OutputFormat;
+use claudecode::SessionConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

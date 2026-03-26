@@ -4,7 +4,8 @@
 #![expect(clippy::case_sensitive_file_extension_comparisons)]
 
 use coding_agent_tools::paths::to_abs_string;
-use coding_agent_tools::types::{Depth, Show};
+use coding_agent_tools::types::Depth;
+use coding_agent_tools::types::Show;
 use std::str::FromStr;
 
 // =============================================================================
@@ -150,8 +151,11 @@ mod path_tests {
 // =============================================================================
 
 mod text_format_tests {
-    use agentic_tools_core::fmt::{TextFormat, TextOptions};
-    use coding_agent_tools::types::{EntryKind, LsEntry, LsOutput};
+    use agentic_tools_core::fmt::TextFormat;
+    use agentic_tools_core::fmt::TextOptions;
+    use coding_agent_tools::types::EntryKind;
+    use coding_agent_tools::types::LsEntry;
+    use coding_agent_tools::types::LsOutput;
 
     #[test]
     fn format_header_has_trailing_slash() {
@@ -249,8 +253,11 @@ mod text_format_tests {
 }
 
 mod walker_integration_tests {
-    use coding_agent_tools::types::{EntryKind, Show};
-    use coding_agent_tools::walker::{BUILTIN_IGNORES, WalkConfig, list};
+    use coding_agent_tools::types::EntryKind;
+    use coding_agent_tools::types::Show;
+    use coding_agent_tools::walker::BUILTIN_IGNORES;
+    use coding_agent_tools::walker::WalkConfig;
+    use coding_agent_tools::walker::list;
     use std::fs;
     use tempfile::TempDir;
 
@@ -629,8 +636,11 @@ mod walker_integration_tests {
 // =============================================================================
 
 mod pagination_integration_tests {
-    use coding_agent_tools::pagination::{PAGE_SIZE_ALL, PAGE_SIZE_FILTERED, paginate};
-    use coding_agent_tools::types::{EntryKind, LsEntry};
+    use coding_agent_tools::pagination::PAGE_SIZE_ALL;
+    use coding_agent_tools::pagination::PAGE_SIZE_FILTERED;
+    use coding_agent_tools::pagination::paginate;
+    use coding_agent_tools::types::EntryKind;
+    use coding_agent_tools::types::LsEntry;
 
     fn make_entries(count: usize) -> Vec<LsEntry> {
         (0..count)
@@ -932,7 +942,8 @@ mod ls_parallel_and_cache_tests {
 }
 
 mod truncation_sentinel_tests {
-    use coding_agent_tools::types::{TRUNCATION_SENTINEL, encode_truncation_info};
+    use coding_agent_tools::types::TRUNCATION_SENTINEL;
+    use coding_agent_tools::types::encode_truncation_info;
 
     #[test]
     fn encode_format_contains_numbers() {
@@ -953,7 +964,8 @@ mod truncation_sentinel_tests {
 }
 
 mod enhanced_truncation_message_tests {
-    use agentic_tools_core::fmt::{TextFormat, TextOptions};
+    use agentic_tools_core::fmt::TextFormat;
+    use agentic_tools_core::fmt::TextOptions;
     use coding_agent_tools::CodingAgentTools;
     use std::fs;
     use std::path::Path;

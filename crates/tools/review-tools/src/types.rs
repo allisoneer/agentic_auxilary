@@ -2,7 +2,8 @@
 
 use agentic_tools_core::fmt::TextFormat;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 
 /// Default page size in lines (~800 lines per page).

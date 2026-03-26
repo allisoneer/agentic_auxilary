@@ -1,8 +1,17 @@
-use crate::config::validation::{canonical_reference_key, is_git_url, validate_reference_url};
-use crate::config::{ReferenceEntry, RepoConfigManager, RepoMappingManager};
-use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url, is_git_repo};
+use crate::config::ReferenceEntry;
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
+use crate::config::validation::canonical_reference_key;
+use crate::config::validation::is_git_url;
+use crate::config::validation::validate_reference_url;
+use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_remote_url;
+use crate::git::utils::is_git_repo;
 use crate::utils::paths::expand_path;
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use colored::Colorize;
 use std::path::PathBuf;
 

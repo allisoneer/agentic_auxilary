@@ -1,6 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use cargo_metadata::MetadataCommand;
-use clap::{Parser, Subcommand};
+use clap::Parser;
+use clap::Subcommand;
 use std::path::PathBuf;
 
 pub mod autogen;
@@ -10,6 +12,7 @@ pub mod marker;
 pub mod policy;
 pub mod readme;
 pub mod release_plz;
+pub mod schema;
 pub mod sync;
 pub mod verify;
 

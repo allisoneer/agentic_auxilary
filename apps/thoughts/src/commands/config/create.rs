@@ -1,7 +1,9 @@
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_current_control_repo_root;
 use crate::utils::paths;
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use colored::Colorize;
 
 pub async fn execute() -> Result<()> {

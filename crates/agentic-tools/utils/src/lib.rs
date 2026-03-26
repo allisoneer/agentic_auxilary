@@ -7,3 +7,7 @@ pub mod llm_output;
 pub mod pagination;
 pub mod prompt;
 pub mod secrets;
+
+// Re-exports for convenient access
+pub use cli::Argv;
+pub use cli::editor_argv;

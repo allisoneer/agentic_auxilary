@@ -2,14 +2,17 @@
 
 use crate::context::ToolContext;
 use crate::error::ToolError;
-use crate::fmt::{TextFormat, TextOptions};
+use crate::fmt::TextFormat;
+use crate::fmt::TextOptions;
 use crate::schema::mcp_schema;
-use crate::tool::{Tool, ToolCodec};
+use crate::tool::Tool;
+use crate::tool::ToolCodec;
 use futures::future::BoxFuture;
 use schemars::Schema;
 use serde_json::Value;
 use std::any::TypeId;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::sync::Arc;
 

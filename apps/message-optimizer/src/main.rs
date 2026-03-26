@@ -1,8 +1,11 @@
 use std::io::Read;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use clap::Parser;
-use message_optimizer::{OptimizeMessageRequest, OptimizedPrompt, optimize_message};
+use message_optimizer::OptimizeMessageRequest;
+use message_optimizer::OptimizedPrompt;
+use message_optimizer::optimize_message;
 
 #[derive(Debug, Parser)]
 #[command(name = "message-optimizer")]

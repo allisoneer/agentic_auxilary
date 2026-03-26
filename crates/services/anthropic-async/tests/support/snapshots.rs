@@ -24,9 +24,11 @@
 
 use std::env;
 
-use anthropic_async::{AnthropicConfig, Client};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::Client;
 
-use super::recording::{self, SnapshotServer};
+use super::recording::SnapshotServer;
+use super::recording::{self};
 
 /// Check if we're running in live mode (real API calls).
 #[must_use]

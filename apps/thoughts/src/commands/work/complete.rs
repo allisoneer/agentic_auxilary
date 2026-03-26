@@ -1,8 +1,13 @@
-use crate::config::{Mount, RepoConfigManager};
-use crate::git::utils::{find_repo_root, get_control_repo_root, get_current_branch};
+use crate::config::Mount;
+use crate::config::RepoConfigManager;
+use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_current_branch;
 use crate::mount::MountResolver;
-use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use anyhow::Context;
+use anyhow::Result;
+use chrono::DateTime;
+use chrono::Utc;
 use colored::Colorize;
 use std::fs;
 use thoughts_tool::workspace::check_branch_allowed;

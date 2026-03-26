@@ -3,7 +3,8 @@
 //! This module provides utilities for classifying HTTP responses
 //! in a consistent, transport-agnostic way.
 
-use reqwest::{Error as ReqwestError, StatusCode};
+use reqwest::Error as ReqwestError;
+use reqwest::StatusCode;
 
 /// Classification of HTTP errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -4,7 +4,8 @@
 //!
 //! This example requires the `opencode` binary to be installed and in PATH.
 
-use opencode_rs::cli::{CliRunner, RunOptions};
+use opencode_rs::cli::CliRunner;
+use opencode_rs::cli::RunOptions;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

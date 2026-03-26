@@ -16,6 +16,7 @@ name = "coding_agent_tools"
 path = "src/lib.rs"
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 agentic-tools-utils = { workspace = true }

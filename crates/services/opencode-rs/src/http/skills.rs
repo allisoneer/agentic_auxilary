@@ -3,8 +3,10 @@
 //! Endpoints for managing skills (reusable prompt templates).
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::skill::{SkillDirs, SkillInfo};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::skill::SkillDirs;
+use crate::types::skill::SkillInfo;
 use reqwest::Method;
 
 /// Skills API client.
@@ -63,8 +65,12 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use std::time::Duration;
-    use wiremock::matchers::{method, path, query_param};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+    use wiremock::matchers::query_param;
 
     #[tokio::test]
     async fn test_list_skills() {

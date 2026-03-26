@@ -1,4 +1,6 @@
-use claudecode::{Client, Model, SessionConfig};
+use claudecode::Client;
+use claudecode::Model;
+use claudecode::SessionConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

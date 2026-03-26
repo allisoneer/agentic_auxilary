@@ -7,5 +7,6 @@ pub mod marker;
 pub mod policy;
 pub mod readme;
 pub mod release_plz;
+pub mod schema;
 pub mod sync;
 pub mod verify;

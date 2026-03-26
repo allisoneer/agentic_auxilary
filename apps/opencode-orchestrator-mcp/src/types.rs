@@ -1,8 +1,10 @@
 //! Tool input/output types with JSON schema and `TextFormat` implementations.
 
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Write;
 
 // ============================================================================

@@ -25,17 +25,21 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 thiserror = "2"
-dirs = "6"
+dirs = { workspace = true }
 git2 = { version = "0.20", features = ["vendored-openssl", "ssh", "https"] }
 gix = { version = "0.80", default-features = false, features = [
-    "blocking-network-client",
-    "worktree-mutation",
-    "interrupt",
-    "blocking-http-transport-reqwest-rust-tls"
+  "blocking-network-client",
+  "worktree-mutation",
+  "interrupt",
+  "blocking-http-transport-reqwest-rust-tls",
 ] }
 gix-protocol = "0.58"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "time",
+] }
 chrono = { version = "0.4", features = ["serde"] }
 glob = "0.3"
 tokio = { version = "1", features = ["full"] }
@@ -53,7 +57,11 @@ rustc_version = "0.4"
 # Configure platform-specific compilation
 [package.metadata.docs.rs]
 all-features = true
-targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+]
 
 [dev-dependencies]
 tempfile = "3"

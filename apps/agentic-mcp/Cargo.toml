@@ -17,10 +17,12 @@ logging = false
 napi = false
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 agentic-tools-registry = { workspace = true }
 clap = { workspace = true }
+colored = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -31,4 +33,9 @@ anyhow = { workspace = true }
 # TLS backend - explicit dependency for CryptoProvider initialization
 # Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
 # in without explicit provider selection (due to Cargo's additive features)
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+] }
+
+[lints]
+workspace = true

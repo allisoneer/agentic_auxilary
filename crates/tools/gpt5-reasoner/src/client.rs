@@ -1,5 +1,7 @@
-use crate::errors::{ReasonerError, Result};
-use async_openai::{Client, config::OpenAIConfig};
+use crate::errors::ReasonerError;
+use crate::errors::Result;
+use async_openai::Client;
+use async_openai::config::OpenAIConfig;
 
 pub struct OrClient {
     pub client: Client<OpenAIConfig>,

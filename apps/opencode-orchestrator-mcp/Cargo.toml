@@ -26,6 +26,7 @@ name = "opencode-orchestrator-mcp"
 path = "src/main.rs"
 
 [dependencies]
+agentic-config = { workspace = true }
 anyhow = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
@@ -34,14 +35,21 @@ opencode_rs = { workspace = true, features = ["server"] }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "sync"] }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "time",
+  "sync",
+] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # TLS backend - explicit dependency for CryptoProvider initialization
 # Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
 # in without explicit provider selection (due to Cargo's additive features)
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+] }
 
 [dev-dependencies]
 pretty_assertions = "1.4"

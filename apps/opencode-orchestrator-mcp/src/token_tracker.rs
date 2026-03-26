@@ -4,10 +4,11 @@
 //! is reached to trigger server-side summarization.
 
 use opencode_rs::types::event::Event;
-use opencode_rs::types::message::{Part, TokenUsage};
+use opencode_rs::types::message::Part;
+use opencode_rs::types::message::TokenUsage;
 
 /// Tracks token usage during a session run to detect context limit threshold.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct TokenTracker {
     /// Provider ID from message events
     pub provider_id: Option<String>,
@@ -19,13 +20,33 @@ pub struct TokenTracker {
     pub latest_input_tokens: Option<u64>,
     /// Flag indicating compaction/summarization is needed
     pub compaction_needed: bool,
+    /// Threshold at which to trigger summarization (0.0 - 1.0)
+    threshold: f64,
+}
+
+impl Default for TokenTracker {
+    fn default() -> Self {
+        Self::with_threshold(0.80)
+    }
 }
 
 impl TokenTracker {
-    /// Threshold at which to trigger summarization (80%)
-    pub const THRESHOLD: f64 = 0.80;
+    /// Create a new token tracker with a custom compaction threshold.
+    ///
+    /// The threshold should be between 0.0 and 1.0 (e.g., 0.80 for 80%).
+    pub fn with_threshold(threshold: f64) -> Self {
+        Self {
+            provider_id: None,
+            model_id: None,
+            context_limit: None,
+            latest_input_tokens: None,
+            compaction_needed: false,
+            threshold,
+        }
+    }
 
-    /// Create a new token tracker.
+    /// Create a new token tracker with default threshold (80%).
+    #[cfg(test)]
     pub fn new() -> Self {
         Self::default()
     }
@@ -85,7 +106,7 @@ impl TokenTracker {
             && limit > 0
         {
             let ratio = input as f64 / limit as f64;
-            if ratio >= Self::THRESHOLD {
+            if ratio >= self.threshold {
                 self.compaction_needed = true;
                 tracing::info!(
                     "Context limit threshold reached: {}/{} ({:.1}%)",
@@ -119,8 +140,10 @@ impl TokenTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opencode_rs::types::event::{MessagePartEventProps, MessageUpdatedProps};
-    use opencode_rs::types::message::{MessageInfo, MessageTime};
+    use opencode_rs::types::event::MessagePartEventProps;
+    use opencode_rs::types::event::MessageUpdatedProps;
+    use opencode_rs::types::message::MessageInfo;
+    use opencode_rs::types::message::MessageTime;
 
     fn mk_token_usage(input: u64) -> TokenUsage {
         TokenUsage {

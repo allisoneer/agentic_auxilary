@@ -4,9 +4,11 @@
 
 #![allow(dead_code)]
 
-use crate::model::{ParamDef, ToolDef};
+use crate::model::ParamDef;
+use crate::model::ToolDef;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::format_ident;
+use quote::quote;
 
 /// Generate a parameter struct for a tool
 ///
@@ -234,8 +236,10 @@ pub fn generate_method_call_from_struct(tool: &ToolDef, struct_var: &str) -> Tok
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ParamMetadata, ParamSource};
-    use syn::{Type, parse_quote};
+    use crate::model::ParamMetadata;
+    use crate::model::ParamSource;
+    use syn::Type;
+    use syn::parse_quote;
 
     fn create_test_param(name: &str, ty: Type, is_optional: bool) -> ParamDef {
         ParamDef {

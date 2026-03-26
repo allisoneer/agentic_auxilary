@@ -9,7 +9,10 @@ use agentic_tools_core::tool::Tool;
 use futures::future::BoxFuture;
 
 use crate::WebTools;
-use crate::types::{WebFetchInput, WebFetchOutput, WebSearchInput, WebSearchOutput};
+use crate::types::WebFetchInput;
+use crate::types::WebFetchOutput;
+use crate::types::WebSearchInput;
+use crate::types::WebSearchOutput;
 
 // ============================================================================
 // WebFetchTool
@@ -41,7 +44,7 @@ impl Tool for WebFetchTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move { crate::fetch::web_fetch(&tools, input).await })
     }
 }
@@ -76,7 +79,7 @@ impl Tool for WebSearchTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let tools = self.tools.clone();
+        let tools = Arc::clone(&self.tools);
         Box::pin(async move { crate::search::web_search(&tools, input).await })
     }
 }
@@ -88,7 +91,7 @@ impl Tool for WebSearchTool {
 /// Build a `ToolRegistry` containing all web tools.
 pub fn build_registry(tools: Arc<WebTools>) -> ToolRegistry {
     ToolRegistry::builder()
-        .register::<WebFetchTool, ()>(WebFetchTool::new(tools.clone()))
+        .register::<WebFetchTool, ()>(WebFetchTool::new(Arc::clone(&tools)))
         .register::<WebSearchTool, ()>(WebSearchTool::new(tools))
         .finish()
 }

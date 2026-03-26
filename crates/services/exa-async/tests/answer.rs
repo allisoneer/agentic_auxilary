@@ -1,7 +1,11 @@
+use exa_async::Client;
+use exa_async::ExaConfig;
 use exa_async::types::answer::AnswerRequest;
-use exa_async::{Client, ExaConfig};
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 fn test_client(server: &MockServer) -> Client<ExaConfig> {
     let config = ExaConfig::new()

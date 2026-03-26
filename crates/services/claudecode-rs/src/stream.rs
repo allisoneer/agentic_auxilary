@@ -1,7 +1,13 @@
-use crate::error::{ClaudeError, Result};
-use crate::types::{Event, Result as ClaudeResult};
-use futures::{Stream, StreamExt};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
+use crate::error::ClaudeError;
+use crate::error::Result;
+use crate::types::Event;
+use crate::types::Result as ClaudeResult;
+use futures::Stream;
+use futures::StreamExt;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
+use tokio::io::BufReader;
 use tracing::trace;
 
 /// Parser for streaming JSON events (NDJSON format)
@@ -148,7 +154,8 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> TextParser<R1, R2> {
 mod text_parser_tests {
     use super::*;
     use std::pin::Pin;
-    use std::task::{Context, Poll};
+    use std::task::Context;
+    use std::task::Poll;
     use tokio::io::ReadBuf;
 
     /// Minimal AsyncRead adapter over in-memory bytes for tests

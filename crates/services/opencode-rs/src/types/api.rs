@@ -2,7 +2,8 @@
 //!
 //! Typed response wrappers for HTTP endpoints, replacing `serde_json::Value` returns.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // ==================== Messages API Responses ====================
 

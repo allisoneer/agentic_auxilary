@@ -1,9 +1,8 @@
-use crate::{
-    client::Client,
-    config::Config,
-    error::ExaError,
-    types::answer::{AnswerRequest, AnswerResponse},
-};
+use crate::client::Client;
+use crate::config::Config;
+use crate::error::ExaError;
+use crate::types::answer::AnswerRequest;
+use crate::types::answer::AnswerResponse;
 
 /// API resource for the `/answer` endpoint (non-streaming)
 pub struct Answer<'c, C: Config> {

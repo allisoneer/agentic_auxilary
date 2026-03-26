@@ -5,7 +5,8 @@
 //! This example requires the `opencode` binary to be installed and in PATH.
 
 use opencode_rs::ClientBuilder;
-use opencode_rs::server::{ManagedServer, ServerOptions};
+use opencode_rs::server::ManagedServer;
+use opencode_rs::server::ServerOptions;
 use std::time::Duration;
 
 #[tokio::main]

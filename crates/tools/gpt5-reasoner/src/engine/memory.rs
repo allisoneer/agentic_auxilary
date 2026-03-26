@@ -1,5 +1,8 @@
-use crate::engine::paths::{is_ancestor, to_abs_string, walk_up_to_boundary};
-use crate::types::{DirectoryMeta, FileMeta};
+use crate::engine::paths::is_ancestor;
+use crate::engine::paths::to_abs_string;
+use crate::engine::paths::walk_up_to_boundary;
+use crate::types::DirectoryMeta;
+use crate::types::FileMeta;
 
 pub fn memory_files_in_dir(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
@@ -156,7 +159,8 @@ pub fn auto_inject_claude_memories(
 #[cfg(test)]
 mod claude_injection_tests {
     use super::*;
-    use crate::test_support::{DirGuard, EnvGuard};
+    use crate::test_support::DirGuard;
+    use crate::test_support::EnvGuard;
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
@@ -320,7 +324,8 @@ mod claude_injection_tests {
 mod claude_injection_integration_tests {
     use super::*;
     use crate::template::inject_files;
-    use crate::test_support::{DirGuard, EnvGuard};
+    use crate::test_support::DirGuard;
+    use crate::test_support::EnvGuard;
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
@@ -349,7 +354,8 @@ mod claude_injection_integration_tests {
 <!-- GROUP: implementation -->
 </context>"#;
 
-        use crate::optimizer::parser::{FileGroup, FileGrouping};
+        use crate::optimizer::parser::FileGroup;
+        use crate::optimizer::parser::FileGrouping;
         let groups = FileGrouping {
             file_groups: vec![FileGroup {
                 name: "implementation".to_string(),

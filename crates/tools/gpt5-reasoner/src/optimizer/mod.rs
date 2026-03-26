@@ -1,11 +1,15 @@
 pub mod parser;
 pub mod prompts;
 
-use crate::{FileMeta, PromptType, client::OrClient, errors::*};
-use async_openai::types::chat::{
-    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, ReasoningEffort,
-};
+use crate::FileMeta;
+use crate::PromptType;
+use crate::client::OrClient;
+use crate::errors::*;
+use async_openai::types::chat::ChatCompletionRequestMessage;
+use async_openai::types::chat::ChatCompletionRequestSystemMessageArgs;
+use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
+use async_openai::types::chat::CreateChatCompletionRequestArgs;
+use async_openai::types::chat::ReasoningEffort;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]

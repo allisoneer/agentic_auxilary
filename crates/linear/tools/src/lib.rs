@@ -6,8 +6,10 @@ pub mod tools;
 #[doc(hidden)]
 pub mod test_support;
 
-use anyhow::{Context, Result};
-use cynic::{MutationBuilder, QueryBuilder};
+use anyhow::Context;
+use anyhow::Result;
+use cynic::MutationBuilder;
+use cynic::QueryBuilder;
 use http::LinearClient;
 use linear_queries::scalars::DateTimeOrDuration;
 use linear_queries::*;

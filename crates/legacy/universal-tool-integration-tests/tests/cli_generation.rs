@@ -6,7 +6,8 @@
 #![allow(dead_code, unused_variables)]
 
 use universal_tool_core::prelude::*;
-use universal_tool_macros::{universal_tool, universal_tool_router};
+use universal_tool_macros::universal_tool;
+use universal_tool_macros::universal_tool_router;
 
 /// Test struct for basic CLI generation
 struct TestTools;

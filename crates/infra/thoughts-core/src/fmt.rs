@@ -3,10 +3,15 @@
 //! These implementations produce identical output to the McpFormatter
 //! implementations, preserving Unicode symbols (checkmarks, dashes) for human-readable output.
 
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 
-use crate::documents::{ActiveDocuments, WriteDocumentOk};
-use crate::mcp::{AddReferenceOk, ReferencesList, RepoRefsList, TemplateResponse};
+use crate::documents::ActiveDocuments;
+use crate::documents::WriteDocumentOk;
+use crate::mcp::AddReferenceOk;
+use crate::mcp::ReferencesList;
+use crate::mcp::RepoRefsList;
+use crate::mcp::TemplateResponse;
 use crate::utils::human_size;
 
 impl TextFormat for WriteDocumentOk {
@@ -159,7 +164,8 @@ mod tests {
     use super::*;
     use crate::documents::DocumentInfo;
     use crate::git::remote_refs::RemoteRef;
-    use crate::mcp::{ReferenceItem, TemplateType};
+    use crate::mcp::ReferenceItem;
+    use crate::mcp::TemplateType;
 
     #[test]
     fn write_document_text_format() {

@@ -4,21 +4,30 @@
 //! library with logging identical to the MCP implementation.
 
 use agentic_logging::CallTimer;
-use agentic_tools_core::{Tool, ToolContext, ToolError};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use thoughts_tool::config::{RepoConfigManager, extract_org_repo_from_url};
-use thoughts_tool::documents::{
-    ActiveDocuments, DocumentType, WriteDocumentOk, list_documents, write_document,
-};
+use thoughts_tool::config::RepoConfigManager;
+use thoughts_tool::config::extract_org_repo_from_url;
+use thoughts_tool::documents::ActiveDocuments;
+use thoughts_tool::documents::DocumentType;
+use thoughts_tool::documents::WriteDocumentOk;
+use thoughts_tool::documents::list_documents;
+use thoughts_tool::documents::write_document;
 use thoughts_tool::git::ref_key::encode_ref_key;
 use thoughts_tool::git::utils::get_control_repo_root;
-use thoughts_tool::mcp::{
-    AddReferenceOk, ReferenceItem, ReferencesList, RepoRefsList, TemplateResponse, TemplateType,
-    add_reference_impl_adapter, get_repo_refs_impl_adapter,
-};
+use thoughts_tool::mcp::AddReferenceOk;
+use thoughts_tool::mcp::ReferenceItem;
+use thoughts_tool::mcp::ReferencesList;
+use thoughts_tool::mcp::RepoRefsList;
+use thoughts_tool::mcp::TemplateResponse;
+use thoughts_tool::mcp::TemplateType;
+use thoughts_tool::mcp::add_reference_impl_adapter;
+use thoughts_tool::mcp::get_repo_refs_impl_adapter;
 use thoughts_tool::mount::MountSpace;
 use thoughts_tool::utils::logging::log_tool_call;
 

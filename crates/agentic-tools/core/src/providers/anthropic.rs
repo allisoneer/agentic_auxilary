@@ -1,7 +1,8 @@
 //! Anthropic tool schema renderer.
 
 use schemars::Schema;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 
 /// Render a tool as an Anthropic tool definition.
 ///

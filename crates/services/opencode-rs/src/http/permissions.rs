@@ -3,8 +3,10 @@
 //! Endpoints for managing permission requests.
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::permission::{PermissionReplyRequest, PermissionRequest};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::permission::PermissionReplyRequest;
+use crate::types::permission::PermissionRequest;
 use reqwest::Method;
 
 /// Permissions API client.

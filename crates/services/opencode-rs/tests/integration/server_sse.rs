@@ -2,7 +2,8 @@
 //!
 //! Tests that verify typed event deserialization against a live opencode server.
 
-use super::{create_test_client, should_run};
+use super::create_test_client;
+use super::should_run;
 use opencode_rs::types::Event;
 use std::time::Duration;
 use tokio::time::timeout;

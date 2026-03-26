@@ -4,7 +4,9 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::pty::{CreatePtyRequest, Pty, UpdatePtyRequest};
+use crate::types::pty::CreatePtyRequest;
+use crate::types::pty::Pty;
+use crate::types::pty::UpdatePtyRequest;
 use reqwest::Method;
 
 /// PTY API client.

@@ -13,21 +13,33 @@
 
 mod support;
 
-use agentic_tools_core::{Tool, ToolContext};
-use opencode_orchestrator_mcp::tools::{OrchestratorRunTool, RespondPermissionTool};
-use opencode_orchestrator_mcp::types::{
-    OrchestratorRunInput, PermissionReply, RespondPermissionInput, RunStatus,
-};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
+use opencode_orchestrator_mcp::tools::RespondPermissionTool;
+use opencode_orchestrator_mcp::types::OrchestratorRunInput;
+use opencode_orchestrator_mcp::types::PermissionReply;
+use opencode_orchestrator_mcp::types::RespondPermissionInput;
+use opencode_orchestrator_mcp::types::RunStatus;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
-use wiremock::matchers::{method, path, path_regex};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::matchers::path_regex;
 
-use support::{
-    SequenceResponder, SwitchAfterCallsResponder, messages_fixture, permission_fixture,
-    session_fixture, status_v2_busy, status_v2_idle, status_v2_retry, test_orchestrator_server,
-};
+use support::SequenceResponder;
+use support::SwitchAfterCallsResponder;
+use support::messages_fixture;
+use support::permission_fixture;
+use support::session_fixture;
+use support::status_v2_busy;
+use support::status_v2_idle;
+use support::status_v2_retry;
+use support::test_orchestrator_server;
 
 /// IT-BUG1: Completion should retry message extraction when first attempt returns no assistant text.
 ///

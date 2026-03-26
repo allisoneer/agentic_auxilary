@@ -1,4 +1,5 @@
-use crate::scalars::{DateTime, TimelessDate};
+use crate::scalars::DateTime;
+use crate::scalars::TimelessDate;
 use linear_schema::linear as schema;
 
 #[derive(cynic::QueryFragment, Debug, Clone)]

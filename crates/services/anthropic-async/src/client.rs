@@ -1,7 +1,11 @@
-use backon::{ExponentialBuilder, Retryable};
-use serde::{Serialize, de::DeserializeOwned};
+use backon::ExponentialBuilder;
+use backon::Retryable;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use crate::{config::Config, error::AnthropicError, retry};
+use crate::config::Config;
+use crate::error::AnthropicError;
+use crate::retry;
 
 /// Anthropic API client
 ///

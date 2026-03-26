@@ -23,9 +23,14 @@
 
 #![deny(clippy::all)]
 
-use agentic_tools_core::fmt::{TextOptions, fallback_text_from_json};
-use agentic_tools_core::{FieldConstraint, SchemaEngine, ToolContext, ToolRegistry};
-use agentic_tools_registry::{AgenticTools, AgenticToolsConfig};
+use agentic_tools_core::FieldConstraint;
+use agentic_tools_core::SchemaEngine;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolRegistry;
+use agentic_tools_core::fmt::TextOptions;
+use agentic_tools_core::fmt::fallback_text_from_json;
+use agentic_tools_registry::AgenticTools;
+use agentic_tools_registry::AgenticToolsConfig;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use once_cell::sync::OnceCell;
@@ -95,7 +100,7 @@ pub fn init(config_json: String) -> Result<()> {
     // Build registry via shared aggregator (includes all 19 tools)
     let registry = AgenticTools::new(AgenticToolsConfig {
         allowlist,
-        extras: serde_json::json!({}),
+        ..Default::default()
     });
 
     REGISTRY

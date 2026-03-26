@@ -10,8 +10,11 @@ pub(crate) fn encode_path_segment(raw: &str) -> String {
     urlencoding::encode(raw).into_owned()
 }
 
-use crate::error::{OpencodeError, Result};
-use reqwest::{Client as ReqClient, Method, Response};
+use crate::error::OpencodeError;
+use crate::error::Result;
+use reqwest::Client as ReqClient;
+use reqwest::Method;
+use reqwest::Response;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -396,8 +399,12 @@ impl HttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{header, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::header;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_get_success() {

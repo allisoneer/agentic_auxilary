@@ -27,14 +27,15 @@
 
 mod support;
 
-use anthropic_async::types::{
-    content::{
-        ContentBlock, ContentBlockParam, MessageContentParam, MessageParam, MessageRole,
-        ToolResultContent,
-    },
-    messages::MessagesCreateRequest,
-    tools::{Tool, ToolChoice},
-};
+use anthropic_async::types::content::ContentBlock;
+use anthropic_async::types::content::ContentBlockParam;
+use anthropic_async::types::content::MessageContentParam;
+use anthropic_async::types::content::MessageParam;
+use anthropic_async::types::content::MessageRole;
+use anthropic_async::types::content::ToolResultContent;
+use anthropic_async::types::messages::MessagesCreateRequest;
+use anthropic_async::types::tools::Tool;
+use anthropic_async::types::tools::ToolChoice;
 use insta::assert_json_snapshot;
 use support::snapshots::SnapshotHarness;
 

@@ -30,8 +30,10 @@ pub mod cli;
 pub mod client;
 
 // Re-exports
-pub use crate::client::{Client, ClientBuilder};
-pub use crate::error::{OpencodeError, Result};
+pub use crate::client::Client;
+pub use crate::client::ClientBuilder;
+pub use crate::error::OpencodeError;
+pub use crate::error::Result;
 
 // Version info
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

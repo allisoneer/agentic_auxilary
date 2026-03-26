@@ -3,8 +3,11 @@
 //! These tests verify the SDK works correctly against a wiremock server.
 
 use opencode_rs::ClientBuilder;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 /// Test that the client can get health status from the server.
 #[tokio::test]

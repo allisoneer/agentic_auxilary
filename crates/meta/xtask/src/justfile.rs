@@ -3,8 +3,10 @@
 //! Syncs root justfile variables that should be derived from workspace metadata.
 
 use crate::autogen::replace_named_block_toml;
-use anyhow::{Context, Result};
-use cargo_metadata::{Metadata, Package};
+use anyhow::Context;
+use anyhow::Result;
+use cargo_metadata::Metadata;
+use cargo_metadata::Package;
 use std::fs;
 
 /// Extract metadata.repo.role from a package, defaulting to "unknown".

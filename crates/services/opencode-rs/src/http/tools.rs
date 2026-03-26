@@ -4,7 +4,10 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::tool::{Agent, Command, Tool, ToolIds};
+use crate::types::tool::Agent;
+use crate::types::tool::Command;
+use crate::types::tool::Tool;
+use crate::types::tool::ToolIds;
 use reqwest::Method;
 
 /// Tools API client.

@@ -179,9 +179,12 @@ impl SchemaEngine {
 /// - AddNullable transform for `Option<T>` fields
 /// - Thread-local caching keyed by TypeId for performance
 pub mod mcp_schema {
+    use schemars::JsonSchema;
+    use schemars::Schema;
     use schemars::generate::SchemaSettings;
-    use schemars::transform::{AddNullable, RestrictFormats, Transform};
-    use schemars::{JsonSchema, Schema};
+    use schemars::transform::AddNullable;
+    use schemars::transform::RestrictFormats;
+    use schemars::transform::Transform;
     use std::any::TypeId;
     use std::cell::RefCell;
     use std::collections::HashMap;

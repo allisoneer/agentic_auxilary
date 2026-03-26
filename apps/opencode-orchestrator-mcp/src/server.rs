@@ -1,14 +1,18 @@
 //! Shared orchestrator server state.
 //!
-//! Wraps `ManagedServer` + `Client` + cached model context limits.
+//! Wraps `ManagedServer` + `Client` + cached model context limits + config.
 
+use agentic_config::types::OrchestratorConfig;
 use anyhow::Context;
 use opencode_rs::Client;
-use opencode_rs::server::{ManagedServer, ServerOptions};
-use opencode_rs::types::message::{Message, Part};
+use opencode_rs::server::ManagedServer;
+use opencode_rs::server::ServerOptions;
+use opencode_rs::types::message::Message;
+use opencode_rs::types::message::Part;
 use opencode_rs::types::provider::ProviderListResponse;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Environment variable name for the orchestrator-managed recursion guard.
 pub const OPENCODE_ORCHESTRATOR_MANAGED_ENV: &str = "OPENCODE_ORCHESTRATOR_MANAGED";
@@ -75,6 +79,8 @@ pub struct OrchestratorServer {
     model_context_limits: HashMap<ModelKey, u64>,
     /// Base URL of the managed server
     base_url: String,
+    /// Orchestrator configuration (session timeouts, compaction threshold)
+    config: OrchestratorConfig,
 }
 
 impl OrchestratorServer {
@@ -110,6 +116,21 @@ impl OrchestratorServer {
 
     /// Internal implementation that actually spawns the server.
     async fn start_impl() -> anyhow::Result<Self> {
+        // Load configuration (best-effort, use defaults if unavailable)
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let config = match agentic_config::loader::load_merged(&cwd) {
+            Ok(loaded) => {
+                for w in &loaded.warnings {
+                    tracing::warn!("{w}");
+                }
+                loaded.config.orchestrator
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load config, using defaults: {e}");
+                OrchestratorConfig::default()
+            }
+        };
+
         let managed = ManagedServer::start(ServerOptions::default())
             .await
             .context("Failed to start embedded `opencode serve`")?;
@@ -143,6 +164,7 @@ impl OrchestratorServer {
             client,
             model_context_limits,
             base_url,
+            config,
         })
     }
 
@@ -162,6 +184,21 @@ impl OrchestratorServer {
         self.model_context_limits
             .get(&(provider_id.to_string(), model_id.to_string()))
             .copied()
+    }
+
+    /// Get the session deadline duration.
+    pub fn session_deadline(&self) -> Duration {
+        Duration::from_secs(self.config.session_deadline_secs)
+    }
+
+    /// Get the inactivity timeout duration.
+    pub fn inactivity_timeout(&self) -> Duration {
+        Duration::from_secs(self.config.inactivity_timeout_secs)
+    }
+
+    /// Get the compaction threshold (0.0 - 1.0).
+    pub fn compaction_threshold(&self) -> f64 {
+        self.config.compaction_threshold
     }
 
     /// Load model context limits from GET /provider.
@@ -232,6 +269,7 @@ impl OrchestratorServer {
             client,
             model_context_limits: HashMap::new(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
+            config: OrchestratorConfig::default(),
         }
     }
 }
@@ -239,8 +277,10 @@ impl OrchestratorServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     /// Mutex to serialize env var tests (env vars are process-global).
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
