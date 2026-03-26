@@ -30,6 +30,38 @@ const REPO_REFS_TIMEOUT_SECS: u64 = 20;
 
 static REPO_REFS_SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
+fn find_matching_existing_reference(
+    cfg: &crate::config::RepoConfigV2,
+    input_url: &str,
+    requested_ref_name: Option<&str>,
+) -> Option<(String, Option<String>)> {
+    let wanted = canonical_reference_instance_key(input_url, requested_ref_name).ok()?;
+
+    for entry in &cfg.references {
+        let (existing_url, existing_ref_name) = match entry {
+            ReferenceEntry::Simple(url) => (url.as_str(), None),
+            ReferenceEntry::WithMetadata(reference_mount) => (
+                reference_mount.remote.as_str(),
+                reference_mount.ref_name.as_deref(),
+            ),
+        };
+
+        let Ok(existing_key) = canonical_reference_instance_key(existing_url, existing_ref_name)
+        else {
+            continue;
+        };
+
+        if existing_key == wanted {
+            return Some((
+                existing_url.to_string(),
+                existing_ref_name.map(ToString::to_string),
+            ));
+        }
+    }
+
+    None
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TemplateType {
@@ -225,7 +257,7 @@ pub async fn add_reference_impl_adapter(
     ref_name: Option<String>,
 ) -> Result<AddReferenceOk> {
     let input_url = url.trim().to_string();
-    let ref_name = match ref_name {
+    let requested_ref_name = match ref_name {
         Some(ref_name) => {
             let trimmed = ref_name.trim();
             if trimmed.is_empty() {
@@ -235,7 +267,7 @@ pub async fn add_reference_impl_adapter(
         }
         None => None,
     };
-    if let Some(ref_name) = ref_name.as_deref()
+    if let Some(ref_name) = requested_ref_name.as_deref()
         && let Err(e) = validate_pinned_ref_full_name_new_input(ref_name)
     {
         anyhow::bail!(
@@ -245,7 +277,6 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
             e
         );
     }
-    let ref_key = ref_name.as_deref().map(encode_ref_key).transpose()?;
 
     // Validate URL per MCP HTTPS-only rules
     validate_reference_url_https_only(&input_url)
@@ -265,20 +296,19 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
         .ensure_v2_default()
         .context("failed to ensure v2 config")?;
 
-    // Build existing canonical keys set for duplicate detection
-    let mut existing_keys = std::collections::HashSet::new();
-    for e in &cfg.references {
-        let (existing_url, existing_ref_name) = match e {
-            ReferenceEntry::Simple(s) => (s.as_str(), None),
-            ReferenceEntry::WithMetadata(rm) => (rm.remote.as_str(), rm.ref_name.as_deref()),
-        };
-        if let Ok(k) = canonical_reference_instance_key(existing_url, existing_ref_name) {
-            existing_keys.insert(k);
-        }
-    }
-    let this_key = canonical_reference_instance_key(&input_url, ref_name.as_deref())
+    canonical_reference_instance_key(&input_url, requested_ref_name.as_deref())
         .context("invalid input: failed to canonicalize URL")?;
-    let already_existed = existing_keys.contains(&this_key);
+    let matched_existing =
+        find_matching_existing_reference(&cfg, &input_url, requested_ref_name.as_deref());
+    let already_existed = matched_existing.is_some();
+    let effective_ref_name = matched_existing
+        .as_ref()
+        .and_then(|(_, ref_name)| ref_name.clone())
+        .or_else(|| requested_ref_name.clone());
+    let ref_key = effective_ref_name
+        .as_deref()
+        .map(encode_ref_key)
+        .transpose()?;
 
     // Compute paths for response
     let ds = mgr
@@ -301,7 +331,7 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
     let repo_mapping =
         RepoMappingManager::new().context("failed to create repo mapping manager")?;
     let pre_mapping = repo_mapping
-        .resolve_reference_url(&input_url, ref_name.as_deref())
+        .resolve_reference_url(&input_url, effective_ref_name.as_deref())
         .ok()
         .flatten()
         .map(|p| p.to_string_lossy().to_string());
@@ -314,12 +344,12 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
         (!trimmed.is_empty()).then(|| trimmed.to_string())
     });
     if !already_existed {
-        if description.is_some() || ref_name.is_some() {
+        if description.is_some() || requested_ref_name.is_some() {
             cfg.references
                 .push(ReferenceEntry::WithMetadata(ReferenceMount {
                     remote: input_url.clone(),
                     description: description.clone(),
-                    ref_name: ref_name.clone(),
+                    ref_name: requested_ref_name.clone(),
                 }));
         } else {
             cfg.references
@@ -331,7 +361,7 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
             .context("failed to save config")?;
         warnings.extend(ws);
         config_updated = true;
-    } else if description.is_some() || ref_name.is_some() {
+    } else if description.is_some() || requested_ref_name.is_some() {
         warnings.push(
             "Reference already exists; metadata was not updated (use CLI to modify metadata)"
                 .to_string(),
@@ -347,7 +377,7 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
     let repo_mapping_post =
         RepoMappingManager::new().context("failed to create repo mapping manager")?;
     let post_mapping = repo_mapping_post
-        .resolve_reference_url(&input_url, ref_name.as_deref())
+        .resolve_reference_url(&input_url, effective_ref_name.as_deref())
         .ok()
         .flatten()
         .map(|p| p.to_string_lossy().to_string());
@@ -388,7 +418,7 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
 
     Ok(AddReferenceOk {
         url: input_url,
-        ref_name,
+        ref_name: effective_ref_name,
         org,
         repo,
         mount_path,
@@ -407,6 +437,7 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{MountDirsV2, RepoConfigV2};
     use crate::documents::{ActiveDocuments, DocumentInfo, WriteDocumentOk};
     use crate::utils::human_size;
     use agentic_tools_core::fmt::{TextFormat, TextOptions};
@@ -796,6 +827,63 @@ mod tests {
             err.to_string().contains("refs/heads/main"),
             "unexpected error: {err:#}"
         );
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_bare_heads_prefix_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("refs/heads/".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name")
+        );
+    }
+
+    #[tokio::test]
+    async fn add_reference_rejects_bare_tags_prefix_early() {
+        let err = add_reference_impl_adapter(
+            "https://github.com/org/repo".into(),
+            None,
+            Some("refs/tags/".into()),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("invalid input: ref must be a full ref name")
+        );
+    }
+
+    #[test]
+    fn find_matching_existing_reference_returns_legacy_ref_name_when_equivalent() {
+        let cfg = RepoConfigV2 {
+            version: "2.0".into(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".into(),
+                description: None,
+                ref_name: Some("refs/remotes/origin/main".into()),
+            })],
+        };
+
+        let found = find_matching_existing_reference(
+            &cfg,
+            "https://github.com/org/repo",
+            Some("refs/heads/main"),
+        )
+        .expect("should match by canonical identity");
+
+        assert_eq!(found.0, "https://github.com/org/repo");
+        assert_eq!(found.1.as_deref(), Some("refs/remotes/origin/main"));
     }
 
     #[test]

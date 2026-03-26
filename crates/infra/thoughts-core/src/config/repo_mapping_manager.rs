@@ -1,5 +1,8 @@
 use super::types::{RepoLocation, RepoMapping};
-use crate::config::validation::{canonical_reference_instance_key, canonical_reference_key};
+use crate::config::validation::{
+    canonical_reference_instance_key, canonical_reference_key,
+    normalize_encoded_ref_key_for_identity,
+};
 use crate::git::ref_key::encode_ref_key;
 use crate::repo_identity::{
     RepoIdentity, RepoIdentityKey, parse_url_and_subpath as identity_parse_url_and_subpath,
@@ -437,7 +440,10 @@ impl RepoMappingManager {
             .filter_map(|stored_key| {
                 let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
                 let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
-                let actual = (host, org_path, repo, stored_ref_key);
+                let normalized_stored_ref_key = stored_ref_key
+                    .as_deref()
+                    .map(|ref_key| normalize_encoded_ref_key_for_identity(ref_key).into_owned());
+                let actual = (host, org_path, repo, normalized_stored_ref_key);
                 (actual == wanted).then(|| stored_key.clone())
             })
             .collect();
@@ -687,6 +693,35 @@ mod tests {
 
         let mapping = manager.load().unwrap();
         assert_eq!(mapping.mappings.len(), 2);
+    }
+
+    #[test]
+    fn test_resolve_reference_url_matches_legacy_refs_remotes_and_heads_equivalently() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let repo_path = temp_dir.path().join("repo-legacy");
+        std::fs::create_dir_all(&repo_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/remotes/origin/main"),
+                repo_path.clone(),
+                true,
+            )
+            .unwrap();
+
+        let mgr_ro = RepoMappingManager { mapping_path };
+        assert_eq!(
+            mgr_ro
+                .resolve_reference_url("https://github.com/org/repo", Some("refs/heads/main"))
+                .unwrap(),
+            Some(repo_path)
+        );
     }
 
     #[test]

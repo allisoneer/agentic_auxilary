@@ -1,6 +1,7 @@
 use crate::git::ref_key::encode_ref_key;
 use crate::repo_identity::{RepoIdentity, parse_url_and_subpath};
 use anyhow::{Result, bail};
+use std::borrow::Cow;
 
 /// Sanitize a mount name for use as directory name
 pub fn sanitize_mount_name(name: &str) -> String {
@@ -82,12 +83,40 @@ pub fn canonical_reference_key(url: &str) -> Result<(String, String, String)> {
 }
 
 /// Canonical key for a specific reference instance: repository identity plus optional ref key.
+fn normalize_pinned_ref_name_for_identity(ref_name: &str) -> Cow<'_, str> {
+    if let Some(rest) = ref_name.strip_prefix("refs/remotes/")
+        && let Some((_remote, branch)) = rest.split_once('/')
+        && !branch.is_empty()
+    {
+        return Cow::Owned(format!("refs/heads/{branch}"));
+    }
+
+    Cow::Borrowed(ref_name)
+}
+
+pub(crate) fn normalize_encoded_ref_key_for_identity(ref_key: &str) -> Cow<'_, str> {
+    const REMOTES_PREFIX: &str = "r-refs~2fremotes~2f";
+    const HEADS_PREFIX: &str = "r-refs~2fheads~2f";
+
+    if let Some(rest) = ref_key.strip_prefix(REMOTES_PREFIX)
+        && let Some((_remote_enc, branch_enc)) = rest.split_once("~2f")
+        && !branch_enc.is_empty()
+    {
+        return Cow::Owned(format!("{HEADS_PREFIX}{branch_enc}"));
+    }
+
+    Cow::Borrowed(ref_key)
+}
+
 pub fn canonical_reference_instance_key(
     url: &str,
     ref_name: Option<&str>,
 ) -> Result<(String, String, String, Option<String>)> {
     let (host, org_path, repo) = canonical_reference_key(url)?;
-    let ref_key = ref_name.map(encode_ref_key).transpose()?;
+    let ref_key = ref_name
+        .map(normalize_pinned_ref_name_for_identity)
+        .map(|name| encode_ref_key(name.as_ref()))
+        .transpose()?;
     Ok((host, org_path, repo, ref_key))
 }
 
@@ -97,18 +126,37 @@ pub fn validate_pinned_ref_full_name(ref_name: &str) -> Result<()> {
         bail!("ref cannot be empty");
     }
 
-    let allowed = ref_name.starts_with("refs/heads/")
-        || ref_name.starts_with("refs/tags/")
-        || ref_name.starts_with("refs/remotes/");
-
-    if !allowed {
-        bail!(
-            "Pinned refs must be full ref names starting with 'refs/heads/', 'refs/tags/', or 'refs/remotes/' (got '{}')",
-            ref_name
-        );
+    if let Some(rest) = ref_name.strip_prefix("refs/heads/") {
+        if rest.is_empty() {
+            bail!("Pinned ref cannot be the bare prefix 'refs/heads/'");
+        }
+        return Ok(());
     }
 
-    Ok(())
+    if let Some(rest) = ref_name.strip_prefix("refs/tags/") {
+        if rest.is_empty() {
+            bail!("Pinned ref cannot be the bare prefix 'refs/tags/'");
+        }
+        return Ok(());
+    }
+
+    if let Some(rest) = ref_name.strip_prefix("refs/remotes/") {
+        let mut parts = rest.splitn(2, '/');
+        let remote = parts.next().unwrap_or("");
+        let branch = parts.next().unwrap_or("");
+        if remote.is_empty() || branch.is_empty() {
+            bail!(
+                "Legacy pinned ref must be 'refs/remotes/<remote>/<branch>' (got '{}')",
+                ref_name
+            );
+        }
+        return Ok(());
+    }
+
+    bail!(
+        "Pinned refs must be full ref names starting with 'refs/heads/', 'refs/tags/', or 'refs/remotes/' (got '{}')",
+        ref_name
+    );
 }
 
 pub fn validate_pinned_ref_full_name_new_input(ref_name: &str) -> Result<()> {
@@ -117,16 +165,24 @@ pub fn validate_pinned_ref_full_name_new_input(ref_name: &str) -> Result<()> {
         bail!("ref cannot be empty");
     }
 
-    let allowed = ref_name.starts_with("refs/heads/") || ref_name.starts_with("refs/tags/");
-
-    if !allowed {
-        bail!(
-            "Pinned refs must be full ref names starting with 'refs/heads/' or 'refs/tags/' (got '{}')",
-            ref_name
-        );
+    if let Some(rest) = ref_name.strip_prefix("refs/heads/") {
+        if rest.is_empty() {
+            bail!("Pinned ref cannot be the bare prefix 'refs/heads/'");
+        }
+        return Ok(());
     }
 
-    Ok(())
+    if let Some(rest) = ref_name.strip_prefix("refs/tags/") {
+        if rest.is_empty() {
+            bail!("Pinned ref cannot be the bare prefix 'refs/tags/'");
+        }
+        return Ok(());
+    }
+
+    bail!(
+        "Pinned refs must be full ref names starting with 'refs/heads/' or 'refs/tags/' (got '{}')",
+        ref_name
+    );
 }
 
 // --- MCP HTTPS-only validation helpers ---
@@ -267,6 +323,33 @@ mod ref_validation_tests {
     }
 
     #[test]
+    fn test_canonical_reference_instance_key_normalizes_legacy_refs_remotes_to_heads() {
+        let legacy = canonical_reference_instance_key(
+            "https://github.com/org/repo",
+            Some("refs/remotes/origin/main"),
+        )
+        .unwrap();
+        let canonical = canonical_reference_instance_key(
+            "https://github.com/org/repo",
+            Some("refs/heads/main"),
+        )
+        .unwrap();
+
+        assert_eq!(legacy, canonical);
+    }
+
+    #[test]
+    fn test_normalize_encoded_ref_key_for_identity_collapses_legacy_remotes() {
+        let legacy = encode_ref_key("refs/remotes/origin/main").unwrap();
+        let canonical = encode_ref_key("refs/heads/main").unwrap();
+
+        assert_eq!(
+            normalize_encoded_ref_key_for_identity(&legacy).as_ref(),
+            canonical
+        );
+    }
+
+    #[test]
     fn test_validate_reference_url_rejects_query_and_fragment() {
         assert!(validate_reference_url("https://github.com/org/repo?ref=main").is_err());
         assert!(validate_reference_url("https://github.com/org/repo#main").is_err());
@@ -343,6 +426,14 @@ mod pinned_ref_name_tests {
         assert!(validate_pinned_ref_full_name("origin/main").is_err());
         assert!(validate_pinned_ref_full_name("refs/pull/123/head").is_err());
     }
+
+    #[test]
+    fn rejects_incomplete_prefixes() {
+        assert!(validate_pinned_ref_full_name("refs/heads/").is_err());
+        assert!(validate_pinned_ref_full_name("refs/tags/").is_err());
+        assert!(validate_pinned_ref_full_name("refs/remotes/").is_err());
+        assert!(validate_pinned_ref_full_name("refs/remotes/origin/").is_err());
+    }
 }
 
 #[cfg(test)]
@@ -360,5 +451,11 @@ mod pinned_ref_name_new_input_tests {
         assert!(validate_pinned_ref_full_name_new_input("refs/remotes/origin/main").is_err());
         assert!(validate_pinned_ref_full_name_new_input("main").is_err());
         assert!(validate_pinned_ref_full_name_new_input("refs/pull/123/head").is_err());
+    }
+
+    #[test]
+    fn new_input_rejects_incomplete_prefixes() {
+        assert!(validate_pinned_ref_full_name_new_input("refs/heads/").is_err());
+        assert!(validate_pinned_ref_full_name_new_input("refs/tags/").is_err());
     }
 }

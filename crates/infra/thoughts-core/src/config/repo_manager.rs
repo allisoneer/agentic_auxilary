@@ -1348,6 +1348,34 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_v2_hard_rejects_duplicate_references_legacy_remotes_vs_heads() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "https://github.com/org/repo".to_string(),
+                    description: None,
+                    ref_name: Some("refs/remotes/origin/main".to_string()),
+                }),
+                ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "git@github.com:Org/Repo.git".to_string(),
+                    description: None,
+                    ref_name: Some("refs/heads/main".to_string()),
+                }),
+            ],
+        };
+
+        let err = mgr.validate_v2_hard(&cfg).unwrap_err();
+        assert!(err.to_string().contains("Duplicate reference"));
+    }
+
+    #[test]
     fn test_validate_v2_hard_rejects_shorthand_pinned_ref() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
@@ -1369,6 +1397,26 @@ mod tests {
             format!("{err:#}").contains("Pinned refs must be full ref names"),
             "unexpected error chain: {err:#}"
         );
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_incomplete_pinned_ref_prefix() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2::default(),
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                remote: "https://github.com/org/repo".to_string(),
+                description: None,
+                ref_name: Some("refs/heads/".to_string()),
+            })],
+        };
+
+        assert!(mgr.validate_v2_hard(&cfg).is_err());
     }
 
     #[test]
