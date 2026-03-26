@@ -335,6 +335,9 @@ impl PrComments {
         let key = make_pr_list_key(&self.owner, &self.repo, &state, page_size);
         let query_lock = self.pr_list_pager.get_or_create(&key);
 
+        // TODO(2): On cache miss, list_prs blocks page 1 on a full GitHub PR fetch so we can compute
+        // total_prs from results.len(). Consider incremental remote pagination or relaxing exact totals
+        // if cold-cache latency matters.
         let needs_fetch = {
             let state = query_lock.state.lock().unwrap();
             state.is_empty() || state.is_expired()
