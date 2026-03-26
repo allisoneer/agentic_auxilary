@@ -121,10 +121,17 @@ pub fn canonical_reference_instance_key(
 }
 
 pub fn validate_pinned_ref_full_name(ref_name: &str) -> Result<()> {
-    let ref_name = ref_name.trim();
-    if ref_name.is_empty() {
+    let trimmed = ref_name.trim();
+    if trimmed.is_empty() {
         bail!("ref cannot be empty");
     }
+    if trimmed != ref_name {
+        bail!("Pinned ref must not contain leading/trailing whitespace");
+    }
+    if trimmed.ends_with('/') {
+        bail!("Pinned ref cannot end with '/'");
+    }
+    let ref_name = trimmed;
 
     if let Some(rest) = ref_name.strip_prefix("refs/heads/") {
         if rest.is_empty() {
@@ -160,10 +167,17 @@ pub fn validate_pinned_ref_full_name(ref_name: &str) -> Result<()> {
 }
 
 pub fn validate_pinned_ref_full_name_new_input(ref_name: &str) -> Result<()> {
-    let ref_name = ref_name.trim();
-    if ref_name.is_empty() {
+    let trimmed = ref_name.trim();
+    if trimmed.is_empty() {
         bail!("ref cannot be empty");
     }
+    if trimmed != ref_name {
+        bail!("Pinned ref must not contain leading/trailing whitespace");
+    }
+    if trimmed.ends_with('/') {
+        bail!("Pinned ref cannot end with '/'");
+    }
+    let ref_name = trimmed;
 
     if let Some(rest) = ref_name.strip_prefix("refs/heads/") {
         if rest.is_empty() {
@@ -434,6 +448,20 @@ mod pinned_ref_name_tests {
         assert!(validate_pinned_ref_full_name("refs/remotes/").is_err());
         assert!(validate_pinned_ref_full_name("refs/remotes/origin/").is_err());
     }
+
+    #[test]
+    fn rejects_leading_and_trailing_whitespace() {
+        assert!(validate_pinned_ref_full_name(" refs/heads/main").is_err());
+        assert!(validate_pinned_ref_full_name("refs/heads/main ").is_err());
+        assert!(validate_pinned_ref_full_name(" refs/tags/v1.0.0 ").is_err());
+    }
+
+    #[test]
+    fn rejects_trailing_slash_full_refs() {
+        assert!(validate_pinned_ref_full_name("refs/heads/main/").is_err());
+        assert!(validate_pinned_ref_full_name("refs/tags/v1.0.0/").is_err());
+        assert!(validate_pinned_ref_full_name("refs/remotes/origin/main/").is_err());
+    }
 }
 
 #[cfg(test)]
@@ -457,5 +485,18 @@ mod pinned_ref_name_new_input_tests {
     fn new_input_rejects_incomplete_prefixes() {
         assert!(validate_pinned_ref_full_name_new_input("refs/heads/").is_err());
         assert!(validate_pinned_ref_full_name_new_input("refs/tags/").is_err());
+    }
+
+    #[test]
+    fn rejects_leading_and_trailing_whitespace() {
+        assert!(validate_pinned_ref_full_name_new_input(" refs/heads/main").is_err());
+        assert!(validate_pinned_ref_full_name_new_input("refs/heads/main ").is_err());
+        assert!(validate_pinned_ref_full_name_new_input(" refs/tags/v1.0.0 ").is_err());
+    }
+
+    #[test]
+    fn rejects_trailing_slash_full_refs() {
+        assert!(validate_pinned_ref_full_name_new_input("refs/heads/main/").is_err());
+        assert!(validate_pinned_ref_full_name_new_input("refs/tags/v1.0.0/").is_err());
     }
 }

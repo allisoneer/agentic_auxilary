@@ -1027,6 +1027,31 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_v2_hard_rejects_pinned_ref_with_whitespace_or_trailing_slash() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+
+        for bad_ref in [" refs/heads/main", "refs/heads/main ", "refs/heads/main/"] {
+            let cfg = RepoConfigV2 {
+                version: "2.0".to_string(),
+                mount_dirs: MountDirsV2::default(),
+                thoughts_mount: None,
+                context_mounts: vec![],
+                references: vec![ReferenceEntry::WithMetadata(ReferenceMount {
+                    remote: "https://github.com/org/repo".to_string(),
+                    description: None,
+                    ref_name: Some(bad_ref.to_string()),
+                })],
+            };
+
+            assert!(
+                mgr.validate_v2_hard(&cfg).is_err(),
+                "expected {bad_ref:?} to fail hard validation"
+            );
+        }
+    }
+
+    #[test]
     fn test_validate_v2_hard_rejects_empty_mount_dirs() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());

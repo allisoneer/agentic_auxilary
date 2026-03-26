@@ -239,6 +239,15 @@ fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
     }
 }
 
+fn response_identity_url<'a>(
+    input_url: &'a str,
+    matched_existing: Option<&'a (String, Option<String>)>,
+) -> &'a str {
+    matched_existing
+        .map(|(stored_url, _)| stored_url.as_str())
+        .unwrap_or(input_url)
+}
+
 /// Public adapter for add_reference implementation.
 ///
 /// This function is callable by agentic-tools wrappers. It contains the actual
@@ -282,10 +291,6 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
     validate_reference_url_https_only(&input_url)
         .context("invalid input: URL failed HTTPS validation")?;
 
-    // Parse org/repo; safe after validation
-    let (org, repo) = extract_org_repo_from_url(&input_url)
-        .context("invalid input: failed to extract org/repo from URL")?;
-
     // Resolve repo root and config manager
     let repo_root =
         get_control_repo_root(&std::env::current_dir().context("failed to get current directory")?)
@@ -305,6 +310,9 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
         .as_ref()
         .and_then(|(_, ref_name)| ref_name.clone())
         .or_else(|| requested_ref_name.clone());
+    let identity_url = response_identity_url(&input_url, matched_existing.as_ref());
+    let (org, repo) = extract_org_repo_from_url(identity_url)
+        .context("invalid input: failed to extract org/repo from URL")?;
     let ref_key = effective_ref_name
         .as_deref()
         .map(encode_ref_key)
@@ -884,6 +892,31 @@ mod tests {
 
         assert_eq!(found.0, "https://github.com/org/repo");
         assert_eq!(found.1.as_deref(), Some("refs/remotes/origin/main"));
+    }
+
+    #[test]
+    fn idempotent_add_reference_response_uses_matched_stored_url_identity_for_paths() {
+        let input_url = "https://github.com/org/repo";
+        let stored_url = "https://github.com/Org/Repo";
+        let matched_existing = Some((stored_url.to_string(), None));
+
+        let identity_url = response_identity_url(input_url, matched_existing.as_ref());
+        assert_eq!(identity_url, stored_url);
+
+        let (org, repo) = extract_org_repo_from_url(identity_url).unwrap();
+        let mount_dirs = MountDirsV2::default();
+        let mount_space = MountSpace::Reference {
+            org_path: org.clone(),
+            repo: repo.clone(),
+            ref_key: None,
+        };
+
+        assert_eq!(org, "Org");
+        assert_eq!(repo, "Repo");
+        assert_eq!(
+            mount_space.relative_path(&mount_dirs),
+            format!("{}/{}/{}", mount_dirs.references, org, repo)
+        );
     }
 
     #[test]
