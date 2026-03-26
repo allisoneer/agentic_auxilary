@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use models::{
     CommentSourceType, PrSummary, PrSummaryList, ReviewComment, ReviewCommentList, Thread,
 };
-use pagination::{PaginationCache, make_key, make_pr_list_key, paginate_slice};
+use pagination::{PaginationCache, QueryLock, make_key, make_pr_list_key, paginate_slice};
 use std::sync::Arc;
 
 // Re-export agentic-tools types for MCP server usage
@@ -17,6 +17,13 @@ pub use tools::build_registry;
 
 /// AI response prefix to clearly identify automated replies.
 pub const AI_PREFIX: &str = "\u{1F916} AI response: ";
+
+fn guarded_post_fetch_reset<T>(query_lock: &Arc<QueryLock<T>>, entries: Vec<T>, page_size: usize) {
+    let mut state = query_lock.state.lock().unwrap();
+    if state.is_empty() || state.is_expired() {
+        state.reset(entries, (), page_size);
+    }
+}
 
 /// Prepend the AI prefix to a message body if it's not already present.
 /// Avoids double-prefixing, handles leading whitespace.
@@ -268,9 +275,7 @@ impl PrComments {
             let threads = client.build_threads(comments, &resolution_map);
             let filtered = client.filter_threads(threads, src, include_resolved);
 
-            // Re-acquire lock to update state
-            let mut state = query_lock.state.lock().unwrap();
-            state.reset(filtered, (), page_size);
+            guarded_post_fetch_reset(&query_lock, filtered, page_size);
         }
 
         // Now paginate (re-acquire lock for pagination)
@@ -363,8 +368,7 @@ impl PrComments {
                 }
             })?;
 
-            let mut pager_state = query_lock.state.lock().unwrap();
-            pager_state.reset(prs, (), page_size);
+            guarded_post_fetch_reset(&query_lock, prs, page_size);
         }
 
         let mut pager_state = query_lock.state.lock().unwrap();
@@ -494,6 +498,66 @@ mod tests {
             updated_at: "2025-01-01T00:00:00Z".into(),
             comment_count: 0,
             review_comment_count: 0,
+        }
+    }
+
+    #[test]
+    fn late_concurrent_caller_does_not_rewind_next_offset() {
+        let cache: PaginationCache<Thread> = PaginationCache::new();
+        let key = make_key("owner", "repo", 123, CommentSourceType::All, false, 2);
+        let query_lock = cache.get_or_create(&key);
+
+        let needs_fetch_a = {
+            let st = query_lock.state.lock().unwrap();
+            st.is_empty() || st.is_expired()
+        };
+        let needs_fetch_b = {
+            let st = query_lock.state.lock().unwrap();
+            st.is_empty() || st.is_expired()
+        };
+        assert!(needs_fetch_a);
+        assert!(needs_fetch_b);
+
+        guarded_post_fetch_reset(
+            &query_lock,
+            vec![sample_thread(1), sample_thread(2), sample_thread(3)],
+            2,
+        );
+
+        {
+            let mut st = query_lock.state.lock().unwrap();
+            let (page, has_more) = paginate_slice(&st.results, st.next_offset, st.page_size);
+            st.next_offset += page.len();
+
+            assert_eq!(page.len(), 2);
+            assert_eq!(page[0].parent.id, 1);
+            assert_eq!(page[1].parent.id, 2);
+            assert!(has_more);
+            assert_eq!(st.next_offset, 2);
+        }
+
+        guarded_post_fetch_reset(
+            &query_lock,
+            vec![sample_thread(100), sample_thread(101), sample_thread(102)],
+            2,
+        );
+
+        {
+            let st = query_lock.state.lock().unwrap();
+            assert_eq!(st.next_offset, 2);
+            assert_eq!(st.results[0].parent.id, 1);
+            assert_eq!(st.results[1].parent.id, 2);
+            assert_eq!(st.results[2].parent.id, 3);
+        }
+
+        {
+            let mut st = query_lock.state.lock().unwrap();
+            let (page, has_more) = paginate_slice(&st.results, st.next_offset, st.page_size);
+            st.next_offset += page.len();
+
+            assert_eq!(page.len(), 1);
+            assert_eq!(page[0].parent.id, 3);
+            assert!(!has_more);
         }
     }
 

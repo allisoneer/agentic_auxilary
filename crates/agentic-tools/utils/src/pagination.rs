@@ -8,7 +8,13 @@
 //!
 //! Uses two-level locking for thread safety:
 //! - Level 1: Brief lock on outer HashMap to get/create per-query state
-//! - Level 2: Per-query lock held during work, serializing same-param calls
+//! - Level 2: Per-query mutex protects shared QueryState access. Callers
+//!   typically lock only to read or update pagination state and may perform
+//!   expensive work outside the lock.
+//!
+//! This cache does not automatically coordinate in-flight work for the same
+//! key; concurrent same-key callers may do redundant fetching unless the
+//! caller adds its own coordination.
 //!
 //! # Example
 //!
