@@ -21,6 +21,6 @@ role = "lib"
 family = "agentic-tools"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = false
 napi = false

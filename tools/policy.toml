@@ -39,6 +39,9 @@ To add a new enum value:
 3) Run: cargo run -p xtask -- verify --check
 """
 
+# `integrations.mcp` semantics:
+# - Set `mcp = true` ONLY for runtime MCP server apps (role = "app") that run an MCP server process.
+# - Libraries and tool-libs that provide MCP tools/primitives should keep `mcp = false`.
 [integrations.mcp]
 # Require at least one of these deps if metadata.repo.integrations.mcp = true
 any_of = ["agentic-tools-mcp", "universal-tool-core", "rmcp"]

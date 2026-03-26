@@ -43,6 +43,6 @@ role = "tool-lib"
 family = "linear"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = false
 napi = false

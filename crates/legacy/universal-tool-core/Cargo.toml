@@ -57,6 +57,6 @@ role = "legacy"
 family = "legacy"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = false
 napi = false
