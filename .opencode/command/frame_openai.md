@@ -1,6 +1,6 @@
 ---
 description: Turn a short or under-specified prompt into a stronger GPT-5.4 working frame
-agent: NormalOpenAI
+model: opencode/gpt-5.4
 ---
 
 <task>
