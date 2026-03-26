@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.4] - 2026-03-26
+
+### 🐛 Bug Fixes
+- *(pr_comments)* Guard post-fetch pagination resets
+
+### 📚 Documentation
+- *(agentic-tools-utils)* Rewrite pagination cache example
 ## [0.1.3] - 2026-03-26
 
 ### 🚜 Refactor
