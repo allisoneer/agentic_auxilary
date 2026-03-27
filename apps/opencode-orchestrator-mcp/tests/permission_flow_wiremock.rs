@@ -81,6 +81,12 @@ async fn it_bug1_completion_retries_messages_until_visible() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
     // GET /session/s1/message - FIRST call: no assistant text, SECOND call: has text
     let messages_seq = SequenceResponder::new(vec![
         ResponseTemplate::new(200).set_body_json(messages_fixture(sid, None)), // stale
@@ -115,12 +121,15 @@ async fn it_bug1_completion_retries_messages_until_visible() {
     // Act
     let result = timeout(
         Duration::from_secs(10),
-        tool.run_impl(OrchestratorRunInput {
-            session_id: Some(sid.into()),
-            command: None,
-            message: Some("test prompt".into()),
-            wait_for_activity: None,
-        }),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: None,
+                message: Some("test prompt".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
     )
     .await
     .expect("timed out")
@@ -185,6 +194,12 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
     Mock::given(method("GET"))
         .and(path("/permission"))
         .respond_with(perm_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
@@ -293,6 +308,12 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
     // POST /permission/{id}/reply
     Mock::given(method("POST"))
         .and(path_regex(r"/permission/.*/reply"))
@@ -380,6 +401,12 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     Mock::given(method("GET"))
         .and(path("/permission"))
         .respond_with(perm_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
@@ -515,6 +542,12 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
     // GET /session/s4/message
     Mock::given(method("GET"))
         .and(path("/session/s4/message"))
@@ -562,12 +595,15 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
     // Act
     let result = timeout(
         Duration::from_secs(15), // Overall test timeout
-        tool.run_impl(OrchestratorRunInput {
-            session_id: Some(sid.into()),
-            command: Some("test_cmd".into()),
-            message: Some("test args".into()),
-            wait_for_activity: None,
-        }),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: Some("test_cmd".into()),
+                message: Some("test args".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
     )
     .await
     .expect("test timed out");

@@ -1,6 +1,6 @@
 [package]
 name = "opencode-orchestrator-mcp"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "MCP server for orchestrator-style agents to spawn and manage OpenCode sessions"
@@ -18,7 +18,7 @@ family = "agentic-tools"
 
 [package.metadata.repo.integrations]
 mcp = true
-logging = false
+logging = true
 napi = false
 
 [[bin]]
@@ -28,13 +28,16 @@ path = "src/main.rs"
 [dependencies]
 agentic-config = { workspace = true }
 anyhow = { workspace = true }
+agentic_logging = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
+chrono = { workspace = true }
 futures = "0.3"
 opencode_rs = { workspace = true, features = ["server"] }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+thoughts-tool = { workspace = true }
 tokio = { workspace = true, features = [
   "macros",
   "rt-multi-thread",
@@ -53,6 +56,8 @@ rustls = { version = "0.23", default-features = false, features = [
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+serial_test = "3.2"
+tempfile = "3"
 wiremock = "0.6"
 tokio = { workspace = true, features = ["test-util"] }
 

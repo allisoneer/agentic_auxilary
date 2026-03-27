@@ -269,6 +269,25 @@
     {
       "remote": "https://github.com/livegrep/livegrep",
       "description": "Suffix-array-based regex code search system discussed in the instant grep article; highest-value missing architectural alternative to trigram/sparse-ngram indexing."
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "Pinned upstream OpenCode reference for timeout behavior comparison against local orchestrator expectations.",
+      "ref": "refs/tags/v1.3.3"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "Retry pinned upstream OpenCode v1.3.0 reference for timeout behavior comparison.",
+      "ref": "refs/tags/v1.3.0"
+    },
+    {
+      "remote": "https://github.com/sst/opencode",
+      "description": "Latest upstream OpenCode dev branch for spotting post-release behavioral changes.",
+      "ref": "refs/heads/dev"
+    },
+    {
+      "remote": "https://github.com/EmbarkStudios/cargo-deny",
+      "description": "Upstream cargo-deny changelog and docs for defensible version selection."
     }
   ]
 }

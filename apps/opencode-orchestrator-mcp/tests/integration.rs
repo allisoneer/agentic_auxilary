@@ -12,6 +12,7 @@ use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use opencode_orchestrator_mcp::types::PermissionReply;
 use opencode_orchestrator_mcp::types::RespondPermissionInput;
 use opencode_orchestrator_mcp::types::RunStatus;
+use opencode_orchestrator_mcp::version;
 use opencode_rs::types::session::CreateSessionRequest;
 use std::sync::Arc;
 use std::time::Duration;
@@ -93,7 +94,11 @@ async fn unknown_command_errors_fast() {
     };
 
     let start = Instant::now();
-    let result = timeout(Duration::from_secs(10), tool.run_impl(input)).await;
+    let result = timeout(
+        Duration::from_secs(10),
+        tool.call(input, &agentic_tools_core::ToolContext::default()),
+    )
+    .await;
     let elapsed = start.elapsed();
 
     cleanup_session(&server, &session_id).await;
@@ -128,10 +133,13 @@ async fn prompt_completes_and_extracts_response() {
         wait_for_activity: None,
     };
 
-    let result = timeout(Duration::from_secs(180), tool.run_impl(input))
-        .await
-        .expect("timed out waiting for normal completion")
-        .expect("run returned error");
+    let result = timeout(
+        Duration::from_secs(180),
+        tool.call(input, &agentic_tools_core::ToolContext::default()),
+    )
+    .await
+    .expect("timed out waiting for normal completion")
+    .expect("run returned error");
 
     cleanup_session(&server, &session_id).await;
 
@@ -146,6 +154,22 @@ async fn prompt_completes_and_extracts_response() {
         .response
         .expect("expected a response for completed session");
     assert!(!response.trim().is_empty(), "response should not be empty");
+}
+
+#[tokio::test]
+#[ignore = "requires pinned opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1 + OPENCODE_BINARY or local pinned path)"]
+async fn live_managed_server_reports_exact_pinned_version() {
+    if !should_run() {
+        return;
+    }
+    init_tracing();
+
+    let server = start_server().await;
+    let s = server.get().expect("server initialized");
+    let health = s.client().misc().health().await.expect("health ok");
+
+    version::validate_exact_version(health.version.as_deref())
+        .expect("version must match pinned stable");
 }
 
 #[tokio::test]
@@ -168,10 +192,13 @@ async fn session_resumption_works() {
         wait_for_activity: None,
     };
 
-    let result1 = timeout(Duration::from_secs(180), tool.run_impl(input1))
-        .await
-        .expect("timed out on first call")
-        .expect("first call failed");
+    let result1 = timeout(
+        Duration::from_secs(180),
+        tool.call(input1, &agentic_tools_core::ToolContext::default()),
+    )
+    .await
+    .expect("timed out on first call")
+    .expect("first call failed");
 
     assert!(matches!(result1.status, RunStatus::Completed));
 
@@ -182,10 +209,13 @@ async fn session_resumption_works() {
         wait_for_activity: None,
     };
 
-    let result2 = timeout(Duration::from_secs(180), tool.run_impl(input2))
-        .await
-        .expect("timed out on second call")
-        .expect("second call failed");
+    let result2 = timeout(
+        Duration::from_secs(180),
+        tool.call(input2, &agentic_tools_core::ToolContext::default()),
+    )
+    .await
+    .expect("timed out on second call")
+    .expect("second call failed");
 
     cleanup_session(&server, &session_id).await;
 
@@ -224,12 +254,15 @@ async fn permission_request_returns_status() {
     // Should return PermissionRequired within 60 seconds, not hang
     let result = timeout(
         Duration::from_secs(60),
-        run_tool.run_impl(OrchestratorRunInput {
-            session_id: Some(session_id.clone()),
-            command: None,
-            message: Some(prompt),
-            wait_for_activity: None,
-        }),
+        run_tool.call(
+            OrchestratorRunInput {
+                session_id: Some(session_id.clone()),
+                command: None,
+                message: Some(prompt),
+                wait_for_activity: None,
+            },
+            &agentic_tools_core::ToolContext::default(),
+        ),
     )
     .await
     .expect("timed out waiting for permission request - possible hang")
@@ -295,12 +328,15 @@ async fn permission_response_resumes_and_completes() {
     // Step 1: Trigger permission request
     let result1 = timeout(
         Duration::from_secs(60),
-        run_tool.run_impl(OrchestratorRunInput {
-            session_id: Some(session_id.clone()),
-            command: None,
-            message: Some(prompt),
-            wait_for_activity: None,
-        }),
+        run_tool.call(
+            OrchestratorRunInput {
+                session_id: Some(session_id.clone()),
+                command: None,
+                message: Some(prompt),
+                wait_for_activity: None,
+            },
+            &agentic_tools_core::ToolContext::default(),
+        ),
     )
     .await
     .expect("timed out waiting for initial permission request")
@@ -373,6 +409,12 @@ async fn permission_response_resumes_and_completes() {
                 );
                 // Continue to next iteration
             }
+            RunStatus::QuestionRequired => {
+                panic!(
+                    "unexpected question interruption in permission flow: {:?}",
+                    respond_result.questions
+                );
+            }
         }
     }
 
@@ -413,12 +455,15 @@ async fn permission_reject_returns_none_with_warning() {
     // Step 1: Trigger permission request
     let result = timeout(
         Duration::from_secs(60),
-        run_tool.run_impl(OrchestratorRunInput {
-            session_id: Some(session_id.clone()),
-            command: None,
-            message: Some(prompt),
-            wait_for_activity: None,
-        }),
+        run_tool.call(
+            OrchestratorRunInput {
+                session_id: Some(session_id.clone()),
+                command: None,
+                message: Some(prompt),
+                wait_for_activity: None,
+            },
+            &agentic_tools_core::ToolContext::default(),
+        ),
     )
     .await
     .expect("timed out waiting for permission request")

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.4.0] - 2026-03-27
+
+### ⛰️  Features
+- *(opencode-orchestrator-mcp)* Add stable v1.3.3 launcher support and reliability fixes
 ## [0.3.1] - 2026-03-26
 
 ### ⚙️  Miscellaneous

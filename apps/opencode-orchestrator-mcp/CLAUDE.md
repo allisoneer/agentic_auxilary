@@ -5,7 +5,7 @@
 - Path: apps/opencode-orchestrator-mcp/
 - Role: app
 - Family: agentic-tools
-- Integrations: mcp=true, logging=false, napi=false
+- Integrations: mcp=true, logging=true, napi=false
 <!-- END:xtask:autogen -->
 
 ## Overview
