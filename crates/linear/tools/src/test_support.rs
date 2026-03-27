@@ -207,6 +207,43 @@ pub fn comment_create_response(id: &str, body: &str) -> String {
     .unwrap()
 }
 
+pub fn comment_node(id: &str, body: &str, url: &str, created_at: &str, updated_at: &str) -> Value {
+    json!({
+        "id": id,
+        "body": body,
+        "url": url,
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+        "parentId": null,
+        "user": null
+    })
+}
+
+pub fn issue_comments_response(
+    issue_id: &str,
+    identifier: &str,
+    nodes: Vec<Value>,
+    has_next_page: bool,
+    end_cursor: Option<&str>,
+) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issue": {
+                "id": issue_id,
+                "identifier": identifier,
+                "comments": {
+                    "nodes": nodes,
+                    "pageInfo": {
+                        "hasNextPage": has_next_page,
+                        "endCursor": end_cursor
+                    }
+                }
+            }
+        }
+    }))
+    .unwrap()
+}
+
 pub fn archive_response(success: bool) -> String {
     serde_json::to_string(&json!({
         "data": { "issueArchive": { "success": success } }

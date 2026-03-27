@@ -36,6 +36,8 @@ fn parse_identifier(input: &str) -> Option<(String, i32)> {
 }
 
 const COMMENTS_PAGE_SIZE: usize = 10;
+const ISSUE_COMMENTS_FETCH_PAGE_SIZE: i32 = 50;
+const ISSUE_COMMENTS_MAX_PAGES: usize = 100;
 
 #[derive(Clone)]
 pub struct LinearTools {
@@ -968,40 +970,68 @@ impl LinearTools {
         client: &LinearClient,
         issue_id: &str,
     ) -> Result<(String, Vec<models::CommentSummary>)> {
-        let args = IssueCommentsArguments {
-            id: issue_id.to_string(),
-        };
-        let op = IssueCommentsQuery::build(args);
-        let resp = client.run(op).await?;
-        let data = http::extract_data(resp)?;
+        let mut cursor: Option<String> = None;
+        let mut all_comments = Vec::new();
+        let mut identifier: Option<String> = None;
 
-        let issue = data
-            .issue
-            .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", issue_id))?;
+        for page in 0..ISSUE_COMMENTS_MAX_PAGES {
+            let args = IssueCommentsArguments {
+                id: issue_id.to_string(),
+                first: Some(ISSUE_COMMENTS_FETCH_PAGE_SIZE),
+                after: cursor.clone(),
+            };
+            let op = IssueCommentsQuery::build(args);
+            let resp = client.run(op).await?;
+            let data = http::extract_data(resp)?;
 
-        let identifier = issue.identifier.clone();
+            let issue = data
+                .issue
+                .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", issue_id))?;
 
-        // Convert to CommentSummary, sorting by created_at
-        let mut comments: Vec<models::CommentSummary> = issue
-            .comments
-            .nodes
-            .into_iter()
-            .map(|c| models::CommentSummary {
-                id: c.id.inner().to_string(),
-                body: c.body,
-                url: c.url,
-                created_at: c.created_at.0,
-                updated_at: c.updated_at.0,
-                parent_id: c.parent_id,
-                author_name: c.user.as_ref().map(|u| u.name.clone()),
-                author_email: c.user.as_ref().map(|u| u.email.clone()),
-            })
-            .collect();
+            if identifier.is_none() {
+                identifier = Some(issue.identifier.clone());
+            }
 
-        // Sort chronologically
-        comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            all_comments.extend(
+                issue
+                    .comments
+                    .nodes
+                    .into_iter()
+                    .map(|c| models::CommentSummary {
+                        id: c.id.inner().to_string(),
+                        body: c.body,
+                        url: c.url,
+                        created_at: c.created_at.0,
+                        updated_at: c.updated_at.0,
+                        parent_id: c.parent_id,
+                        author_name: c.user.as_ref().map(|u| u.name.clone()),
+                        author_email: c.user.as_ref().map(|u| u.email.clone()),
+                    }),
+            );
 
-        Ok((identifier, comments))
+            if !issue.comments.page_info.has_next_page {
+                all_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+                return Ok((identifier.unwrap_or_default(), all_comments));
+            }
+
+            cursor = issue.comments.page_info.end_cursor.clone();
+            if cursor.is_none() {
+                return Err(anyhow::anyhow!(
+                    "Issue comments pagination for {} reported has_next_page=true without end_cursor",
+                    issue_id
+                ));
+            }
+
+            if page + 1 == ISSUE_COMMENTS_MAX_PAGES {
+                return Err(anyhow::anyhow!(
+                    "Issue comments pagination for {} exceeded {} pages",
+                    issue_id,
+                    ISSUE_COMMENTS_MAX_PAGES
+                ));
+            }
+        }
+
+        unreachable!("issue comments pagination loop must return or error")
     }
 }
 

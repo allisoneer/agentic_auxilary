@@ -1050,3 +1050,92 @@ async fn get_metadata_pagination() {
     assert!(res.has_next_page);
     assert_eq!(res.end_cursor, Some("cursor-abc".to_string()));
 }
+
+#[tokio::test]
+#[serial(env)]
+async fn get_issue_comments_fetches_multiple_upstream_pages_then_paginates_locally() {
+    let mut server = Server::new_async().await;
+    let issue_uuid = "issue-comments-uuid";
+    let identifier = "ENG-245";
+
+    let first_page_nodes = (1..=6)
+        .map(|n| {
+            comment_node(
+                &format!("comment-{n:02}"),
+                &format!("Comment {n:02}"),
+                &format!("https://linear.app/test/comment/{n:02}"),
+                &format!("2025-01-{n:02}T00:00:00Z"),
+                &format!("2025-01-{n:02}T01:00:00Z"),
+            )
+        })
+        .collect::<Vec<_>>();
+    let second_page_nodes = (7..=12)
+        .map(|n| {
+            comment_node(
+                &format!("comment-{n:02}"),
+                &format!("Comment {n:02}"),
+                &format!("https://linear.app/test/comment/{n:02}"),
+                &format!("2025-01-{n:02}T00:00:00Z"),
+                &format!("2025-01-{n:02}T01:00:00Z"),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let _page1 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_comments_response(
+            issue_uuid,
+            identifier,
+            first_page_nodes,
+            true,
+            Some("cursor-1"),
+        ))
+        .expect(1)
+        .create_async()
+        .await;
+    let _page2 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_comments_response(
+            issue_uuid,
+            identifier,
+            second_page_nodes,
+            false,
+            None,
+        ))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tools = linear_tools::LinearTools::new();
+
+    let first = tools
+        .get_issue_comments(issue_uuid.to_string())
+        .await
+        .unwrap();
+    assert_eq!(first.issue_identifier, identifier);
+    assert_eq!(first.comments.len(), 10);
+    assert_eq!(first.total_comments, 12);
+    assert_eq!(first.shown_comments, 10);
+    assert!(first.has_more);
+    assert_eq!(first.comments.first().unwrap().id, "comment-01");
+    assert_eq!(first.comments.last().unwrap().id, "comment-10");
+
+    let second = tools
+        .get_issue_comments(issue_uuid.to_string())
+        .await
+        .unwrap();
+    assert_eq!(second.issue_identifier, identifier);
+    assert_eq!(second.comments.len(), 2);
+    assert_eq!(second.total_comments, 12);
+    assert_eq!(second.shown_comments, 12);
+    assert!(!second.has_more);
+    assert_eq!(second.comments.first().unwrap().id, "comment-11");
+    assert_eq!(second.comments.last().unwrap().id, "comment-12");
+}
