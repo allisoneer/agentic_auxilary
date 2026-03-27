@@ -1,0 +1,27 @@
+crates/meta/xtask/src/verify.rs
+  f96c67e30d7ccd4f 255-261
+tools/policy.toml
+  f96c67e30d7ccd4f 111-113
+crates/meta/xtask/src/policy.rs
+  f96c67e30d7ccd4f 90-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "504fe63e67c2fdb83ab13b6049008af0ccaddbe4",
+  "prompts": {
+    "f96c67e30d7ccd4f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d00a9242ffehdILyy4sMOlk4a",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 4,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    }
+  }
+}
