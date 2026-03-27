@@ -87,6 +87,11 @@ pub struct TodoPolicy {
     /// Repo-relative path prefixes to exclude from scanning.
     #[serde(default)]
     pub ignore_paths: Vec<String>,
+
+    /// Filename suffixes to exclude from scanning (e.g., "CHANGELOG.md" matches any path
+    /// ending with "/CHANGELOG.md" or exactly "CHANGELOG.md").
+    #[serde(default)]
+    pub ignore_suffixes: Vec<String>,
 }
 
 fn default_blocked_severities() -> Vec<u8> {

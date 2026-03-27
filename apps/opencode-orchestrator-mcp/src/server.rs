@@ -14,6 +14,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::version;
+
 /// Environment variable name for the orchestrator-managed recursion guard.
 pub const OPENCODE_ORCHESTRATOR_MANAGED_ENV: &str = "OPENCODE_ORCHESTRATOR_MANAGED";
 
@@ -116,8 +118,9 @@ impl OrchestratorServer {
 
     /// Internal implementation that actually spawns the server.
     async fn start_impl() -> anyhow::Result<Self> {
+        let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
+
         // Load configuration (best-effort, use defaults if unavailable)
-        let cwd = std::env::current_dir().unwrap_or_default();
         let config = match agentic_config::loader::load_merged(&cwd) {
             Ok(loaded) => {
                 for w in &loaded.warnings {
@@ -131,25 +134,47 @@ impl OrchestratorServer {
             }
         };
 
-        let managed = ManagedServer::start(ServerOptions::default())
+        let launcher_config = version::resolve_launcher_config(&cwd)
+            .context("Failed to resolve OpenCode launcher configuration")?;
+
+        tracing::info!(
+            binary = %launcher_config.binary,
+            launcher_args = ?launcher_config.launcher_args,
+            expected_version = %version::PINNED_OPENCODE_VERSION,
+            "starting embedded opencode serve (pinned stable)"
+        );
+
+        let opts = ServerOptions::default()
+            .binary(&launcher_config.binary)
+            .launcher_args(launcher_config.launcher_args)
+            .directory(cwd.clone());
+
+        let managed = ManagedServer::start(opts)
             .await
             .context("Failed to start embedded `opencode serve`")?;
 
         // Avoid trailing slash to prevent `//event` formatting
         let base_url = managed.url().to_string().trim_end_matches('/').to_string();
 
-        let directory = std::env::current_dir()
-            .ok()
-            .map(|p| p.to_string_lossy().to_string());
-
-        let mut builder = Client::builder().base_url(&base_url);
-        if let Some(dir) = &directory {
-            builder = builder.directory(dir.clone());
-        }
-
-        let client = builder
+        let client = Client::builder()
+            .base_url(&base_url)
+            .directory(cwd.to_string_lossy().to_string())
             .build()
             .context("Failed to build opencode-rs HTTP client")?;
+
+        let health = client
+            .misc()
+            .health()
+            .await
+            .context("Failed to fetch /global/health for version validation")?;
+
+        version::validate_exact_version(health.version.as_deref()).with_context(|| {
+            format!(
+                "Embedded OpenCode server did not match pinned stable v{} (binary={})",
+                version::PINNED_OPENCODE_VERSION,
+                launcher_config.binary
+            )
+        })?;
 
         // Load model context limits (best-effort, don't fail if unavailable)
         let model_context_limits = Self::load_model_limits(&client).await.unwrap_or_else(|e| {
@@ -277,13 +302,9 @@ impl OrchestratorServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
+    use serial_test::serial;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
-
-    /// Mutex to serialize env var tests (env vars are process-global).
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[tokio::test]
     async fn init_with_retry_succeeds_on_first_attempt() {
@@ -340,67 +361,61 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_not_set() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
         // Ensure the env var is not set
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
         assert!(!managed_guard_enabled());
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_enabled_when_env_is_1() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_is_0() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "0") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_is_empty() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_is_whitespace() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "   ") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_enabled_when_env_is_truthy() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "true") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 }

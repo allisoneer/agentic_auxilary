@@ -1,10 +1,11 @@
 //! MCP server for orchestrator-style agents to spawn and manage `OpenCode` sessions.
 //!
-//! This binary exposes four tools for orchestrator agents:
+//! This binary exposes five tools for orchestrator agents:
 //! - `run` - start or resume an `OpenCode` session
 //! - `list_sessions` - list existing sessions
 //! - `list_commands` - discover available `OpenCode` commands
 //! - `respond_permission` - reply to permission requests
+//! - `respond_question` - reply to question requests
 
 use agentic_tools_mcp::OutputMode;
 use agentic_tools_mcp::RegistryServer;
@@ -13,10 +14,13 @@ use agentic_tools_mcp::stdio;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
+mod config;
+mod logging;
 mod server;
 mod token_tracker;
 mod tools;
 mod types;
+mod version;
 
 use server::OrchestratorServer;
 

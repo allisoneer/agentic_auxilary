@@ -252,6 +252,13 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
             continue;
         }
 
+        // Check ignore_suffixes (e.g., "CHANGELOG.md" matches "foo/CHANGELOG.md").
+        if todos.ignore_suffixes.iter().any(|suffix| {
+            rel_path.as_ref() == suffix || rel_path.ends_with(&format!("/{}", suffix))
+        }) {
+            continue;
+        }
+
         let abs_path = ws_root.join(rel_path.as_ref());
 
         // Skip symlinks: avoids blocking on FUSE mounts (e.g. thoughts three-space
@@ -464,6 +471,7 @@ mod tests {
         let policy = TodoPolicy {
             blocked_severities: vec![0],
             ignore_paths: vec![],
+            ignore_suffixes: vec![],
         };
         let result = check_todo_annotations(dir.path(), &policy);
         let err = result.unwrap_err().to_string();
@@ -480,6 +488,7 @@ mod tests {
         let policy = TodoPolicy {
             blocked_severities: vec![0],
             ignore_paths: vec![],
+            ignore_suffixes: vec![],
         };
         let result = check_todo_annotations(dir.path(), &policy);
         let err = result.unwrap_err().to_string();
@@ -496,6 +505,7 @@ mod tests {
         let policy = TodoPolicy {
             blocked_severities: vec![0],
             ignore_paths: vec![],
+            ignore_suffixes: vec![],
         };
         let result = check_todo_annotations(dir.path(), &policy);
         assert!(
@@ -510,11 +520,27 @@ mod tests {
         let policy = TodoPolicy {
             blocked_severities: vec![0],
             ignore_paths: vec!["CLAUDE.md".to_string()],
+            ignore_suffixes: vec![],
         };
         let result = check_todo_annotations(dir.path(), &policy);
         assert!(
             result.is_ok(),
             "ignored path should not trigger: {result:?}"
+        );
+    }
+
+    #[test]
+    fn ignores_configured_suffixes() {
+        let dir = setup_git_repo(&[("foo/CHANGELOG.md", b"TODO: changelog prose\n")]);
+        let policy = TodoPolicy {
+            blocked_severities: vec![0],
+            ignore_paths: vec![],
+            ignore_suffixes: vec!["CHANGELOG.md".to_string()],
+        };
+        let result = check_todo_annotations(dir.path(), &policy);
+        assert!(
+            result.is_ok(),
+            "ignored suffix should not trigger: {result:?}"
         );
     }
 
@@ -527,6 +553,7 @@ mod tests {
         let policy = TodoPolicy {
             blocked_severities: vec![0],
             ignore_paths: vec![],
+            ignore_suffixes: vec![],
         };
         let result = check_todo_annotations(dir.path(), &policy);
         assert!(result.is_ok(), "binary file should be skipped: {result:?}");
