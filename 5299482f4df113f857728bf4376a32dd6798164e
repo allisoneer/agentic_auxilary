@@ -1,0 +1,39 @@
+crates/linear/tools/src/lib.rs
+  510518b67b7b0c26 223,264-271,474-522,798-889
+crates/linear/queries/src/filters.rs
+  510518b67b7b0c26 164-165
+crates/linear/tools/tests/integration.rs
+  510518b67b7b0c26 22,91,380,422,457,483,524,566,642-861,979-1020
+crates/linear/queries/src/mutations.rs
+  510518b67b7b0c26 2,55-97,164-237
+crates/linear/tools/tests/live.rs
+  510518b67b7b0c26 79
+crates/linear/tools/src/tools.rs
+  510518b67b7b0c26 11,13,45-47,106,339-476,551-552
+crates/linear/tools/src/models.rs
+  510518b67b7b0c26 103-106,281-289,319-326,337-348
+crates/linear/tools/src/test_support.rs
+  510518b67b7b0c26 191-197,293-348
+crates/linear/queries/src/queries.rs
+  510518b67b7b0c26 156-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "5299482f4df113f857728bf4376a32dd6798164e",
+  "prompts": {
+    "510518b67b7b0c26": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2ced5ec98ffex47b9ol1zvHjxO",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 850,
+      "total_deletions": 15,
+      "accepted_lines": 839,
+      "overriden_lines": 0
+    }
+  }
+}
