@@ -58,7 +58,7 @@ cargo install --path apps/thoughts
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-claudecode = "0.1.14"
+claudecode = "0.1.15"
 ```
 <!-- END:autodeps -->
 
@@ -66,7 +66,7 @@ claudecode = "0.1.14"
 <!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-anthropic-async = "0.5.1"
+anthropic-async = "0.5.2"
 ```
 <!-- END:autodeps -->
 
@@ -74,7 +74,7 @@ anthropic-async = "0.5.1"
 <!-- BEGIN:autodeps {"crates":["opencode_rs"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-opencode_rs = "0.3.0"
+opencode_rs = "0.3.1"
 ```
 <!-- END:autodeps -->
 
