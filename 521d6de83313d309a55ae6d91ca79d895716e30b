@@ -1,0 +1,23 @@
+apps/opencode-orchestrator-mcp/Cargo.toml
+  f96c67e30d7ccd4f 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "521d6de83313d309a55ae6d91ca79d895716e30b",
+  "prompts": {
+    "f96c67e30d7ccd4f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d00a9242ffehdILyy4sMOlk4a",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
