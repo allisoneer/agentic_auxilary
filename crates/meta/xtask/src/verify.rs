@@ -252,6 +252,13 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
             continue;
         }
 
+        // Check ignore_suffixes (e.g., "CHANGELOG.md" matches "foo/CHANGELOG.md").
+        if todos.ignore_suffixes.iter().any(|suffix| {
+            rel_path.as_ref() == suffix || rel_path.ends_with(&format!("/{}", suffix))
+        }) {
+            continue;
+        }
+
         let abs_path = ws_root.join(rel_path.as_ref());
 
         // Skip symlinks: avoids blocking on FUSE mounts (e.g. thoughts three-space
