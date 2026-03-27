@@ -1,0 +1,23 @@
+crates/linear/tools/src/models.rs
+  4f7538ffd5a267ee 116-139,300-303,312-313,338-387,532-663
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "8810e33cc152c1b6b5cf2002df11336671f0d165",
+  "prompts": {
+    "4f7538ffd5a267ee": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2ce954604ffehHE82W29icB5mL",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 212,
+      "overriden_lines": 0
+    }
+  }
+}
