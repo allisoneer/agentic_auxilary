@@ -114,7 +114,7 @@ const THOUGHTS_NAMES: &[&str] = &[
 
 const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
 
-const REVIEW_NAMES: &[&str] = &["diff_snapshot", "diff_page", "run"];
+const REVIEW_NAMES: &[&str] = &["review_diff_snapshot", "review_diff_page", "review_run"];
 
 impl AgenticTools {
     /// Build the unified ToolRegistry using domain registries.
