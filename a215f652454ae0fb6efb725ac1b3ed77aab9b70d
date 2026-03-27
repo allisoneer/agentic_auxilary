@@ -1,0 +1,38 @@
+.opencode/command/create_plan_final.md
+  e56a2216d101cbc9 97
+apps/opencode-orchestrator-mcp/src/version.rs
+  c84d708ab5727ac4 78-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "a215f652454ae0fb6efb725ac1b3ed77aab9b70d",
+  "prompts": {
+    "c84d708ab5727ac4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2cf2e535cffenY6Fc9hODyy86F",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 7,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    },
+    "e56a2216d101cbc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2cf746ef8ffeZT9vRYnlFmqZq3",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
