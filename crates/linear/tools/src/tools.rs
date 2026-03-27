@@ -291,6 +291,50 @@ impl Tool for AddCommentTool {
 }
 
 // ============================================================================
+// GetIssueComments Tool
+// ============================================================================
+
+/// Input for get_issue_comments tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct GetIssueCommentsInput {
+    /// Issue ID, identifier (e.g., ENG-245), or URL
+    pub issue: String,
+}
+
+/// Tool for fetching comments on a Linear issue with implicit pagination.
+#[derive(Clone)]
+pub struct GetIssueCommentsTool {
+    linear: Arc<LinearTools>,
+}
+
+impl GetIssueCommentsTool {
+    pub fn new(linear: Arc<LinearTools>) -> Self {
+        Self { linear }
+    }
+}
+
+impl Tool for GetIssueCommentsTool {
+    type Input = GetIssueCommentsInput;
+    type Output = crate::models::CommentsResult;
+    const NAME: &'static str = "linear_get_issue_comments";
+    const DESCRIPTION: &'static str = "Get comments on a Linear issue. Returns 10 comments per call with implicit pagination - call again with the same issue to get more comments.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let linear = self.linear.clone();
+        Box::pin(async move {
+            linear
+                .get_issue_comments(input.issue)
+                .await
+                .map_err(map_anyhow_to_tool_error)
+        })
+    }
+}
+
+// ============================================================================
 // ArchiveIssue Tool
 // ============================================================================
 
@@ -547,6 +591,7 @@ pub fn build_registry(linear: Arc<LinearTools>) -> ToolRegistry {
         .register::<ReadIssueTool, ()>(ReadIssueTool::new(linear.clone()))
         .register::<CreateIssueTool, ()>(CreateIssueTool::new(linear.clone()))
         .register::<AddCommentTool, ()>(AddCommentTool::new(linear.clone()))
+        .register::<GetIssueCommentsTool, ()>(GetIssueCommentsTool::new(linear.clone()))
         .register::<ArchiveIssueTool, ()>(ArchiveIssueTool::new(linear.clone()))
         .register::<UpdateIssueTool, ()>(UpdateIssueTool::new(linear.clone()))
         .register::<SetRelationTool, ()>(SetRelationTool::new(linear.clone()))

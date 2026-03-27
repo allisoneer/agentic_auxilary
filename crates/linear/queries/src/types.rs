@@ -186,3 +186,33 @@ pub struct IssueLabelConnection {
     #[cynic(rename = "pageInfo")]
     pub page_info: PageInfo,
 }
+
+// ============================================================================
+// Issue comment types (for reading issue comments)
+// ============================================================================
+
+/// Full comment fragment for reading issue comments.
+/// Named `IssueComment` to avoid conflict with minimal `Comment` in mutations.rs.
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "Comment")]
+pub struct IssueComment {
+    pub id: cynic::Id,
+    pub body: String,
+    pub url: String,
+    #[cynic(rename = "createdAt")]
+    pub created_at: DateTime,
+    #[cynic(rename = "updatedAt")]
+    pub updated_at: DateTime,
+    #[cynic(rename = "parentId")]
+    pub parent_id: Option<String>,
+    pub user: Option<User>,
+}
+
+/// Connection type for issue comments query.
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "CommentConnection")]
+pub struct IssueCommentConnection {
+    pub nodes: Vec<IssueComment>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}

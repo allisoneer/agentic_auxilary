@@ -6,6 +6,8 @@ pub mod tools;
 #[doc(hidden)]
 pub mod test_support;
 
+use agentic_tools_utils::pagination::PaginationCache;
+use agentic_tools_utils::pagination::paginate_slice;
 use anyhow::Context;
 use anyhow::Result;
 use cynic::MutationBuilder;
@@ -14,6 +16,7 @@ use http::LinearClient;
 use linear_queries::scalars::DateTimeOrDuration;
 use linear_queries::*;
 use regex::Regex;
+use std::sync::Arc;
 
 // Re-export agentic-tools types for MCP server usage
 pub use tools::build_registry;
@@ -32,15 +35,19 @@ fn parse_identifier(input: &str) -> Option<(String, i32)> {
     None
 }
 
+const COMMENTS_PAGE_SIZE: usize = 10;
+
 #[derive(Clone)]
 pub struct LinearTools {
     api_key: Option<String>,
+    comments_cache: Arc<PaginationCache<models::CommentSummary>>,
 }
 
 impl LinearTools {
     pub fn new() -> Self {
         Self {
             api_key: std::env::var("LINEAR_API_KEY").ok(),
+            comments_cache: Arc::new(PaginationCache::new()),
         }
     }
 
@@ -886,6 +893,113 @@ impl LinearTools {
                 }
             }
         }
+    }
+
+    /// Get comments on a Linear issue with implicit pagination
+    pub async fn get_issue_comments(&self, issue: String) -> Result<models::CommentsResult> {
+        let client = LinearClient::new(self.api_key.clone())
+            .context("internal: failed to create Linear client")?;
+
+        // Resolve issue identifier to UUID
+        let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
+
+        // Cache key includes page size for correctness
+        let cache_key = format!("{}|{}", issue_id, COMMENTS_PAGE_SIZE);
+
+        // Sweep expired entries
+        self.comments_cache.sweep_expired();
+
+        // Get or create cache entry
+        let query_lock = self.comments_cache.get_or_create(&cache_key);
+
+        // Check if we need to fetch
+        let needs_fetch = {
+            let state = query_lock.lock_state();
+            state.is_empty() || state.is_expired()
+        };
+
+        // Store the issue identifier for display
+        let issue_identifier: String;
+
+        if needs_fetch {
+            // Fetch all comments from Linear API
+            let (identifier, all_comments) = self.fetch_all_comments(&client, &issue_id).await?;
+            issue_identifier = identifier;
+
+            // Reset cache with fresh data
+            let mut state = query_lock.lock_state();
+            if state.is_empty() || state.is_expired() {
+                state.reset(all_comments, (), COMMENTS_PAGE_SIZE);
+            }
+        } else {
+            // Get identifier from issue (not cached, but fast)
+            issue_identifier = issue.clone();
+        }
+
+        // Paginate from cache
+        let (page_comments, total, shown, has_more) = {
+            let mut state = query_lock.lock_state();
+            let (page, has_more) =
+                paginate_slice(&state.results, state.next_offset, state.page_size);
+            let total = state.results.len();
+            state.next_offset += page.len();
+            let shown = state.next_offset;
+            (page, total, shown, has_more)
+        };
+
+        // If exhausted, remove cache entry so next call restarts
+        if !has_more {
+            self.comments_cache.remove_if_same(&cache_key, &query_lock);
+        }
+
+        Ok(models::CommentsResult {
+            issue_identifier,
+            comments: page_comments,
+            shown_comments: shown,
+            total_comments: total,
+            has_more,
+        })
+    }
+
+    async fn fetch_all_comments(
+        &self,
+        client: &LinearClient,
+        issue_id: &str,
+    ) -> Result<(String, Vec<models::CommentSummary>)> {
+        let args = IssueCommentsArguments {
+            id: issue_id.to_string(),
+        };
+        let op = IssueCommentsQuery::build(args);
+        let resp = client.run(op).await?;
+        let data = http::extract_data(resp)?;
+
+        let issue = data
+            .issue
+            .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", issue_id))?;
+
+        let identifier = issue.identifier.clone();
+
+        // Convert to CommentSummary, sorting by created_at
+        let mut comments: Vec<models::CommentSummary> = issue
+            .comments
+            .nodes
+            .into_iter()
+            .map(|c| models::CommentSummary {
+                id: c.id.inner().to_string(),
+                body: c.body,
+                url: c.url,
+                created_at: c.created_at.0,
+                updated_at: c.updated_at.0,
+                parent_id: c.parent_id,
+                author_name: c.user.as_ref().map(|u| u.name.clone()),
+                author_email: c.user.as_ref().map(|u| u.email.clone()),
+            })
+            .collect();
+
+        // Sort chronologically
+        comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+        Ok((identifier, comments))
     }
 }
 

@@ -202,3 +202,32 @@ pub struct IssueRelationsQuery {
     #[arguments(id: $id)]
     pub issue: Option<IssueWithRelations>,
 }
+
+// ============================================================================
+// Issue comments query
+// ============================================================================
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "Issue")]
+pub struct IssueWithComments {
+    pub id: cynic::Id,
+    pub identifier: String,
+    #[arguments(first: 50)]
+    pub comments: IssueCommentConnection,
+}
+
+#[derive(cynic::QueryVariables, Debug, Clone)]
+pub struct IssueCommentsArguments {
+    pub id: String,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    graphql_type = "Query",
+    schema = "linear",
+    variables = "IssueCommentsArguments"
+)]
+pub struct IssueCommentsQuery {
+    #[arguments(id: $id)]
+    pub issue: Option<IssueWithComments>,
+}
