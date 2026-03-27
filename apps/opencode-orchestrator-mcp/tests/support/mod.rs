@@ -7,12 +7,14 @@
 #![allow(dead_code)]
 
 use opencode_orchestrator_mcp::server::OrchestratorServer;
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use tokio::sync::OnceCell;
-use wiremock::{MockServer, Request, Respond, ResponseTemplate};
+use wiremock::MockServer;
+use wiremock::Request;
+use wiremock::Respond;
+use wiremock::ResponseTemplate;
 
 /// Build an `OrchestratorServer` cell connected to a wiremock `MockServer`.
 ///

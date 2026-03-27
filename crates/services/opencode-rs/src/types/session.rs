@@ -1,7 +1,8 @@
 //! Session types for `opencode_rs`.
 
 use crate::types::permission::Ruleset;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// A session in `OpenCode`.

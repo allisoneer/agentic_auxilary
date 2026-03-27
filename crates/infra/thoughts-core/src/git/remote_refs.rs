@@ -1,7 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use gix_protocol::handshake::Ref as HandshakeRef;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

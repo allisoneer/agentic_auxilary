@@ -5,7 +5,9 @@
 
 #![allow(dead_code)]
 
-use syn::{GenericArgument, PathArguments, Type};
+use syn::GenericArgument;
+use syn::PathArguments;
+use syn::Type;
 
 /// Check if a type is Option<T>
 pub fn is_option(ty: &Type) -> bool {

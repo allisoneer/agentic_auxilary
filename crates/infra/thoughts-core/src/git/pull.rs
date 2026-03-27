@@ -1,5 +1,7 @@
-use anyhow::{Context, Result};
-use git2::{AnnotatedCommit, Repository};
+use anyhow::Context;
+use anyhow::Result;
+use git2::AnnotatedCommit;
+use git2::Repository;
 use std::path::Path;
 
 use crate::git::shell_fetch;

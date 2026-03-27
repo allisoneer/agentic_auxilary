@@ -1,7 +1,11 @@
-use anyhow::{Context, Result, bail};
-use std::io::{BufRead, BufReader};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::process::Stdio;
 
 pub fn build_push_command(repo_path: &Path, remote: &str, branch: &str) -> Command {
     let mut cmd = Command::new("git");

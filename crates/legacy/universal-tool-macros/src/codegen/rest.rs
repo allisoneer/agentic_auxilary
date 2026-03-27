@@ -3,8 +3,12 @@
 //! This module generates `create_rest_router()` and `get_openapi_spec()` methods
 //! that integrate tools with axum-based REST APIs.
 
-use crate::codegen::shared::{to_kebab_case, to_pascal_case};
-use crate::model::{HttpMethod, ParamSource, RouterDef, ToolDef};
+use crate::codegen::shared::to_kebab_case;
+use crate::codegen::shared::to_pascal_case;
+use crate::model::HttpMethod;
+use crate::model::ParamSource;
+use crate::model::RouterDef;
+use crate::model::ToolDef;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;

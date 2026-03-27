@@ -1,4 +1,6 @@
-use anthropic_async::{AnthropicConfig, config::ANTHROPIC_DEFAULT_BASE, test_support::EnvGuard};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::config::ANTHROPIC_DEFAULT_BASE;
+use anthropic_async::test_support::EnvGuard;
 use serial_test::serial;
 
 #[test]

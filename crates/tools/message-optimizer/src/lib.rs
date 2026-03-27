@@ -4,13 +4,14 @@ mod prompts;
 mod types;
 
 pub use crate::error::MessageOptimizerError;
-pub use crate::types::{OptimizeMessageRequest, OptimizedPrompt};
+pub use crate::types::OptimizeMessageRequest;
+pub use crate::types::OptimizedPrompt;
 
-use crate::{
-    anthropic::{AnthropicOptimizer, OptimizerBackend},
-    prompts::{build_optimizer_user, build_repair_user},
-    types::ModelOutput,
-};
+use crate::anthropic::AnthropicOptimizer;
+use crate::anthropic::OptimizerBackend;
+use crate::prompts::build_optimizer_user;
+use crate::prompts::build_repair_user;
+use crate::types::ModelOutput;
 
 const MAX_ATTEMPTS: usize = 3;
 
@@ -72,13 +73,14 @@ pub(crate) fn assemble(system_prompt: &str, user_prompt: &str) -> String {
 mod tests {
     use std::sync::Mutex;
 
-    use anthropic_async::types::{
-        content::{ContentBlock, MessageRole},
-        messages::MessagesCreateResponse,
-    };
+    use anthropic_async::types::content::ContentBlock;
+    use anthropic_async::types::content::MessageRole;
+    use anthropic_async::types::messages::MessagesCreateResponse;
 
     use super::*;
-    use crate::anthropic::{TOOL_NAME, extract_model_output, parse_model_output};
+    use crate::anthropic::TOOL_NAME;
+    use crate::anthropic::extract_model_output;
+    use crate::anthropic::parse_model_output;
 
     struct StubBackend {
         responses: Mutex<Vec<Result<ModelOutput, MessageOptimizerError>>>,

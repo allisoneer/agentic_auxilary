@@ -2,7 +2,8 @@
 //!
 //! Types for the question-answer flow where the server asks users for input.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A question request from the server.
 #[derive(Debug, Clone, Serialize, Deserialize)]

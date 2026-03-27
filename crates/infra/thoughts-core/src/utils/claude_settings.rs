@@ -1,12 +1,18 @@
-use anyhow::{Context, Result, anyhow};
-use atomicwrites::{AtomicFile, OverwriteBehavior};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
+use atomicwrites::AtomicFile;
+use atomicwrites::OverwriteBehavior;
 use colored::Colorize;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
 pub struct InjectionSummary {

@@ -4,22 +4,43 @@ use crate::config;
 use crate::logging;
 use crate::server::OrchestratorServer;
 use crate::token_tracker::TokenTracker;
-use crate::types::{
-    CommandInfo, ListCommandsInput, ListCommandsOutput, ListSessionsInput, ListSessionsOutput,
-    OrchestratorRunInput, OrchestratorRunOutput, PermissionReply, QuestionAction, QuestionInfoView,
-    QuestionOptionView, RespondPermissionInput, RespondPermissionOutput, RespondQuestionInput,
-    RespondQuestionOutput, RunStatus, SessionSummary,
-};
-use agentic_logging::{CallTimer, ToolCallRecord};
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use crate::types::CommandInfo;
+use crate::types::ListCommandsInput;
+use crate::types::ListCommandsOutput;
+use crate::types::ListSessionsInput;
+use crate::types::ListSessionsOutput;
+use crate::types::OrchestratorRunInput;
+use crate::types::OrchestratorRunOutput;
+use crate::types::PermissionReply;
+use crate::types::QuestionAction;
+use crate::types::QuestionInfoView;
+use crate::types::QuestionOptionView;
+use crate::types::RespondPermissionInput;
+use crate::types::RespondPermissionOutput;
+use crate::types::RespondQuestionInput;
+use crate::types::RespondQuestionOutput;
+use crate::types::RunStatus;
+use crate::types::SessionSummary;
+use agentic_logging::CallTimer;
+use agentic_logging::ToolCallRecord;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 use futures::future::BoxFuture;
 use opencode_rs::types::event::Event;
-use opencode_rs::types::message::{CommandRequest, PromptPart, PromptRequest};
+use opencode_rs::types::message::CommandRequest;
+use opencode_rs::types::message::PromptPart;
+use opencode_rs::types::message::PromptRequest;
 use opencode_rs::types::permission::PermissionReply as ApiPermissionReply;
 use opencode_rs::types::permission::PermissionReplyRequest;
-use opencode_rs::types::question::{QuestionReply, QuestionRequest};
-use opencode_rs::types::session::{CreateSessionRequest, SessionStatusInfo, SummarizeRequest};
+use opencode_rs::types::question::QuestionReply;
+use opencode_rs::types::question::QuestionRequest;
+use opencode_rs::types::session::CreateSessionRequest;
+use opencode_rs::types::session::SessionStatusInfo;
+use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -409,7 +430,7 @@ impl OrchestratorRunTool {
         // 4. If no message/command and session is idle, just return current state
         // Uses finalize_completed to get retry logic for message extraction
         if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
-            let token_tracker = TokenTracker::new();
+            let token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
             let output =
                 Self::finalize_completed(client, session_id, &token_tracker, vec![]).await?;
             return Ok(RunOutcome::with_tracker(output, &token_tracker));
@@ -484,13 +505,13 @@ impl OrchestratorRunTool {
         }
 
         // 7. Event loop: wait for completion or permission
-        // Overall timeout to prevent infinite hangs (1 hour)
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(3600);
-        let inactivity_timeout = Duration::from_secs(300);
+        // Overall timeout to prevent infinite hangs (configurable, default 1 hour)
+        let deadline = tokio::time::Instant::now() + server.session_deadline();
+        let inactivity_timeout = server.inactivity_timeout();
         let mut last_activity_time = tokio::time::Instant::now();
 
         tracing::debug!(session_id = %session_id, "run: entering event loop");
-        let mut token_tracker = TokenTracker::new();
+        let mut token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
         let mut partial_response = String::new();
         let warnings = Vec::new();
 

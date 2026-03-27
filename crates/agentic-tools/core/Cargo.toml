@@ -1,6 +1,6 @@
 [package]
 name = "agentic-tools-core"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Core traits and types for agentic-tools library family"

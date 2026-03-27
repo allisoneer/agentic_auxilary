@@ -1,15 +1,20 @@
-use anyhow::{Context, Result};
-use atomicwrites::{AtomicFile, OverwriteBehavior};
+use anyhow::Context;
+use anyhow::Result;
+use atomicwrites::AtomicFile;
+use atomicwrites::OverwriteBehavior;
 use serde_json::json;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use tracing::debug;
 
-use crate::config::{Mount, RepoConfigManager};
-use crate::git::utils::{
-    find_repo_root, get_control_repo_root, get_current_branch, get_remote_url,
-};
+use crate::config::Mount;
+use crate::config::RepoConfigManager;
+use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_current_branch;
+use crate::git::utils::get_remote_url;
 use crate::mount::MountResolver;
 
 // Centralized main/master detection

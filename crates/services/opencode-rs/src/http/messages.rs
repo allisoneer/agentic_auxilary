@@ -3,9 +3,15 @@
 //! This module provides methods for message endpoints (6 total).
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::api::{CommandResponse, PromptResponse, ShellResponse};
-use crate::types::message::{CommandRequest, Message, PromptRequest, ShellRequest};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::api::CommandResponse;
+use crate::types::api::PromptResponse;
+use crate::types::api::ShellResponse;
+use crate::types::message::CommandRequest;
+use crate::types::message::Message;
+use crate::types::message::PromptRequest;
+use crate::types::message::ShellRequest;
 use reqwest::Method;
 use uuid::Uuid;
 
@@ -120,10 +126,16 @@ impl MessagesApi {
 mod tests {
     use super::*;
     use crate::http::HttpConfig;
-    use crate::types::message::{CommandRequest, PromptPart, ShellRequest};
+    use crate::types::message::CommandRequest;
+    use crate::types::message::PromptPart;
+    use crate::types::message::ShellRequest;
     use std::time::Duration;
-    use wiremock::matchers::{body_json, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::body_json;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_prompt() {

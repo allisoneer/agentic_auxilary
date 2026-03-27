@@ -1,6 +1,9 @@
-use crate::models::{
-    CommentSourceType, GraphQLResponse, PrSummary, PullRequestData, ReviewComment, Thread,
-};
+use crate::models::CommentSourceType;
+use crate::models::GraphQLResponse;
+use crate::models::PrSummary;
+use crate::models::PullRequestData;
+use crate::models::ReviewComment;
+use crate::models::Thread;
 use anyhow::Result;
 use octocrab::Octocrab;
 use std::collections::HashMap;
@@ -505,7 +508,8 @@ impl GitHubClient {
 // Test helper module - public for integration tests
 pub mod test_helpers {
     use super::*;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
+    use std::collections::HashSet;
 
     #[derive(Debug, Clone)]
     pub struct FilterParams<'a> {

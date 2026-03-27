@@ -2,7 +2,8 @@
 //!
 //! Contains typed error structures matching TypeScript MessageV2.APIError.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// API error from the `OpenCode` server.

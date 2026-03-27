@@ -1,6 +1,6 @@
 [package]
 name = "agentic-tools-registry"
-version = "0.2.10"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Unified tool registry aggregating all agentic-tools domain registries"
@@ -16,6 +16,7 @@ logging = false
 napi = false
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 coding_agent_tools = { workspace = true }
 gpt5_reasoner = { workspace = true }

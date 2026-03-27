@@ -7,17 +7,18 @@ Guidance for Claude Code when working with this repository.
 <!-- BEGIN:xtask:autogen crate-index -->
 ### agentic-tools
 
+- `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-core` (lib) - `crates/agentic-tools/core/`
 - `agentic-mcp` (app) - `apps/agentic-mcp/`
 - `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
 - `agentic-tools-registry` (lib) - `crates/agentic-tools/registry/`
-- `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `opencode-orchestrator-mcp` (app) - `apps/opencode-orchestrator-mcp/`
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 
 ### infra
 
+- `agentic-config` (lib) - `crates/infra/agentic-config/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
@@ -46,6 +47,7 @@ Guidance for Claude Code when working with this repository.
 
 ### tools
 
+- `agentic-bin` (app) - `apps/agentic/`
 - `thoughts-bin` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
@@ -57,6 +59,9 @@ Guidance for Claude Code when working with this repository.
 - `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 <!-- END:xtask:autogen -->
 
+## Working Notes
+
+See [TODO.md](TODO.md) for the human maintainer's ad-hoc notes and thoughts. This file contains ideas, observations, and potential work items that are still loosely scoped—things worth thinking about but not yet defined enough for a formal ticket.
 
 ## Common Commands
 
@@ -159,6 +164,19 @@ See `workflow.md` -> "Code Review (/review)" for:
 - End-to-end `/review` usage
 
 ## Code Style Guidelines
+
+### Workspace Lint Conformance
+
+When modifying any crate, bring it toward workspace lint/rule conformance if it doesn't already use `lints.workspace = true`:
+
+1. **Check current state**: Look for `[lints]` section in the crate's `Cargo.toml`
+2. **Add workspace lints**: If missing, add `[lints]` with `workspace = true`
+3. **Fix violations**: Run `cargo clippy -p <crate> --all-targets -- -D warnings` and address issues
+4. **Incremental is acceptable**: Large crates may require multiple passes; use `#[allow(...)]` with TODO comments for complex fixes that need separate PRs
+
+This ensures the codebase moves toward consistent quality standards without requiring massive all-at-once migrations.
+
+### TODO Annotations
 
 Rules on comment annotations:
 

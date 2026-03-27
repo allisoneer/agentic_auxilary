@@ -4,21 +4,32 @@
 
 mod support;
 
-use agentic_tools_core::{Tool, ToolContext};
-use opencode_orchestrator_mcp::tools::{OrchestratorRunTool, RespondQuestionTool};
-use opencode_orchestrator_mcp::types::{
-    OrchestratorRunInput, QuestionAction, RespondQuestionInput, RunStatus,
-};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
+use opencode_orchestrator_mcp::tools::RespondQuestionTool;
+use opencode_orchestrator_mcp::types::OrchestratorRunInput;
+use opencode_orchestrator_mcp::types::QuestionAction;
+use opencode_orchestrator_mcp::types::RespondQuestionInput;
+use opencode_orchestrator_mcp::types::RunStatus;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
-use wiremock::matchers::{method, path, path_regex};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::matchers::path_regex;
 
-use support::{
-    SequenceResponder, messages_fixture, permission_fixture, question_fixture, session_fixture,
-    status_v2_busy, status_v2_idle, test_orchestrator_server,
-};
+use support::SequenceResponder;
+use support::messages_fixture;
+use support::permission_fixture;
+use support::question_fixture;
+use support::session_fixture;
+use support::status_v2_busy;
+use support::status_v2_idle;
+use support::test_orchestrator_server;
 
 fn question_payload(question: &str) -> serde_json::Value {
     serde_json::json!({

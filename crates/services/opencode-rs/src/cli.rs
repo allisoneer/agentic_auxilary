@@ -2,10 +2,12 @@
 //!
 //! This module provides functionality to wrap `opencode run --format json`.
 
-use crate::error::{OpencodeError, Result};
+use crate::error::OpencodeError;
+use crate::error::Result;
 use serde::Deserialize;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 

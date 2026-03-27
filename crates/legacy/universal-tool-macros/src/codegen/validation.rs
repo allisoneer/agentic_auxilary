@@ -4,13 +4,17 @@
 //! (CLI, REST, MCP) to ensure consistent parameter handling and error messages.
 
 use crate::codegen::error_handling;
-use crate::codegen::shared::{
-    is_bool_type, is_custom_struct_type, is_hashmap_type, is_optional_type, is_vec_type,
-};
-use crate::model::{ParamDef, ToolDef};
+use crate::codegen::shared::is_bool_type;
+use crate::codegen::shared::is_custom_struct_type;
+use crate::codegen::shared::is_hashmap_type;
+use crate::codegen::shared::is_optional_type;
+use crate::codegen::shared::is_vec_type;
+use crate::model::ParamDef;
+use crate::model::ToolDef;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Type, parse_str};
+use syn::Type;
+use syn::parse_str;
 
 /// Generates code to extract a parameter with appropriate validation
 /// This unifies the extraction logic across all interfaces

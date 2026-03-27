@@ -7,8 +7,8 @@
 //! # Architecture
 //!
 //! Uses two-level locking for thread safety:
-//! - Level 1: Brief lock on outer HashMap to get/create per-query state
-//! - Level 2: Per-query mutex protects shared QueryState access. Callers
+//! - Level 1: Brief lock on outer `HashMap` to get/create per-query state
+//! - Level 2: Per-query mutex protects shared `QueryState` access. Callers
 //!   typically lock only to read or update pagination state and may perform
 //!   expensive work outside the lock.
 //!
@@ -50,8 +50,10 @@
 //! ```
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 /// Default TTL for pagination state: 5 minutes.
 pub const DEFAULT_TTL: Duration = Duration::from_secs(5 * 60);
@@ -101,12 +103,13 @@ impl<T, M: Default> PaginationCache<T, M> {
     /// Get or create the per-query lock for the given key.
     ///
     /// If a lock already exists for this key, returns a clone of its Arc.
-    /// Otherwise creates a new QueryLock and returns it.
+    /// Otherwise creates a new `QueryLock` and returns it.
     pub fn get_or_create(&self, key: &str) -> Arc<QueryLock<T, M>> {
         let mut m = self.lock_map();
-        m.entry(key.to_string())
-            .or_insert_with(|| Arc::new(QueryLock::new()))
-            .clone()
+        let arc = m
+            .entry(key.to_string())
+            .or_insert_with(|| Arc::new(QueryLock::new()));
+        Arc::clone(arc)
     }
 
     /// Opportunistic sweep: remove expired entries.
@@ -116,7 +119,7 @@ impl<T, M: Default> PaginationCache<T, M> {
     pub fn sweep_expired(&self) {
         let entries: Vec<(String, Arc<QueryLock<T, M>>)> = {
             let m = self.lock_map();
-            m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            m.iter().map(|(k, v)| (k.clone(), Arc::clone(v))).collect()
         };
 
         for (k, lk) in entries {
@@ -152,7 +155,7 @@ impl<T, M> QueryLock<T, M> {
 }
 
 impl<T, M: Default> QueryLock<T, M> {
-    /// Create a new QueryLock with empty state.
+    /// Create a new `QueryLock` with empty state.
     pub fn new() -> Self {
         Self {
             state: Mutex::new(QueryState::with_ttl(DEFAULT_TTL)),
@@ -231,7 +234,7 @@ impl<T, M: Default> QueryState<T, M> {
 
 /// Paginate a slice without consuming it.
 ///
-/// Returns (page_entries, has_more).
+/// Returns (`page_entries`, `has_more`).
 ///
 /// # Arguments
 /// * `entries` - The full list of entries to paginate
@@ -383,7 +386,9 @@ mod tests {
         // Manually expire it by setting created_at to the past
         {
             let mut st = lock.state.lock().unwrap();
-            st.created_at = Instant::now() - Duration::from_secs(6 * 60);
+            st.created_at = Instant::now()
+                .checked_sub(Duration::from_secs(6 * 60))
+                .unwrap();
         }
 
         // Sweep should remove expired entry

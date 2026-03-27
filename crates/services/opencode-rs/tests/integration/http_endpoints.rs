@@ -5,8 +5,10 @@
 //! TODO(3): Add error case tests (invalid session IDs, malformed payloads, missing fields)
 //! to verify error responses deserialize correctly.
 
-use super::{create_test_client, should_run};
-use opencode_rs::types::message::{PromptPart, PromptRequest};
+use super::create_test_client;
+use super::should_run;
+use opencode_rs::types::message::PromptPart;
+use opencode_rs::types::message::PromptRequest;
 
 /// Test session CRUD with typed responses.
 #[tokio::test]

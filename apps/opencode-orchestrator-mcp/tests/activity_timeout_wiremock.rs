@@ -4,17 +4,23 @@
 
 mod support;
 
-use agentic_tools_core::{Tool, ToolContext};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use tokio::time::advance;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
-use support::{session_fixture, status_v2_busy, status_v2_idle};
+use support::session_fixture;
+use support::status_v2_busy;
+use support::status_v2_idle;
 
 fn test_orchestrator_server_with_long_timeout(
     mock: &MockServer,

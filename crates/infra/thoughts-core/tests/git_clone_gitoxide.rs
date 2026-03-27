@@ -7,7 +7,8 @@ mod support;
 use std::fs;
 use tempfile::TempDir;
 
-use thoughts_tool::git::clone::{CloneOptions, clone_repository};
+use thoughts_tool::git::clone::CloneOptions;
+use thoughts_tool::git::clone::clone_repository;
 
 /// Create a bare git remote with an initial commit for testing.
 fn init_bare_remote_with_commit() -> (TempDir, String) {

@@ -1,22 +1,26 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, OnceLock};
+use serde::Deserialize;
+use serde::Serialize;
+use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::sync::Semaphore;
 
 mod templates;
 
-use crate::config::validation::{
-    canonical_reference_instance_key, validate_pinned_ref_full_name_new_input,
-    validate_reference_url_https_only,
-};
-use crate::config::{
-    ReferenceEntry, ReferenceMount, RepoConfigManager, RepoMappingManager,
-    extract_org_repo_from_url,
-};
+use crate::config::ReferenceEntry;
+use crate::config::ReferenceMount;
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
+use crate::config::extract_org_repo_from_url;
+use crate::config::validation::canonical_reference_instance_key;
+use crate::config::validation::validate_pinned_ref_full_name_new_input;
+use crate::config::validation::validate_reference_url_https_only;
 use crate::git::ref_key::encode_ref_key;
-use crate::git::remote_refs::{RemoteRef, discover_remote_refs};
+use crate::git::remote_refs::RemoteRef;
+use crate::git::remote_refs::discover_remote_refs;
 use crate::git::utils::get_control_repo_root;
 use crate::mount::MountSpace;
 use crate::mount::auto_mount::update_active_mounts;
@@ -445,11 +449,16 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{MountDirsV2, RepoConfigV2};
-    use crate::documents::{ActiveDocuments, DocumentInfo, WriteDocumentOk};
+    use crate::config::MountDirsV2;
+    use crate::config::RepoConfigV2;
+    use crate::documents::ActiveDocuments;
+    use crate::documents::DocumentInfo;
+    use crate::documents::WriteDocumentOk;
     use crate::utils::human_size;
-    use agentic_tools_core::fmt::{TextFormat, TextOptions};
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use agentic_tools_core::fmt::TextFormat;
+    use agentic_tools_core::fmt::TextOptions;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
     use std::sync::mpsc;
 
     fn sample_remote_ref(name: &str) -> RemoteRef {

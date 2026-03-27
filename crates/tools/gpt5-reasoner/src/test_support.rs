@@ -21,7 +21,8 @@
 //!   execution and ensure process-global state mutations don't interfere with each other.
 //! - Never stack multiple guards of the same variable; prefer separate test functions.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// RAII guard for temporarily setting an environment variable.
 ///

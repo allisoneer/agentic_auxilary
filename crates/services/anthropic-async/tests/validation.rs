@@ -1,9 +1,12 @@
-use anthropic_async::{
-    AnthropicConfig, Client,
-    types::{content::*, messages::*},
-};
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::Client;
+use anthropic_async::types::content::*;
+use anthropic_async::types::messages::*;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 #[tokio::test]
 async fn test_temperature_validation_below_range() {

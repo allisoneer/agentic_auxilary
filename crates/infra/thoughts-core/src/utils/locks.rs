@@ -5,9 +5,13 @@
 //! - Protecting `repos.json` read-modify-write operations
 //! - Per-repo clone locks to prevent concurrent clones into the same target
 
-use anyhow::{Context, Result};
-use std::fs::{File, OpenOptions, TryLockError};
-use std::path::{Path, PathBuf};
+use anyhow::Context;
+use anyhow::Result;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::fs::TryLockError;
+use std::path::Path;
+use std::path::PathBuf;
 
 /// RAII advisory file lock.
 ///

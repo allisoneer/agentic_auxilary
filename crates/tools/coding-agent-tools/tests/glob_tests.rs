@@ -4,9 +4,11 @@
 #![expect(clippy::case_sensitive_file_extension_comparisons)]
 
 use coding_agent_tools::types::SortOrder;
-use filetime::{FileTime, set_file_mtime};
+use filetime::FileTime;
+use filetime::set_file_mtime;
 use std::fs;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+use std::time::SystemTime;
 use tempfile::TempDir;
 
 /// Helper to create a `GlobConfig` and run glob.

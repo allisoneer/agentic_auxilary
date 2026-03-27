@@ -77,15 +77,29 @@ pub mod types;
 
 // Re-export main types
 pub use client::Client;
-pub use config::{MCPConfig, MCPServer, SessionConfig, SessionConfigBuilder};
-pub use error::{ClaudeError, Result};
+pub use config::MCPConfig;
+pub use config::MCPServer;
+pub use config::SessionConfig;
+pub use config::SessionConfigBuilder;
+pub use error::ClaudeError;
+pub use error::Result;
 pub use probe::CliCapabilities;
 pub use session::Session;
-pub use types::{
-    AssistantEvent, Content, ErrorEvent, Event, InputFormat, MCPStatus, Message, Model,
-    OutputFormat, PermissionMode, Result as ClaudeResult, ResultEvent, ServerToolUse, SystemEvent,
-    Usage,
-};
+pub use types::AssistantEvent;
+pub use types::Content;
+pub use types::ErrorEvent;
+pub use types::Event;
+pub use types::InputFormat;
+pub use types::MCPStatus;
+pub use types::Message;
+pub use types::Model;
+pub use types::OutputFormat;
+pub use types::PermissionMode;
+pub use types::Result as ClaudeResult;
+pub use types::ResultEvent;
+pub use types::ServerToolUse;
+pub use types::SystemEvent;
+pub use types::Usage;
 
 // Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

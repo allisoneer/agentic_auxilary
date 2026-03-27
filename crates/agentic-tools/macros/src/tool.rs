@@ -3,8 +3,13 @@
 use darling::FromMeta;
 use darling::ast::NestedMeta;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
-use syn::{FnArg, ItemFn, ReturnType, Type, parse2};
+use quote::format_ident;
+use quote::quote;
+use syn::FnArg;
+use syn::ItemFn;
+use syn::ReturnType;
+use syn::Type;
+use syn::parse2;
 
 /// Parsed #[tool(...)] attributes.
 #[derive(Debug, Default, FromMeta)]

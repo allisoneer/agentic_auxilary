@@ -1,5 +1,7 @@
-use anyhow::{Context, anyhow};
-use std::path::{Path, PathBuf};
+use anyhow::Context;
+use anyhow::anyhow;
+use std::path::Path;
+use std::path::PathBuf;
 
 pub const PINNED_OPENCODE_VERSION: &str = "1.3.3";
 pub const OPENCODE_BINARY_ENV: &str = "OPENCODE_BINARY";
@@ -145,7 +147,8 @@ pub fn resolve_launcher_config(base_dir: &Path) -> anyhow::Result<LauncherConfig
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
 
     /// Mutex to serialize env var tests (env vars are process-global).
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();

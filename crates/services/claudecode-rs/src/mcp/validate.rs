@@ -4,19 +4,23 @@
 //! and respond to tools/list, as well as validate tool whitelists against
 //! known built-in tools and MCP tools from server responses.
 
-use crate::config::{MCPConfig, MCPServer};
-use rmcp::{
-    model::{ServerInfo, Tool},
-    service::ServiceExt,
-    transport::child_process::TokioChildProcess,
-};
-use std::{
-    collections::{HashMap, HashSet},
-    process::Stdio,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use tokio::{io::AsyncReadExt, process::Command, sync::Mutex, sync::Semaphore, time::timeout};
+use crate::config::MCPConfig;
+use crate::config::MCPServer;
+use rmcp::model::ServerInfo;
+use rmcp::model::Tool;
+use rmcp::service::ServiceExt;
+use rmcp::transport::child_process::TokioChildProcess;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+use tokio::io::AsyncReadExt;
+use tokio::process::Command;
+use tokio::sync::Mutex;
+use tokio::sync::Semaphore;
+use tokio::time::timeout;
 
 // === Configuration ===
 
@@ -864,7 +868,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_panicked_task_is_reported() {
-        use crate::config::{MCPConfig, MCPServer};
+        use crate::config::MCPConfig;
+        use crate::config::MCPServer;
 
         let mut cfg = MCPConfig {
             mcp_servers: HashMap::new(),
@@ -895,7 +900,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_stderr_capture_on_handshake_failure() {
-        use crate::config::{MCPConfig, MCPServer};
+        use crate::config::MCPConfig;
+        use crate::config::MCPServer;
 
         let cmd = "sh";
         let args = vec![
@@ -939,7 +945,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_overall_timeout() {
-        use crate::config::{MCPConfig, MCPServer};
+        use crate::config::MCPConfig;
+        use crate::config::MCPServer;
 
         let cmd = "sh";
         let args = vec!["-c".to_string(), "sleep 5".to_string()];

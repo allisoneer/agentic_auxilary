@@ -20,14 +20,55 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentic-mcp"
-version = "0.1.11"
+name = "agentic-bin"
+version = "0.1.0"
 dependencies = [
+ "agentic-config",
+ "agentic-tools-utils",
+ "anyhow",
+ "assert_cmd",
+ "atomicwrites",
+ "clap",
+ "colored 2.2.0",
+ "predicates",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "agentic-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "atomicwrites",
+ "dirs",
+ "jsonschema",
+ "proptest",
+ "schemars 1.2.1",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serial_test",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "agentic-mcp"
+version = "0.2.0"
+dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "agentic-tools-registry",
  "anyhow",
  "clap",
+ "colored 2.2.0",
  "rustls",
  "serde",
  "serde_json",
@@ -38,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "futures",
  "inventory",
@@ -53,7 +94,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",
@@ -63,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-mcp"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "agentic-tools-core",
  "futures",
@@ -92,8 +133,9 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.2.10"
+version = "0.3.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "coding_agent_tools",
  "gpt5_reasoner",
@@ -110,18 +152,20 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-utils"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
+ "anyhow",
  "futures",
  "reqwest 0.13.2",
  "serde_json",
+ "shlex",
  "thiserror 2.0.18",
  "tokio",
 ]
 
 [[package]]
 name = "agentic_logging"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "atomicwrites",
  "chrono",
@@ -132,6 +176,20 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "getrandom 0.3.4",
+ "once_cell",
+ "serde",
+ "version_check",
+ "zerocopy",
 ]
 
 [[package]]
@@ -231,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "anthropic-async"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "backon",
@@ -705,6 +763,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "borrow-or-share"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
+
+[[package]]
 name = "brotli"
 version = "8.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -967,7 +1031,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "claudecode"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "chrono",
  "dirs",
@@ -1009,8 +1073,9 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.2.9"
+version = "0.3.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "agentic-tools-utils",
@@ -1044,6 +1109,16 @@ name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
+
+[[package]]
+name = "colored"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
+dependencies = [
+ "lazy_static",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "colored"
@@ -1544,6 +1619,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
+name = "email_address"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1635,7 +1719,7 @@ dependencies = [
 
 [[package]]
 name = "exa-async"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "backon",
@@ -1662,6 +1746,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "531e46835a22af56d1e3b66f04844bed63158bc094a628bec1d321d9b4c44bf2"
 dependencies = [
  "bit-set 0.5.3",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "fancy-regex"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e24cb5a94bcae1e5408b0effca5cd7172ea3c5755049c5f3af4cd283a165298"
+dependencies = [
+ "bit-set 0.8.0",
  "regex-automata",
  "regex-syntax",
 ]
@@ -1730,6 +1825,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fluent-uri"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1918b65d96df47d3591bed19c5cca17e3fa5d0707318e4b5ef2eae01764df7e5"
+dependencies = [
+ "borrow-or-share",
+ "ref-cast",
+ "serde",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1754,6 +1860,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fraction"
+version = "0.15.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f158e3ff0a1b334408dc9fb811cd99b446986f4d8b741bb08f9df1604085ae7"
+dependencies = [
+ "lazy_static",
+ "num",
 ]
 
 [[package]]
@@ -2764,8 +2880,9 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "agentic_logging",
@@ -3493,6 +3610,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonschema"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "161c33c3ec738cfea3288c5c53dfcdb32fd4fc2954de86ea06f71b5a1a40bfcd"
+dependencies = [
+ "ahash",
+ "base64",
+ "bytecount",
+ "email_address",
+ "fancy-regex 0.14.0",
+ "fraction",
+ "idna",
+ "itoa",
+ "num-cmp",
+ "once_cell",
+ "percent-encoding",
+ "referencing",
+ "regex-syntax",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "uuid-simd",
+]
+
+[[package]]
 name = "jsonwebtoken"
 version = "10.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3609,7 +3751,7 @@ dependencies = [
 
 [[package]]
 name = "linear-queries"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "cynic",
@@ -3629,7 +3771,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.4.5"
+version = "0.4.6"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -3807,7 +3949,7 @@ dependencies = [
 
 [[package]]
 name = "message-optimizer-bin"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3820,7 +3962,7 @@ dependencies = [
 
 [[package]]
 name = "message_optimizer"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anthropic-async",
  "schemars 1.2.1",
@@ -3882,7 +4024,7 @@ checksum = "90820618712cab19cfc46b274c6c22546a82affcb3c3bdf0f29e3db8e1bb92c0"
 dependencies = [
  "assert-json-diff",
  "bytes",
- "colored",
+ "colored 3.1.1",
  "futures-core",
  "http",
  "http-body",
@@ -4053,6 +4195,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-cmp"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63335b2e2c34fae2fb0aa2cecfd9f0832a1e24b3b32ecec612c3426d46dc8aaa"
+
+[[package]]
 name = "num-complex"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4179,8 +4327,9 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "agentic_logging",
@@ -4204,7 +4353,7 @@ dependencies = [
 
 [[package]]
 name = "opencode_rs"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "backon",
@@ -4301,6 +4450,12 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "outref"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
 name = "papergrid"
@@ -4594,7 +4749,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -5019,6 +5174,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "referencing"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40a64b3a635fad9000648b4d8a59c8710c523ab61a23d392a7d91d47683f5adc"
+dependencies = [
+ "ahash",
+ "fluent-uri",
+ "once_cell",
+ "parking_lot",
+ "percent-encoding",
+ "serde_json",
+]
+
+[[package]]
 name = "regex"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5064,6 +5233,7 @@ checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64",
  "bytes",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "http",
@@ -5162,7 +5332,7 @@ dependencies = [
 
 [[package]]
 name = "review_tools"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-utils",
@@ -6147,13 +6317,14 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
+ "agentic-tools-utils",
  "anyhow",
  "assert_cmd",
  "chrono",
  "clap",
- "colored",
+ "colored 3.1.1",
  "git2",
  "predicates",
  "serde_json",
@@ -6167,7 +6338,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-mcp-tools"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6184,7 +6355,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6194,7 +6365,7 @@ dependencies = [
  "atomicwrites",
  "chrono",
  "clap",
- "colored",
+ "colored 3.1.1",
  "dirs",
  "futures",
  "git2",
@@ -6236,7 +6407,7 @@ dependencies = [
  "anyhow",
  "base64",
  "bstr",
- "fancy-regex",
+ "fancy-regex 0.13.0",
  "lazy_static",
  "regex",
  "rustc-hash 1.1.0",
@@ -6647,7 +6818,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "universal-tool-core"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "async-trait",
  "atty",
@@ -6687,7 +6858,7 @@ dependencies = [
 
 [[package]]
 name = "universal-tool-macros"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",
@@ -6805,6 +6976,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid-simd"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b082222b4f6619906941c17eb2297fff4c2fb96cb60164170522942a200bd8"
+dependencies = [
+ "outref",
+ "uuid",
+ "vsimd",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6821,6 +7003,12 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vsimd"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
 name = "wait-timeout"
@@ -6995,8 +7183,9 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "anthropic-async",
  "chrono",

@@ -1,6 +1,8 @@
 use crate::git::ref_key::encode_ref_key;
-use crate::repo_identity::{RepoIdentity, parse_url_and_subpath};
-use anyhow::{Result, bail};
+use crate::repo_identity::RepoIdentity;
+use crate::repo_identity::parse_url_and_subpath;
+use anyhow::Result;
+use anyhow::bail;
 use std::borrow::Cow;
 
 /// Sanitize a mount name for use as directory name

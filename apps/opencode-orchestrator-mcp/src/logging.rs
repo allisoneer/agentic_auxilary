@@ -1,4 +1,5 @@
-use agentic_logging::{LogWriter, ToolCallRecord};
+use agentic_logging::LogWriter;
+use agentic_logging::ToolCallRecord;
 use chrono::Utc;
 use std::path::PathBuf;
 
@@ -47,9 +48,11 @@ pub fn write_markdown_best_effort(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agentic_logging::{CallTimer, ToolCallRecord};
+    use agentic_logging::CallTimer;
+    use agentic_logging::ToolCallRecord;
     use std::io::Read;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 

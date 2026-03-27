@@ -1,9 +1,14 @@
-use crate::config::{MCPConfig, SessionConfig};
-use crate::error::{ClaudeError, Result};
-use crate::process::{ProcessHandle, expand_tilde, find_claude_in_path};
+use crate::config::MCPConfig;
+use crate::config::SessionConfig;
+use crate::error::ClaudeError;
+use crate::error::Result;
+use crate::process::ProcessHandle;
+use crate::process::expand_tilde;
+use crate::process::find_claude_in_path;
 use crate::session::Session;
 use crate::types::Result as ClaudeResult;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use tempfile::NamedTempFile;
 use tokio::fs;
 use tracing::debug;
@@ -251,7 +256,9 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{InputFormat, OutputFormat, PermissionMode};
+    use crate::types::InputFormat;
+    use crate::types::OutputFormat;
+    use crate::types::PermissionMode;
 
     fn create_test_client() -> Client {
         Client {

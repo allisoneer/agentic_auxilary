@@ -65,10 +65,12 @@ build:
     {{ exec }}cargo build --workspace
 
 fmt:
-    {{ exec }}cargo fmt --all
+    {{ exec }}cargo +nightly fmt --all
+    {{ exec }}taplo fmt
 
 fmt-check:
-    {{ exec }}cargo fmt --all -- --check
+    {{ exec }}cargo +nightly fmt --all -- --check
+    {{ exec }}taplo fmt --check
 
 # Security audit with cargo-deny
 deny:
@@ -80,7 +82,7 @@ fmt-check-just:
 
 # Per-crate commands
 crate-check crate:
-    {{ exec }}cargo fmt -p {{ crate }} -- --check
+    {{ exec }}cargo +nightly fmt -p {{ crate }} -- --check
     {{ exec }}cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
 crate-test crate:
@@ -114,6 +116,10 @@ thoughts_sync:
 # Copy a file
 cp src dst:
     {{ exec }}cp "{{ src }}" "{{ dst }}"
+
+# Remove a file
+rm path:
+    rm -f "{{ path }}"
 
 # Create a directory (with parents)
 mkdir path:
@@ -323,6 +329,14 @@ git-files patterns="":
     # Disable glob expansion so patterns are passed literally to git
     set -f
     git --no-pager ls-files -- {{ patterns }}
+
+# ------------------------------------------------------------------------------
+# Schema Generation
+# ------------------------------------------------------------------------------
+
+# Generate agentic.schema.json from Rust types
+schema-generate:
+    cargo run -p agentic-bin -- config schema > agentic.schema.json
 
 # ------------------------------------------------------------------------------
 # MCP Inspector Recipes

@@ -4,25 +4,25 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # All advisories are denied by default in cargo-deny 0.16.0+
 # Ignore advisories for transitive dependencies we can't control:
 ignore = [
-    # backoff and instant come from async-openai (transitive via gpt5_reasoner)
-    # Upstream issue: https://github.com/64bit/async-openai/issues/298
-    "RUSTSEC-2025-0012",  # backoff unmaintained
-    "RUSTSEC-2024-0384",  # instant unmaintained
+  # backoff and instant come from async-openai (transitive via gpt5_reasoner)
+  # Upstream issue: https://github.com/64bit/async-openai/issues/298
+  "RUSTSEC-2025-0012", # backoff unmaintained
+  "RUSTSEC-2024-0384", # instant unmaintained
 ]
 
 [licenses]
 # List of allowed licenses
 allow = [
-    "MIT",
-    "Apache-2.0",
-    "BSD-3-Clause",
-    "Unicode-3.0",  # Required for Unicode support (ICU crates, unicode-ident)
-    "MPL-2.0",       # Mozilla Public License (weak copyleft, used by colored and option-ext)
-    "ISC",           # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
-    "CDLA-Permissive-2.0",  # Community Data License Agreement for webpki-roots certificate data (CCADB)
-    "Unlicense",  # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
-    "Zlib",       # zlib License (OSI-approved, FSF Free/Libre) - used by foldhash, zlib-rs via gix
-    "OpenSSL",    # OpenSSL License (FSF Free/Libre) - used by aws-lc-sys via rustls
+  "MIT",
+  "Apache-2.0",
+  "BSD-3-Clause",
+  "Unicode-3.0",         # Required for Unicode support (ICU crates, unicode-ident)
+  "MPL-2.0",             # Mozilla Public License (weak copyleft, used by colored and option-ext)
+  "ISC",                 # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
+  "CDLA-Permissive-2.0", # Community Data License Agreement for webpki-roots certificate data (CCADB)
+  "Unlicense",           # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
+  "Zlib",                # zlib License (OSI-approved, FSF Free/Libre) - used by foldhash, zlib-rs via gix
+  "OpenSSL",             # OpenSSL License (FSF Free/Libre) - used by aws-lc-sys via rustls
 ]
 # Confidence threshold for license detection (0.0-1.0)
 confidence-threshold = 0.93
@@ -36,38 +36,38 @@ wildcards = "deny"
 allow-wildcard-paths = true
 # Allow specific version duplicates that are transitive dependencies we can't control
 skip = [
-    # heck is used by different proc-macro crates with different major versions
-    { name = "heck", version = "0.4" },  # Used by tabled_derive
+  # heck is used by different proc-macro crates with different major versions
+  { name = "heck", version = "0.4" }, # Used by tabled_derive
 
-    # syn 1.0 is still used by some older proc-macro crates
-    { name = "syn", version = "1.0" },  # Used by older proc-macro dependencies
-    # System-level crates with different major versions
-    { name = "rustix", version = "0.38" },
-    { name = "linux-raw-sys", version = "0.4" },
-    # thiserror v1 is still used by dialoguer
-    { name = "thiserror", version = "1.0" },  # Used by dialoguer v0.11
-    { name = "thiserror-impl", version = "1.0" },  # Proc-macro for thiserror v1
-    # getrandom has different major versions in the ecosystem
-    { name = "getrandom", version = "0.2" },  # Used by older crates
+  # syn 1.0 is still used by some older proc-macro crates
+  { name = "syn", version = "1.0" }, # Used by older proc-macro dependencies
+  # System-level crates with different major versions
+  { name = "rustix", version = "0.38" },
+  { name = "linux-raw-sys", version = "0.4" },
+  # thiserror v1 is still used by dialoguer
+  { name = "thiserror", version = "1.0" },      # Used by dialoguer v0.11
+  { name = "thiserror-impl", version = "1.0" }, # Proc-macro for thiserror v1
+  # getrandom has different major versions in the ecosystem
+  { name = "getrandom", version = "0.2" }, # Used by older crates
 
-    # base64 0.21 coexists with 0.22 in the ecosystem
-    { name = "base64", version = "0.21" },
+  # base64 0.21 coexists with 0.22 in the ecosystem
+  { name = "base64", version = "0.21" },
 ]
 
 [graph]
 # Limit analysis to supported platforms to avoid Windows-only crates polluting the graph
 targets = [
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-    "x86_64-apple-darwin",
-    "aarch64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
 ]
 all-features = false
 # Exclude legacy universal-tool-* crates from cargo-deny analysis
 exclude = [
-    "universal-tool-core",
-    "universal-tool-macros",
-    "universal-tool-integration-tests",
+  "universal-tool-core",
+  "universal-tool-macros",
+  "universal-tool-integration-tests",
 ]
 
 [sources]

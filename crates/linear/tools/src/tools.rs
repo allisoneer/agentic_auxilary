@@ -3,11 +3,16 @@
 //! Each tool delegates to the corresponding method on [`LinearTools`].
 
 use crate::LinearTools;
-use crate::models::{
-    ArchiveIssueResult, CommentResult, CreateIssueResult, GetMetadataResult, IssueDetails,
-    SearchResult,
-};
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use crate::models::ArchiveIssueResult;
+use crate::models::CommentResult;
+use crate::models::CreateIssueResult;
+use crate::models::GetMetadataResult;
+use crate::models::IssueDetails;
+use crate::models::SearchResult;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;

@@ -1,4 +1,5 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use cynic::http::ReqwestExt;
 use reqwest::Client;
 

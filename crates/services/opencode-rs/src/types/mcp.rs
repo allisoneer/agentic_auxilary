@@ -1,6 +1,7 @@
 //! MCP (Model Context Protocol) types for `opencode_rs`.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// MCP server status.

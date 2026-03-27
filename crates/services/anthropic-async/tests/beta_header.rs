@@ -1,6 +1,13 @@
-use anthropic_async::{AnthropicConfig, Client, config::BetaFeature, types::ModelListParams};
-use wiremock::matchers::{header_exists, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use anthropic_async::AnthropicConfig;
+use anthropic_async::Client;
+use anthropic_async::config::BetaFeature;
+use anthropic_async::types::ModelListParams;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::header_exists;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 #[tokio::test]
 async fn test_beta_header_propagation() {

@@ -1,6 +1,6 @@
 [package]
 name = "web-retrieval"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Web fetch and web search MCP tools"
@@ -10,6 +10,7 @@ repository = "https://github.com/allisoneer/agentic_auxilary"
 dist = false
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 exa-async = { workspace = true }
 anthropic-async = { workspace = true }
@@ -21,7 +22,14 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 chrono = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 thiserror = { workspace = true }
-reqwest = { version = "0.13.2", features = ["json", "gzip", "brotli", "deflate", "stream", "rustls"], default-features = false }
+reqwest = { version = "0.13.2", features = [
+  "json",
+  "gzip",
+  "brotli",
+  "deflate",
+  "stream",
+  "rustls",
+], default-features = false }
 htmd = "0.5"
 url = "2"
 futures = "0.3"
@@ -30,13 +38,8 @@ futures = "0.3"
 wiremock = "0.6"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
-[lints.rust]
-warnings = "deny"
-
-[lints.clippy]
-all = "deny"
-pedantic = "warn"
-nursery = "warn"
+[lints]
+workspace = true
 
 [package.metadata.repo]
 role = "tool-lib"

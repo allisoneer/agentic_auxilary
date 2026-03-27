@@ -3,8 +3,10 @@
 //! Endpoints for managing question-answer flows.
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::question::{QuestionReply, QuestionRequest};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::question::QuestionReply;
+use crate::types::question::QuestionRequest;
 use reqwest::Method;
 
 /// Question API client.
@@ -63,8 +65,11 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use std::time::Duration;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_list_questions() {

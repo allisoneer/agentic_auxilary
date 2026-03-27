@@ -4,10 +4,8 @@ use agentic_tools_core::error::ToolError;
 use chrono::Utc;
 
 use crate::WebTools;
-use crate::types::{WebFetchInput, WebFetchOutput};
-
-/// Default maximum download size: 5 MB
-const DEFAULT_MAX_BYTES: usize = 5 * 1024 * 1024;
+use crate::types::WebFetchInput;
+use crate::types::WebFetchOutput;
 
 /// Hard maximum allowed `max_bytes`: 20 MB
 pub const HARD_MAX_BYTES: usize = 20 * 1024 * 1024;
@@ -20,7 +18,9 @@ pub async fn web_fetch(
     tools: &WebTools,
     input: WebFetchInput,
 ) -> Result<WebFetchOutput, ToolError> {
-    let max_bytes = input.max_bytes.unwrap_or(DEFAULT_MAX_BYTES);
+    #[expect(clippy::cast_possible_truncation)]
+    let default_max_bytes = tools.cfg.default_max_bytes as usize;
+    let max_bytes = input.max_bytes.unwrap_or(default_max_bytes);
 
     if max_bytes > HARD_MAX_BYTES {
         return Err(ToolError::invalid_input(format!(
@@ -53,7 +53,7 @@ pub async fn web_fetch(
         .to_string();
 
     // Download body with size cap (streaming)
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation)]
     // max_bytes is already bounded by HARD_MAX_BYTES (20MB)
     let initial_capacity = response
         .content_length()
@@ -257,8 +257,10 @@ mod tests {
         use super::*;
         use crate::WebTools;
         use crate::types::WebFetchInput;
+        use wiremock::Mock;
+        use wiremock::MockServer;
+        use wiremock::ResponseTemplate;
         use wiremock::matchers::method;
-        use wiremock::{Mock, MockServer, ResponseTemplate};
 
         #[tokio::test]
         async fn web_fetch_returns_error_on_404() {

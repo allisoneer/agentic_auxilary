@@ -1,5 +1,6 @@
 use linear_schema::linear as schema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Wrapper for Linear DateTime scalar
 #[derive(Debug, Clone, Serialize, Deserialize)]

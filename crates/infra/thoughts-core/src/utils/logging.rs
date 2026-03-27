@@ -4,7 +4,9 @@
 //! wrappers to ensure consistent logging behavior.
 
 use crate::documents::active_logs_dir;
-use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
+use agentic_logging::CallTimer;
+use agentic_logging::LogWriter;
+use agentic_logging::ToolCallRecord;
 
 /// Log a tool call. Behavior identical to MCP.
 ///

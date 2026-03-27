@@ -4,9 +4,12 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::api::{FormatterInfo, LspServerStatus, OpenApiDoc};
+use crate::types::api::FormatterInfo;
+use crate::types::api::LspServerStatus;
+use crate::types::api::OpenApiDoc;
 use reqwest::Method;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Misc API client.
 #[derive(Clone)]

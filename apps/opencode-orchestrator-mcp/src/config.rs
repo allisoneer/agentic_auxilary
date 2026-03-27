@@ -23,7 +23,8 @@ pub fn idle_grace() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 

@@ -5,21 +5,14 @@ use chrono::Utc;
 use url::Url;
 
 use crate::WebTools;
-use crate::types::{WebSearchInput, WebSearchOutput, WebSearchResultCard};
+use crate::types::WebSearchInput;
+use crate::types::WebSearchOutput;
+use crate::types::WebSearchResultCard;
 
-/// Maximum number of results we'll request from Exa
-const MAX_RESULTS: u32 = 20;
-/// Default number of results
-const DEFAULT_RESULTS: u32 = 8;
 /// Max chars for context trimming
 const MAX_CONTEXT_CHARS: usize = 1500;
 /// Max chars for snippet trimming
 const MAX_SNIPPET_CHARS: usize = 300;
-
-/// Clamp `num_results` to a valid range: at least 1, at most `MAX_RESULTS`.
-fn clamp_num_results(n: Option<u32>) -> u32 {
-    n.unwrap_or(DEFAULT_RESULTS).clamp(1, MAX_RESULTS)
-}
 
 /// Execute a web search via Exa's semantic search API.
 ///
@@ -29,7 +22,12 @@ pub async fn web_search(
     tools: &WebTools,
     input: WebSearchInput,
 ) -> Result<WebSearchOutput, ToolError> {
-    let num_results = clamp_num_results(input.num_results);
+    let default_results = tools.cfg.default_search_results;
+    let max_results = tools.cfg.max_search_results;
+    let num_results = input
+        .num_results
+        .unwrap_or(default_results)
+        .clamp(1, max_results);
 
     let req = exa_async::types::search::SearchRequest::new(&input.query)
         .with_num_results(num_results)
@@ -98,7 +96,7 @@ fn extract_domain(url_str: &str) -> String {
 
 /// Scale Exa score (0.0-1.0 float) to 0-100 integer.
 fn scale_score(score: f64) -> u32 {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let scaled = (score * 100.0).round() as u32;
     scaled.min(100)
 }
@@ -196,26 +194,32 @@ mod tests {
     }
 
     #[test]
-    fn num_results_is_clamped() {
+    fn num_results_clamping_logic() {
+        use agentic_config::types::WebRetrievalConfig;
+
+        let cfg = WebRetrievalConfig::default();
+        let default_results = cfg.default_search_results;
+        let max_results = cfg.max_search_results;
+
+        // Helper to test clamping behavior
+        let clamp = |n: Option<u32>| n.unwrap_or(default_results).clamp(1, max_results);
+
         // None uses default (8)
-        assert_eq!(clamp_num_results(None), super::DEFAULT_RESULTS);
+        assert_eq!(clamp(None), default_results);
 
         // Zero is clamped to 1
-        assert_eq!(clamp_num_results(Some(0)), 1);
+        assert_eq!(clamp(Some(0)), 1);
 
         // Value of 1 is unchanged
-        assert_eq!(clamp_num_results(Some(1)), 1);
+        assert_eq!(clamp(Some(1)), 1);
 
         // Value within range is unchanged
-        assert_eq!(clamp_num_results(Some(10)), 10);
+        assert_eq!(clamp(Some(10)), 10);
 
-        // MAX_RESULTS is unchanged
-        assert_eq!(
-            clamp_num_results(Some(super::MAX_RESULTS)),
-            super::MAX_RESULTS
-        );
+        // max_results is unchanged
+        assert_eq!(clamp(Some(max_results)), max_results);
 
-        // Over MAX_RESULTS is clamped to MAX_RESULTS
-        assert_eq!(clamp_num_results(Some(999)), super::MAX_RESULTS);
+        // Over max_results is clamped to max_results
+        assert_eq!(clamp(Some(999)), max_results);
     }
 }

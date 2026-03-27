@@ -1,4 +1,5 @@
-use crate::errors::{ReasonerError, Result};
+use crate::errors::ReasonerError;
+use crate::errors::Result;
 use tiktoken_rs::o200k_base;
 
 pub const TOKEN_LIMIT: usize = 250_000;

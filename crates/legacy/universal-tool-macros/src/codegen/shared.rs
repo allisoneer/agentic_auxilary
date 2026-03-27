@@ -6,7 +6,8 @@
 
 use crate::model::ToolDef;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::format_ident;
+use quote::quote;
 use syn::Type;
 
 // TODO(1): Move these interface-specific functions to their respective modules (cli.rs, rest.rs, mcp.rs)

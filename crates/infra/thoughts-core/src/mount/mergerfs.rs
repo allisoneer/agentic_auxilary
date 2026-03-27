@@ -1,14 +1,21 @@
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
-use std::time::{Duration, Instant};
-use tokio::time::{sleep, timeout};
-use tracing::{debug, error, info, warn};
+use std::time::Duration;
+use std::time::Instant;
+use tokio::time::sleep;
+use tokio::time::timeout;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use super::manager::MountManager;
 use super::types::*;
 use super::utils;
-use crate::error::{Result, ThoughtsError};
+use crate::error::Result;
+use crate::error::ThoughtsError;
 use crate::platform::common::*;
 use crate::platform::detector::LinuxInfo;
 use crate::platform::linux::*;

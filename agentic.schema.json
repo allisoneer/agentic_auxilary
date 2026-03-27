@@ -1,0 +1,358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgenticConfig",
+  "description": "Root configuration for all agentic tools.\n\nThis is the unified configuration that gets loaded from `agentic.toml` files.\nAll fields use `#[serde(default)]` so partial configs work correctly.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Optional JSON Schema URL for IDE autocomplete support.\nIn TOML: `\"$schema\" = \"file://./agentic.schema.json\"`",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cli_tools": {
+      "description": "CLI tools (grep, glob, ls) configuration.",
+      "$ref": "#/$defs/CliToolsConfig",
+      "default": {
+        "extra_ignore_patterns": [],
+        "glob_default_limit": 500,
+        "grep_default_limit": 200,
+        "ls_page_size": 100,
+        "max_depth": 10,
+        "pagination_cache_ttl_secs": 300
+      }
+    },
+    "logging": {
+      "description": "Logging and diagnostics configuration.",
+      "$ref": "#/$defs/LoggingConfig",
+      "default": {
+        "json": false,
+        "level": "info"
+      }
+    },
+    "orchestrator": {
+      "description": "Orchestrator session and timing configuration.",
+      "$ref": "#/$defs/OrchestratorConfig",
+      "default": {
+        "compaction_threshold": 0.8,
+        "inactivity_timeout_secs": 300,
+        "session_deadline_secs": 3600
+      }
+    },
+    "reasoning": {
+      "description": "Tool-specific config for gpt5-reasoner.",
+      "$ref": "#/$defs/ReasoningConfig",
+      "default": {
+        "executor_model": "openai/gpt-5.2",
+        "optimizer_model": "anthropic/claude-sonnet-4.6"
+      }
+    },
+    "services": {
+      "description": "External service configurations (Anthropic, Exa).",
+      "$ref": "#/$defs/ServicesConfig",
+      "default": {
+        "anthropic": {
+          "base_url": "https://api.anthropic.com"
+        },
+        "exa": {
+          "base_url": "https://api.exa.ai"
+        }
+      }
+    },
+    "subagents": {
+      "description": "Tool-specific config for coding-agent-tools subagents.",
+      "$ref": "#/$defs/SubagentsConfig",
+      "default": {
+        "analyzer_model": "claude-sonnet-4-6",
+        "locator_model": "claude-haiku-4-5"
+      }
+    },
+    "web_retrieval": {
+      "description": "Web retrieval tool configuration.",
+      "$ref": "#/$defs/WebRetrievalConfig",
+      "default": {
+        "default_max_bytes": 5242880,
+        "default_search_results": 8,
+        "max_search_results": 20,
+        "request_timeout_secs": 30,
+        "summarizer": {
+          "max_tokens": 300,
+          "model": "claude-haiku-4-5",
+          "temperature": 0.2
+        }
+      }
+    }
+  },
+  "$defs": {
+    "AnthropicServiceConfig": {
+      "description": "Anthropic API service configuration.",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Base URL for the Anthropic API.",
+          "type": "string",
+          "default": "https://api.anthropic.com"
+        }
+      }
+    },
+    "CliToolsConfig": {
+      "description": "Configuration for CLI tools (grep, glob, ls).",
+      "type": "object",
+      "properties": {
+        "extra_ignore_patterns": {
+          "description": "Additional ignore patterns to append to builtin ignores.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "glob_default_limit": {
+          "description": "Default `head_limit` for glob results (default: 500).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 500,
+          "minimum": 0
+        },
+        "grep_default_limit": {
+          "description": "Default `head_limit` for grep results (default: 200).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 200,
+          "minimum": 0
+        },
+        "ls_page_size": {
+          "description": "Default page size for ls results (default: 100).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 100,
+          "minimum": 0
+        },
+        "max_depth": {
+          "description": "Maximum directory traversal depth (default: 10).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 10,
+          "minimum": 0
+        },
+        "pagination_cache_ttl_secs": {
+          "description": "Pagination cache TTL in seconds (default: 300 = 5 minutes).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 300,
+          "minimum": 0
+        }
+      }
+    },
+    "ExaServiceConfig": {
+      "description": "Exa search API service configuration.",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Base URL for the Exa API.",
+          "type": "string",
+          "default": "https://api.exa.ai"
+        }
+      }
+    },
+    "LoggingConfig": {
+      "description": "Logging and diagnostics configuration.",
+      "type": "object",
+      "properties": {
+        "json": {
+          "description": "Whether to enable JSON-formatted logs.",
+          "type": "boolean",
+          "default": false
+        },
+        "level": {
+          "description": "Log level (trace, debug, info, warn, error).",
+          "type": "string",
+          "default": "info"
+        }
+      }
+    },
+    "OrchestratorConfig": {
+      "description": "Configuration for opencode-orchestrator-mcp.",
+      "type": "object",
+      "properties": {
+        "compaction_threshold": {
+          "description": "Context compaction threshold as fraction 0.0-1.0 (default: 0.80).",
+          "type": "number",
+          "format": "double",
+          "default": 0.8
+        },
+        "inactivity_timeout_secs": {
+          "description": "Inactivity timeout in seconds before session ends (default: 300 = 5 minutes).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 300,
+          "minimum": 0
+        },
+        "session_deadline_secs": {
+          "description": "Maximum session duration in seconds (default: 3600 = 1 hour).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 3600,
+          "minimum": 0
+        }
+      }
+    },
+    "ReasoningConfig": {
+      "description": "Configuration for gpt5-reasoner tool.",
+      "type": "object",
+      "properties": {
+        "api_base_url": {
+          "description": "Optional API base URL override for reasoning service.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "executor_model": {
+          "description": "`OpenRouter` model ID for executor/reasoner step.",
+          "type": "string",
+          "default": "openai/gpt-5.2"
+        },
+        "optimizer_model": {
+          "description": "`OpenRouter` model ID for optimizer step.",
+          "type": "string",
+          "default": "anthropic/claude-sonnet-4.6"
+        },
+        "reasoning_effort": {
+          "description": "Optional reasoning effort level: low, medium, high, xhigh.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffortLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "token_limit": {
+          "description": "Optional token limit for reasoning requests.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      }
+    },
+    "ReasoningEffortLevel": {
+      "description": "Schema-only enum for `reasoning_effort` IDE autocomplete.\nRuntime storage remains Option<String> for advisory validation semantics.",
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "ServicesConfig": {
+      "description": "External service configurations.",
+      "type": "object",
+      "properties": {
+        "anthropic": {
+          "description": "Anthropic API configuration.",
+          "$ref": "#/$defs/AnthropicServiceConfig",
+          "default": {
+            "base_url": "https://api.anthropic.com"
+          }
+        },
+        "exa": {
+          "description": "Exa search API configuration.",
+          "$ref": "#/$defs/ExaServiceConfig",
+          "default": {
+            "base_url": "https://api.exa.ai"
+          }
+        }
+      }
+    },
+    "SubagentsConfig": {
+      "description": "Configuration for coding-agent-tools subagents (`ask_agent` tool).",
+      "type": "object",
+      "properties": {
+        "analyzer_model": {
+          "description": "Model for Analyzer subagent (deep analysis). Uses Claude CLI format.",
+          "type": "string",
+          "default": "claude-sonnet-4-6"
+        },
+        "locator_model": {
+          "description": "Model for Locator subagent (fast discovery). Uses Claude CLI format.",
+          "type": "string",
+          "default": "claude-haiku-4-5"
+        }
+      }
+    },
+    "WebRetrievalConfig": {
+      "description": "Configuration for web-retrieval tools (`web_fetch`, `web_search`).",
+      "type": "object",
+      "properties": {
+        "default_max_bytes": {
+          "description": "Default maximum bytes to fetch (default: 5MB).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 5242880,
+          "minimum": 0
+        },
+        "default_search_results": {
+          "description": "Default number of search results (default: 8).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 8,
+          "minimum": 0
+        },
+        "max_search_results": {
+          "description": "Maximum number of search results allowed (default: 20).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 20,
+          "minimum": 0
+        },
+        "request_timeout_secs": {
+          "description": "HTTP request timeout in seconds (default: 30).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 30,
+          "minimum": 0
+        },
+        "summarizer": {
+          "description": "Summarizer configuration for Haiku-based summarization.",
+          "$ref": "#/$defs/WebSummarizerConfig",
+          "default": {
+            "max_tokens": 300,
+            "model": "claude-haiku-4-5",
+            "temperature": 0.2
+          }
+        }
+      }
+    },
+    "WebSummarizerConfig": {
+      "description": "Configuration for the web summarizer (Haiku).",
+      "type": "object",
+      "properties": {
+        "max_tokens": {
+          "description": "Maximum tokens for summary output (default: 300).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 300,
+          "minimum": 0
+        },
+        "model": {
+          "description": "Model to use for summarization (default: claude-haiku-4-5).",
+          "type": "string",
+          "default": "claude-haiku-4-5"
+        },
+        "temperature": {
+          "description": "Temperature for summary generation (default: 0.2).",
+          "type": "number",
+          "format": "double",
+          "default": 0.2
+        }
+      }
+    }
+  }
+}

@@ -1,9 +1,15 @@
+use exa_async::Client;
+use exa_async::ExaConfig;
+use exa_async::ExaError;
 use exa_async::test_support::EnvGuard;
 use exa_async::types::search::SearchRequest;
-use exa_async::{Client, ExaConfig, ExaError};
 use serial_test::serial;
-use wiremock::matchers::{header, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::header;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 fn test_client(server: &MockServer) -> Client<ExaConfig> {
     let config = ExaConfig::new()

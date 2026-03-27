@@ -4,23 +4,33 @@
 
 mod support;
 
-use agentic_tools_core::{Tool, ToolContext};
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
 use opencode_orchestrator_mcp::config::OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS;
-use opencode_orchestrator_mcp::tools::{OrchestratorRunTool, RespondPermissionTool};
-use opencode_orchestrator_mcp::types::{
-    OrchestratorRunInput, PermissionReply, RespondPermissionInput, RunStatus,
-};
-use std::sync::{Arc, OnceLock};
+use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
+use opencode_orchestrator_mcp::tools::RespondPermissionTool;
+use opencode_orchestrator_mcp::types::OrchestratorRunInput;
+use opencode_orchestrator_mcp::types::PermissionReply;
+use opencode_orchestrator_mcp::types::RespondPermissionInput;
+use opencode_orchestrator_mcp::types::RunStatus;
+use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
-use wiremock::matchers::{method, path, path_regex};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::matchers::path_regex;
 
-use support::{
-    SequenceResponder, messages_fixture, permission_fixture, session_fixture, status_v2_idle,
-    test_orchestrator_server,
-};
+use support::SequenceResponder;
+use support::messages_fixture;
+use support::permission_fixture;
+use support::session_fixture;
+use support::status_v2_idle;
+use support::test_orchestrator_server;
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 

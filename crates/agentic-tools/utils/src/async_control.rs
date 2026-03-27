@@ -92,7 +92,9 @@ where
         }
     }
 
-    // Preserve the last underlying error
+    // Preserve the last underlying error.
+    // This expect is intentional: calling with empty delays is a programmer error.
+    #[expect(clippy::expect_used)]
     Err(last_err.expect("retry_fixed_delays called with empty delays"))
 }
 
@@ -100,7 +102,8 @@ where
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     #[derive(Debug)]
     struct TestError(String);

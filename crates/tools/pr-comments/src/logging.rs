@@ -3,8 +3,11 @@
 //! Provides a helper context that reduces duplication when logging tool calls
 //! to the thoughts logs directory using agentic_logging.
 
-use agentic_logging::chrono::{DateTime, Utc};
-use agentic_logging::{CallTimer, LogWriter, ToolCallRecord};
+use agentic_logging::CallTimer;
+use agentic_logging::LogWriter;
+use agentic_logging::ToolCallRecord;
+use agentic_logging::chrono::DateTime;
+use agentic_logging::chrono::Utc;
 use thoughts_tool::active_logs_dir;
 
 /// Context for logging a single tool call.

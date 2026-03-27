@@ -4,7 +4,9 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::file::{FileContent, FileInfo, FileStatus};
+use crate::types::file::FileContent;
+use crate::types::file::FileInfo;
+use crate::types::file::FileStatus;
 use reqwest::Method;
 
 /// Files API client.

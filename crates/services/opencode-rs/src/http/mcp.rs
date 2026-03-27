@@ -3,12 +3,15 @@
 //! Endpoints for Model Context Protocol server management.
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
 use crate::types::api::McpActionResponse;
-use crate::types::mcp::{
-    McpAddRequest, McpAuthCallbackRequest, McpAuthStartRequest, McpAuthStartResponse,
-    McpAuthenticateRequest, McpStatus,
-};
+use crate::types::mcp::McpAddRequest;
+use crate::types::mcp::McpAuthCallbackRequest;
+use crate::types::mcp::McpAuthStartRequest;
+use crate::types::mcp::McpAuthStartResponse;
+use crate::types::mcp::McpAuthenticateRequest;
+use crate::types::mcp::McpStatus;
 use reqwest::Method;
 
 /// MCP API client.

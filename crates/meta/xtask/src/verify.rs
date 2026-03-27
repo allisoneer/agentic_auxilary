@@ -2,13 +2,21 @@
 //!
 //! Validates metadata, policy rules, and generated file freshness.
 
-use crate::policy::{IntegrationRule, Policy, TodoPolicy};
+use crate::policy::IntegrationRule;
+use crate::policy::Policy;
+use crate::policy::TodoPolicy;
 use crate::sync;
-use anyhow::{Context, Result, bail};
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use cargo_metadata::Metadata;
+use cargo_metadata::MetadataCommand;
+use cargo_metadata::Package;
 use regex::Regex;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
@@ -339,6 +347,8 @@ fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
         "CLAUDE.md".to_string(),
         "release-plz.toml".to_string(),
         "README.md".to_string(),
+        "justfile".to_string(),
+        "agentic.schema.json".to_string(),
     ];
     let ws_root = metadata.workspace_root.as_std_path();
 

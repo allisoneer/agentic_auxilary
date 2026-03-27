@@ -1,8 +1,15 @@
-use crate::config::{Mount, RepoConfigManager, RepoMappingManager, SyncStrategy};
+use crate::config::Mount;
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
+use crate::config::SyncStrategy;
 use crate::git::GitSync;
-use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url};
-use crate::mount::{MountResolver, MountSpace};
-use anyhow::{Context, Result};
+use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_remote_url;
+use crate::mount::MountResolver;
+use crate::mount::MountSpace;
+use anyhow::Context;
+use anyhow::Result;
 use colored::*;
 use std::env;
 

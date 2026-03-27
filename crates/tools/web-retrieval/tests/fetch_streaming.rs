@@ -1,10 +1,14 @@
 //! Integration tests for streaming download behavior in `web_fetch`.
 
 use web_retrieval::WebTools;
-use web_retrieval::fetch::{HARD_MAX_BYTES, web_fetch};
+use web_retrieval::fetch::HARD_MAX_BYTES;
+use web_retrieval::fetch::web_fetch;
 use web_retrieval::types::WebFetchInput;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 #[tokio::test]
 async fn fetch_under_cap_is_not_truncated() {

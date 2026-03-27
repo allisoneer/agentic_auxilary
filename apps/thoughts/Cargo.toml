@@ -1,6 +1,6 @@
 [package]
 name = "thoughts-bin"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "CLI for flexible thought management using filesystem mounts"
@@ -22,10 +22,15 @@ path = "src/main.rs"
 
 [dependencies]
 thoughts-tool = { workspace = true }
+agentic-tools-utils = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "time",
+] }
 colored = "3"
 tokio = { workspace = true }
 chrono = { workspace = true }

@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+## [0.5.2] - 2026-03-26
+
+### ⚙️  Miscellaneous
+- Resolve PR #127 review feedback and enable taplo verification
+
+### 🎨 Styling
+- Apply rustfmt 2024 edition and fix clippy lints
 ## [0.5.1] - 2026-03-10
 
 ### ⚙️  Miscellaneous

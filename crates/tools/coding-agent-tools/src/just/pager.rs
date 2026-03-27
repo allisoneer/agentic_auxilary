@@ -4,8 +4,10 @@
 
 use super::types::SearchItem;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 /// Time-to-live for pagination state
 const TTL: Duration = Duration::from_secs(5 * 60);

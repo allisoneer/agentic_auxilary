@@ -112,7 +112,8 @@ fn request_json_shape_reasoning_mode() {
 /// Test that ToolCallRecord can be serialized with expected fields.
 #[test]
 fn tool_call_record_serialization() {
-    use agentic_logging::{CallTimer, ToolCallRecord};
+    use agentic_logging::CallTimer;
+    use agentic_logging::ToolCallRecord;
 
     // Use CallTimer to get proper timestamps
     let timer = CallTimer::start();

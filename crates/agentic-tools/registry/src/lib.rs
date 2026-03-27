@@ -22,8 +22,20 @@
 //! assert_eq!(filtered.len(), 2);
 //! ```
 
+#[cfg(not(unix))]
+compile_error!(
+    "agentic-tools-registry only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
+use agentic_config::types::AnthropicServiceConfig;
+use agentic_config::types::CliToolsConfig;
+use agentic_config::types::ExaServiceConfig;
+use agentic_config::types::ReasoningConfig;
+use agentic_config::types::SubagentsConfig;
+use agentic_config::types::WebRetrievalConfig;
 use agentic_tools_core::ToolRegistry;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::warn;
@@ -35,6 +47,30 @@ pub struct AgenticToolsConfig {
     /// Empty or None = enable all tools.
     #[serde(default)]
     pub allowlist: Option<HashSet<String>>,
+
+    /// Tool-specific config for coding-agent-tools subagents.
+    #[serde(default)]
+    pub subagents: SubagentsConfig,
+
+    /// Tool-specific config for CLI tools (limits, ignore patterns).
+    #[serde(default)]
+    pub cli_tools: CliToolsConfig,
+
+    /// Tool-specific config for gpt5-reasoner.
+    #[serde(default)]
+    pub reasoning: ReasoningConfig,
+
+    /// Tool-specific config for web retrieval tools.
+    #[serde(default)]
+    pub web_retrieval: WebRetrievalConfig,
+
+    /// Anthropic service configuration for web summarization.
+    #[serde(default)]
+    pub anthropic: AnthropicServiceConfig,
+
+    /// Exa service configuration for web search.
+    #[serde(default)]
+    pub exa: ExaServiceConfig,
 
     /// Reserved for future use (e.g., schema strictness, patches).
     #[serde(default)]
@@ -100,8 +136,10 @@ impl AgenticTools {
 
         // coding_agent_tools (6 tools)
         if domain_wanted(CODING_NAMES) {
-            let svc = Arc::new(coding_agent_tools::CodingAgentTools::new());
-            regs.push(coding_agent_tools::build_registry(svc));
+            regs.push(coding_agent_tools::build_registry(
+                config.subagents.clone(),
+                config.cli_tools.clone(),
+            ));
         }
 
         // pr_comments (3 tools)
@@ -129,7 +167,7 @@ impl AgenticTools {
 
         // gpt5_reasoner (1 tool)
         if domain_wanted(GPT5_NAMES) {
-            regs.push(gpt5_reasoner::build_registry());
+            regs.push(gpt5_reasoner::build_registry(config.reasoning.clone()));
         }
 
         // thoughts-mcp-tools (6 tools)
@@ -139,7 +177,11 @@ impl AgenticTools {
 
         // web-retrieval (2 tools)
         if domain_wanted(WEB_NAMES) {
-            let web = Arc::new(web_retrieval::WebTools::new());
+            let web = Arc::new(web_retrieval::WebTools::with_config(
+                config.web_retrieval.clone(),
+                &config.exa,
+                config.anthropic.clone(),
+            ));
             regs.push(web_retrieval::build_registry(web));
         }
 
@@ -290,7 +332,7 @@ mod tests {
         set.insert("ask_reasoning_model".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
-            extras: serde_json::json!({}),
+            ..Default::default()
         };
 
         let reg = AgenticTools::new(config);
@@ -309,7 +351,7 @@ mod tests {
         set.insert("ASK_REASONING_MODEL".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
-            extras: serde_json::json!({}),
+            ..Default::default()
         };
 
         let reg = AgenticTools::new(config);
@@ -323,7 +365,7 @@ mod tests {
     fn empty_allowlist_enables_all_tools() {
         let config = AgenticToolsConfig {
             allowlist: Some(HashSet::new()),
-            extras: serde_json::json!({}),
+            ..Default::default()
         };
 
         let reg = AgenticTools::new(config);
@@ -338,7 +380,7 @@ mod tests {
         set.insert("web_search".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
-            extras: serde_json::json!({}),
+            ..Default::default()
         };
 
         let reg = AgenticTools::new(config);
@@ -354,7 +396,7 @@ mod tests {
         set.insert("nonexistent_tool".to_string());
         let config = AgenticToolsConfig {
             allowlist: Some(set),
-            extras: serde_json::json!({}),
+            ..Default::default()
         };
 
         let reg = AgenticTools::new(config);
@@ -362,5 +404,45 @@ mod tests {
         // Should only have "cli_ls", ignoring "nonexistent_tool"
         assert_eq!(reg.len(), 1);
         assert!(reg.contains("cli_ls"));
+    }
+
+    #[test]
+    fn builds_with_non_default_tool_configs() {
+        // Verify that AgenticTools::new() builds successfully with non-default
+        // SubagentsConfig and ReasoningConfig values
+        let config = AgenticToolsConfig {
+            allowlist: None,
+            subagents: SubagentsConfig {
+                locator_model: "custom-haiku".into(),
+                analyzer_model: "custom-sonnet".into(),
+            },
+            reasoning: ReasoningConfig {
+                optimizer_model: "anthropic/custom-optimizer".into(),
+                executor_model: "openai/custom-executor".into(),
+                reasoning_effort: Some("high".into()),
+                api_base_url: None,
+                token_limit: None,
+            },
+            ..Default::default()
+        };
+
+        let reg = AgenticTools::new(config);
+
+        // Should build successfully with all tools
+        assert!(
+            reg.len() >= 23,
+            "expected at least 23 tools, got {}",
+            reg.len()
+        );
+
+        // Verify tools from domains that use the configs are present
+        assert!(
+            reg.contains("ask_agent"),
+            "missing ask_agent (uses subagents config)"
+        );
+        assert!(
+            reg.contains("ask_reasoning_model"),
+            "missing ask_reasoning_model (uses reasoning config)"
+        );
     }
 }

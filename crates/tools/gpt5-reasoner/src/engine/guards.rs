@@ -1,5 +1,7 @@
-use crate::optimizer::parser::{FileGroup, OptimizerOutput};
-use crate::types::{FileMeta, PromptType};
+use crate::optimizer::parser::FileGroup;
+use crate::optimizer::parser::OptimizerOutput;
+use crate::types::FileMeta;
+use crate::types::PromptType;
 
 pub fn maybe_inject_plan_structure_meta(
     prompt_type: &PromptType,
@@ -98,7 +100,8 @@ pub fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
 #[cfg(test)]
 mod plan_guards_tests {
     use super::*;
-    use crate::optimizer::parser::{FileGrouping, OptimizerOutput};
+    use crate::optimizer::parser::FileGrouping;
+    use crate::optimizer::parser::OptimizerOutput;
 
     #[test]
     fn test_maybe_inject_plan_structure_meta() {

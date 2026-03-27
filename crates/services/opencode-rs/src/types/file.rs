@@ -1,6 +1,7 @@
 //! File types for `opencode_rs`.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A file in the project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
