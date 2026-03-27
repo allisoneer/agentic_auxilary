@@ -110,7 +110,7 @@ ignore_paths = [
 
 # Filename suffixes to exclude (matches any path ending with the suffix).
 ignore_suffixes = [
-  "CHANGELOG.md",                                         # Auto-generated changelog prose
+  "CHANGELOG.md", # Auto-generated changelog prose
 ]
 
 [release_plz]
