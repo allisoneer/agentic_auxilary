@@ -1,0 +1,31 @@
+crates/services/opencode-rs/src/server.rs
+  dfe35f9c8bdd02f0 25,27-34,46,98-107,138-143,274,289-316
+apps/opencode-orchestrator-mcp/src/server.rs
+  dfe35f9c8bdd02f0 116-117,120-121,127-128,154
+apps/opencode-orchestrator-mcp/justfile
+  dfe35f9c8bdd02f0 33-69
+apps/opencode-orchestrator-mcp/src/version.rs
+  dfe35f9c8bdd02f0 6-27,85-144,148,150-152,174-254,256-261
+apps/opencode-orchestrator-mcp/Cargo.toml
+  dfe35f9c8bdd02f0 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "024f5a92befbd44442534c671d9ec3bb2c5429c8",
+  "prompts": {
+    "dfe35f9c8bdd02f0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d3582c06ffepalUYPymeaOjY7",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 293,
+      "total_deletions": 27,
+      "accepted_lines": 273,
+      "overriden_lines": 0
+    }
+  }
+}
