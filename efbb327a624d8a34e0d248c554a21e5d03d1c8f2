@@ -1,0 +1,25 @@
+apps/opencode-orchestrator-mcp/Cargo.toml
+  5b9e91e9ffe07be3 59
+apps/opencode-orchestrator-mcp/src/logging.rs
+  5b9e91e9ffe07be3 53,64,66,93,101,120,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "efbb327a624d8a34e0d248c554a21e5d03d1c8f2",
+  "prompts": {
+    "5b9e91e9ffe07be3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2cf983b54ffeeFuyljVbhDildj",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 10,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    }
+  }
+}
