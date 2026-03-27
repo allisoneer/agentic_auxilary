@@ -2,12 +2,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-#[expect(
-    dead_code,
-    reason = "shared support module provides fixtures used by other test binaries"
-)]
 mod support;
 
+use agentic_tools_core::{Tool, ToolContext};
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use std::sync::Arc;
@@ -87,6 +84,12 @@ async fn it_times_out_after_5_min_inactivity() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
     // SSE stream stalls, forcing polling fallback
     Mock::given(method("GET"))
         .and(path("/event"))
@@ -100,12 +103,15 @@ async fn it_times_out_after_5_min_inactivity() {
 
     let handle = tokio::spawn(async move {
         run_tool
-            .run_impl(OrchestratorRunInput {
-                session_id: Some("s1".into()),
-                command: None,
-                message: Some("test prompt".into()),
-                wait_for_activity: None,
-            })
+            .call(
+                OrchestratorRunInput {
+                    session_id: Some("s1".into()),
+                    command: None,
+                    message: Some("test prompt".into()),
+                    wait_for_activity: None,
+                },
+                &ToolContext::default(),
+            )
             .await
     });
 
@@ -157,6 +163,12 @@ async fn it_does_not_timeout_while_busy() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
     // SSE stream stalls, forcing polling fallback
     Mock::given(method("GET"))
         .and(path("/event"))
@@ -170,12 +182,15 @@ async fn it_does_not_timeout_while_busy() {
 
     let handle = tokio::spawn(async move {
         run_tool
-            .run_impl(OrchestratorRunInput {
-                session_id: Some("s1".into()),
-                command: None,
-                message: Some("test prompt".into()),
-                wait_for_activity: None,
-            })
+            .call(
+                OrchestratorRunInput {
+                    session_id: Some("s1".into()),
+                    command: None,
+                    message: Some("test prompt".into()),
+                    wait_for_activity: None,
+                },
+                &ToolContext::default(),
+            )
             .await
     });
 

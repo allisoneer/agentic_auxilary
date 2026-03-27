@@ -1,23 +1,129 @@
 //! Tool implementations for orchestrator MCP server.
 
+use crate::config;
+use crate::logging;
 use crate::server::OrchestratorServer;
 use crate::token_tracker::TokenTracker;
 use crate::types::{
     CommandInfo, ListCommandsInput, ListCommandsOutput, ListSessionsInput, ListSessionsOutput,
-    OrchestratorRunInput, OrchestratorRunOutput, PermissionReply, RespondPermissionInput,
-    RespondPermissionOutput, RunStatus, SessionSummary,
+    OrchestratorRunInput, OrchestratorRunOutput, PermissionReply, QuestionAction, QuestionInfoView,
+    QuestionOptionView, RespondPermissionInput, RespondPermissionOutput, RespondQuestionInput,
+    RespondQuestionOutput, RunStatus, SessionSummary,
 };
+use agentic_logging::{CallTimer, ToolCallRecord};
+use agentic_tools_core::fmt::{TextFormat, TextOptions};
 use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
 use futures::future::BoxFuture;
 use opencode_rs::types::event::Event;
 use opencode_rs::types::message::{CommandRequest, PromptPart, PromptRequest};
 use opencode_rs::types::permission::PermissionReply as ApiPermissionReply;
 use opencode_rs::types::permission::PermissionReplyRequest;
+use opencode_rs::types::question::{QuestionReply, QuestionRequest};
 use opencode_rs::types::session::{CreateSessionRequest, SessionStatusInfo, SummarizeRequest};
+use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
+
+const SERVER_NAME: &str = "opencode-orchestrator-mcp";
+
+#[derive(Debug, Clone, Default)]
+struct ToolLogMeta {
+    token_usage: Option<agentic_logging::TokenUsage>,
+    token_usage_saturated: bool,
+}
+
+struct RunOutcome {
+    output: OrchestratorRunOutput,
+    log_meta: ToolLogMeta,
+}
+
+impl RunOutcome {
+    fn without_tokens(output: OrchestratorRunOutput) -> Self {
+        Self {
+            output,
+            log_meta: ToolLogMeta::default(),
+        }
+    }
+
+    fn with_tracker(output: OrchestratorRunOutput, token_tracker: &TokenTracker) -> Self {
+        let (token_usage, token_usage_saturated) = token_tracker.to_log_token_usage();
+        Self {
+            output,
+            log_meta: ToolLogMeta {
+                token_usage,
+                token_usage_saturated,
+            },
+        }
+    }
+}
+
+fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
+    serde_json::to_value(request)
+        .unwrap_or_else(|error| serde_json::json!({"serialization_error": error.to_string()}))
+}
+
+fn log_tool_success<TReq: Serialize, TOut: TextFormat>(
+    timer: &CallTimer,
+    tool: &str,
+    request: &TReq,
+    output: &TOut,
+    log_meta: ToolLogMeta,
+    write_markdown: bool,
+) {
+    let (completed_at, duration_ms) = timer.finish();
+    let rendered = output.fmt_text(&TextOptions::default());
+    let response_file = write_markdown
+        .then(|| logging::write_markdown_best_effort(completed_at, &timer.call_id, &rendered))
+        .flatten();
+
+    let record = ToolCallRecord {
+        call_id: timer.call_id.clone(),
+        server: SERVER_NAME.into(),
+        tool: tool.into(),
+        started_at: timer.started_at,
+        completed_at,
+        duration_ms,
+        request: request_json(request),
+        response_file,
+        success: true,
+        error: None,
+        model: None,
+        token_usage: log_meta.token_usage,
+        summary: log_meta
+            .token_usage_saturated
+            .then(|| serde_json::json!({"token_usage_saturated": true})),
+    };
+
+    logging::append_record_best_effort(&record);
+}
+
+fn log_tool_error<TReq: Serialize>(
+    timer: &CallTimer,
+    tool: &str,
+    request: &TReq,
+    error: &ToolError,
+) {
+    let (completed_at, duration_ms) = timer.finish();
+    let record = ToolCallRecord {
+        call_id: timer.call_id.clone(),
+        server: SERVER_NAME.into(),
+        tool: tool.into(),
+        started_at: timer.started_at,
+        completed_at,
+        duration_ms,
+        request: request_json(request),
+        response_file: None,
+        success: false,
+        error: Some(error.to_string()),
+        model: None,
+        token_usage: None,
+        summary: None,
+    };
+
+    logging::append_record_best_effort(&record);
+}
 
 // ============================================================================
 // run
@@ -124,14 +230,53 @@ impl OrchestratorRunTool {
             permission_request_id: None,
             permission_type: None,
             permission_patterns: vec![],
+            question_request_id: None,
+            questions: vec![],
             warnings,
         })
     }
 
-    pub async fn run_impl(
-        &self,
-        input: OrchestratorRunInput,
-    ) -> Result<OrchestratorRunOutput, ToolError> {
+    fn map_questions(req: &QuestionRequest) -> Vec<QuestionInfoView> {
+        req.questions
+            .iter()
+            .map(|question| QuestionInfoView {
+                question: question.question.clone(),
+                header: question.header.clone(),
+                options: question
+                    .options
+                    .iter()
+                    .map(|option| QuestionOptionView {
+                        label: option.label.clone(),
+                        description: option.description.clone(),
+                    })
+                    .collect(),
+                multiple: question.multiple,
+                custom: question.custom,
+            })
+            .collect()
+    }
+
+    fn question_required_output(
+        session_id: String,
+        partial_response: Option<String>,
+        request: &QuestionRequest,
+        warnings: Vec<String>,
+    ) -> OrchestratorRunOutput {
+        OrchestratorRunOutput {
+            session_id,
+            status: RunStatus::QuestionRequired,
+            response: None,
+            partial_response,
+            permission_request_id: None,
+            permission_type: None,
+            permission_patterns: vec![],
+            question_request_id: Some(request.id.clone()),
+            questions: Self::map_questions(request),
+            warnings,
+        }
+    }
+
+    async fn run_impl_outcome(&self, input: OrchestratorRunInput) -> Result<RunOutcome, ToolError> {
         // Input validation
         if input.session_id.is_none() && input.message.is_none() && input.command.is_none() {
             return Err(ToolError::InvalidInput(
@@ -228,7 +373,7 @@ impl OrchestratorRunTool {
                 permission_type = %perm.permission,
                 "run: pending permission found"
             );
-            return Ok(OrchestratorRunOutput {
+            return Ok(RunOutcome::without_tokens(OrchestratorRunOutput {
                 session_id,
                 status: RunStatus::PermissionRequired,
                 response: None,
@@ -236,21 +381,55 @@ impl OrchestratorRunTool {
                 permission_request_id: Some(perm.id),
                 permission_type: Some(perm.permission),
                 permission_patterns: perm.patterns,
+                question_request_id: None,
+                questions: vec![],
                 warnings: vec![],
-            });
+            }));
+        }
+
+        let pending_questions = client
+            .question()
+            .list()
+            .await
+            .map_err(|e| ToolError::Internal(format!("Failed to list questions: {e}")))?;
+
+        if let Some(question) = pending_questions
+            .into_iter()
+            .find(|question| question.session_id == session_id)
+        {
+            tracing::info!(session_id = %session_id, question_id = %question.id, "run: pending question found");
+            return Ok(RunOutcome::without_tokens(Self::question_required_output(
+                session_id,
+                None,
+                &question,
+                vec![],
+            )));
         }
 
         // 4. If no message/command and session is idle, just return current state
         // Uses finalize_completed to get retry logic for message extraction
         if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
             let token_tracker = TokenTracker::new();
-            return Self::finalize_completed(client, session_id, &token_tracker, vec![]).await;
+            let output =
+                Self::finalize_completed(client, session_id, &token_tracker, vec![]).await?;
+            return Ok(RunOutcome::with_tracker(output, &token_tracker));
         }
 
         // 5. Subscribe to SSE BEFORE sending prompt/command
         let mut subscription = client
             .subscribe_session(&session_id)
             .map_err(|e| ToolError::Internal(format!("Failed to subscribe to session: {e}")))?;
+
+        // Track whether this call is dispatching new work (command or message)
+        // vs just resuming/monitoring an existing session.
+        let dispatched_new_work = input.command.is_some() || message.is_some() || wait_for_activity;
+        let idle_grace = config::idle_grace();
+        let mut idle_grace_deadline: Option<tokio::time::Instant> = None;
+        let mut awaiting_idle_grace_check = false;
+
+        if wait_for_activity && input.command.is_none() && message.is_none() {
+            idle_grace_deadline = Some(tokio::time::Instant::now() + idle_grace);
+        }
 
         // 6. Kick off the work
         let mut command_task: Option<JoinHandle<Result<(), String>>> = None;
@@ -300,6 +479,8 @@ impl OrchestratorRunTool {
                 .prompt_async(&session_id, &req)
                 .await
                 .map_err(|e| ToolError::Internal(format!("Failed to send prompt: {e}")))?;
+
+            idle_grace_deadline = Some(tokio::time::Instant::now() + idle_grace);
         }
 
         // 7. Event loop: wait for completion or permission
@@ -315,10 +496,6 @@ impl OrchestratorRunTool {
 
         let mut poll_interval = tokio::time::interval(Duration::from_secs(1));
         poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-        // Track whether this call is dispatching new work (command or message)
-        // vs just resuming/monitoring an existing session
-        let dispatched_new_work = input.command.is_some() || message.is_some() || wait_for_activity;
 
         // Track whether we've observed the session as busy at least once.
         // This prevents completing immediately if we call run_impl on an already-idle
@@ -341,7 +518,9 @@ impl OrchestratorRunTool {
                 session_id = %session_id,
                 "session already idle on post-subscribe check"
             );
-            return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
+            let output =
+                Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+            return Ok(RunOutcome::with_tracker(output, &token_tracker));
         }
         // If check fails or session is busy, continue to event loop
 
@@ -392,7 +571,7 @@ impl OrchestratorRunTool {
                                 permission_type = %properties.request.permission,
                                 "run: permission requested"
                             );
-                            return Ok(OrchestratorRunOutput {
+                            return Ok(RunOutcome::with_tracker(OrchestratorRunOutput {
                                 session_id,
                                 status: RunStatus::PermissionRequired,
                                 response: None,
@@ -404,18 +583,40 @@ impl OrchestratorRunTool {
                                 permission_request_id: Some(properties.request.id),
                                 permission_type: Some(properties.request.permission),
                                 permission_patterns: properties.request.patterns,
+                                question_request_id: None,
+                                questions: vec![],
                                 warnings,
-                            });
+                            }, &token_tracker));
+                        }
+
+                        Event::QuestionAsked { properties } => {
+                            return Ok(RunOutcome::with_tracker(Self::question_required_output(
+                                session_id,
+                                if partial_response.is_empty() {
+                                    None
+                                } else {
+                                    Some(partial_response)
+                                },
+                                &properties.request,
+                                warnings,
+                            ), &token_tracker));
                         }
 
                         Event::MessagePartUpdated { properties } => {
                             last_activity_time = tokio::time::Instant::now();
                             // Message streaming means session is actively processing
                             observed_busy = true;
+                            awaiting_idle_grace_check = false;
                             // Collect streaming text
                             if let Some(delta) = &properties.delta {
                                 partial_response.push_str(delta);
                             }
+                        }
+
+                        Event::MessageUpdated { .. } => {
+                            last_activity_time = tokio::time::Instant::now();
+                            observed_busy = true;
+                            awaiting_idle_grace_check = false;
                         }
 
                         Event::SessionError { properties } => {
@@ -432,7 +633,8 @@ impl OrchestratorRunTool {
 
                         Event::SessionIdle { .. } => {
                             tracing::debug!(session_id = %session_id, "received SessionIdle event");
-                            return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
+                            let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                            return Ok(RunOutcome::with_tracker(output, &token_tracker));
                         }
 
                         _ => {
@@ -462,7 +664,7 @@ impl OrchestratorRunTool {
                             permission_id = %perm.id,
                             "detected pending permission via polling fallback"
                         );
-                        return Ok(OrchestratorRunOutput {
+                        return Ok(RunOutcome::with_tracker(OrchestratorRunOutput {
                             session_id,
                             status: RunStatus::PermissionRequired,
                             response: None,
@@ -470,12 +672,47 @@ impl OrchestratorRunTool {
                                 None
                             } else {
                                 Some(partial_response)
-                            },
-                            permission_request_id: Some(perm.id),
-                            permission_type: Some(perm.permission),
+                                },
+                                permission_request_id: Some(perm.id),
+                                permission_type: Some(perm.permission),
                             permission_patterns: perm.patterns,
+                            question_request_id: None,
+                            questions: vec![],
                             warnings,
-                        });
+                        }, &token_tracker));
+                    }
+
+                    let pending_questions = match client.question().list().await {
+                        Ok(questions) => questions,
+                        Err(e) => {
+                            tracing::warn!(
+                                session_id = %session_id,
+                                error = %e,
+                                "failed to list questions during poll fallback"
+                            );
+                            vec![]
+                        }
+                    };
+
+                    if let Some(question) = pending_questions
+                        .into_iter()
+                        .find(|question| question.session_id == session_id)
+                    {
+                        tracing::debug!(
+                            session_id = %session_id,
+                            question_id = %question.id,
+                            "detected pending question via polling fallback"
+                        );
+                        return Ok(RunOutcome::with_tracker(Self::question_required_output(
+                            session_id,
+                            if partial_response.is_empty() {
+                                None
+                            } else {
+                                Some(partial_response)
+                            },
+                            &question,
+                            warnings,
+                        ), &token_tracker));
                     }
 
                     // === 2. Session idle detection fallback (NEW) ===
@@ -485,6 +722,7 @@ impl OrchestratorRunTool {
                         Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }) => {
                             last_activity_time = tokio::time::Instant::now();
                             observed_busy = true;
+                            awaiting_idle_grace_check = false;
                             tracing::trace!(
                                 session_id = %session_id,
                                 "our session is busy/retry, waiting"
@@ -503,15 +741,35 @@ impl OrchestratorRunTool {
                                     observed_busy = observed_busy,
                                     "detected session idle via polling fallback"
                                 );
-                                return Self::finalize_completed(client, session_id, &token_tracker, warnings).await;
+                                let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                                return Ok(RunOutcome::with_tracker(output, &token_tracker));
                             }
 
-                            // Session is idle but we dispatched work and haven't seen busy yet.
-                            // This likely means our work hasn't started processing.
-                            // Wait for next poll tick.
+                            let Some(deadline) = idle_grace_deadline else {
+                                tracing::trace!(
+                                    session_id = %session_id,
+                                    command_task_active = command_task_active,
+                                    "idle seen before dispatch confirmed; waiting"
+                                );
+                                continue;
+                            };
+
+                            let now = tokio::time::Instant::now();
+                            if now >= deadline {
+                                tracing::debug!(
+                                    session_id = %session_id,
+                                    idle_grace_ms = idle_grace.as_millis(),
+                                    "accepting idle via bounded idle grace (no busy observed)"
+                                );
+                                let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                                return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                            }
+
+                            awaiting_idle_grace_check = true;
                             tracing::trace!(
                                 session_id = %session_id,
-                                "session idle but work may not have started yet, waiting"
+                                remaining_ms = (deadline - now).as_millis(),
+                                "idle detected before busy; waiting for idle-grace deadline"
                             );
                         }
                         Err(e) => {
@@ -520,6 +778,34 @@ impl OrchestratorRunTool {
                                 session_id = %session_id,
                                 error = %e,
                                 "failed to get session status during poll fallback"
+                            );
+                        }
+                    }
+                }
+
+                () = async {
+                    match idle_grace_deadline {
+                        Some(deadline) => tokio::time::sleep_until(deadline).await,
+                        None => std::future::pending::<()>().await,
+                    }
+                }, if awaiting_idle_grace_check => {
+                    awaiting_idle_grace_check = false;
+
+                    match client.sessions().status_for(&session_id).await {
+                        Ok(SessionStatusInfo::Idle) => {
+                            tracing::debug!(session_id = %session_id, "idle-grace deadline reached; finalizing");
+                            let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                            return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                        }
+                        Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }) => {
+                            last_activity_time = tokio::time::Instant::now();
+                            observed_busy = true;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                session_id = %session_id,
+                                error = %e,
+                                "status check failed at idle-grace deadline"
                             );
                         }
                     }
@@ -538,6 +824,7 @@ impl OrchestratorRunTool {
                 }, if command_task_active => {
                     match cmd_result {
                         Some(Ok(Ok(()))) => {
+                            idle_grace_deadline = Some(tokio::time::Instant::now() + idle_grace);
                             tracing::debug!(
                                 session_id = %session_id,
                                 command = ?command_name_for_logging,
@@ -585,6 +872,7 @@ impl Tool for OrchestratorRunTool {
 Returns when:
 - status=completed: Session finished executing. Response contains final assistant output.
 - status=permission_required: Session needs permission approval. Call respond_permission to continue.
+- status=question_required: Session needs question answers. Call respond_question to continue.
 
 Parameters:
 - session_id: Existing session to resume (omit to create new)
@@ -603,7 +891,26 @@ Examples:
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let this = self.clone();
-        Box::pin(async move { this.run_impl(input).await })
+        Box::pin(async move {
+            let timer = CallTimer::start();
+            match this.run_impl_outcome(input.clone()).await {
+                Ok(outcome) => {
+                    log_tool_success(
+                        &timer,
+                        Self::NAME,
+                        &input,
+                        &outcome.output,
+                        outcome.log_meta,
+                        true,
+                    );
+                    Ok(outcome.output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &input, &error);
+                    Err(error)
+                }
+            }
+        })
     }
 }
 
@@ -638,32 +945,52 @@ impl Tool for ListSessionsTool {
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let server_cell = Arc::clone(&self.server);
         Box::pin(async move {
-            let server = server_cell
-                .get_or_try_init(OrchestratorServer::start_lazy)
-                .await
-                .map_err(|e| ToolError::Internal(e.to_string()))?;
+            let timer = CallTimer::start();
+            let result: Result<ListSessionsOutput, ToolError> = async {
+                let server = server_cell
+                    .get_or_try_init(OrchestratorServer::start_lazy)
+                    .await
+                    .map_err(|e| ToolError::Internal(e.to_string()))?;
 
-            let sessions = server
-                .client()
-                .sessions()
-                .list()
-                .await
-                .map_err(|e| ToolError::Internal(format!("Failed to list sessions: {e}")))?;
+                let sessions =
+                    server.client().sessions().list().await.map_err(|e| {
+                        ToolError::Internal(format!("Failed to list sessions: {e}"))
+                    })?;
 
-            let limit = input.limit.unwrap_or(20);
-            let summaries: Vec<SessionSummary> = sessions
-                .into_iter()
-                .take(limit)
-                .map(|s| SessionSummary {
-                    id: s.id,
-                    title: s.title,
-                    updated: s.time.as_ref().map(|t| t.updated),
+                let limit = input.limit.unwrap_or(20);
+                let summaries: Vec<SessionSummary> = sessions
+                    .into_iter()
+                    .take(limit)
+                    .map(|s| SessionSummary {
+                        id: s.id,
+                        title: s.title,
+                        updated: s.time.as_ref().map(|t| t.updated),
+                    })
+                    .collect();
+
+                Ok(ListSessionsOutput {
+                    sessions: summaries,
                 })
-                .collect();
+            }
+            .await;
 
-            Ok(ListSessionsOutput {
-                sessions: summaries,
-            })
+            match result {
+                Ok(output) => {
+                    log_tool_success(
+                        &timer,
+                        Self::NAME,
+                        &input,
+                        &output,
+                        ToolLogMeta::default(),
+                        false,
+                    );
+                    Ok(output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &input, &error);
+                    Err(error)
+                }
+            }
         })
     }
 }
@@ -693,34 +1020,54 @@ impl Tool for ListCommandsTool {
 
     fn call(
         &self,
-        _input: Self::Input,
+        input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let server_cell = Arc::clone(&self.server);
         Box::pin(async move {
-            let server = server_cell
-                .get_or_try_init(OrchestratorServer::start_lazy)
-                .await
-                .map_err(|e| ToolError::Internal(e.to_string()))?;
+            let timer = CallTimer::start();
+            let result: Result<ListCommandsOutput, ToolError> = async {
+                let server = server_cell
+                    .get_or_try_init(OrchestratorServer::start_lazy)
+                    .await
+                    .map_err(|e| ToolError::Internal(e.to_string()))?;
 
-            let commands = server
-                .client()
-                .tools()
-                .commands()
-                .await
-                .map_err(|e| ToolError::Internal(format!("Failed to list commands: {e}")))?;
+                let commands =
+                    server.client().tools().commands().await.map_err(|e| {
+                        ToolError::Internal(format!("Failed to list commands: {e}"))
+                    })?;
 
-            let command_infos: Vec<CommandInfo> = commands
-                .into_iter()
-                .map(|c| CommandInfo {
-                    name: c.name,
-                    description: c.description,
+                let command_infos: Vec<CommandInfo> = commands
+                    .into_iter()
+                    .map(|c| CommandInfo {
+                        name: c.name,
+                        description: c.description,
+                    })
+                    .collect();
+
+                Ok(ListCommandsOutput {
+                    commands: command_infos,
                 })
-                .collect();
+            }
+            .await;
 
-            Ok(ListCommandsOutput {
-                commands: command_infos,
-            })
+            match result {
+                Ok(output) => {
+                    log_tool_success(
+                        &timer,
+                        Self::NAME,
+                        &input,
+                        &output,
+                        ToolLogMeta::default(),
+                        false,
+                    );
+                    Ok(output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &input, &error);
+                    Err(error)
+                }
+            }
         })
     }
 }
@@ -765,151 +1112,331 @@ Parameters:
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let server_cell = Arc::clone(&self.server);
         Box::pin(async move {
+            let timer = CallTimer::start();
+            let request = input.clone();
+            let result: Result<(RespondPermissionOutput, ToolLogMeta), ToolError> = async {
+                let server = server_cell
+                    .get_or_try_init(OrchestratorServer::start_lazy)
+                    .await
+                    .map_err(|e| ToolError::Internal(e.to_string()))?;
+
+                let client = server.client();
+
+                // Find the pending permission for this session
+                let mut pending =
+                    client.permissions().list().await.map_err(|e| {
+                        ToolError::Internal(format!("Failed to list permissions: {e}"))
+                    })?;
+
+                let perm = if let Some(req_id) = input.permission_request_id.as_deref() {
+                    let idx = pending.iter().position(|p| p.id == req_id).ok_or_else(|| {
+                        ToolError::InvalidInput(format!(
+                            "No pending permission found with id '{req_id}'. \
+                         (session_id='{}')",
+                            input.session_id
+                        ))
+                    })?;
+
+                    let perm = pending.remove(idx);
+
+                    if perm.session_id != input.session_id {
+                        return Err(ToolError::InvalidInput(format!(
+                            "Permission request '{req_id}' belongs to session '{}', not '{}'.",
+                            perm.session_id, input.session_id
+                        )));
+                    }
+
+                    perm
+                } else {
+                    let mut perms: Vec<_> = pending
+                        .into_iter()
+                        .filter(|p| p.session_id == input.session_id)
+                        .collect();
+
+                    match perms.as_slice() {
+                        [] => {
+                            return Err(ToolError::InvalidInput(format!(
+                                "No pending permission found for session '{}'. \
+                             The permission may have already been responded to.",
+                                input.session_id
+                            )));
+                        }
+                        [_single] => perms.swap_remove(0),
+                        multiple => {
+                            let ids = multiple
+                                .iter()
+                                .map(|p| p.id.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            return Err(ToolError::InvalidInput(format!(
+                                "Multiple pending permissions found for session '{}': {ids}. \
+                             Please retry with permission_request_id (returned by run).",
+                                input.session_id
+                            )));
+                        }
+                    }
+                };
+
+                // Track if this is a rejection for post-processing
+                let is_reject = matches!(input.reply, PermissionReply::Reject);
+
+                // Capture permission details for warning message
+                let permission_type = perm.permission.clone();
+                let permission_patterns = perm.patterns.clone();
+
+                // Capture baseline assistant text BEFORE sending reject
+                // This lets us detect stale text after rejection
+                let mut pre_warnings: Vec<String> = Vec::new();
+                let baseline = if is_reject {
+                    match client.messages().list(&input.session_id).await {
+                        Ok(msgs) => OrchestratorServer::extract_assistant_text(&msgs),
+                        Err(e) => {
+                            pre_warnings.push(format!("Failed to fetch baseline messages: {e}"));
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                // Convert our reply type to API type
+                let api_reply = match input.reply {
+                    PermissionReply::Once => ApiPermissionReply::Once,
+                    PermissionReply::Always => ApiPermissionReply::Always,
+                    PermissionReply::Reject => ApiPermissionReply::Reject,
+                };
+
+                // Send the reply
+                client
+                    .permissions()
+                    .reply(
+                        &perm.id,
+                        &PermissionReplyRequest {
+                            reply: api_reply,
+                            message: input.message,
+                        },
+                    )
+                    .await
+                    .map_err(|e| {
+                        ToolError::Internal(format!("Failed to reply to permission: {e}"))
+                    })?;
+
+                // Now continue monitoring the session using run logic
+                let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
+                let wait_for_activity = (!is_reject).then_some(true);
+                let outcome = run_tool
+                    .run_impl_outcome(OrchestratorRunInput {
+                        session_id: Some(input.session_id),
+                        command: None,
+                        message: None,
+                        wait_for_activity,
+                    })
+                    .await?;
+                let mut out = outcome.output;
+
+                // Merge pre-warnings
+                out.warnings.extend(pre_warnings);
+
+                // Apply rejection-aware output mutation
+                if is_reject && matches!(out.status, RunStatus::Completed) {
+                    let final_resp = out.response.as_deref();
+                    let baseline_resp = baseline.as_deref();
+
+                    // If response unchanged or None, it's stale pre-rejection text
+                    if final_resp.is_none() || final_resp == baseline_resp {
+                        out.response = None;
+                        let patterns_str = if permission_patterns.is_empty() {
+                            "(none)".to_string()
+                        } else {
+                            permission_patterns.join(", ")
+                        };
+                        out.warnings.push(format!(
+                        "Permission rejected for '{permission_type}'. Patterns: {patterns_str}. \
+                         Session stopped without generating a new assistant response."
+                    ));
+                        tracing::debug!(
+                            permission_type = %permission_type,
+                            "rejection override applied: response set to None"
+                        );
+                    }
+                }
+
+                Ok((out, outcome.log_meta))
+            }
+            .await;
+
+            match result {
+                Ok((output, log_meta)) => {
+                    log_tool_success(&timer, Self::NAME, &request, &output, log_meta, true);
+                    Ok(output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &request, &error);
+                    Err(error)
+                }
+            }
+        })
+    }
+}
+
+// ============================================================================
+// respond_question
+// ============================================================================
+
+#[derive(Clone)]
+pub struct RespondQuestionTool {
+    server: Arc<OnceCell<OrchestratorServer>>,
+}
+
+impl RespondQuestionTool {
+    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+        Self { server }
+    }
+}
+
+impl Tool for RespondQuestionTool {
+    type Input = RespondQuestionInput;
+    type Output = RespondQuestionOutput;
+    const NAME: &'static str = "respond_question";
+    const DESCRIPTION: &'static str = r#"Respond to a question request from an OpenCode session.
+
+After replying, continues monitoring the session and returns when complete or when another interruption is required.
+
+Parameters:
+- session_id: Session with pending question
+- action: "reply" or "reject"
+- answers: Required when action=reply; one list per question"#;
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let server_cell = Arc::clone(&self.server);
+        Box::pin(async move {
+            let timer = CallTimer::start();
+            let request = input.clone();
+            let result: Result<(RespondQuestionOutput, ToolLogMeta), ToolError> = async {
             let server = server_cell
                 .get_or_try_init(OrchestratorServer::start_lazy)
                 .await
                 .map_err(|e| ToolError::Internal(e.to_string()))?;
 
             let client = server.client();
-
-            // Find the pending permission for this session
             let mut pending = client
-                .permissions()
+                .question()
                 .list()
                 .await
-                .map_err(|e| ToolError::Internal(format!("Failed to list permissions: {e}")))?;
+                .map_err(|e| ToolError::Internal(format!("Failed to list questions: {e}")))?;
 
-            let perm = if let Some(req_id) = input.permission_request_id.as_deref() {
-                let idx = pending.iter().position(|p| p.id == req_id).ok_or_else(|| {
-                    ToolError::InvalidInput(format!(
-                        "No pending permission found with id '{req_id}'. \
-                         (session_id='{}')",
-                        input.session_id
-                    ))
-                })?;
+            let question = if let Some(req_id) = input.question_request_id.as_deref() {
+                let idx = pending
+                    .iter()
+                    .position(|question| question.id == req_id)
+                    .ok_or_else(|| {
+                        ToolError::InvalidInput(format!(
+                            "No pending question found with id '{req_id}'. (session_id='{}')",
+                            input.session_id
+                        ))
+                    })?;
 
-                let perm = pending.remove(idx);
-
-                if perm.session_id != input.session_id {
+                let question = pending.remove(idx);
+                if question.session_id != input.session_id {
                     return Err(ToolError::InvalidInput(format!(
-                        "Permission request '{req_id}' belongs to session '{}', not '{}'.",
-                        perm.session_id, input.session_id
+                        "Question request '{req_id}' belongs to session '{}', not '{}'.",
+                        question.session_id, input.session_id
                     )));
                 }
 
-                perm
+                question
             } else {
-                let mut perms: Vec<_> = pending
+                let mut questions: Vec<_> = pending
                     .into_iter()
-                    .filter(|p| p.session_id == input.session_id)
+                    .filter(|question| question.session_id == input.session_id)
                     .collect();
 
-                match perms.as_slice() {
+                match questions.as_slice() {
                     [] => {
                         return Err(ToolError::InvalidInput(format!(
-                            "No pending permission found for session '{}'. \
-                             The permission may have already been responded to.",
+                            "No pending question found for session '{}'. The question may have already been responded to.",
                             input.session_id
                         )));
                     }
-                    [_single] => perms.swap_remove(0),
+                    [_single] => questions.swap_remove(0),
                     multiple => {
                         let ids = multiple
                             .iter()
-                            .map(|p| p.id.as_str())
+                            .map(|question| question.id.as_str())
                             .collect::<Vec<_>>()
                             .join(", ");
                         return Err(ToolError::InvalidInput(format!(
-                            "Multiple pending permissions found for session '{}': {ids}. \
-                             Please retry with permission_request_id (returned by run).",
+                            "Multiple pending questions found for session '{}': {ids}. Please retry with question_request_id (returned by run).",
                             input.session_id
                         )));
                     }
                 }
             };
 
-            // Track if this is a rejection for post-processing
-            let is_reject = matches!(input.reply, PermissionReply::Reject);
-
-            // Capture permission details for warning message
-            let permission_type = perm.permission.clone();
-            let permission_patterns = perm.patterns.clone();
-
-            // Capture baseline assistant text BEFORE sending reject
-            // This lets us detect stale text after rejection
-            let mut pre_warnings: Vec<String> = Vec::new();
-            let baseline = if is_reject {
-                match client.messages().list(&input.session_id).await {
-                    Ok(msgs) => OrchestratorServer::extract_assistant_text(&msgs),
-                    Err(e) => {
-                        pre_warnings.push(format!("Failed to fetch baseline messages: {e}"));
-                        None
+            match input.action {
+                QuestionAction::Reply => {
+                    if input.answers.is_empty() {
+                        return Err(ToolError::InvalidInput(
+                            "answers is required when action=reply".into(),
+                        ));
                     }
+
+                    client
+                        .question()
+                        .reply(
+                            &question.id,
+                            &QuestionReply {
+                                answers: input.answers,
+                            },
+                        )
+                        .await
+                        .map_err(|e| {
+                            ToolError::Internal(format!("Failed to reply to question: {e}"))
+                        })?;
+
+                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_cell))
+                        .run_impl_outcome(OrchestratorRunInput {
+                            session_id: Some(input.session_id),
+                            command: None,
+                            message: None,
+                            wait_for_activity: Some(true),
+                        })
+                        .await?;
+                    Ok((outcome.output, outcome.log_meta))
                 }
-            } else {
-                None
-            };
+                QuestionAction::Reject => {
+                    client.question().reject(&question.id).await.map_err(|e| {
+                        ToolError::Internal(format!("Failed to reject question: {e}"))
+                    })?;
 
-            // Convert our reply type to API type
-            let api_reply = match input.reply {
-                PermissionReply::Once => ApiPermissionReply::Once,
-                PermissionReply::Always => ApiPermissionReply::Always,
-                PermissionReply::Reject => ApiPermissionReply::Reject,
-            };
-
-            // Send the reply
-            client
-                .permissions()
-                .reply(
-                    &perm.id,
-                    &PermissionReplyRequest {
-                        reply: api_reply,
-                        message: input.message,
-                    },
-                )
-                .await
-                .map_err(|e| ToolError::Internal(format!("Failed to reply to permission: {e}")))?;
-
-            // Now continue monitoring the session using run logic
-            let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
-            let wait_for_activity = (!is_reject).then_some(true);
-            let mut out = run_tool
-                .run_impl(OrchestratorRunInput {
-                    session_id: Some(input.session_id),
-                    command: None,
-                    message: None,
-                    wait_for_activity,
-                })
-                .await?;
-
-            // Merge pre-warnings
-            out.warnings.extend(pre_warnings);
-
-            // Apply rejection-aware output mutation
-            if is_reject && matches!(out.status, RunStatus::Completed) {
-                let final_resp = out.response.as_deref();
-                let baseline_resp = baseline.as_deref();
-
-                // If response unchanged or None, it's stale pre-rejection text
-                if final_resp.is_none() || final_resp == baseline_resp {
-                    out.response = None;
-                    let patterns_str = if permission_patterns.is_empty() {
-                        "(none)".to_string()
-                    } else {
-                        permission_patterns.join(", ")
-                    };
-                    out.warnings.push(format!(
-                        "Permission rejected for '{permission_type}'. Patterns: {patterns_str}. \
-                         Session stopped without generating a new assistant response."
-                    ));
-                    tracing::debug!(
-                        permission_type = %permission_type,
-                        "rejection override applied: response set to None"
-                    );
+                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_cell))
+                        .run_impl_outcome(OrchestratorRunInput {
+                            session_id: Some(input.session_id),
+                            command: None,
+                            message: None,
+                            wait_for_activity: None,
+                        })
+                        .await?;
+                    Ok((outcome.output, outcome.log_meta))
                 }
             }
+        }
+        .await;
 
-            Ok(out)
+            match result {
+                Ok((output, log_meta)) => {
+                    log_tool_success(&timer, Self::NAME, &request, &output, log_meta, true);
+                    Ok(output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &request, &error);
+                    Err(error)
+                }
+            }
         })
     }
 }
@@ -927,6 +1454,7 @@ pub fn build_registry(server: &Arc<OnceCell<OrchestratorServer>>) -> ToolRegistr
         .register::<ListSessionsTool, ()>(ListSessionsTool::new(Arc::clone(server)))
         .register::<ListCommandsTool, ()>(ListCommandsTool::new(Arc::clone(server)))
         .register::<RespondPermissionTool, ()>(RespondPermissionTool::new(Arc::clone(server)))
+        .register::<RespondQuestionTool, ()>(RespondQuestionTool::new(Arc::clone(server)))
         .finish()
 }
 
@@ -941,5 +1469,6 @@ mod tests {
         assert_eq!(<ListSessionsTool as Tool>::NAME, "list_sessions");
         assert_eq!(<ListCommandsTool as Tool>::NAME, "list_commands");
         assert_eq!(<RespondPermissionTool as Tool>::NAME, "respond_permission");
+        assert_eq!(<RespondQuestionTool as Tool>::NAME, "respond_question");
     }
 }

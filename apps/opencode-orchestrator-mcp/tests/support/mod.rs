@@ -4,6 +4,7 @@
 //! sequenced responders for simulating stale-then-fresh scenarios.
 
 #![allow(clippy::unwrap_used)]
+#![allow(dead_code)]
 
 use opencode_orchestrator_mcp::server::OrchestratorServer;
 use std::sync::{
@@ -192,6 +193,20 @@ pub fn permission_fixture(
         "always": [],
         "tool": null,
         "metadata": null
+    })
+}
+
+/// Create a question fixture.
+pub fn question_fixture(
+    id: &str,
+    session_id: &str,
+    questions: &[serde_json::Value],
+) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "sessionId": session_id,
+        "questions": questions,
+        "tool": null,
     })
 }
 

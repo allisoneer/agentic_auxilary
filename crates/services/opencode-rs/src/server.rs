@@ -22,8 +22,16 @@ pub struct ServerOptions {
     pub config_json: Option<String>,
     /// Startup timeout in milliseconds (default: 5000).
     pub startup_timeout_ms: u64,
-    /// Path to opencode binary.
+    /// Path to opencode binary (or launcher binary like `bunx`).
     pub binary: String,
+    /// Extra arguments inserted between the binary and `serve` command.
+    ///
+    /// Useful for launchers like `bunx` where the full command is:
+    /// `bunx --yes opencode-ai@1.3.3 serve --hostname ... --port ...`
+    ///
+    /// In this case, set `binary = "bunx"` and `launcher_args = vec!["--yes", "opencode-ai@1.3.3"]`.
+    /// The `--yes` flag makes bunx non-interactive (skips confirmation prompts).
+    pub launcher_args: Vec<String>,
 }
 
 impl Default for ServerOptions {
@@ -35,6 +43,7 @@ impl Default for ServerOptions {
             config_json: None,
             startup_timeout_ms: 5000,
             binary: "opencode".to_string(),
+            launcher_args: Vec::new(),
         }
     }
 }
@@ -86,6 +95,16 @@ impl ServerOptions {
         self.binary = binary.into();
         self
     }
+
+    /// Set extra arguments inserted between the binary and `serve` command.
+    ///
+    /// Useful for launchers like `bunx` where the full command is:
+    /// `bunx --yes opencode-ai@1.3.3 serve --hostname ... --port ...`
+    #[must_use]
+    pub fn launcher_args(mut self, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.launcher_args = args.into_iter().map(Into::into).collect();
+        self
+    }
 }
 
 /// A managed `OpenCode` server instance.
@@ -116,6 +135,12 @@ impl ManagedServer {
             .unwrap_or_else(|| portpicker::pick_unused_port().unwrap_or(4096));
 
         let mut cmd = Command::new(&opts.binary);
+
+        // Insert launcher args before 'serve' (e.g., for `bunx opencode-ai@1.3.3 serve ...`)
+        for arg in &opts.launcher_args {
+            cmd.arg(arg);
+        }
+
         cmd.arg("serve")
             .arg("--hostname")
             .arg(&opts.hostname)
@@ -246,6 +271,7 @@ mod tests {
         assert_eq!(opts.hostname, "127.0.0.1");
         assert_eq!(opts.startup_timeout_ms, 5000);
         assert_eq!(opts.binary, "opencode");
+        assert!(opts.launcher_args.is_empty());
     }
 
     #[test]
@@ -260,5 +286,33 @@ mod tests {
         assert_eq!(opts.hostname, "0.0.0.0");
         assert_eq!(opts.startup_timeout_ms, 10000);
         assert_eq!(opts.binary, "/usr/local/bin/opencode");
+        assert!(opts.launcher_args.is_empty());
+    }
+
+    #[test]
+    fn test_server_options_launcher_args() {
+        // Test bunx-style launcher: `bunx opencode-ai@1.3.3 serve ...`
+        let opts = ServerOptions::new()
+            .binary("bunx")
+            .launcher_args(["opencode-ai@1.3.3"]);
+
+        assert_eq!(opts.binary, "bunx");
+        assert_eq!(opts.launcher_args, vec!["opencode-ai@1.3.3"]);
+
+        // Test multiple launcher args
+        let opts = ServerOptions::new()
+            .binary("npx")
+            .launcher_args(["--yes", "opencode-ai@1.3.3"]);
+
+        assert_eq!(opts.binary, "npx");
+        assert_eq!(opts.launcher_args, vec!["--yes", "opencode-ai@1.3.3"]);
+    }
+
+    #[test]
+    fn test_server_options_launcher_args_from_strings() {
+        let args: Vec<String> = vec!["opencode-ai@1.3.3".to_string()];
+        let opts = ServerOptions::new().binary("bunx").launcher_args(args);
+
+        assert_eq!(opts.launcher_args, vec!["opencode-ai@1.3.3"]);
     }
 }

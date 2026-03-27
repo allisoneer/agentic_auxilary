@@ -10,7 +10,7 @@ use std::fmt::Write;
 // ============================================================================
 
 /// Input for the `run` tool.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct OrchestratorRunInput {
     /// Existing session ID to resume. Omit to create a new session.
     #[serde(default)]
@@ -41,6 +41,28 @@ pub enum RunStatus {
     Completed,
     /// Session requires permission approval before continuing
     PermissionRequired,
+    /// Session requires answers to one or more questions before continuing
+    QuestionRequired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct QuestionOptionView {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct QuestionInfoView {
+    pub question: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub header: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<QuestionOptionView>,
+    #[serde(default)]
+    pub multiple: bool,
+    #[serde(default)]
+    pub custom: bool,
 }
 
 /// Output from the `run` tool.
@@ -72,6 +94,14 @@ pub struct OrchestratorRunOutput {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub permission_patterns: Vec<String>,
 
+    /// Question request ID for responding (when `status=question_required`)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub question_request_id: Option<String>,
+
+    /// Pending question details (when `status=question_required`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub questions: Vec<QuestionInfoView>,
+
     /// Any warnings (e.g., summarization triggered)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -85,10 +115,12 @@ impl TextFormat for OrchestratorRunOutput {
         let status_icon = match self.status {
             RunStatus::Completed => "\u{2713}",          // checkmark
             RunStatus::PermissionRequired => "\u{23f8}", // pause
+            RunStatus::QuestionRequired => "?",
         };
         let status_str = match self.status {
             RunStatus::Completed => "completed",
             RunStatus::PermissionRequired => "permission_required",
+            RunStatus::QuestionRequired => "question_required",
         };
         let _ = writeln!(
             out,
@@ -120,6 +152,33 @@ impl TextFormat for OrchestratorRunOutput {
             out.push_str("  tip: include permission_request_id=<Request ID> when provided\n");
         }
 
+        if self.status == RunStatus::QuestionRequired {
+            out.push_str("\n--- Question Request ---\n");
+            if let Some(req_id) = &self.question_request_id {
+                let _ = writeln!(out, "Request ID: {req_id}");
+            }
+            for (index, question) in self.questions.iter().enumerate() {
+                if !question.header.is_empty() {
+                    let _ = writeln!(out, "Header: {}", question.header);
+                }
+                let _ = writeln!(out, "Question {}: {}", index + 1, question.question);
+                for option in &question.options {
+                    if option.description.is_empty() {
+                        let _ = writeln!(out, "  - {}", option.label);
+                    } else {
+                        let _ = writeln!(out, "  - {}: {}", option.label, option.description);
+                    }
+                }
+                let _ = writeln!(out, "  multiple: {}", question.multiple);
+                let _ = writeln!(out, "  custom: {}", question.custom);
+            }
+            out.push_str(
+                "\nTo respond: orchestrator_respond_question(session_id, action, answers)\n",
+            );
+            out.push_str("  action options: reply | reject\n");
+            out.push_str("  tip: include question_request_id=<Request ID> when provided\n");
+        }
+
         // Response content
         if let Some(response) = &self.response {
             out.push_str("\n--- Response ---\n");
@@ -140,7 +199,7 @@ impl TextFormat for OrchestratorRunOutput {
 // ============================================================================
 
 /// Input for the `list_sessions` tool.
-#[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 pub struct ListSessionsInput {
     /// Maximum number of sessions to return (default: 20)
     #[serde(default)]
@@ -189,7 +248,7 @@ impl TextFormat for ListSessionsOutput {
 // ============================================================================
 
 /// Input for the `list_commands` tool.
-#[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 pub struct ListCommandsInput {}
 
 /// Information about an available command.
@@ -239,7 +298,7 @@ impl TextFormat for ListCommandsOutput {
 // ============================================================================
 
 /// Input for the `respond_permission` tool.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct RespondPermissionInput {
     /// Session ID with pending permission
     pub session_id: String,
@@ -271,6 +330,25 @@ pub enum PermissionReply {
 
 /// Response from permission reply - same as run output since we continue monitoring.
 pub type RespondPermissionOutput = OrchestratorRunOutput;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QuestionAction {
+    Reply,
+    Reject,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct RespondQuestionInput {
+    pub session_id: String,
+    #[serde(default)]
+    pub question_request_id: Option<String>,
+    pub action: QuestionAction,
+    #[serde(default)]
+    pub answers: Vec<Vec<String>>,
+}
+
+pub type RespondQuestionOutput = OrchestratorRunOutput;
 
 // ============================================================================
 // Helpers
@@ -309,6 +387,8 @@ mod tests {
             permission_request_id: None,
             permission_type: None,
             permission_patterns: vec![],
+            question_request_id: None,
+            questions: vec![],
             warnings: vec![],
         };
 
@@ -328,6 +408,8 @@ mod tests {
             permission_request_id: Some("perm-789".into()),
             permission_type: Some("file.write".into()),
             permission_patterns: vec!["src/**/*.rs".into()],
+            question_request_id: None,
+            questions: vec![],
             warnings: vec![],
         };
 
@@ -339,6 +421,37 @@ mod tests {
         assert!(text.contains("perm-789"));
         assert!(text.contains("orchestrator_respond_permission"));
         assert!(text.contains("permission_request_id"));
+    }
+
+    #[test]
+    fn run_output_text_format_question_required() {
+        let out = OrchestratorRunOutput {
+            session_id: "sess-789".into(),
+            status: RunStatus::QuestionRequired,
+            response: None,
+            partial_response: Some("Need confirmation".into()),
+            permission_request_id: None,
+            permission_type: None,
+            permission_patterns: vec![],
+            question_request_id: Some("question-123".into()),
+            questions: vec![QuestionInfoView {
+                question: "Continue with deploy?".into(),
+                header: "Deployment".into(),
+                options: vec![QuestionOptionView {
+                    label: "yes".into(),
+                    description: "Proceed".into(),
+                }],
+                multiple: false,
+                custom: false,
+            }],
+            warnings: vec![],
+        };
+
+        let text = out.fmt_text(&TextOptions::default());
+        assert!(text.contains("question_required"));
+        assert!(text.contains("question-123"));
+        assert!(text.contains("Continue with deploy?"));
+        assert!(text.contains("orchestrator_respond_question"));
     }
 
     #[test]

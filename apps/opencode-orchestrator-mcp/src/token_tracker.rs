@@ -6,6 +6,14 @@
 use opencode_rs::types::event::Event;
 use opencode_rs::types::message::{Part, TokenUsage};
 
+fn sat_u32(value: u64) -> (u32, bool) {
+    if value > u64::from(u32::MAX) {
+        (u32::MAX, true)
+    } else {
+        (value as u32, false)
+    }
+}
+
 /// Tracks token usage during a session run to detect context limit threshold.
 #[derive(Debug, Default, Clone)]
 pub struct TokenTracker {
@@ -17,6 +25,8 @@ pub struct TokenTracker {
     pub context_limit: Option<u64>,
     /// Latest observed input token count
     pub latest_input_tokens: Option<u64>,
+    /// Latest observed full token usage
+    pub latest_tokens: Option<TokenUsage>,
     /// Flag indicating compaction/summarization is needed
     pub compaction_needed: bool,
 }
@@ -76,7 +86,34 @@ impl TokenTracker {
     /// Observe token usage and update threshold flag.
     pub fn observe_tokens(&mut self, tokens: &TokenUsage) {
         self.latest_input_tokens = Some(tokens.input);
+        self.latest_tokens = Some(tokens.clone());
         self.recompute_flag();
+    }
+
+    pub fn to_log_token_usage(&self) -> (Option<agentic_logging::TokenUsage>, bool) {
+        let Some(tokens) = &self.latest_tokens else {
+            return (None, false);
+        };
+
+        let (prompt, prompt_saturated) = sat_u32(tokens.input);
+        let (completion, completion_saturated) = sat_u32(tokens.output);
+        let total_raw = tokens
+            .total
+            .unwrap_or_else(|| tokens.input.saturating_add(tokens.output));
+        let (total, total_saturated) = sat_u32(total_raw);
+        let (reasoning, reasoning_saturated) = sat_u32(tokens.reasoning);
+        let saturated =
+            prompt_saturated || completion_saturated || total_saturated || reasoning_saturated;
+
+        (
+            Some(agentic_logging::TokenUsage {
+                prompt,
+                completion,
+                total,
+                reasoning_tokens: (tokens.reasoning > 0).then_some(reasoning),
+            }),
+            saturated,
+        )
     }
 
     /// Recompute the `compaction_needed` flag based on current state.
@@ -105,6 +142,7 @@ impl TokenTracker {
     pub fn reset_after_compaction(&mut self) {
         self.compaction_needed = false;
         self.latest_input_tokens = None;
+        self.latest_tokens = None;
     }
 
     /// Get the current usage ratio (0.0 to 1.0+).
@@ -300,5 +338,47 @@ mod tests {
         // Should NOT trigger because context_limit is None
         assert!(!tracker.compaction_needed);
         assert_eq!(tracker.context_limit, None);
+    }
+
+    #[test]
+    fn to_log_token_usage_preserves_values_without_saturation() {
+        let mut tracker = TokenTracker::new();
+        tracker.observe_tokens(&TokenUsage {
+            total: Some(30),
+            input: 10,
+            output: 20,
+            reasoning: 5,
+            cache: None,
+            extra: serde_json::Value::Null,
+        });
+
+        let (usage, saturated) = tracker.to_log_token_usage();
+        let usage = usage.expect("usage should be present");
+        assert!(!saturated);
+        assert_eq!(usage.prompt, 10);
+        assert_eq!(usage.completion, 20);
+        assert_eq!(usage.total, 30);
+        assert_eq!(usage.reasoning_tokens, Some(5));
+    }
+
+    #[test]
+    fn to_log_token_usage_saturates_large_values() {
+        let mut tracker = TokenTracker::new();
+        tracker.observe_tokens(&TokenUsage {
+            total: Some(u64::MAX),
+            input: u64::MAX,
+            output: u64::MAX,
+            reasoning: u64::MAX,
+            cache: None,
+            extra: serde_json::Value::Null,
+        });
+
+        let (usage, saturated) = tracker.to_log_token_usage();
+        let usage = usage.expect("usage should be present");
+        assert!(saturated);
+        assert_eq!(usage.prompt, u32::MAX);
+        assert_eq!(usage.completion, u32::MAX);
+        assert_eq!(usage.total, u32::MAX);
+        assert_eq!(usage.reasoning_tokens, Some(u32::MAX));
     }
 }

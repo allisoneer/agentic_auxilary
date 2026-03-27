@@ -18,7 +18,7 @@ family = "agentic-tools"
 
 [package.metadata.repo.integrations]
 mcp = true
-logging = false
+logging = true
 napi = false
 
 [[bin]]
@@ -27,13 +27,16 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+agentic_logging = { path = "../../crates/infra/agentic-logging" }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
+chrono = { workspace = true }
 futures = "0.3"
 opencode_rs = { workspace = true, features = ["server"] }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+thoughts-tool = { path = "../../crates/infra/thoughts-core" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "sync"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -45,6 +48,7 @@ rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] 
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+tempfile = "3"
 wiremock = "0.6"
 tokio = { workspace = true, features = ["test-util"] }
 

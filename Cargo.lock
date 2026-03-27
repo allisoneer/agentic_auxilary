@@ -4150,7 +4150,9 @@ version = "0.1.2"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
+ "agentic_logging",
  "anyhow",
+ "chrono",
  "futures",
  "opencode-orchestrator-mcp",
  "opencode_rs",
@@ -4159,6 +4161,8 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "tempfile",
+ "thoughts-tool",
  "tokio",
  "tracing",
  "tracing-subscriber",

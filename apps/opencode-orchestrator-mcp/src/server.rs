@@ -10,6 +10,8 @@ use opencode_rs::types::provider::ProviderListResponse;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::version;
+
 /// Environment variable name for the orchestrator-managed recursion guard.
 pub const OPENCODE_ORCHESTRATOR_MANAGED_ENV: &str = "OPENCODE_ORCHESTRATOR_MANAGED";
 
@@ -110,25 +112,48 @@ impl OrchestratorServer {
 
     /// Internal implementation that actually spawns the server.
     async fn start_impl() -> anyhow::Result<Self> {
-        let managed = ManagedServer::start(ServerOptions::default())
+        let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
+        let launcher_config = version::resolve_launcher_config(&cwd)
+            .context("Failed to resolve OpenCode launcher configuration")?;
+
+        tracing::info!(
+            binary = %launcher_config.binary,
+            launcher_args = ?launcher_config.launcher_args,
+            expected_version = %version::PINNED_OPENCODE_VERSION,
+            "starting embedded opencode serve (pinned stable)"
+        );
+
+        let opts = ServerOptions::default()
+            .binary(&launcher_config.binary)
+            .launcher_args(launcher_config.launcher_args)
+            .directory(cwd.clone());
+
+        let managed = ManagedServer::start(opts)
             .await
             .context("Failed to start embedded `opencode serve`")?;
 
         // Avoid trailing slash to prevent `//event` formatting
         let base_url = managed.url().to_string().trim_end_matches('/').to_string();
 
-        let directory = std::env::current_dir()
-            .ok()
-            .map(|p| p.to_string_lossy().to_string());
-
-        let mut builder = Client::builder().base_url(&base_url);
-        if let Some(dir) = &directory {
-            builder = builder.directory(dir.clone());
-        }
-
-        let client = builder
+        let client = Client::builder()
+            .base_url(&base_url)
+            .directory(cwd.to_string_lossy().to_string())
             .build()
             .context("Failed to build opencode-rs HTTP client")?;
+
+        let health = client
+            .misc()
+            .health()
+            .await
+            .context("Failed to fetch /global/health for version validation")?;
+
+        version::validate_exact_version(health.version.as_deref()).with_context(|| {
+            format!(
+                "Embedded OpenCode server did not match pinned stable v{} (binary={})",
+                version::PINNED_OPENCODE_VERSION,
+                launcher_config.binary
+            )
+        })?;
 
         // Load model context limits (best-effort, don't fail if unavailable)
         let model_context_limits = Self::load_model_limits(&client).await.unwrap_or_else(|e| {
