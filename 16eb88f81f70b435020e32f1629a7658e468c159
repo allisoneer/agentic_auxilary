@@ -1,0 +1,29 @@
+apps/opencode-orchestrator-mcp/src/version.rs
+  b55a1d72254c89bb 90-94
+.github/workflows/ci.yml
+  b55a1d72254c89bb 17,101
+apps/opencode-orchestrator-mcp/src/logging.rs
+  b55a1d72254c89bb 59-62,66-71,98-101,125-128
+apps/opencode-orchestrator-mcp/justfile
+  b55a1d72254c89bb 45,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "16eb88f81f70b435020e32f1629a7658e468c159",
+  "prompts": {
+    "b55a1d72254c89bb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2cfa6ab2cffeyN3UGEX81xQvNq",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 27,
+      "total_deletions": 6,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    }
+  }
+}
