@@ -1,0 +1,23 @@
+apps/opencode-orchestrator-mcp/src/token_tracker.rs
+  29327425711847af 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "e7f88f26a2fb53addfae1e3191367f75f9aa798f",
+  "prompts": {
+    "29327425711847af": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d021cbd2ffex7pw0UPm3QbH0H",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
