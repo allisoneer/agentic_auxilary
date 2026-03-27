@@ -3,9 +3,20 @@
 //! This binary exposes all 19+ tools from the various domain crates through a single
 //! MCP stdio server, with optional allowlist filtering.
 
-use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
-use agentic_tools_registry::{AgenticTools, AgenticToolsConfig};
+#[cfg(not(unix))]
+compile_error!(
+    "agentic-mcp only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
+use agentic_config::loader::load_merged;
+use agentic_tools_mcp::OutputMode;
+use agentic_tools_mcp::RegistryServer;
+use agentic_tools_mcp::ServiceExt;
+use agentic_tools_mcp::stdio;
+use agentic_tools_registry::AgenticTools;
+use agentic_tools_registry::AgenticToolsConfig;
 use clap::Parser;
+use colored::Colorize;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs;
@@ -15,13 +26,13 @@ use std::sync::Arc;
 #[command(name = "agentic-mcp")]
 #[command(about = "Unified MCP server for all agentic-tools", version)]
 struct Args {
-    /// Comma-separated allowlist (case-insensitive). Example: cli_ls,cli_grep,ask_reasoning_model
+    /// Comma-separated allowlist (case-insensitive). Example: `cli_ls,cli_grep,ask_reasoning_model`
     #[arg(long, value_name = "NAMES")]
     allow: Option<String>,
 
-    /// JSON config file path (supports { "allowlist": ["cli_ls", "cli_grep"] })
-    #[arg(long, value_name = "PATH")]
-    config: Option<String>,
+    /// JSON config file path for server settings (allowlist/output)
+    #[arg(long = "server-config", value_name = "PATH")]
+    server_config: Option<String>,
 
     /// List available tools and exit
     #[arg(long)]
@@ -34,31 +45,31 @@ struct Args {
     // Convenience flags for individual tool filtering
     // TODO(3): Probably don't need these convenience flags. They are kinda archaic for the old
     // agentic-tools setup. We likely can remove them after ensuring no one else uses them.
-    /// Enable cli_ls tool
+    /// Enable `cli_ls` tool
     #[arg(long)]
     cli_ls: bool,
 
-    /// Enable ask_agent tool
+    /// Enable `ask_agent` tool
     #[arg(long)]
     ask_agent: bool,
 
-    /// Enable cli_grep tool
+    /// Enable `cli_grep` tool
     #[arg(long)]
     cli_grep: bool,
 
-    /// Enable cli_instant_grep tool
+    /// Enable `cli_instant_grep` tool
     #[arg(long)]
     cli_instant_grep: bool,
 
-    /// Enable cli_glob tool
+    /// Enable `cli_glob` tool
     #[arg(long)]
     cli_glob: bool,
 
-    /// Enable cli_just_search tool
+    /// Enable `cli_just_search` tool
     #[arg(long)]
     cli_just_search: bool,
 
-    /// Enable cli_just_execute tool
+    /// Enable `cli_just_execute` tool
     #[arg(long)]
     cli_just_execute: bool,
 }
@@ -70,10 +81,10 @@ struct FileConfig {
 }
 
 fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
-    // Parse --config if provided
+    // Parse server config if provided
     let mut allowlist: Option<HashSet<String>> = None;
     let mut file_output: Option<String> = None;
-    if let Some(path) = &args.config {
+    if let Some(path) = args.server_config.as_deref() {
         match fs::read_to_string(path) {
             Ok(s) => {
                 if let Ok(fc) = serde_json::from_str::<FileConfig>(&s) {
@@ -84,7 +95,7 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to read config file: {}; ignoring", e);
+                eprintln!("Warning: Failed to read config file: {e}; ignoring");
             }
         }
     }
@@ -132,7 +143,7 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
     (
         AgenticToolsConfig {
             allowlist,
-            extras: serde_json::json!({}),
+            ..Default::default()
         },
         file_output,
     )
@@ -150,24 +161,40 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    let (cfg, file_output) = parse_config(&args);
-    let reg = AgenticTools::new(cfg);
+    // Load agentic.toml for tool-specific config (subagents, reasoning)
+    let cwd = std::env::current_dir()?;
+    let loaded = load_merged(&cwd)?;
+
+    // Print config warnings
+    for w in &loaded.warnings {
+        eprintln!("{} {}", "WARN".yellow(), w);
+    }
+
+    // Parse server config (allowlist, output mode)
+    let (mut reg_cfg, file_output) = parse_config(&args);
+
+    // Attach tool config sections from agentic.toml
+    reg_cfg.subagents = loaded.config.subagents.clone();
+    reg_cfg.reasoning = loaded.config.reasoning.clone();
+    reg_cfg.web_retrieval = loaded.config.web_retrieval.clone();
+    reg_cfg.cli_tools = loaded.config.cli_tools.clone();
+    reg_cfg.exa = loaded.config.services.exa.clone();
+    reg_cfg.anthropic = loaded.config.services.anthropic.clone();
+
+    let reg = AgenticTools::new(reg_cfg);
 
     if args.list_tools {
         let mut names = reg.list_names();
         names.sort();
         eprintln!("Available tools ({}):", names.len());
         for n in names {
-            eprintln!("  - {}", n);
+            eprintln!("  - {n}");
         }
         return Ok(());
     }
 
     let output_mode = match (args.output.as_deref(), file_output.as_deref()) {
-        (Some("structured"), _) => OutputMode::Structured,
-        (Some("text"), _) => OutputMode::Text,
-        (None, Some("structured")) => OutputMode::Structured,
-        (None, Some("text")) => OutputMode::Text,
+        (Some("structured"), _) | (None, Some("structured")) => OutputMode::Structured,
         _ => OutputMode::Text, // default
     };
 

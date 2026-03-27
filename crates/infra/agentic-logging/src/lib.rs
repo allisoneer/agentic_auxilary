@@ -6,13 +6,16 @@
 //! - Daily bucket organization
 //! - Disable via `AGENTIC_LOGGING_DISABLED=1` environment variable
 
-use atomicwrites::{AtomicFile, OverwriteBehavior};
-use chrono::{DateTime, Utc};
+use atomicwrites::AtomicFile;
+use atomicwrites::OverwriteBehavior;
+use chrono::DateTime;
+use chrono::Utc;
 
 // Re-export chrono types for downstream crates
 pub use chrono;
 use fd_lock::RwLock;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;

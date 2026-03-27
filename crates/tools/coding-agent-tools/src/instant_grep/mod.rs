@@ -11,11 +11,13 @@ pub mod index;
 pub mod overlay;
 pub mod planner;
 
-use crate::grep::{self, GrepConfig};
+use crate::grep::GrepConfig;
+use crate::grep::{self};
 use crate::types::GrepOutput;
 use agentic_tools_core::ToolError;
 use git2::Repository;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use thoughts_tool::git::utils::find_repo_root;
 
 pub const INDEX_FORMAT_VERSION: u32 = 1;

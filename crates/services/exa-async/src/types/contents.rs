@@ -1,8 +1,11 @@
 //! Types for the Exa `/contents` endpoint
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::common::{ContentsOptions, LivecrawlOption, SearchResult};
+use super::common::ContentsOptions;
+use super::common::LivecrawlOption;
+use super::common::SearchResult;
 
 /// Request body for `POST /contents`
 #[derive(Debug, Clone, Serialize, Deserialize)]

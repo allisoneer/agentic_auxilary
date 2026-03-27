@@ -2,7 +2,8 @@
 //!
 //! Provides utilities for replacing content within BEGIN/END marker blocks.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use regex::Regex;
 
 /// Replace content within a named autogen block.

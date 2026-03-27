@@ -1,0 +1,124 @@
+# Example agentic.toml configuration
+# Copy to agentic.toml and customize as needed
+#
+# Configuration precedence (lowest to highest):
+# 1. Default values (shown below)
+# 2. Global config (~/.config/agentic/agentic.toml)
+# 3. Local config (./agentic.toml)
+# 4. Environment variables
+#
+# Generate JSON Schema for IDE support:
+#   agentic config schema > agentic.schema.json
+#
+# "$schema" = "file://./agentic.schema.json"
+
+# =============================================================================
+# Subagents - Models for ask_agent tool
+# =============================================================================
+[subagents]
+# Model for Locator subagent (fast discovery). Uses Claude CLI format.
+locator_model = "claude-haiku-4-5"
+# Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
+analyzer_model = "claude-sonnet-4-6"
+
+# =============================================================================
+# Reasoning - Models for ask_reasoning_model tool
+# =============================================================================
+[reasoning]
+# OpenRouter model ID for optimizer step
+optimizer_model = "anthropic/claude-sonnet-4.6"
+# OpenRouter model ID for executor/reasoner step
+executor_model = "openai/gpt-5.2"
+# Optional reasoning effort level: low, medium, high, xhigh
+# reasoning_effort = "high"
+
+# =============================================================================
+# Orchestrator - Session and timing configuration
+# =============================================================================
+[orchestrator]
+# Maximum session duration in seconds (default: 3600 = 1 hour)
+session_deadline_secs = 3600
+# Inactivity timeout in seconds before session ends (default: 300 = 5 minutes)
+inactivity_timeout_secs = 300
+# Context compaction threshold as fraction 0.0-1.0 (default: 0.80)
+compaction_threshold = 0.80
+
+# =============================================================================
+# Web Retrieval - Configuration for web_fetch and web_search tools
+# =============================================================================
+[web_retrieval]
+# HTTP request timeout in seconds
+request_timeout_secs = 30
+# Default maximum bytes to fetch (5MB)
+default_max_bytes = 5242880
+# Default number of search results
+default_search_results = 8
+# Maximum number of search results allowed
+max_search_results = 20
+
+[web_retrieval.summarizer]
+# Model for Haiku-based summarization
+model = "claude-haiku-4-5"
+# Maximum tokens for summary output
+max_tokens = 300
+# Temperature for summary generation
+temperature = 0.2
+
+# =============================================================================
+# CLI Tools - Configuration for grep, glob, ls tools
+# =============================================================================
+[cli_tools]
+# Default page size for ls results
+ls_page_size = 100
+# Default head_limit for grep results
+grep_default_limit = 200
+# Default head_limit for glob results
+glob_default_limit = 500
+# Maximum directory traversal depth
+max_depth = 10
+# Pagination cache TTL in seconds
+pagination_cache_ttl_secs = 300
+# Additional ignore patterns (appended to builtin ignores)
+extra_ignore_patterns = []
+
+# =============================================================================
+# Services - External API configurations
+# =============================================================================
+[services.anthropic]
+base_url = "https://api.anthropic.com"
+connect_timeout_secs = 5
+request_timeout_secs = 600
+# api_key is set via ANTHROPIC_API_KEY environment variable (never in config)
+
+[services.exa]
+base_url = "https://api.exa.ai"
+# api_key is set via EXA_API_KEY environment variable (never in config)
+
+[services.opencode]
+base_url = "http://127.0.0.1:4096"
+request_timeout_secs = 1800
+# api_key is set via OPENCODE_API_KEY environment variable (never in config)
+
+[services.linear]
+base_url = "https://api.linear.app/graphql"
+connect_timeout_secs = 10
+request_timeout_secs = 30
+default_page_size = 50
+# api_key is set via LINEAR_API_KEY environment variable (never in config)
+
+[services.github]
+base_url = "https://api.github.com"
+connect_timeout_secs = 10
+request_timeout_secs = 30
+cache_ttl_secs = 300
+ai_reply_prefix = "[AI] "
+# token is set via GITHUB_TOKEN environment variable (never in config)
+
+# =============================================================================
+# Logging - Diagnostics configuration
+# =============================================================================
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+# Enable JSON-formatted logs
+json = false

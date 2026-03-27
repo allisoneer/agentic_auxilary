@@ -13,7 +13,11 @@ crate-type = ["cdylib"]
 agentic-tools-core = { workspace = true }
 agentic-tools-registry = { workspace = true }
 
-napi = { version = "2", default-features = false, features = ["napi6", "tokio_rt", "serde-json"] }
+napi = { version = "2", default-features = false, features = [
+  "napi6",
+  "tokio_rt",
+  "serde-json",
+] }
 napi-derive = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }

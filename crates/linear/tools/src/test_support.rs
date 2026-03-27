@@ -78,7 +78,8 @@ impl Drop for EnvGuard {
 // JSON fixture builders for integration tests
 // ============================================================================
 
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 
 pub fn user_node(id: &str, name: &str, display_name: &str, email: &str) -> Value {
     json!({ "id": id, "name": name, "displayName": display_name, "email": email })

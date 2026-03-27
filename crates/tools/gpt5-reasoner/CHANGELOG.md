@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.8.0] - 2026-03-26
+## [0.7.2] - 2026-03-26
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: thoughts-tool
+## [0.7.1] - 2026-03-26
+
+### 🚜 Refactor
+- *(policy)* Reserve mcp=true for runtime MCP server apps only
 ## [0.7.0] - 2026-03-10
 
 ### ⚙️  Miscellaneous

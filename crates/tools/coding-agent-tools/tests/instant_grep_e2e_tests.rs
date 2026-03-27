@@ -5,7 +5,8 @@
 use coding_agent_tools::CodingAgentTools;
 use coding_agent_tools::instant_grep::index::storage::resolve_index_paths;
 use coding_agent_tools::types::OutputMode;
-use git2::{Repository, Signature};
+use git2::Repository;
+use git2::Signature;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;

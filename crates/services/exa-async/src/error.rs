@@ -1,5 +1,6 @@
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use thiserror::Error;
 
 /// Errors that can occur when using the Exa API client

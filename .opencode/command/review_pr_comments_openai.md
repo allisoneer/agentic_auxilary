@@ -62,7 +62,7 @@ $ARGUMENTS
 
 1. Prefer auto-detection by calling `tools_gh_get_comments` without `pr_number` first.
 2. If auto-detection fails or the user specified a PR number, use that explicit PR.
-3. If the PR is still unknown, call `tools_gh_get_prs`, present the candidates, and ask the user to choose.
+3. If the PR is still unknown, call `tools_gh_get_prs`, follow the tool-visible pagination cues if more results remain, stop when the tool says completion, then present the candidates and ask the user to choose.
 4. Treat GitHub tool output as the authoritative source for PR identification and PR metadata in this workflow.
 
 </step_2>
@@ -75,15 +75,25 @@ $ARGUMENTS
    - `comment_source_type` from intent (`all` by default)
    - `include_resolved` from intent (`false` by default)
    - `pr_number` from Step 2
-2. Handle pagination by repeating the same request until no more threads are returned.
-3. For each thread, capture:
-   - thread ID (parent comment ID)
-   - file path and line
-   - `html_url`
-   - author metadata (`login`, `is_bot`)
-   - ordered replies with authors and bodies
-4. If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
-5. If no matching threads exist, continue through artifact writing with a grounded `no unresolved comments` summary.
+2. Handle pagination by repeating the same request only while the tool output says more results remain.
+3. Stop immediately when the tool output says the result is complete.
+   - Do not call again after completion, because another identical call restarts pagination from page 1.
+4. For each thread, capture:
+    - thread_id (parent comment ID)
+    - file path and line
+    - top-level thread URL
+    - ordered thread comments (parent first, then replies), each with:
+      - comment_id (numeric ID if present in tool output; parent comment_id == thread_id)
+      - author_login
+      - body
+    - If per-comment IDs are not visible (e.g., `PR_COMMENTS_EXTRAS=noid`), keep reply comment_id unknown and rely on the Step 6 fallback; do NOT guess IDs.
+5. Also capture PR metadata from the tool output:
+    - owner/repo
+    - PR number
+    - PR URL
+6. Treat reply URLs, bot markers, dates, and review IDs as optional extras only when the tool output includes them.
+7. If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
+8. If no matching threads exist, continue through artifact writing with a grounded `no unresolved comments` summary.
 
 </step_3>
 
@@ -125,7 +135,7 @@ $ARGUMENTS
    - why it matters
    - a proposed resolution path
    - a `reply_draft` if the thread is reply-worthy — do NOT include a `🤖` or bot-marker prefix
-   - the best target comment ID for a future reply
+   - the best target comment ID for a future reply (prefer the last comment_id in the provided thread; if per-comment IDs are missing or unavailable, set `target_comment_id = thread_id` and explicitly note the limitation — do NOT guess)
 3. Launch independent thread analyzers in parallel.
 
 </step_6>

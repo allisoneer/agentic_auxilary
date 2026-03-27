@@ -1,4 +1,5 @@
-use crate::config::{RepoConfigManager, RepoMappingManager};
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
 use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;
@@ -22,8 +23,9 @@ pub async fn execute() -> Result<()> {
     for rm in &ds.references {
         let (org, repo) = crate::config::extract_org_repo_from_url(&rm.remote)
             .unwrap_or_else(|_| ("unknown".to_string(), rm.remote.clone()));
+        let ref_name = rm.ref_name.as_deref();
 
-        let status = if let Ok(Some(_)) = mapping_mgr.resolve_url(&rm.remote) {
+        let status = if let Ok(Some(_)) = mapping_mgr.resolve_reference_url(&rm.remote, ref_name) {
             "✓ cloned".green()
         } else {
             "✗ not cloned".red()
@@ -31,6 +33,9 @@ pub async fn execute() -> Result<()> {
 
         println!("  - {}/{} ({})", org, repo, status);
         println!("    {}", rm.remote.dimmed());
+        if let Some(ref_name) = &rm.ref_name {
+            println!("    ref: {}", ref_name.dimmed());
+        }
         if let Some(desc) = &rm.description {
             println!("      {}", desc.dimmed());
         }

@@ -1,9 +1,8 @@
-use crate::{
-    client::Client,
-    config::Config,
-    error::ExaError,
-    types::search::{SearchRequest, SearchResponse},
-};
+use crate::client::Client;
+use crate::config::Config;
+use crate::error::ExaError;
+use crate::types::search::SearchRequest;
+use crate::types::search::SearchResponse;
 
 /// API resource for the `/search` endpoint
 pub struct Search<'c, C: Config> {

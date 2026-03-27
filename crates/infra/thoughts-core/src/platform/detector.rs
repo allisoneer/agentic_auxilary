@@ -1,7 +1,9 @@
 use crate::error::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {

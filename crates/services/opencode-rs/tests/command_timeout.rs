@@ -5,8 +5,11 @@
 use opencode_rs::ClientBuilder;
 use opencode_rs::types::message::CommandRequest;
 use std::time::Duration;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 /// Verify that the default client timeout allows a slow command response.
 #[tokio::test]

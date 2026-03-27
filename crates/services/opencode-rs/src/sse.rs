@@ -4,13 +4,16 @@
 
 use crate::error::Result;
 use crate::types::event::Event;
-use backon::{BackoffBuilder, ExponentialBuilder};
+use backon::BackoffBuilder;
+use backon::ExponentialBuilder;
 use futures::StreamExt;
 use reqwest::Client as ReqClient;
-use reqwest_eventsource::{Event as EsEvent, EventSource};
+use reqwest_eventsource::Event as EsEvent;
+use reqwest_eventsource::EventSource;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 /// Options for SSE subscription.

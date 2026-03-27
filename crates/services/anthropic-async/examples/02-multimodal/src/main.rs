@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let req = MessagesCreateRequest {
-        model: "claude-3-5-sonnet-20241022".into(),
+        model: "claude-sonnet-4-6".into(),
         max_tokens: 1024,
         messages: vec![MessageParam {
             role: MessageRole::User,

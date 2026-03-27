@@ -4,7 +4,8 @@
 //! and capabilities. This is useful for validating SDK compatibility with the
 //! installed CLI version.
 
-use crate::error::{ClaudeError, Result};
+use crate::error::ClaudeError;
+use crate::error::Result;
 use std::collections::HashSet;
 use std::path::Path;
 use std::process::Stdio;

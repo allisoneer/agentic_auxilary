@@ -6,7 +6,10 @@
 //! - `list_commands` - discover available `OpenCode` commands
 //! - `respond_permission` - reply to permission requests
 
-use agentic_tools_mcp::{OutputMode, RegistryServer, ServiceExt, stdio};
+use agentic_tools_mcp::OutputMode;
+use agentic_tools_mcp::RegistryServer;
+use agentic_tools_mcp::ServiceExt;
+use agentic_tools_mcp::stdio;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 

@@ -65,10 +65,12 @@ build:
     {{ exec }}cargo build --workspace
 
 fmt:
-    {{ exec }}cargo fmt --all
+    {{ exec }}cargo +nightly fmt --all
+    {{ exec }}taplo fmt
 
 fmt-check:
-    {{ exec }}cargo fmt --all -- --check
+    {{ exec }}cargo +nightly fmt --all -- --check
+    {{ exec }}taplo fmt --check
 
 # Security audit with cargo-deny
 deny:
@@ -80,7 +82,7 @@ fmt-check-just:
 
 # Per-crate commands
 crate-check crate:
-    {{ exec }}cargo fmt -p {{ crate }} -- --check
+    {{ exec }}cargo +nightly fmt -p {{ crate }} -- --check
     {{ exec }}cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
 crate-test crate:
@@ -88,6 +90,9 @@ crate-test crate:
 
 crate-build crate:
     {{ exec }}cargo build -p {{ crate }}
+
+crate-run crate:
+    cargo run -p {{ crate }}
 
 # xtask commands
 
@@ -111,6 +116,10 @@ thoughts_sync:
 # Copy a file
 cp src dst:
     {{ exec }}cp "{{ src }}" "{{ dst }}"
+
+# Remove a file
+rm path:
+    rm -f "{{ path }}"
 
 # Create a directory (with parents)
 mkdir path:
@@ -307,7 +316,7 @@ git-show ref path="":
       git --no-pager show "${REF}:${P}" || true
     fi
 
-# git-files: List tracked files, optionally filtered by pathspec patterns (quote paths with spaces).
+# git-files: List tracked files, optionally filtered by whitespace-separated git pathspec patterns (paths containing spaces not supported).
 git-files patterns="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -317,7 +326,17 @@ git-files patterns="":
       exit 0
     fi
 
+    # Disable glob expansion so patterns are passed literally to git
+    set -f
     git --no-pager ls-files -- {{ patterns }}
+
+# ------------------------------------------------------------------------------
+# Schema Generation
+# ------------------------------------------------------------------------------
+
+# Generate agentic.schema.json from Rust types
+schema-generate:
+    cargo run -p agentic-bin -- config schema > agentic.schema.json
 
 # ------------------------------------------------------------------------------
 # MCP Inspector Recipes

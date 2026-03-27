@@ -1,12 +1,18 @@
 use derive_builder::Builder;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::common::{Metadata, Usage};
-use super::content::{
-    ContentBlock, ContentBlockConversionError, ContentBlockParam, MessageContentParam,
-    MessageParam, MessageRole, SystemParam,
-};
-use super::tools::{Tool, ToolChoice};
+use super::common::Metadata;
+use super::common::Usage;
+use super::content::ContentBlock;
+use super::content::ContentBlockConversionError;
+use super::content::ContentBlockParam;
+use super::content::MessageContentParam;
+use super::content::MessageParam;
+use super::content::MessageRole;
+use super::content::SystemParam;
+use super::tools::Tool;
+use super::tools::ToolChoice;
 
 /// Output format for structured outputs (beta)
 ///
@@ -291,12 +297,13 @@ pub struct MessageTokensCountResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::content::{ContentBlockParam, MessageContentParam};
+    use crate::types::content::ContentBlockParam;
+    use crate::types::content::MessageContentParam;
 
     #[test]
     fn message_request_ser() {
         let req = MessagesCreateRequest {
-            model: "claude-3-5-sonnet-20241022".into(),
+            model: "claude-sonnet-4-6".into(),
             max_tokens: 128,
             messages: vec![MessageParam {
                 role: MessageRole::User,
@@ -305,7 +312,7 @@ mod tests {
             ..Default::default()
         };
         let s = serde_json::to_string(&req).unwrap();
-        assert!(s.contains(r#""model":"claude-3-5-sonnet-20241022""#));
+        assert!(s.contains(r#""model":"claude-sonnet-4-6""#));
         assert!(s.contains(r#""max_tokens":128"#));
         assert!(s.contains(r#""Hello""#));
         // Optional fields should not appear when None
@@ -318,7 +325,7 @@ mod tests {
     #[test]
     fn message_request_with_system_string() {
         let req = MessagesCreateRequest {
-            model: "claude-3-5-sonnet-20241022".into(),
+            model: "claude-sonnet-4-6".into(),
             max_tokens: 128,
             system: Some("You are helpful".into()),
             messages: vec![MessageParam {
@@ -334,7 +341,7 @@ mod tests {
     #[test]
     fn message_request_with_blocks() {
         let req = MessagesCreateRequest {
-            model: "claude-3-5-sonnet-20241022".into(),
+            model: "claude-sonnet-4-6".into(),
             max_tokens: 128,
             messages: vec![MessageParam {
                 role: MessageRole::User,
@@ -586,7 +593,8 @@ mod tests {
 
     #[test]
     fn try_into_message_param_fails_on_unknown_block() {
-        use crate::types::content::{ContentBlock, ContentBlockConversionError};
+        use crate::types::content::ContentBlock;
+        use crate::types::content::ContentBlockConversionError;
 
         let response = MessagesCreateResponse {
             id: "msg_789".into(),

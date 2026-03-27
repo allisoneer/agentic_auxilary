@@ -5,8 +5,10 @@
 
 mod server;
 
-pub use server::{OutputMode, RegistryServer};
+pub use server::OutputMode;
+pub use server::RegistryServer;
 
 // Re-export rmcp types for convenience
+pub use rmcp::ServerHandler;
+pub use rmcp::service::ServiceExt;
 pub use rmcp::transport::stdio;
-pub use rmcp::{ServerHandler, service::ServiceExt};

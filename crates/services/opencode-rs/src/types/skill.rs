@@ -2,7 +2,8 @@
 //!
 //! Types for skills (reusable prompt templates/workflows).
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A skill definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,17 +1,27 @@
 //! Immutable instant-grep index builder.
 
-use super::format::{IndexMeta, LookupEntry};
-use super::storage::{GenerationPaths, resolve_index_paths};
-use crate::instant_grep::grams::{GramKey, all_grams};
+use super::format::IndexMeta;
+use super::format::LookupEntry;
+use super::storage::GenerationPaths;
+use super::storage::resolve_index_paths;
+use crate::instant_grep::grams::GramKey;
+use crate::instant_grep::grams::all_grams;
 use crate::walker;
-use anyhow::{Context, Result, bail};
-use git2::{ObjectType, Oid, Repository, Tree};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use git2::ObjectType;
+use git2::Oid;
+use git2::Repository;
+use git2::Tree;
 use globset::GlobSet;
 use ignore::WalkBuilder;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use thoughts_tool::utils::locks::FileLock;
 
 fn is_hidden_path(rel_path: &str) -> bool {
@@ -285,7 +295,8 @@ pub fn build_index_for_head(repo_root: &Path, head_oid: &str) -> Result<Generati
 #[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use git2::{Repository, Signature};
+    use git2::Repository;
+    use git2::Signature;
     use tempfile::TempDir;
 
     fn commit_file(

@@ -53,12 +53,12 @@ pr_comments list-prs --state open
 
 ## Pagination
 
-Comments are paginated at the thread level. Default page size is 10 threads. Configure via:
+Comments and PR lists use implicit same-parameter pagination in MCP mode. Default page size is 10 entries. Configure via:
 ```bash
 export PR_COMMENTS_PAGE_SIZE=20
 ```
 
-In MCP mode, repeated calls with the same parameters return the next page. Cache expires after 5 minutes.
+In MCP mode, repeated calls with the same parameters return the next page while the tool output says more results remain. When the tool output says completion, stop there — another identical call restarts from page 1. Cache expires after 5 minutes.
 
 ## Architecture Notes
 - GraphQL query runs only when filtering resolved comments (performance optimization)
@@ -84,22 +84,30 @@ The pr_comments MCP tool supports token-efficient text formatting. Set `PR_COMME
 export PR_COMMENTS_EXTRAS="id,url,dates,review,counts,author"
 ```
 
-**Default behavior** (no env var set): Minimal output with essential fields (user, path, line, body) plus comment IDs.
+**Default behavior** (no env var set): Lean output with PR metadata, pagination state, top-level thread URLs, essential comment fields, and comment IDs. Reply URLs remain optional.
 
 ### MCP Tool Output Formats
 
 **get_comments**: Returns grouped review comments by file path with format:
 ```
-Review comments:
+Review comments for owner/repo#123:
+PR: https://github.com/owner/repo/pull/123
+Threads shown: 1 of 2
 Legend: L = old (LEFT), R = new (RIGHT), - = unknown
 
 src/lib.rs
   [12 R] alice #12345678
     Can you add error handling here?
+    Thread: https://github.com/owner/repo/pull/123#discussion_r12345678
     ↳ [12 R] bob #12345680
       Done, added Result<>
-  [42 L] charlie #12345681
-    This should use Result<>
+
+(more results — showing 1 of 2 threads; call gh_get_comments again with same params for next page)
+```
+
+Final page example:
+```
+(complete — showing 2 of 2 threads; stop here; another identical gh_get_comments call restarts from page 1)
 ```
 
 **add_comment_reply**: Returns the created comment:
@@ -109,18 +117,24 @@ src/lib.rs [12 R] ai-bot #22334455
   AI response: Thanks for the feedback!
 ```
 
-**list_prs**: Returns compact PR list:
+**list_prs**: Returns compact PR list with visible pagination state:
 ```
-Pull requests:
+Pull requests for owner/repo (state=open):
+PRs shown: 2 of 3
 #683 open — Implement llm2 framework
-#682 closed — Fix schema validation bug
+#682 open — Fix schema validation bug
+
+(more results — showing 2 of 3 pull requests; call gh_get_prs again with same params for next page)
 ```
 
 With `PR_COMMENTS_EXTRAS="author,counts"`:
 ```
-Pull requests:
+Pull requests for owner/repo (state=open):
+PRs shown: 2 of 2
 #683 open — Implement llm2 framework (by alice) [comments=4, review_comments=11]
-#682 closed — Fix schema validation bug (by bob) [comments=2, review_comments=3]
+#682 open — Fix schema validation bug (by bob) [comments=2, review_comments=3]
+
+(complete — showing 2 of 2 pull requests; stop here; another identical gh_get_prs call restarts from page 1)
 ```
 
 ### Token Reduction
@@ -142,7 +156,7 @@ CLI returns JSON for programmatic use. MCP interface returns formatted text for 
 - Path: crates/tools/pr-comments/
 - Role: tool-lib
 - Family: tools
-- Integrations: mcp=true, logging=true, napi=false
+- Integrations: mcp=false, logging=true, napi=false
 <!-- END:xtask:autogen -->
 
 <!-- BEGIN:xtask:autogen commands -->

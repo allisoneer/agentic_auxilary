@@ -1,10 +1,16 @@
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use colored::Colorize;
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
-use crate::mount::{MountResolver, MountSpace, get_mount_manager};
+use crate::mount::MountResolver;
+use crate::mount::MountSpace;
+use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
 
 pub async fn execute(mount_name: String) -> Result<()> {

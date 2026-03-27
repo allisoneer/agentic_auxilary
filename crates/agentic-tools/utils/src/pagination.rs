@@ -7,33 +7,53 @@
 //! # Architecture
 //!
 //! Uses two-level locking for thread safety:
-//! - Level 1: Brief lock on outer HashMap to get/create per-query state
-//! - Level 2: Per-query lock held during work, serializing same-param calls
+//! - Level 1: Brief lock on outer `HashMap` to get/create per-query state
+//! - Level 2: Per-query mutex protects shared `QueryState` access. Callers
+//!   typically lock only to read or update pagination state and may perform
+//!   expensive work outside the lock.
+//!
+//! This cache does not automatically coordinate in-flight work for the same
+//! key; concurrent same-key callers may do redundant fetching unless the
+//! caller adds its own coordination.
 //!
 //! # Example
 //!
 //! ```
 //! use agentic_tools_utils::pagination::{PaginationCache, paginate_slice};
 //!
-//! // Create a cache for your result type
 //! let cache: PaginationCache<i32> = PaginationCache::new();
-//!
-//! // Get or create a lock for a query
 //! let lock = cache.get_or_create("my-query-key");
 //!
-//! // Work with the query state
-//! {
-//!     let mut state = lock.state.lock().unwrap();
-//!     if state.is_empty() {
-//!         // Fetch results and populate state
-//!         state.reset(vec![1, 2, 3, 4, 5], (), 2);
+//! let needs_fetch = {
+//!     let state = lock.lock_state();
+//!     state.is_empty() || state.is_expired()
+//! };
+//!
+//! if needs_fetch {
+//!     // Do expensive work outside the lock.
+//!     let fetched_entries = vec![1, 2, 3, 4, 5];
+//!     let page_size = 2;
+//!
+//!     let mut state = lock.lock_state();
+//!     if state.is_empty() || state.is_expired() {
+//!         state.reset(fetched_entries, (), page_size);
 //!     }
 //! }
+//!
+//! let (page, has_more) = {
+//!     let mut state = lock.lock_state();
+//!     let (page, has_more) =
+//!         paginate_slice(&state.results, state.next_offset, state.page_size);
+//!     state.next_offset += page.len();
+//!     (page, has_more)
+//! };
 //! ```
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 /// Default TTL for pagination state: 5 minutes.
 pub const DEFAULT_TTL: Duration = Duration::from_secs(5 * 60);
@@ -83,12 +103,13 @@ impl<T, M: Default> PaginationCache<T, M> {
     /// Get or create the per-query lock for the given key.
     ///
     /// If a lock already exists for this key, returns a clone of its Arc.
-    /// Otherwise creates a new QueryLock and returns it.
+    /// Otherwise creates a new `QueryLock` and returns it.
     pub fn get_or_create(&self, key: &str) -> Arc<QueryLock<T, M>> {
         let mut m = self.lock_map();
-        m.entry(key.to_string())
-            .or_insert_with(|| Arc::new(QueryLock::new()))
-            .clone()
+        let arc = m
+            .entry(key.to_string())
+            .or_insert_with(|| Arc::new(QueryLock::new()));
+        Arc::clone(arc)
     }
 
     /// Opportunistic sweep: remove expired entries.
@@ -98,7 +119,7 @@ impl<T, M: Default> PaginationCache<T, M> {
     pub fn sweep_expired(&self) {
         let entries: Vec<(String, Arc<QueryLock<T, M>>)> = {
             let m = self.lock_map();
-            m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            m.iter().map(|(k, v)| (k.clone(), Arc::clone(v))).collect()
         };
 
         for (k, lk) in entries {
@@ -134,7 +155,7 @@ impl<T, M> QueryLock<T, M> {
 }
 
 impl<T, M: Default> QueryLock<T, M> {
-    /// Create a new QueryLock with empty state.
+    /// Create a new `QueryLock` with empty state.
     pub fn new() -> Self {
         Self {
             state: Mutex::new(QueryState::with_ttl(DEFAULT_TTL)),
@@ -213,7 +234,7 @@ impl<T, M: Default> QueryState<T, M> {
 
 /// Paginate a slice without consuming it.
 ///
-/// Returns (page_entries, has_more).
+/// Returns (`page_entries`, `has_more`).
 ///
 /// # Arguments
 /// * `entries` - The full list of entries to paginate
@@ -365,7 +386,9 @@ mod tests {
         // Manually expire it by setting created_at to the past
         {
             let mut st = lock.state.lock().unwrap();
-            st.created_at = Instant::now() - Duration::from_secs(6 * 60);
+            st.created_at = Instant::now()
+                .checked_sub(Duration::from_secs(6 * 60))
+                .unwrap();
         }
 
         // Sweep should remove expired entry

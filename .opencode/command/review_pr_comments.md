@@ -58,7 +58,7 @@ Prefer auto-detection: call `tools_gh_get_comments` without pr_number — the to
 
 If auto-detection fails or user specified a PR number, use that.
 
-If still unknown, call `tools_gh_get_prs` and ask user to select. State assumptions clearly.
+If still unknown, call `tools_gh_get_prs`, follow the tool-visible pagination cues if more results remain, stop when the tool says completion, then ask the user to select. State assumptions clearly.
 
 Treat GitHub tool output as the authoritative source for PR identification and PR metadata in this workflow.
 
@@ -73,13 +73,27 @@ Use `tools_gh_get_comments` with:
 - include_resolved from intent (false default)
 - pr_number from Step 2
 
-Handle pagination: repeat calls with same params until no more threads returned.
+Handle pagination: repeat calls with same params only while the tool output says more results remain.
+
+Stop immediately when the tool output says the result is complete.
+- Do not call again after completion, because another identical call restarts pagination from page 1.
 
 For each thread, capture:
 - thread_id (parent comment id)
-- path, line, html_url
-- author metadata (login, is_bot)
-- ordered list of replies with authors and bodies
+- path, line, top-level thread URL
+- ordered thread comments (parent first, then replies), each with:
+  - comment_id (numeric ID if present in tool output; parent comment_id == thread_id)
+  - author_login
+  - body
+
+If per-comment IDs are not visible in the tool output (e.g., `PR_COMMENTS_EXTRAS=noid`), record reply `comment_id` as unknown and rely on the Step 6 fallback (`target_comment_id = thread_id`). Do NOT guess IDs.
+
+Also capture PR metadata from the tool output:
+- owner/repo
+- PR number
+- PR URL
+
+Treat reply URLs, bot markers, dates, and review IDs as optional extras only when the tool output includes them.
 
 If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
 
@@ -135,7 +149,7 @@ Each sub-agent returns:
 - Why it matters (risk/impact)
 - Proposed resolution path
 - reply_draft (if reply_worthy) — do NOT include "🤖" prefix
-- target_comment_id to reply to (typically last comment in thread)
+- target_comment_id to reply to (prefer the last comment_id in the thread; if per-comment IDs are unavailable or missing, set `target_comment_id = thread_id` and explicitly note that per-comment IDs were not available — do NOT guess)
 
 Spawn all sub-agents in parallel for efficiency.
 

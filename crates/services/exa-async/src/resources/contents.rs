@@ -1,9 +1,8 @@
-use crate::{
-    client::Client,
-    config::Config,
-    error::ExaError,
-    types::contents::{ContentsRequest, ContentsResponse},
-};
+use crate::client::Client;
+use crate::config::Config;
+use crate::error::ExaError;
+use crate::types::contents::ContentsRequest;
+use crate::types::contents::ContentsResponse;
 
 /// API resource for the `/contents` endpoint
 pub struct Contents<'c, C: Config> {

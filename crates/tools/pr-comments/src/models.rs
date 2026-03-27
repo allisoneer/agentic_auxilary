@@ -1,6 +1,8 @@
-use agentic_tools_core::fmt::{TextFormat, TextOptions};
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::sync::OnceLock;
@@ -47,6 +49,10 @@ pub struct PrSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewCommentList {
+    pub owner: String,
+    pub repo: String,
+    pub pr_number: u64,
+    pub pr_url: String,
     pub comments: Vec<ReviewComment>,
 
     /// Number of threads shown so far (cumulative across pagination calls)
@@ -56,7 +62,7 @@ pub struct ReviewCommentList {
     /// Whether there are more pages available
     pub has_more: bool,
 
-    /// Optional pagination hint message (only when has_more=true)
+    /// Optional pagination hint message for structured consumers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
@@ -72,7 +78,17 @@ pub struct Thread {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PrSummaryList {
+    pub owner: String,
+    pub repo: String,
+    pub state: String,
     pub prs: Vec<PrSummary>,
+
+    pub shown_prs: usize,
+    pub total_prs: usize,
+    pub has_more: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -188,12 +204,34 @@ fn fmt_ts(ts: &str) -> &str {
 
 impl TextFormat for ReviewCommentList {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
-        if self.comments.is_empty() {
-            return "Review comments: <none>".into();
-        }
-        let opts = FormatOptions::get();
+        self.fmt_text_with_options(FormatOptions::get())
+    }
+}
+
+impl ReviewCommentList {
+    pub fn fmt_text_with_options(&self, opts: &FormatOptions) -> String {
         let mut out = String::new();
-        let _ = writeln!(out, "{}", fmt_header("Review comments:"));
+        let _ = writeln!(
+            out,
+            "{}",
+            fmt_header(&format!(
+                "Review comments for {}/{}#{}:",
+                self.owner, self.repo, self.pr_number
+            ))
+        );
+        let _ = writeln!(out, "PR: {}", self.pr_url);
+        let _ = writeln!(
+            out,
+            "Threads shown: {} of {}",
+            self.shown_threads, self.total_threads
+        );
+
+        if self.comments.is_empty() {
+            let _ = writeln!(out, "No matching review comment threads.");
+            let _ = writeln!(out, "{}", self.pagination_footer());
+            return out.trim_end().to_string();
+        }
+
         let _ = writeln!(out, "{}", format_legend());
 
         let grouped = group_by_path(&self.comments);
@@ -228,15 +266,13 @@ impl TextFormat for ReviewCommentList {
                 {
                     head.push_str(&format!(" (review:{})", rid));
                 }
-                if opts.show_urls {
-                    head.push_str(&format!(" {}", c.html_url));
-                }
                 if opts.show_dates {
                     head.push_str(&format!(" @{}", fmt_ts(&c.created_at)));
                 }
                 let _ = writeln!(out, "{}", head);
                 let body = indent_multiline(&c.body, "    ");
                 let _ = writeln!(out, "    {}", body);
+                let _ = writeln!(out, "    Thread: {}", c.html_url);
 
                 // Render replies indented under parent
                 if let Some(replies) = replies_by_parent.get(&c.id) {
@@ -266,18 +302,51 @@ impl TextFormat for ReviewCommentList {
                 }
             }
         }
-        out
+
+        let _ = writeln!(out, "\n{}", self.pagination_footer());
+        out.trim_end().to_string()
+    }
+
+    fn pagination_footer(&self) -> String {
+        if self.has_more {
+            format!(
+                "(more results — showing {} of {} threads; call gh_get_comments again with same params for next page)",
+                self.shown_threads, self.total_threads
+            )
+        } else {
+            format!(
+                "(complete — showing {} of {} threads; stop here; another identical gh_get_comments call restarts from page 1)",
+                self.shown_threads, self.total_threads
+            )
+        }
     }
 }
 
 impl TextFormat for PrSummaryList {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
-        if self.prs.is_empty() {
-            return "Pull requests: <none>".into();
-        }
-        let opts = FormatOptions::get();
+        self.fmt_text_with_options(FormatOptions::get())
+    }
+}
+
+impl PrSummaryList {
+    pub fn fmt_text_with_options(&self, opts: &FormatOptions) -> String {
         let mut out = String::new();
-        let _ = writeln!(out, "{}", fmt_header("Pull requests:"));
+        let _ = writeln!(
+            out,
+            "{}",
+            fmt_header(&format!(
+                "Pull requests for {}/{} (state={}):",
+                self.owner, self.repo, self.state
+            ))
+        );
+        let _ = writeln!(out, "PRs shown: {} of {}", self.shown_prs, self.total_prs);
+
+        if self.prs.is_empty() {
+            let _ = writeln!(out, "No matching pull requests.");
+            let _ = writeln!(out, "{}", self.pagination_footer());
+            return out.trim_end().to_string();
+        }
+
         for pr in &self.prs {
             let mut line = format!("#{} {} — {}", pr.number, pr.state, pr.title);
             if opts.show_author {
@@ -294,7 +363,23 @@ impl TextFormat for PrSummaryList {
             }
             let _ = writeln!(out, "{}", line);
         }
-        out
+
+        let _ = writeln!(out, "\n{}", self.pagination_footer());
+        out.trim_end().to_string()
+    }
+
+    fn pagination_footer(&self) -> String {
+        if self.has_more {
+            format!(
+                "(more results — showing {} of {} pull requests; call gh_get_prs again with same params for next page)",
+                self.shown_prs, self.total_prs
+            )
+        } else {
+            format!(
+                "(complete — showing {} of {} pull requests; stop here; another identical gh_get_prs call restarts from page 1)",
+                self.shown_prs, self.total_prs
+            )
+        }
     }
 }
 
@@ -525,15 +610,19 @@ mod format_options_tests {
 mod mcp_format_tests {
     use super::*;
 
+    #[expect(clippy::too_many_arguments, reason = "Test helper keeps cases concise")]
     fn sample_review(
+        id: u64,
         path: &str,
         line: Option<u64>,
         side: Option<&str>,
         user: &str,
         body: &str,
+        html_url: &str,
+        in_reply_to_id: Option<u64>,
     ) -> ReviewComment {
         ReviewComment {
-            id: 1,
+            id,
             user: user.into(),
             is_bot: false,
             body: body.into(),
@@ -542,18 +631,89 @@ mod mcp_format_tests {
             side: side.map(|s| s.into()),
             created_at: "2025-01-01T00:00:00Z".into(),
             updated_at: "2025-01-01T00:00:00Z".into(),
-            html_url: "https://example.com/review/1".into(),
+            html_url: html_url.into(),
             pull_request_review_id: Some(42),
-            in_reply_to_id: None,
+            in_reply_to_id,
+        }
+    }
+
+    fn sample_review_list(comments: Vec<ReviewComment>, has_more: bool) -> ReviewCommentList {
+        let shown_threads = comments
+            .iter()
+            .filter(|c| c.in_reply_to_id.is_none())
+            .count();
+        let total_threads = if has_more {
+            shown_threads.saturating_add(1)
+        } else {
+            shown_threads
+        };
+        ReviewCommentList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            pr_number: 123,
+            pr_url: "https://github.com/octo/hello-world/pull/123".into(),
+            comments,
+            shown_threads,
+            total_threads,
+            has_more,
+            message: has_more.then(|| {
+                format!(
+                    "Showing {} out of {} threads. Call gh_get_comments again for more.",
+                    shown_threads, total_threads
+                )
+            }),
+        }
+    }
+
+    fn sample_pr_summary_list(prs: Vec<PrSummary>, has_more: bool) -> PrSummaryList {
+        let shown_prs = prs.len();
+        let total_prs = if has_more {
+            shown_prs.saturating_add(1)
+        } else {
+            shown_prs
+        };
+
+        PrSummaryList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            state: "open".into(),
+            prs,
+            shown_prs,
+            total_prs,
+            has_more,
+            message: has_more.then(|| {
+                format!(
+                    "Showing {} out of {} pull requests. Call gh_get_prs again for more.",
+                    shown_prs, total_prs
+                )
+            }),
         }
     }
 
     #[test]
     fn group_by_path_groups_and_orders() {
         let cs = vec![
-            sample_review("a.rs", Some(1), Some("RIGHT"), "u", "x"),
-            sample_review("b.rs", Some(2), Some("LEFT"), "u", "y"),
-            sample_review("a.rs", None, None, "u2", "z"),
+            sample_review(
+                1,
+                "a.rs",
+                Some(1),
+                Some("RIGHT"),
+                "u",
+                "x",
+                "https://x/1",
+                None,
+            ),
+            sample_review(
+                2,
+                "b.rs",
+                Some(2),
+                Some("LEFT"),
+                "u",
+                "y",
+                "https://x/2",
+                None,
+            ),
+            sample_review(3, "a.rs", None, None, "u2", "z", "https://x/3", None),
         ];
         let g = group_by_path(&cs);
         let keys: Vec<_> = g.keys().cloned().collect();
@@ -580,44 +740,159 @@ mod mcp_format_tests {
     }
 
     #[test]
-    fn format_review_comment_list_basic() {
-        unsafe {
-            std::env::remove_var("PR_COMMENTS_EXTRAS");
-        }
-        let list = ReviewCommentList {
-            comments: vec![
+    fn format_review_comment_list_shows_header_thread_url_and_completion_footer() {
+        let list = sample_review_list(
+            vec![
                 sample_review(
+                    1,
                     "src/lib.rs",
                     Some(12),
                     Some("RIGHT"),
                     "alice",
                     "Body A\nMore",
+                    "https://example.com/review/1",
+                    None,
                 ),
-                sample_review("src/lib.rs", Some(42), Some("LEFT"), "bob", "Body B"),
+                sample_review(
+                    2,
+                    "src/lib.rs",
+                    Some(42),
+                    Some("LEFT"),
+                    "bob",
+                    "Body B",
+                    "https://example.com/review/2",
+                    None,
+                ),
             ],
-            shown_threads: 2,
-            total_threads: 2,
-            has_more: false,
-            message: None,
-        };
-        let text = list.fmt_text(&TextOptions::default());
-        assert!(text.contains("Review comments:"));
+            false,
+        );
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("Review comments for octo/hello-world#123:"));
+        assert!(text.contains("PR: https://github.com/octo/hello-world/pull/123"));
+        assert!(text.contains("Threads shown: 2 of 2"));
         assert!(text.contains("Legend:"));
         assert!(text.contains("src/lib.rs"));
         assert!(text.contains("[12 R] alice"));
         assert!(text.contains("[42 L] bob"));
         assert!(text.contains("Body A"));
         assert!(text.contains("\n    More"));
+        assert!(text.contains("Thread: https://example.com/review/1"));
         assert!(text.contains("#1")); // ids are ON by default
+        assert!(text.contains("complete — showing 2 of 2 threads"));
+        assert!(text.contains("restarts from page 1"));
+    }
+
+    #[test]
+    fn format_review_comment_list_shows_more_results_footer() {
+        let list = sample_review_list(
+            vec![sample_review(
+                1,
+                "src/lib.rs",
+                Some(12),
+                Some("RIGHT"),
+                "alice",
+                "Body A",
+                "https://example.com/review/1",
+                None,
+            )],
+            true,
+        );
+
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("Threads shown: 1 of 2"));
+        assert!(text.contains("more results — showing 1 of 2 threads"));
+        assert!(text.contains("call gh_get_comments again with same params"));
+    }
+
+    #[test]
+    fn format_review_comment_list_hides_reply_urls_by_default() {
+        let list = sample_review_list(
+            vec![
+                sample_review(
+                    1,
+                    "src/lib.rs",
+                    Some(12),
+                    Some("RIGHT"),
+                    "alice",
+                    "Parent",
+                    "https://example.com/review/1",
+                    None,
+                ),
+                sample_review(
+                    2,
+                    "src/lib.rs",
+                    Some(12),
+                    Some("RIGHT"),
+                    "bob",
+                    "Reply",
+                    "https://example.com/review/2",
+                    Some(1),
+                ),
+            ],
+            false,
+        );
+
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("Thread: https://example.com/review/1"));
+        assert!(!text.contains("https://example.com/review/2"));
+    }
+
+    #[test]
+    fn format_review_comment_list_shows_reply_urls_when_enabled() {
+        let list = sample_review_list(
+            vec![
+                sample_review(
+                    1,
+                    "src/lib.rs",
+                    Some(12),
+                    Some("RIGHT"),
+                    "alice",
+                    "Parent",
+                    "https://example.com/review/1",
+                    None,
+                ),
+                sample_review(
+                    2,
+                    "src/lib.rs",
+                    Some(12),
+                    Some("RIGHT"),
+                    "bob",
+                    "Reply",
+                    "https://example.com/review/2",
+                    Some(1),
+                ),
+            ],
+            false,
+        );
+
+        let text = list.fmt_text_with_options(&FormatOptions::from_csv("url"));
+        assert!(text.contains("https://example.com/review/2"));
+    }
+
+    #[test]
+    fn format_review_comment_list_empty_still_shows_pr_context() {
+        let list = ReviewCommentList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            pr_number: 123,
+            pr_url: "https://github.com/octo/hello-world/pull/123".into(),
+            comments: vec![],
+            shown_threads: 0,
+            total_threads: 0,
+            has_more: false,
+            message: None,
+        };
+
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("Review comments for octo/hello-world#123:"));
+        assert!(text.contains("No matching review comment threads."));
+        assert!(text.contains("complete — showing 0 of 0 threads"));
     }
 
     #[test]
     fn format_pr_summary_list_basic() {
-        unsafe {
-            std::env::remove_var("PR_COMMENTS_EXTRAS");
-        }
-        let list = PrSummaryList {
-            prs: vec![PrSummary {
+        let list = sample_pr_summary_list(
+            vec![PrSummary {
                 number: 123,
                 title: "Fix bug".into(),
                 author: "dana".into(),
@@ -627,12 +902,56 @@ mod mcp_format_tests {
                 comment_count: 2,
                 review_comment_count: 3,
             }],
-        };
-        let text = list.fmt_text(&TextOptions::default());
-        assert!(text.contains("Pull requests:"));
+            false,
+        );
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("Pull requests for octo/hello-world (state=open):"));
+        assert!(text.contains("PRs shown: 1 of 1"));
         assert!(text.contains("#123 open — Fix bug"));
         assert!(!text.contains("comments=")); // counts off by default
         assert!(!text.contains("(by ")); // author off by default
+        assert!(text.contains("complete — showing 1 of 1 pull requests"));
+    }
+
+    #[test]
+    fn format_pr_summary_list_shows_more_results_footer() {
+        let list = sample_pr_summary_list(
+            vec![PrSummary {
+                number: 123,
+                title: "Fix bug".into(),
+                author: "dana".into(),
+                state: "open".into(),
+                created_at: "2025-01-01T00:00:00Z".into(),
+                updated_at: "2025-01-02T00:00:00Z".into(),
+                comment_count: 2,
+                review_comment_count: 3,
+            }],
+            true,
+        );
+
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("PRs shown: 1 of 2"));
+        assert!(text.contains("more results — showing 1 of 2 pull requests"));
+        assert!(text.contains("call gh_get_prs again with same params"));
+    }
+
+    #[test]
+    fn format_pr_summary_list_empty_still_shows_context() {
+        let list = PrSummaryList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            state: "open".into(),
+            prs: vec![],
+            shown_prs: 0,
+            total_prs: 0,
+            has_more: false,
+            message: None,
+        };
+
+        let text = list.fmt_text_with_options(&FormatOptions::default());
+        assert!(text.contains("Pull requests for octo/hello-world (state=open):"));
+        assert!(text.contains("No matching pull requests."));
+        assert!(text.contains("complete — showing 0 of 0 pull requests"));
     }
 
     #[test]
@@ -659,6 +978,10 @@ mod mcp_format_tests {
     #[test]
     fn wrapper_serializes_as_object() {
         let w = ReviewCommentList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            pr_number: 123,
+            pr_url: "https://github.com/octo/hello-world/pull/123".into(),
             comments: vec![],
             shown_threads: 0,
             total_threads: 0,
@@ -666,6 +989,10 @@ mod mcp_format_tests {
             message: None,
         };
         let s = serde_json::to_string(&w).unwrap();
+        assert!(s.contains("\"owner\""));
+        assert!(s.contains("\"repo\""));
+        assert!(s.contains("\"pr_number\""));
+        assert!(s.contains("\"pr_url\""));
         assert!(s.contains("\"comments\""));
         assert!(s.contains("\"shown_threads\""));
         assert!(s.contains("\"total_threads\""));
@@ -678,6 +1005,10 @@ mod mcp_format_tests {
     fn pagination_message_only_when_has_more() {
         // When has_more is false, message should be None
         let list_complete = ReviewCommentList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            pr_number: 123,
+            pr_url: "https://github.com/octo/hello-world/pull/123".into(),
             comments: vec![],
             shown_threads: 5,
             total_threads: 5,
@@ -689,6 +1020,10 @@ mod mcp_format_tests {
         // When has_more is true, message should contain "Showing X out of Y threads"
         let msg = "Showing 5 out of 15 threads. Call gh_get_comments again for more.".to_string();
         let list_partial = ReviewCommentList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            pr_number: 123,
+            pr_url: "https://github.com/octo/hello-world/pull/123".into(),
             comments: vec![],
             shown_threads: 5,
             total_threads: 15,
@@ -702,6 +1037,10 @@ mod mcp_format_tests {
 
         // Verify message is serialized when present
         let list_with_msg = ReviewCommentList {
+            owner: "octo".into(),
+            repo: "hello-world".into(),
+            pr_number: 123,
+            pr_url: "https://github.com/octo/hello-world/pull/123".into(),
             comments: vec![],
             shown_threads: 5,
             total_threads: 15,

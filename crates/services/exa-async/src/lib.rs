@@ -22,10 +22,12 @@ pub mod types;
 
 pub use crate::client::Client;
 pub use crate::config::ExaConfig;
-pub use crate::error::{ApiErrorObject, ExaError};
+pub use crate::error::ApiErrorObject;
+pub use crate::error::ExaError;
 
 /// Prelude module for convenient imports
 pub mod prelude {
+    pub use crate::Client;
+    pub use crate::ExaConfig;
     pub use crate::types::*;
-    pub use crate::{Client, ExaConfig};
 }

@@ -1,9 +1,16 @@
 //! Sync command implementation.
 //!
-//! Updates autogen blocks in CLAUDE.md files, release-plz.toml, README.md, and justfile.
+//! Updates autogen blocks in CLAUDE.md files, release-plz.toml, README.md, justfile,
+//! and agentic.schema.json.
 
-use crate::{claude, justfile, policy::Policy, readme, release_plz};
-use anyhow::{Context, Result};
+use crate::claude;
+use crate::justfile;
+use crate::policy::Policy;
+use crate::readme;
+use crate::release_plz;
+use crate::schema;
+use anyhow::Context;
+use anyhow::Result;
 use cargo_metadata::MetadataCommand;
 use std::fs;
 
@@ -49,12 +56,17 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     eprintln!("[sync] Syncing justfile...");
     let justfile_changed = justfile::sync_justfile("justfile", &metadata, dry_run, check)?;
 
+    // agentic.schema.json (6th target)
+    eprintln!("[sync] Syncing agentic.schema.json...");
+    let schema_changed = schema::sync_schema("agentic.schema.json", dry_run, check)?;
+
     // Summary
     let total_changes = (root_changed as usize)
         + crate_count
         + (release_changed as usize)
         + (readme_changed as usize)
-        + (justfile_changed as usize);
+        + (justfile_changed as usize)
+        + (schema_changed as usize);
     if total_changes == 0 {
         eprintln!("[sync] No changes needed.");
     } else if dry_run {

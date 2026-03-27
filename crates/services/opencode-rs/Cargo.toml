@@ -1,6 +1,6 @@
 [package]
 name = "opencode_rs"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Rust SDK for OpenCode (HTTP-first hybrid with SSE streaming)"
@@ -20,9 +20,18 @@ cli = ["tokio/process"]
 full = ["http", "sse", "server", "cli"]
 
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "stream",
+  "rustls-tls",
+], optional = true }
 reqwest-eventsource = { version = "0.6", optional = true }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
+] }
 tokio-util = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }

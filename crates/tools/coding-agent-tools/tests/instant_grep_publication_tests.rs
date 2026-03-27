@@ -4,7 +4,8 @@
 
 use coding_agent_tools::instant_grep::index::builder::build_index_for_head;
 use coding_agent_tools::instant_grep::index::reader::open_or_build;
-use git2::{Repository, Signature};
+use git2::Repository;
+use git2::Signature;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;

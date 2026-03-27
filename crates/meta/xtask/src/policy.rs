@@ -2,7 +2,8 @@
 //!
 //! Parses tools/policy.toml and provides validation utilities.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fs;

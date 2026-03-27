@@ -1,6 +1,6 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
+use anyhow::bail;
 use colored::Colorize;
-use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -15,7 +15,7 @@ pub enum OpenSubdir {
 }
 
 pub async fn execute(subdir: OpenSubdir) -> Result<()> {
-    let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+    let argv = agentic_tools_utils::editor_argv()?;
     let aw = ensure_active_work()?;
 
     let target: PathBuf = match subdir {
@@ -29,7 +29,10 @@ pub async fn execute(subdir: OpenSubdir) -> Result<()> {
         bail!("Target directory does not exist: {}", target.display());
     }
 
-    let status = Command::new(&editor).arg(&target).status()?;
+    let status = Command::new(&argv.program)
+        .args(&argv.args)
+        .arg(&target)
+        .status()?;
     if !status.success() {
         bail!("Editor exited with error");
     }

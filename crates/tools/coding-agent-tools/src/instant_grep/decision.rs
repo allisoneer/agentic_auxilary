@@ -38,7 +38,8 @@ pub fn decide_mode(cfg: &GrepConfig, repo_root: &Path) -> ExecutionMode {
 mod tests {
     use super::*;
     use crate::types::OutputMode;
-    use git2::{Repository, Signature};
+    use git2::Repository;
+    use git2::Signature;
     use tempfile::TempDir;
 
     fn test_cfg(root: &str) -> GrepConfig {

@@ -3,16 +3,28 @@
 //! This module handles parsing of the universal_tool macros using darling
 //! for clean attribute parsing and syn for AST traversal.
 
-use darling::{FromAttributes, FromMeta, ast::NestedMeta};
+use darling::FromAttributes;
+use darling::FromMeta;
+use darling::ast::NestedMeta;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{
-    Attribute, FnArg, GenericArgument, ImplItem, ItemImpl, LitStr, Pat, PatType, PathArguments,
-    ReturnType, Type, TypePath, parse2,
-};
+use syn::Attribute;
+use syn::FnArg;
+use syn::GenericArgument;
+use syn::ImplItem;
+use syn::ItemImpl;
+use syn::LitStr;
+use syn::Pat;
+use syn::PatType;
+use syn::PathArguments;
+use syn::ReturnType;
+use syn::Type;
+use syn::TypePath;
+use syn::parse2;
 
 use crate::model::*;
-use syn::visit_mut::{self, VisitMut};
+use syn::visit_mut::VisitMut;
+use syn::visit_mut::{self};
 
 /// Parse the universal_tool_router attribute macro.
 pub fn parse_router(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {

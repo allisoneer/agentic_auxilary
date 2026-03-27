@@ -1,13 +1,27 @@
-use super::types::{RepoLocation, RepoMapping};
-use crate::repo_identity::{
-    RepoIdentity, RepoIdentityKey, parse_url_and_subpath as identity_parse_url_and_subpath,
-};
+use super::types::RepoLocation;
+use super::types::RepoMapping;
+use crate::config::validation::canonical_reference_instance_key;
+use crate::config::validation::canonical_reference_key;
+use crate::config::validation::normalize_encoded_ref_key_for_identity;
+use crate::git::ref_key::encode_ref_key;
+use crate::repo_identity::RepoIdentity;
+use crate::repo_identity::RepoIdentityKey;
+use crate::repo_identity::parse_url_and_subpath as identity_parse_url_and_subpath;
 use crate::utils::locks::FileLock;
-use crate::utils::paths::{self, sanitize_dir_name};
-use anyhow::{Context, Result, bail};
-use atomicwrites::{AllowOverwrite, AtomicFile};
+use crate::utils::paths::sanitize_dir_name;
+use crate::utils::paths::{self};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use atomicwrites::AllowOverwrite;
+use atomicwrites::AtomicFile;
+use std::io::ErrorKind;
 use std::io::Write;
-use std::path::{Component, Path, PathBuf};
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
+
+const REFERENCE_MAPPING_MARKER: &str = "#thoughts-ref=";
 
 /// Indicates how a URL was resolved to a mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,35 +47,93 @@ pub struct RepoMappingManager {
     mapping_path: PathBuf,
 }
 
+/// Compute the lock path for a given mapping file path.
+///
+/// This is extracted as a standalone function so it can be used both in
+/// `RepoMappingManager::lock_path()` and `migrate_legacy_repos_json_if_needed()`.
+fn lock_path_for_mapping_path(mapping_path: &Path) -> PathBuf {
+    let name = mapping_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+    mapping_path.with_file_name(format!("{name}.lock"))
+}
+
+/// Migrate legacy repos.json to the new location, if needed.
+///
+/// Returns `Ok(true)` if migration was performed, `Ok(false)` otherwise.
+///
+/// # Safety Properties
+///
+/// - Acquires the same lock used by all RMW operations.
+/// - Re-checks `mapping_path.exists()` under lock to close the TOCTOU window.
+/// - Writes via `AtomicFile` for atomic visibility.
+fn migrate_legacy_repos_json_if_needed(mapping_path: &Path, legacy_path: &Path) -> Result<bool> {
+    let _lock = FileLock::lock_exclusive(lock_path_for_mapping_path(mapping_path))?;
+
+    // Re-check under lock to close the TOCTOU window.
+    if mapping_path.exists() || !legacy_path.exists() {
+        return Ok(false);
+    }
+
+    if let Some(parent) = mapping_path.parent() {
+        paths::ensure_dir(parent)?;
+    }
+
+    let bytes = std::fs::read(legacy_path).with_context(|| {
+        format!(
+            "Failed to read legacy repos.json at {}",
+            legacy_path.display()
+        )
+    })?;
+
+    let af = AtomicFile::new(mapping_path, AllowOverwrite);
+    af.write(|f| f.write_all(&bytes))
+        .context("Failed to migrate repos.json from legacy location")?;
+
+    tracing::info!(
+        "Migrated repos.json from {} to {}",
+        legacy_path.display(),
+        mapping_path.display()
+    );
+
+    Ok(true)
+}
+
 impl RepoMappingManager {
     pub fn new() -> Result<Self> {
         let mapping_path = paths::get_repo_mapping_path()?;
+
+        // Check for legacy location migration (fast-path guard), then migrate under lock.
+        if !mapping_path.exists()
+            && let Ok(legacy_path) = paths::get_legacy_repo_mapping_path()
+            && legacy_path.exists()
+        {
+            // Performs the lock + recheck + atomic write.
+            let _ = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path)?;
+        }
+
         Ok(Self { mapping_path })
     }
 
     /// Get the lock file path for repos.json RMW operations.
     fn lock_path(&self) -> PathBuf {
-        let name = self
-            .mapping_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-        self.mapping_path.with_file_name(format!("{name}.lock"))
+        lock_path_for_mapping_path(&self.mapping_path)
     }
 
     pub fn load(&self) -> Result<RepoMapping> {
-        if !self.mapping_path.exists() {
-            // First time - create empty mapping
-            let default = RepoMapping::default();
-            self.save(&default)?;
-            return Ok(default);
-        }
+        let contents = match std::fs::read_to_string(&self.mapping_path) {
+            Ok(c) => c,
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                // Pure read: do not create the file here.
+                return Ok(RepoMapping::default());
+            }
+            Err(e) => {
+                return Err(e).context("Failed to read repository mapping file");
+            }
+        };
 
-        let contents = std::fs::read_to_string(&self.mapping_path)
-            .context("Failed to read repository mapping file")?;
-        let mapping: RepoMapping =
-            serde_json::from_str(&contents).context("Failed to parse repository mapping")?;
-        Ok(mapping)
+        serde_json::from_str(&contents).context("Failed to parse repository mapping")
     }
 
     pub fn save(&self, mapping: &RepoMapping) -> Result<()> {
@@ -162,6 +234,30 @@ impl RepoMappingManager {
         Ok(None)
     }
 
+    pub fn resolve_reference_url(
+        &self,
+        url: &str,
+        ref_name: Option<&str>,
+    ) -> Result<Option<PathBuf>> {
+        let mapping = self.load()?;
+        let (_, subpath) = parse_url_and_subpath(url);
+
+        let matches = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
+
+        if let Some(stored_key) = matches.first()
+            && let Some(location) = mapping.mappings.get(stored_key)
+        {
+            let mut p = location.path.clone();
+            if let Some(ref sub) = subpath {
+                validate_subpath(sub)?;
+                p = p.join(sub);
+            }
+            return Ok(Some(p));
+        }
+
+        Ok(None)
+    }
+
     /// Add a URL-to-path mapping with identity-based upsert.
     ///
     /// If a mapping with the same canonical identity already exists,
@@ -219,6 +315,49 @@ impl RepoMappingManager {
         Ok(())
     }
 
+    pub fn add_reference_mapping(
+        &mut self,
+        url: String,
+        ref_name: Option<&str>,
+        path: PathBuf,
+        auto_managed: bool,
+    ) -> Result<()> {
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
+        let mut mapping = self.load()?;
+
+        if !path.exists() {
+            bail!("Path does not exist: {}", path.display());
+        }
+
+        if !path.is_dir() {
+            bail!("Path is not a directory: {}", path.display());
+        }
+
+        let storage_key = reference_mapping_storage_key(&url, ref_name)?;
+        let matching_urls = Self::matching_reference_storage_keys(&mapping, &url, ref_name)?;
+
+        let preserved_last_sync = matching_urls
+            .iter()
+            .filter_map(|k| mapping.mappings.get(k).and_then(|loc| loc.last_sync))
+            .max();
+
+        for k in matching_urls {
+            mapping.mappings.remove(&k);
+        }
+
+        mapping.mappings.insert(
+            storage_key,
+            RepoLocation {
+                path,
+                auto_managed,
+                last_sync: preserved_last_sync,
+            },
+        );
+
+        self.save(&mapping)?;
+        Ok(())
+    }
+
     /// Remove a URL mapping
     #[allow(dead_code)]
     // TODO(2): Add "thoughts mount unmap" command for cleanup
@@ -236,6 +375,16 @@ impl RepoMappingManager {
         Ok(mapping
             .mappings
             .get(url)
+            .map(|loc| loc.auto_managed)
+            .unwrap_or(false))
+    }
+
+    pub fn is_reference_auto_managed(&self, url: &str, ref_name: Option<&str>) -> Result<bool> {
+        let mapping = self.load()?;
+        let keys = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
+        Ok(keys
+            .first()
+            .and_then(|key| mapping.mappings.get(key))
             .map(|loc| loc.auto_managed)
             .unwrap_or(false))
     }
@@ -262,6 +411,20 @@ impl RepoMappingManager {
         }
         p = p.join(sanitize_dir_name(&key.repo));
         Ok(p)
+    }
+
+    pub fn get_default_reference_clone_path(url: &str, ref_name: Option<&str>) -> Result<PathBuf> {
+        let mut path = Self::get_default_clone_path(url)?;
+        if let Some(ref_name) = ref_name {
+            let ref_key = encode_ref_key(ref_name)?;
+            let repo_dir = path
+                .file_name()
+                .ok_or_else(|| anyhow::anyhow!("Default clone path had no repository segment"))?
+                .to_string_lossy()
+                .to_string();
+            path.set_file_name(format!("{}@{}", sanitize_dir_name(&repo_dir), ref_key));
+        }
+        Ok(path)
     }
 
     /// Update last sync time for a URL.
@@ -308,10 +471,68 @@ impl RepoMappingManager {
         Ok(())
     }
 
+    pub fn update_reference_sync_time(&mut self, url: &str, ref_name: Option<&str>) -> Result<()> {
+        let _lock = FileLock::lock_exclusive(self.lock_path())?;
+        let mut mapping = self.load()?;
+        let now = chrono::Utc::now();
+
+        let keys = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
+        if let Some(key) = keys.first()
+            && let Some(loc) = mapping.mappings.get_mut(key)
+        {
+            loc.last_sync = Some(now);
+            self.save(&mapping)?;
+        }
+
+        Ok(())
+    }
+
     /// Get the canonical identity key for a URL, if parseable.
     pub fn get_canonical_key(url: &str) -> Option<RepoIdentityKey> {
         let (base, _) = parse_url_and_subpath(url);
         RepoIdentity::parse(&base).ok().map(|id| id.canonical_key())
+    }
+
+    fn matching_reference_storage_keys(
+        mapping: &RepoMapping,
+        url: &str,
+        ref_name: Option<&str>,
+    ) -> Result<Vec<String>> {
+        let wanted = canonical_reference_instance_key(url, ref_name)?;
+        let mut keys: Vec<String> = mapping
+            .mappings
+            .keys()
+            .filter_map(|stored_key| {
+                let (stored_url, stored_ref_key) = parse_reference_mapping_storage_key(stored_key);
+                let (host, org_path, repo) = canonical_reference_key(&stored_url).ok()?;
+                let normalized_stored_ref_key = stored_ref_key
+                    .as_deref()
+                    .map(|ref_key| normalize_encoded_ref_key_for_identity(ref_key).into_owned());
+                let actual = (host, org_path, repo, normalized_stored_ref_key);
+                (actual == wanted).then(|| stored_key.clone())
+            })
+            .collect();
+        keys.sort();
+        Ok(keys)
+    }
+}
+
+fn reference_mapping_storage_key(url: &str, ref_name: Option<&str>) -> Result<String> {
+    let (base_url, _) = parse_url_and_subpath(url);
+    match ref_name {
+        Some(ref_name) => Ok(format!(
+            "{}{REFERENCE_MAPPING_MARKER}{}",
+            base_url,
+            encode_ref_key(ref_name)?
+        )),
+        None => Ok(base_url),
+    }
+}
+
+pub fn parse_reference_mapping_storage_key(stored_key: &str) -> (String, Option<String>) {
+    match stored_key.split_once(REFERENCE_MAPPING_MARKER) {
+        Some((base_url, ref_key)) => (base_url.to_string(), Some(ref_key.to_string())),
+        None => (stored_key.to_string(), None),
     }
 }
 
@@ -387,6 +608,7 @@ pub fn extract_org_repo_from_url(url: &str) -> anyhow::Result<(String, String)> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_parse_url_and_subpath() {
@@ -471,6 +693,18 @@ mod tests {
     }
 
     #[test]
+    fn test_default_reference_clone_path_appends_ref_key() {
+        let p = RepoMappingManager::get_default_reference_clone_path(
+            "https://github.com/org/repo.git",
+            Some("refs/tags/v1.2.3"),
+        )
+        .unwrap();
+        assert!(p.ends_with(std::path::Path::new(
+            ".thoughts/clones/github.com/org/repo@r-refs~2ftags~2fv1.2.3"
+        )));
+    }
+
+    #[test]
     fn test_canonical_key_consistency() {
         let ssh_key = RepoMappingManager::get_canonical_key("git@github.com:Org/Repo.git").unwrap();
         let https_key =
@@ -478,6 +712,139 @@ mod tests {
         assert_eq!(
             ssh_key, https_key,
             "SSH and HTTPS should have same canonical key"
+        );
+    }
+
+    #[test]
+    fn test_add_reference_mapping_keeps_different_refs_separate() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager { mapping_path };
+
+        let main_path = temp_dir.path().join("repo-main");
+        let tag_path = temp_dir.path().join("repo-tag");
+        std::fs::create_dir_all(&main_path).unwrap();
+        std::fs::create_dir_all(&tag_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/heads/main"),
+                main_path.clone(),
+                true,
+            )
+            .unwrap();
+        manager
+            .add_reference_mapping(
+                "git@github.com:Org/Repo.git".to_string(),
+                Some("refs/tags/v1.0.0"),
+                tag_path.clone(),
+                true,
+            )
+            .unwrap();
+
+        assert_eq!(
+            manager
+                .resolve_reference_url("https://github.com/org/repo", Some("refs/heads/main"))
+                .unwrap(),
+            Some(main_path)
+        );
+        assert_eq!(
+            manager
+                .resolve_reference_url("https://github.com/org/repo", Some("refs/tags/v1.0.0"))
+                .unwrap(),
+            Some(tag_path)
+        );
+
+        let mapping = manager.load().unwrap();
+        assert_eq!(mapping.mappings.len(), 2);
+    }
+
+    #[test]
+    fn test_resolve_reference_url_matches_legacy_refs_remotes_and_heads_equivalently() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let repo_path = temp_dir.path().join("repo-legacy");
+        std::fs::create_dir_all(&repo_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/remotes/origin/main"),
+                repo_path.clone(),
+                true,
+            )
+            .unwrap();
+
+        let mgr_ro = RepoMappingManager { mapping_path };
+        assert_eq!(
+            mgr_ro
+                .resolve_reference_url("https://github.com/org/repo", Some("refs/heads/main"))
+                .unwrap(),
+            Some(repo_path)
+        );
+    }
+
+    #[test]
+    fn test_update_reference_sync_time_updates_ref_specific_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager { mapping_path };
+
+        let repo_path = temp_dir.path().join("repo-main");
+        std::fs::create_dir_all(&repo_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/heads/main"),
+                repo_path,
+                true,
+            )
+            .unwrap();
+
+        manager
+            .update_reference_sync_time("git@github.com:Org/Repo.git", Some("refs/heads/main"))
+            .unwrap();
+
+        let mapping = manager.load().unwrap();
+        let found = mapping
+            .mappings
+            .iter()
+            .find(|(key, _)| key.contains("#thoughts-ref="))
+            .unwrap();
+        assert!(found.1.last_sync.is_some());
+    }
+
+    #[test]
+    fn test_is_reference_auto_managed_matches_ref_specific_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let mapping_path = temp_dir.path().join("repos.json");
+        let mut manager = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let repo_path = temp_dir.path().join("repo-main");
+        std::fs::create_dir_all(&repo_path).unwrap();
+
+        manager
+            .add_reference_mapping(
+                "https://github.com/org/repo.git".to_string(),
+                Some("refs/heads/main"),
+                repo_path,
+                true,
+            )
+            .unwrap();
+
+        let mgr_ro = RepoMappingManager { mapping_path };
+        assert!(
+            mgr_ro
+                .is_reference_auto_managed("git@github.com:Org/Repo.git", Some("refs/heads/main"))
+                .unwrap()
         );
     }
 
@@ -512,5 +879,89 @@ mod tests {
         assert!(validate_subpath("/etc").is_err());
         assert!(validate_subpath("/etc/passwd").is_err());
         assert!(validate_subpath("/home/user/.ssh").is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // Migration and load() TOCTOU-fix tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_migrate_legacy_when_destination_missing() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let legacy_path = dir.path().join("legacy_repos.json");
+
+        let legacy_bytes = br#"{ "mappings": { "git@github.com:a/b.git": { "path": "/tmp/x", "auto_managed": false, "last_sync": null } } }"#;
+        std::fs::write(&legacy_path, legacy_bytes).unwrap();
+
+        let migrated = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path).unwrap();
+        assert!(migrated);
+        assert!(mapping_path.exists());
+
+        let got = std::fs::read(&mapping_path).unwrap();
+        assert_eq!(got, legacy_bytes);
+    }
+
+    #[test]
+    fn test_migrate_does_not_overwrite_existing_destination() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let legacy_path = dir.path().join("legacy_repos.json");
+
+        std::fs::write(&legacy_path, b"legacy").unwrap();
+        std::fs::write(&mapping_path, b"already-there").unwrap();
+
+        let migrated = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path).unwrap();
+        assert!(!migrated);
+
+        let got = std::fs::read(&mapping_path).unwrap();
+        assert_eq!(got, b"already-there");
+    }
+
+    #[test]
+    fn test_migrate_noop_when_legacy_missing() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let legacy_path = dir.path().join("legacy_repos.json"); // intentionally absent
+
+        let migrated = migrate_legacy_repos_json_if_needed(&mapping_path, &legacy_path).unwrap();
+        assert!(!migrated);
+        assert!(!mapping_path.exists());
+    }
+
+    #[test]
+    fn test_load_missing_file_returns_default_without_creating_file() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let mgr = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let mapping = mgr.load().unwrap();
+        assert_eq!(mapping, RepoMapping::default());
+        assert!(!mapping_path.exists(), "load() must not create repos.json");
+    }
+
+    #[test]
+    fn test_load_reads_existing_file() {
+        let dir = TempDir::new().unwrap();
+        let mapping_path = dir.path().join("repos.json");
+        let mgr = RepoMappingManager {
+            mapping_path: mapping_path.clone(),
+        };
+
+        let mut m = RepoMapping::default();
+        m.mappings.insert(
+            "git@github.com:org/repo.git".to_string(),
+            RepoLocation {
+                path: PathBuf::from("/tmp/repo"),
+                auto_managed: false,
+                last_sync: None,
+            },
+        );
+        mgr.save(&m).unwrap();
+
+        let loaded = mgr.load().unwrap();
+        assert!(loaded.mappings.contains_key("git@github.com:org/repo.git"));
     }
 }

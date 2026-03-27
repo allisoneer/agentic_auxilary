@@ -1,17 +1,18 @@
-use crate::{
-    client::Client,
-    config::Config,
-    error::AnthropicError,
-    types::common::{CacheControl, CacheTtl, validate_mixed_ttl_order},
-    types::content::{
-        ContentBlockParam, MessageContentParam, SystemParam, ToolResultContent,
-        ToolResultContentBlock,
-    },
-    types::messages::{
-        MessageTokensCountRequest, MessageTokensCountResponse, MessagesCreateRequest,
-        MessagesCreateResponse,
-    },
-};
+use crate::client::Client;
+use crate::config::Config;
+use crate::error::AnthropicError;
+use crate::types::common::CacheControl;
+use crate::types::common::CacheTtl;
+use crate::types::common::validate_mixed_ttl_order;
+use crate::types::content::ContentBlockParam;
+use crate::types::content::MessageContentParam;
+use crate::types::content::SystemParam;
+use crate::types::content::ToolResultContent;
+use crate::types::content::ToolResultContentBlock;
+use crate::types::messages::MessageTokensCountRequest;
+use crate::types::messages::MessageTokensCountResponse;
+use crate::types::messages::MessagesCreateRequest;
+use crate::types::messages::MessagesCreateResponse;
 
 // ============================================================================
 // TTL Validation Helpers
@@ -256,13 +257,14 @@ impl<C: Config> crate::Client<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{
-        content::{
-            DocumentSource, ImageSource, MessageParam, MessageRole, TextBlockParam,
-            ToolResultContent, ToolResultContentBlock,
-        },
-        tools::Tool,
-    };
+    use crate::types::content::DocumentSource;
+    use crate::types::content::ImageSource;
+    use crate::types::content::MessageParam;
+    use crate::types::content::MessageRole;
+    use crate::types::content::TextBlockParam;
+    use crate::types::content::ToolResultContent;
+    use crate::types::content::ToolResultContentBlock;
+    use crate::types::tools::Tool;
 
     /// Create a base request with minimal valid fields
     fn base_req(messages: Vec<MessageParam>) -> MessagesCreateRequest {

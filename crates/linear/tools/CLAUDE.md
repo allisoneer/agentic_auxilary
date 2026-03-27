@@ -5,7 +5,7 @@
 - Path: crates/linear/tools/
 - Role: tool-lib
 - Family: linear
-- Integrations: mcp=true, logging=false, napi=false
+- Integrations: mcp=false, logging=false, napi=false
 <!-- END:xtask:autogen -->
 
 ## Overview

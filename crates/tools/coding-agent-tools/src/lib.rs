@@ -1,3 +1,8 @@
+#[cfg(not(unix))]
+compile_error!(
+    "coding_agent_tools only supports Unix-like platforms (Linux/macOS). Windows is not supported."
+);
+
 pub mod agent;
 pub mod glob;
 pub mod grep;
@@ -12,9 +17,18 @@ pub mod walker;
 
 pub use tools::build_registry;
 
+use agentic_config::types::CliToolsConfig;
+use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::ToolError;
 use std::sync::Arc;
-use types::{AgentOutput, Depth, GlobOutput, GrepOutput, LsOutput, OutputMode, Show, SortOrder};
+use types::AgentOutput;
+use types::Depth;
+use types::GlobOutput;
+use types::GrepOutput;
+use types::LsOutput;
+use types::OutputMode;
+use types::Show;
+use types::SortOrder;
 
 /// Select the first non-empty (after trimming) text from result.result or result.content.
 /// Prefers `result.result` over `result.content`, but rejects empty/whitespace-only strings.
@@ -35,6 +49,10 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
 
 #[derive(Clone)]
 pub struct CodingAgentTools {
+    /// Tool-specific config for subagents (model selection).
+    subagents: SubagentsConfig,
+    /// Tool-specific config for CLI tools (limits, ignore patterns).
+    cli_tools: CliToolsConfig,
     /// Two-level pagination cache for MCP (persists across calls when Arc-wrapped)
     pager: Arc<pagination::PaginationCache>,
     /// Cache for parsed justfile recipes
@@ -51,7 +69,13 @@ impl Default for CodingAgentTools {
 
 impl CodingAgentTools {
     pub fn new() -> Self {
+        Self::with_config(SubagentsConfig::default(), CliToolsConfig::default())
+    }
+
+    pub fn with_config(subagents: SubagentsConfig, cli_tools: CliToolsConfig) -> Self {
         Self {
+            subagents,
+            cli_tools,
             pager: Arc::new(pagination::PaginationCache::new()),
             just_registry: Arc::new(just::JustRegistry::new()),
             just_pager: Arc::new(just::pager::PaginationCache::new()),
@@ -136,14 +160,17 @@ impl CodingAgentTools {
         // Configure walker
         let depth_val = depth.map_or(1, types::Depth::as_u8);
         let show_val = show.unwrap_or_default();
-        let user_ignores = ignore.unwrap_or_default();
         let include_hidden = hidden.unwrap_or(false);
+
+        // Combine user-provided ignore patterns with config's extra_ignore_patterns
+        let mut combined_ignores = ignore.unwrap_or_default();
+        combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
 
         let cfg = walker::WalkConfig {
             root: root_path,
             depth: depth_val,
             show: show_val,
-            user_ignores: &user_ignores,
+            user_ignores: &combined_ignores,
             include_hidden,
         };
 
@@ -157,7 +184,7 @@ impl CodingAgentTools {
             depth_val,
             show_val,
             include_hidden,
-            &user_ignores,
+            &combined_ignores,
         );
 
         // Acquire per-query lock (level 2), serialize same-param calls
@@ -239,8 +266,10 @@ impl CodingAgentTools {
     ) -> Result<AgentOutput, ToolError> {
         use claudecode::client::Client;
         use claudecode::config::SessionConfig;
-        use claudecode::mcp::validate::{ValidateOptions, ensure_valid_mcp_config};
-        use claudecode::types::{OutputFormat, PermissionMode};
+        use claudecode::mcp::validate::ValidateOptions;
+        use claudecode::mcp::validate::ensure_valid_mcp_config;
+        use claudecode::types::OutputFormat;
+        use claudecode::types::PermissionMode;
 
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("ask_agent");
@@ -267,7 +296,7 @@ impl CodingAgentTools {
         }
 
         // Compose configuration
-        let model = agent::model_for(agent_type);
+        let model = agent::model_for(agent_type, &self.subagents);
         let system_prompt = agent::compose_prompt(agent_type, location);
         let enabled_tools = agent::enabled_tools_for(agent_type, location);
 
@@ -465,12 +494,16 @@ impl CodingAgentTools {
                 return Err(ToolError::InvalidInput(msg));
             }
         };
+        // Combine user-provided ignore patterns with config's extra_ignore_patterns
+        let mut combined_ignores = ignore.unwrap_or_default();
+        combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
+
         let cfg = grep::GrepConfig {
             root: abs_root,
             pattern,
             mode: mode.unwrap_or_default(),
             include_globs: globs.unwrap_or_default(),
-            ignore_globs: ignore.unwrap_or_default(),
+            ignore_globs: combined_ignores,
             include_hidden: include_hidden.unwrap_or(false),
             case_insensitive: case_insensitive.unwrap_or(false),
             multiline: multiline.unwrap_or(false),
@@ -479,7 +512,7 @@ impl CodingAgentTools {
             context_before,
             context_after,
             include_binary: include_binary.unwrap_or(false),
-            head_limit: head_limit.unwrap_or(200),
+            head_limit: head_limit.unwrap_or(self.cli_tools.grep_default_limit as usize),
             offset: offset.unwrap_or(0),
         };
 
@@ -621,13 +654,17 @@ impl CodingAgentTools {
                 return Err(ToolError::InvalidInput(msg));
             }
         };
+        // Combine user-provided ignore patterns with config's extra_ignore_patterns
+        let mut combined_ignores = ignore.unwrap_or_default();
+        combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
+
         let cfg = glob::GlobConfig {
             root: abs_root,
             pattern,
-            ignore_globs: ignore.unwrap_or_default(),
+            ignore_globs: combined_ignores,
             include_hidden: include_hidden.unwrap_or(false),
             sort: sort.unwrap_or_default(),
-            head_limit: head_limit.unwrap_or(500),
+            head_limit: head_limit.unwrap_or(self.cli_tools.glob_default_limit as usize),
             offset: offset.unwrap_or(0),
         };
 

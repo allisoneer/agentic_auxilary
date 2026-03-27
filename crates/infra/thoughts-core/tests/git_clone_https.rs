@@ -3,7 +3,8 @@
 //!   THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 cargo test --test git_clone_https
 
 use tempfile::TempDir;
-use thoughts_tool::git::clone::{CloneOptions, clone_repository};
+use thoughts_tool::git::clone::CloneOptions;
+use thoughts_tool::git::clone::clone_repository;
 
 fn should_run() -> bool {
     std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() == Some("1")

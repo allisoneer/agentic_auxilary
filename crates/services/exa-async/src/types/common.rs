@@ -1,6 +1,7 @@
 //! Shared types used across Exa API endpoints
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Search type for Exa queries
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

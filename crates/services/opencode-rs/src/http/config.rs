@@ -4,7 +4,9 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::config::{Config, ConfigProviders, UpdateConfigRequest};
+use crate::types::config::Config;
+use crate::types::config::ConfigProviders;
+use crate::types::config::UpdateConfigRequest;
 use reqwest::Method;
 
 /// Config API client.

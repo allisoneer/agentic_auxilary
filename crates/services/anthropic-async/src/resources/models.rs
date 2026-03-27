@@ -1,9 +1,9 @@
-use crate::{
-    client::Client,
-    config::Config,
-    error::AnthropicError,
-    types::models::{Model, ModelListParams, ModelsListResponse},
-};
+use crate::client::Client;
+use crate::config::Config;
+use crate::error::AnthropicError;
+use crate::types::models::Model;
+use crate::types::models::ModelListParams;
+use crate::types::models::ModelsListResponse;
 
 /// API resource for the `/v1/models` endpoints
 ///

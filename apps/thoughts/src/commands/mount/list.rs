@@ -1,6 +1,8 @@
-use crate::config::{Mount, RepoConfigManager};
+use crate::config::Mount;
+use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
-use crate::mount::{MountResolver, MountSpace};
+use crate::mount::MountResolver;
+use crate::mount::MountSpace;
 use anyhow::Result;
 use colored::*;
 use std::env;

@@ -1,6 +1,9 @@
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::process::Stdio;
 
 /// Build a git fetch command for the given repo and remote
 pub fn build_fetch_command(repo_path: &Path, remote: &str) -> Command {

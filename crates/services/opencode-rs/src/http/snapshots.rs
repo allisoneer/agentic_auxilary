@@ -4,11 +4,18 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::snapshot::{
-    FileDiff, FilePatch, SnapshotDiffRequest, SnapshotDiffResponse, SnapshotPatchRequest,
-    SnapshotPatchResponse, SnapshotRestoreRequest, SnapshotRestoreResponse, SnapshotRevertRequest,
-    SnapshotRevertResponse, SnapshotTrackRequest, SnapshotTrackResponse,
-};
+use crate::types::snapshot::FileDiff;
+use crate::types::snapshot::FilePatch;
+use crate::types::snapshot::SnapshotDiffRequest;
+use crate::types::snapshot::SnapshotDiffResponse;
+use crate::types::snapshot::SnapshotPatchRequest;
+use crate::types::snapshot::SnapshotPatchResponse;
+use crate::types::snapshot::SnapshotRestoreRequest;
+use crate::types::snapshot::SnapshotRestoreResponse;
+use crate::types::snapshot::SnapshotRevertRequest;
+use crate::types::snapshot::SnapshotRevertResponse;
+use crate::types::snapshot::SnapshotTrackRequest;
+use crate::types::snapshot::SnapshotTrackResponse;
 use reqwest::Method;
 
 /// Snapshots API client.
@@ -116,8 +123,11 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use std::time::Duration;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_snapshot_track() {

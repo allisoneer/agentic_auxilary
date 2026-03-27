@@ -1,6 +1,7 @@
 //! Embedded prompt constants for agent types and locations.
 
-use crate::types::{AgentLocation, AgentType};
+use crate::types::AgentLocation;
+use crate::types::AgentType;
 
 // =============================================================================
 // Base prompts per agent type

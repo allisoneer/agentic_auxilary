@@ -52,6 +52,27 @@ commit_parsers = [
 # DO NOT EDIT: run `cargo run -p xtask -- sync` to update
 # BEGIN:xtask:autogen release-plz:packages
 [[package]]
+name = "agentic-bin"
+changelog_path = "apps/agentic/CHANGELOG.md"
+git_tag_name = "agentic-bin-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "agentic-config"
+changelog_path = "crates/infra/agentic-config/CHANGELOG.md"
+git_tag_name = "agentic-config-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "agentic-tools-utils"
+changelog_path = "crates/agentic-tools/utils/CHANGELOG.md"
+git_tag_name = "agentic-tools-utils-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "thoughts-bin"
 changelog_path = "apps/thoughts/CHANGELOG.md"
 git_tag_name = "thoughts-bin-v{{ version }}"
@@ -108,13 +129,6 @@ git_tag_enable = true
 release = true
 
 [[package]]
-name = "agentic-tools-utils"
-changelog_path = "crates/agentic-tools/utils/CHANGELOG.md"
-git_tag_name = "agentic-tools-utils-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
 name = "claudecode"
 changelog_path = "crates/services/claudecode-rs/CHANGELOG.md"
 git_tag_name = "claudecode-v{{ version }}"
@@ -153,6 +167,13 @@ release = true
 name = "pr_comments"
 changelog_path = "crates/tools/pr-comments/CHANGELOG.md"
 git_tag_name = "pr_comments-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
+name = "review_tools"
+changelog_path = "crates/tools/review-tools/CHANGELOG.md"
+git_tag_name = "review_tools-v{{ version }}"
 git_tag_enable = true
 release = true
 

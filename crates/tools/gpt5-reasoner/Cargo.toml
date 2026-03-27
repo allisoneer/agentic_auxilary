@@ -1,6 +1,6 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
@@ -11,6 +11,7 @@ keywords = ["gpt-5", "reasoning", "mcp", "cli", "prompt"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 thoughts-tool = { workspace = true }
@@ -47,6 +48,6 @@ family = "tools"
 readme_tier = "featured"
 
 [package.metadata.repo.integrations]
-mcp = true
+mcp = false
 logging = true
 napi = false

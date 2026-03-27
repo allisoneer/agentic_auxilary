@@ -3,11 +3,19 @@
 //! This module provides methods for session endpoints (18 total).
 
 use crate::error::Result;
-use crate::http::{HttpClient, encode_path_segment};
-use crate::types::session::{
-    CreateSessionRequest, RevertRequest, Session, SessionDiff, SessionStatus, SessionStatusInfo,
-    SessionStatusResponse, ShareInfo, SummarizeRequest, TodoItem, UpdateSessionRequest,
-};
+use crate::http::HttpClient;
+use crate::http::encode_path_segment;
+use crate::types::session::CreateSessionRequest;
+use crate::types::session::RevertRequest;
+use crate::types::session::Session;
+use crate::types::session::SessionDiff;
+use crate::types::session::SessionStatus;
+use crate::types::session::SessionStatusInfo;
+use crate::types::session::SessionStatusResponse;
+use crate::types::session::ShareInfo;
+use crate::types::session::SummarizeRequest;
+use crate::types::session::TodoItem;
+use crate::types::session::UpdateSessionRequest;
 use reqwest::Method;
 
 /// Sessions API client.
@@ -287,8 +295,12 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use std::time::Duration;
-    use wiremock::matchers::{body_json, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::body_json;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     #[tokio::test]
     async fn test_create_session() {

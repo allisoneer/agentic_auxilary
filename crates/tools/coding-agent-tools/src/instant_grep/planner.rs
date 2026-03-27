@@ -5,7 +5,9 @@
 //! means more scan fallbacks and potentially broader candidate sets than the
 //! ideal design, but it preserves correctness and the sparse-gram storage model.
 
-use crate::instant_grep::grams::{GramKey, all_grams, gram_weight};
+use crate::instant_grep::grams::GramKey;
+use crate::instant_grep::grams::all_grams;
+use crate::instant_grep::grams::gram_weight;
 use crate::instant_grep::index::reader::InstantGrepIndex;
 use std::collections::BTreeSet;
 

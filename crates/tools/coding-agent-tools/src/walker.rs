@@ -1,8 +1,12 @@
 //! Directory traversal with gitignore and custom pattern filtering.
 
-use crate::types::{EntryKind, LsEntry, Show};
+use crate::types::EntryKind;
+use crate::types::LsEntry;
+use crate::types::Show;
 use agentic_tools_core::ToolError;
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::Glob;
+use globset::GlobSet;
+use globset::GlobSetBuilder;
 use ignore::WalkBuilder;
 use std::path::Path;
 

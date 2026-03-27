@@ -1,5 +1,7 @@
-use reqwest::header::{HeaderMap, HeaderValue};
-use secrecy::{ExposeSecret, SecretString};
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use secrecy::ExposeSecret;
+use secrecy::SecretString;
 
 /// Default Exa API base URL
 pub const EXA_DEFAULT_BASE: &str = "https://api.exa.ai";

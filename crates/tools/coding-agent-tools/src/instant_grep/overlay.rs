@@ -1,8 +1,11 @@
 //! Query-time working tree overlay helpers.
 
 use anyhow::Result;
-use git2::{Repository, Status, StatusOptions};
-use std::path::{Path, PathBuf};
+use git2::Repository;
+use git2::Status;
+use git2::StatusOptions;
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Dirty/untracked working-tree files to verify against the base index.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -53,7 +56,8 @@ pub fn overlay_paths(repo_root: &Path) -> Result<OverlayPaths> {
 #[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use git2::{Repository, Signature};
+    use git2::Repository;
+    use git2::Signature;
     use tempfile::TempDir;
 
     fn init_repo() -> (TempDir, Repository) {

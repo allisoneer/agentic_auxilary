@@ -1,8 +1,10 @@
 //! Repo-local storage paths for instant-grep index generations.
 
 use anyhow::Result;
-use std::path::{Path, PathBuf};
-use thoughts_tool::git::utils::{get_control_repo_root, get_current_branch};
+use std::path::Path;
+use std::path::PathBuf;
+use thoughts_tool::git::utils::get_control_repo_root;
+use thoughts_tool::git::utils::get_current_branch;
 use thoughts_tool::utils::paths::sanitize_dir_name;
 
 #[derive(Debug, Clone)]

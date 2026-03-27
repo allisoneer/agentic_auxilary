@@ -3,7 +3,8 @@
 #![expect(clippy::unwrap_used)]
 
 use coding_agent_tools::CodingAgentTools;
-use coding_agent_tools::types::{GrepOutput, OutputMode};
+use coding_agent_tools::types::GrepOutput;
+use coding_agent_tools::types::OutputMode;
 use std::fs;
 use tempfile::TempDir;
 

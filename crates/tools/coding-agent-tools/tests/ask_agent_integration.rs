@@ -4,7 +4,8 @@
 #![expect(clippy::unwrap_used)]
 
 use coding_agent_tools::CodingAgentTools;
-use coding_agent_tools::types::{AgentLocation, AgentType};
+use coding_agent_tools::types::AgentLocation;
+use coding_agent_tools::types::AgentType;
 
 #[tokio::test]
 #[ignore = "requires live API key and network access"]

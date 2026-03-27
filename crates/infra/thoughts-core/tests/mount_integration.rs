@@ -1,7 +1,9 @@
 #![cfg(test)]
 
 use tempfile::TempDir;
-use thoughts_tool::{MountOptions, detect_platform, get_mount_manager};
+use thoughts_tool::MountOptions;
+use thoughts_tool::detect_platform;
+use thoughts_tool::get_mount_manager;
 
 #[tokio::test]
 #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), ignore)]

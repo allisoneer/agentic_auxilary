@@ -1,6 +1,9 @@
-use crate::models::{
-    CommentSourceType, GraphQLResponse, PrSummary, PullRequestData, ReviewComment, Thread,
-};
+use crate::models::CommentSourceType;
+use crate::models::GraphQLResponse;
+use crate::models::PrSummary;
+use crate::models::PullRequestData;
+use crate::models::ReviewComment;
+use crate::models::Thread;
 use anyhow::Result;
 use octocrab::Octocrab;
 use std::collections::HashMap;
@@ -247,27 +250,33 @@ impl GitHubClient {
             ),
         };
 
-        let pulls = self
-            .client
-            .pulls(&self.owner, &self.repo)
-            .list()
-            .state(state)
-            .per_page(30)
-            .send()
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to list pull requests for {}/{}: {:?}",
-                    self.owner,
-                    self.repo,
-                    e
-                )
-            })?;
+        let mut prs = Vec::new();
+        let mut page = 1u32;
 
-        Ok(pulls
-            .items
-            .into_iter()
-            .map(|pr| PrSummary {
+        loop {
+            let pulls = self
+                .client
+                .pulls(&self.owner, &self.repo)
+                .list()
+                .state(state)
+                .page(page)
+                .per_page(100)
+                .send()
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to list pull requests for {}/{}: {:?}",
+                        self.owner,
+                        self.repo,
+                        e
+                    )
+                })?;
+
+            if pulls.items.is_empty() {
+                break;
+            }
+
+            prs.extend(pulls.items.into_iter().map(|pr| PrSummary {
                 number: pr.number,
                 title: pr.title.unwrap_or_default(),
                 author: pr.user.map(|u| u.login).unwrap_or_default(),
@@ -280,8 +289,12 @@ impl GitHubClient {
                 updated_at: pr.updated_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
                 comment_count: pr.comments.unwrap_or(0) as u32,
                 review_comment_count: pr.review_comments.unwrap_or(0) as u32,
-            })
-            .collect())
+            }));
+
+            page += 1;
+        }
+
+        Ok(prs)
     }
 
     pub async fn get_review_thread_resolution_status(
@@ -495,7 +508,8 @@ impl GitHubClient {
 // Test helper module - public for integration tests
 pub mod test_helpers {
     use super::*;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
+    use std::collections::HashSet;
 
     #[derive(Debug, Clone)]
     pub struct FilterParams<'a> {

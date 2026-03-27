@@ -1,9 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use colored::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use crate::git::progress::InlineProgress;
-use crate::git::utils::{get_remote_url, is_git_repo};
+use crate::git::utils::get_remote_url;
+use crate::git::utils::is_git_repo;
 use crate::repo_identity::RepoIdentity;
 use crate::utils::locks::FileLock;
 

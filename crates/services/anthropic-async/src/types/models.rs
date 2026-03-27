@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// An Anthropic model
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

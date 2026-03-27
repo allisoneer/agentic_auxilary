@@ -3,33 +3,52 @@
 //! This module provides utilities for MCP server applications including
 //! re-exports of rmcp and related dependencies.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use std::borrow::Cow;
 
-use crate::error::{ErrorCode, ToolError};
+use crate::error::ErrorCode;
+use crate::error::ToolError;
 use ::schemars::JsonSchema;
 use std::any::TypeId;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 // Re-export rmcp types so users don't need to depend on them
 pub use rmcp;
 pub use rmcp::*;
 
 // Re-export commonly used MCP types for convenience
-pub use rmcp::{
-    ServerHandler,
-    model::{
-        CallToolRequestParam, CallToolResult, CompleteRequestParam, CompleteResult, Content,
-        ErrorData, GetPromptRequestParam, GetPromptResult, Implementation, InitializeRequestParam,
-        InitializeResult, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
-        ListToolsResult, PaginatedRequestParam, ReadResourceRequestParam, ReadResourceResult,
-        ServerCapabilities, SetLevelRequestParam, SubscribeRequestParam, Tool,
-        UnsubscribeRequestParam,
-    },
-    service::{RequestContext, RoleServer, Service, ServiceExt},
-};
+pub use rmcp::ServerHandler;
+pub use rmcp::model::CallToolRequestParam;
+pub use rmcp::model::CallToolResult;
+pub use rmcp::model::CompleteRequestParam;
+pub use rmcp::model::CompleteResult;
+pub use rmcp::model::Content;
+pub use rmcp::model::ErrorData;
+pub use rmcp::model::GetPromptRequestParam;
+pub use rmcp::model::GetPromptResult;
+pub use rmcp::model::Implementation;
+pub use rmcp::model::InitializeRequestParam;
+pub use rmcp::model::InitializeResult;
+pub use rmcp::model::ListPromptsResult;
+pub use rmcp::model::ListResourceTemplatesResult;
+pub use rmcp::model::ListResourcesResult;
+pub use rmcp::model::ListToolsResult;
+pub use rmcp::model::PaginatedRequestParam;
+pub use rmcp::model::ReadResourceRequestParam;
+pub use rmcp::model::ReadResourceResult;
+pub use rmcp::model::ServerCapabilities;
+pub use rmcp::model::SetLevelRequestParam;
+pub use rmcp::model::SubscribeRequestParam;
+pub use rmcp::model::Tool;
+pub use rmcp::model::UnsubscribeRequestParam;
+pub use rmcp::service::RequestContext;
+pub use rmcp::service::RoleServer;
+pub use rmcp::service::Service;
+pub use rmcp::service::ServiceExt;
 
 // Re-export Error as McpError for convenience
 pub use rmcp::ErrorData as McpError;
@@ -38,7 +57,8 @@ pub use rmcp::ErrorData as McpError;
 pub use rmcp::transport::stdio;
 
 // Re-export serde_json for parameter handling
-pub use serde_json::{Value as JsonValue, json};
+pub use serde_json::Value as JsonValue;
+pub use serde_json::json;
 
 /// MCP error data structure following JSON-RPC 2.0 spec
 #[derive(Debug, Serialize, Deserialize, Clone)]

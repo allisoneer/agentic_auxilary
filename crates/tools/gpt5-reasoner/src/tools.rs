@@ -2,8 +2,15 @@
 //!
 //! Provides the `request` tool that wraps the reasoning model functionality.
 
-use crate::{DirectoryMeta, FileMeta, PromptType, gpt5_reasoner_impl};
-use agentic_tools_core::{Tool, ToolContext, ToolError, ToolRegistry};
+use crate::DirectoryMeta;
+use crate::FileMeta;
+use crate::PromptType;
+use crate::gpt5_reasoner_impl;
+use agentic_config::types::ReasoningConfig;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
+use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -47,7 +54,15 @@ pub struct RequestInput {
 
 /// Tool for requesting assistance from the reasoning model.
 #[derive(Clone)]
-pub struct RequestTool;
+pub struct RequestTool {
+    cfg: ReasoningConfig,
+}
+
+impl RequestTool {
+    pub fn new(cfg: ReasoningConfig) -> Self {
+        Self { cfg }
+    }
+}
 
 impl Tool for RequestTool {
     type Input = RequestInput;
@@ -60,12 +75,13 @@ impl Tool for RequestTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let cfg = self.cfg.clone();
         Box::pin(async move {
             gpt5_reasoner_impl(
                 input.prompt,
                 input.files,
                 input.directories,
-                None,
+                &cfg,
                 input.prompt_type,
                 input.output_filename,
             )
@@ -79,8 +95,8 @@ impl Tool for RequestTool {
 // ============================================================================
 
 /// Build a ToolRegistry containing all gpt5_reasoner tools.
-pub fn build_registry() -> ToolRegistry {
+pub fn build_registry(cfg: ReasoningConfig) -> ToolRegistry {
     ToolRegistry::builder()
-        .register::<RequestTool, ()>(RequestTool)
+        .register::<RequestTool, ()>(RequestTool::new(cfg))
         .finish()
 }

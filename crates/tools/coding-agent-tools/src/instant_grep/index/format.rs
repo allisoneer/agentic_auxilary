@@ -1,6 +1,7 @@
 //! Binary format metadata for instant-grep index generations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IndexMeta {

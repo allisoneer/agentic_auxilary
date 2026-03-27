@@ -3,7 +3,8 @@
 //! Generic pagination infrastructure is in `agentic_tools_utils::pagination`.
 //! This module contains ls-specific helpers and type aliases.
 
-use crate::types::{LsEntry, Show};
+use crate::types::LsEntry;
+use crate::types::Show;
 
 /// Page sizes based on show mode and depth
 pub const PAGE_SIZE_ALL: usize = 100;

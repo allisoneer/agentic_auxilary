@@ -1,6 +1,7 @@
 //! Provider types for `opencode_rs`.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// Response from the provider list endpoint.

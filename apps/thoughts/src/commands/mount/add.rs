@@ -1,8 +1,16 @@
+use crate::config::ContextMount;
+use crate::config::RepoConfigManager;
+use crate::config::RepoMappingManager;
+use crate::config::SyncStrategy;
 use crate::config::validation::sanitize_mount_name;
-use crate::config::{ContextMount, RepoConfigManager, RepoMappingManager, SyncStrategy};
-use crate::git::utils::{find_repo_root, get_control_repo_root, get_remote_url, is_git_repo};
+use crate::git::utils::find_repo_root;
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_remote_url;
+use crate::git::utils::is_git_repo;
 use crate::utils::paths::expand_path;
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use colored::*;
 use std::path::PathBuf;
 

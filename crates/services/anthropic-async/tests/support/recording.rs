@@ -9,12 +9,13 @@
 //! - API key and sensitive header redaction
 //! - starting/stopping the httpmock server used by the harness
 
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::env;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 
-use httpmock::{MockServer, Recording};
+use httpmock::MockServer;
+use httpmock::Recording;
 
 /// `ANTHROPIC_LIVE=1` => run against the real API (optionally via proxy when recording).
 pub const ENV_LIVE: &str = "ANTHROPIC_LIVE";

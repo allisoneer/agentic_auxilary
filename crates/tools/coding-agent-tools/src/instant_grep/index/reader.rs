@@ -1,10 +1,13 @@
 //! Instant-grep index reader.
 
 use super::builder::build_index_for_head;
-use super::format::{IndexMeta, LookupEntry};
-use super::storage::{GenerationPaths, resolve_index_paths};
+use super::format::IndexMeta;
+use super::format::LookupEntry;
+use super::storage::GenerationPaths;
+use super::storage::resolve_index_paths;
 use crate::instant_grep::grams::GramKey;
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use memmap2::Mmap;
 use std::fs::File;
 
@@ -193,7 +196,8 @@ pub fn open_or_build(repo_root: &std::path::Path, head_oid: &str) -> Result<Inst
 mod tests {
     use super::*;
     use crate::instant_grep::grams::all_grams;
-    use git2::{Repository, Signature};
+    use git2::Repository;
+    use git2::Signature;
     use std::path::Path;
     use tempfile::TempDir;
 

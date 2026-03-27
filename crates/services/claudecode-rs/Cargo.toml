@@ -1,6 +1,6 @@
 [package]
 name = "claudecode"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 authors = ["ClaudeCode-RS Contributors"]
 description = "A Rust SDK for programmatically interacting with Claude Code"
@@ -33,7 +33,7 @@ thiserror = "2.0"
 tracing = "0.1"
 
 # Path and environment handling
-dirs = "6"
+dirs = { workspace = true }
 which = "8"
 
 # Time handling
@@ -53,9 +53,9 @@ rmcp = { workspace = true, features = ["client", "transport-child-process"] }
 num_cpus = "1.16"
 
 [dev-dependencies]
- tokio-test = "0.4"
- tracing-subscriber = "0.3"
- serial_test = "3.2"
+tokio-test = "0.4"
+tracing-subscriber = "0.3"
+serial_test = "3.2"
 
 # Examples
 [[example]]

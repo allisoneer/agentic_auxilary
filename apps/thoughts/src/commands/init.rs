@@ -1,13 +1,17 @@
 use crate::config::RepoConfigManager;
-use crate::git::utils::{
-    get_control_repo_root, get_current_repo, get_main_repo_for_worktree, is_worktree,
-};
+use crate::git::utils::get_control_repo_root;
+use crate::git::utils::get_current_repo;
+use crate::git::utils::get_main_repo_for_worktree;
+use crate::git::utils::is_worktree;
 use crate::utils::git::ensure_gitignore_entry;
 use crate::utils::paths::ensure_dir;
-use anyhow::{Context, Result, anyhow};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
 use colored::Colorize;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 pub async fn execute(force: bool) -> Result<()> {
     // Ensure we're in a git repository

@@ -4,15 +4,21 @@ compile_error!(
 );
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
+use clap::Subcommand;
 use colored::Colorize;
 use tracing::info;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod commands;
 
-// Re-export library modules into binary's namespace
-pub use thoughts_tool::{config, error, git, mount, platform, utils};
+pub use thoughts_tool::config;
+pub use thoughts_tool::error;
+pub use thoughts_tool::git;
+pub use thoughts_tool::mount;
+pub use thoughts_tool::platform;
+pub use thoughts_tool::utils;
 
 use crate::config::SyncStrategy;
 
@@ -47,7 +53,7 @@ enum Commands {
         /// Specific mount to sync (syncs current repository's mounts if not specified)
         mount: Option<String>,
 
-        /// Commit message for sync
+        /// Commit message for sync (currently ignored)
         #[arg(short, long)]
         message: Option<String>,
 
@@ -180,9 +186,6 @@ enum ConfigCommands {
 
     /// Validate configuration
     Validate,
-
-    /// Migrate v1 configuration to v2
-    MigrateToV2(commands::config::migrate::MigrateArgs),
 }
 
 #[derive(Subcommand)]
@@ -278,7 +281,6 @@ async fn main() -> Result<()> {
         );
     }
 
-    // Execute command
     match cli.command {
         Commands::Init { force } => commands::init::execute(force).await,
         Commands::Sync {
@@ -318,7 +320,6 @@ async fn main() -> Result<()> {
             ConfigCommands::Show { json } => commands::config::show::execute(json).await,
             ConfigCommands::Edit {} => commands::config::edit::execute().await,
             ConfigCommands::Validate => commands::config::validate::execute().await,
-            ConfigCommands::MigrateToV2(args) => commands::config::migrate::execute(args).await,
         },
         Commands::References { command } => match command {
             ReferenceCommands::Add { url } => commands::references::add::execute(url).await,
@@ -334,7 +335,8 @@ async fn main() -> Result<()> {
             WorkCommands::Complete => commands::work::complete::execute().await,
             WorkCommands::List { recent } => commands::work::list::execute(recent).await,
             WorkCommands::Open { subdir } => {
-                use commands::work::open::{OpenSubdir, execute};
+                use commands::work::open::OpenSubdir;
+                use commands::work::open::execute;
                 let which = match subdir.as_deref() {
                     Some("research") => OpenSubdir::Research,
                     Some("plans") => OpenSubdir::Plans,
