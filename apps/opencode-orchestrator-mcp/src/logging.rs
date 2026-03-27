@@ -56,12 +56,19 @@ mod tests {
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-    struct EnvVarGuard(&'static str);
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
 
     impl Drop for EnvVarGuard {
         fn drop(&mut self) {
-            // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
-            unsafe { std::env::remove_var(self.0) };
+            match &self.previous {
+                // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+                Some(value) => unsafe { std::env::set_var(self.key, value) },
+                // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+                None => unsafe { std::env::remove_var(self.key) },
+            }
         }
     }
 
@@ -88,7 +95,10 @@ mod tests {
     #[test]
     fn env_log_dir_writes_jsonl() {
         let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-        let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_LOG_DIR);
+        let _env = EnvVarGuard {
+            key: OPENCODE_ORCHESTRATOR_LOG_DIR,
+            previous: std::env::var_os(OPENCODE_ORCHESTRATOR_LOG_DIR),
+        };
         let tmp = tempfile::tempdir().unwrap();
 
         // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
@@ -112,7 +122,10 @@ mod tests {
     #[test]
     fn invalid_log_dir_is_swallowed() {
         let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-        let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_LOG_DIR);
+        let _env = EnvVarGuard {
+            key: OPENCODE_ORCHESTRATOR_LOG_DIR,
+            previous: std::env::var_os(OPENCODE_ORCHESTRATOR_LOG_DIR),
+        };
         let tmp = tempfile::tempdir().unwrap();
         let invalid_path = tmp.path().join("not-a-directory");
         std::fs::write(&invalid_path, "file").unwrap();

@@ -87,6 +87,11 @@ pub fn resolve_opencode_binary(base_dir: &Path) -> anyhow::Result<PathBuf> {
 /// Parse launcher args from `OPENCODE_BINARY_ARGS` environment variable.
 ///
 /// Splits on whitespace. Returns empty Vec if unset or empty.
+///
+/// Note: This uses simple whitespace splitting and does not support shell-style
+/// quoting. Arguments containing spaces (e.g., `--message "hello world"`) will
+/// be incorrectly split. This is acceptable for the documented use case
+/// (`--yes opencode-ai@1.3.3`).
 pub fn parse_launcher_args() -> Vec<String> {
     match std::env::var(OPENCODE_BINARY_ARGS_ENV) {
         Ok(value) => {
