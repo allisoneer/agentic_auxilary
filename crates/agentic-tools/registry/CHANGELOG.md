@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.2.10] - 2026-03-26
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: pr_comments, coding_agent_tools, linear-tools, review_tools
 ## [0.2.9] - 2026-03-26
 ## [0.2.8] - 2026-03-26
 
