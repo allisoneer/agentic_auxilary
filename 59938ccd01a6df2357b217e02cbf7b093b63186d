@@ -1,0 +1,23 @@
+crates/meta/xtask/src/verify.rs
+  f96c67e30d7ccd4f 474,491,508,523,533-546,556
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "59938ccd01a6df2357b217e02cbf7b093b63186d",
+  "prompts": {
+    "f96c67e30d7ccd4f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2d00a9242ffehdILyy4sMOlk4a",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 0,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
