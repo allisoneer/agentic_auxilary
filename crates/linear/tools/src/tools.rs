@@ -501,7 +501,7 @@ impl Tool for SetRelationTool {
     type Input = SetRelationInput;
     type Output = SetRelationResult;
     const NAME: &'static str = "linear_set_relation";
-    const DESCRIPTION: &'static str = "Set or remove a relation between two issues. Provide relation_type to create (blocks/duplicate/related/similar), or omit/null to remove any existing relation.";
+    const DESCRIPTION: &'static str = "Set or remove a relation between two issues. Provide relation_type to create (blocks/duplicate/related), or omit/null to remove any existing relation.";
 
     fn call(
         &self,

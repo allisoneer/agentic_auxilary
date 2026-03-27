@@ -40,7 +40,7 @@ const COMMENTS_PAGE_SIZE: usize = 10;
 #[derive(Clone)]
 pub struct LinearTools {
     api_key: Option<String>,
-    comments_cache: Arc<PaginationCache<models::CommentSummary>>,
+    comments_cache: Arc<PaginationCache<models::CommentSummary, String>>,
 }
 
 impl LinearTools {
@@ -517,8 +517,11 @@ impl LinearTools {
         let resp = client.run(op).await?;
         let data = http::extract_data(resp)?;
 
-        let issue = data
-            .issue_update
+        let payload = data.issue_update;
+        if !payload.success {
+            anyhow::bail!("Update failed: Linear returned success=false");
+        }
+        let issue = payload
             .issue
             .ok_or_else(|| anyhow::anyhow!("No issue returned from update"))?;
 
@@ -845,9 +848,7 @@ impl LinearTools {
             }
             None => {
                 // Remove relation - need to find it first
-                let op = IssueRelationsQuery::build(IssueRelationsArguments {
-                    id: issue_id.clone(),
-                });
+                let op = IssueRelationsQuery::build(IssueRelationsArguments { id: issue_id });
                 let resp = client.run(op).await?;
                 let data = http::extract_data(resp)?;
 
@@ -924,16 +925,17 @@ impl LinearTools {
         if needs_fetch {
             // Fetch all comments from Linear API
             let (identifier, all_comments) = self.fetch_all_comments(&client, &issue_id).await?;
-            issue_identifier = identifier;
+            issue_identifier = identifier.clone();
 
-            // Reset cache with fresh data
+            // Reset cache with fresh data (stores canonical identifier)
             let mut state = query_lock.lock_state();
             if state.is_empty() || state.is_expired() {
-                state.reset(all_comments, (), COMMENTS_PAGE_SIZE);
+                state.reset(all_comments, identifier, COMMENTS_PAGE_SIZE);
             }
         } else {
-            // Get identifier from issue (not cached, but fast)
-            issue_identifier = issue.clone();
+            // Get canonical identifier from cache
+            let state = query_lock.lock_state();
+            issue_identifier = state.meta.clone();
         }
 
         // Paginate from cache
