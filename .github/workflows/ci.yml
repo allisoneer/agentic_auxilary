@@ -94,9 +94,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
         with:
-          command: check
+          tool: cargo-deny
+
+      - name: Run cargo deny
+        run: cargo deny check
 
   actionlint:
     name: Lint GitHub Actions workflows
