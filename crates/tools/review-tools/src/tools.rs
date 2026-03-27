@@ -25,7 +25,7 @@ impl Tool for DiffSnapshotTool {
     type Input = ReviewDiffSnapshotInput;
     type Output = ReviewDiffSnapshotOutput;
 
-    const NAME: &'static str = "diff_snapshot";
+    const NAME: &'static str = "review_diff_snapshot";
     const DESCRIPTION: &'static str = "Generate a paginated git diff snapshot (pure git2), cache it server-side, and return a handle. \
          Use 'mode=staged' for staged-only changes, or 'mode=default' for working tree + staged vs merge-base.";
 
@@ -49,7 +49,7 @@ impl Tool for DiffPageTool {
     type Input = ReviewDiffPageInput;
     type Output = ReviewDiffPageOutput;
 
-    const NAME: &'static str = "diff_page";
+    const NAME: &'static str = "review_diff_page";
     const DESCRIPTION: &'static str = "Fetch one page (1-based) of a cached diff snapshot by handle. \
          Returns the diff content for that page along with metadata.";
 
@@ -73,7 +73,7 @@ impl Tool for RunTool {
     type Input = ReviewRunInput;
     type Output = ReviewRunOutput;
 
-    const NAME: &'static str = "run";
+    const NAME: &'static str = "review_run";
     const DESCRIPTION: &'static str = "Run a lens-based adversarial code review over a cached diff snapshot. \
          The diff is embedded in the reviewer prompt (fileless). \
          Returns a validated ReviewReport with findings and verdict.";
@@ -108,17 +108,17 @@ mod tests {
 
     #[test]
     fn diff_snapshot_tool_name() {
-        assert_eq!(DiffSnapshotTool::NAME, "diff_snapshot");
+        assert_eq!(DiffSnapshotTool::NAME, "review_diff_snapshot");
     }
 
     #[test]
     fn diff_page_tool_name() {
-        assert_eq!(DiffPageTool::NAME, "diff_page");
+        assert_eq!(DiffPageTool::NAME, "review_diff_page");
     }
 
     #[test]
     fn run_tool_name() {
-        assert_eq!(RunTool::NAME, "run");
+        assert_eq!(RunTool::NAME, "review_run");
     }
 
     #[test]
@@ -126,8 +126,8 @@ mod tests {
         let svc = Arc::new(ReviewTools::new());
         let registry = build_registry(svc);
         assert_eq!(registry.len(), 3);
-        assert!(registry.contains("diff_snapshot"));
-        assert!(registry.contains("diff_page"));
-        assert!(registry.contains("run"));
+        assert!(registry.contains("review_diff_snapshot"));
+        assert!(registry.contains("review_diff_page"));
+        assert!(registry.contains("review_run"));
     }
 }
