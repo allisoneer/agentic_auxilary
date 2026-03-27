@@ -100,6 +100,11 @@ pub struct CreateIssueResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct IssueResult {
+    pub issue: IssueSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CommentResult {
     pub success: bool,
     pub comment_id: Option<String>,
@@ -273,6 +278,15 @@ impl TextFormat for CreateIssueResult {
     }
 }
 
+impl TextFormat for IssueResult {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        format!(
+            "Updated issue: {} - {}",
+            self.issue.identifier, self.issue.title
+        )
+    }
+}
+
 impl TextFormat for CommentResult {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
         if !self.success {
@@ -302,12 +316,32 @@ pub struct ArchiveIssueResult {
     pub success: bool,
 }
 
+/// Result of a set_relation operation
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SetRelationResult {
+    pub success: bool,
+    /// Action taken: "created", "removed", or "no_change"
+    pub action: String,
+}
+
 impl TextFormat for ArchiveIssueResult {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
         if self.success {
             "Issue archived successfully".into()
         } else {
             "Failed to archive issue".into()
+        }
+    }
+}
+
+impl TextFormat for SetRelationResult {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        match (self.success, self.action.as_str()) {
+            (true, "created") => "Relation created successfully".into(),
+            (true, "removed") => "Relation removed successfully".into(),
+            (true, "no_change") => "No relation change needed".into(),
+            (false, _) => "Failed to modify relation".into(),
+            _ => format!("Relation operation: {}", self.action),
         }
     }
 }

@@ -220,6 +220,7 @@ impl LinearTools {
         priority: Option<i32>,
         state_id: Option<String>,
         assignee_id: Option<String>,
+        creator_id: Option<String>,
         team_id: Option<String>,
         project_id: Option<String>,
         created_after: Option<String>,
@@ -254,6 +255,14 @@ impl LinearTools {
         }
         if let Some(id) = assignee_id {
             filter.assignee = Some(NullableUserFilter {
+                id: Some(IdComparator {
+                    eq: Some(cynic::Id::new(id)),
+                }),
+            });
+            has_filter = true;
+        }
+        if let Some(id) = creator_id {
+            filter.creator = Some(NullableUserFilter {
                 id: Some(IdComparator {
                     eq: Some(cynic::Id::new(id)),
                 }),
@@ -459,6 +468,55 @@ impl LinearTools {
         Ok(models::CreateIssueResult {
             success: payload.success,
             issue,
+        })
+    }
+
+    /// Update an existing Linear issue
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_issue(
+        &self,
+        issue: String,
+        title: Option<String>,
+        description: Option<String>,
+        priority: Option<i32>,
+        assignee_id: Option<String>,
+        state_id: Option<String>,
+        project_id: Option<String>,
+        parent_id: Option<String>,
+        label_ids: Option<Vec<String>>,
+        added_label_ids: Option<Vec<String>>,
+        removed_label_ids: Option<Vec<String>>,
+        due_date: Option<String>,
+    ) -> Result<models::IssueResult> {
+        let client = LinearClient::new(self.api_key.clone())
+            .context("internal: failed to create Linear client")?;
+        let id = self.resolve_to_issue_id(&client, &issue).await?;
+
+        let input = IssueUpdateInput {
+            title,
+            description,
+            priority,
+            assignee_id,
+            state_id,
+            project_id,
+            parent_id,
+            label_ids,
+            added_label_ids,
+            removed_label_ids,
+            due_date: due_date.map(linear_queries::scalars::TimelessDate),
+        };
+
+        let op = IssueUpdateMutation::build(IssueUpdateArguments { id, input });
+        let resp = client.run(op).await?;
+        let data = http::extract_data(resp)?;
+
+        let issue = data
+            .issue_update
+            .issue
+            .ok_or_else(|| anyhow::anyhow!("No issue returned from update"))?;
+
+        Ok(models::IssueResult {
+            issue: issue.into(),
         })
     }
 
@@ -734,6 +792,98 @@ impl LinearTools {
                     has_next_page: data.issue_labels.page_info.has_next_page,
                     end_cursor: data.issue_labels.page_info.end_cursor,
                 })
+            }
+        }
+    }
+
+    /// Set or remove a relation between two issues
+    pub async fn set_relation(
+        &self,
+        issue: String,
+        related_issue: String,
+        relation_type: Option<String>,
+    ) -> Result<models::SetRelationResult> {
+        let client = LinearClient::new(self.api_key.clone())
+            .context("internal: failed to create Linear client")?;
+        let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
+        let related_issue_id = self.resolve_to_issue_id(&client, &related_issue).await?;
+
+        match relation_type {
+            Some(rel_type) => {
+                // Create relation
+                let relation_type = match rel_type.to_lowercase().as_str() {
+                    "blocks" => IssueRelationType::Blocks,
+                    "duplicate" => IssueRelationType::Duplicate,
+                    "related" => IssueRelationType::Related,
+                    other => anyhow::bail!(
+                        "Invalid relation type: {}. Must be one of: blocks, duplicate, related",
+                        other
+                    ),
+                };
+
+                let input = IssueRelationCreateInput {
+                    issue_id,
+                    related_issue_id,
+                    relation_type,
+                };
+
+                let op = IssueRelationCreateMutation::build(IssueRelationCreateArguments { input });
+                let resp = client.run(op).await?;
+                let data = http::extract_data(resp)?;
+
+                Ok(models::SetRelationResult {
+                    success: data.issue_relation_create.success,
+                    action: "created".to_string(),
+                })
+            }
+            None => {
+                // Remove relation - need to find it first
+                let op = IssueRelationsQuery::build(IssueRelationsArguments {
+                    id: issue_id.clone(),
+                });
+                let resp = client.run(op).await?;
+                let data = http::extract_data(resp)?;
+
+                let issue_with_relations = data
+                    .issue
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue not found"))?;
+
+                // Search in both relations and inverse_relations
+                let relation_id = issue_with_relations
+                    .relations
+                    .nodes
+                    .iter()
+                    .find(|r| r.related_issue.id.inner() == related_issue_id)
+                    .map(|r| r.id.inner().to_string())
+                    .or_else(|| {
+                        issue_with_relations
+                            .inverse_relations
+                            .nodes
+                            .iter()
+                            .find(|r| r.related_issue.id.inner() == related_issue_id)
+                            .map(|r| r.id.inner().to_string())
+                    });
+
+                match relation_id {
+                    Some(id) => {
+                        let op =
+                            IssueRelationDeleteMutation::build(IssueRelationDeleteArguments { id });
+                        let resp = client.run(op).await?;
+                        let data = http::extract_data(resp)?;
+
+                        Ok(models::SetRelationResult {
+                            success: data.issue_relation_delete.success,
+                            action: "removed".to_string(),
+                        })
+                    }
+                    None => {
+                        // No relation found - idempotent success
+                        Ok(models::SetRelationResult {
+                            success: true,
+                            action: "no_change".to_string(),
+                        })
+                    }
+                }
             }
         }
     }

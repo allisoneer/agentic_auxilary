@@ -161,6 +161,8 @@ pub struct IssueFilter {
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<NullableUserFilter>,
     #[cynic(skip_serializing_if = "Option::is_none")]
+    pub creator: Option<NullableUserFilter>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamFilter>,
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub project: Option<NullableProjectFilter>,

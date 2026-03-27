@@ -19,7 +19,7 @@ async fn search_issues_auth_failure() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await;
     assert!(res.is_err());
@@ -88,7 +88,7 @@ async fn search_issues_success() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
@@ -377,6 +377,7 @@ async fn search_issues_with_state_filter() {
             None,
             None,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -418,6 +419,7 @@ async fn search_issues_with_date_ranges() {
             None,
             None,
             None,
+            None,
             Some("2025-01-01T00:00:00Z".to_string()),
             Some("2025-01-31T23:59:59Z".to_string()),
             None,
@@ -452,7 +454,7 @@ async fn auth_header_personal_key() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
@@ -478,7 +480,7 @@ async fn auth_header_oauth_token() {
     let tool = linear_tools::LinearTools::new();
     let res = tool
         .search_issues(
-            None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
@@ -519,6 +521,7 @@ async fn search_issues_full_text_success() {
             None,
             None,
             None,
+            None,
             Some(10),
             None,
         )
@@ -550,6 +553,7 @@ async fn graphql_errors_fail_fast() {
     let res = tool
         .search_issues(
             Some("anything".into()),
+            None,
             None,
             None,
             None,
@@ -632,6 +636,227 @@ async fn archive_issue_success_by_identifier() {
     let tool = linear_tools::LinearTools::new();
     let res = tool.archive_issue("ENG-245".to_string()).await.unwrap();
     assert!(res.success);
+}
+
+// ============================================================================
+// Update issue tests
+// ============================================================================
+
+#[tokio::test]
+#[serial(env)]
+async fn update_issue_by_uuid_success() {
+    let mut server = Server::new_async().await;
+
+    // Use a proper UUID format that won't be mistaken for an identifier like ENG-123
+    let mut node = issue_node(
+        "550e8400-e29b-41d4-a716-446655440000",
+        "ENG-100",
+        "Updated Title",
+    );
+    node["description"] = serde_json::json!("Updated description");
+    node["state"] = workflow_state_node("s1", "In Progress", "started");
+
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_update_response(node))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let result = tool
+        .update_issue(
+            "550e8400-e29b-41d4-a716-446655440000".to_string(), // proper UUID format
+            Some("Updated Title".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.issue.title, "Updated Title");
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn update_issue_by_identifier_success() {
+    let mut server = Server::new_async().await;
+
+    // First mock: resolve identifier
+    let mut resolve_node = issue_node("uuid-1", "ENG-100", "Original");
+    resolve_node["state"] = serde_json::json!(null);
+
+    let _m1 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issues_response(vec![resolve_node], false, None))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // Second mock: update issue
+    let mut updated_node = issue_node("uuid-1", "ENG-100", "Updated");
+    updated_node["state"] = workflow_state_node("s1", "In Progress", "started");
+    updated_node["description"] = serde_json::json!("New description");
+
+    let _m2 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_update_response(updated_node))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let result = tool
+        .update_issue(
+            "ENG-100".to_string(),
+            Some("Updated".to_string()),
+            Some("New description".to_string()),
+            Some(2), // High priority
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.issue.title, "Updated");
+}
+
+// ============================================================================
+// Set relation tests
+// ============================================================================
+
+#[tokio::test]
+#[serial(env)]
+async fn set_relation_create_success() {
+    let mut server = Server::new_async().await;
+
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_relation_create_response(true))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let result = tool
+        .set_relation(
+            "550e8400-e29b-41d4-a716-446655440001".to_string(),
+            "550e8400-e29b-41d4-a716-446655440002".to_string(),
+            Some("blocks".to_string()),
+        )
+        .await
+        .unwrap();
+
+    assert!(result.success);
+    assert_eq!(result.action, "created");
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn set_relation_remove_existing() {
+    let mut server = Server::new_async().await;
+
+    // First mock: query relations
+    let _m1 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_relations_response(
+            vec![("rel-123", "550e8400-e29b-41d4-a716-446655440002")],
+            vec![],
+        ))
+        .expect(1)
+        .create_async()
+        .await;
+
+    // Second mock: delete relation
+    let _m2 = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_relation_delete_response(true))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let result = tool
+        .set_relation(
+            "550e8400-e29b-41d4-a716-446655440001".to_string(),
+            "550e8400-e29b-41d4-a716-446655440002".to_string(),
+            None, // Remove relation
+        )
+        .await
+        .unwrap();
+
+    assert!(result.success);
+    assert_eq!(result.action, "removed");
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn set_relation_remove_not_found_idempotent() {
+    let mut server = Server::new_async().await;
+
+    // Mock: query relations returns empty
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_relations_response(vec![], vec![]))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let result = tool
+        .set_relation(
+            "550e8400-e29b-41d4-a716-446655440001".to_string(),
+            "550e8400-e29b-41d4-a716-446655440002".to_string(),
+            None, // Remove relation
+        )
+        .await
+        .unwrap();
+
+    assert!(result.success);
+    assert_eq!(result.action, "no_change");
 }
 
 // ============================================================================
@@ -747,6 +972,50 @@ async fn get_metadata_labels_success() {
     assert_eq!(res.items[0].team_id, Some("t1".to_string()));
     assert_eq!(res.items[1].name, "Feature");
     assert_eq!(res.items[1].team_id, None);
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn search_issues_with_creator_id_filter() {
+    let mut server = Server::new_async().await;
+
+    let node = issue_node("uuid-creator", "ENG-150", "Issue by Creator");
+
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issues_response(vec![node], false, None))
+        .expect(1)
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool
+        .search_issues(
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("creator-uuid".to_string()), // creator_id
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.issues.len(), 1);
+    assert_eq!(res.issues[0].identifier, "ENG-150");
 }
 
 #[tokio::test]
