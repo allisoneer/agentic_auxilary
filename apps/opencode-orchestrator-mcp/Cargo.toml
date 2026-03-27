@@ -28,7 +28,7 @@ path = "src/main.rs"
 [dependencies]
 agentic-config = { workspace = true }
 anyhow = { workspace = true }
-agentic_logging = { path = "../../crates/infra/agentic-logging" }
+agentic_logging = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 chrono = { workspace = true }
