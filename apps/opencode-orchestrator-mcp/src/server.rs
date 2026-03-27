@@ -302,13 +302,9 @@ impl OrchestratorServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
+    use serial_test::serial;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
-
-    /// Mutex to serialize env var tests (env vars are process-global).
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[tokio::test]
     async fn init_with_retry_succeeds_on_first_attempt() {
@@ -365,67 +361,61 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_not_set() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
         // Ensure the env var is not set
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
         assert!(!managed_guard_enabled());
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_enabled_when_env_is_1() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_is_0() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "0") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_is_empty() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_disabled_when_env_is_whitespace() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "   ") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn managed_guard_enabled_when_env_is_truthy() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "true") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 }

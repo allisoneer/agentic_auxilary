@@ -50,11 +50,8 @@ mod tests {
     use super::*;
     use agentic_logging::CallTimer;
     use agentic_logging::ToolCallRecord;
+    use serial_test::serial;
     use std::io::Read;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
-
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     struct EnvVarGuard {
         key: &'static str,
@@ -64,9 +61,9 @@ mod tests {
     impl Drop for EnvVarGuard {
         fn drop(&mut self) {
             match &self.previous {
-                // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+                // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
                 Some(value) => unsafe { std::env::set_var(self.key, value) },
-                // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+                // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
                 None => unsafe { std::env::remove_var(self.key) },
             }
         }
@@ -93,15 +90,15 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn env_log_dir_writes_jsonl() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
         let _env = EnvVarGuard {
             key: OPENCODE_ORCHESTRATOR_LOG_DIR,
             previous: std::env::var_os(OPENCODE_ORCHESTRATOR_LOG_DIR),
         };
         let tmp = tempfile::tempdir().unwrap();
 
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_LOG_DIR, tmp.path()) };
 
         let record = sample_record();
@@ -120,8 +117,8 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn invalid_log_dir_is_swallowed() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
         let _env = EnvVarGuard {
             key: OPENCODE_ORCHESTRATOR_LOG_DIR,
             previous: std::env::var_os(OPENCODE_ORCHESTRATOR_LOG_DIR),
@@ -130,7 +127,7 @@ mod tests {
         let invalid_path = tmp.path().join("not-a-directory");
         std::fs::write(&invalid_path, "file").unwrap();
 
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_LOG_DIR, &invalid_path) };
 
         append_record_best_effort(&sample_record());

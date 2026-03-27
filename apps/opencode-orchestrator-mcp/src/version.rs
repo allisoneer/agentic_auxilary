@@ -152,11 +152,7 @@ pub fn resolve_launcher_config(base_dir: &Path) -> anyhow::Result<LauncherConfig
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
-
-    /// Mutex to serialize env var tests (env vars are process-global).
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    use serial_test::serial;
 
     #[test]
     fn normalize_strips_v_prefix() {
@@ -183,47 +179,43 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn parse_launcher_args_empty_when_unset() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_BINARY_ARGS_ENV) };
         assert!(parse_launcher_args().is_empty());
     }
 
     #[test]
+    #[serial(env)]
     fn parse_launcher_args_splits_on_whitespace() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.3") };
         assert_eq!(parse_launcher_args(), vec!["opencode-ai@1.3.3"]);
 
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "--yes opencode-ai@1.3.3") };
         assert_eq!(parse_launcher_args(), vec!["--yes", "opencode-ai@1.3.3"]);
 
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_BINARY_ARGS_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn parse_launcher_args_empty_string_returns_empty() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "   ") };
         assert!(parse_launcher_args().is_empty());
 
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_BINARY_ARGS_ENV) };
     }
 
     #[test]
+    #[serial(env)]
     fn resolve_launcher_config_launcher_mode() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::set_var(OPENCODE_BINARY_ENV, "bunx");
             std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.3");
@@ -235,7 +227,7 @@ mod tests {
         assert_eq!(config.binary, "bunx");
         assert_eq!(config.launcher_args, vec!["opencode-ai@1.3.3"]);
 
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::remove_var(OPENCODE_BINARY_ENV);
             std::env::remove_var(OPENCODE_BINARY_ARGS_ENV);
@@ -243,10 +235,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(env)]
     fn resolve_launcher_config_errors_when_args_set_but_binary_empty() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::set_var(OPENCODE_BINARY_ENV, "   ");
             std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.3");
@@ -262,7 +253,7 @@ mod tests {
                 .contains("OPENCODE_BINARY is empty")
         );
 
-        // SAFETY: Test runs with ENV_LOCK held, ensuring no concurrent env modification
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::remove_var(OPENCODE_BINARY_ENV);
             std::env::remove_var(OPENCODE_BINARY_ARGS_ENV);

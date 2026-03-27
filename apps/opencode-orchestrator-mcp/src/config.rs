@@ -23,50 +23,43 @@ pub fn idle_grace() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
-
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-        ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
-    }
+    use serial_test::serial;
 
     #[test]
+    #[serial(env)]
     fn idle_grace_uses_default_when_env_missing() {
-        let _guard = lock_env();
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS) };
         assert_eq!(idle_grace(), Duration::from_millis(DEFAULT_IDLE_GRACE_MS));
     }
 
     #[test]
+    #[serial(env)]
     fn idle_grace_uses_env_value_when_valid() {
-        let _guard = lock_env();
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "42") };
         assert_eq!(idle_grace(), Duration::from_millis(42));
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS) };
     }
 
     #[test]
+    #[serial(env)]
     fn idle_grace_falls_back_when_env_invalid() {
-        let _guard = lock_env();
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "abc") };
         assert_eq!(idle_grace(), Duration::from_millis(DEFAULT_IDLE_GRACE_MS));
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS) };
     }
 
     #[test]
+    #[serial(env)]
     fn idle_grace_falls_back_when_env_empty() {
-        let _guard = lock_env();
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "   ") };
         assert_eq!(idle_grace(), Duration::from_millis(DEFAULT_IDLE_GRACE_MS));
-        // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS) };
     }
 }
