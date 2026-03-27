@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.1] - 2026-03-27
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: agentic-config, coding_agent_tools, gpt5_reasoner, review_tools, web-retrieval
 ## [0.3.0] - 2026-03-26
 ## [0.2.10] - 2026-03-26
 
