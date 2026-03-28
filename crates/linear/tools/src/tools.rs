@@ -8,7 +8,9 @@ use crate::models::CommentResult;
 use crate::models::CreateIssueResult;
 use crate::models::GetMetadataResult;
 use crate::models::IssueDetails;
+use crate::models::IssueResult;
 use crate::models::SearchResult;
+use crate::models::SetRelationResult;
 use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
@@ -40,6 +42,9 @@ pub struct SearchIssuesInput {
     /// Assignee user ID (UUID)
     #[serde(default)]
     pub assignee_id: Option<String>,
+    /// Creator user ID (UUID)
+    #[serde(default)]
+    pub creator_id: Option<String>,
     /// Team ID (UUID)
     #[serde(default)]
     pub team_id: Option<String>,
@@ -98,6 +103,7 @@ impl Tool for SearchIssuesTool {
                     input.priority,
                     input.state_id,
                     input.assignee_id,
+                    input.creator_id,
                     input.team_id,
                     input.project_id,
                     input.created_after,
@@ -285,6 +291,50 @@ impl Tool for AddCommentTool {
 }
 
 // ============================================================================
+// GetIssueComments Tool
+// ============================================================================
+
+/// Input for get_issue_comments tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct GetIssueCommentsInput {
+    /// Issue ID, identifier (e.g., ENG-245), or URL
+    pub issue: String,
+}
+
+/// Tool for fetching comments on a Linear issue with implicit pagination.
+#[derive(Clone)]
+pub struct GetIssueCommentsTool {
+    linear: Arc<LinearTools>,
+}
+
+impl GetIssueCommentsTool {
+    pub fn new(linear: Arc<LinearTools>) -> Self {
+        Self { linear }
+    }
+}
+
+impl Tool for GetIssueCommentsTool {
+    type Input = GetIssueCommentsInput;
+    type Output = crate::models::CommentsResult;
+    const NAME: &'static str = "linear_get_issue_comments";
+    const DESCRIPTION: &'static str = "Get comments on a Linear issue. Returns 10 comments per call with implicit pagination - call again with the same issue to get more comments.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let linear = self.linear.clone();
+        Box::pin(async move {
+            linear
+                .get_issue_comments(input.issue)
+                .await
+                .map_err(map_anyhow_to_tool_error)
+        })
+    }
+}
+
+// ============================================================================
 // ArchiveIssue Tool
 // ============================================================================
 
@@ -323,6 +373,145 @@ impl Tool for ArchiveIssueTool {
         Box::pin(async move {
             linear
                 .archive_issue(input.issue)
+                .await
+                .map_err(map_anyhow_to_tool_error)
+        })
+    }
+}
+
+// ============================================================================
+// UpdateIssue Tool
+// ============================================================================
+
+/// Input for updating an existing Linear issue
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct UpdateIssueInput {
+    /// Issue identifier (UUID, key like ENG-245, or Linear URL)
+    pub issue: String,
+    /// New title for the issue
+    #[serde(default)]
+    pub title: Option<String>,
+    /// New description (markdown supported)
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Priority: 0=None, 1=Urgent, 2=High, 3=Medium, 4=Low
+    #[serde(default)]
+    pub priority: Option<i32>,
+    /// Assignee user ID (UUID)
+    #[serde(default)]
+    pub assignee_id: Option<String>,
+    /// Workflow state ID (UUID)
+    #[serde(default)]
+    pub state_id: Option<String>,
+    /// Project ID (UUID)
+    #[serde(default)]
+    pub project_id: Option<String>,
+    /// Parent issue ID (UUID) for sub-issues
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// Replace all labels with these IDs (overrides existing)
+    #[serde(default)]
+    pub label_ids: Option<Vec<String>>,
+    /// Add these label IDs (incremental)
+    #[serde(default)]
+    pub added_label_ids: Option<Vec<String>>,
+    /// Remove these label IDs (incremental)
+    #[serde(default)]
+    pub removed_label_ids: Option<Vec<String>>,
+    /// Due date in ISO 8601 format (YYYY-MM-DD)
+    #[serde(default)]
+    pub due_date: Option<String>,
+}
+
+/// Tool for updating an existing Linear issue.
+#[derive(Clone)]
+pub struct UpdateIssueTool {
+    linear: Arc<LinearTools>,
+}
+
+impl UpdateIssueTool {
+    pub fn new(linear: Arc<LinearTools>) -> Self {
+        Self { linear }
+    }
+}
+
+impl Tool for UpdateIssueTool {
+    type Input = UpdateIssueInput;
+    type Output = IssueResult;
+    const NAME: &'static str = "linear_update_issue";
+    const DESCRIPTION: &'static str = "Update an existing Linear issue. Use linear_get_metadata to look up user IDs, state IDs, project IDs, and label IDs.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let linear = self.linear.clone();
+        Box::pin(async move {
+            linear
+                .update_issue(
+                    input.issue,
+                    input.title,
+                    input.description,
+                    input.priority,
+                    input.assignee_id,
+                    input.state_id,
+                    input.project_id,
+                    input.parent_id,
+                    input.label_ids,
+                    input.added_label_ids,
+                    input.removed_label_ids,
+                    input.due_date,
+                )
+                .await
+                .map_err(map_anyhow_to_tool_error)
+        })
+    }
+}
+
+// ============================================================================
+// SetRelation Tool
+// ============================================================================
+
+/// Input for setting or removing an issue relation
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct SetRelationInput {
+    /// Source issue identifier (UUID, key like ENG-245, or URL)
+    pub issue: String,
+    /// Related issue identifier (UUID, key like ENG-245, or URL)
+    pub related_issue: String,
+    /// Relation type: "blocks", "duplicate", "related". Null/omitted to remove relation.
+    #[serde(default)]
+    pub relation_type: Option<String>,
+}
+
+/// Tool for setting or removing issue relations.
+#[derive(Clone)]
+pub struct SetRelationTool {
+    linear: Arc<LinearTools>,
+}
+
+impl SetRelationTool {
+    pub fn new(linear: Arc<LinearTools>) -> Self {
+        Self { linear }
+    }
+}
+
+impl Tool for SetRelationTool {
+    type Input = SetRelationInput;
+    type Output = SetRelationResult;
+    const NAME: &'static str = "linear_set_relation";
+    const DESCRIPTION: &'static str = "Set or remove a relation between two issues. Provide relation_type to create (blocks/duplicate/related), or omit/null to remove any existing relation.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let linear = self.linear.clone();
+        Box::pin(async move {
+            linear
+                .set_relation(input.issue, input.related_issue, input.relation_type)
                 .await
                 .map_err(map_anyhow_to_tool_error)
         })
@@ -402,7 +591,10 @@ pub fn build_registry(linear: Arc<LinearTools>) -> ToolRegistry {
         .register::<ReadIssueTool, ()>(ReadIssueTool::new(linear.clone()))
         .register::<CreateIssueTool, ()>(CreateIssueTool::new(linear.clone()))
         .register::<AddCommentTool, ()>(AddCommentTool::new(linear.clone()))
+        .register::<GetIssueCommentsTool, ()>(GetIssueCommentsTool::new(linear.clone()))
         .register::<ArchiveIssueTool, ()>(ArchiveIssueTool::new(linear.clone()))
+        .register::<UpdateIssueTool, ()>(UpdateIssueTool::new(linear.clone()))
+        .register::<SetRelationTool, ()>(SetRelationTool::new(linear.clone()))
         .register::<GetMetadataTool, ()>(GetMetadataTool::new(linear))
         .finish()
 }

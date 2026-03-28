@@ -33,7 +33,7 @@ Inside of normal we have a handful of tools, most are custom, and pluggable into
 
 ### Agent Variants
 
-| NORMAL (19)   | BASH (20)     | LINEAR (25)   | PLAYWRIGHT (37)       | REVIEW (9)            |
+| NORMAL (19)   | BASH (20)     | LINEAR (28)   | PLAYWRIGHT (37)       | REVIEW (9)            |
 |---------------|---------------|---------------|-----------------------|-----------------------|
 | File ops      | File ops      | File ops      | File ops              | Read only             |
 | Search        | Search        | Search        | Search                | Search (cli_*)        |
@@ -42,7 +42,7 @@ Inside of normal we have a handful of tools, most are custom, and pluggable into
 | Thoughts      | Thoughts      | Thoughts      | Thoughts              | Thoughts (write only) |
 | GitHub PRs    | GitHub PRs    | GitHub PRs    | GitHub PRs            |                       |
 | Sub-agents    | Sub-agents    | Sub-agents    | Sub-agents            | Reasoning model       |
-|               | + mcp_bash (shell) | + 6 Linear tools | + 18 Browser automation | + review_* tools |
+|               | + mcp_bash (shell) | + 9 Linear tools | + 18 Browser automation | + review_* tools |
 
 ### Commands Using Each
 
@@ -103,7 +103,7 @@ If I ever need additional tools that aren't in the list of ones above, I'll tab 
 
 **Pre-approved patterns:** `ls`, `cat`, `grep`, `find`, `git`, `cargo`, `just`, `make`, `aws` (read-only), `gh`
 
-### Linear Agent (+6 tools = 25 total)
+### Linear Agent (+9 tools = 28 total)
 
 | Tool                   | Parameters                          | Description           |
 |------------------------|-------------------------------------|-----------------------|
@@ -112,6 +112,9 @@ If I ever need additional tools that aren't in the list of ones above, I'll tab 
 | `linear_create_issue`  | team, title, description?           | Create new issue      |
 | `linear_archive_issue` | issue                               | Archive an issue      |
 | `linear_add_comment`   | issue, body                         | Comment on issue      |
+| `linear_get_issue_comments` | issue                          | Get comments on an issue with pagination |
+| `linear_update_issue`  | issue, fields...                    | Update issue fields (title, description, priority, etc.) |
+| `linear_set_relation`  | issue, relatedIssue, relationType?  | Create or remove issue relations (blocks, duplicate, related) |
 | `linear_get_metadata`  | type (users/teams/projects/states/labels) | Look up Linear metadata |
 
 ### Playwright Agent (+18 tools = 37 total)

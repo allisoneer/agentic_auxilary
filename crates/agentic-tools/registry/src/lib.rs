@@ -97,7 +97,10 @@ const LINEAR_NAMES: &[&str] = &[
     "linear_read_issue",
     "linear_create_issue",
     "linear_add_comment",
+    "linear_get_issue_comments",
     "linear_archive_issue",
+    "linear_update_issue",
+    "linear_set_relation",
     "linear_get_metadata",
 ];
 
@@ -159,7 +162,7 @@ impl AgenticTools {
             regs.push(pr_comments::build_registry(Arc::new(tool)));
         }
 
-        // linear_tools (6 tools)
+        // linear_tools (9 tools)
         if domain_wanted(LINEAR_NAMES) {
             let linear = Arc::new(linear_tools::LinearTools::new());
             regs.push(linear_tools::build_registry(linear));
@@ -242,8 +245,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_27() {
-        assert_eq!(AgenticTools::total_tool_count(), 27);
+    fn total_tool_count_is_30() {
+        assert_eq!(AgenticTools::total_tool_count(), 30);
     }
 
     #[test]
@@ -387,6 +390,26 @@ mod tests {
         assert_eq!(reg.len(), 1);
         assert!(reg.contains("web_search"));
         assert!(!reg.contains("web_fetch"));
+    }
+
+    #[test]
+    fn allowlist_single_linear_update_issue() {
+        let mut set = HashSet::new();
+        set.insert("linear_update_issue".to_string());
+        let config = AgenticToolsConfig {
+            allowlist: Some(set),
+            ..Default::default()
+        };
+
+        let reg = AgenticTools::new(config);
+
+        assert_eq!(reg.len(), 1, "expected exactly 1 tool");
+        assert!(
+            reg.contains("linear_update_issue"),
+            "linear_update_issue must be present after single-tool allowlist"
+        );
+        assert!(!reg.contains("linear_search_issues"));
+        assert!(!reg.contains("linear_read_issue"));
     }
 
     #[test]

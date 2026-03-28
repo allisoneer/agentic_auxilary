@@ -188,12 +188,56 @@ pub fn issue_create_response(issue: Value) -> String {
     .unwrap()
 }
 
+pub fn issue_update_response(issue: Value) -> String {
+    serde_json::to_string(&json!({
+        "data": { "issueUpdate": { "success": true, "issue": issue } }
+    }))
+    .unwrap()
+}
+
 pub fn comment_create_response(id: &str, body: &str) -> String {
     serde_json::to_string(&json!({
         "data": {
             "commentCreate": {
                 "success": true,
                 "comment": { "id": id, "body": body, "createdAt": "2025-01-01T00:00:00Z" }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn comment_node(id: &str, body: &str, url: &str, created_at: &str, updated_at: &str) -> Value {
+    json!({
+        "id": id,
+        "body": body,
+        "url": url,
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+        "parentId": null,
+        "user": null
+    })
+}
+
+pub fn issue_comments_response(
+    issue_id: &str,
+    identifier: &str,
+    nodes: Vec<Value>,
+    has_next_page: bool,
+    end_cursor: Option<&str>,
+) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issue": {
+                "id": issue_id,
+                "identifier": identifier,
+                "comments": {
+                    "nodes": nodes,
+                    "pageInfo": {
+                        "hasNextPage": has_next_page,
+                        "endCursor": end_cursor
+                    }
+                }
             }
         }
     }))
@@ -281,6 +325,62 @@ pub fn issue_labels_response(
 
 pub fn issue_label_node(id: &str, name: &str, team: Option<Value>) -> Value {
     json!({ "id": id, "name": name, "team": team })
+}
+
+// ============================================================================
+// Issue relation fixtures
+// ============================================================================
+
+pub fn issue_relations_response(
+    relations: Vec<(&str, &str)>, // (relation_id, related_issue_id)
+    inverse_relations: Vec<(&str, &str)>,
+) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issue": {
+                "id": "source-issue-id",
+                "relations": {
+                    "nodes": relations.iter().map(|(rel_id, related_id)| {
+                        json!({
+                            "id": rel_id,
+                            "relatedIssue": { "id": related_id }
+                        })
+                    }).collect::<Vec<_>>()
+                },
+                "inverseRelations": {
+                    "nodes": inverse_relations.iter().map(|(rel_id, related_id)| {
+                        json!({
+                            "id": rel_id,
+                            "relatedIssue": { "id": related_id }
+                        })
+                    }).collect::<Vec<_>>()
+                }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn issue_relation_create_response(success: bool) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issueRelationCreate": {
+                "success": success
+            }
+        }
+    }))
+    .unwrap()
+}
+
+pub fn issue_relation_delete_response(success: bool) -> String {
+    serde_json::to_string(&json!({
+        "data": {
+            "issueRelationDelete": {
+                "success": success
+            }
+        }
+    }))
+    .unwrap()
 }
 
 #[cfg(test)]
