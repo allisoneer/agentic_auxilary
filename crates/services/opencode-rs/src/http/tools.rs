@@ -62,3 +62,147 @@ impl ToolsApi {
         self.http.request_json(Method::GET, "/command", None).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::http::HttpConfig;
+    use std::time::Duration;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    #[tokio::test]
+    async fn test_tool_ids_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/experimental/tool/ids"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ids": ["read_file", "write_file", "bash"]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let tools = ToolsApi::new(http);
+        let result = tools.ids().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_tool_list_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/experimental/tool"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "read_file",
+                    "name": "Read File",
+                    "description": "Read contents of a file"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let tools = ToolsApi::new(http);
+        let result = tools.list().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_agents_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/agent"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "coder",
+                    "name": "Coder Agent"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let tools = ToolsApi::new(http);
+        let result = tools.agents().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_commands_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/command"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "help",
+                    "name": "Help"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let tools = ToolsApi::new(http);
+        let result = tools.commands().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_tool_list_server_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/experimental/tool"))
+            .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+                "name": "InternalError",
+                "message": "Failed to list tools"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let tools = ToolsApi::new(http);
+        let result = tools.list().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_server_error());
+    }
+}

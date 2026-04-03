@@ -1,6 +1,10 @@
 //! PTY API for `OpenCode`.
 //!
 //! Endpoints for pseudo-terminal management.
+//!
+//! Note: Unit tests are intentionally skipped for this module because the
+//! `GET /pty/{id}/connect` endpoint requires WebSocket support, which is
+//! out of scope for this SDK version.
 
 use crate::error::Result;
 use crate::http::HttpClient;

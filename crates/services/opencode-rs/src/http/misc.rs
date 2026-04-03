@@ -170,3 +170,286 @@ pub struct HealthInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::http::HttpConfig;
+    use std::time::Duration;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    #[tokio::test]
+    async fn test_health_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "healthy": true,
+                "version": "1.3.13"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.health().await;
+        assert!(result.is_ok());
+        let health = result.unwrap();
+        assert!(health.healthy);
+        assert_eq!(health.version, Some("1.3.13".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_doc_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/doc"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "openapi": "3.0.0",
+                "info": {"title": "OpenCode API", "version": "1.3.13"},
+                "paths": {}
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.doc().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_path_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/path"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "directory": "/home/user/project"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.path().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_vcs_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/vcs"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "type": "git",
+                "branch": "main"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.vcs().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_dispose_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/dispose"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.dispose().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_lsp_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/lsp"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.lsp().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_formatter_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/formatter"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.formatter().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_global_dispose_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/global/dispose"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(true)))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.global_dispose().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_health_server_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/health"))
+            .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+                "name": "InternalError",
+                "message": "Health check failed"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.health().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_server_error());
+    }
+
+    #[tokio::test]
+    async fn test_log_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/log"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc
+            .log(&LogEntry {
+                level: "info".to_string(),
+                message: "Test log message".to_string(),
+                data: None,
+            })
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_dispose_server_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/dispose"))
+            .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+                "name": "InternalError",
+                "message": "Failed to dispose instance"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let result = misc.dispose().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_server_error());
+    }
+}

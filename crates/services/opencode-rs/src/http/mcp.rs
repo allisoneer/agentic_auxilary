@@ -146,3 +146,260 @@ impl McpApi {
             .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::http::HttpConfig;
+    use std::time::Duration;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    #[tokio::test]
+    async fn test_mcp_status_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/mcp"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "servers": []
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp.status().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_add_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "success": true
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp
+            .add(&McpAddRequest {
+                name: "test-server".to_string(),
+                command: "npx".to_string(),
+                args: vec!["@modelcontextprotocol/server-test".to_string()],
+                env: None,
+            })
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_auth_start_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp/server1/auth"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "url": "https://auth.example.com/oauth"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp
+            .auth_start(
+                "server1",
+                &McpAuthStartRequest {
+                    callback_url: Some("http://localhost:8080/callback".to_string()),
+                },
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_auth_callback_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp/server1/auth/callback"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "success": true
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp
+            .auth_callback(
+                "server1",
+                &McpAuthCallbackRequest {
+                    code: "code123".to_string(),
+                    state: Some("state456".to_string()),
+                },
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_connect_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp/server1/connect"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "success": true
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp.connect("server1").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_disconnect_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp/server1/disconnect"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "success": true
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp.disconnect("server1").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_auth_remove_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/mcp/server1/auth"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp.auth_remove("server1").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_connect_not_found() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp/missing/connect"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "name": "NotFound",
+                "message": "MCP server not found"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp.connect("missing").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_authenticate_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp/server1/auth/authenticate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "success": true
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let mcp = McpApi::new(http);
+        let result = mcp
+            .authenticate(
+                "server1",
+                &McpAuthenticateRequest {
+                    token: "test-api-key".to_string(),
+                },
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+}
