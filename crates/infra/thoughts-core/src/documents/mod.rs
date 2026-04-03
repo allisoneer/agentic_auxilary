@@ -5,6 +5,7 @@
 
 use crate::error::Result as TResult;
 use crate::error::ThoughtsError;
+use crate::repo_identity::RepoIdentity;
 use crate::utils::validation::validate_simple_filename;
 use crate::workspace::ActiveWork;
 use crate::workspace::ensure_active_work;
@@ -89,6 +90,10 @@ impl<'de> serde::Deserialize<'de> for DocumentType {
 pub struct WriteDocumentOk {
     pub path: String,
     pub bytes_written: u64,
+    /// GitHub URL for the document (available after sync).
+    /// None if the remote is not GitHub-hosted or URL couldn't be computed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub github_url: Option<String>,
 }
 
 /// Metadata about a single document file.
@@ -107,6 +112,47 @@ pub struct ActiveDocuments {
     pub files: Vec<DocumentInfo>,
 }
 
+/// Compute GitHub blob URL if the remote is GitHub-hosted.
+///
+/// Returns None if:
+/// - No remote URL is available
+/// - The remote is not GitHub-hosted
+/// - The URL couldn't be parsed
+fn compute_github_url(
+    remote_url: Option<&str>,
+    repo_subpath: Option<&str>,
+    branch: &str,
+    doc_type: &DocumentType,
+    filename: &str,
+) -> Option<String> {
+    let remote = remote_url?;
+    let identity = RepoIdentity::parse(remote).ok()?;
+
+    // Only generate URLs for GitHub
+    if identity.host != "github.com" {
+        return None;
+    }
+
+    // Build the path within the repo
+    // Structure: {subpath}/{branch}/{doc_type_dir}/{filename}
+    let mut path_parts = Vec::new();
+    if let Some(subpath) = repo_subpath
+        && !subpath.is_empty()
+    {
+        path_parts.push(subpath.to_string());
+    }
+    path_parts.push(branch.to_string());
+    path_parts.push(doc_type.subdir_name().to_string());
+    path_parts.push(filename.to_string());
+
+    let path_in_repo = path_parts.join("/");
+
+    Some(format!(
+        "https://github.com/{}/{}/blob/{}/{}",
+        identity.org_path, identity.repo, branch, path_in_repo
+    ))
+}
+
 /// Write a document to the active work directory.
 ///
 /// # Arguments
@@ -115,7 +161,7 @@ pub struct ActiveDocuments {
 /// * `content` - The content to write
 ///
 /// # Returns
-/// A `WriteDocumentOk` with the path and bytes written on success.
+/// A `WriteDocumentOk` with the path, bytes written, and optional GitHub URL on success.
 pub fn write_document(
     doc_type: DocumentType,
     filename: &str,
@@ -131,6 +177,14 @@ pub fn write_document(
         .write(|f| std::io::Write::write_all(f, content.as_bytes()))
         .map_err(|e| ThoughtsError::Io(std::io::Error::other(e)))?;
 
+    let github_url = compute_github_url(
+        aw.remote_url.as_deref(),
+        aw.repo_subpath.as_deref(),
+        &aw.dir_name,
+        &doc_type,
+        filename,
+    );
+
     Ok(WriteDocumentOk {
         path: format!(
             "./thoughts/{}/{}/{}",
@@ -139,6 +193,7 @@ pub fn write_document(
             filename
         ),
         bytes_written,
+        github_url,
     })
 }
 
@@ -293,5 +348,68 @@ mod tests {
         assert_eq!(DocumentType::Plan.singular_label(), "plan");
         assert_eq!(DocumentType::Artifact.singular_label(), "artifact");
         assert_eq!(DocumentType::Log.singular_label(), "log");
+    }
+
+    #[test]
+    fn test_compute_github_url_ssh() {
+        let url = compute_github_url(
+            Some("git@github.com:org/repo.git"),
+            None,
+            "main",
+            &DocumentType::Research,
+            "doc.md",
+        );
+        assert_eq!(
+            url,
+            Some("https://github.com/org/repo/blob/main/main/research/doc.md".to_string())
+        );
+    }
+
+    #[test]
+    fn test_compute_github_url_https() {
+        let url = compute_github_url(
+            Some("https://github.com/org/repo.git"),
+            Some("docs/thoughts"),
+            "feature-branch",
+            &DocumentType::Plan,
+            "plan.md",
+        );
+        assert_eq!(
+            url,
+            Some("https://github.com/org/repo/blob/feature-branch/docs/thoughts/feature-branch/plans/plan.md".to_string())
+        );
+    }
+
+    #[test]
+    fn test_compute_github_url_non_github() {
+        let url = compute_github_url(
+            Some("git@gitlab.com:org/repo.git"),
+            None,
+            "main",
+            &DocumentType::Research,
+            "doc.md",
+        );
+        assert_eq!(url, None);
+    }
+
+    #[test]
+    fn test_compute_github_url_none_remote() {
+        let url = compute_github_url(None, None, "main", &DocumentType::Research, "doc.md");
+        assert_eq!(url, None);
+    }
+
+    #[test]
+    fn test_compute_github_url_no_subpath() {
+        let url = compute_github_url(
+            Some("git@github.com:General-Wisdom/thoughts.git"),
+            None,
+            "allison-feature",
+            &DocumentType::Artifact,
+            "test.md",
+        );
+        assert_eq!(
+            url,
+            Some("https://github.com/General-Wisdom/thoughts/blob/allison-feature/allison-feature/artifacts/test.md".to_string())
+        );
     }
 }

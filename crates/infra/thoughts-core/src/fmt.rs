@@ -16,11 +16,15 @@ use crate::utils::human_size;
 
 impl TextFormat for WriteDocumentOk {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
-        format!(
+        let mut out = format!(
             "\u{2713} Created {}\n  Size: {}",
             self.path,
             human_size(self.bytes_written)
-        )
+        );
+        if let Some(url) = &self.github_url {
+            out.push_str(&format!("\n  URL (after sync): {}", url));
+        }
+        out
     }
 }
 
@@ -172,10 +176,25 @@ mod tests {
         let v = WriteDocumentOk {
             path: "./thoughts/x/research/test.md".into(),
             bytes_written: 2048,
+            github_url: None,
         };
         let tf = v.fmt_text(&TextOptions::default());
         assert!(tf.contains("\u{2713} Created"));
         assert!(tf.contains("2.0 KB"));
+        assert!(!tf.contains("URL")); // No URL when github_url is None
+    }
+
+    #[test]
+    fn write_document_text_format_with_url() {
+        let v = WriteDocumentOk {
+            path: "./thoughts/x/research/test.md".into(),
+            bytes_written: 2048,
+            github_url: Some("https://github.com/org/repo/blob/x/research/test.md".into()),
+        };
+        let tf = v.fmt_text(&TextOptions::default());
+        assert!(tf.contains("\u{2713} Created"));
+        assert!(tf.contains("2.0 KB"));
+        assert!(tf.contains("URL (after sync): https://github.com/org/repo"));
     }
 
     #[test]

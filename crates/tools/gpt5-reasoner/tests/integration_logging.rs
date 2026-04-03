@@ -159,6 +159,7 @@ fn write_document_ok_path_format() {
     let ok = WriteDocumentOk {
         path: "./thoughts/my-branch/plans/design.md".into(),
         bytes_written: 2048,
+        github_url: None,
     };
 
     // Path should follow the expected format
