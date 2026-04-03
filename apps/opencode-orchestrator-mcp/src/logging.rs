@@ -108,10 +108,13 @@ mod tests {
         let date_prefix = format!("tool_logs_{}", record.completed_at.format("%Y-%m-%d"));
         let jsonl_files: Vec<_> = std::fs::read_dir(tmp.path())
             .unwrap()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
-                name.starts_with(&date_prefix) && name.ends_with(".jsonl")
+                name.starts_with(&date_prefix)
+                    && std::path::Path::new(&name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
             })
             .collect();
 
