@@ -730,3 +730,21 @@ async fn test_global_events() {
         println!("No global events received within timeout (this is OK)");
     }
 }
+
+/// Test that server version matches SDK pinned version.
+///
+/// This test validates that when running against a bunx-provisioned server
+/// with the pinned version, the health endpoint returns the expected version.
+#[tokio::test]
+#[ignore = "requires: opencode serve"]
+async fn test_health_returns_pinned_version() {
+    if !should_run() {
+        return;
+    }
+    let client = build_client();
+    let health = client.misc().health().await.expect("health check failed");
+
+    // Validate version matches pinned version
+    opencode_rs::version::validate_exact_version(health.version.as_deref())
+        .expect("server version must match SDK pinned version");
+}
