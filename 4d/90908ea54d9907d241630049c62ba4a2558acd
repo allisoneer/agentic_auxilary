@@ -1,0 +1,23 @@
+apps/opencode-orchestrator-mcp/src/logging.rs
+  b93f4cf1ea281455 111,114-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "4d90908ea54d9907d241630049c62ba4a2558acd",
+  "prompts": {
+    "b93f4cf1ea281455": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2aa62d5edffef7DpNxP0TlPgUu",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 2,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
