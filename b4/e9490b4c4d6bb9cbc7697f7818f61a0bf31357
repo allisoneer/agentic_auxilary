@@ -1,0 +1,37 @@
+apps/opencode-orchestrator-mcp/src/logging.rs
+  540f42f2fc4ef484 107-123
+crates/infra/agentic-logging/src/lib.rs
+  540f42f2fc4ef484 22,26-34,157-160,162,290-306
+crates/tools/gpt5-reasoner/tests/integration_logging.rs
+  540f42f2fc4ef484 162
+crates/infra/thoughts-core/src/fmt.rs
+  540f42f2fc4ef484 19,23-27,179,184-192,197
+crates/infra/thoughts-core/src/git/sync.rs
+  540f42f2fc4ef484 6-7,12-14,17-112,132-138,141,149,162,174-238,397,402-407,418-424,427,447-459,465-489,491-493,495,502-581
+crates/infra/thoughts-core/src/mcp/mod.rs
+  540f42f2fc4ef484 497
+crates/infra/thoughts-core/src/workspace/mod.rs
+  540f42f2fc4ef484 163-166,169-173,177,198-200,202-206,212,214-215,227,230-231,242,297-298
+crates/infra/thoughts-core/src/documents/mod.rs
+  540f42f2fc4ef484 8,93-96,115-155,164,180-186,196,352-414
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "b4e9490b4c4d6bb9cbc7697f7818f61a0bf31357",
+  "prompts": {
+    "540f42f2fc4ef484": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2aa95d5a0ffevVF5O8zqmRIFhD",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 556,
+      "total_deletions": 54,
+      "accepted_lines": 535,
+      "overriden_lines": 0
+    }
+  }
+}
