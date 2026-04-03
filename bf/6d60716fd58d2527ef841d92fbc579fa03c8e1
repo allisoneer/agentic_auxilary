@@ -1,0 +1,27 @@
+crates/services/opencode-rs/src/http/project.rs
+  a2b53239ca7e26a2 8-9,58-69,71-228
+crates/services/opencode-rs/src/types/project.rs
+  a2b53239ca7e26a2 150-169
+crates/services/opencode-rs/src/http/messages.rs
+  a2b53239ca7e26a2 123-135,591-664
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "bf6d60716fd58d2527ef841d92fbc579fa03c8e1",
+  "prompts": {
+    "a2b53239ca7e26a2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2aaede6a7ffepzt7a39NxCWMZ8",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2089,
+      "overriden_lines": 0
+    }
+  }
+}
