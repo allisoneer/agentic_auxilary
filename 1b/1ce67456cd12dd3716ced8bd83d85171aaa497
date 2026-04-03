@@ -1,0 +1,33 @@
+crates/meta/xtask/src/endpoint_coverage.rs
+  a2b53239ca7e26a2 1-58
+crates/meta/xtask/src/main.rs
+  a2b53239ca7e26a2 10,56-64,81
+crates/meta/xtask/src/lib.rs
+  a2b53239ca7e26a2 5
+justfile
+  a2b53239ca7e26a2 111-120
+crates/services/opencode-rs/Cargo.toml
+  a2b53239ca7e26a2 77-80
+crates/services/opencode-rs/examples/endpoint_coverage.rs
+  a2b53239ca7e26a2 1-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "1b1ce67456cd12dd3716ced8bd83d85171aaa497",
+  "prompts": {
+    "a2b53239ca7e26a2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2aaede6a7ffepzt7a39NxCWMZ8",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 318,
+      "overriden_lines": 0
+    }
+  }
+}
