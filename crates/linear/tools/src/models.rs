@@ -100,11 +100,41 @@ pub struct CreateIssueResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct IssueResult {
+    pub issue: IssueSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CommentResult {
     pub success: bool,
     pub comment_id: Option<String>,
     pub body: Option<String>,
     pub created_at: Option<String>,
+}
+
+// ============================================================================
+// Get issue comments models
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CommentSummary {
+    pub id: String,
+    pub body: String,
+    pub url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub parent_id: Option<String>,
+    pub author_name: Option<String>,
+    pub author_email: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CommentsResult {
+    pub issue_identifier: String,
+    pub comments: Vec<CommentSummary>,
+    pub shown_comments: usize,
+    pub total_comments: usize,
+    pub has_more: bool,
 }
 
 // ============================================================================
@@ -267,9 +297,21 @@ impl TextFormat for CreateIssueResult {
             return "Failed to create issue".into();
         }
         match &self.issue {
-            Some(i) => format!("Created issue: {} - {}", i.identifier, i.title),
+            Some(i) => format!(
+                "Created issue: {} - {}\nURL: {}",
+                i.identifier, i.title, i.url
+            ),
             None => "Issue created (no details returned)".into(),
         }
+    }
+}
+
+impl TextFormat for IssueResult {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        format!(
+            "Updated issue: {} - {}\nURL: {}",
+            self.issue.identifier, self.issue.title, self.issue.url
+        )
     }
 }
 
@@ -293,6 +335,56 @@ impl TextFormat for CommentResult {
     }
 }
 
+impl TextFormat for CommentsResult {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        if self.comments.is_empty() && self.total_comments == 0 {
+            return format!("No comments on {}", self.issue_identifier);
+        }
+
+        let mut out = String::new();
+        let start = self.shown_comments.saturating_sub(self.comments.len()) + 1;
+        let _ = writeln!(
+            out,
+            "Comments for {} (showing {}-{} of {}):",
+            self.issue_identifier, start, self.shown_comments, self.total_comments
+        );
+
+        for c in &self.comments {
+            let author = c.author_name.as_deref().unwrap_or("Unknown");
+            let timestamp = if c.created_at.len() >= 16 {
+                &c.created_at[..16]
+            } else {
+                &c.created_at
+            };
+
+            // Indent replies with ↳
+            let prefix = if c.parent_id.is_some() {
+                "  ↳ "
+            } else {
+                "  "
+            };
+
+            let _ = writeln!(out, "{}[{}] {}:", prefix, timestamp, author);
+            // Indent body lines
+            for line in c.body.lines() {
+                let _ = writeln!(out, "{}  {}", prefix, line);
+            }
+            let _ = writeln!(out);
+        }
+
+        if self.has_more {
+            let _ = writeln!(
+                out,
+                "(more comments available - call linear_get_issue_comments again)"
+            );
+        } else if self.total_comments > 0 {
+            let _ = writeln!(out, "(complete - another call restarts from beginning)");
+        }
+
+        out
+    }
+}
+
 // ============================================================================
 // Archive + Metadata models
 // ============================================================================
@@ -302,12 +394,32 @@ pub struct ArchiveIssueResult {
     pub success: bool,
 }
 
+/// Result of a set_relation operation
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SetRelationResult {
+    pub success: bool,
+    /// Action taken: "created", "removed", or "no_change"
+    pub action: String,
+}
+
 impl TextFormat for ArchiveIssueResult {
     fn fmt_text(&self, _opts: &TextOptions) -> String {
         if self.success {
             "Issue archived successfully".into()
         } else {
             "Failed to archive issue".into()
+        }
+    }
+}
+
+impl TextFormat for SetRelationResult {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        match (self.success, self.action.as_str()) {
+            (true, "created") => "Relation created successfully".into(),
+            (true, "removed") => "Relation removed successfully".into(),
+            (true, "no_change") => "No relation change needed".into(),
+            (false, _) => "Failed to modify relation".into(),
+            _ => format!("Relation operation: {}", self.action),
         }
     }
 }
@@ -416,5 +528,137 @@ mod tests {
         assert!(opts.show_state);
         assert!(opts.show_assignee);
         assert!(opts.show_priority);
+    }
+
+    #[test]
+    fn create_issue_result_includes_url() {
+        let result = CreateIssueResult {
+            success: true,
+            issue: Some(IssueSummary {
+                id: "id".into(),
+                identifier: "ENG-123".into(),
+                title: "Test Issue".into(),
+                url: "https://linear.app/team/issue/ENG-123".into(),
+                team: TeamRef {
+                    id: "team-id".into(),
+                    key: "ENG".into(),
+                    name: "Engineering".into(),
+                },
+                state: None,
+                assignee: None,
+                creator: None,
+                project: None,
+                priority: 3,
+                priority_label: "Normal".into(),
+                label_ids: vec![],
+                due_date: None,
+                created_at: "2024-03-27T10:00:00Z".into(),
+                updated_at: "2024-03-27T10:00:00Z".into(),
+            }),
+        };
+        let text = result.fmt_text(&TextOptions::default());
+        assert!(text.contains("ENG-123"));
+        assert!(text.contains("URL: https://linear.app/team/issue/ENG-123"));
+    }
+
+    #[test]
+    fn issue_result_includes_url() {
+        let result = IssueResult {
+            issue: IssueSummary {
+                id: "id".into(),
+                identifier: "ENG-456".into(),
+                title: "Updated Issue".into(),
+                url: "https://linear.app/team/issue/ENG-456".into(),
+                team: TeamRef {
+                    id: "team-id".into(),
+                    key: "ENG".into(),
+                    name: "Engineering".into(),
+                },
+                state: None,
+                assignee: None,
+                creator: None,
+                project: None,
+                priority: 3,
+                priority_label: "Normal".into(),
+                label_ids: vec![],
+                due_date: None,
+                created_at: "2024-03-27T10:00:00Z".into(),
+                updated_at: "2024-03-27T10:00:00Z".into(),
+            },
+        };
+        let text = result.fmt_text(&TextOptions::default());
+        assert!(text.contains("ENG-456"));
+        assert!(text.contains("URL: https://linear.app/team/issue/ENG-456"));
+    }
+
+    #[test]
+    fn comments_result_formats_empty() {
+        let result = CommentsResult {
+            issue_identifier: "ENG-123".into(),
+            comments: vec![],
+            shown_comments: 0,
+            total_comments: 0,
+            has_more: false,
+        };
+        let text = result.fmt_text(&TextOptions::default());
+        assert!(text.contains("No comments on ENG-123"));
+    }
+
+    #[test]
+    fn comments_result_formats_with_reply_indent() {
+        let result = CommentsResult {
+            issue_identifier: "ENG-123".into(),
+            comments: vec![
+                CommentSummary {
+                    id: "c1".into(),
+                    body: "Parent comment".into(),
+                    url: "https://linear.app/...".into(),
+                    created_at: "2024-03-27T10:00:00Z".into(),
+                    updated_at: "2024-03-27T10:00:00Z".into(),
+                    parent_id: None,
+                    author_name: Some("Alice".into()),
+                    author_email: Some("alice@example.com".into()),
+                },
+                CommentSummary {
+                    id: "c2".into(),
+                    body: "Reply comment".into(),
+                    url: "https://linear.app/...".into(),
+                    created_at: "2024-03-27T10:15:00Z".into(),
+                    updated_at: "2024-03-27T10:15:00Z".into(),
+                    parent_id: Some("c1".into()),
+                    author_name: Some("Bob".into()),
+                    author_email: Some("bob@example.com".into()),
+                },
+            ],
+            shown_comments: 2,
+            total_comments: 2,
+            has_more: false,
+        };
+        let text = result.fmt_text(&TextOptions::default());
+        assert!(text.contains("Alice"));
+        assert!(text.contains("↳")); // Reply has indent
+        assert!(text.contains("Bob"));
+    }
+
+    #[test]
+    fn comments_result_shows_pagination_message() {
+        let result = CommentsResult {
+            issue_identifier: "ENG-123".into(),
+            comments: vec![CommentSummary {
+                id: "c1".into(),
+                body: "Test comment".into(),
+                url: "https://linear.app/...".into(),
+                created_at: "2024-03-27T10:00:00Z".into(),
+                updated_at: "2024-03-27T10:00:00Z".into(),
+                parent_id: None,
+                author_name: Some("Alice".into()),
+                author_email: None,
+            }],
+            shown_comments: 10,
+            total_comments: 15,
+            has_more: true,
+        };
+        let text = result.fmt_text(&TextOptions::default());
+        assert!(text.contains("more comments available"));
     }
 }

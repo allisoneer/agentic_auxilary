@@ -75,13 +75,12 @@ pub fn resolve_opencode_binary(base_dir: &Path) -> anyhow::Result<PathBuf> {
             .with_context(|| format!("Failed to canonicalize {}", candidate.display()));
     }
 
-    Err(anyhow!(
-        "No pinned OpenCode binary found.\n\
-         Expected OpenCode v{ver}.\n\
-         Set OPENCODE_BINARY to a v{ver} 'opencode' binary, or install it at:\n  {path}",
-        ver = PINNED_OPENCODE_VERSION,
-        path = candidate.display(),
-    ))
+    // Fall back to "opencode" in PATH
+    tracing::warn!(
+        "No pinned OpenCode binary found at {}; falling back to 'opencode' in PATH",
+        candidate.display()
+    );
+    Ok(PathBuf::from("opencode"))
 }
 
 /// Parse launcher args from `OPENCODE_BINARY_ARGS` environment variable.

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.0] - 2026-03-28
+
+### ⛰️  Features
+- *(linear-tools)* Add update_issue, set_relation, and creator_id filter
+- *(linear-tools)* Add linear_get_issue_comments tool with pagination
+- *(linear-tools)* Add URL to issue results and comments formatting
+
+### 🐛 Bug Fixes
+- *(linear-tools)* Address PR review feedback for issue operations
+- *(linear-tools)* Fetch all issue comment pages before local pagination
 ## [0.4.6] - 2026-03-26
 
 ### ⚙️  Miscellaneous

@@ -94,7 +94,7 @@ On user approval, write the plan using `tools_thoughts_write_document`:
 - `filename: {same_readable_name}_implementation.md` (use same base name as requirements file)
 - `content:` The approved plan
 
-Confirm the saved path and that the plan is ready for implementation.
+Confirm the saved path of both this and the requirements file and that the plans are ready for implementation via the `/implement_plan` command.
 
 </step>
 

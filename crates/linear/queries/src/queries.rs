@@ -153,3 +153,87 @@ pub struct IssueLabelsQuery {
     #[cynic(rename = "issueLabels")]
     pub issue_labels: IssueLabelConnection,
 }
+
+// ============================================================================
+// Issue relation queries
+// ============================================================================
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct IssueRelation {
+    pub id: cynic::Id,
+    #[cynic(rename = "relatedIssue")]
+    pub related_issue: RelatedIssue,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "Issue")]
+pub struct RelatedIssue {
+    pub id: cynic::Id,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear")]
+pub struct IssueRelationConnection {
+    pub nodes: Vec<IssueRelation>,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "Issue")]
+pub struct IssueWithRelations {
+    pub id: cynic::Id,
+    pub relations: IssueRelationConnection,
+    #[cynic(rename = "inverseRelations")]
+    pub inverse_relations: IssueRelationConnection,
+}
+
+#[derive(cynic::QueryVariables, Debug, Clone)]
+pub struct IssueRelationsArguments {
+    pub id: String,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    graphql_type = "Query",
+    schema = "linear",
+    variables = "IssueRelationsArguments"
+)]
+pub struct IssueRelationsQuery {
+    #[arguments(id: $id)]
+    pub issue: Option<IssueWithRelations>,
+}
+
+// ============================================================================
+// Issue comments query
+// ============================================================================
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(
+    schema = "linear",
+    graphql_type = "Issue",
+    variables = "IssueCommentsArguments"
+)]
+pub struct IssueWithComments {
+    pub id: cynic::Id,
+    pub identifier: String,
+    #[arguments(first: $first, after: $after)]
+    pub comments: IssueCommentConnection,
+}
+
+#[derive(cynic::QueryVariables, Debug, Clone)]
+pub struct IssueCommentsArguments {
+    pub id: String,
+    pub first: Option<i32>,
+    pub after: Option<String>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    graphql_type = "Query",
+    schema = "linear",
+    variables = "IssueCommentsArguments"
+)]
+pub struct IssueCommentsQuery {
+    #[arguments(id: $id)]
+    pub issue: Option<IssueWithComments>,
+}

@@ -17,7 +17,7 @@ orchestrator_respond_permission: Respond to permission requests from sessions.
 
 <available_commands>
 bash: Grants shell access with pre-approved patterns for ls, cat, grep, find, head, tail, tree, jq, pwd, which, git operations, cargo, just, make, aws (read-only), gh.
-linear: Grants 6 Linear tools for issue management (read, search, create, archive, comment, metadata).
+linear: Grants 9 Linear tools for issue management (read, search, create, archive, comment, metadata, get_issue_comments, update_issue, set_relation).
 playwright: Grants 22 browser automation tools (navigate, click, fill, screenshot, evaluate, and more).
 commit: Uses bash agent for creating atomic conventional commits.
 describe_pr: Uses the existing bash-based PR description workflow; no OpenAI-specific variant yet.
