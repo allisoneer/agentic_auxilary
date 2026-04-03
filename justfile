@@ -108,6 +108,16 @@ xtask-sync-check:
 xtask-verify-check:
     {{ exec }}cargo run -p xtask -- verify --check
 
+# Endpoint coverage commands for opencode-rs SDK
+endpoint-coverage:
+    {{ exec }}cargo run -p xtask -- endpoint-coverage
+
+endpoint-coverage-check:
+    {{ exec }}cargo run -p xtask -- endpoint-coverage --check
+
+endpoint-coverage-json:
+    {{ exec }}cargo run -p xtask -- endpoint-coverage --json
+
 # Utility commands
 
 thoughts_sync:

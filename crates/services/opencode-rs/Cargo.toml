@@ -74,6 +74,10 @@ required-features = ["cli"]
 name = "full_workflow"
 required-features = ["http", "sse"]
 
+[[example]]
+name = "endpoint_coverage"
+required-features = ["full"]
+
 [lints]
 workspace = true
 
