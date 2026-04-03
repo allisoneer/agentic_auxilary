@@ -288,6 +288,10 @@
     {
       "remote": "https://github.com/EmbarkStudios/cargo-deny",
       "description": "Upstream cargo-deny changelog and docs for defensible version selection."
+    },
+    {
+      "remote": "https://github.com/trapexit/mergerfs",
+      "description": "mergerfs source code - investigating FUSE mounting changes between 2.40.2 and 2.41.x for Ubuntu 26.04 AppArmor compatibility"
     }
   ]
 }
