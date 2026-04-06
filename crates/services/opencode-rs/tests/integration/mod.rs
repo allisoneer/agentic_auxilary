@@ -5,8 +5,9 @@
 //! # Running the tests
 //!
 //! With `server` feature (recommended - auto-spawns server):
-//!   The parent `integration.rs` module starts a `ManagedServer` and sets
-//!   `OPENCODE_BASE_URL` to its dynamic port. These tests then use that URL.
+//!   The parent `integration.rs` module starts a `ManagedServer`. These tests
+//!   call `super::start_server()` directly to ensure the server is initialized
+//!   before obtaining the URL.
 //!
 //! Without `server` feature (manual server):
 //!   1. Start the opencode server: `opencode serve --port 4096 --hostname 127.0.0.1`
@@ -25,16 +26,38 @@ pub fn should_run() -> bool {
     std::env::var("OPENCODE_INTEGRATION").is_ok()
 }
 
-/// Get the test server URL.
+// ============================================================================
+// Server feature enabled: Get URL from managed server directly
+// ============================================================================
+
+/// Create a test client connected to the managed test server.
 ///
-/// When running with the `server` feature, the parent `integration.rs` module
-/// sets `OPENCODE_BASE_URL` after starting the managed server. This allows
-/// these typed tests to connect to the same server instance.
-pub fn test_url() -> String {
+/// This calls `super::start_server()` to ensure the managed server is started,
+/// then uses its URL directly. This removes the dependency on test execution
+/// order that previously existed when relying on `OPENCODE_BASE_URL` being
+/// pre-populated by a parent test.
+#[cfg(feature = "server")]
+pub async fn create_test_client() -> opencode_rs::Client {
+    let server = super::start_server().await;
+    opencode_rs::Client::builder()
+        .base_url(server.url().as_str())
+        .timeout_secs(30)
+        .build()
+        .unwrap()
+}
+
+// ============================================================================
+// Server feature disabled: Connect to pre-running server via env var
+// ============================================================================
+
+/// Get the test server URL from environment.
+#[cfg(not(feature = "server"))]
+fn test_url() -> String {
     std::env::var("OPENCODE_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:4096".to_string())
 }
 
-/// Create a test client connected to the test server.
+/// Create a test client connected to a pre-running test server.
+#[cfg(not(feature = "server"))]
 pub async fn create_test_client() -> opencode_rs::Client {
     opencode_rs::Client::builder()
         .base_url(test_url())
