@@ -484,8 +484,8 @@ impl GitSync {
                 let file_path = self.repo_path.join(path_str);
                 std::fs::write(&file_path, &merged)?;
 
-                // Write merged content back to index
-                index.add_frombuffer(our, &merged)?;
+                // Stage the resolved file from working tree (clears conflict state)
+                index.add_path(std::path::Path::new(path_str))?;
                 continue;
             }
 
