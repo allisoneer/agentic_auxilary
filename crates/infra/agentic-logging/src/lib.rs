@@ -19,8 +19,19 @@ use serde::Serialize;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use thiserror::Error;
 use uuid::Uuid;
+
+/// Process-wide session identifier (first 8 chars of UUID v4).
+///
+/// Used to namespace log files and prevent conflicts between concurrent processes
+/// writing to the same thoughts repository. Each process gets a unique session ID
+/// that remains stable for the lifetime of the process.
+static SESSION_ID: LazyLock<String> = LazyLock::new(|| {
+    let uuid = Uuid::new_v4().to_string();
+    uuid[..8].to_string()
+});
 
 /// Errors that can occur during logging operations.
 #[derive(Error, Debug)]
@@ -143,8 +154,12 @@ impl LogWriter {
     }
 
     /// Generate the day bucket name from a timestamp.
+    ///
+    /// Format: `tool_logs_YYYY-MM-DD_{session_id}` where session_id is the first
+    /// 8 characters of a UUID v4 unique to this process. This prevents file
+    /// conflicts between concurrent processes writing to the same logs directory.
     fn day_bucket_name(date: DateTime<Utc>) -> String {
-        date.format("tool_logs_%Y-%m-%d").to_string()
+        format!("tool_logs_{}_{}", date.format("%Y-%m-%d"), *SESSION_ID)
     }
 
     /// Ensure the JSONL file and markdown directory exist for a day bucket.
@@ -272,7 +287,23 @@ mod tests {
         let date = DateTime::parse_from_rfc3339("2025-03-15T10:30:00Z")
             .unwrap()
             .with_timezone(&Utc);
-        assert_eq!(LogWriter::day_bucket_name(date), "tool_logs_2025-03-15");
+        let bucket = LogWriter::day_bucket_name(date);
+
+        // Format: tool_logs_YYYY-MM-DD_{8_char_session_id}
+        assert!(bucket.starts_with("tool_logs_2025-03-15_"));
+        assert_eq!(bucket.len(), "tool_logs_2025-03-15_".len() + 8);
+
+        // Session ID should be consistent within same process
+        let bucket2 = LogWriter::day_bucket_name(date);
+        assert_eq!(bucket, bucket2);
+    }
+
+    #[test]
+    fn test_session_id_is_stable() {
+        let id1 = &*SESSION_ID;
+        let id2 = &*SESSION_ID;
+        assert_eq!(id1, id2);
+        assert_eq!(id1.len(), 8);
     }
 
     #[test]

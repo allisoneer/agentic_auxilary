@@ -494,6 +494,7 @@ mod tests {
         let ok = WriteDocumentOk {
             path: "./thoughts/feat/research/a.md".into(),
             bytes_written: 2048,
+            github_url: None,
         };
         let text = ok.fmt_text(&TextOptions::default());
         assert!(text.contains("2.0 KB"));

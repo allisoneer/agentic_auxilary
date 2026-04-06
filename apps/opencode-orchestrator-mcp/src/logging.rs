@@ -104,9 +104,26 @@ mod tests {
         let record = sample_record();
         append_record_best_effort(&record);
 
-        let bucket = format!("tool_logs_{}", record.completed_at.format("%Y-%m-%d"));
-        let path = tmp.path().join(format!("{bucket}.jsonl"));
-        assert!(path.exists());
+        // Filename format: tool_logs_YYYY-MM-DD_{session_id}.jsonl
+        let date_prefix = format!("tool_logs_{}", record.completed_at.format("%Y-%m-%d"));
+        let jsonl_files: Vec<_> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(std::result::Result::ok)
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.starts_with(&date_prefix)
+                    && std::path::Path::new(&name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
+            })
+            .collect();
+
+        assert_eq!(
+            jsonl_files.len(),
+            1,
+            "Expected one JSONL file with today's date"
+        );
+        let path = jsonl_files[0].path();
 
         let mut content = String::new();
         std::fs::File::open(path)

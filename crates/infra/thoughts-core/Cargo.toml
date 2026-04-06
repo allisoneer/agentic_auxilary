@@ -50,6 +50,7 @@ colored = "3"
 regex = "1"
 schemars = { workspace = true }
 sha2 = "0.10"
+percent-encoding = "2"
 
 [build-dependencies]
 rustc_version = "0.4"

@@ -160,10 +160,24 @@ pub struct ActiveWork {
     pub plans: PathBuf,
     pub artifacts: PathBuf,
     pub logs: PathBuf,
+    /// Remote git URL for the thoughts repository (for URL generation)
+    pub remote_url: Option<String>,
+    /// Subpath within the thoughts repository (for URL generation)
+    pub repo_subpath: Option<String>,
+    /// Git ref for the mounted thoughts repository (for GitHub blob URLs)
+    pub thoughts_git_ref: Option<String>,
+}
+
+/// Internal struct to carry resolved thoughts root info.
+struct ResolvedThoughtsRoot {
+    path: PathBuf,
+    remote_url: Option<String>,
+    repo_subpath: Option<String>,
+    thoughts_git_ref: Option<String>,
 }
 
 /// Resolve thoughts root via configured thoughts_mount
-fn resolve_thoughts_root() -> Result<PathBuf> {
+fn resolve_thoughts_root() -> Result<ResolvedThoughtsRoot> {
     let control_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(control_root);
     let ds = mgr.load_desired_state()?.ok_or_else(|| {
@@ -184,18 +198,30 @@ fn resolve_thoughts_root() -> Result<PathBuf> {
         sync: tm.sync,
     };
 
-    resolver
-        .resolve_mount(&mount)
-        .context("Thoughts mount not cloned. Run 'thoughts sync' or 'thoughts mount update' first.")
+    let path = resolver.resolve_mount(&mount).context(
+        "Thoughts mount not cloned. Run 'thoughts sync' or 'thoughts mount update' first.",
+    )?;
+
+    let thoughts_git_ref = find_repo_root(&path)
+        .ok()
+        .and_then(|repo_root| get_current_branch(&repo_root).ok())
+        .filter(|branch| branch != "detached");
+
+    Ok(ResolvedThoughtsRoot {
+        path,
+        remote_url: Some(tm.remote.clone()),
+        repo_subpath: tm.subpath.clone(),
+        thoughts_git_ref,
+    })
 }
 
 /// Public helper for commands that must not create dirs (e.g., work complete).
 /// Runs migration and auto-archive, then enforces branch lockout.
 pub fn check_branch_allowed() -> Result<()> {
-    let thoughts_root = resolve_thoughts_root()?;
+    let resolved = resolve_thoughts_root()?;
     // Preserve legacy migration then auto-archive
-    migrate_active_layer(&thoughts_root)?;
-    auto_archive_weekly_dirs(&thoughts_root)?;
+    migrate_active_layer(&resolved.path)?;
+    auto_archive_weekly_dirs(&resolved.path)?;
     let code_root = find_repo_root(&std::env::current_dir()?)?;
     let branch = get_current_branch(&code_root)?;
     if is_main_like(&branch) {
@@ -207,11 +233,11 @@ pub fn check_branch_allowed() -> Result<()> {
 /// Ensure active work directory exists with subdirs and manifest.
 /// Fails on main/master; never creates weekly directories.
 pub fn ensure_active_work() -> Result<ActiveWork> {
-    let thoughts_root = resolve_thoughts_root()?;
+    let resolved = resolve_thoughts_root()?;
 
     // Run migrations before any branch checks
-    migrate_active_layer(&thoughts_root)?;
-    auto_archive_weekly_dirs(&thoughts_root)?;
+    migrate_active_layer(&resolved.path)?;
+    auto_archive_weekly_dirs(&resolved.path)?;
 
     // Get branch and enforce lockout
     let code_root = find_repo_root(&std::env::current_dir()?)?;
@@ -222,7 +248,7 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
 
     // Use branch name directly - no weekly directories
     let dir_name = branch.clone();
-    let base = thoughts_root.join(&dir_name);
+    let base = resolved.path.join(&dir_name);
 
     // Create structure if missing
     if !base.exists() {
@@ -277,6 +303,9 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
         plans: base.join("plans"),
         artifacts: base.join("artifacts"),
         logs: base.join("logs"),
+        remote_url: resolved.remote_url,
+        repo_subpath: resolved.repo_subpath,
+        thoughts_git_ref: resolved.thoughts_git_ref,
     })
 }
 
