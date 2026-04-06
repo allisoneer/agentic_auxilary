@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.11.0] - 2026-04-06
+
+### ⛰️  Features
+- *(thoughts-tool)* Improve sync reliability and add shareable URL generation
+
+### 🐛 Bug Fixes
+- *(thoughts-tool)* Normalize repo_subpath in GitHub URL composition
+- *(thoughts-tool)* Tighten tool log matching and correct divergence analysis
+- *(thoughts-tool)* Guard against empty org_path in GitHub URL composition
+- *(thoughts-tool)* Correct github url ref handling and path encoding
+- *(thoughts-tool)* Write merged JSONL to working tree during conflict resolution
+- *(thoughts-tool)* Set bare repo HEAD for clone compatibility in test
+- *(thoughts-tool)* Use add_path instead of add_frombuffer for conflict resolution
+
+### 🧪 Testing
+- *(thoughts-tool)* Add divergence and JSONL smart-merge coverage
 ## [0.10.0] - 2026-03-26
 
 ### ⚙️  Miscellaneous
