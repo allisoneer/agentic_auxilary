@@ -55,6 +55,8 @@ async fn sync_jsonl_smart_merge_on_conflict() {
             "initial",
         ],
     );
+    // Normalize branch name (git init may create master or main depending on config)
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
     support::git_ok(
         local.path(),
         &["remote", "add", "origin", remote.path().to_str().unwrap()],
@@ -68,11 +70,13 @@ async fn sync_jsonl_smart_merge_on_conflict() {
         &["clone", remote.path().to_str().unwrap(), "."],
     );
 
-    // 6. In other clone: append remote_only entry, commit, push
+    // 6. In other clone: REPLACE base line with remote_modified AND add remote_only entry
+    // (This creates a conflict on the base line, triggering the smart JSONL merge)
     let other_jsonl = other.path().join("branch/logs/tool_logs_base.jsonl");
-    let mut content = fs::read_to_string(&other_jsonl).unwrap();
-    content.push_str("\n{\"call_id\":\"remote_only\",\"started_at\":\"2025-01-01T11:00:00Z\",\"tool\":\"remote\"}");
-    fs::write(&other_jsonl, &content).unwrap();
+    // Replace original "init" with "remote_modified" for the base entry
+    let new_content = r#"{"call_id":"base","started_at":"2025-01-01T10:00:00Z","tool":"remote_modified"}
+{"call_id":"remote_only","started_at":"2025-01-01T11:00:00Z","tool":"remote"}"#;
+    fs::write(&other_jsonl, new_content).unwrap();
     support::git_ok(other.path(), &["add", "."]);
     support::git_ok(
         other.path(),
@@ -88,16 +92,12 @@ async fn sync_jsonl_smart_merge_on_conflict() {
     );
     support::git_ok(other.path(), &["push"]);
 
-    // 7. Back in original local: append local_only entry AND collision entry
+    // 7. Back in original local: REPLACE base line with local_override AND add local_only entry
     // (do NOT commit yet — sync() will stage and commit)
-    let mut local_content = fs::read_to_string(&jsonl_path).unwrap();
-    // Add local_only entry
-    local_content.push_str(
-        "\n{\"call_id\":\"local_only\",\"started_at\":\"2025-01-01T12:00:00Z\",\"tool\":\"local\"}",
-    );
-    // Add collision entry (same call_id as base, but different tool - local should win)
-    local_content.push_str("\n{\"call_id\":\"base\",\"started_at\":\"2025-01-01T10:00:00Z\",\"tool\":\"local_override\"}");
-    fs::write(&jsonl_path, &local_content).unwrap();
+    // Both sides now modify the base line, creating a conflict that triggers smart merge
+    let new_local_content = r#"{"call_id":"base","started_at":"2025-01-01T10:00:00Z","tool":"local_override"}
+{"call_id":"local_only","started_at":"2025-01-01T12:00:00Z","tool":"local"}"#;
+    fs::write(&jsonl_path, new_local_content).unwrap();
 
     // 8. Run sync - this should trigger rebase with smart-merge
     let sync = GitSync::new(local.path(), None).unwrap();
@@ -116,14 +116,14 @@ async fn sync_jsonl_smart_merge_on_conflict() {
         merged.contains("local_only"),
         "should contain local_only entry"
     );
-    // Local wins on collision — "local_override" not "init"
+    // Local wins on collision — "local_override" not "remote_modified"
     assert!(
         merged.contains("local_override"),
         "should contain local_override (local wins)"
     );
     assert!(
-        !merged.contains(r#""tool":"init""#),
-        "should NOT contain original 'init' tool (overwritten by local)"
+        !merged.contains(r#""tool":"remote_modified""#),
+        "should NOT contain remote_modified (local wins on collision)"
     );
 
     // Verify chronological ordering by started_at

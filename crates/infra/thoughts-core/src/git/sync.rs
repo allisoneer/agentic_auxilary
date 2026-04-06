@@ -480,6 +480,10 @@ impl GitSync {
 
                 let merged = merge_jsonl_logs(our_blob.content(), their_blob.content());
 
+                // Write merged content to working tree file
+                let file_path = self.repo_path.join(path_str);
+                std::fs::write(&file_path, &merged)?;
+
                 // Write merged content back to index
                 index.add_frombuffer(our, &merged)?;
                 continue;
@@ -673,6 +677,8 @@ mod tests {
                 "initial",
             ],
         );
+        // Normalize branch name (git init may create master or main depending on config)
+        git_ok(repo.path(), &["branch", "-M", "main"]);
 
         let head_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
         git_ok(
@@ -708,6 +714,8 @@ mod tests {
                 "C1",
             ],
         );
+        // Normalize branch name (git init may create master or main depending on config)
+        git_ok(repo.path(), &["branch", "-M", "main"]);
 
         let c1_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
         git_ok(
@@ -758,6 +766,8 @@ mod tests {
                 "C1",
             ],
         );
+        // Normalize branch name (git init may create master or main depending on config)
+        git_ok(repo.path(), &["branch", "-M", "main"]);
 
         std::fs::write(repo.path().join("b.txt"), "b").unwrap();
         git_ok(repo.path(), &["add", "."]);
@@ -809,6 +819,8 @@ mod tests {
                 "C1",
             ],
         );
+        // Normalize branch name (git init may create master or main depending on config)
+        git_ok(repo.path(), &["branch", "-M", "main"]);
 
         let c1_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
 
