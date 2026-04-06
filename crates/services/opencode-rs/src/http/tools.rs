@@ -78,11 +78,14 @@ mod tests {
     async fn test_tool_ids_success() {
         let mock_server = MockServer::start().await;
 
+        // Server sends a flat array, not {"ids": [...]}
         Mock::given(method("GET"))
             .and(path("/experimental/tool/ids"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "ids": ["read_file", "write_file", "bash"]
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                "read_file",
+                "write_file",
+                "bash"
+            ])))
             .mount(&mock_server)
             .await;
 
@@ -96,19 +99,23 @@ mod tests {
         let tools = ToolsApi::new(http);
         let result = tools.ids().await;
         assert!(result.is_ok());
+        let ids = result.unwrap();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(ids.0[0], "read_file");
     }
 
     #[tokio::test]
     async fn test_tool_list_success() {
         let mock_server = MockServer::start().await;
 
+        // 1.3.17 ToolListItem has: id, description, parameters (no name field)
         Mock::given(method("GET"))
             .and(path("/experimental/tool"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
                     "id": "read_file",
-                    "name": "Read File",
-                    "description": "Read contents of a file"
+                    "description": "Read contents of a file",
+                    "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}
                 }
             ])))
             .mount(&mock_server)
@@ -124,6 +131,10 @@ mod tests {
         let tools = ToolsApi::new(http);
         let result = tools.list().await;
         assert!(result.is_ok());
+        let list = result.unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, "read_file");
+        assert_eq!(list[0].description, "Read contents of a file");
     }
 
     #[tokio::test]
