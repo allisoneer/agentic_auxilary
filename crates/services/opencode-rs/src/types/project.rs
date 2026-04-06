@@ -15,8 +15,8 @@ pub struct Project {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    /// Project directory path.
-    #[serde(alias = "path", default, skip_serializing_if = "Option::is_none")]
+    /// Project directory path (legacy field, 1.3.17 uses `worktree`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
 
     /// Whether this is the current project.
@@ -120,15 +120,18 @@ pub struct ProjectSettings {
 }
 
 // TODO(3): Derive PartialEq on ModelRef, Project, ProjectSettings, UpdateProjectRequest for testing convenience
-/// Reference to a model.
+/// Reference to a model (1.3.17 uses `providerID`/`modelID` casing).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ModelRef {
     /// Provider identifier.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "providerID",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub provider_id: Option<String>,
     /// Model identifier.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "modelID", default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     /// Additional fields from server.
     #[serde(flatten)]
@@ -265,7 +268,8 @@ mod tests {
 
     #[test]
     fn test_model_ref() {
-        let json = r#"{"providerId": "anthropic", "modelId": "claude-3"}"#;
+        // 1.3.17 uses uppercase ID casing
+        let json = r#"{"providerID": "anthropic", "modelID": "claude-3"}"#;
         let model_ref: ModelRef = serde_json::from_str(json).unwrap();
         assert_eq!(model_ref.provider_id, Some("anthropic".to_string()));
         assert_eq!(model_ref.model_id, Some("claude-3".to_string()));
@@ -278,5 +282,20 @@ mod tests {
         let model_ref: ModelRef = serde_json::from_str(json).unwrap();
         assert!(model_ref.provider_id.is_none());
         assert!(model_ref.model_id.is_none());
+    }
+
+    #[test]
+    fn test_model_ref_serializes_correct_casing() {
+        // Verify we serialize with uppercase ID to match 1.3.17
+        let model_ref = ModelRef {
+            provider_id: Some("openai".to_string()),
+            model_id: Some("gpt-4".to_string()),
+            extra: serde_json::Value::Null,
+        };
+        let json = serde_json::to_string(&model_ref).unwrap();
+        assert!(json.contains("providerID"));
+        assert!(json.contains("modelID"));
+        assert!(!json.contains("providerId"));
+        assert!(!json.contains("modelId"));
     }
 }

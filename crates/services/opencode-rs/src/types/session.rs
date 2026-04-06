@@ -133,7 +133,7 @@ pub struct RevertInfo {
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionRequest {
     /// Parent session ID to fork from.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "parentID")]
     pub parent_id: Option<String>,
     /// Optional title for the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -466,5 +466,32 @@ mod tests {
         assert_eq!(diff.len(), 2);
         assert_eq!(diff[0].status, Some(SessionDiffStatus::Added));
         assert_eq!(diff[1].status, Some(SessionDiffStatus::Deleted));
+    }
+
+    // ==================== CreateSessionRequest Tests ====================
+
+    #[test]
+    fn test_create_session_request_parent_id_serializes_as_uppercase() {
+        let req = CreateSessionRequest {
+            parent_id: Some("ses-123".to_string()),
+            title: None,
+            permission: None,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains(r#""parentID""#));
+        assert!(!json.contains(r#""parentId""#));
+    }
+
+    #[test]
+    fn test_create_session_request_without_parent_id() {
+        let req = CreateSessionRequest {
+            parent_id: None,
+            title: Some("Test Session".to_string()),
+            permission: None,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        // parentID should not appear when None
+        assert!(!json.contains("parentID"));
+        assert!(json.contains(r#""title":"Test Session""#));
     }
 }
