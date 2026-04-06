@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 pub mod autogen;
 pub mod claude;
+pub mod endpoint_coverage;
 pub mod justfile;
 pub mod marker;
 pub mod policy;
@@ -52,6 +53,15 @@ enum Cmd {
         #[arg(long)]
         check: bool,
     },
+    /// Check SDK endpoint coverage against server OpenAPI spec
+    EndpointCoverage {
+        /// Output results as JSON
+        #[arg(long, default_value_t = false)]
+        json: bool,
+        /// Fail if coverage is incomplete (for CI)
+        #[arg(long, default_value_t = false)]
+        check: bool,
+    },
 }
 
 fn strict_mode() -> bool {
@@ -68,6 +78,7 @@ fn main() -> Result<()> {
         } => readme_sync(path, dry_run, check),
         Cmd::Sync { dry_run, check } => sync::run(dry_run, check),
         Cmd::Verify { check } => verify::run(check),
+        Cmd::EndpointCoverage { json, check } => endpoint_coverage::run(json, check),
     }
 }
 

@@ -55,3 +55,120 @@ impl FindApi {
             .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::http::HttpConfig;
+    use std::time::Duration;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+    use wiremock::matchers::query_param;
+
+    #[tokio::test]
+    async fn test_find_text_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/find"))
+            .and(query_param("pattern", "SEARCH_TERM"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "matches": [
+                    {"file": "src/main.rs", "line": 10, "content": "// SEARCH_TERM: fix this"}
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let find = FindApi::new(http);
+        let result = find.text("SEARCH_TERM").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_find_files_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/find/file"))
+            .and(query_param("query", "main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "files": [
+                    {"path": "src/main.rs", "score": 1.0}
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let find = FindApi::new(http);
+        let result = find.files("main").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_find_symbols_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/find/symbol"))
+            .and(query_param("query", "main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "symbols": []
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let find = FindApi::new(http);
+        let result = find.symbols("main").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_find_text_empty_results() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/find"))
+            .and(query_param("pattern", "nonexistent"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "matches": []
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let find = FindApi::new(http);
+        let result = find.text("nonexistent").await;
+        assert!(result.is_ok());
+    }
+}

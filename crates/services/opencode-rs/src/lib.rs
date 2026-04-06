@@ -13,6 +13,7 @@ compile_error!(
 
 pub mod error;
 pub mod types;
+pub mod version;
 
 #[cfg(feature = "http")]
 pub mod http;
