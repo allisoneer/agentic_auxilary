@@ -1,0 +1,25 @@
+crates/infra/thoughts-core/tests/git_sync_divergence.rs
+  66534ab3b121a672 58-59,73-74,76-79,95,97-100,119,125-126
+crates/infra/thoughts-core/src/git/sync.rs
+  66534ab3b121a672 483-486,680-681,717-718,769-770,822-823
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "0fb1faa92a70f50d0d29e2bde4bf22035d377766",
+  "prompts": {
+    "66534ab3b121a672": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c248cb6ffeca3oOwPBfDs4tC",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 19,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    }
+  }
+}
