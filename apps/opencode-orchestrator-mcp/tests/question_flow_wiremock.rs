@@ -445,7 +445,7 @@ async fn respond_question_by_id_lookup() {
 
     // Mock the reply endpoint to accept the specific question ID
     Mock::given(method("POST"))
-        .and(path_regex(r"/question/.*/reply"))
+        .and(path(format!("/question/{question_id}/reply")))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
