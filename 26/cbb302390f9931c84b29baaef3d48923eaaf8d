@@ -1,0 +1,37 @@
+.opencode/command/decide_findings_openai.md
+  53e61f18dd41c34f 1,4-6,18-20,31-40,42,59-63,75-79,87-92,99-103,130,132,134,180,182,184,196,198,200,217,219,223,225,227,229,231-237,239-241,252-255,264-268,274-278,283,285,287,289,291,293,295,299,307-308,310,315,322-323,357-361,367
+  fc36d1d61e66588b 2-3,7-17,21-30,41,43-58,64-74,80-86,93-98,104-129,131,133,135-179,181,183,185-195,197,199,201-216,218,220-222,224,226,228,230,238,242-251,256-263,269-273,279-282,284,286,288,290,292,294,296-298,300-306,309,311-314,316-321,324-356,362-366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "26cbb302390f9931c84b29baaef3d48923eaaf8d",
+  "prompts": {
+    "53e61f18dd41c34f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c8212d5ffeuycc5WUoup0U97",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 98,
+      "overriden_lines": 0
+    },
+    "fc36d1d61e66588b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c7419f8ffeI9GLjwPjlkRO9R",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 269,
+      "overriden_lines": 0
+    }
+  }
+}
