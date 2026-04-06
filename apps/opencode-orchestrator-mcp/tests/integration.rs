@@ -14,6 +14,7 @@ use opencode_orchestrator_mcp::types::RespondPermissionInput;
 use opencode_orchestrator_mcp::types::RunStatus;
 use opencode_orchestrator_mcp::version;
 use opencode_rs::types::session::CreateSessionRequest;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -520,5 +521,82 @@ async fn permission_reject_returns_none_with_warning() {
 
     // Cleanup
     let _ = std::fs::remove_file(&tmp_file);
+    cleanup_session(&server, &session_id).await;
+}
+
+/// Start a server with custom config injection.
+async fn start_server_with_config(config_json: String) -> Arc<OnceCell<OrchestratorServer>> {
+    let cell = Arc::new(OnceCell::new());
+    let server = timeout(
+        Duration::from_secs(30),
+        OrchestratorServer::start_lazy_with_config(Some(config_json)),
+    )
+    .await
+    .expect("timeout starting embedded opencode server with config")
+    .expect("failed to start embedded opencode server with config");
+    cell.set(server)
+        .unwrap_or_else(|_| panic!("cell should be empty"));
+    cell
+}
+
+/// Live integration test for question tool flow.
+///
+/// This test validates that the config injection infrastructure works.
+/// Triggering an actual question requires specific prompts; this test
+/// validates the server starts correctly with injected config.
+#[tokio::test]
+#[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
+async fn live_question_tool_infrastructure() {
+    if !should_run() {
+        return;
+    }
+    init_tracing();
+
+    // Load test config fixture
+    let config_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/opencode.config.json");
+    let config_json =
+        std::fs::read_to_string(&config_path).expect("Failed to read test config fixture");
+
+    tracing::info!("Loaded config from {}", config_path.display());
+
+    // Start server with injected config
+    let server = start_server_with_config(config_json).await;
+
+    // Create session to verify server is working
+    let session_id = create_session(&server).await;
+
+    tracing::info!(session_id = %session_id, "Created session with config-injected server");
+
+    // Run a simple prompt to verify the server is functional
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let result = timeout(
+        Duration::from_secs(60),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(session_id.clone()),
+                command: None,
+                message: Some("Say 'config test passed' and nothing else.".into()),
+                wait_for_activity: None,
+            },
+            &agentic_tools_core::ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("timed out waiting for response")
+    .expect("run failed");
+
+    assert!(
+        matches!(result.status, RunStatus::Completed),
+        "expected Completed status, got {:?}",
+        result.status
+    );
+
+    tracing::info!(
+        response = ?result.response,
+        "Config injection test completed successfully"
+    );
+
+    // Cleanup
     cleanup_session(&server, &session_id).await;
 }
