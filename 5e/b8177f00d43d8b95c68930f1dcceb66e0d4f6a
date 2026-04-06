@@ -1,0 +1,34 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "5eb8177f00d43d8b95c68930f1dcceb66e0d4f6a",
+  "prompts": {
+    "53e61f18dd41c34f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c8212d5ffeuycc5WUoup0U97",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 98,
+      "overriden_lines": 0
+    },
+    "fc36d1d61e66588b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c7419f8ffeI9GLjwPjlkRO9R",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 269,
+      "overriden_lines": 0
+    }
+  }
+}
