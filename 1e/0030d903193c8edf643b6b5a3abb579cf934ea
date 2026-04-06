@@ -1,0 +1,23 @@
+crates/infra/thoughts-core/src/git/sync.rs
+  3dfee8b911b4cd73 30-31,33-38,228-230,233-235,570,576-577,579-580,584-593
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "1e0030d903193c8edf643b6b5a3abb579cf934ea",
+  "prompts": {
+    "3dfee8b911b4cd73": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29cb06025ffeDWLY3QuhqcxqeR",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 29,
+      "total_deletions": 15,
+      "accepted_lines": 29,
+      "overriden_lines": 0
+    }
+  }
+}
