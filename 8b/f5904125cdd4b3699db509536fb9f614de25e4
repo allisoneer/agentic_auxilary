@@ -1,0 +1,23 @@
+crates/infra/thoughts-core/src/documents/mod.rs
+  72202f9a068bc5a2 136-140,421-434
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "8bf5904125cdd4b3699db509536fb9f614de25e4",
+  "prompts": {
+    "72202f9a068bc5a2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29cab66cbffePRxKPlNYVdjWZR",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 19,
+      "total_deletions": 0,
+      "accepted_lines": 19,
+      "overriden_lines": 0
+    }
+  }
+}
