@@ -231,3 +231,22 @@ pub fn messages_fixture(session_id: &str, assistant_text: Option<&str>) -> serde
 
     serde_json::Value::Array(msgs)
 }
+
+/// Create a sessions list response fixture.
+pub fn sessions_list_fixture(session_ids: &[&str]) -> serde_json::Value {
+    serde_json::json!(
+        session_ids
+            .iter()
+            .map(|id| session_fixture(id))
+            .collect::<Vec<_>>()
+    )
+}
+
+/// Create a commands list response fixture.
+pub fn commands_list_fixture() -> serde_json::Value {
+    serde_json::json!([
+        {"name": "test", "description": "Run tests"},
+        {"name": "build", "description": "Build project"},
+        {"name": "lint", "description": "Run linter"}
+    ])
+}

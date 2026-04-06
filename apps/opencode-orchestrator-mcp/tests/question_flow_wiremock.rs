@@ -388,3 +388,185 @@ async fn permission_priority_wins_over_question() {
     assert!(matches!(result.status, RunStatus::PermissionRequired));
     assert!(result.question_request_id.is_none());
 }
+
+// ==================== New Test Scenarios for v1.3.17 ====================
+
+/// Test question lookup by explicit `question_request_id`
+#[tokio::test]
+async fn respond_question_by_id_lookup() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+    let tool = RespondQuestionTool::new(Arc::clone(&server));
+    let sid = "question-by-id";
+    let question_id = "question-specific";
+
+    // Mount two questions for the same session, then empty after reply
+    let question_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            question_fixture(
+                "question-other",
+                sid,
+                &[question_payload("First question?")]
+            ),
+            question_fixture(question_id, sid, &[question_payload("Second question?")])
+        ])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(question_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    // Status transitions: busy -> busy -> idle
+    let status_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    // Mock the reply endpoint to accept the specific question ID
+    Mock::given(method("POST"))
+        .and(path_regex(r"/question/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("Reply done"))),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    // Provide explicit question_request_id to select the specific question
+    let result = timeout(
+        Duration::from_secs(4),
+        tool.call(
+            RespondQuestionInput {
+                session_id: sid.into(),
+                question_request_id: Some(question_id.into()),
+                action: QuestionAction::Reply,
+                answers: vec![vec!["yes".into()]],
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("respond_question by id should not hang")
+    .expect("respond_question by id should succeed");
+
+    assert!(matches!(result.status, RunStatus::Completed));
+}
+
+/// Test error when multiple questions pending and no ID provided
+#[tokio::test]
+async fn multiple_pending_questions_returns_ambiguity_error() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+    let tool = RespondQuestionTool::new(Arc::clone(&server));
+    let sid = "question-ambiguous";
+
+    // Mount two questions for the same session
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            question_fixture("q1", sid, &[question_payload("First question?")]),
+            question_fixture("q2", sid, &[question_payload("Second question?")])
+        ])))
+        .mount(&mock)
+        .await;
+
+    // Call without question_request_id - should return error
+    let result = tool
+        .call(
+            RespondQuestionInput {
+                session_id: sid.into(),
+                question_request_id: None, // No explicit ID
+                action: QuestionAction::Reply,
+                answers: vec![vec!["yes".into()]],
+            },
+            &ToolContext::default(),
+        )
+        .await;
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Multiple pending questions"),
+        "Expected ambiguity error, got: {msg}"
+    );
+    assert!(msg.contains("q1"), "Error should mention first question ID");
+    assert!(
+        msg.contains("q2"),
+        "Error should mention second question ID"
+    );
+}
+
+/// Test validation error when Reply action has empty answers
+#[tokio::test]
+async fn reply_with_empty_answers_returns_validation_error() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+    let tool = RespondQuestionTool::new(Arc::clone(&server));
+    let sid = "question-empty-answers";
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            question_fixture("q-empty", sid, &[question_payload("Continue?")])
+        ])))
+        .mount(&mock)
+        .await;
+
+    // Call with action=Reply but empty answers vec
+    let result = tool
+        .call(
+            RespondQuestionInput {
+                session_id: sid.into(),
+                question_request_id: None,
+                action: QuestionAction::Reply,
+                answers: vec![], // Empty answers!
+            },
+            &ToolContext::default(),
+        )
+        .await;
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("answers is required") || msg.contains("answers"),
+        "Expected validation error about answers, got: {msg}"
+    );
+}
