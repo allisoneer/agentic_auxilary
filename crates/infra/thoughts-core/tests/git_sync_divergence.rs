@@ -63,6 +63,16 @@ async fn sync_jsonl_smart_merge_on_conflict() {
     );
     support::git_ok(local.path(), &["push", "-u", "origin", "main"]);
 
+    // Fix bare remote HEAD to point to main (otherwise clone gets detached HEAD)
+    // Bare repos initialized with `git init --bare` keep HEAD at refs/heads/master
+    // and don't update it on push. Real Git servers set HEAD appropriately.
+    {
+        let bare_repo = git2::Repository::open(remote.path()).expect("open bare remote");
+        bare_repo
+            .set_head("refs/heads/main")
+            .expect("set bare HEAD to main");
+    }
+
     // 5. Clone to second location (simulating another client)
     let other = TempDir::new().unwrap();
     support::git_ok(
