@@ -133,6 +133,11 @@ fn compute_github_url(
         return None;
     }
 
+    // Guard against single-segment remotes that produce empty org_path
+    if identity.org_path.is_empty() {
+        return None;
+    }
+
     // Build the path within the repo
     // Structure: {subpath}/{branch}/{doc_type_dir}/{filename}
     let mut path_parts = Vec::new();
@@ -412,5 +417,19 @@ mod tests {
             url,
             Some("https://github.com/General-Wisdom/thoughts/blob/allison-feature/allison-feature/artifacts/test.md".to_string())
         );
+    }
+
+    #[test]
+    fn test_compute_github_url_empty_org_path() {
+        // Single-segment remotes produce empty org_path; should return None
+        // to avoid malformed URLs like https://github.com//repo/...
+        let url = compute_github_url(
+            Some("git@github.com:repo.git"),
+            None,
+            "main",
+            &DocumentType::Research,
+            "doc.md",
+        );
+        assert_eq!(url, None);
     }
 }
