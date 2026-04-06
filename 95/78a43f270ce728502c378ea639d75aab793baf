@@ -1,0 +1,25 @@
+apps/opencode-orchestrator-mcp/tests/integration.rs
+  ba4e6d9f9e90b347 17,526-602
+apps/opencode-orchestrator-mcp/src/server.rs
+  ba4e6d9f9e90b347 112-125,130-134,214-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "9578a43f270ce728502c378ea639d75aab793baf",
+  "prompts": {
+    "ba4e6d9f9e90b347": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29ba31a75ffeqpk7ZM8KETlXlQ",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 180,
+      "overriden_lines": 0
+    }
+  }
+}
