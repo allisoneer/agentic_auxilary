@@ -136,10 +136,11 @@ fn compute_github_url(
     // Build the path within the repo
     // Structure: {subpath}/{branch}/{doc_type_dir}/{filename}
     let mut path_parts = Vec::new();
-    if let Some(subpath) = repo_subpath
-        && !subpath.is_empty()
-    {
-        path_parts.push(subpath.to_string());
+    if let Some(subpath) = repo_subpath {
+        let subpath = subpath.trim().trim_matches('/');
+        if !subpath.is_empty() {
+            path_parts.push(subpath.to_string());
+        }
     }
     path_parts.push(branch.to_string());
     path_parts.push(doc_type.subdir_name().to_string());

@@ -194,7 +194,9 @@ mod tests {
         let tf = v.fmt_text(&TextOptions::default());
         assert!(tf.contains("\u{2713} Created"));
         assert!(tf.contains("2.0 KB"));
-        assert!(tf.contains("URL (after sync): https://github.com/org/repo"));
+        assert!(
+            tf.contains("URL (after sync): https://github.com/org/repo/blob/x/research/test.md")
+        );
     }
 
     #[test]
