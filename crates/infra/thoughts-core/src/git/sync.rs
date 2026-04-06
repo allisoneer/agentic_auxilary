@@ -27,8 +27,15 @@ struct LogEntryForMerge {
 /// Check if a path matches the tool logs pattern.
 ///
 /// Tool log files are in `*/logs/tool_logs_*.jsonl` paths.
+/// The `tool_logs_` prefix must appear immediately after `/logs/` to prevent
+/// false positives on paths like `tool_logs_config/logs/readme.md`.
 fn is_tool_log_file(path: &str) -> bool {
-    path.contains("/logs/") && path.contains("tool_logs_") && path.ends_with(".jsonl")
+    if let Some(logs_idx) = path.find("/logs/") {
+        let after_logs = &path[logs_idx + 6..]; // Skip "/logs/"
+        after_logs.starts_with("tool_logs_") && path.ends_with(".jsonl")
+    } else {
+        false
+    }
 }
 
 /// Merge two JSONL log files by deduplicating on call_id and sorting by started_at.
@@ -218,21 +225,14 @@ impl GitSync {
             }
         };
 
-        if local_oid == upstream_oid {
-            return Ok(DivergenceAnalysis {
-                is_diverged: false,
-                is_ahead: false,
-                is_behind: false,
-            });
-        }
-
-        let upstream_commit = self.repo.find_annotated_commit(upstream_oid)?;
-        let (analysis, _) = self.repo.merge_analysis(&[&upstream_commit])?;
+        // Use graph_ahead_behind for accurate commit counts instead of merge_analysis
+        // which doesn't distinguish between ahead-only, behind-only, and diverged states
+        let (ahead, behind) = self.repo.graph_ahead_behind(local_oid, upstream_oid)?;
 
         Ok(DivergenceAnalysis {
-            is_diverged: !analysis.is_up_to_date() && !analysis.is_fast_forward(),
-            is_ahead: !analysis.is_up_to_date(),
-            is_behind: analysis.is_fast_forward(),
+            is_diverged: ahead > 0 && behind > 0,
+            is_ahead: ahead > 0,
+            is_behind: behind > 0,
         })
     }
 
@@ -567,15 +567,29 @@ mod tests {
 
     #[test]
     fn test_is_tool_log_file() {
+        // Valid tool log paths
         assert!(is_tool_log_file("branch/logs/tool_logs_2025-01-01.jsonl"));
         assert!(is_tool_log_file(
             "foo/logs/tool_logs_2025-01-01_abc123.jsonl"
         ));
         assert!(is_tool_log_file("a/b/c/logs/tool_logs_whatever.jsonl"));
+
+        // Invalid: wrong filename in logs directory
         assert!(!is_tool_log_file("branch/logs/other.jsonl"));
+
+        // Invalid: tool_logs_ in wrong directory
         assert!(!is_tool_log_file(
             "branch/research/tool_logs_2025-01-01.jsonl"
         ));
-        assert!(!is_tool_log_file("branch/logs/tool_logs_2025-01-01.json")); // wrong extension
+
+        // Invalid: wrong extension
+        assert!(!is_tool_log_file("branch/logs/tool_logs_2025-01-01.json"));
+
+        // Invalid: tool_logs_ appears BEFORE /logs/ (false positive that tighter check prevents)
+        assert!(!is_tool_log_file("tool_logs_config/logs/readme.jsonl"));
+        assert!(!is_tool_log_file("tool_logs_foo/logs/bar.jsonl"));
+
+        // Invalid: no /logs/ directory at all
+        assert!(!is_tool_log_file("tool_logs_2025-01-01.jsonl"));
     }
 }
