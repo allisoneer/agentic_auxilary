@@ -1,0 +1,29 @@
+apps/opencode-orchestrator-mcp/tests/support/mod.rs
+  ba4e6d9f9e90b347 234-252
+apps/opencode-orchestrator-mcp/src/token_tracker.rs
+  ba4e6d9f9e90b347 204,218,230
+apps/opencode-orchestrator-mcp/tests/question_flow_wiremock.rs
+  ba4e6d9f9e90b347 391-572
+apps/opencode-orchestrator-mcp/tests/list_tools_wiremock.rs
+  ba4e6d9f9e90b347 1-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "65a7c8b0647c7055c5b2d4e63e7b29e93b5a5a9e",
+  "prompts": {
+    "ba4e6d9f9e90b347": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29ba31a75ffeqpk7ZM8KETlXlQ",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 497,
+      "overriden_lines": 0
+    }
+  }
+}
