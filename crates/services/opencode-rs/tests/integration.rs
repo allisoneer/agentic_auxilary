@@ -79,31 +79,31 @@ fn resolve_launcher_config() -> (String, Vec<String>) {
 
 #[cfg(feature = "server")]
 async fn start_server() -> Arc<ManagedServer> {
-    SERVER
-        .get_or_init(|| async {
-            let (binary, launcher_args) = resolve_launcher_config();
-            let dir = directory();
+    Arc::clone(
+        SERVER
+            .get_or_init(|| async {
+                let (binary, launcher_args) = resolve_launcher_config();
+                let dir = directory();
 
-            eprintln!(
-                "[integration] Starting managed server: binary={}, args={:?}, dir={}",
-                binary, launcher_args, dir
-            );
+                eprintln!(
+                    "[integration] Starting managed server: binary={binary}, args={launcher_args:?}, dir={dir}"
+                );
 
-            let opts = ServerOptions::default()
-                .binary(&binary)
-                .launcher_args(launcher_args)
-                .directory(&dir)
-                .startup_timeout_ms(30_000); // 30 second timeout for bunx
+                let opts = ServerOptions::default()
+                    .binary(&binary)
+                    .launcher_args(launcher_args)
+                    .directory(&dir)
+                    .startup_timeout_ms(30_000); // 30 second timeout for bunx
 
-            let server = ManagedServer::start(opts)
-                .await
-                .expect("Failed to start managed opencode server");
+                let server = ManagedServer::start(opts)
+                    .await
+                    .expect("Failed to start managed opencode server");
 
-            eprintln!("[integration] Server started at {}", server.url());
-            Arc::new(server)
-        })
-        .await
-        .clone()
+                eprintln!("[integration] Server started at {}", server.url());
+                Arc::new(server)
+            })
+            .await,
+    )
 }
 
 #[cfg(feature = "server")]
