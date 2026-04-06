@@ -2,11 +2,22 @@
 //!
 //! These tests run against a real `OpenCode` server and are gated by environment variables.
 //!
-//! To run:
-//!   `OPENCODE_INTEGRATION=1` cargo test --test integration -- --ignored
+//! With `server` feature (recommended - auto-spawns server):
+//!   `OPENCODE_INTEGRATION=1 cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
-//! Optional environment variables:
-//!   `OPENCODE_BASE_URL` - Base URL of the `OpenCode` server (default: <http://127.0.0.1:4096>)
+//! For bunx-provisioned testing:
+//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" OPENCODE_INTEGRATION=1 \
+//!    cargo test -p opencode_rs --features server --test integration -- --ignored`
+//!
+//! Without `server` feature (requires pre-running server):
+//!   `OPENCODE_BASE_URL=http://127.0.0.1:4096 OPENCODE_INTEGRATION=1 \
+//!    cargo test -p opencode_rs --test integration -- --ignored`
+//!
+//! Environment variables:
+//!   `OPENCODE_INTEGRATION` - Must be set to run integration tests
+//!   `OPENCODE_BINARY` - Path to opencode binary or launcher (default: "opencode")
+//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.3.13")
+//!   `OPENCODE_BASE_URL` - Base URL when not using managed server (default: <http://127.0.0.1:4096>)
 //!   `OPENCODE_DIRECTORY` - Directory context for requests (default: current directory)
 
 // Integration tests are allowed to use unwrap/expect for test assertions
@@ -16,6 +27,20 @@
 #[path = "integration/mod.rs"]
 mod typed_tests;
 
+#[cfg(feature = "server")]
+use opencode_rs::server::ManagedServer;
+#[cfg(feature = "server")]
+use opencode_rs::server::ServerOptions;
+#[cfg(feature = "server")]
+use opencode_rs::version::OPENCODE_BINARY_ARGS_ENV;
+#[cfg(feature = "server")]
+use opencode_rs::version::OPENCODE_BINARY_ENV;
+#[cfg(feature = "server")]
+use std::sync::Arc;
+#[cfg(feature = "server")]
+use tokio::sync::OnceCell;
+
+use opencode_rs::Client;
 use opencode_rs::ClientBuilder;
 use opencode_rs::types::event::Event;
 use opencode_rs::types::message::PromptPart;
@@ -28,11 +53,6 @@ fn should_run() -> bool {
     std::env::var("OPENCODE_INTEGRATION").is_ok()
 }
 
-/// Get the base URL for the `OpenCode` server.
-fn base_url() -> String {
-    std::env::var("OPENCODE_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:4096".to_string())
-}
-
 /// Get the directory context.
 fn directory() -> String {
     std::env::var("OPENCODE_DIRECTORY").unwrap_or_else(|_| {
@@ -41,8 +61,77 @@ fn directory() -> String {
     })
 }
 
-/// Build a client for integration tests.
-fn build_client() -> opencode_rs::Client {
+// ============================================================================
+// Server feature enabled: Auto-spawn ManagedServer
+// ============================================================================
+
+#[cfg(feature = "server")]
+static SERVER: OnceCell<Arc<ManagedServer>> = OnceCell::const_new();
+
+#[cfg(feature = "server")]
+fn resolve_launcher_config() -> (String, Vec<String>) {
+    let binary = std::env::var(OPENCODE_BINARY_ENV).unwrap_or_else(|_| "opencode".to_string());
+    let args = std::env::var(OPENCODE_BINARY_ARGS_ENV)
+        .map(|s| s.split_whitespace().map(String::from).collect())
+        .unwrap_or_default();
+    (binary, args)
+}
+
+#[cfg(feature = "server")]
+async fn start_server() -> Arc<ManagedServer> {
+    SERVER
+        .get_or_init(|| async {
+            let (binary, launcher_args) = resolve_launcher_config();
+            let dir = directory();
+
+            eprintln!(
+                "[integration] Starting managed server: binary={}, args={:?}, dir={}",
+                binary, launcher_args, dir
+            );
+
+            let opts = ServerOptions::default()
+                .binary(&binary)
+                .launcher_args(launcher_args)
+                .directory(&dir)
+                .startup_timeout_ms(30_000); // 30 second timeout for bunx
+
+            let server = ManagedServer::start(opts)
+                .await
+                .expect("Failed to start managed opencode server");
+
+            eprintln!("[integration] Server started at {}", server.url());
+            Arc::new(server)
+        })
+        .await
+        .clone()
+}
+
+#[cfg(feature = "server")]
+async fn build_client() -> Client {
+    let server = start_server().await;
+    ClientBuilder::new()
+        .base_url(server.url().as_str())
+        .directory(directory())
+        .timeout_secs(300)
+        .build()
+        .unwrap()
+}
+
+// ============================================================================
+// Server feature disabled: Connect to pre-running server
+// ============================================================================
+
+#[cfg(not(feature = "server"))]
+fn base_url() -> String {
+    std::env::var("OPENCODE_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:4096".to_string())
+}
+
+#[cfg(not(feature = "server"))]
+#[expect(
+    clippy::unused_async,
+    reason = "async for API compatibility with server-enabled version"
+)]
+async fn build_client() -> Client {
     ClientBuilder::new()
         .base_url(base_url())
         .directory(directory())
@@ -59,7 +148,7 @@ async fn test_server_health() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
     let health = client.misc().health().await.expect("Failed to get health");
     assert!(health.healthy, "Server should be healthy");
 }
@@ -72,7 +161,7 @@ async fn test_session_lifecycle() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create session
     let session = client
@@ -119,7 +208,7 @@ async fn test_session_prompt_and_stream() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create session
     let session = client
@@ -212,7 +301,7 @@ async fn test_session_abort() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create session
     let session = client
@@ -245,7 +334,7 @@ async fn test_permissions_list() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // List permissions (may be empty, that's fine)
     let permissions = client
@@ -266,7 +355,7 @@ async fn test_files_list() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // List files in project
     // Note: This endpoint may require specific project context or return 400
@@ -291,7 +380,7 @@ async fn test_files_status() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get file status (VCS status)
     let status = client
@@ -312,7 +401,7 @@ async fn test_project_list() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // List projects
     let projects = client
@@ -333,7 +422,7 @@ async fn test_project_current() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get current project
     let project = client
@@ -353,7 +442,7 @@ async fn test_providers_list() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // List providers - returns ProviderListResponse with all/default/connected
     let response = client
@@ -386,7 +475,7 @@ async fn test_mcp_status() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get MCP status
     let status = client
@@ -407,7 +496,7 @@ async fn test_config_get() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get config
     let config = client.config().get().await.expect("Failed to get config");
@@ -425,7 +514,7 @@ async fn test_agents_list() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // List agents
     let agents = client
@@ -446,7 +535,7 @@ async fn test_commands_list() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // List commands
     let commands = client
@@ -467,7 +556,7 @@ async fn test_vcs_info() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get VCS info - the .expect() validates we got a successful response
     let vcs = client.misc().vcs().await.expect("Failed to get VCS info");
@@ -484,7 +573,7 @@ async fn test_path_info() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get path info
     let path = client.misc().path().await.expect("Failed to get path info");
@@ -500,7 +589,7 @@ async fn test_openapi_doc() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Get OpenAPI doc
     let doc = client
@@ -525,7 +614,7 @@ async fn test_session_fork() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create parent session
     let parent = client
@@ -568,7 +657,7 @@ async fn test_session_children() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create parent session
     let parent = client
@@ -619,7 +708,7 @@ async fn test_session_diff() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create session
     let session = client
@@ -657,7 +746,7 @@ async fn test_session_todos() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Create session
     let session = client
@@ -692,7 +781,7 @@ async fn test_global_events() {
         return;
     }
 
-    let client = build_client();
+    let client = build_client().await;
 
     // Subscribe to global events
     let mut subscription = client
@@ -741,7 +830,7 @@ async fn test_health_returns_pinned_version() {
     if !should_run() {
         return;
     }
-    let client = build_client();
+    let client = build_client().await;
     let health = client.misc().health().await.expect("health check failed");
 
     // Validate version matches pinned version
