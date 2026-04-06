@@ -1,0 +1,23 @@
+apps/opencode-orchestrator-mcp/tests/question_flow_wiremock.rs
+  315cd583e5636171 448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "32aea08e16ea3e4ae487311b5d775fcfbed18b26",
+  "prompts": {
+    "315cd583e5636171": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29b6e8566ffeQU0gK2Nxs3W6ZR",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
