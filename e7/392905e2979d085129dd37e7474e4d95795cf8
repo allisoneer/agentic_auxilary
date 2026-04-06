@@ -1,0 +1,51 @@
+AGENTS.md
+  1eac61232d870e4b 156-179
+CLAUDE.md
+  1eac61232d870e4b 62,64-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "e7392905e2979d085129dd37e7474e4d95795cf8",
+  "prompts": {
+    "1eac61232d870e4b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c9352d2ffem7WUjscRqylGV4",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 46,
+      "total_deletions": 2,
+      "accepted_lines": 46,
+      "overriden_lines": 0
+    },
+    "53e61f18dd41c34f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c8212d5ffeuycc5WUoup0U97",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 273,
+      "total_deletions": 0,
+      "accepted_lines": 92,
+      "overriden_lines": 0
+    },
+    "fc36d1d61e66588b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29c7419f8ffeI9GLjwPjlkRO9R",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 276,
+      "total_deletions": 182,
+      "accepted_lines": 275,
+      "overriden_lines": 0
+    }
+  }
+}
