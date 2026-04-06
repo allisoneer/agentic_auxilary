@@ -1,0 +1,23 @@
+crates/services/opencode-rs/tests/integration.rs
+  f6985c4de0dd9c1f 82-86,88-90,92-96,98-100,102-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "f7c6d41ab7cd6bc6be3d358a276712c7070b4380",
+  "prompts": {
+    "f6985c4de0dd9c1f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29cb772d2ffevC60hNpgVhkUt1",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 25,
+      "total_deletions": 25,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    }
+  }
+}
