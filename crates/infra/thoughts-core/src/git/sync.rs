@@ -107,14 +107,14 @@ fn merge_jsonl_logs(ours_content: &[u8], theirs_content: &[u8]) -> Vec<u8> {
 }
 
 /// Result of analyzing divergence between local and remote branches.
-#[allow(dead_code)] // is_ahead and is_behind reserved for future use
-struct DivergenceAnalysis {
+#[allow(dead_code)] // is_ahead and is_behind are tested in unit tests (divergence_* tests below)
+pub(crate) struct DivergenceAnalysis {
     /// Local and remote have diverged (both have unique commits)
-    is_diverged: bool,
+    pub(crate) is_diverged: bool,
     /// Local is ahead of remote (has commits not on remote)
-    is_ahead: bool,
+    pub(crate) is_ahead: bool,
     /// Local is behind remote (remote has commits not on local)
-    is_behind: bool,
+    pub(crate) is_behind: bool,
 }
 
 pub struct GitSync {
@@ -204,7 +204,7 @@ impl GitSync {
     }
 
     /// Check if local and remote branches have diverged.
-    fn check_divergence(&self) -> Result<DivergenceAnalysis> {
+    pub(crate) fn check_divergence(&self) -> Result<DivergenceAnalysis> {
         let head = self.repo.head()?;
         let branch_name = head.shorthand().unwrap_or("HEAD");
         let upstream_ref = format!("refs/remotes/origin/{}", branch_name);
@@ -591,5 +591,271 @@ mod tests {
 
         // Invalid: no /logs/ directory at all
         assert!(!is_tool_log_file("tool_logs_2025-01-01.jsonl"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Divergence detection unit tests
+    // These test check_divergence() return values for various git graph states.
+    // -------------------------------------------------------------------------
+
+    /// Helper: run git command and assert success
+    fn git_ok(dir: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("failed to spawn git");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// Helper: get trimmed stdout from git command
+    fn git_stdout(dir: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("failed to spawn git");
+        assert!(out.status.success());
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Test: No upstream ref exists (fresh local repo, no remote tracking branch).
+    /// Expected: is_diverged=false, is_ahead=true, is_behind=false
+    #[test]
+    fn divergence_no_upstream_ref() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::write(repo.path().join("a.txt"), "a").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "initial",
+            ],
+        );
+
+        let sync = GitSync::new(repo.path(), None).unwrap();
+        let analysis = sync.check_divergence().unwrap();
+
+        assert!(!analysis.is_diverged, "should not be diverged");
+        assert!(analysis.is_ahead, "should be ahead (no upstream)");
+        assert!(!analysis.is_behind, "should not be behind");
+    }
+
+    /// Test: Local and remote are at the same commit.
+    /// Expected: is_diverged=false, is_ahead=false, is_behind=false
+    #[test]
+    fn divergence_up_to_date() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::write(repo.path().join("a.txt"), "a").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "initial",
+            ],
+        );
+
+        let head_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+        git_ok(
+            repo.path(),
+            &["update-ref", "refs/remotes/origin/main", &head_oid],
+        );
+
+        let sync = GitSync::new(repo.path(), None).unwrap();
+        let analysis = sync.check_divergence().unwrap();
+
+        assert!(!analysis.is_diverged, "should not be diverged");
+        assert!(!analysis.is_ahead, "should not be ahead");
+        assert!(!analysis.is_behind, "should not be behind");
+    }
+
+    /// Test: Local has commits that remote doesn't (local ahead only).
+    /// Expected: is_diverged=false, is_ahead=true, is_behind=false
+    #[test]
+    fn divergence_local_ahead_only() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::write(repo.path().join("a.txt"), "a").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C1",
+            ],
+        );
+
+        let c1_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+        git_ok(
+            repo.path(),
+            &["update-ref", "refs/remotes/origin/main", &c1_oid],
+        );
+
+        std::fs::write(repo.path().join("b.txt"), "b").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C2",
+            ],
+        );
+
+        let sync = GitSync::new(repo.path(), None).unwrap();
+        let analysis = sync.check_divergence().unwrap();
+
+        assert!(!analysis.is_diverged, "should not be diverged");
+        assert!(analysis.is_ahead, "should be ahead");
+        assert!(!analysis.is_behind, "should not be behind");
+    }
+
+    /// Test: Remote has commits that local doesn't (local behind only).
+    /// Expected: is_diverged=false, is_ahead=false, is_behind=true
+    #[test]
+    fn divergence_local_behind_only() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::write(repo.path().join("a.txt"), "a").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C1",
+            ],
+        );
+
+        std::fs::write(repo.path().join("b.txt"), "b").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C2",
+            ],
+        );
+
+        let c2_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+        git_ok(repo.path(), &["reset", "--hard", "HEAD~1"]);
+        git_ok(
+            repo.path(),
+            &["update-ref", "refs/remotes/origin/main", &c2_oid],
+        );
+
+        let sync = GitSync::new(repo.path(), None).unwrap();
+        let analysis = sync.check_divergence().unwrap();
+
+        assert!(!analysis.is_diverged, "should not be diverged");
+        assert!(!analysis.is_ahead, "should not be ahead");
+        assert!(analysis.is_behind, "should be behind");
+    }
+
+    /// Test: Both local and remote have unique commits (diverged).
+    /// Expected: is_diverged=true, is_ahead=true, is_behind=true
+    #[test]
+    fn divergence_diverged() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::write(repo.path().join("a.txt"), "a").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C1",
+            ],
+        );
+
+        let c1_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+
+        std::fs::write(repo.path().join("b.txt"), "b").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C2-local",
+            ],
+        );
+
+        git_ok(repo.path(), &["branch", "remote-sim", &c1_oid]);
+        git_ok(repo.path(), &["checkout", "remote-sim"]);
+        std::fs::write(repo.path().join("c.txt"), "c").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "C3-remote",
+            ],
+        );
+
+        let c3_oid = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+        git_ok(repo.path(), &["checkout", "main"]);
+        git_ok(
+            repo.path(),
+            &["update-ref", "refs/remotes/origin/main", &c3_oid],
+        );
+
+        let sync = GitSync::new(repo.path(), None).unwrap();
+        let analysis = sync.check_divergence().unwrap();
+
+        assert!(analysis.is_diverged, "should be diverged");
+        assert!(analysis.is_ahead, "should be ahead");
+        assert!(analysis.is_behind, "should be behind");
     }
 }
