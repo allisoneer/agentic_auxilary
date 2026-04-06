@@ -164,6 +164,8 @@ pub struct ActiveWork {
     pub remote_url: Option<String>,
     /// Subpath within the thoughts repository (for URL generation)
     pub repo_subpath: Option<String>,
+    /// Git ref for the mounted thoughts repository (for GitHub blob URLs)
+    pub thoughts_git_ref: Option<String>,
 }
 
 /// Internal struct to carry resolved thoughts root info.
@@ -171,6 +173,7 @@ struct ResolvedThoughtsRoot {
     path: PathBuf,
     remote_url: Option<String>,
     repo_subpath: Option<String>,
+    thoughts_git_ref: Option<String>,
 }
 
 /// Resolve thoughts root via configured thoughts_mount
@@ -199,10 +202,16 @@ fn resolve_thoughts_root() -> Result<ResolvedThoughtsRoot> {
         "Thoughts mount not cloned. Run 'thoughts sync' or 'thoughts mount update' first.",
     )?;
 
+    let thoughts_git_ref = find_repo_root(&path)
+        .ok()
+        .and_then(|repo_root| get_current_branch(&repo_root).ok())
+        .filter(|branch| branch != "detached");
+
     Ok(ResolvedThoughtsRoot {
         path,
         remote_url: Some(tm.remote.clone()),
         repo_subpath: tm.subpath.clone(),
+        thoughts_git_ref,
     })
 }
 
@@ -296,6 +305,7 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
         logs: base.join("logs"),
         remote_url: resolved.remote_url,
         repo_subpath: resolved.repo_subpath,
+        thoughts_git_ref: resolved.thoughts_git_ref,
     })
 }
 

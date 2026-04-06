@@ -13,6 +13,9 @@ use atomicwrites::AtomicFile;
 use atomicwrites::OverwriteBehavior;
 use chrono::DateTime;
 use chrono::Utc;
+use percent_encoding::AsciiSet;
+use percent_encoding::CONTROLS;
+use percent_encoding::utf8_percent_encode;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -116,16 +119,57 @@ pub struct ActiveDocuments {
 ///
 /// Returns None if:
 /// - No remote URL is available
+/// - No git ref is available
 /// - The remote is not GitHub-hosted
 /// - The URL couldn't be parsed
+const GITHUB_PATH_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'!')
+    .add(b'"')
+    .add(b'#')
+    .add(b'$')
+    .add(b'%')
+    .add(b'&')
+    .add(b'\'')
+    .add(b'(')
+    .add(b')')
+    .add(b'*')
+    .add(b'+')
+    .add(b',')
+    .add(b':')
+    .add(b';')
+    .add(b'<')
+    .add(b'=')
+    .add(b'>')
+    .add(b'?')
+    .add(b'@')
+    .add(b'[')
+    .add(b'\\')
+    .add(b']')
+    .add(b'^')
+    .add(b'`')
+    .add(b'{')
+    .add(b'|')
+    .add(b'}');
+
+fn encode_path_segment(value: &str) -> String {
+    value
+        .split('/')
+        .map(|segment| utf8_percent_encode(segment, GITHUB_PATH_SEGMENT_ENCODE_SET).to_string())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 fn compute_github_url(
     remote_url: Option<&str>,
     repo_subpath: Option<&str>,
-    branch: &str,
+    git_ref: Option<&str>,
+    dir_name: &str,
     doc_type: &DocumentType,
     filename: &str,
 ) -> Option<String> {
     let remote = remote_url?;
+    let git_ref = git_ref?;
     let identity = RepoIdentity::parse(remote).ok()?;
 
     // Only generate URLs for GitHub
@@ -139,23 +183,26 @@ fn compute_github_url(
     }
 
     // Build the path within the repo
-    // Structure: {subpath}/{branch}/{doc_type_dir}/{filename}
+    // Structure: {subpath}/{dir_name}/{doc_type_dir}/{filename}
     let mut path_parts = Vec::new();
     if let Some(subpath) = repo_subpath {
         let subpath = subpath.trim().trim_matches('/');
         if !subpath.is_empty() {
-            path_parts.push(subpath.to_string());
+            path_parts.push(encode_path_segment(subpath));
         }
     }
-    path_parts.push(branch.to_string());
+    path_parts.push(encode_path_segment(dir_name));
     path_parts.push(doc_type.subdir_name().to_string());
-    path_parts.push(filename.to_string());
+    path_parts.push(encode_path_segment(filename));
 
     let path_in_repo = path_parts.join("/");
 
     Some(format!(
         "https://github.com/{}/{}/blob/{}/{}",
-        identity.org_path, identity.repo, branch, path_in_repo
+        encode_path_segment(&identity.org_path),
+        encode_path_segment(&identity.repo),
+        encode_path_segment(git_ref),
+        path_in_repo
     ))
 }
 
@@ -186,6 +233,7 @@ pub fn write_document(
     let github_url = compute_github_url(
         aw.remote_url.as_deref(),
         aw.repo_subpath.as_deref(),
+        aw.thoughts_git_ref.as_deref(),
         &aw.dir_name,
         &doc_type,
         filename,
@@ -361,6 +409,7 @@ mod tests {
         let url = compute_github_url(
             Some("git@github.com:org/repo.git"),
             None,
+            Some("main"),
             "main",
             &DocumentType::Research,
             "doc.md",
@@ -376,13 +425,17 @@ mod tests {
         let url = compute_github_url(
             Some("https://github.com/org/repo.git"),
             Some("docs/thoughts"),
+            Some("main"),
             "feature-branch",
             &DocumentType::Plan,
             "plan.md",
         );
         assert_eq!(
             url,
-            Some("https://github.com/org/repo/blob/feature-branch/docs/thoughts/feature-branch/plans/plan.md".to_string())
+            Some(
+                "https://github.com/org/repo/blob/main/docs/thoughts/feature-branch/plans/plan.md"
+                    .to_string()
+            )
         );
     }
 
@@ -391,6 +444,7 @@ mod tests {
         let url = compute_github_url(
             Some("git@gitlab.com:org/repo.git"),
             None,
+            Some("main"),
             "main",
             &DocumentType::Research,
             "doc.md",
@@ -400,7 +454,14 @@ mod tests {
 
     #[test]
     fn test_compute_github_url_none_remote() {
-        let url = compute_github_url(None, None, "main", &DocumentType::Research, "doc.md");
+        let url = compute_github_url(
+            None,
+            None,
+            Some("main"),
+            "main",
+            &DocumentType::Research,
+            "doc.md",
+        );
         assert_eq!(url, None);
     }
 
@@ -409,13 +470,14 @@ mod tests {
         let url = compute_github_url(
             Some("git@github.com:General-Wisdom/thoughts.git"),
             None,
+            Some("main"),
             "allison-feature",
             &DocumentType::Artifact,
             "test.md",
         );
         assert_eq!(
             url,
-            Some("https://github.com/General-Wisdom/thoughts/blob/allison-feature/allison-feature/artifacts/test.md".to_string())
+            Some("https://github.com/General-Wisdom/thoughts/blob/main/allison-feature/artifacts/test.md".to_string())
         );
     }
 
@@ -426,10 +488,74 @@ mod tests {
         let url = compute_github_url(
             Some("git@github.com:repo.git"),
             None,
+            Some("main"),
             "main",
             &DocumentType::Research,
             "doc.md",
         );
         assert_eq!(url, None);
+    }
+
+    #[test]
+    fn test_compute_github_url_slash_branch() {
+        let url = compute_github_url(
+            Some("git@github.com:org/repo.git"),
+            None,
+            Some("main"),
+            "feature/login",
+            &DocumentType::Research,
+            "notes.md",
+        );
+        assert_eq!(
+            url,
+            Some(
+                "https://github.com/org/repo/blob/main/feature/login/research/notes.md".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_compute_github_url_special_chars() {
+        let url = compute_github_url(
+            Some("git@github.com:org/repo.git"),
+            None,
+            Some("main"),
+            "feat#1%",
+            &DocumentType::Plan,
+            "plan.md",
+        );
+        assert_eq!(
+            url,
+            Some("https://github.com/org/repo/blob/main/feat%231%25/plans/plan.md".to_string())
+        );
+    }
+
+    #[test]
+    fn test_compute_github_url_detached_head() {
+        let url = compute_github_url(
+            Some("git@github.com:org/repo.git"),
+            None,
+            None,
+            "some-branch",
+            &DocumentType::Research,
+            "doc.md",
+        );
+        assert_eq!(url, None);
+    }
+
+    #[test]
+    fn test_compute_github_url_space_in_branch() {
+        let url = compute_github_url(
+            Some("git@github.com:org/repo.git"),
+            None,
+            Some("main"),
+            "my branch",
+            &DocumentType::Artifact,
+            "out.md",
+        );
+        assert_eq!(
+            url,
+            Some("https://github.com/org/repo/blob/main/my%20branch/artifacts/out.md".to_string())
+        );
     }
 }
