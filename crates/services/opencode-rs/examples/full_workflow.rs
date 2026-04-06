@@ -140,10 +140,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 8: Get session diff
     println!("\n8. Getting session diff...");
     let diff = client.sessions().diff(&session.id).await?;
-    println!("   Files changed: {}", diff.files.len());
-    if !diff.diff.is_empty() {
-        let preview: String = diff.diff.chars().take(100).collect();
-        println!("   Diff preview: {preview}...");
+    println!("   Files changed: {}", diff.len());
+    for file_diff in &diff {
+        println!(
+            "   - {} (+{}, -{})",
+            file_diff.file, file_diff.additions, file_diff.deletions
+        );
     }
 
     // Step 9: Get todos

@@ -294,20 +294,44 @@ impl<'de> Deserialize<'de> for SessionStatusResponse {
     }
 }
 
-/// Session diff response.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// A file diff entry from the session diff endpoint.
+///
+/// The server returns an array of these objects representing changes to each file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionDiff {
-    /// Diff content.
-    #[serde(default)]
-    pub diff: String,
-    /// Files changed.
-    #[serde(default)]
-    pub files: Vec<String>,
-    /// Additional fields.
+pub struct SessionFileDiff {
+    /// File path.
+    pub file: String,
+    /// Content before changes.
+    pub before: String,
+    /// Content after changes.
+    pub after: String,
+    /// Number of lines added.
+    pub additions: u64,
+    /// Number of lines deleted.
+    pub deletions: u64,
+    /// Diff status: "added", "deleted", or "modified".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<SessionDiffStatus>,
+    /// Additional fields from server.
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
+
+/// Status of a file in a session diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionDiffStatus {
+    /// File was added.
+    Added,
+    /// File was deleted.
+    Deleted,
+    /// File was modified.
+    Modified,
+}
+
+/// Session diff response - a list of file diffs.
+pub type SessionDiff = Vec<SessionFileDiff>;
 
 /// Session todo item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -413,5 +437,34 @@ mod tests {
 
         assert!(matches!(resp, SessionStatusResponse::Map(_)));
         assert!(matches!(resp.status_for("any"), SessionStatusInfo::Idle));
+    }
+
+    #[test]
+    fn parse_session_file_diff() {
+        let json = r#"{
+            "file": "src/main.rs",
+            "before": "fn main() {}",
+            "after": "fn main() { println!(\"hello\"); }",
+            "additions": 1,
+            "deletions": 0,
+            "status": "modified"
+        }"#;
+        let diff: SessionFileDiff = serde_json::from_str(json).unwrap();
+        assert_eq!(diff.file, "src/main.rs");
+        assert_eq!(diff.additions, 1);
+        assert_eq!(diff.deletions, 0);
+        assert_eq!(diff.status, Some(SessionDiffStatus::Modified));
+    }
+
+    #[test]
+    fn parse_session_diff_array() {
+        let json = r#"[
+            {"file": "a.rs", "before": "", "after": "new", "additions": 1, "deletions": 0, "status": "added"},
+            {"file": "b.rs", "before": "old", "after": "", "additions": 0, "deletions": 1, "status": "deleted"}
+        ]"#;
+        let diff: SessionDiff = serde_json::from_str(json).unwrap();
+        assert_eq!(diff.len(), 2);
+        assert_eq!(diff[0].status, Some(SessionDiffStatus::Added));
+        assert_eq!(diff[1].status, Some(SessionDiffStatus::Deleted));
     }
 }

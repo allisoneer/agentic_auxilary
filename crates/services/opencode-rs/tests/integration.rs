@@ -6,7 +6,7 @@
 //!   `OPENCODE_INTEGRATION=1 cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
 //! For bunx-provisioned testing:
-//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" OPENCODE_INTEGRATION=1 \
+//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" OPENCODE_INTEGRATION=1 \
 //!    cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
 //! Without `server` feature (requires pre-running server):
@@ -16,7 +16,7 @@
 //! Environment variables:
 //!   `OPENCODE_INTEGRATION` - Must be set to run integration tests
 //!   `OPENCODE_BINARY` - Path to opencode binary or launcher (default: "opencode")
-//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.3.13")
+//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.3.17")
 //!   `OPENCODE_BASE_URL` - Base URL when not using managed server (default: <http://127.0.0.1:4096>)
 //!   `OPENCODE_DIRECTORY` - Directory context for requests (default: current directory)
 
@@ -99,7 +99,15 @@ async fn start_server() -> Arc<ManagedServer> {
                     .await
                     .expect("Failed to start managed opencode server");
 
-                eprintln!("[integration] Server started at {}", server.url());
+                let url = server.url().to_string();
+                eprintln!("[integration] Server started at {url}");
+
+                // Set OPENCODE_BASE_URL so typed_tests submodule can find the managed server.
+                // The typed_tests module can't access the SERVER singleton (Rust module scoping),
+                // so we communicate the URL via environment variable.
+                // SAFETY: Tests run single-threaded (--test-threads=1), so this is safe.
+                unsafe { std::env::set_var("OPENCODE_BASE_URL", &url) };
+
                 Arc::new(server)
             })
             .await,
@@ -718,17 +726,14 @@ async fn test_session_diff() {
         .expect("Failed to create session");
 
     // Get diff (may be empty for new session)
-    // Note: Response format may vary - could be object or array
-    match client.sessions().diff(&session.id).await {
-        Ok(diff) => {
-            // Just verify we got a response
-            let _ = diff.files.len();
-        }
-        Err(e) => {
-            // Some versions return different format
-            println!("Diff returned unexpected format: {e:?}");
-        }
-    }
+    let diff = client
+        .sessions()
+        .diff(&session.id)
+        .await
+        .expect("Failed to get session diff");
+
+    // Just verify we got a response (may be empty for new session with no changes)
+    println!("Session diff has {} file entries", diff.len());
 
     // Cleanup
     client
