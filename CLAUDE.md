@@ -59,9 +59,29 @@ Guidance for Claude Code when working with this repository.
 - `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 <!-- END:xtask:autogen -->
 
-## Working Notes
+## Project Context Files
 
-See [TODO.md](TODO.md) for the human maintainer's ad-hoc notes and thoughts. This file contains ideas, observations, and potential work items that are still loosely scoped—things worth thinking about but not yet defined enough for a formal ticket.
+These files contain important project-level context that should be read and kept up to date:
+
+| File | Purpose | When to Read | When to Update |
+|------|---------|--------------|----------------|
+| `TODO.md` | Living work queue: investigating, ready, blocked/sequenced, to-plan, to-classify | When planning new work, checking dependencies, understanding what's blocked or in-flight | When finishing work that unblocks other items, discovering new work items, or changing priorities |
+| `workflow.md` | Visual guide to agent architecture: orchestrator → session agents → sub-agents, tool matrices, decision flowchart | When understanding how agents/commands/tools relate, onboarding to the system, or debugging agent behavior | When adding new commands, changing tool availability, or modifying the agent hierarchy |
+
+**TODO.md categories:**
+- `Currently investigating` — active research
+- `Researched / Ready for implementation` — can be picked up now
+- `Blocked / Sequenced` — has dependencies, do in order
+- `To plan/design` — needs design work before implementation
+- `To classify/investigate` — needs triage
+- `To validate` — needs verification
+
+**workflow.md sections:**
+- Level 0: Orchestrator tools and spawning
+- Level 1: Session agent variants (Normal, Bash, Linear, Playwright, Review) and their tool counts
+- Level 2: Sub-agent matrix (Locator/Analyzer × Codebase/Thoughts/References/Web)
+- GPT-5 Reasoner integration
+- Decision flowchart for choosing the right agent/command
 
 ## Common Commands
 
