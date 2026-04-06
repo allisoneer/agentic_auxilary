@@ -251,9 +251,10 @@ async fn permission_request_returns_status() {
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
-    // Should return PermissionRequired within 60 seconds, not hang
+    // Should return PermissionRequired within 120 seconds, not hang
+    // (Model inference time is variable; 60s was too tight)
     let result = timeout(
-        Duration::from_secs(60),
+        Duration::from_secs(120),
         run_tool.call(
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),

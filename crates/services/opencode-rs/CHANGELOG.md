@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.0] - 2026-04-06
+
+### ⛰️  Features
+- *(opencode_rs)* Add version pinning and E2E test infrastructure
+- *(opencode_rs)* Add DELETE message and POST git/init endpoints
+- *(opencode_rs)* Add endpoint coverage verification tooling
+
+### 🧪 Testing
+- *(opencode_rs)* Add wiremock unit tests for all HTTP modules
 ## [0.4.0] - 2026-03-27
 
 ### ⛰️  Features

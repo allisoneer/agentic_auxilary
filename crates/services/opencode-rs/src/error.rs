@@ -74,6 +74,15 @@ pub enum OpencodeError {
     /// Internal state error.
     #[error("Internal state error: {0}")]
     State(String),
+
+    /// Version mismatch between SDK expectation and server response.
+    #[error("Version mismatch: expected {expected}, got {actual}")]
+    VersionMismatch {
+        /// Expected version.
+        expected: String,
+        /// Actual version.
+        actual: String,
+    },
 }
 
 /// Helper to parse `OpenCode`'s `NamedError` response body.

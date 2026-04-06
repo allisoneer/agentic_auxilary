@@ -120,6 +120,19 @@ impl MessagesApi {
             .request_json(Method::POST, &format!("/session/{sid}/shell"), Some(body))
             .await
     }
+
+    /// Delete a message from a session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the session or message is not found.
+    pub async fn delete(&self, session_id: &str, message_id: &str) -> Result<()> {
+        let sid = encode_path_segment(session_id);
+        let mid = encode_path_segment(message_id);
+        self.http
+            .delete_empty(&format!("/session/{sid}/message/{mid}"))
+            .await
+    }
 }
 
 #[cfg(test)]
@@ -574,5 +587,79 @@ mod tests {
             .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().is_validation_error());
+    }
+
+    #[tokio::test]
+    async fn test_delete_message_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/session/s1/message/m1"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let messages = MessagesApi::new(http);
+        let result = messages.delete("s1", "m1").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_delete_message_not_found() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/session/s1/message/missing"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "name": "NotFound",
+                "message": "Message not found"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let messages = MessagesApi::new(http);
+        let result = messages.delete("s1", "missing").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[tokio::test]
+    async fn test_delete_message_session_not_found() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/session/missing/message/m1"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "name": "NotFound",
+                "message": "Session not found"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let messages = MessagesApi::new(http);
+        let result = messages.delete("missing", "m1").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_not_found());
     }
 }

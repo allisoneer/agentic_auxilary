@@ -109,3 +109,217 @@ impl ProvidersApi {
             .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::http::HttpConfig;
+    use std::time::Duration;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    #[tokio::test]
+    async fn test_list_providers_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/provider"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "all": [
+                    {
+                        "id": "anthropic",
+                        "name": "Anthropic",
+                        "env": [],
+                        "options": {},
+                        "models": {}
+                    },
+                    {
+                        "id": "openai",
+                        "name": "OpenAI",
+                        "env": [],
+                        "options": {},
+                        "models": {}
+                    }
+                ],
+                "default": {},
+                "connected": []
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers.list().await;
+        assert!(result.is_ok());
+        let provider_list = result.unwrap();
+        assert_eq!(provider_list.all.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_auth_providers_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/provider/auth"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "providerId": "anthropic",
+                    "method": {"type": "api-key"},
+                    "configured": true
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers.auth().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_oauth_authorize_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/provider/openai/oauth/authorize"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "url": "https://oauth.openai.com/authorize?client_id=..."
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers.oauth_authorize("openai").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_oauth_callback_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/provider/openai/oauth/callback"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(true)))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers
+            .oauth_callback(
+                "openai",
+                &OAuthCallbackRequest {
+                    code: "auth_code_123".to_string(),
+                    state: None,
+                },
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_auth_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("PUT"))
+            .and(path("/auth/anthropic"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(true)))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers
+            .set_auth(
+                "anthropic",
+                &SetAuthRequest {
+                    key: "sk-ant-api-key".to_string(),
+                },
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_delete_auth_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/auth/anthropic"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(true)))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers.delete_auth("anthropic").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_oauth_authorize_not_found() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/provider/unknown/oauth/authorize"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "name": "NotFound",
+                "message": "Provider not found"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let providers = ProvidersApi::new(http);
+        let result = providers.oauth_authorize("unknown").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_not_found());
+    }
+}
