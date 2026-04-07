@@ -11,8 +11,10 @@ use opencode_rs::types::message::Message;
 use opencode_rs::types::message::Part;
 use opencode_rs::types::provider::ProviderListResponse;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 use crate::version;
 
@@ -83,6 +85,8 @@ pub struct OrchestratorServer {
     base_url: String,
     /// Orchestrator configuration (session timeouts, compaction threshold)
     config: OrchestratorConfig,
+    /// Session IDs created by this orchestrator instance.
+    spawned_sessions: Arc<RwLock<HashSet<String>>>,
 }
 
 impl OrchestratorServer {
@@ -208,6 +212,7 @@ impl OrchestratorServer {
             model_context_limits,
             base_url,
             config,
+            spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
         })
     }
 
@@ -291,6 +296,7 @@ impl OrchestratorServer {
             model_context_limits,
             base_url,
             config,
+            spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
         })
     }
 
@@ -325,6 +331,11 @@ impl OrchestratorServer {
     /// Get the compaction threshold (0.0 - 1.0).
     pub fn compaction_threshold(&self) -> f64 {
         self.config.compaction_threshold
+    }
+
+    /// Returns session IDs created by this orchestrator instance.
+    pub fn spawned_sessions(&self) -> &Arc<RwLock<HashSet<String>>> {
+        &self.spawned_sessions
     }
 
     /// Load model context limits from GET /provider.
@@ -396,6 +407,7 @@ impl OrchestratorServer {
             model_context_limits: HashMap::new(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
             config: OrchestratorConfig::default(),
+            spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 }

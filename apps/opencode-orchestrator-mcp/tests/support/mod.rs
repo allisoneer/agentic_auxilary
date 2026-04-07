@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use opencode_orchestrator_mcp::server::OrchestratorServer;
+use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -180,6 +181,30 @@ pub fn status_v2_retry(session_id: &str, attempt: u64) -> serde_json::Value {
     })
 }
 
+/// Create a modern session status map fixture from explicit entries.
+pub fn session_status_fixture(statuses: &[(&str, Value)]) -> Value {
+    let mut map = serde_json::Map::new();
+    for (session_id, status) in statuses {
+        map.insert((*session_id).to_string(), status.clone());
+    }
+    Value::Object(map)
+}
+
+/// Create a busy status fixture entry.
+pub fn busy_status_fixture() -> Value {
+    serde_json::json!({ "type": "busy" })
+}
+
+/// Create a retry status fixture entry.
+pub fn retry_status_fixture(attempt: u64, message: &str, next: u64) -> Value {
+    serde_json::json!({
+        "type": "retry",
+        "attempt": attempt,
+        "message": message,
+        "next": next,
+    })
+}
+
 /// Create a permission fixture.
 pub fn permission_fixture(
     id: &str,
@@ -232,6 +257,53 @@ pub fn messages_fixture(session_id: &str, assistant_text: Option<&str>) -> serde
     serde_json::Value::Array(msgs)
 }
 
+/// Create a message fixture with explicit parts and timestamps.
+pub fn message_fixture(
+    session_id: &str,
+    message_id: &str,
+    role: &str,
+    created: i64,
+    completed: Option<i64>,
+    parts: Vec<Value>,
+) -> Value {
+    let mut time = serde_json::json!({ "created": created });
+    if let Some(completed) = completed {
+        time["completed"] = serde_json::json!(completed);
+    }
+    let parts = Value::Array(parts);
+
+    serde_json::json!({
+        "info": {
+            "id": message_id,
+            "sessionId": session_id,
+            "role": role,
+            "time": time,
+        },
+        "parts": parts,
+    })
+}
+
+/// Create a tool part fixture with an optional state payload.
+pub fn tool_part_fixture(call_id: &str, tool: &str, state: Option<Value>) -> Value {
+    let mut part = serde_json::json!({
+        "type": "tool",
+        "callID": call_id,
+        "tool": tool,
+        "input": {},
+    });
+
+    if let Some(state) = state {
+        part["state"] = state;
+    }
+
+    part
+}
+
+/// Create a message history response fixture.
+pub fn message_history_fixture(messages: Vec<Value>) -> Value {
+    Value::Array(messages)
+}
+
 /// Create a sessions list response fixture.
 pub fn sessions_list_fixture(session_ids: &[&str]) -> serde_json::Value {
     serde_json::json!(
@@ -249,4 +321,16 @@ pub fn commands_list_fixture() -> serde_json::Value {
         {"name": "build", "description": "Build project"},
         {"name": "lint", "description": "Run linter"}
     ])
+}
+
+/// Seed launched sessions on the in-memory test server.
+pub async fn seed_spawned_sessions(
+    server: &Arc<OnceCell<OrchestratorServer>>,
+    session_ids: &[&str],
+) {
+    let srv = server.get().expect("test server should be initialized");
+    let mut spawned = srv.spawned_sessions().write().await;
+    for session_id in session_ids {
+        spawned.insert((*session_id).to_string());
+    }
 }
