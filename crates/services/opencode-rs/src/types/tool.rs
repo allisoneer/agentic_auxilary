@@ -6,26 +6,16 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
-/// A tool definition.
+/// A tool definition (matches 1.3.17 `ToolListItem`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tool {
     /// Tool identifier.
     pub id: String,
-    /// Tool name.
-    pub name: String,
     /// Tool description.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// Input schema.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub input_schema: Option<serde_json::Value>,
-    /// Whether this tool requires approval.
-    #[serde(default)]
-    pub requires_approval: bool,
-    /// Source of the tool (builtin, mcp, etc.).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
+    pub description: String,
+    /// Input parameters JSON schema.
+    pub parameters: serde_json::Value,
 }
 
 /// Agent mode (how the agent operates).
@@ -136,12 +126,32 @@ pub struct Command {
 }
 
 /// List of tool IDs.
+///
+/// Deserializes directly from a JSON array (e.g., `["tool-a", "tool-b"]`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolIds {
-    /// Tool identifiers.
-    #[serde(default)]
-    pub ids: Vec<String>,
+#[serde(transparent)]
+pub struct ToolIds(pub Vec<String>);
+
+impl ToolIds {
+    /// Returns the inner vector of tool IDs.
+    pub fn into_inner(self) -> Vec<String> {
+        self.0
+    }
+
+    /// Returns a reference to the inner vector.
+    pub fn as_slice(&self) -> &[String] {
+        &self.0
+    }
+
+    /// Returns true if empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns the number of tool IDs.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 #[cfg(test)]
@@ -231,11 +241,12 @@ mod tests {
 
     #[test]
     fn test_agent_with_model_ref() {
+        // 1.3.17 uses uppercase ID casing
         let json = r#"{
             "name": "model-agent",
             "model": {
-                "providerId": "anthropic",
-                "modelId": "claude-3-opus"
+                "providerID": "anthropic",
+                "modelID": "claude-3-opus"
             }
         }"#;
         let agent: Agent = serde_json::from_str(json).unwrap();
@@ -320,5 +331,66 @@ mod tests {
         assert_eq!(parsed.name, agent.name);
         assert_eq!(parsed.mode, agent.mode);
         assert_eq!(parsed.top_p, agent.top_p);
+    }
+
+    // ==================== ToolIds Tests ====================
+
+    #[test]
+    fn test_tool_ids_deserialize_flat_array() {
+        let json = r#"["read_file", "write_file", "bash"]"#;
+        let ids: ToolIds = serde_json::from_str(json).unwrap();
+        assert_eq!(ids.len(), 3);
+        assert_eq!(ids.0[0], "read_file");
+        assert_eq!(ids.0[1], "write_file");
+        assert_eq!(ids.0[2], "bash");
+    }
+
+    #[test]
+    fn test_tool_ids_deserialize_empty() {
+        let json = r"[]";
+        let ids: ToolIds = serde_json::from_str(json).unwrap();
+        assert!(ids.is_empty());
+        assert_eq!(ids.len(), 0);
+    }
+
+    #[test]
+    fn test_tool_ids_into_inner() {
+        let ids = ToolIds(vec!["a".to_string(), "b".to_string()]);
+        let inner = ids.into_inner();
+        assert_eq!(inner, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_tool_ids_as_slice() {
+        let ids = ToolIds(vec!["x".to_string(), "y".to_string()]);
+        assert_eq!(ids.as_slice(), &["x", "y"]);
+    }
+
+    // ==================== Tool Tests (1.3.17 schema) ====================
+
+    #[test]
+    fn test_tool_deserialize() {
+        let json = r#"{
+            "id": "read_file",
+            "description": "Read a file from the filesystem",
+            "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}
+        }"#;
+        let tool: Tool = serde_json::from_str(json).unwrap();
+        assert_eq!(tool.id, "read_file");
+        assert_eq!(tool.description, "Read a file from the filesystem");
+        assert_eq!(tool.parameters["type"], "object");
+    }
+
+    #[test]
+    fn test_tool_round_trip() {
+        let tool = Tool {
+            id: "bash".to_string(),
+            description: "Execute a bash command".to_string(),
+            parameters: serde_json::json!({"type": "object"}),
+        };
+        let json = serde_json::to_string(&tool).unwrap();
+        let parsed: Tool = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, "bash");
+        assert_eq!(parsed.description, "Execute a bash command");
     }
 }

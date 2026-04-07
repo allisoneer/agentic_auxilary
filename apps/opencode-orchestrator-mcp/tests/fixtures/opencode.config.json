@@ -1,0 +1,9 @@
+{
+  "autoupdate": false,
+  "permission": {
+    "question": "allow",
+    "read": "allow",
+    "edit": "ask",
+    "bash": "ask"
+  }
+}

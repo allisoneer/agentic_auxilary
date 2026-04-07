@@ -5,6 +5,7 @@
 
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
 
 /// Message info (metadata).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,9 +37,9 @@ pub struct MessageInfo {
     /// System prompt override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
-    /// Tools available for this message.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<String>,
+    /// Tools available for this message (map of tool name to enabled status).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub tools: HashMap<String, bool>,
     /// Parent message ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
@@ -889,15 +890,17 @@ mod tests {
 
     #[test]
     fn test_message_info_with_new_fields() {
+        // Note: ModelRef uses uppercase ID casing (1.3.17), but denormalized
+        // fields modelId/providerId use camelCase via rename_all
         let json = r#"{
             "id": "msg-123",
             "sessionId": "sess-456",
             "role": "assistant",
             "time": {"created": 1234567890, "completed": 1234567900},
             "format": "markdown",
-            "model": {"providerId": "anthropic", "modelId": "claude-3"},
+            "model": {"providerID": "anthropic", "modelID": "claude-3"},
             "system": "You are a helpful assistant",
-            "tools": ["read_file", "write_file"],
+            "tools": {"read_file": true, "write_file": false},
             "parentId": "msg-100",
             "modelId": "claude-3",
             "providerId": "anthropic",
@@ -917,6 +920,8 @@ mod tests {
         );
         assert_eq!(info.system, Some("You are a helpful assistant".to_string()));
         assert_eq!(info.tools.len(), 2);
+        assert_eq!(info.tools.get("read_file"), Some(&true));
+        assert_eq!(info.tools.get("write_file"), Some(&false));
         assert_eq!(info.parent_id, Some("msg-100".to_string()));
         assert_eq!(info.model_id, Some("claude-3".to_string()));
         assert_eq!(info.provider_id, Some("anthropic".to_string()));
@@ -1009,5 +1014,44 @@ mod tests {
         let path: MessagePath = serde_json::from_str(json).unwrap();
         assert_eq!(path.cwd, "/path/to/dir");
         assert_eq!(path.root, "/path");
+    }
+
+    // ==================== MessageInfo.tools HashMap Tests ====================
+
+    #[test]
+    fn test_message_info_tools_as_hashmap() {
+        let json = r#"{
+            "id": "msg-1",
+            "role": "user",
+            "time": {"created": 1234567890},
+            "tools": {"read_file": true, "write_file": false}
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.tools.len(), 2);
+        assert_eq!(info.tools.get("read_file"), Some(&true));
+        assert_eq!(info.tools.get("write_file"), Some(&false));
+    }
+
+    #[test]
+    fn test_message_info_tools_empty_hashmap() {
+        let json = r#"{
+            "id": "msg-1",
+            "role": "user",
+            "time": {"created": 1234567890},
+            "tools": {}
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(info.tools.is_empty());
+    }
+
+    #[test]
+    fn test_message_info_tools_missing_defaults_to_empty() {
+        let json = r#"{
+            "id": "msg-1",
+            "role": "user",
+            "time": {"created": 1234567890}
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert!(info.tools.is_empty());
     }
 }

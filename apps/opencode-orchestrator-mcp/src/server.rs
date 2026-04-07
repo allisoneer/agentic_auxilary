@@ -109,11 +109,29 @@ impl OrchestratorServer {
     /// Returns the guard message if `OPENCODE_ORCHESTRATOR_MANAGED` is set.
     /// Returns an error if the server fails to start after 2 attempts.
     pub async fn start_lazy() -> anyhow::Result<Self> {
+        Self::start_lazy_with_config(None).await
+    }
+
+    /// Start the orchestrator server lazily with optional config injection.
+    ///
+    /// # Arguments
+    ///
+    /// * `config_json` - Optional JSON config to inject via `OPENCODE_CONFIG_CONTENT`
+    ///
+    /// # Errors
+    ///
+    /// Returns the guard message if `OPENCODE_ORCHESTRATOR_MANAGED` is set.
+    /// Returns an error if the server fails to start after 2 attempts.
+    pub async fn start_lazy_with_config(config_json: Option<String>) -> anyhow::Result<Self> {
         if managed_guard_enabled() {
             anyhow::bail!(ORCHESTRATOR_MANAGED_GUARD_MESSAGE);
         }
 
-        init_with_retry(|_attempt| async { Self::start_impl().await }).await
+        init_with_retry(|_attempt| {
+            let cfg = config_json.clone();
+            async move { Self::start_impl_with_config(cfg).await }
+        })
+        .await
     }
 
     /// Internal implementation that actually spawns the server.
@@ -148,6 +166,89 @@ impl OrchestratorServer {
             .binary(&launcher_config.binary)
             .launcher_args(launcher_config.launcher_args)
             .directory(cwd.clone());
+
+        let managed = ManagedServer::start(opts)
+            .await
+            .context("Failed to start embedded `opencode serve`")?;
+
+        // Avoid trailing slash to prevent `//event` formatting
+        let base_url = managed.url().to_string().trim_end_matches('/').to_string();
+
+        let client = Client::builder()
+            .base_url(&base_url)
+            .directory(cwd.to_string_lossy().to_string())
+            .build()
+            .context("Failed to build opencode-rs HTTP client")?;
+
+        let health = client
+            .misc()
+            .health()
+            .await
+            .context("Failed to fetch /global/health for version validation")?;
+
+        version::validate_exact_version(health.version.as_deref()).with_context(|| {
+            format!(
+                "Embedded OpenCode server did not match pinned stable v{} (binary={})",
+                version::PINNED_OPENCODE_VERSION,
+                launcher_config.binary
+            )
+        })?;
+
+        // Load model context limits (best-effort, don't fail if unavailable)
+        let model_context_limits = Self::load_model_limits(&client).await.unwrap_or_else(|e| {
+            tracing::warn!("Failed to load model limits: {}", e);
+            HashMap::new()
+        });
+
+        tracing::info!("Loaded {} model context limits", model_context_limits.len());
+
+        Ok(Self {
+            _managed: Some(managed),
+            client,
+            model_context_limits,
+            base_url,
+            config,
+        })
+    }
+
+    /// Internal implementation with optional config injection.
+    async fn start_impl_with_config(config_json: Option<String>) -> anyhow::Result<Self> {
+        let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
+
+        // Load configuration (best-effort, use defaults if unavailable)
+        let config = match agentic_config::loader::load_merged(&cwd) {
+            Ok(loaded) => {
+                for w in &loaded.warnings {
+                    tracing::warn!("{w}");
+                }
+                loaded.config.orchestrator
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load config, using defaults: {e}");
+                OrchestratorConfig::default()
+            }
+        };
+
+        let launcher_config = version::resolve_launcher_config(&cwd)
+            .context("Failed to resolve OpenCode launcher configuration")?;
+
+        tracing::info!(
+            binary = %launcher_config.binary,
+            launcher_args = ?launcher_config.launcher_args,
+            expected_version = %version::PINNED_OPENCODE_VERSION,
+            config_injected = config_json.is_some(),
+            "starting embedded opencode serve (pinned stable)"
+        );
+
+        let mut opts = ServerOptions::default()
+            .binary(&launcher_config.binary)
+            .launcher_args(launcher_config.launcher_args)
+            .directory(cwd.clone());
+
+        // Inject config if provided
+        if let Some(cfg) = config_json {
+            opts = opts.config_json(cfg);
+        }
 
         let managed = ManagedServer::start(opts)
             .await

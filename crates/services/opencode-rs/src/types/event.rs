@@ -120,8 +120,8 @@ pub enum Event {
     /// Message updated.
     #[serde(rename = "message.updated")]
     MessageUpdated {
-        /// Event properties with full message info.
-        properties: MessageUpdatedProps,
+        /// Event properties with full message info (boxed to reduce enum size).
+        properties: Box<MessageUpdatedProps>,
     },
 
     /// Message removed.
@@ -275,6 +275,56 @@ pub enum Event {
         properties: serde_json::Value,
     },
 
+    /// MCP browser open failed.
+    #[serde(rename = "mcp.browser.open.failed")]
+    McpBrowserOpenFailed {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Workspace (2) ====================
+    /// Workspace ready.
+    #[serde(rename = "workspace.ready")]
+    WorkspaceReady {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Workspace failed.
+    #[serde(rename = "workspace.failed")]
+    WorkspaceFailed {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Worktree (2) ====================
+    /// Worktree ready.
+    #[serde(rename = "worktree.ready")]
+    WorktreeReady {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    /// Worktree failed.
+    #[serde(rename = "worktree.failed")]
+    WorktreeFailed {
+        /// Event properties.
+        #[serde(default)]
+        properties: serde_json::Value,
+    },
+
+    // ==================== Message Part Delta (1) ====================
+    /// Message part delta (field-level streaming).
+    #[serde(rename = "message.part.delta")]
+    MessagePartDelta {
+        /// Event properties (boxed to reduce enum size).
+        properties: Box<MessagePartEventProps>,
+    },
+
     // ==================== Installation (3) ====================
     /// Installation updated.
     #[serde(rename = "installation.updated")]
@@ -384,10 +434,9 @@ pub struct SessionInfoProps {
 
 /// Properties for session.idle events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SessionIdleProps {
-    /// Session ID.
-    #[serde(alias = "sessionID")]
+    /// Session ID (1.3.17 uses uppercase ID casing).
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     /// Additional properties.
     #[serde(flatten)]
@@ -548,7 +597,9 @@ impl Event {
             Self::SessionError { properties } => properties.session_id.as_deref(),
             Self::MessageUpdated { properties } => properties.info.session_id.as_deref(),
             Self::MessageRemoved { properties } => Some(&properties.session_id),
-            Self::MessagePartUpdated { properties } => properties.session_id.as_deref(),
+            Self::MessagePartUpdated { properties } | Self::MessagePartDelta { properties } => {
+                properties.session_id.as_deref()
+            }
             Self::PermissionAsked { properties } => Some(&properties.request.session_id),
             Self::PermissionReplied { properties } | Self::PermissionRepliedNext { properties } => {
                 Some(&properties.session_id)
@@ -771,6 +822,51 @@ mod tests {
         } else {
             panic!("Expected QuestionRejected");
         }
+    }
+
+    // ==================== New Event Type Tests (v1.3.17) ====================
+
+    #[test]
+    fn test_message_part_delta_deserialize() {
+        let json = r#"{"type": "message.part.delta", "properties": {"sessionId": "ses-1", "messageId": "msg-1", "index": 0}}"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::MessagePartDelta { .. }));
+        assert_eq!(event.session_id(), Some("ses-1"));
+    }
+
+    #[test]
+    fn test_workspace_events_deserialize() {
+        let ready = r#"{"type": "workspace.ready", "properties": {}}"#;
+        let failed = r#"{"type": "workspace.failed", "properties": {}}"#;
+        assert!(matches!(
+            serde_json::from_str::<Event>(ready).unwrap(),
+            Event::WorkspaceReady { .. }
+        ));
+        assert!(matches!(
+            serde_json::from_str::<Event>(failed).unwrap(),
+            Event::WorkspaceFailed { .. }
+        ));
+    }
+
+    #[test]
+    fn test_worktree_events_deserialize() {
+        let ready = r#"{"type": "worktree.ready", "properties": {}}"#;
+        let failed = r#"{"type": "worktree.failed", "properties": {}}"#;
+        assert!(matches!(
+            serde_json::from_str::<Event>(ready).unwrap(),
+            Event::WorktreeReady { .. }
+        ));
+        assert!(matches!(
+            serde_json::from_str::<Event>(failed).unwrap(),
+            Event::WorktreeFailed { .. }
+        ));
+    }
+
+    #[test]
+    fn test_mcp_browser_open_failed_deserialize() {
+        let json = r#"{"type": "mcp.browser.open.failed", "properties": {}}"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, Event::McpBrowserOpenFailed { .. }));
     }
 
     // TODO(3): Add tests for GlobalEventEnvelope deserialization and round-trip serialization

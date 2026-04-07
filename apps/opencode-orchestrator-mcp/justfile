@@ -32,19 +32,19 @@ integration-test-permissions-debug:
         permission
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stable v1.3.13 lane (bunx launcher mode, non-interactive)
+# Stable v1.3.17 lane (bunx launcher mode, non-interactive)
 # Uses --yes to skip bunx confirmation prompts for CI/automated contexts
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Full integration tests using bunx opencode-ai@1.3.13 (requires bun installed)
+# Full integration tests using bunx opencode-ai@1.3.17 (requires bun installed)
 # Ignored by default; run manually to validate stable version compatibility
 [no-exit-message]
 integration-test-bunx-stable:
-    @echo "Running integration tests with bunx --yes opencode-ai@1.3.13..."
+    @echo "Running integration tests with bunx --yes opencode-ai@1.3.17..."
     @echo "Requires: bun installed and available in PATH"
     OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
     cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
 
@@ -53,11 +53,11 @@ integration-test-bunx-stable:
 # Note: Explicitly disables recursion guard to allow running from within orchestrator contexts
 [no-exit-message]
 smoke-bunx-stable-version:
-    @echo "Smoke test: starting managed server via bunx --yes opencode-ai@1.3.13 and validating exact version..."
+    @echo "Smoke test: starting managed server via bunx --yes opencode-ai@1.3.17 and validating exact version..."
     @echo "Requires: bun installed and available in PATH"
     OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
     cargo test -p opencode-orchestrator-mcp --test integration live_managed_server_reports_exact_pinned_version -- --ignored --nocapture --test-threads=1
 
@@ -66,6 +66,6 @@ integration-test-bunx-stable-verbose:
     RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
     OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
     cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1

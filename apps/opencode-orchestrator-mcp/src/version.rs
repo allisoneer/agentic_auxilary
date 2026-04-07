@@ -3,14 +3,14 @@ use anyhow::anyhow;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub const PINNED_OPENCODE_VERSION: &str = "1.3.13";
+pub const PINNED_OPENCODE_VERSION: &str = "1.3.17";
 pub const OPENCODE_BINARY_ENV: &str = "OPENCODE_BINARY";
 /// Environment variable for extra arguments between binary and `serve` command.
 ///
 /// Useful for launchers like `bunx` where the full command is:
-/// `bunx --yes opencode-ai@1.3.13 serve --hostname ... --port ...`
+/// `bunx --yes opencode-ai@1.3.17 serve --hostname ... --port ...`
 ///
-/// Example: `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13"`
+/// Example: `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17"`
 ///
 /// The `--yes` flag makes bunx non-interactive (skips confirmation prompts).
 pub const OPENCODE_BINARY_ARGS_ENV: &str = "OPENCODE_BINARY_ARGS";
@@ -19,7 +19,7 @@ pub const OPENCODE_BINARY_ARGS_ENV: &str = "OPENCODE_BINARY_ARGS";
 ///
 /// Supports both direct binary invocation and launcher-based invocation:
 /// - Direct: `binary = "/path/to/opencode"`, `launcher_args = []`
-/// - Launcher: `binary = "bunx"`, `launcher_args = ["--yes", "opencode-ai@1.3.13"]`
+/// - Launcher: `binary = "bunx"`, `launcher_args = ["--yes", "opencode-ai@1.3.17"]`
 #[derive(Debug, Clone)]
 pub struct LauncherConfig {
     /// Path to the binary (or launcher binary like `bunx`).
@@ -90,7 +90,7 @@ pub fn resolve_opencode_binary(base_dir: &Path) -> anyhow::Result<PathBuf> {
 /// Note: This uses simple whitespace splitting and does not support shell-style
 /// quoting. Arguments containing spaces (e.g., `--message "hello world"`) will
 /// be incorrectly split. This is acceptable for the documented use case
-/// (`--yes opencode-ai@1.3.13`).
+/// (`--yes opencode-ai@1.3.17`).
 pub fn parse_launcher_args() -> Vec<String> {
     match std::env::var(OPENCODE_BINARY_ARGS_ENV) {
         Ok(value) => {
@@ -155,15 +155,15 @@ mod tests {
 
     #[test]
     fn normalize_strips_v_prefix() {
-        assert_eq!(normalize_version("v1.3.13"), "1.3.13");
-        assert_eq!(normalize_version("1.3.13"), "1.3.13");
-        assert_eq!(normalize_version("  v1.3.13 "), "1.3.13");
+        assert_eq!(normalize_version("v1.3.17"), "1.3.17");
+        assert_eq!(normalize_version("1.3.17"), "1.3.17");
+        assert_eq!(normalize_version("  v1.3.17 "), "1.3.17");
     }
 
     #[test]
     fn validate_exact_version_enforces_pinned() {
-        validate_exact_version(Some("1.3.13")).unwrap();
-        validate_exact_version(Some("v1.3.13")).unwrap();
+        validate_exact_version(Some(PINNED_OPENCODE_VERSION)).unwrap();
+        validate_exact_version(Some(&format!("v{PINNED_OPENCODE_VERSION}"))).unwrap();
         assert!(validate_exact_version(Some("1.3.14")).is_err());
         assert!(validate_exact_version(None).is_err());
     }
@@ -173,7 +173,9 @@ mod tests {
         let base = Path::new("/tmp/project");
         assert_eq!(
             default_pinned_binary_path(base),
-            PathBuf::from("/tmp/project/.opencode/bin/opencode-v1.3.13")
+            PathBuf::from(format!(
+                "/tmp/project/.opencode/bin/opencode-v{PINNED_OPENCODE_VERSION}"
+            ))
         );
     }
 
@@ -189,12 +191,12 @@ mod tests {
     #[serial(env)]
     fn parse_launcher_args_splits_on_whitespace() {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.13") };
-        assert_eq!(parse_launcher_args(), vec!["opencode-ai@1.3.13"]);
+        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.17") };
+        assert_eq!(parse_launcher_args(), vec!["opencode-ai@1.3.17"]);
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "--yes opencode-ai@1.3.13") };
-        assert_eq!(parse_launcher_args(), vec!["--yes", "opencode-ai@1.3.13"]);
+        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "--yes opencode-ai@1.3.17") };
+        assert_eq!(parse_launcher_args(), vec!["--yes", "opencode-ai@1.3.17"]);
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_BINARY_ARGS_ENV) };
@@ -217,14 +219,14 @@ mod tests {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::set_var(OPENCODE_BINARY_ENV, "bunx");
-            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.13");
+            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.17");
         }
 
         let base = Path::new("/tmp/project");
         let config = resolve_launcher_config(base).unwrap();
 
         assert_eq!(config.binary, "bunx");
-        assert_eq!(config.launcher_args, vec!["opencode-ai@1.3.13"]);
+        assert_eq!(config.launcher_args, vec!["opencode-ai@1.3.17"]);
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
@@ -239,7 +241,7 @@ mod tests {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::set_var(OPENCODE_BINARY_ENV, "   ");
-            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.13");
+            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.3.17");
         }
 
         let base = Path::new("/tmp/project");

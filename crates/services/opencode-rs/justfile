@@ -9,7 +9,7 @@ integration-test-bunx-stable:
     #!/usr/bin/env bash
     set -euxo pipefail
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration -- --ignored --nocapture --test-threads=1
 
@@ -19,7 +19,7 @@ smoke-bunx-version:
     #!/usr/bin/env bash
     set -euxo pipefail
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration test_health_returns_pinned_version -- --ignored --nocapture
 
@@ -30,6 +30,6 @@ integration-test-bunx-verbose:
     set -euxo pipefail
     RUST_LOG=opencode_rs=debug \
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.13" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration -- --ignored --nocapture --test-threads=1

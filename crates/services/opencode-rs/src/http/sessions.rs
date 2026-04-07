@@ -553,12 +553,19 @@ mod tests {
     async fn test_diff() {
         let mock_server = MockServer::start().await;
 
+        // Server returns an array of file diff objects
         Mock::given(method("GET"))
             .and(path("/session/s1/diff"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "diff": "--- a/file.rs\n+++ b/file.rs\n@@ -1 +1 @@\n-old\n+new",
-                "files": ["file.rs"]
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "file": "file.rs",
+                    "before": "old content",
+                    "after": "new content",
+                    "additions": 1,
+                    "deletions": 1,
+                    "status": "modified"
+                }
+            ])))
             .mount(&mock_server)
             .await;
 
@@ -571,8 +578,10 @@ mod tests {
 
         let sessions = SessionsApi::new(http);
         let diff = sessions.diff("s1").await.unwrap();
-        assert!(diff.diff.contains("file.rs"));
-        assert_eq!(diff.files.len(), 1);
+        assert_eq!(diff.len(), 1);
+        assert_eq!(diff[0].file, "file.rs");
+        assert_eq!(diff[0].additions, 1);
+        assert_eq!(diff[0].deletions, 1);
     }
 
     #[tokio::test]

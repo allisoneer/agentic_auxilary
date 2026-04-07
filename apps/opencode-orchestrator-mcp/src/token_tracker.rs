@@ -201,7 +201,7 @@ mod tests {
         tokens: Option<TokenUsage>,
     ) -> Event {
         Event::MessageUpdated {
-            properties: MessageUpdatedProps {
+            properties: Box::new(MessageUpdatedProps {
                 info: MessageInfo {
                     id: "msg-1".to_string(),
                     session_id: None,
@@ -215,7 +215,7 @@ mod tests {
                     format: None,
                     model: None,
                     system: None,
-                    tools: vec![],
+                    tools: std::collections::HashMap::new(),
                     parent_id: None,
                     model_id: model_id.map(str::to_string),
                     provider_id: provider_id.map(str::to_string),
@@ -227,7 +227,7 @@ mod tests {
                     extra: serde_json::Value::Null,
                 },
                 extra: serde_json::Value::Null,
-            },
+            }),
         }
     }
 
