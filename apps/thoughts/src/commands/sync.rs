@@ -92,13 +92,21 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     println!("{} {} mount(s)...", "Syncing".green(), mounts_to_sync.len());
 
     // Sync each mount
+    let mut any_failed = false;
     for mount_space in &mounts_to_sync {
         if let Some((_, mount)) = sync_list.iter().find(|(space, _)| space == mount_space) {
             match sync_mount(&mount_space.as_str(), mount, &resolver).await {
                 Ok(_) => println!("  {} {}", "✓".green(), mount_space),
-                Err(e) => eprintln!("  {} {}: {}", "✗".red(), mount_space, e),
+                Err(e) => {
+                    eprintln!("  {} {}: {}", "✗".red(), mount_space, e);
+                    any_failed = true;
+                }
             }
         }
+    }
+
+    if any_failed {
+        anyhow::bail!("One or more mounts failed to sync");
     }
 
     Ok(())

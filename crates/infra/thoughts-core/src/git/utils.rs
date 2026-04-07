@@ -2,6 +2,7 @@ use crate::error::ThoughtsError;
 use crate::repo_identity::RepoIdentity;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use git2::ErrorCode;
 use git2::Repository;
 use git2::StatusOptions;
@@ -184,6 +185,37 @@ pub fn get_current_branch(repo_path: &Path) -> Result<String> {
     }
 }
 
+/// Returns Ok(()) if the repository is in a state suitable for sync.
+pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
+    let repo = Repository::open(repo_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+    let git_dir = repo.path();
+
+    if git_dir.join("MERGE_HEAD").exists() {
+        bail!("Repository has an in-progress merge. Complete or abort it before syncing.");
+    }
+    if git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists() {
+        bail!("Repository has an in-progress rebase. Complete or abort it before syncing.");
+    }
+    if git_dir.join("CHERRY_PICK_HEAD").exists() || git_dir.join("sequencer").exists() {
+        bail!("Repository has an in-progress cherry-pick. Complete or abort it before syncing.");
+    }
+    if git_dir.join("REVERT_HEAD").exists() {
+        bail!("Repository has an in-progress revert. Complete or abort it before syncing.");
+    }
+
+    Ok(())
+}
+
+/// Returns the current branch name or an error when sync is unsafe.
+pub fn get_sync_branch(repo_path: &Path) -> Result<String> {
+    let branch = get_current_branch(repo_path)?;
+    if branch == "detached" {
+        bail!("Repository is in detached HEAD state. Check out a branch before syncing.");
+    }
+    Ok(branch)
+}
+
 /// Return true if the repository's working tree has any changes (including untracked)
 pub fn is_worktree_dirty(repo: &Repository) -> Result<bool> {
     let mut opts = StatusOptions::new();
@@ -344,5 +376,54 @@ mod tests {
 
         let err = try_get_origin_identity(&non_repo).unwrap_err();
         assert!(err.to_string().contains("Failed to open git repository"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_rejects_merge_state() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        std::fs::write(repo.path().join("MERGE_HEAD"), "deadbeef\n").unwrap();
+
+        let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("in-progress merge"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_rejects_rebase_state() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        std::fs::create_dir_all(repo.path().join("rebase-merge")).unwrap();
+
+        let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("in-progress rebase"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_accepts_clean_repo() {
+        let dir = TempDir::new().unwrap();
+        Repository::init(dir.path()).unwrap();
+
+        ensure_repo_ready_for_sync(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn get_sync_branch_rejects_detached_head() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+        let repo = Repository::init(repo_path).unwrap();
+
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let tree_id = {
+            let mut index = repo.index().unwrap();
+            index.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_id).unwrap();
+        let commit_oid = repo
+            .commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+            .unwrap();
+        repo.set_head_detached(commit_oid).unwrap();
+
+        let err = get_sync_branch(repo_path).unwrap_err();
+        assert!(err.to_string().contains("detached HEAD state"));
     }
 }

@@ -1,18 +1,29 @@
 use crate::git::shell_fetch;
-use crate::git::shell_push::push_current_branch;
+use crate::git::shell_push::PushFailureKind;
+use crate::git::shell_push::push_current_branch_with_result;
+use crate::git::utils::ensure_repo_ready_for_sync;
+use crate::git::utils::get_sync_branch;
 use crate::git::utils::is_worktree_dirty;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use chrono::DateTime;
 use chrono::Utc;
 use colored::*;
+use git2::Commit;
+use git2::ErrorCode;
+use git2::Index;
 use git2::IndexAddOption;
+use git2::Oid;
 use git2::Repository;
 use git2::Signature;
+use git2::Tree;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Duration;
+use tokio::time::sleep;
 
 /// Minimal struct for parsing log entries during merge.
 /// Only fields needed for deduplication and sorting.
@@ -117,6 +128,26 @@ pub(crate) struct DivergenceAnalysis {
     pub(crate) is_behind: bool,
 }
 
+const MAX_PUSH_RETRIES: u32 = 3;
+const RETRY_BASE_MS: u64 = 500;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyncRelation {
+    NoUpstream,
+    UpToDate,
+    AheadOnly,
+    BehindOnly,
+    Diverged,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommitParentPlan {
+    None,
+    HeadOnly,
+    UpstreamOnly,
+    HeadAndUpstream,
+}
+
 pub struct GitSync {
     repo: Repository,
     repo_path: std::path::PathBuf,
@@ -136,77 +167,166 @@ impl GitSync {
     pub async fn sync(&self, mount_name: &str) -> Result<()> {
         println!("  {} {}", "Syncing".cyan(), mount_name);
 
-        // 1. PRE-FLIGHT: Fetch first to know remote state before committing
-        if let Err(e) = self.preflight_fetch() {
-            println!("    {} Pre-flight fetch failed: {}", "⚠".yellow(), e);
-            // Continue anyway - we'll try to sync what we can
+        ensure_repo_ready_for_sync(&self.repo_path)?;
+        let branch_name = get_sync_branch(&self.repo_path)?;
+
+        if self.repo.find_remote("origin").is_err() {
+            println!(
+                "    {} No remote 'origin' configured (local-only)",
+                "Info".dimmed()
+            );
+            self.sync_without_remote(mount_name).await?;
+            return Ok(());
         }
 
-        // 2. Stage changes (respecting subpath)
+        for attempt in 0..MAX_PUSH_RETRIES {
+            let attempt_head = self.head_commit_oid()?;
+            self.sync_once(mount_name, &branch_name).await?;
+
+            let push_result =
+                push_current_branch_with_result(&self.repo_path, "origin", &branch_name)?;
+            if push_result.success {
+                println!("    {} Pushed to remote", "✓".green());
+                return Ok(());
+            }
+
+            let failure_kind = push_result.failure_kind.unwrap_or(PushFailureKind::Other);
+            if failure_kind == PushFailureKind::Race && attempt < MAX_PUSH_RETRIES - 1 {
+                println!(
+                    "    {} Push race detected; retrying after re-fetch",
+                    "Info".dimmed()
+                );
+                self.reset_after_push_race(attempt_head)?;
+                sleep(Duration::from_millis(RETRY_BASE_MS * 2u64.pow(attempt))).await;
+                continue;
+            }
+
+            let stderr = push_result.stderr.trim();
+            if stderr.is_empty() {
+                bail!("git push failed ({failure_kind:?})");
+            } else {
+                bail!("git push failed ({failure_kind:?}): {stderr}");
+            }
+        }
+
+        bail!("git push race retry budget exhausted after {MAX_PUSH_RETRIES} attempts")
+    }
+
+    async fn sync_without_remote(&self, mount_name: &str) -> Result<()> {
         let changes_staged = self.stage_changes().await?;
-
-        // 3. Commit if there are changes
-        if changes_staged {
-            self.commit(mount_name).await?;
-            println!("    {} Committed changes", "✓".green());
-        } else {
+        if !changes_staged {
             println!("    {} No changes to commit", "○".dimmed());
+            return Ok(());
         }
 
-        // 4. Pull with rebase (may be fast-forward now if no local changes)
-        match self.pull_rebase().await {
-            Ok(pulled) => {
-                if pulled {
-                    println!("    {} Pulled remote changes", "✓".green());
-                }
-            }
-            Err(e) => {
-                println!("    {} Pull failed: {}", "⚠".yellow(), e);
-                // Continue anyway - will try to push local changes
-            }
-        }
-
-        // 5. Push (non-fatal)
-        match self.push().await {
-            Ok(_) => println!("    {} Pushed to remote", "✓".green()),
-            Err(e) => {
-                println!("    {} Push failed: {}", "⚠".yellow(), e);
-                println!("      {} Changes saved locally only", "Info".dimmed());
-            }
-        }
-
+        let head_commit = self.head_commit()?;
+        let local_tree = self.local_tree_from_index()?;
+        let commit_oid = self.create_commit_from_relation(
+            mount_name,
+            &local_tree,
+            head_commit.as_ref(),
+            None,
+            SyncRelation::NoUpstream,
+        )?;
+        self.refresh_worktree_after_commit(commit_oid)?;
+        println!("    {} Committed changes", "✓".green());
         Ok(())
     }
 
-    /// Pre-flight fetch to update remote refs before committing.
-    ///
-    /// This enables early divergence detection and cleaner error messages.
-    fn preflight_fetch(&self) -> Result<()> {
-        // Check if origin exists
-        if self.repo.find_remote("origin").is_err() {
-            return Ok(()); // No remote, nothing to fetch
+    async fn sync_once(&self, mount_name: &str, branch_name: &str) -> Result<()> {
+        shell_fetch::fetch(&self.repo_path, "origin").with_context(|| {
+            format!(
+                "Fetch from origin failed for repo '{}'",
+                self.repo_path.display()
+            )
+        })?;
+
+        let head_commit = self.head_commit()?;
+        let upstream_commit = self.find_upstream_commit(branch_name)?;
+
+        if let Some(upstream_commit) = upstream_commit.as_ref() {
+            self.premerge_jsonl_files(&upstream_commit.tree()?)?;
         }
 
-        // Fetch using shell git (uses system SSH, triggers 1Password)
-        shell_fetch::fetch(&self.repo_path, "origin")?;
+        let changes_staged = self.stage_changes().await?;
+        let local_tree = self.local_tree_from_index()?;
+        let relation =
+            self.sync_relation(head_commit.as_ref(), upstream_commit.as_ref(), branch_name)?;
 
-        // Log divergence status for visibility
-        if let Ok(analysis) = self.check_divergence()
-            && analysis.is_diverged
-        {
-            println!(
-                "    {} Detected divergence from remote - will attempt rebase",
-                "Info".dimmed()
-            );
+        match relation {
+            SyncRelation::NoUpstream => {
+                if changes_staged {
+                    let commit_oid = self.create_commit_from_relation(
+                        mount_name,
+                        &local_tree,
+                        head_commit.as_ref(),
+                        None,
+                        relation,
+                    )?;
+                    self.refresh_worktree_after_commit(commit_oid)?;
+                    println!("    {} Committed changes", "✓".green());
+                }
+                return Ok(());
+            }
+            SyncRelation::UpToDate | SyncRelation::AheadOnly => {
+                if changes_staged {
+                    let commit_oid = self.create_commit_from_relation(
+                        mount_name,
+                        &local_tree,
+                        head_commit.as_ref(),
+                        upstream_commit.as_ref(),
+                        relation,
+                    )?;
+                    self.refresh_worktree_after_commit(commit_oid)?;
+                    println!("    {} Committed changes", "✓".green());
+                } else {
+                    println!("    {} No changes to commit", "○".dimmed());
+                }
+                return Ok(());
+            }
+            SyncRelation::BehindOnly => {
+                let upstream_commit = upstream_commit.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Missing upstream commit for behind-only sync")
+                })?;
+                if !changes_staged {
+                    self.fast_forward_to_commit(branch_name, upstream_commit)?;
+                    println!("    {} Pulled remote changes", "✓".green());
+                    return Ok(());
+                }
+            }
+            SyncRelation::Diverged => {
+                println!(
+                    "    {} Detected divergence from remote - merging before commit",
+                    "Info".dimmed()
+                );
+            }
         }
+
+        let upstream_commit = upstream_commit
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Missing upstream commit for merge integration"))?;
+        let merged_tree = self.integrate_local_tree(
+            head_commit.as_ref(),
+            &local_tree,
+            upstream_commit,
+            relation,
+        )?;
+        let commit_oid = self.create_commit_from_relation(
+            mount_name,
+            &merged_tree,
+            head_commit.as_ref(),
+            Some(upstream_commit),
+            relation,
+        )?;
+        self.refresh_worktree_after_commit(commit_oid)?;
+        println!("    {} Integrated remote changes", "✓".green());
 
         Ok(())
     }
 
     /// Check if local and remote branches have diverged.
-    pub(crate) fn check_divergence(&self) -> Result<DivergenceAnalysis> {
+    pub(crate) fn check_divergence(&self, branch_name: &str) -> Result<DivergenceAnalysis> {
         let head = self.repo.head()?;
-        let branch_name = head.shorthand().unwrap_or("HEAD");
         let upstream_ref = format!("refs/remotes/origin/{}", branch_name);
 
         let local_oid = head
@@ -234,6 +354,329 @@ impl GitSync {
             is_ahead: ahead > 0,
             is_behind: behind > 0,
         })
+    }
+
+    fn sync_relation(
+        &self,
+        head_commit: Option<&Commit<'_>>,
+        upstream_commit: Option<&Commit<'_>>,
+        branch_name: &str,
+    ) -> Result<SyncRelation> {
+        match (head_commit, upstream_commit) {
+            (_, None) => Ok(SyncRelation::NoUpstream),
+            (None, Some(_)) => Ok(SyncRelation::BehindOnly),
+            (Some(_), Some(_)) => {
+                let analysis = self.check_divergence(branch_name)?;
+                Ok(
+                    match (analysis.is_diverged, analysis.is_ahead, analysis.is_behind) {
+                        (true, _, _) => SyncRelation::Diverged,
+                        (false, true, false) => SyncRelation::AheadOnly,
+                        (false, false, true) => SyncRelation::BehindOnly,
+                        (false, false, false) => SyncRelation::UpToDate,
+                        _ => SyncRelation::Diverged,
+                    },
+                )
+            }
+        }
+    }
+
+    fn head_commit(&self) -> Result<Option<Commit<'_>>> {
+        match self.repo.head() {
+            Ok(head) => {
+                let target = head
+                    .target()
+                    .ok_or_else(|| anyhow::anyhow!("No HEAD target"))?;
+                Ok(Some(self.repo.find_commit(target)?))
+            }
+            Err(e) if e.code() == ErrorCode::UnbornBranch => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn head_commit_oid(&self) -> Result<Option<Oid>> {
+        Ok(self.head_commit()?.map(|commit| commit.id()))
+    }
+
+    fn find_upstream_commit(&self, branch_name: &str) -> Result<Option<Commit<'_>>> {
+        match self
+            .repo
+            .refname_to_id(&format!("refs/remotes/origin/{branch_name}"))
+        {
+            Ok(oid) => Ok(Some(self.repo.find_commit(oid)?)),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn local_tree_from_index(&self) -> Result<Tree<'_>> {
+        let mut index = self.repo.index()?;
+        let tree_id = index.write_tree()?;
+        self.repo.find_tree(tree_id).map_err(Into::into)
+    }
+
+    fn integrate_local_tree(
+        &self,
+        head_commit: Option<&Commit<'_>>,
+        local_tree: &Tree<'_>,
+        upstream_commit: &Commit<'_>,
+        relation: SyncRelation,
+    ) -> Result<Tree<'_>> {
+        let ancestor_tree_id =
+            self.ancestor_tree_for_merge(head_commit, upstream_commit, relation)?;
+        let ancestor_tree = self.repo.find_tree(ancestor_tree_id)?;
+        let upstream_tree = upstream_commit.tree()?;
+        let mut merged_index =
+            self.repo
+                .merge_trees(&ancestor_tree, local_tree, &upstream_tree, None)?;
+
+        if merged_index.has_conflicts() {
+            self.resolve_merge_conflicts(&mut merged_index)?;
+        }
+        if merged_index.has_conflicts() {
+            bail!("Failed to resolve merge conflicts before final commit");
+        }
+
+        let tree_id = merged_index.write_tree_to(&self.repo)?;
+        self.repo.find_tree(tree_id).map_err(Into::into)
+    }
+
+    fn ancestor_tree_for_merge(
+        &self,
+        head_commit: Option<&Commit<'_>>,
+        upstream_commit: &Commit<'_>,
+        relation: SyncRelation,
+    ) -> Result<Oid> {
+        match relation {
+            SyncRelation::BehindOnly => match head_commit {
+                Some(head_commit) => Ok(head_commit.tree_id()),
+                None => self.empty_tree().map(|tree| tree.id()),
+            },
+            SyncRelation::Diverged => {
+                let head_commit = head_commit
+                    .ok_or_else(|| anyhow::anyhow!("Missing HEAD commit for diverged merge"))?;
+                match self.repo.merge_base(head_commit.id(), upstream_commit.id()) {
+                    Ok(merge_base_oid) => Ok(self.repo.find_commit(merge_base_oid)?.tree_id()),
+                    Err(_) => self.empty_tree().map(|tree| tree.id()),
+                }
+            }
+            _ => self.empty_tree().map(|tree| tree.id()),
+        }
+    }
+
+    fn empty_tree(&self) -> Result<Tree<'_>> {
+        let mut index = Index::new()?;
+        let tree_id = index.write_tree_to(&self.repo)?;
+        self.repo.find_tree(tree_id).map_err(Into::into)
+    }
+
+    fn resolve_merge_conflicts(&self, index: &mut Index) -> Result<()> {
+        let conflicts: Vec<_> = index
+            .conflicts()?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        for conflict in conflicts {
+            let path = conflict
+                .our
+                .as_ref()
+                .or(conflict.their.as_ref())
+                .or(conflict.ancestor.as_ref())
+                .map(|entry| String::from_utf8_lossy(&entry.path).to_string())
+                .unwrap_or_default();
+
+            if is_tool_log_file(&path)
+                && let (Some(local), Some(remote)) = (&conflict.our, &conflict.their)
+            {
+                let local_blob = self.repo.find_blob(local.id)?;
+                let remote_blob = self.repo.find_blob(remote.id)?;
+                let merged = merge_jsonl_logs(remote_blob.content(), local_blob.content());
+                let file_path = self.repo_path.join(&path);
+                if let Some(parent) = file_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&file_path, &merged)?;
+                index.add_path(Path::new(&path))?;
+                continue;
+            }
+
+            match (&conflict.our, &conflict.their) {
+                (_, Some(remote)) => index.add(remote)?,
+                (Some(_), None) => {
+                    if !path.is_empty() {
+                        index.remove_path(Path::new(&path))?;
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+
+        index.write()?;
+        Ok(())
+    }
+
+    fn create_commit_from_relation(
+        &self,
+        mount_name: &str,
+        tree: &Tree<'_>,
+        head_commit: Option<&Commit<'_>>,
+        upstream_commit: Option<&Commit<'_>>,
+        relation: SyncRelation,
+    ) -> Result<Oid> {
+        match commit_parent_plan(relation, head_commit.is_some(), upstream_commit.is_some())? {
+            CommitParentPlan::None => self.create_commit_for_tree(mount_name, tree, &[]),
+            CommitParentPlan::HeadOnly => {
+                let parents = head_commit.map(|commit| vec![commit]).unwrap_or_default();
+                self.create_commit_for_tree(mount_name, tree, &parents)
+            }
+            CommitParentPlan::UpstreamOnly => {
+                let upstream_commit = upstream_commit.ok_or_else(|| {
+                    anyhow::anyhow!("Missing upstream commit for behind-only commit")
+                })?;
+                self.create_commit_for_tree(mount_name, tree, &[upstream_commit])
+            }
+            CommitParentPlan::HeadAndUpstream => {
+                let head_commit = head_commit
+                    .ok_or_else(|| anyhow::anyhow!("Missing HEAD commit for diverged commit"))?;
+                let upstream_commit = upstream_commit.ok_or_else(|| {
+                    anyhow::anyhow!("Missing upstream commit for diverged commit")
+                })?;
+                self.create_commit_for_tree(mount_name, tree, &[head_commit, upstream_commit])
+            }
+        }
+    }
+
+    fn create_commit_for_tree(
+        &self,
+        mount_name: &str,
+        tree: &Tree<'_>,
+        parents: &[&Commit<'_>],
+    ) -> Result<Oid> {
+        let sig = Signature::now("thoughts-sync", "thoughts@sync.local")?;
+        let message = if let Some(subpath) = &self.subpath {
+            format!("Auto-sync thoughts for {mount_name} (subpath: {subpath})")
+        } else {
+            format!("Auto-sync thoughts for {mount_name}")
+        };
+
+        self.repo
+            .commit(Some("HEAD"), &sig, &sig, &message, tree, parents)
+            .map_err(Into::into)
+    }
+
+    fn refresh_worktree_after_commit(&self, commit_oid: Oid) -> Result<()> {
+        if self.subpath.is_some() {
+            return Ok(());
+        }
+
+        let obj = self.repo.find_object(commit_oid, None)?;
+        self.repo.reset(
+            &obj,
+            git2::ResetType::Hard,
+            Some(git2::build::CheckoutBuilder::default().force()),
+        )?;
+        Ok(())
+    }
+
+    fn fast_forward_to_commit(
+        &self,
+        branch_name: &str,
+        upstream_commit: &Commit<'_>,
+    ) -> Result<()> {
+        if is_worktree_dirty(&self.repo)? {
+            bail!(
+                "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before syncing."
+            );
+        }
+
+        self.repo.set_head(&format!("refs/heads/{branch_name}"))?;
+        let obj = self.repo.find_object(upstream_commit.id(), None)?;
+        self.repo.reset(
+            &obj,
+            git2::ResetType::Hard,
+            Some(git2::build::CheckoutBuilder::default().force()),
+        )?;
+        Ok(())
+    }
+
+    fn reset_after_push_race(&self, original_head: Option<Oid>) -> Result<()> {
+        match original_head {
+            Some(original_head) => {
+                let obj = self.repo.find_object(original_head, None)?;
+                self.repo.reset(&obj, git2::ResetType::Mixed, None)?;
+            }
+            None => {
+                let branch_name = get_sync_branch(&self.repo_path)?;
+                self.repo.set_head(&format!("refs/heads/{branch_name}"))?;
+                self.repo.cleanup_state()?;
+            }
+        }
+        Ok(())
+    }
+
+    fn premerge_jsonl_files(&self, upstream_tree: &Tree<'_>) -> Result<()> {
+        for rel_path in self.tool_log_files_in_scope()? {
+            let Some(upstream_content) = self.read_tree_blob(upstream_tree, &rel_path)? else {
+                continue;
+            };
+
+            let local_path = self.repo_path.join(&rel_path);
+            let local_content = std::fs::read(&local_path)?;
+            let merged = merge_jsonl_logs(&upstream_content, &local_content);
+            if merged != local_content {
+                std::fs::write(local_path, merged)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn tool_log_files_in_scope(&self) -> Result<Vec<String>> {
+        let root = self
+            .subpath
+            .as_ref()
+            .map(|subpath| self.repo_path.join(subpath))
+            .unwrap_or_else(|| self.repo_path.clone());
+        let mut files = Vec::new();
+        self.collect_tool_log_files(&root, &mut files)?;
+        files.sort();
+        Ok(files)
+    }
+
+    fn collect_tool_log_files(&self, dir: &Path, files: &mut Vec<String>) -> Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.file_name().is_some_and(|name| name == ".git") {
+                continue;
+            }
+
+            if path.is_dir() {
+                self.collect_tool_log_files(&path, files)?;
+                continue;
+            }
+
+            let rel_path = path
+                .strip_prefix(&self.repo_path)
+                .with_context(|| format!("Failed to strip repo prefix from {}", path.display()))?;
+            let rel_path = rel_path.to_string_lossy().replace('\\', "/");
+            if is_tool_log_file(&rel_path) {
+                files.push(rel_path);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn read_tree_blob(&self, tree: &Tree<'_>, rel_path: &str) -> Result<Option<Vec<u8>>> {
+        let entry = match tree.get_path(Path::new(rel_path)) {
+            Ok(entry) => entry,
+            Err(err) if err.code() == ErrorCode::NotFound => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
+
+        let blob = self.repo.find_blob(entry.id())?;
+        Ok(Some(blob.content().to_vec()))
     }
 
     async fn stage_changes(&self) -> Result<bool> {
@@ -293,215 +736,34 @@ impl GitSync {
 
         Ok(diff.stats()?.files_changed() > 0)
     }
+}
 
-    async fn commit(&self, mount_name: &str) -> Result<()> {
-        let sig = Signature::now("thoughts-sync", "thoughts@sync.local")?;
-        let tree_id = self.repo.index()?.write_tree()?;
-        let tree = self.repo.find_tree(tree_id)?;
-
-        // Create descriptive commit message
-        let message = if let Some(subpath) = &self.subpath {
-            format!("Auto-sync thoughts for {mount_name} (subpath: {subpath})")
-        } else {
-            format!("Auto-sync thoughts for {mount_name}")
-        };
-
-        // Handle both initial commit and subsequent commits
-        match self.repo.head() {
-            Ok(head) => {
-                // Normal commit with parent
-                let parent = self.repo.find_commit(head.target().unwrap())?;
-                self.repo
-                    .commit(Some("HEAD"), &sig, &sig, &message, &tree, &[&parent])?;
+fn commit_parent_plan(
+    relation: SyncRelation,
+    has_head: bool,
+    has_upstream: bool,
+) -> Result<CommitParentPlan> {
+    Ok(match relation {
+        SyncRelation::NoUpstream | SyncRelation::UpToDate | SyncRelation::AheadOnly => {
+            if has_head {
+                CommitParentPlan::HeadOnly
+            } else {
+                CommitParentPlan::None
             }
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
-                // Initial commit - no parents
-                self.repo.commit(
-                    Some("HEAD"),
-                    &sig,
-                    &sig,
-                    &message,
-                    &tree,
-                    &[], // No parents for initial commit
-                )?;
+        }
+        SyncRelation::BehindOnly => {
+            if !has_upstream {
+                bail!("Missing upstream commit for behind-only commit");
             }
-            Err(e) => return Err(e.into()),
+            CommitParentPlan::UpstreamOnly
         }
-
-        Ok(())
-    }
-
-    async fn pull_rebase(&self) -> Result<bool> {
-        // Check if origin exists
-        if self.repo.find_remote("origin").is_err() {
-            println!(
-                "    {} No remote 'origin' configured (local-only)",
-                "Info".dimmed()
-            );
-            return Ok(false);
-        }
-
-        // Fetch using shell git (uses system SSH, triggers 1Password)
-        shell_fetch::fetch(&self.repo_path, "origin").with_context(|| {
-            format!(
-                "Fetch from origin failed for repo '{}'",
-                self.repo_path.display()
-            )
-        })?;
-
-        // Get current branch
-        let head = self.repo.head()?;
-        let branch_name = head.shorthand().unwrap_or("main");
-
-        // Try to find the upstream commit
-        let upstream_oid = match self
-            .repo
-            .refname_to_id(&format!("refs/remotes/origin/{branch_name}"))
-        {
-            Ok(oid) => oid,
-            Err(_) => {
-                // No upstream branch yet
-                return Ok(false);
+        SyncRelation::Diverged => {
+            if !has_head || !has_upstream {
+                bail!("Missing head or upstream commit for diverged commit");
             }
-        };
-
-        let upstream_commit = self.repo.find_annotated_commit(upstream_oid)?;
-        let head_commit = self.repo.find_annotated_commit(head.target().unwrap())?;
-
-        // Check if we need to rebase
-        let analysis = self.repo.merge_analysis(&[&upstream_commit])?;
-
-        if analysis.0.is_up_to_date() {
-            return Ok(false);
+            CommitParentPlan::HeadAndUpstream
         }
-
-        if analysis.0.is_fast_forward() {
-            // Safety gate: never force-checkout over local changes
-            if is_worktree_dirty(&self.repo)? {
-                anyhow::bail!(
-                    "Cannot fast-forward: working tree has uncommitted changes. Please commit or stash before syncing."
-                );
-            }
-            // TODO(3): Migrate to gitoxide when worktree update support is added upstream
-            // (currently marked incomplete in gitoxide README)
-            // Fast-forward: update ref, index, and working tree atomically
-            let obj = self.repo.find_object(upstream_oid, None)?;
-            self.repo.reset(
-                &obj,
-                git2::ResetType::Hard,
-                Some(git2::build::CheckoutBuilder::default().force()),
-            )?;
-            return Ok(true);
-        }
-
-        // Need to rebase - wrap in closure with abort safety net
-        let mut rebase =
-            self.repo
-                .rebase(Some(&head_commit), Some(&upstream_commit), None, None)?;
-
-        let rebase_result: Result<bool> = (|| {
-            while let Some(operation) = rebase.next() {
-                // Fix: properly handle errors instead of silent discard
-                let _op =
-                    operation.map_err(|e| anyhow::anyhow!("Rebase operation failed: {}", e))?;
-
-                if self.repo.index()?.has_conflicts() {
-                    // Resolve conflicts by preferring remote
-                    self.resolve_conflicts_prefer_remote()?;
-                }
-                rebase.commit(
-                    None,
-                    &Signature::now("thoughts-sync", "thoughts@sync.local")?,
-                    None,
-                )?;
-            }
-            rebase.finish(None)?;
-            Ok(true)
-        })();
-
-        // Safety net: abort rebase on any failure to prevent stuck state
-        if rebase_result.is_err() {
-            let _ = rebase.abort(); // Best-effort cleanup, ignore abort errors
-        }
-
-        rebase_result
-    }
-
-    async fn push(&self) -> Result<()> {
-        if self.repo.find_remote("origin").is_err() {
-            println!(
-                "    {} No remote 'origin' configured (local-only)",
-                "Info".dimmed()
-            );
-            return Ok(());
-        }
-
-        let head = self.repo.head()?;
-        let branch = head.shorthand().unwrap_or("main");
-
-        // Use shell git push (triggers 1Password SSH prompts)
-        push_current_branch(&self.repo_path, "origin", branch)?;
-        Ok(())
-    }
-
-    /// Resolve conflicts by preferring the remote/upstream version.
-    ///
-    /// IMPORTANT: During rebase, libgit2 inverts ours/theirs semantics:
-    /// - `conflict.our` = upstream commit (what we're rebasing onto) = REMOTE
-    /// - `conflict.their` = local commit being replayed = LOCAL
-    ///
-    /// So to prefer remote, we use `conflict.our`, not `conflict.their`.
-    ///
-    /// Special handling for tool log files (`*/logs/tool_logs_*.jsonl`):
-    /// - Parse both sides as JSONL
-    /// - Deduplicate by `call_id` (local wins on collision)
-    /// - Sort by `started_at` timestamp
-    /// - Preserve unparseable lines at the end
-    fn resolve_conflicts_prefer_remote(&self) -> Result<()> {
-        let mut index = self.repo.index()?;
-        let conflicts: Vec<_> = index.conflicts()?.collect::<Result<Vec<_>, _>>()?;
-
-        for conflict in conflicts {
-            // Get the path from whichever side exists
-            let path = conflict
-                .our
-                .as_ref()
-                .or(conflict.their.as_ref())
-                .map(|e| String::from_utf8_lossy(&e.path).to_string());
-
-            let path_str = path.as_deref().unwrap_or("");
-
-            // Smart merge for tool log files
-            if is_tool_log_file(path_str)
-                && let (Some(our), Some(their)) = (&conflict.our, &conflict.their)
-            {
-                let our_blob = self.repo.find_blob(our.id)?;
-                let their_blob = self.repo.find_blob(their.id)?;
-
-                let merged = merge_jsonl_logs(our_blob.content(), their_blob.content());
-
-                // Write merged content to working tree file
-                let file_path = self.repo_path.join(path_str);
-                std::fs::write(&file_path, &merged)?;
-
-                // Stage the resolved file from working tree (clears conflict state)
-                index.add_path(std::path::Path::new(path_str))?;
-                continue;
-            }
-
-            // Standard resolution: prefer upstream/remote (conflict.our during rebase)
-            if let Some(our) = conflict.our {
-                index.add(&our)?;
-            } else if let Some(their) = conflict.their {
-                // Fallback to local if no remote version exists
-                index.add(&their)?;
-            }
-            // If both are None, the file was deleted on both sides - nothing to add
-        }
-
-        index.write()?;
-        Ok(())
-    }
+    })
 }
 
 #[cfg(test)]
@@ -570,6 +832,18 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_context_jsonl_keeps_local_on_collision() {
+        let remote = br#"{"call_id":"same","started_at":"2025-01-01T10:00:00Z","tool":"remote"}"#;
+        let local = br#"{"call_id":"same","started_at":"2025-01-01T10:00:00Z","tool":"local"}"#;
+
+        let merged = merge_jsonl_logs(remote, local);
+        let merged_str = String::from_utf8_lossy(&merged);
+
+        assert!(merged_str.contains("local"));
+        assert!(!merged_str.contains("remote"));
+    }
+
+    #[test]
     fn test_is_tool_log_file() {
         // Valid tool log paths
         assert!(is_tool_log_file("branch/logs/tool_logs_2025-01-01.jsonl"));
@@ -595,6 +869,30 @@ mod tests {
 
         // Invalid: no /logs/ directory at all
         assert!(!is_tool_log_file("tool_logs_2025-01-01.jsonl"));
+    }
+
+    #[test]
+    fn commit_parent_plan_selects_expected_parents() {
+        assert_eq!(
+            commit_parent_plan(SyncRelation::NoUpstream, false, false).unwrap(),
+            CommitParentPlan::None
+        );
+        assert_eq!(
+            commit_parent_plan(SyncRelation::UpToDate, true, true).unwrap(),
+            CommitParentPlan::HeadOnly
+        );
+        assert_eq!(
+            commit_parent_plan(SyncRelation::AheadOnly, true, false).unwrap(),
+            CommitParentPlan::HeadOnly
+        );
+        assert_eq!(
+            commit_parent_plan(SyncRelation::BehindOnly, true, true).unwrap(),
+            CommitParentPlan::UpstreamOnly
+        );
+        assert_eq!(
+            commit_parent_plan(SyncRelation::Diverged, true, true).unwrap(),
+            CommitParentPlan::HeadAndUpstream
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -650,7 +948,7 @@ mod tests {
         );
 
         let sync = GitSync::new(repo.path(), None).unwrap();
-        let analysis = sync.check_divergence().unwrap();
+        let analysis = sync.check_divergence("main").unwrap();
 
         assert!(!analysis.is_diverged, "should not be diverged");
         assert!(analysis.is_ahead, "should be ahead (no upstream)");
@@ -687,7 +985,7 @@ mod tests {
         );
 
         let sync = GitSync::new(repo.path(), None).unwrap();
-        let analysis = sync.check_divergence().unwrap();
+        let analysis = sync.check_divergence("main").unwrap();
 
         assert!(!analysis.is_diverged, "should not be diverged");
         assert!(!analysis.is_ahead, "should not be ahead");
@@ -739,7 +1037,7 @@ mod tests {
         );
 
         let sync = GitSync::new(repo.path(), None).unwrap();
-        let analysis = sync.check_divergence().unwrap();
+        let analysis = sync.check_divergence("main").unwrap();
 
         assert!(!analysis.is_diverged, "should not be diverged");
         assert!(analysis.is_ahead, "should be ahead");
@@ -792,7 +1090,7 @@ mod tests {
         );
 
         let sync = GitSync::new(repo.path(), None).unwrap();
-        let analysis = sync.check_divergence().unwrap();
+        let analysis = sync.check_divergence("main").unwrap();
 
         assert!(!analysis.is_diverged, "should not be diverged");
         assert!(!analysis.is_ahead, "should not be ahead");
@@ -864,7 +1162,7 @@ mod tests {
         );
 
         let sync = GitSync::new(repo.path(), None).unwrap();
-        let analysis = sync.check_divergence().unwrap();
+        let analysis = sync.check_divergence("main").unwrap();
 
         assert!(analysis.is_diverged, "should be diverged");
         assert!(analysis.is_ahead, "should be ahead");

@@ -8,9 +8,18 @@
 mod support;
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 use thoughts_tool::git::sync::GitSync;
+
+fn ensure_remote_head_points_to_main(remote: &TempDir) {
+    let bare_repo = git2::Repository::open(remote.path()).expect("open bare remote");
+    bare_repo
+        .set_head("refs/heads/main")
+        .expect("set bare HEAD to main");
+}
 
 /// Test: JSONL smart-merge during rebase conflict.
 /// Creates divergent commits on a tool_logs JSONL file, runs sync(), and asserts
@@ -66,12 +75,7 @@ async fn sync_jsonl_smart_merge_on_conflict() {
     // Fix bare remote HEAD to point to main (otherwise clone gets detached HEAD)
     // Bare repos initialized with `git init --bare` keep HEAD at refs/heads/master
     // and don't update it on push. Real Git servers set HEAD appropriately.
-    {
-        let bare_repo = git2::Repository::open(remote.path()).expect("open bare remote");
-        bare_repo
-            .set_head("refs/heads/main")
-            .expect("set bare HEAD to main");
-    }
+    ensure_remote_head_points_to_main(&remote);
 
     // 5. Clone to second location (simulating another client)
     let other = TempDir::new().unwrap();
@@ -153,4 +157,151 @@ async fn sync_jsonl_smart_merge_on_conflict() {
         lines[2].contains("local_only"),
         "third line should be local_only"
     );
+}
+
+#[tokio::test]
+async fn sync_remote_behind_with_local_uncommitted_creates_one_final_commit() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    let remote = TempDir::new().unwrap();
+    support::git_ok(remote.path(), &["init", "--bare"]);
+
+    let local = TempDir::new().unwrap();
+    support::git_ok(local.path(), &["init"]);
+    fs::write(local.path().join("base.txt"), "base\n").unwrap();
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "initial",
+        ],
+    );
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    support::git_ok(local.path(), &["push", "-u", "origin", "main"]);
+    ensure_remote_head_points_to_main(&remote);
+
+    let other = TempDir::new().unwrap();
+    support::git_ok(
+        other.path(),
+        &["clone", remote.path().to_str().unwrap(), "."],
+    );
+    fs::write(other.path().join("remote.txt"), "remote\n").unwrap();
+    support::git_ok(other.path(), &["add", "."]);
+    support::git_ok(
+        other.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "remote change",
+        ],
+    );
+    let remote_parent = support::git_stdout(other.path(), &["rev-parse", "HEAD"]);
+    support::git_ok(other.path(), &["push"]);
+
+    fs::write(local.path().join("local.txt"), "local\n").unwrap();
+
+    let sync = GitSync::new(local.path(), None).unwrap();
+    sync.sync("test-mount").await.unwrap();
+
+    let head_message = support::git_stdout(local.path(), &["log", "-1", "--pretty=%s"]);
+    assert_eq!(head_message, "Auto-sync thoughts for test-mount");
+
+    let parent = support::git_stdout(local.path(), &["rev-parse", "HEAD^"]);
+    assert_eq!(parent, remote_parent);
+
+    let auto_sync_count: i32 = support::git_stdout(
+        local.path(),
+        &[
+            "rev-list",
+            "--count",
+            "--grep=^Auto-sync thoughts for test-mount$",
+            "HEAD",
+        ],
+    )
+    .parse()
+    .unwrap();
+    assert_eq!(auto_sync_count, 1);
+}
+
+#[tokio::test]
+async fn sync_retries_once_after_race_like_push_rejection() {
+    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    let remote = TempDir::new().unwrap();
+    support::git_ok(remote.path(), &["init", "--bare"]);
+
+    let local = TempDir::new().unwrap();
+    support::git_ok(local.path(), &["init"]);
+    fs::write(local.path().join("base.txt"), "base\n").unwrap();
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "initial",
+        ],
+    );
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    support::git_ok(local.path(), &["push", "-u", "origin", "main"]);
+    ensure_remote_head_points_to_main(&remote);
+
+    let hook_path = remote.path().join("hooks/pre-receive");
+    let marker_path = remote.path().join("hooks/race_once_marker");
+    fs::write(
+        &hook_path,
+        format!(
+            "#!/bin/sh\nMARKER='{}'\nif [ ! -f \"$MARKER\" ]; then\n  touch \"$MARKER\"\n  echo 'remote: ! [rejected] HEAD -> main (fetch first)' >&2\n  echo 'remote: error: failed to push some refs' >&2\n  exit 1\nfi\nexit 0\n",
+            marker_path.display()
+        ),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(&hook_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook_path, perms).unwrap();
+    }
+
+    fs::write(local.path().join("retry.txt"), "retry\n").unwrap();
+
+    let sync = GitSync::new(local.path(), None).unwrap();
+    sync.sync("test-mount").await.unwrap();
+
+    assert!(
+        marker_path.exists(),
+        "first push attempt should have been rejected"
+    );
+
+    let local_head = support::git_stdout(local.path(), &["rev-parse", "HEAD"]);
+    let remote_head = support::git_stdout(remote.path(), &["rev-parse", "refs/heads/main"]);
+    assert_eq!(local_head, remote_head);
 }
