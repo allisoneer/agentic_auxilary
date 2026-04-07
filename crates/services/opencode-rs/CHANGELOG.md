@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.6.0] - 2026-04-07
+
+### ⛰️  Features
+- *(opencode)* Upgrade SDK compatibility to opencode v1.3.17
+- *(opencode_rs)* Add missing SSE event types from OpenCode 1.3.17
+
+### 🐛 Bug Fixes
+- *(opencode_rs)* Align type definitions with OpenCode 1.3.17 schema
+- *(opencode_rs)* Correct field casing to match OpenCode 1.3.17 convention
+- *(opencode_rs)* Ensure typed tests initialize server directly under feature="server"
 ## [0.5.0] - 2026-04-06
 
 ### ⛰️  Features

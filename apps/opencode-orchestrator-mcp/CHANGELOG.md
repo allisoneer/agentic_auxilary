@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.4] - 2026-04-07
+
+### ⛰️  Features
+- *(opencode)* Upgrade SDK compatibility to opencode v1.3.17
+- *(opencode_orchestrator_mcp)* Add config injection for integration tests
+
+### 🧪 Testing
+- *(opencode_orchestrator_mcp)* Expand wiremock test coverage
+- *(opencode_orchestrator_mcp)* Verify ID-specific routing in respond_question_by_id_lookup
 ## [0.3.3] - 2026-04-06
 ## [0.3.2] - 2026-04-06
 ## [0.3.1] - 2026-03-27
