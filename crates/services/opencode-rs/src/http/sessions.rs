@@ -17,6 +17,7 @@ use crate::types::session::SummarizeRequest;
 use crate::types::session::TodoItem;
 use crate::types::session::UpdateSessionRequest;
 use reqwest::Method;
+use std::collections::HashMap;
 
 /// Sessions API client.
 #[derive(Clone)]
@@ -131,6 +132,31 @@ impl SessionsApi {
             .request_json(Method::GET, "/session/status", None)
             .await?;
         Ok(response.status_for(session_id))
+    }
+
+    /// Get the full per-session status map.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn status_map(&self) -> Result<HashMap<String, SessionStatusInfo>> {
+        let response: SessionStatusResponse = self
+            .http
+            .request_json(Method::GET, "/session/status", None)
+            .await?;
+
+        Ok(match response {
+            SessionStatusResponse::Map(map) => map,
+            SessionStatusResponse::Legacy(summary) => {
+                let mut map = HashMap::new();
+                if summary.busy
+                    && let Some(active_session_id) = summary.active_session_id
+                {
+                    map.insert(active_session_id, SessionStatusInfo::Busy);
+                }
+                map
+            }
+        })
     }
 
     /// Get children of a session (forked sessions).
@@ -390,6 +416,63 @@ mod tests {
         let sessions = SessionsApi::new(http);
         let list = sessions.list().await.unwrap();
         assert_eq!(list.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_status_map_from_modern_response() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "s1": {"type": "busy"},
+                "s2": {"type": "retry", "attempt": 2, "message": "rate limited", "next": 12345}
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let sessions = SessionsApi::new(http);
+        let map = sessions.status_map().await.unwrap();
+
+        assert!(matches!(map.get("s1"), Some(SessionStatusInfo::Busy)));
+        assert!(matches!(
+            map.get("s2"),
+            Some(SessionStatusInfo::Retry { attempt: 2, .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_status_map_from_legacy_response() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "busy": true,
+                "activeSessionId": "s1"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let sessions = SessionsApi::new(http);
+        let map = sessions.status_map().await.unwrap();
+
+        assert_eq!(map.len(), 1);
+        assert!(matches!(map.get("s1"), Some(SessionStatusInfo::Busy)));
     }
 
     #[tokio::test]
