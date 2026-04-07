@@ -992,12 +992,7 @@ impl Tool for ListSessionsTool {
                     server.client().sessions().list().await.map_err(|e| {
                         ToolError::Internal(format!("Failed to list sessions: {e}"))
                     })?;
-                let status_map = server
-                    .client()
-                    .sessions()
-                    .status_map()
-                    .await
-                    .unwrap_or_default();
+                let status_map = server.client().sessions().status_map().await.ok();
                 let spawned = server.spawned_sessions().read().await;
 
                 let limit = input.limit.unwrap_or(20);
@@ -1005,22 +1000,21 @@ impl Tool for ListSessionsTool {
                     .into_iter()
                     .take(limit)
                     .map(|s| {
-                        let status =
-                            status_map
-                                .get(&s.id)
-                                .map_or(SessionStatusSummary::Idle, |info| match info {
-                                    SessionStatusInfo::Idle => SessionStatusSummary::Idle,
-                                    SessionStatusInfo::Busy => SessionStatusSummary::Busy,
-                                    SessionStatusInfo::Retry {
-                                        attempt,
-                                        message,
-                                        next,
-                                    } => SessionStatusSummary::Retry {
-                                        attempt: *attempt,
-                                        message: message.clone(),
-                                        next: *next,
-                                    },
-                                });
+                        let status = status_map.as_ref().and_then(|status_map| {
+                            status_map.get(&s.id).map(|info| match info {
+                                SessionStatusInfo::Idle => SessionStatusSummary::Idle,
+                                SessionStatusInfo::Busy => SessionStatusSummary::Busy,
+                                SessionStatusInfo::Retry {
+                                    attempt,
+                                    message,
+                                    next,
+                                } => SessionStatusSummary::Retry {
+                                    attempt: *attempt,
+                                    message: message.clone(),
+                                    next: *next,
+                                },
+                            })
+                        });
 
                         let change_stats = s.summary.as_ref().map(|summary| ChangeStats {
                             additions: summary.additions,
@@ -1035,7 +1029,7 @@ impl Tool for ListSessionsTool {
                             directory: s.directory,
                             title: s.title,
                             id: s.id,
-                            status: Some(status),
+                            status,
                             change_stats,
                         }
                     })
@@ -1070,14 +1064,10 @@ impl Tool for ListSessionsTool {
 
 fn count_pending_messages(messages: &[Message]) -> usize {
     let mut pending = 0;
-    let mut last_was_user = false;
 
     for message in messages.iter().rev() {
         if message.role() == "user" {
-            if !last_was_user {
-                pending += 1;
-            }
-            last_was_user = true;
+            pending += 1;
         } else if message.role() == "assistant" {
             break;
         }
@@ -1190,21 +1180,25 @@ impl Tool for GetSessionStateTool {
                     }
                 })?;
 
-                let status = match client.sessions().status_for(session_id).await {
-                    Ok(SessionStatusInfo::Busy) => SessionStatusSummary::Busy,
-                    Ok(SessionStatusInfo::Retry {
+                let status = match client.sessions().status_for(session_id).await.map_err(|e| {
+                    ToolError::Internal(format!("Failed to get session status: {e}"))
+                })? {
+                    SessionStatusInfo::Busy => SessionStatusSummary::Busy,
+                    SessionStatusInfo::Retry {
                         attempt,
                         message,
                         next,
-                    }) => SessionStatusSummary::Retry {
+                    } => SessionStatusSummary::Retry {
                         attempt,
                         message,
                         next,
                     },
-                    Ok(SessionStatusInfo::Idle) | Err(_) => SessionStatusSummary::Idle,
+                    SessionStatusInfo::Idle => SessionStatusSummary::Idle,
                 };
 
-                let messages = client.messages().list(session_id).await.unwrap_or_default();
+                let messages = client.messages().list(session_id).await.map_err(|e| {
+                    ToolError::Internal(format!("Failed to list messages: {e}"))
+                })?;
                 let pending_message_count = count_pending_messages(&messages);
                 let last_activity = get_last_activity_time(&messages);
                 let recent_tool_calls = extract_recent_tool_calls(&messages, 10);

@@ -1,5 +1,5 @@
 ---
-description: Interact with Linear for issue/project management
+description: Interact with OpenAI for general-purpose assistant tasks
 agent: NormalOpenAI
 ---
 $ARGUMENTS

@@ -18,6 +18,7 @@ You have access to these orchestrator tools:
 |------|---------|
 | `orchestrator_run` | Start or resume a session. Accepts optional `command`, `message`, and `session_id` parameters. |
 | `orchestrator_list_sessions` | List available sessions with IDs and descriptions. |
+| `orchestrator_get_session_state` | Inspect one session's status, pending messages, recent tool calls, and last activity. |
 | `orchestrator_list_commands` | List available commands that can be run. |
 | `orchestrator_respond_permission` | Respond to permission requests with "once", "always", or "reject". |
 

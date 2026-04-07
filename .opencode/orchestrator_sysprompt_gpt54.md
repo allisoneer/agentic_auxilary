@@ -7,6 +7,10 @@ orchestrator_run: Start or resume a session.
 
 orchestrator_list_sessions: List available sessions with their IDs and descriptions. No parameters.
 
+orchestrator_get_session_state: Inspect a specific session's status, pending messages, recent tool calls, and last activity.
+  Parameters:
+    session_id: The session ID to inspect
+
 orchestrator_list_commands: List available commands that can be run. No parameters.
 
 orchestrator_respond_permission: Respond to permission requests from sessions.

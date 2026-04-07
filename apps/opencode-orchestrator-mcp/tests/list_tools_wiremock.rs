@@ -58,6 +58,8 @@ async fn list_sessions_returns_session_ids() {
     assert_eq!(result.sessions.len(), 2);
     assert_eq!(result.sessions[0].id, "ses-1");
     assert_eq!(result.sessions[1].id, "ses-2");
+    assert!(result.sessions[0].status.is_none());
+    assert!(result.sessions[1].status.is_none());
 }
 
 #[tokio::test]
@@ -435,6 +437,128 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
         result.recent_tool_calls[3].state,
         ToolStateSummary::Pending
     ));
+}
+
+#[tokio::test]
+async fn get_session_state_returns_error_when_status_lookup_fails() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "name": "InternalError",
+            "message": "boom"
+        })))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let err = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect_err("status lookup failure should error");
+
+    assert!(matches!(err, ToolError::Internal(_)));
+    assert!(err.to_string().contains("Failed to get session status"));
+}
+
+#[tokio::test]
+async fn get_session_state_returns_error_when_message_lookup_fails() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_status_fixture(&[("ses-1", busy_status_fixture())])),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1/message"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "name": "InternalError",
+            "message": "boom"
+        })))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let err = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect_err("message lookup failure should error");
+
+    assert!(matches!(err, ToolError::Internal(_)));
+    assert!(err.to_string().contains("Failed to list messages"));
+}
+
+#[tokio::test]
+async fn get_session_state_counts_each_trailing_user_message() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&mock)
+        .await;
+
+    let history = message_history_fixture(vec![
+        message_fixture("ses-1", "m1", "assistant", 1, Some(2), vec![]),
+        message_fixture("ses-1", "m2", "user", 3, None, vec![]),
+        message_fixture("ses-1", "m3", "user", 4, None, vec![]),
+    ]);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1/message"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(history))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let result = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect("get_session_state should succeed");
+
+    assert_eq!(result.pending_message_count, 2);
 }
 
 #[tokio::test]
