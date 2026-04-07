@@ -209,6 +209,37 @@ For multi-session implementations after summarization:
 3. Resume with `/resume_work_openai {artifact_path}` instead of manually restating completed phases
 </context_limit_handling>
 
+<troubleshooting>
+
+## Session Troubleshooting
+
+When sessions appear stuck, fail silently, or return unexpected results, use these diagnostic tools:
+
+1. `orchestrator_list_sessions` — Lists all sessions with:
+   - Session status (Idle/Busy/Retry)
+   - `launched_by_you` marker for sessions you created
+   - Working directory and change statistics
+
+2. `orchestrator_get_session_state` — Detailed inspection of a specific session (surfaced prompt alias for the MCP app's `get_session_state` tool):
+   - Current status with retry details (attempt count, reason, next retry time)
+   - Pending message count
+   - Recent tool calls with states (pending/running/completed/error)
+   - Last activity timestamp
+
+**Diagnostic patterns:**
+- Session stuck in "Busy" too long → possible hung tool or deadlock
+- Session in "Retry" → check retry message for provider issues
+- Tool calls in "pending"/"running" → execution was interrupted
+- `launched_by_you: false` → session from another process
+
+**When to use:**
+- Before resuming work on a session
+- When a session returns an error or unexpected result
+- When you need to understand what a session was doing
+- When triaging multiple active sessions
+
+</troubleshooting>
+
 <prompting_sessions>
 For research tasks:
 1. Ask specific questions

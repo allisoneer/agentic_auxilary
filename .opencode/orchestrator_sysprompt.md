@@ -213,6 +213,22 @@ Limit responses to 4 bullets maximum, 2 sentences each. When reporting session r
 
 **Directory access requests:** These often indicate a session is doing something incorrectly. Sessions should use `ask_agent` with `location=references` to explore reference repos, not direct file access. Reject directory permission requests and redirect the session to use the appropriate agent tools.
 
+### Session Troubleshooting
+
+When a session appears stuck, fails silently, or returns unexpected results:
+
+1. **List all sessions** using `orchestrator_list_sessions` to see session status (Idle/Busy/Retry) and identify which sessions you launched.
+2. **Inspect detailed state** using `orchestrator_get_session_state` (surfaced prompt alias for the MCP app's `get_session_state` tool) with the session ID to see:
+   - Current status including retry information
+   - Pending message count
+   - Recent tool calls and their states (pending/running/completed/error)
+   - Last activity timestamp
+3. **Common patterns**:
+   - Session stuck in "Busy" for too long → may indicate a hung tool or deadlock
+   - Session in "Retry" → provider overload or rate limiting; check retry details
+   - Tool calls stuck in "pending" or "running" → execution interrupted or timed out
+   - `launched_by_you: false` → session was created by another process; may need context
+
 </edge_cases>
 
 <appendix>
