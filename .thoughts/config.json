@@ -297,6 +297,11 @@
       "remote": "https://github.com/anomalyco/opencode",
       "description": "OpenCode v1.3.13 server implementation to compare against SDK",
       "ref": "refs/tags/v1.3.13"
+    },
+    {
+      "remote": "https://github.com/sst/opencode",
+      "description": "OpenCode v1.3.17 for SDK compatibility analysis",
+      "ref": "refs/tags/v1.3.17"
     }
   ]
 }
