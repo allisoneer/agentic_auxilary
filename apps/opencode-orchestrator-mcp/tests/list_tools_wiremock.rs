@@ -590,6 +590,197 @@ async fn get_session_state_unknown_session_returns_error() {
     assert!(err.to_string().contains("Use list_sessions"));
 }
 
+/// When an LLM issues parallel tool calls, all of them appear as multiple `Part::Tool` entries
+/// within a *single* assistant message. This test verifies that `get_session_state` returns all
+/// tool calls from such a message and preserves their within-message ordering (first-to-last).
+#[tokio::test]
+async fn get_session_state_handles_parallel_tool_calls_in_single_message() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&mock)
+        .await;
+
+    // A single assistant message with THREE tool parts — this is what a parallel tool call
+    // response looks like in the OpenCode message model.
+    let history = message_history_fixture(vec![message_fixture(
+        "ses-1",
+        "m1",
+        "assistant",
+        100,
+        Some(110),
+        vec![
+            tool_part_fixture(
+                "call-grep",
+                "grep",
+                Some(json!({
+                    "status": "completed",
+                    "input": {},
+                    "output": "results",
+                    "title": "grep",
+                    "metadata": {},
+                    "time": { "start": 101, "end": 102 }
+                })),
+            ),
+            tool_part_fixture(
+                "call-read",
+                "read",
+                Some(json!({
+                    "status": "completed",
+                    "input": {},
+                    "output": "content",
+                    "title": "read",
+                    "metadata": {},
+                    "time": { "start": 103, "end": 104 }
+                })),
+            ),
+            tool_part_fixture(
+                "call-bash",
+                "bash",
+                Some(json!({
+                    "status": "error",
+                    "input": {},
+                    "error": "command failed",
+                    "time": { "start": 105, "end": 106 }
+                })),
+            ),
+        ],
+    )]);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1/message"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(history))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let result = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect("get_session_state should succeed with parallel tool calls");
+
+    // All three parallel tool calls must be present.
+    assert_eq!(result.recent_tool_calls.len(), 3);
+
+    // Within-message ordering is preserved: calls come out in the order they appear in the
+    // message (first → last), because the message itself is the unit of "recency".
+    assert_eq!(result.recent_tool_calls[0].call_id, "call-grep");
+    assert_eq!(result.recent_tool_calls[0].tool_name, "grep");
+    assert!(matches!(
+        result.recent_tool_calls[0].state,
+        ToolStateSummary::Completed
+    ));
+
+    assert_eq!(result.recent_tool_calls[1].call_id, "call-read");
+    assert_eq!(result.recent_tool_calls[1].tool_name, "read");
+    assert!(matches!(
+        result.recent_tool_calls[1].state,
+        ToolStateSummary::Completed
+    ));
+
+    assert_eq!(result.recent_tool_calls[2].call_id, "call-bash");
+    assert_eq!(result.recent_tool_calls[2].tool_name, "bash");
+    assert!(matches!(
+        result.recent_tool_calls[2].state,
+        ToolStateSummary::Error { ref message } if message == "command failed"
+    ));
+}
+
+/// The `recent_tool_calls` limit is applied globally across all parts of all messages.
+/// When a single message contains more tool parts than the remaining budget, the batch is
+/// truncated mid-message. This test documents that behaviour explicitly.
+#[tokio::test]
+async fn get_session_state_limit_truncates_within_parallel_batch() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&mock)
+        .await;
+
+    // Construct a history: an older message with 1 tool call, then a newer message with 3
+    // parallel tool calls. With limit=10 (the default in GetSessionStateTool) all 4 fit, so
+    // to force mid-batch truncation we build a history with enough calls to exceed the cap.
+    // We use two messages, each with 6 parallel calls, and verify the limit of 10 is
+    // respected and truncates the second (older) message's batch.
+    let make_tool_parts = |prefix: &str| -> Vec<serde_json::Value> {
+        (0..6)
+            .map(|i| {
+                tool_part_fixture(
+                    &format!("{prefix}-{i}"),
+                    "grep",
+                    Some(json!({
+                        "status": "completed",
+                        "input": {},
+                        "output": "ok",
+                        "title": "grep",
+                        "metadata": {},
+                        "time": { "start": i, "end": i + 1 }
+                    })),
+                )
+            })
+            .collect()
+    };
+
+    let history = message_history_fixture(vec![
+        // older message (processed second due to rev())
+        message_fixture("ses-1", "m1", "assistant", 1, Some(2), make_tool_parts("old")),
+        // newer message (processed first due to rev())
+        message_fixture("ses-1", "m2", "assistant", 3, Some(4), make_tool_parts("new")),
+    ]);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1/message"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(history))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let result = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect("get_session_state should succeed");
+
+    // GetSessionStateTool uses a hard limit of 10.
+    assert_eq!(result.recent_tool_calls.len(), 10);
+
+    // The first 6 results come from the newer message ("new-0" … "new-5").
+    for i in 0..6 {
+        assert_eq!(result.recent_tool_calls[i].call_id, format!("new-{i}"));
+    }
+    // The next 4 come from the older message ("old-0" … "old-3"), truncated mid-batch.
+    for i in 0..4 {
+        assert_eq!(result.recent_tool_calls[6 + i].call_id, format!("old-{i}"));
+    }
+}
+
 #[tokio::test]
 async fn list_commands_returns_available_commands() {
     let mock = MockServer::start().await;
