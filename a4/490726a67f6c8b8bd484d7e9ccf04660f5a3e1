@@ -1,0 +1,23 @@
+crates/agentic-tools/core/src/schema.rs
+  0fce390004aba277 175,177,179,197,200,356,360,362-364,419,500,505,508-509,511-514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "a4490726a67f6c8b8bd484d7e9ccf04660f5a3e1",
+  "prompts": {
+    "0fce390004aba277": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_291e6bbd4ffeKmBXU7nNesjcZ6",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 73,
+      "accepted_lines": 21,
+      "overriden_lines": 0
+    }
+  }
+}
