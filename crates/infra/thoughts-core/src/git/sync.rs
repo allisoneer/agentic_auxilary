@@ -174,8 +174,8 @@ impl GitSync {
         println!("  {} {}", "Syncing".cyan(), mount_name);
 
         ensure_repo_ready_for_sync(&self.repo_path)?;
-        let branch_name = get_sync_branch(&self.repo_path)?;
 
+        // Check for remote before get_sync_branch() so unborn branches work without remotes
         if self.repo.find_remote("origin").is_err() {
             println!(
                 "    {} No remote 'origin' configured (local-only)",
@@ -184,6 +184,9 @@ impl GitSync {
             self.sync_without_remote(mount_name)?;
             return Ok(());
         }
+
+        // get_sync_branch will fail for unborn/detached with a helpful error message
+        let branch_name = get_sync_branch(&self.repo_path)?;
 
         for attempt in 0..MAX_PUSH_RETRIES {
             let attempt_head = self.head_commit_oid()?;
@@ -471,6 +474,9 @@ impl GitSync {
     }
 
     fn resolve_merge_conflicts(&self, index: &mut Index) -> Result<()> {
+        // Stage bits are in flags bits 12-13. Clear them to make stage-0 (resolved) entries.
+        const GIT_INDEX_ENTRY_STAGEMASK: u16 = 0x3000;
+
         let conflicts: Vec<_> = index
             .conflicts()?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -490,27 +496,74 @@ impl GitSync {
                 let local_blob = self.repo.find_blob(local.id)?;
                 let remote_blob = self.repo.find_blob(remote.id)?;
                 let merged = merge_jsonl_logs(remote_blob.content(), local_blob.content());
+
+                // Write merged content to disk for worktree consistency
                 let file_path = self.repo_path.join(&path);
                 if let Some(parent) = file_path.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
                 std::fs::write(&file_path, &merged)?;
-                index.add_path(Path::new(&path))?;
+
+                // Write merged bytes to ODB and add via IndexEntry (not add_path)
+                // merge_trees() returns an in-memory index without workdir backing,
+                // so add_path() would fail. We create the blob manually and add the entry.
+                let blob_oid = self.repo.blob(&merged)?;
+
+                // Remove conflict entries (stage 1, 2, 3) before adding the resolved entry.
+                // Without this, index.add() only replaces the matching stage slot,
+                // leaving other conflict entries and has_conflicts() still returns true.
+                index.conflict_remove(Path::new(&path))?;
+
+                let entry = git2::IndexEntry {
+                    id: blob_oid,
+                    file_size: u32::try_from(merged.len()).unwrap_or(u32::MAX),
+                    // Copy other fields from the local entry
+                    ctime: local.ctime,
+                    mtime: local.mtime,
+                    dev: local.dev,
+                    ino: local.ino,
+                    mode: local.mode,
+                    uid: local.uid,
+                    gid: local.gid,
+                    flags: local.flags & !GIT_INDEX_ENTRY_STAGEMASK,
+                    flags_extended: local.flags_extended,
+                    path: local.path.clone(),
+                };
+                index.add(&entry)?;
                 continue;
             }
 
+            // Non-JSONL conflict resolution: prefer remote (theirs) version
             match (&conflict.our, &conflict.their) {
-                (_, Some(remote)) => index.add(remote)?,
+                (_, Some(remote)) => {
+                    // Remove conflict entries first, then add resolved stage-0 entry
+                    index.conflict_remove(Path::new(&path))?;
+                    let resolved = git2::IndexEntry {
+                        ctime: remote.ctime,
+                        mtime: remote.mtime,
+                        dev: remote.dev,
+                        ino: remote.ino,
+                        mode: remote.mode,
+                        uid: remote.uid,
+                        gid: remote.gid,
+                        file_size: remote.file_size,
+                        id: remote.id,
+                        flags: remote.flags & !GIT_INDEX_ENTRY_STAGEMASK,
+                        flags_extended: remote.flags_extended,
+                        path: remote.path.clone(),
+                    };
+                    index.add(&resolved)?;
+                }
                 (Some(_), None) => {
-                    if !path.is_empty() {
-                        index.remove_path(Path::new(&path))?;
-                    }
+                    // File deleted on remote - remove it
+                    index.conflict_remove(Path::new(&path))?;
                 }
                 (None, None) => {}
             }
         }
 
-        index.write()?;
+        // Note: Don't call index.write() - this is an in-memory index from merge_trees()
+        // with no backing file. The caller uses write_tree_to(&self.repo) to persist.
         Ok(())
     }
 
@@ -558,9 +611,49 @@ impl GitSync {
             format!("Auto-sync thoughts for {mount_name}")
         };
 
-        self.repo
-            .commit(Some("HEAD"), &sig, &sig, &message, tree, parents)
-            .map_err(Into::into)
+        // Create commit object without updating any ref.
+        // This bypasses libgit2's parent validation which would fail when
+        // parents[0] != HEAD.target() (e.g., for UpstreamOnly commits).
+        let commit_oid = self
+            .repo
+            .commit(None, &sig, &sig, &message, tree, parents)?;
+
+        // Update the branch ref to point to the new commit
+        // Handle unborn branches (empty repo with no commits) by extracting
+        // the target branch name from the symbolic HEAD reference.
+        let (refname, is_branch) = match self.repo.head() {
+            Ok(head_ref) => {
+                let name = head_ref
+                    .name()
+                    .ok_or_else(|| anyhow::anyhow!("HEAD has no name"))?;
+                (name.to_string(), head_ref.is_branch())
+            }
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
+                // For unborn branches, HEAD is a symbolic ref pointing to a branch
+                // that doesn't exist yet (e.g., refs/heads/main). We need to create it.
+                let head_ref = self.repo.find_reference("HEAD")?;
+                let symbolic_target = head_ref
+                    .symbolic_target()
+                    .ok_or_else(|| anyhow::anyhow!("HEAD has no symbolic target"))?;
+                (symbolic_target.to_string(), true)
+            }
+            Err(e) => return Err(e.into()),
+        };
+
+        // For symbolic HEAD (normal case) or unborn branch, update/create the target branch
+        // For detached HEAD, update HEAD directly
+        if is_branch {
+            self.repo.reference(
+                &refname,
+                commit_oid,
+                true, // force
+                &format!("thoughts-sync: {message}"),
+            )?;
+        } else {
+            self.repo.set_head_detached(commit_oid)?;
+        }
+
+        Ok(commit_oid)
     }
 
     fn refresh_worktree_after_commit(&self, commit_oid: Oid) -> Result<()> {

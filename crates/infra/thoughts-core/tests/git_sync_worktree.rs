@@ -1,6 +1,6 @@
 //! Integration tests for `GitSync` with worktree support.
 //! These tests verify that sync operations work correctly from linked worktrees.
-//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_sync_worktree`
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -9,13 +9,9 @@ use tempfile::TempDir;
 
 use thoughts_tool::git::sync::GitSync;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_from_worktree_fetches_and_pushes() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -70,13 +66,9 @@ async fn sync_from_worktree_fetches_and_pushes() {
     assert!(stdout.contains("refs/heads/wt-branch"));
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_stages_and_commits_changes() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -129,13 +121,9 @@ async fn sync_stages_and_commits_changes() {
     assert!(files.contains("new.txt"));
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_no_changes_no_commit() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);

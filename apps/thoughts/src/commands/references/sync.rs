@@ -4,8 +4,9 @@ use crate::config::validation::validate_reference_url;
 use crate::git::clone::CloneOptions;
 use crate::git::clone::clone_repository;
 use crate::git::pull::pull_ff_only;
+use crate::git::utils::HeadState;
 use crate::git::utils::get_control_repo_root;
-use crate::git::utils::get_current_branch;
+use crate::git::utils::get_head_state;
 use anyhow::Result;
 use colored::Colorize;
 use thoughts_tool::repo_identity::RepoIdentity;
@@ -60,9 +61,9 @@ pub async fn execute(verbose: bool) -> Result<()> {
                 println!("  mapping: {}", local_path.display());
             }
 
-            // Try fast-forward-only pull; skip detached head
-            match get_current_branch(&local_path) {
-                Ok(branch) if branch != "detached" => {
+            // Try fast-forward-only pull; skip detached/unborn head
+            match get_head_state(&local_path) {
+                Ok(HeadState::Attached(branch)) => {
                     match pull_ff_only(&local_path, "origin", Some(&branch)) {
                         Ok(()) => {
                             if verbose {
@@ -95,11 +96,15 @@ pub async fn execute(verbose: bool) -> Result<()> {
                         }
                     }
                 }
-                _ => {
+                Ok(HeadState::Detached | HeadState::Unborn(_)) | Err(_) => {
                     if verbose {
-                        println!("  action: skipped (detached HEAD)");
+                        println!("  action: skipped (non-standard HEAD state)");
                     } else {
-                        println!("{} Skipping update (detached HEAD): {}", "⚠".yellow(), url);
+                        println!(
+                            "{} Skipping update (non-standard HEAD state): {}",
+                            "⚠".yellow(),
+                            url
+                        );
                     }
                     skipped_count += 1;
                 }

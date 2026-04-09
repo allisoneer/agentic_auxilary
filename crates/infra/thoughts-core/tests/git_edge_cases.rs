@@ -1,6 +1,6 @@
 //! Edge case integration tests for git operations.
 //! These tests verify handling of edge cases like detached HEAD, missing remotes, etc.
-//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_edge_cases`
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -10,13 +10,9 @@ use tempfile::TempDir;
 use thoughts_tool::git::pull::pull_ff_only;
 use thoughts_tool::git::sync::GitSync;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn detached_head_fetch_noop() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create repo with a commit
     let repo = TempDir::new().unwrap();
     support::git_ok(repo.path(), &["init"]);
@@ -46,13 +42,9 @@ fn detached_head_fetch_noop() {
     assert!(result.is_ok());
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_without_remote_is_ok() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create repo without remote
     let repo = TempDir::new().unwrap();
     support::git_ok(repo.path(), &["init"]);
@@ -83,13 +75,9 @@ async fn sync_without_remote_is_ok() {
     assert!(files.contains("b.txt"));
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_empty_repo_initial_commit() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create empty repo (no commits)
     let repo = TempDir::new().unwrap();
     support::git_ok(repo.path(), &["init"]);
@@ -107,13 +95,9 @@ async fn sync_empty_repo_initial_commit() {
     assert_eq!(count, 1);
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn fetch_no_upstream_branch() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote with main branch
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -146,13 +130,9 @@ fn fetch_no_upstream_branch() {
     assert!(result.is_ok()); // Should succeed, just not do anything
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_subpath_only_commits_subpath() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create repo with initial commit
     let repo = TempDir::new().unwrap();
     support::git_ok(repo.path(), &["init"]);

@@ -5,12 +5,9 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn sync_returns_non_zero_when_any_mount_fails() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        return;
-    }
-
     let td = TempDir::new().unwrap();
     support::git_ok(td.path(), &["init"]);
 

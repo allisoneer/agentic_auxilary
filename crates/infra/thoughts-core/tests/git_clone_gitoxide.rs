@@ -1,7 +1,7 @@
 #![expect(clippy::unwrap_used, reason = "Tests should panic on failure")]
 //! Integration tests for gitoxide-based clone operations.
 //! These tests verify that `clone_repository` works correctly with gitoxide.
-//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_clone_gitoxide`
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -74,13 +74,9 @@ fn init_bare_remote_with_commit() -> (TempDir, String) {
     (remote_dir, remote_path.to_string_lossy().into())
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn clone_with_gitoxide_from_file_remote() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let (_remote_guard, remote_path) = init_bare_remote_with_commit();
     let target = TempDir::new().unwrap();
 
@@ -97,13 +93,9 @@ fn clone_with_gitoxide_from_file_remote() {
     assert_eq!(content, "hello");
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn clone_creates_parent_directories() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let (_remote_guard, remote_path) = init_bare_remote_with_commit();
     let target = TempDir::new().unwrap();
 
@@ -117,13 +109,9 @@ fn clone_creates_parent_directories() {
     assert!(target.path().join("deep/nested/path/cloned/.git").exists());
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn clone_fails_on_nonempty_directory() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let (_remote_guard, remote_path) = init_bare_remote_with_commit();
     let target = TempDir::new().unwrap();
     let target_dir = target.path().join("cloned");
@@ -140,13 +128,9 @@ fn clone_fails_on_nonempty_directory() {
     assert!(result.unwrap_err().to_string().contains("not empty"));
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn clone_named_branch_from_file_remote() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let (_remote_guard, remote_path) = init_bare_remote_with_commit();
     let target = TempDir::new().unwrap();
 
@@ -161,13 +145,9 @@ fn clone_named_branch_from_file_remote() {
     assert_eq!(content, "feature");
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn clone_tag_ref_from_file_remote() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let (_remote_guard, remote_path) = init_bare_remote_with_commit();
     let target = TempDir::new().unwrap();
 

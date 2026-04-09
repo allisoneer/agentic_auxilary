@@ -172,8 +172,19 @@ pub fn try_get_origin_identity(repo_path: &Path) -> Result<Option<RepoIdentity>>
     Ok(RepoIdentity::parse(url).ok())
 }
 
-/// Get the current branch name, or "detached" if in detached HEAD state
-pub fn get_current_branch(repo_path: &Path) -> Result<String> {
+/// Represents the state of HEAD in a git repository
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HeadState {
+    /// HEAD points to a branch that has commits
+    Attached(String),
+    /// HEAD points directly to a commit (detached HEAD)
+    Detached,
+    /// HEAD points to a branch that has no commits yet
+    Unborn(String),
+}
+
+/// Get the current HEAD state with full type safety
+pub fn get_head_state(repo_path: &Path) -> Result<HeadState> {
     let repo = Repository::open(repo_path).map_err(|e| {
         anyhow::anyhow!(
             "Failed to open git repository at {}: {e}",
@@ -181,14 +192,33 @@ pub fn get_current_branch(repo_path: &Path) -> Result<String> {
         )
     })?;
 
-    let head = repo
-        .head()
-        .map_err(|e| anyhow::anyhow!("Failed to get HEAD reference: {e}"))?;
+    match repo.head() {
+        Ok(head) if head.is_branch() => Ok(HeadState::Attached(
+            head.shorthand().unwrap_or("unknown").to_string(),
+        )),
+        Ok(_) => Ok(HeadState::Detached),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => {
+            // Extract branch name from symbolic HEAD
+            let head_ref = repo.find_reference("HEAD")?;
+            let name = head_ref.symbolic_target().map_or_else(
+                || "unknown".to_string(),
+                |s| s.strip_prefix("refs/heads/").unwrap_or(s).to_string(),
+            );
+            Ok(HeadState::Unborn(name))
+        }
+        Err(e) => Err(anyhow::anyhow!("Failed to get HEAD reference: {e}")),
+    }
+}
 
-    if head.is_branch() {
-        Ok(head.shorthand().unwrap_or("unknown").to_string())
-    } else {
-        Ok("detached".to_string())
+/// Get the current branch name, or "detached" if in detached HEAD state.
+/// For unborn branches, returns an error with descriptive message.
+pub fn get_current_branch(repo_path: &Path) -> Result<String> {
+    match get_head_state(repo_path)? {
+        HeadState::Attached(name) => Ok(name),
+        HeadState::Detached => Ok("detached".to_string()),
+        HeadState::Unborn(name) => {
+            bail!("Branch '{name}' has no commits yet")
+        }
     }
 }
 
@@ -220,11 +250,15 @@ pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
 
 /// Returns the current branch name or an error when sync is unsafe.
 pub fn get_sync_branch(repo_path: &Path) -> Result<String> {
-    let branch = get_current_branch(repo_path)?;
-    if branch == "detached" {
-        bail!("Repository is in detached HEAD state. Check out a branch before syncing.");
+    match get_head_state(repo_path)? {
+        HeadState::Attached(name) => Ok(name),
+        HeadState::Detached => {
+            bail!("Repository is in detached HEAD state. Check out a branch before syncing.")
+        }
+        HeadState::Unborn(name) => {
+            bail!("Branch '{name}' has no commits yet. Make an initial commit before syncing.")
+        }
     }
-    Ok(branch)
 }
 
 /// Return true if the repository's working tree has any changes (including untracked)
@@ -290,6 +324,31 @@ mod tests {
         repo.set_head_detached(commit_oid).unwrap();
         let branch = get_current_branch(repo_path).unwrap();
         assert_eq!(branch, "detached");
+    }
+
+    #[test]
+    fn test_get_head_state_unborn() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Init repo without any commits
+        Repository::init(repo_path).unwrap();
+
+        // Should detect unborn branch
+        let state = get_head_state(repo_path).unwrap();
+        assert!(
+            matches!(state, HeadState::Unborn(_)),
+            "expected Unborn, got {state:?}"
+        );
+
+        // get_current_branch should return error for unborn
+        let err = get_current_branch(repo_path).unwrap_err();
+        assert!(err.to_string().contains("no commits yet"));
+
+        // get_sync_branch should also return error with guidance
+        let err = get_sync_branch(repo_path).unwrap_err();
+        assert!(err.to_string().contains("no commits yet"));
+        assert!(err.to_string().contains("Make an initial commit"));
     }
 
     fn initial_commit(repo: &Repository) {

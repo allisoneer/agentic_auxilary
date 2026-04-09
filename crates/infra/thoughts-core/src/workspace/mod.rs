@@ -11,9 +11,11 @@ use tracing::debug;
 
 use crate::config::Mount;
 use crate::config::RepoConfigManager;
+use crate::git::utils::HeadState;
 use crate::git::utils::find_repo_root;
 use crate::git::utils::get_control_repo_root;
 use crate::git::utils::get_current_branch;
+use crate::git::utils::get_head_state;
 use crate::git::utils::get_remote_url;
 use crate::mount::MountResolver;
 
@@ -201,10 +203,14 @@ fn resolve_thoughts_root() -> Result<ResolvedThoughtsRoot> {
         "Thoughts mount not cloned. Run 'thoughts sync' or 'thoughts mount update' first.",
     )?;
 
-    let thoughts_git_ref = find_repo_root(&path)
-        .ok()
-        .and_then(|repo_root| get_current_branch(&repo_root).ok())
-        .filter(|branch| branch != "detached");
+    let thoughts_git_ref = find_repo_root(&path).ok().and_then(|repo_root| {
+        get_head_state(&repo_root)
+            .ok()
+            .and_then(|state| match state {
+                HeadState::Attached(name) => Some(name),
+                _ => None,
+            })
+    });
 
     Ok(ResolvedThoughtsRoot {
         path,

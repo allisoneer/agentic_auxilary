@@ -1,5 +1,6 @@
 //! Integration tests for shell git-based fetch operations.
 //! These tests verify that `shell_fetch::fetch` works correctly with system git.
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -8,17 +9,9 @@ use git2::Repository;
 use thoughts_tool::git::shell_fetch;
 use thoughts_tool::git::shell_push;
 
-fn skip_if_integration_not_enabled() -> bool {
-    std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1")
-}
-
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn shell_fetch_fetches_from_local_bare_remote() -> Result<()> {
-    if skip_if_integration_not_enabled() {
-        eprintln!("Skipping integration test: THOUGHTS_INTEGRATION_TESTS != 1");
-        return Ok(());
-    }
-
     // Ensure git is available
     if which::which("git").is_err() {
         eprintln!("Skipping integration test: git not found in PATH");

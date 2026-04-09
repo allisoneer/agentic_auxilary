@@ -61,6 +61,10 @@ fix:
 test: mcp-test
     {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
 
+# Run integration tests (includes ignored tests that require git setup)
+test-integration: mcp-test
+    THOUGHTS_INTEGRATION_TESTS=1 {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} -- --include-ignored
+
 build:
     {{ exec }}cargo build --workspace
 

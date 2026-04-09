@@ -1,6 +1,6 @@
 //! Integration tests for shell git-based fetch operations used by `pull_ff_only`.
 //! These tests verify that `pull_ff_only` fetches via system git and fast-forwards with git2.
-//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_fetch_gitoxide`
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -11,13 +11,9 @@ use git2::Repository;
 use thoughts_tool::git::pull::pull_ff_only;
 use thoughts_tool::git::utils::is_worktree_dirty;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn fetch_and_fast_forward() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -108,13 +104,9 @@ fn fetch_and_fast_forward() {
     );
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn fetch_already_up_to_date() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -171,13 +163,9 @@ fn fetch_already_up_to_date() {
     );
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn fetch_with_no_remote_is_ok() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create a local-only repo without origin
     let repo = TempDir::new().unwrap();
     support::git_ok(repo.path(), &["init"]);

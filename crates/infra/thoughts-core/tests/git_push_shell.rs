@@ -1,6 +1,6 @@
 //! Integration tests for shell-based git push operations.
 //! These tests verify that `push_current_branch` works correctly via system git.
-//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_push_shell`
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -9,13 +9,9 @@ use tempfile::TempDir;
 
 use thoughts_tool::git::shell_push::push_current_branch;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn push_to_bare_remote_with_shell_git() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -51,13 +47,9 @@ fn push_to_bare_remote_with_shell_git() {
     assert!(stdout.contains("refs/heads/main"));
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn push_additional_commit() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);
@@ -119,13 +111,9 @@ fn push_additional_commit() {
     assert!(!stdout.contains(&first_sha)); // First SHA no longer at HEAD
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn push_nothing_to_push_succeeds() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare", "."]);

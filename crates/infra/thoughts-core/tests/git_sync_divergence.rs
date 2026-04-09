@@ -1,6 +1,6 @@
 #![expect(clippy::expect_used, reason = "Tests should panic on failure")]
 //! Integration tests for git sync JSONL smart-merge during rebase conflicts.
-//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test -p thoughts-tool --test `git_sync_divergence`
+//! Run with: `just test-integration`
 //!
 //! Note: Divergence-state tests are unit tests in src/git/sync.rs because they need
 //! access to the crate-private `check_divergence()` method. This integration test
@@ -25,13 +25,9 @@ fn ensure_remote_head_points_to_main(remote: &TempDir) {
 /// Test: JSONL smart-merge during rebase conflict.
 /// Creates divergent commits on a `tool_logs` JSONL file, runs `sync()`, and asserts
 /// the merged file contains entries from both sides with correct collision semantics.
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_jsonl_smart_merge_on_conflict() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     // 1. Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare"]);
@@ -160,13 +156,9 @@ async fn sync_jsonl_smart_merge_on_conflict() {
     );
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_remote_behind_with_local_uncommitted_creates_one_final_commit() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare"]);
 
@@ -241,13 +233,9 @@ async fn sync_remote_behind_with_local_uncommitted_creates_one_final_commit() {
     assert_eq!(auto_sync_count, 1);
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_retries_once_after_race_like_push_rejection() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare"]);
 

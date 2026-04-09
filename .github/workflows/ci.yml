@@ -85,7 +85,7 @@ jobs:
           RUSTC_WRAPPER: "sccache"
           THOUGHTS_INTEGRATION_TESTS: "1"
           RUST_BACKTRACE: "1"
-        run: cargo nextest run --workspace --profile ci
+        run: cargo nextest run --workspace --profile ci -- --include-ignored
 
   audit:
     name: Security Audit (cargo-deny)
