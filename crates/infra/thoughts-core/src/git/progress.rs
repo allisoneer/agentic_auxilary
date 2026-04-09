@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::io::Write;
 use std::io::{self};
 use std::sync::Arc;
@@ -43,6 +44,10 @@ impl InlineProgress {
         }
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a panic elsewhere; propagating is correct"
+    )]
     fn draw(&self) {
         let now = Instant::now();
 
@@ -69,13 +74,13 @@ impl InlineProgress {
 
         if has_max && max > 0 {
             let pct = (current as f32 / max as f32) * 100.0;
-            line.push_str(&format!("{}/{} ({:.1}%)", current, max, pct));
+            let _ = write!(line, "{current}/{max} ({pct:.1}%)");
         } else {
-            line.push_str(&format!("{}", current));
+            let _ = write!(line, "{current}");
         }
 
-        print!("\r{}", line);
-        io::stdout().flush().ok();
+        print!("\r{line}");
+        let _ = io::stdout().flush();
     }
 }
 
@@ -96,7 +101,7 @@ impl Count for InlineProgress {
 
     fn counter(&self) -> gix::progress::StepShared {
         // Return the shared counter so external increments affect our state
-        self.state.current.clone()
+        Arc::clone(&self.state.current)
     }
 }
 
@@ -131,14 +136,14 @@ impl Progress for InlineProgress {
 }
 
 impl NestedProgress for InlineProgress {
-    type SubProgress = InlineProgress;
+    type SubProgress = Self;
 
     fn add_child(&mut self, name: impl Into<String>) -> Self::SubProgress {
         // Finish current line before starting child
         if !self.state.finished.load(Ordering::Relaxed) {
             println!();
         }
-        InlineProgress::new(name)
+        Self::new(name)
     }
 
     fn add_child_with_id(
@@ -151,6 +156,10 @@ impl NestedProgress for InlineProgress {
 }
 
 impl Drop for InlineProgress {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Mutex poisoning indicates a panic elsewhere; propagating is correct"
+    )]
     fn drop(&mut self) {
         // Ensure we print a newline when done
         if !self.state.finished.swap(true, Ordering::Relaxed) {

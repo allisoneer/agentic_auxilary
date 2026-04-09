@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::git::shell_fetch;
 use crate::git::utils::is_worktree_dirty;
 
-/// Fast-forward-only pull of the current branch from remote_name (default "origin")
+/// Fast-forward-only pull of the current branch from `remote_name` (default "origin")
 /// Uses shell git for fetch (to trigger 1Password SSH prompts) and git2 for fast-forward
 pub fn pull_ff_only(repo_path: &Path, remote_name: &str, branch: Option<&str>) -> Result<()> {
     // First check if remote exists
@@ -36,17 +36,14 @@ pub fn pull_ff_only(repo_path: &Path, remote_name: &str, branch: Option<&str>) -
         .with_context(|| format!("Failed to re-open repository at {}", repo_path.display()))?;
 
     // Now do the fast-forward using git2
-    let remote_ref = format!("refs/remotes/{}/{}", remote_name, branch);
-    let fetch_head = match repo.find_reference(&remote_ref) {
-        Ok(r) => r,
-        Err(_) => {
-            // Remote branch doesn't exist yet
-            return Ok(());
-        }
+    let remote_ref = format!("refs/remotes/{remote_name}/{branch}");
+    let Ok(fetch_head) = repo.find_reference(&remote_ref) else {
+        // Remote branch doesn't exist yet
+        return Ok(());
     };
     let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
 
-    try_fast_forward(&repo, &format!("refs/heads/{}", branch), &fetch_commit)?;
+    try_fast_forward(&repo, &format!("refs/heads/{branch}"), &fetch_commit)?;
     Ok(())
 }
 

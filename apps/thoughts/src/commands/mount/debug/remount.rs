@@ -25,12 +25,12 @@ pub async fn execute(mount_name: String) -> Result<()> {
 
     // Parse mount name to MountSpace
     let mount_space = MountSpace::parse(&mount_name)
-        .with_context(|| format!("Invalid mount name: {}", mount_name))?;
+        .with_context(|| format!("Invalid mount name: {mount_name}"))?;
 
     // Find mount using MountSpace
     let mount = desired
         .find_mount(&mount_space)
-        .ok_or_else(|| anyhow::anyhow!("Mount '{}' not found in configuration", mount_name))?;
+        .ok_or_else(|| anyhow::anyhow!("Mount '{mount_name}' not found in configuration"))?;
 
     // Resolve mount sources
     let resolver = MountResolver::new()?;
@@ -53,14 +53,14 @@ pub async fn execute(mount_name: String) -> Result<()> {
     if mount_manager.is_mounted(&target).await? {
         println!("  Unmounting existing mount...");
         match mount_manager.unmount(&target, false).await {
-            Ok(_) => println!("  {} Unmounted successfully", "✓".green()),
+            Ok(()) => println!("  {} Unmounted successfully", "✓".green()),
             Err(e) => {
                 warn!("Failed to unmount cleanly: {}", e);
                 println!("  {} Unmount failed (may be busy)", "⚠".yellow());
                 println!("  Attempting force unmount...");
 
                 match mount_manager.unmount(&target, true).await {
-                    Ok(_) => println!("  {} Force unmount successful", "✓".green()),
+                    Ok(()) => println!("  {} Force unmount successful", "✓".green()),
                     Err(e) => {
                         error!("Force unmount failed: {}", e);
                         println!("  {} Force unmount failed", "✗".red());
@@ -76,7 +76,7 @@ pub async fn execute(mount_name: String) -> Result<()> {
     // Now mount with fresh state
     println!("  Mounting with current configuration...");
     match mount_manager.mount(&sources, &target, &options).await {
-        Ok(_) => {
+        Ok(()) => {
             println!("  {} Mount successful", "✓".green());
             println!();
             println!(

@@ -20,7 +20,7 @@ async fn test_basic_mount_unmount() {
     if !platform_info.platform.can_mount() {
         eprintln!("Skipping test: mount tools not available");
         if let Some(tool_name) = platform_info.platform.mount_tool_name() {
-            eprintln!("Required tool: {}", tool_name);
+            eprintln!("Required tool: {tool_name}");
         }
         return;
     }
@@ -43,10 +43,10 @@ async fn test_basic_mount_unmount() {
 
     // Test mount
     let options = MountOptions::default();
-    let sources = vec![source1.clone(), source2.clone()];
+    let source_dirs = vec![source1.clone(), source2.clone()];
 
     manager
-        .mount(&sources, &target, &options)
+        .mount(&source_dirs, &target, &options)
         .await
         .expect("Mount failed");
 

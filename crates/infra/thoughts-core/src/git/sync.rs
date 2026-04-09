@@ -9,7 +9,7 @@ use anyhow::Result;
 use anyhow::bail;
 use chrono::DateTime;
 use chrono::Utc;
-use colored::*;
+use colored::Colorize;
 use git2::Commit;
 use git2::ErrorCode;
 use git2::Index;
@@ -43,13 +43,16 @@ struct LogEntryForMerge {
 fn is_tool_log_file(path: &str) -> bool {
     if let Some(logs_idx) = path.find("/logs/") {
         let after_logs = &path[logs_idx + 6..]; // Skip "/logs/"
-        after_logs.starts_with("tool_logs_") && path.ends_with(".jsonl")
+        after_logs.starts_with("tool_logs_")
+            && std::path::Path::new(path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
     } else {
         false
     }
 }
 
-/// Merge two JSONL log files by deduplicating on call_id and sorting by started_at.
+/// Merge two JSONL log files by deduplicating on `call_id` and sorting by `started_at`.
 ///
 /// - Records are deduplicated by `call_id` (local/theirs wins on collision)
 /// - Records are sorted chronologically by `started_at`
@@ -118,7 +121,6 @@ fn merge_jsonl_logs(ours_content: &[u8], theirs_content: &[u8]) -> Vec<u8> {
 }
 
 /// Result of analyzing divergence between local and remote branches.
-#[allow(dead_code)] // is_ahead and is_behind are tested in unit tests (divergence_* tests below)
 pub(crate) struct DivergenceAnalysis {
     /// Local and remote have diverged (both have unique commits)
     pub(crate) is_diverged: bool,
@@ -164,6 +166,10 @@ impl GitSync {
         })
     }
 
+    #[expect(
+        clippy::future_not_send,
+        reason = "git2::Repository is Send but not Sync; this is a known limitation"
+    )]
     pub async fn sync(&self, mount_name: &str) -> Result<()> {
         println!("  {} {}", "Syncing".cyan(), mount_name);
 
@@ -175,13 +181,13 @@ impl GitSync {
                 "    {} No remote 'origin' configured (local-only)",
                 "Info".dimmed()
             );
-            self.sync_without_remote(mount_name).await?;
+            self.sync_without_remote(mount_name)?;
             return Ok(());
         }
 
         for attempt in 0..MAX_PUSH_RETRIES {
             let attempt_head = self.head_commit_oid()?;
-            self.sync_once(mount_name, &branch_name).await?;
+            self.sync_once(mount_name, &branch_name)?;
 
             let push_result =
                 push_current_branch_with_result(&self.repo_path, "origin", &branch_name)?;
@@ -204,16 +210,15 @@ impl GitSync {
             let stderr = push_result.stderr.trim();
             if stderr.is_empty() {
                 bail!("git push failed ({failure_kind:?})");
-            } else {
-                bail!("git push failed ({failure_kind:?}): {stderr}");
             }
+            bail!("git push failed ({failure_kind:?}): {stderr}");
         }
 
         bail!("git push race retry budget exhausted after {MAX_PUSH_RETRIES} attempts")
     }
 
-    async fn sync_without_remote(&self, mount_name: &str) -> Result<()> {
-        let changes_staged = self.stage_changes().await?;
+    fn sync_without_remote(&self, mount_name: &str) -> Result<()> {
+        let changes_staged = self.stage_changes()?;
         if !changes_staged {
             println!("    {} No changes to commit", "○".dimmed());
             return Ok(());
@@ -233,7 +238,7 @@ impl GitSync {
         Ok(())
     }
 
-    async fn sync_once(&self, mount_name: &str, branch_name: &str) -> Result<()> {
+    fn sync_once(&self, mount_name: &str, branch_name: &str) -> Result<()> {
         shell_fetch::fetch(&self.repo_path, "origin").with_context(|| {
             format!(
                 "Fetch from origin failed for repo '{}'",
@@ -248,7 +253,7 @@ impl GitSync {
             self.premerge_jsonl_files(&upstream_commit.tree()?)?;
         }
 
-        let changes_staged = self.stage_changes().await?;
+        let changes_staged = self.stage_changes()?;
         let local_tree = self.local_tree_from_index()?;
         let relation =
             self.sync_relation(head_commit.as_ref(), upstream_commit.as_ref(), branch_name)?;
@@ -327,22 +332,19 @@ impl GitSync {
     /// Check if local and remote branches have diverged.
     pub(crate) fn check_divergence(&self, branch_name: &str) -> Result<DivergenceAnalysis> {
         let head = self.repo.head()?;
-        let upstream_ref = format!("refs/remotes/origin/{}", branch_name);
+        let upstream_ref = format!("refs/remotes/origin/{branch_name}");
 
         let local_oid = head
             .target()
             .ok_or_else(|| anyhow::anyhow!("No HEAD target"))?;
 
-        let upstream_oid = match self.repo.refname_to_id(&upstream_ref) {
-            Ok(oid) => oid,
-            Err(_) => {
-                // No upstream branch yet - local is ahead
-                return Ok(DivergenceAnalysis {
-                    is_diverged: false,
-                    is_ahead: true,
-                    is_behind: false,
-                });
-            }
+        let Ok(upstream_oid) = self.repo.refname_to_id(&upstream_ref) else {
+            // No upstream branch yet - local is ahead
+            return Ok(DivergenceAnalysis {
+                is_diverged: false,
+                is_ahead: true,
+                is_behind: false,
+            });
         };
 
         // Use graph_ahead_behind for accurate commit counts instead of merge_analysis
@@ -369,10 +371,10 @@ impl GitSync {
                 let analysis = self.check_divergence(branch_name)?;
                 Ok(
                     match (analysis.is_diverged, analysis.is_ahead, analysis.is_behind) {
-                        (true, _, _) => SyncRelation::Diverged,
                         (false, true, false) => SyncRelation::AheadOnly,
                         (false, false, true) => SyncRelation::BehindOnly,
                         (false, false, false) => SyncRelation::UpToDate,
+                        // diverged (true, _, _) or any other combination
                         _ => SyncRelation::Diverged,
                     },
                 )
@@ -597,16 +599,13 @@ impl GitSync {
     }
 
     fn reset_after_push_race(&self, original_head: Option<Oid>) -> Result<()> {
-        match original_head {
-            Some(original_head) => {
-                let obj = self.repo.find_object(original_head, None)?;
-                self.repo.reset(&obj, git2::ResetType::Mixed, None)?;
-            }
-            None => {
-                let branch_name = get_sync_branch(&self.repo_path)?;
-                self.repo.set_head(&format!("refs/heads/{branch_name}"))?;
-                self.repo.cleanup_state()?;
-            }
+        if let Some(original_head) = original_head {
+            let obj = self.repo.find_object(original_head, None)?;
+            self.repo.reset(&obj, git2::ResetType::Mixed, None)?;
+        } else {
+            let branch_name = get_sync_branch(&self.repo_path)?;
+            self.repo.set_head(&format!("refs/heads/{branch_name}"))?;
+            self.repo.cleanup_state()?;
         }
         Ok(())
     }
@@ -628,11 +627,10 @@ impl GitSync {
     }
 
     fn tool_log_files_in_scope(&self) -> Result<Vec<String>> {
-        let root = self
-            .subpath
-            .as_ref()
-            .map(|subpath| self.repo_path.join(subpath))
-            .unwrap_or_else(|| self.repo_path.clone());
+        let root = self.subpath.as_ref().map_or_else(
+            || self.repo_path.clone(),
+            |subpath| self.repo_path.join(subpath),
+        );
         let mut files = Vec::new();
         self.collect_tool_log_files(&root, &mut files)?;
         files.sort();
@@ -679,7 +677,7 @@ impl GitSync {
         Ok(Some(blob.content().to_vec()))
     }
 
-    async fn stage_changes(&self) -> Result<bool> {
+    fn stage_changes(&self) -> Result<bool> {
         let mut index = self.repo.index()?;
 
         // Get the pathspec for staging
@@ -723,7 +721,10 @@ impl GitSync {
         // Handle empty repo case where HEAD doesn't exist yet
         let diff = match self.repo.head() {
             Ok(head) => {
-                let head_tree = self.repo.find_commit(head.target().unwrap())?.tree()?;
+                let head_oid = head
+                    .target()
+                    .ok_or_else(|| anyhow::anyhow!("HEAD reference has no target"))?;
+                let head_tree = self.repo.find_commit(head_oid)?.tree()?;
                 self.repo
                     .diff_tree_to_index(Some(&head_tree), Some(&index), None)?
             }
@@ -927,7 +928,7 @@ mod tests {
     }
 
     /// Test: No upstream ref exists (fresh local repo, no remote tracking branch).
-    /// Expected: is_diverged=false, is_ahead=true, is_behind=false
+    /// Expected: `is_diverged=false`, `is_ahead=true`, `is_behind=false`
     #[test]
     fn divergence_no_upstream_ref() {
         let repo = tempfile::TempDir::new().unwrap();
@@ -956,7 +957,7 @@ mod tests {
     }
 
     /// Test: Local and remote are at the same commit.
-    /// Expected: is_diverged=false, is_ahead=false, is_behind=false
+    /// Expected: `is_diverged=false`, `is_ahead=false`, `is_behind=false`
     #[test]
     fn divergence_up_to_date() {
         let repo = tempfile::TempDir::new().unwrap();
@@ -993,7 +994,7 @@ mod tests {
     }
 
     /// Test: Local has commits that remote doesn't (local ahead only).
-    /// Expected: is_diverged=false, is_ahead=true, is_behind=false
+    /// Expected: `is_diverged=false`, `is_ahead=true`, `is_behind=false`
     #[test]
     fn divergence_local_ahead_only() {
         let repo = tempfile::TempDir::new().unwrap();
@@ -1045,7 +1046,7 @@ mod tests {
     }
 
     /// Test: Remote has commits that local doesn't (local behind only).
-    /// Expected: is_diverged=false, is_ahead=false, is_behind=true
+    /// Expected: `is_diverged=false`, `is_ahead=false`, `is_behind=true`
     #[test]
     fn divergence_local_behind_only() {
         let repo = tempfile::TempDir::new().unwrap();
@@ -1098,7 +1099,7 @@ mod tests {
     }
 
     /// Test: Both local and remote have unique commits (diverged).
-    /// Expected: is_diverged=true, is_ahead=true, is_behind=true
+    /// Expected: `is_diverged=true`, `is_ahead=true`, `is_behind=true`
     #[test]
     fn divergence_diverged() {
         let repo = tempfile::TempDir::new().unwrap();

@@ -408,7 +408,7 @@ pub async fn execute(force: bool) -> Result<()> {
     // Auto-mount all configured mounts
     println!("\n{} mounts...", "Setting up".green());
     match crate::mount::auto_mount::update_active_mounts().await {
-        Ok(_) => {}
+        Ok(()) => {}
         Err(e) => {
             eprintln!("{}: Failed to set up mounts: {}", "Warning".yellow(), e);
             eprintln!(
@@ -508,7 +508,7 @@ pub async fn execute(force: bool) -> Result<()> {
 
 fn create_symlink(target: &str, link: &Path) -> Result<()> {
     std::os::unix::fs::symlink(target, link)
-        .with_context(|| format!("Failed to create symlink {link:?} -> {target}"))?;
+        .with_context(|| format!("Failed to create symlink {} -> {target}", link.display()))?;
     Ok(())
 }
 
@@ -518,7 +518,7 @@ fn create_readme_if_empty(dir: &Path, title: &str, content: &str) -> Result<()> 
     if !readme_path.exists() {
         let full_content = format!("# {title}\n\n{content}");
         fs::write(&readme_path, full_content)
-            .with_context(|| format!("Failed to create README at {readme_path:?}"))?;
+            .with_context(|| format!("Failed to create README at {}", readme_path.display()))?;
     }
 
     Ok(())
@@ -534,7 +534,7 @@ enum SymlinkOutcome {
 }
 
 /// Ensure that `link` is a symlink pointing to the absolute `abs_target`.
-/// If incorrect and `force` is true, fix it. If force is false, return NeedsForce.
+/// If incorrect and `force` is true, fix it. If force is false, return `NeedsForce`.
 /// Never delete non-symlinks.
 fn ensure_symlink_abs_target(
     link: &Path,

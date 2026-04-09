@@ -1,6 +1,6 @@
 //! Edge case integration tests for git operations.
 //! These tests verify handling of edge cases like detached HEAD, missing remotes, etc.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_edge_cases
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_edge_cases`
 
 mod support;
 

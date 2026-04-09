@@ -1,6 +1,7 @@
+#![expect(clippy::unwrap_used, reason = "Tests should panic on failure")]
 //! Integration tests for gitoxide-based clone operations.
-//! These tests verify that clone_repository works correctly with gitoxide.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_clone_gitoxide
+//! These tests verify that `clone_repository` works correctly with gitoxide.
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_clone_gitoxide`
 
 mod support;
 

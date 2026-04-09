@@ -1,5 +1,6 @@
+#![expect(clippy::unwrap_used, reason = "Tests should panic on failure")]
 //! Integration tests for remote ref discovery.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_remote_ref_discovery
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_remote_ref_discovery`
 
 mod support;
 

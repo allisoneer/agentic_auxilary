@@ -1,6 +1,6 @@
-//! Integration tests for GitSync with worktree support.
+//! Integration tests for `GitSync` with worktree support.
 //! These tests verify that sync operations work correctly from linked worktrees.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_sync_worktree
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_sync_worktree`
 
 mod support;
 

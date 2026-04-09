@@ -410,7 +410,7 @@ pub async fn gpt5_reasoner_impl(
                     PromptType::Plan => {
                         if let Some(ref name) = output_filename {
                             // Write plan to plans/ directory
-                            match write_document(DocumentType::Plan, name, &content) {
+                            match write_document(&DocumentType::Plan, name, &content) {
                                 Ok(ok) => {
                                     returned = ok.path;
                                 }

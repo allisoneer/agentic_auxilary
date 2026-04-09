@@ -11,7 +11,7 @@ use crate::utils::paths::expand_path;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
-use colored::*;
+use colored::Colorize;
 use std::path::PathBuf;
 
 pub async fn execute(
@@ -43,12 +43,10 @@ pub async fn execute(
                     "Cannot add remote URL directly. Repository must be cloned first.\n\n\
                      To add this repository, use one of:\n\n\
                      1. Clone and manage automatically:\n\
-                        thoughts mount clone {}\n\n\
+                        thoughts mount clone {path_str}\n\n\
                      2. Clone manually then add:\n\
-                        git clone {} /path/to/local\n\
-                        thoughts mount add /path/to/local",
-                    path_str,
-                    path_str
+                        git clone {path_str} /path/to/local\n\
+                        thoughts mount add /path/to/local"
                 );
             }
         }
@@ -79,14 +77,13 @@ pub async fn execute(
         println!("Found remote URL: {url}");
 
         // Add mapping (auto_managed=false for existing repos)
-        repo_mapping.add_mapping(url.clone(), expanded.clone(), false)?;
+        repo_mapping.add_mapping(&url, expanded.clone(), false)?;
 
         let mount_name = mount_path.unwrap_or_else(|| {
             expanded
                 .file_name()
                 .and_then(|n| n.to_str())
-                .map(sanitize_mount_name)
-                .unwrap_or_else(|| "unnamed".to_string())
+                .map_or_else(|| "unnamed".to_string(), sanitize_mount_name)
         });
 
         (mount_name, url, None)
@@ -97,7 +94,7 @@ pub async fn execute(
         let url = get_remote_url(&repo_root).context("Parent repository has no remote URL")?;
 
         // Add mapping for repo root (auto_managed=false for existing repos)
-        repo_mapping.add_mapping(url.clone(), repo_root.clone(), false)?;
+        repo_mapping.add_mapping(&url, repo_root.clone(), false)?;
 
         // Calculate subpath
         let subpath = expanded
@@ -109,8 +106,7 @@ pub async fn execute(
             expanded
                 .file_name()
                 .and_then(|n| n.to_str())
-                .map(sanitize_mount_name)
-                .unwrap_or_else(|| "unnamed".to_string())
+                .map_or_else(|| "unnamed".to_string(), sanitize_mount_name)
         });
 
         (mount_name, url, Some(subpath))
@@ -129,7 +125,7 @@ pub async fn execute(
     };
 
     // Add to repository config at .thoughts/config.json
-    let repo_root = get_control_repo_root(&std::env::current_dir()?)?.to_path_buf();
+    let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
     let was_v1 = matches!(mgr.peek_config_version()?, Some(v) if v == "1.0");
     let mut cfg = mgr.ensure_v2_default()?; // may migrate
@@ -140,7 +136,7 @@ pub async fn execute(
         .iter()
         .any(|m| m.mount_path == mount_name)
     {
-        bail!("Mount '{}' already exists", mount_name);
+        bail!("Mount '{mount_name}' already exists");
     }
 
     // Add mount
@@ -154,10 +150,10 @@ pub async fn execute(
     // Validate and save
     let warnings = mgr.save_v2_validated(&cfg)?;
     for w in warnings {
-        eprintln!("Warning: {}", w);
+        eprintln!("Warning: {w}");
     }
 
-    println!("✓ Added repository mount '{}'", mount_name);
+    println!("✓ Added repository mount '{mount_name}'");
     if was_v1 {
         eprintln!("Upgraded to v2 config. See MIGRATION_V1_TO_V2.md");
     }

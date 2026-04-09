@@ -48,6 +48,10 @@ pub async fn cleanup_mount_point(path: &Path) -> Result<()> {
 }
 
 /// Check if a path is safe to use as a mount point
+#[expect(
+    clippy::unused_async,
+    reason = "async for API consistency with ensure_mount_point/cleanup_mount_point siblings"
+)]
 pub async fn validate_mount_point(path: &Path) -> Result<()> {
     let path_str = path.to_str().unwrap_or("");
 
@@ -230,9 +234,9 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
 
         let counter_closure = {
-            let counter = counter.clone();
+            let counter = Arc::clone(&counter);
             move || {
-                let counter = counter.clone();
+                let counter = Arc::clone(&counter);
                 async move {
                     let n = counter.fetch_add(1, Ordering::SeqCst);
                     Ok(n >= 3) // true on 4th call

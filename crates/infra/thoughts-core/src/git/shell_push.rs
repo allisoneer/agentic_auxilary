@@ -39,7 +39,7 @@ fn print_progress_line(line: &str) {
         || line.starts_with("remote:")
         || line.contains("Counting objects")
     {
-        println!("    {}", line);
+        println!("    {line}");
     }
 }
 

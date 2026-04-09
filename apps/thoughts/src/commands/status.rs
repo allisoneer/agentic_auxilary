@@ -7,20 +7,17 @@ use crate::mount::MountResolver;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use std::env;
 
 pub async fn execute(_detailed: bool) -> Result<()> {
-    let code_root = match find_repo_root(&env::current_dir()?) {
-        Ok(root) => root,
-        Err(_) => {
-            println!("{}: Not in a git repository", "Error".red());
-            println!(
-                "Run {} from within a git repository",
-                "thoughts status".cyan()
-            );
-            return Ok(());
-        }
+    let Ok(code_root) = find_repo_root(&env::current_dir()?) else {
+        println!("{}: Not in a git repository", "Error".red());
+        println!(
+            "Run {} from within a git repository",
+            "thoughts status".cyan()
+        );
+        return Ok(());
     };
 
     let control_root = get_control_repo_root(&env::current_dir()?)?;
@@ -71,24 +68,17 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     // Mount status
     println!("{}", "Mounts:".bold());
 
-    if desired.is_none() {
+    let Some(ds) = desired else {
         println!("  No configuration found");
         println!();
         println!("  Initialize with:");
         println!("    {}", "thoughts init".cyan());
         return Ok(());
-    }
-
-    let ds = desired.unwrap();
+    };
     let has_mounts =
         ds.thoughts_mount.is_some() || !ds.context_mounts.is_empty() || !ds.references.is_empty();
 
-    if !has_mounts {
-        println!("  No mounts configured");
-        println!();
-        println!("  Add mounts with:");
-        println!("    {}", "thoughts mount add <path>".cyan());
-    } else {
+    if has_mounts {
         // Show thoughts mount
         if let Some(tm) = &ds.thoughts_mount {
             println!(
@@ -170,6 +160,11 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                 "thoughts references list".cyan()
             );
         }
+    } else {
+        println!("  No mounts configured");
+        println!();
+        println!("  Add mounts with:");
+        println!("    {}", "thoughts mount add <path>".cyan());
     }
 
     println!();
@@ -177,7 +172,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
     // Mount system health
     println!("{}", "System:".bold());
     match mount_manager.check_health().await {
-        Ok(_) => println!("  Mount system: {} ✓", "Healthy".green()),
+        Ok(()) => println!("  Mount system: {} ✓", "Healthy".green()),
         Err(e) => {
             println!("  Mount system: {} ✗", "Issues detected".red());
             println!("  {}", e.to_string().dimmed());
@@ -192,7 +187,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                     "Linux (mergerfs{})",
                     info.mergerfs_version
                         .as_ref()
-                        .map(|v| format!(" v{}", v))
+                        .map(|v| format!(" v{v}"))
                         .unwrap_or_default()
                 )
             } else {
@@ -205,7 +200,7 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                     "macOS (FUSE-T{})",
                     info.fuse_t_version
                         .as_ref()
-                        .map(|v| format!(" v{}", v))
+                        .map(|v| format!(" v{v}"))
                         .unwrap_or_default()
                 )
             } else if info.has_macfuse {
@@ -213,20 +208,24 @@ pub async fn execute(_detailed: bool) -> Result<()> {
                     "macOS (macFUSE{})",
                     info.macfuse_version
                         .as_ref()
-                        .map(|v| format!(" v{}", v))
+                        .map(|v| format!(" v{v}"))
                         .unwrap_or_default()
                 )
             } else {
                 "macOS (no FUSE implementation)".to_string()
             }
         }
-        crate::platform::Platform::Unsupported(os) => format!("{} (unsupported)", os),
+        crate::platform::Platform::Unsupported(os) => format!("{os} (unsupported)"),
     };
-    println!("  Platform: {}", platform_str);
+    println!("  Platform: {platform_str}");
 
     Ok(())
 }
 
+#[expect(
+    clippy::unused_async,
+    reason = "async for consistency with other helper functions"
+)]
 async fn show_mount_status(
     mount: &Mount,
     resolver: &MountResolver,

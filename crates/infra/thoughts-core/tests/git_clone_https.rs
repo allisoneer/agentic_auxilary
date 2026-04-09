@@ -1,6 +1,6 @@
 //! HTTPS clone smoke tests for gitoxide-based clone operations.
 //! Run with:
-//!   THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 cargo test --test git_clone_https
+//!   `THOUGHTS_INTEGRATION_TESTS=1` `THOUGHTS_NETWORK_TESTS=1` cargo test --test `git_clone_https`
 
 use tempfile::TempDir;
 use thoughts_tool::git::clone::CloneOptions;

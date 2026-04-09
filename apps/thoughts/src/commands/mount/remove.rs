@@ -29,14 +29,14 @@ pub async fn execute(mount_name: String) -> Result<()> {
     let before = cfg.context_mounts.len();
     cfg.context_mounts.retain(|m| m.mount_path != target_name);
     if cfg.context_mounts.len() == before {
-        println!("No mount named '{}' found", mount_name);
+        println!("No mount named '{mount_name}' found");
         return Ok(());
     }
     let warnings = repo_manager.save_v2_validated(&cfg)?;
     for w in warnings {
-        eprintln!("Warning: {}", w);
+        eprintln!("Warning: {w}");
     }
-    println!("✓ Removed mount '{}'", mount_name);
+    println!("✓ Removed mount '{mount_name}'");
 
     // Automatically update active mounts (unmount if needed)
     crate::mount::auto_mount::update_active_mounts().await?;

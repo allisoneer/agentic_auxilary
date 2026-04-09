@@ -57,11 +57,13 @@ fn push_escape(out: &mut String, byte: u8) {
 }
 
 fn short_hash_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
     let digest = Sha256::digest(bytes);
-    digest[..(HASH_HEX_LEN / 2)]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    let mut out = String::with_capacity(HASH_HEX_LEN);
+    for byte in &digest[..(HASH_HEX_LEN / 2)] {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
 }
 
 fn truncate_on_char_boundary(value: &str, max_len: usize) -> String {
@@ -111,7 +113,7 @@ mod tests {
             "must be bounded by MAX_REF_KEY_LEN"
         );
 
-        let (_prefix_part, hash) = out.rsplit_once("--").expect("expected --{hash} suffix");
+        let (_prefix_part, hash) = out.rsplit_once("--").expect("expected '--<hash>' suffix");
         assert_eq!(hash.len(), 16, "expected 16 hex chars");
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
     }
@@ -119,8 +121,8 @@ mod tests {
     #[test]
     fn truncation_hash_makes_long_keys_unique() {
         let base = "refs/heads/".to_string() + &"a".repeat(300);
-        let a = format!("{}-x", base);
-        let b = format!("{}-y", base);
+        let a = format!("{base}-x");
+        let b = format!("{base}-y");
 
         let ka = encode_ref_key(&a).unwrap();
         let kb = encode_ref_key(&b).unwrap();

@@ -5,17 +5,14 @@ use std::process::Command;
 use tracing::debug;
 use tracing::info;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Platform {
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Linux(LinuxInfo),
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     MacOS(MacOSInfo),
-    #[allow(dead_code)] // Needed for exhaustive matching but only constructed on non-Linux/macOS
     Unsupported(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinuxInfo {
     pub distro: String,
     pub version: String,
@@ -28,7 +25,7 @@ pub struct LinuxInfo {
     pub fusermount_path: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacOSInfo {
     pub version: String,
     pub has_fuse_t: bool,
@@ -47,23 +44,21 @@ pub struct PlatformInfo {
 }
 
 impl Platform {
-    #[allow(dead_code)]
     // Used in tests, could be useful for diagnostics
     pub fn can_mount(&self) -> bool {
         match self {
-            Platform::Linux(info) => info.has_mergerfs && info.fuse_available,
-            Platform::MacOS(info) => info.has_fuse_t || info.has_macfuse,
-            Platform::Unsupported(_) => false,
+            Self::Linux(info) => info.has_mergerfs && info.fuse_available,
+            Self::MacOS(info) => info.has_fuse_t || info.has_macfuse,
+            Self::Unsupported(_) => false,
         }
     }
 
-    #[allow(dead_code)]
     // Could be used in error messages showing required tools
     pub fn mount_tool_name(&self) -> Option<&'static str> {
         match self {
-            Platform::Linux(_) => Some("mergerfs"),
-            Platform::MacOS(_) => Some("FUSE-T or macFUSE"),
-            Platform::Unsupported(_) => None,
+            Self::Linux(_) => Some("mergerfs"),
+            Self::MacOS(_) => Some("FUSE-T or macFUSE"),
+            Self::Unsupported(_) => None,
         }
     }
 }
@@ -73,12 +68,12 @@ pub fn detect_platform() -> Result<PlatformInfo> {
 
     #[cfg(target_os = "linux")]
     {
-        detect_linux()
+        Ok(detect_linux())
     }
 
     #[cfg(target_os = "macos")]
     {
-        detect_macos()
+        Ok(detect_macos())
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -93,7 +88,7 @@ pub fn detect_platform() -> Result<PlatformInfo> {
 }
 
 #[cfg(target_os = "linux")]
-fn detect_linux() -> Result<PlatformInfo> {
+fn detect_linux() -> PlatformInfo {
     // Detect distribution
     let (distro, version) = detect_linux_distro();
     info!("Detected Linux distribution: {} {}", distro, version);
@@ -101,10 +96,10 @@ fn detect_linux() -> Result<PlatformInfo> {
     // Check for mergerfs (now returns path and version)
     let (mergerfs_path, mergerfs_version) = check_mergerfs();
     let has_mergerfs = mergerfs_path.is_some();
-    if has_mergerfs {
+    if let Some(path) = &mergerfs_path {
         info!(
             "Found mergerfs at {} version: {}",
-            mergerfs_path.as_ref().unwrap().display(),
+            path.display(),
             mergerfs_version.as_deref().unwrap_or("unknown")
         );
     } else {
@@ -124,11 +119,8 @@ fn detect_linux() -> Result<PlatformInfo> {
         .or_else(|_| which::which("fusermount3"))
         .ok();
     let has_fusermount = fusermount_path.is_some();
-    if has_fusermount {
-        info!(
-            "fusermount detected at {}",
-            fusermount_path.as_ref().unwrap().display()
-        );
+    if let Some(path) = &fusermount_path {
+        info!("fusermount detected at {}", path.display());
     }
 
     let linux_info = LinuxInfo {
@@ -142,11 +134,11 @@ fn detect_linux() -> Result<PlatformInfo> {
         fusermount_path,
     };
 
-    Ok(PlatformInfo {
+    PlatformInfo {
         platform: Platform::Linux(linux_info),
         #[cfg(test)]
         arch: std::env::consts::ARCH.to_string(),
-    })
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -178,13 +170,11 @@ fn detect_linux_distro() -> (String, String) {
         let distro = lines
             .first()
             .and_then(|l| l.split(':').nth(1))
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .map_or_else(|| "Unknown".to_string(), |s| s.trim().to_string());
         let version = lines
             .get(1)
             .and_then(|l| l.split(':').nth(1))
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .map_or_else(|| "Unknown".to_string(), |s| s.trim().to_string());
         return (distro, version);
     }
 
@@ -235,7 +225,7 @@ fn check_fuse_support() -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn detect_macos() -> Result<PlatformInfo> {
+fn detect_macos() -> PlatformInfo {
     // Get macOS version
     let version = get_macos_version();
     info!("Detected macOS version: {}", version);
@@ -264,11 +254,8 @@ fn detect_macos() -> Result<PlatformInfo> {
         .iter()
         .find_map(|binary| which::which(binary).ok());
     let has_unionfs = unionfs_path.is_some();
-    if has_unionfs {
-        info!(
-            "Found unionfs at: {}",
-            unionfs_path.as_ref().unwrap().display()
-        );
+    if let Some(path) = &unionfs_path {
+        info!("Found unionfs at: {}", path.display());
     }
 
     let macos_info = MacOSInfo {
@@ -281,11 +268,11 @@ fn detect_macos() -> Result<PlatformInfo> {
         unionfs_path,
     };
 
-    Ok(PlatformInfo {
+    PlatformInfo {
         platform: Platform::MacOS(macos_info),
         #[cfg(test)]
         arch: std::env::consts::ARCH.to_string(),
-    })
+    }
 }
 
 #[cfg(target_os = "macos")]

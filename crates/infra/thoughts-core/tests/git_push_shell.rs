@@ -1,6 +1,6 @@
 //! Integration tests for shell-based git push operations.
-//! These tests verify that push_current_branch works correctly via system git.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_push_shell
+//! These tests verify that `push_current_branch` works correctly via system git.
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_push_shell`
 
 mod support;
 

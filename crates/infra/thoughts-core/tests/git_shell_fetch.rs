@@ -1,5 +1,5 @@
 //! Integration tests for shell git-based fetch operations.
-//! These tests verify that shell_fetch::fetch works correctly with system git.
+//! These tests verify that `shell_fetch::fetch` works correctly with system git.
 
 mod support;
 

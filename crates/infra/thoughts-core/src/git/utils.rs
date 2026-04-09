@@ -117,7 +117,6 @@ pub fn is_git_repo(path: &Path) -> bool {
 }
 
 /// Initialize a new git repository
-#[allow(dead_code)]
 // TODO(2): Plan initialization architecture for consumer vs source repos
 pub fn init_repo(path: &Path) -> Result<Repository> {
     Ok(Repository::init(path)?)
@@ -125,8 +124,12 @@ pub fn init_repo(path: &Path) -> Result<Repository> {
 
 /// Get the remote URL for a git repository
 pub fn get_remote_url(repo_path: &Path) -> Result<String> {
-    let repo = Repository::open(repo_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+    let repo = Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open git repository at {}: {e}",
+            repo_path.display()
+        )
+    })?;
 
     let remote = repo
         .find_remote("origin")
@@ -135,7 +138,7 @@ pub fn get_remote_url(repo_path: &Path) -> Result<String> {
     remote
         .url()
         .ok_or_else(|| anyhow::anyhow!("Remote 'origin' has no URL"))
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 /// Get the canonical identity of a repository's origin remote, if available.
@@ -171,12 +174,16 @@ pub fn try_get_origin_identity(repo_path: &Path) -> Result<Option<RepoIdentity>>
 
 /// Get the current branch name, or "detached" if in detached HEAD state
 pub fn get_current_branch(repo_path: &Path) -> Result<String> {
-    let repo = Repository::open(repo_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+    let repo = Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open git repository at {}: {e}",
+            repo_path.display()
+        )
+    })?;
 
     let head = repo
         .head()
-        .map_err(|e| anyhow::anyhow!("Failed to get HEAD reference: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to get HEAD reference: {e}"))?;
 
     if head.is_branch() {
         Ok(head.shorthand().unwrap_or("unknown").to_string())
@@ -187,8 +194,12 @@ pub fn get_current_branch(repo_path: &Path) -> Result<String> {
 
 /// Returns Ok(()) if the repository is in a state suitable for sync.
 pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
-    let repo = Repository::open(repo_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+    let repo = Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open git repository at {}: {e}",
+            repo_path.display()
+        )
+    })?;
     let git_dir = repo.path();
 
     if git_dir.join("MERGE_HEAD").exists() {

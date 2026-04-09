@@ -12,13 +12,22 @@ use tracing::info;
 use tracing::warn;
 
 use super::manager::MountManager;
-use super::types::*;
+use super::types::MountInfo;
+use super::types::MountMetadata;
+use super::types::MountOptions;
+use super::types::MountStatus;
 use super::utils;
 use crate::error::Result;
 use crate::error::ThoughtsError;
-use crate::platform::common::*;
+use crate::platform::common::MOUNT_RETRY_DELAY;
+use crate::platform::common::MOUNT_TIMEOUT;
+use crate::platform::common::MOUNT_VERIFY_TIMEOUT;
+use crate::platform::common::UNMOUNT_TIMEOUT;
 use crate::platform::detector::LinuxInfo;
-use crate::platform::linux::*;
+use crate::platform::linux::DEFAULT_MOUNT_OPTIONS;
+use crate::platform::linux::MERGERFS_FSTYPE;
+use crate::platform::linux::PROC_MOUNTINFO;
+use crate::platform::linux::PROC_MOUNTS;
 
 pub struct MergerfsManager {
     /// Path to mergerfs binary (absolute if known)
@@ -40,7 +49,6 @@ impl MergerfsManager {
 
         let fusermount_path = platform_info
             .fusermount_path
-            .clone()
             .or_else(|| which::which("fusermount").ok())
             .or_else(|| which::which("fusermount3").ok());
 
@@ -63,12 +71,7 @@ impl MergerfsManager {
     }
 
     /// Build mergerfs command arguments
-    fn build_mount_args(
-        &self,
-        sources: &[PathBuf],
-        target: &Path,
-        options: &MountOptions,
-    ) -> Vec<String> {
+    fn build_mount_args(sources: &[PathBuf], target: &Path, options: &MountOptions) -> Vec<String> {
         let mut args = Vec::new();
 
         // Add -o flag
@@ -78,7 +81,11 @@ impl MergerfsManager {
         let mut opts = Vec::new();
 
         // Add default options
-        opts.extend(DEFAULT_MOUNT_OPTIONS.iter().map(|s| s.to_string()));
+        opts.extend(
+            DEFAULT_MOUNT_OPTIONS
+                .iter()
+                .map(std::string::ToString::to_string),
+        );
 
         // Add read-only if requested
         if options.read_only {
@@ -130,7 +137,10 @@ impl MergerfsManager {
 
             let sources_str = fields[0];
             let target = PathBuf::from(fields[1]);
-            let options = fields[3].split(',').map(|s| s.to_string()).collect();
+            let options = fields[3]
+                .split(',')
+                .map(std::string::ToString::to_string)
+                .collect();
 
             // Parse source directories (colon-separated)
             let sources: Vec<PathBuf> = sources_str.split(':').map(PathBuf::from).collect();
@@ -160,16 +170,13 @@ impl MergerfsManager {
 
         let target_canon = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
 
-        let content = match fs::read_to_string(PROC_MOUNTINFO).await {
-            Ok(c) => c,
-            Err(_) => {
-                // Fall back to basic info from /proc/mounts
-                let mounts = self.parse_proc_mounts().await?;
-                return Ok(mounts.into_iter().find(|m| {
-                    let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
-                    mt == target_canon
-                }));
-            }
+        let Ok(content) = fs::read_to_string(PROC_MOUNTINFO).await else {
+            // Fall back to basic info from /proc/mounts
+            let mounts = self.parse_proc_mounts().await?;
+            return Ok(mounts.into_iter().find(|m| {
+                let mt = std::fs::canonicalize(&m.target).unwrap_or_else(|_| m.target.clone());
+                mt == target_canon
+            }));
         };
 
         for line in content.lines() {
@@ -211,7 +218,7 @@ impl MergerfsManager {
             let options: Vec<String> = fields[5..separator_pos]
                 .iter()
                 .flat_map(|o| o.split(','))
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect();
 
             return Ok(Some(MountInfo {
@@ -320,7 +327,7 @@ impl MountManager for MergerfsManager {
             return Ok(());
         }
 
-        let args = self.build_mount_args(sources, target, options);
+        let args = Self::build_mount_args(sources, target, options);
         let _timeout = options.timeout.unwrap_or(MOUNT_TIMEOUT);
 
         info!("Mounting {} sources to {}", sources.len(), target.display());
@@ -358,43 +365,41 @@ impl MountManager for MergerfsManager {
 
                 if verified {
                     return Ok(());
-                } else {
-                    warn!(
-                        "Mount command succeeded but target '{}' not visible after {}s polling",
-                        target.display(),
-                        MOUNT_VERIFY_TIMEOUT.as_secs()
-                    );
-                    // Diagnostics: dump relevant /proc/mounts lines for parity with macOS
-                    if let Ok(content) = tokio::fs::read_to_string(PROC_MOUNTS).await {
-                        let target_str = target.display().to_string();
-                        let relevant: Vec<&str> = content
-                            .lines()
-                            .filter(|l| l.contains(&target_str) || l.contains(MERGERFS_FSTYPE))
-                            .collect();
-                        if !relevant.is_empty() {
-                            warn!(
-                                "Mount verification diagnostics for {}:\n    {}",
-                                target.display(),
-                                relevant.join("\n    ")
-                            );
-                        }
+                }
+                warn!(
+                    "Mount command succeeded but target '{}' not visible after {}s polling",
+                    target.display(),
+                    MOUNT_VERIFY_TIMEOUT.as_secs()
+                );
+                // Diagnostics: dump relevant /proc/mounts lines for parity with macOS
+                if let Ok(content) = tokio::fs::read_to_string(PROC_MOUNTS).await {
+                    let target_str = target.display().to_string();
+                    let relevant: Vec<&str> = content
+                        .lines()
+                        .filter(|l| l.contains(&target_str) || l.contains(MERGERFS_FSTYPE))
+                        .collect();
+                    if !relevant.is_empty() {
+                        warn!(
+                            "Mount verification diagnostics for {}:\n    {}",
+                            target.display(),
+                            relevant.join("\n    ")
+                        );
                     }
-
-                    // Return immediately with distinct error (do not fall through)
-                    return Err(ThoughtsError::MountVerificationTimeout {
-                        target: target.to_path_buf(),
-                        timeout_secs: MOUNT_VERIFY_TIMEOUT.as_secs(),
-                    });
                 }
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                error!("Mount failed: {}", stderr);
 
-                if attempt == options.retries {
-                    return Err(ThoughtsError::MountOperationFailed {
-                        message: format!("mergerfs mount failed: {stderr}"),
-                    });
-                }
+                // Return immediately with distinct error (do not fall through)
+                return Err(ThoughtsError::MountVerificationTimeout {
+                    target: target.to_path_buf(),
+                    timeout_secs: MOUNT_VERIFY_TIMEOUT.as_secs(),
+                });
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            error!("Mount failed: {}", stderr);
+
+            if attempt == options.retries {
+                return Err(ThoughtsError::MountOperationFailed {
+                    message: format!("mergerfs mount failed: {stderr}"),
+                });
             }
         }
 
@@ -508,7 +513,7 @@ impl MountManager for MergerfsManager {
         target: &Path,
         options: &MountOptions,
     ) -> String {
-        let args = self.build_mount_args(sources, target, options);
+        let args = Self::build_mount_args(sources, target, options);
         match &self.mergerfs_path {
             Some(p) => format!("{} {}", p.display(), args.join(" ")),
             None => "<mergerfs not available>".to_string(),
@@ -535,7 +540,6 @@ mod tests {
 
     #[test]
     fn test_build_mount_args() {
-        let manager = MergerfsManager::new(test_linux_info_stub());
         let sources = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
         let target = Path::new("/mnt/merged");
         let options = MountOptions {
@@ -543,7 +547,7 @@ mod tests {
             ..Default::default()
         };
 
-        let args = manager.build_mount_args(&sources, target, &options);
+        let args = MergerfsManager::build_mount_args(&sources, target, &options);
 
         assert_eq!(args[0], "-o");
         assert!(args[1].contains("category.create=mfs"));

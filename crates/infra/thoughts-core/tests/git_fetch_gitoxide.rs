@@ -1,6 +1,6 @@
-//! Integration tests for shell git-based fetch operations used by pull_ff_only.
-//! These tests verify that pull_ff_only fetches via system git and fast-forwards with git2.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_fetch_gitoxide
+//! Integration tests for shell git-based fetch operations used by `pull_ff_only`.
+//! These tests verify that `pull_ff_only` fetches via system git and fast-forwards with git2.
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test --test `git_fetch_gitoxide`
 
 mod support;
 

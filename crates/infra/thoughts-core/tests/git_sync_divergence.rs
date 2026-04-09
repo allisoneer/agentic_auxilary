@@ -1,5 +1,6 @@
+#![expect(clippy::expect_used, reason = "Tests should panic on failure")]
 //! Integration tests for git sync JSONL smart-merge during rebase conflicts.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test -p thoughts-tool --test git_sync_divergence
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1` cargo test -p thoughts-tool --test `git_sync_divergence`
 //!
 //! Note: Divergence-state tests are unit tests in src/git/sync.rs because they need
 //! access to the crate-private `check_divergence()` method. This integration test
@@ -22,7 +23,7 @@ fn ensure_remote_head_points_to_main(remote: &TempDir) {
 }
 
 /// Test: JSONL smart-merge during rebase conflict.
-/// Creates divergent commits on a tool_logs JSONL file, runs sync(), and asserts
+/// Creates divergent commits on a `tool_logs` JSONL file, runs `sync()`, and asserts
 /// the merged file contains entries from both sides with correct collision semantics.
 #[tokio::test]
 async fn sync_jsonl_smart_merge_on_conflict() {

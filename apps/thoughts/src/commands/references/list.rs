@@ -4,6 +4,7 @@ use crate::git::utils::get_control_repo_root;
 use anyhow::Result;
 use colored::Colorize;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute() -> Result<()> {
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
@@ -31,7 +32,7 @@ pub async fn execute() -> Result<()> {
             "✗ not cloned".red()
         };
 
-        println!("  - {}/{} ({})", org, repo, status);
+        println!("  - {org}/{repo} ({status})");
         println!("    {}", rm.remote.dimmed());
         if let Some(ref_name) = &rm.ref_name {
             println!("    ref: {}", ref_name.dimmed());

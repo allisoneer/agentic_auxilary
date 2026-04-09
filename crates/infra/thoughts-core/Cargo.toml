@@ -79,3 +79,6 @@ family = "infra"
 mcp = false
 logging = true
 napi = false
+
+[lints]
+workspace = true

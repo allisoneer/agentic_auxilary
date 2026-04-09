@@ -113,7 +113,7 @@ fn idempotent_multiple_runs_do_not_duplicate() {
     let mut seen = std::collections::HashSet::new();
     for item in allow {
         if let Some(s) = item.as_str() {
-            assert!(seen.insert(s.to_string()), "Found duplicate: {}", s);
+            assert!(seen.insert(s.to_string()), "Found duplicate: {s}");
         }
     }
 }
