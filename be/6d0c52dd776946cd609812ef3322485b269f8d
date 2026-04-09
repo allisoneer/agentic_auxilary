@@ -1,0 +1,127 @@
+crates/infra/thoughts-core/src/mount/mergerfs.rs
+  14648411c8c816b7 74,173,330,395-397,399-402,516,550
+crates/infra/thoughts-core/src/utils/mod.rs
+  14648411c8c816b7 13
+crates/infra/thoughts-core/tests/git_clone_gitoxide.rs
+  14648411c8c816b7 1
+crates/infra/thoughts-core/src/git/progress.rs
+  14648411c8c816b7 1,47-50,77,79,83,104,159-162
+crates/tools/thoughts-mcp-tools/src/tools.rs
+  14648411c8c816b7 90,157
+crates/infra/thoughts-core/tests/git_remote_ref_discovery.rs
+  14648411c8c816b7 1
+apps/thoughts/src/commands/work/complete.rs
+  14648411c8c816b7 15,83-86
+crates/infra/thoughts-core/src/platform/detector.rs
+  14648411c8c816b7 71,76,91,99,102,122-123,137,141,228,257-258,271,275
+crates/infra/thoughts-core/src/fmt.rs
+  14648411c8c816b7 6-7,27,54,73,76,102,104,107,110,126-127,130,132,134-135,138,140,144-145,148,152
+apps/thoughts/src/commands/references/list.rs
+  14648411c8c816b7 7
+crates/infra/thoughts-core/build.rs
+  14648411c8c816b7 4,13,20
+apps/thoughts/src/commands/config/create.rs
+  14648411c8c816b7 9
+crates/infra/thoughts-core/src/mount/auto_mount.rs
+  14648411c8c816b7 136-139,151,159,195,208
+crates/infra/thoughts-core/Cargo.toml
+  14648411c8c816b7 82-84
+apps/thoughts/src/commands/references/add.rs
+  14648411c8c816b7 18,91
+apps/thoughts/src/commands/mount/clone.rs
+  14648411c8c816b7 9,61
+crates/infra/thoughts-core/src/config/validation.rs
+  14648411c8c816b7 240-243
+crates/infra/thoughts-core/tests/mount_integration.rs
+  14648411c8c816b7 46,49
+apps/thoughts/src/commands/mount/add.rs
+  14648411c8c816b7 80,97
+apps/thoughts/tests/worktree_test.rs
+  14648411c8c816b7 16,68,108
+apps/thoughts/src/commands/references/doctor.rs
+  14648411c8c816b7 171,351-352
+apps/thoughts/src/commands/init.rs
+  14648411c8c816b7 511,521
+apps/thoughts/tests/support.rs
+  14648411c8c816b7 1-5
+crates/infra/thoughts-core/src/documents/mod.rs
+  14648411c8c816b7 218,237,261,268
+apps/thoughts/src/commands/references/sync.rs
+  14648411c8c816b7 13,125
+crates/tools/gpt5-reasoner/src/engine/orchestration.rs
+  14648411c8c816b7 413
+apps/thoughts/src/commands/mount/debug/command.rs
+  14648411c8c816b7 12
+crates/infra/thoughts-core/src/config/repo_mapping_manager.rs
+  14648411c8c816b7 266,279,320,336-337,451-455,550,712,720,757,784,817
+crates/infra/thoughts-core/src/git/sync.rs
+  14648411c8c816b7 46-49,169-172,184,190,220-221,241,256,341-347,377,680,724-727
+crates/infra/thoughts-core/src/config/repo_manager.rs
+  14648411c8c816b7 72-75,132,178,186,255-258,289,327
+crates/infra/thoughts-core/src/git/utils.rs
+  14648411c8c816b7 127-132,177-182,197-202
+crates/infra/thoughts-core/src/utils/git.rs
+  14648411c8c816b7 1,4-5,36-37,50,52
+crates/infra/thoughts-core/src/git/clone.rs
+  14648411c8c816b7 87
+crates/infra/thoughts-core/src/utils/claude_settings.rs
+  14648411c8c816b7 67-69,79-83,104-106,116-118,150-152,159,187,206,217,262-268,293
+apps/thoughts/src/commands/work/list.rs
+  14648411c8c816b7 11,119-121
+crates/infra/thoughts-core/src/mount/utils.rs
+  14648411c8c816b7 51-54,237,239
+crates/infra/thoughts-core/tests/git_sync_divergence.rs
+  14648411c8c816b7 1
+crates/infra/thoughts-core/tests/support.rs
+  14648411c8c816b7 1-5
+apps/thoughts/src/commands/mount/list.rs
+  14648411c8c816b7 10
+apps/thoughts/src/main.rs
+  14648411c8c816b7 344
+apps/thoughts/src/commands/references/remove.rs
+  14648411c8c816b7 80
+crates/infra/thoughts-core/src/mcp/mod.rs
+  14648411c8c816b7 155,196,402,618,620,646,666
+apps/thoughts/src/commands/config/validate.rs
+  14648411c8c816b7 7
+crates/infra/thoughts-core/src/workspace/mod.rs
+  14648411c8c816b7 83
+apps/thoughts/src/commands/sync.rs
+  14648411c8c816b7 16-19,119-122
+crates/infra/thoughts-core/src/git/ref_key.rs
+  14648411c8c816b7 60,62-66,116
+apps/thoughts/src/commands/status.rs
+  14648411c8c816b7 14,71,77,225-228
+crates/infra/thoughts-core/src/git/pull.rs
+  14648411c8c816b7 40-42
+apps/thoughts/Cargo.toml
+  14648411c8c816b7 45-47
+crates/infra/thoughts-core/src/config/types.rs
+  14648411c8c816b7 137,151,164,187,216
+crates/infra/thoughts-core/src/mount/resolver.rs
+  14648411c8c816b7 98-99
+apps/thoughts/src/commands/work/init.rs
+  14648411c8c816b7 5
+apps/thoughts/src/commands/config/show.rs
+  14648411c8c816b7 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "be6d0c52dd776946cd609812ef3322485b269f8d",
+  "prompts": {
+    "14648411c8c816b7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_291fbaaa5ffePZmV4s07aF7m3Z",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 347,
+      "total_deletions": 264,
+      "accepted_lines": 296,
+      "overriden_lines": 0
+    }
+  }
+}
