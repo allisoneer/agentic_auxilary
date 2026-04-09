@@ -1,0 +1,75 @@
+crates/infra/thoughts-core/tests/git_edge_cases.rs
+  97fab895d84bf0a9 3,13,45,78,98,133
+crates/infra/thoughts-core/tests/git_clone_https.rs
+  97fab895d84bf0a9 2,8-11,14,17-18,32,35-36
+crates/infra/thoughts-core/tests/git_fetch_gitoxide.rs
+  97fab895d84bf0a9 3,14,107,166
+crates/infra/thoughts-core/tests/git_sync_divergence.rs
+  97fab895d84bf0a9 3,28,159,236
+crates/infra/thoughts-core/tests/git_clone_gitoxide.rs
+  97fab895d84bf0a9 4,77,96,112,131,148
+crates/infra/thoughts-core/tests/git_sync_worktree.rs
+  97fab895d84bf0a9 3,12,69,124
+crates/infra/thoughts-core/tests/git_shell_fetch.rs
+  97fab895d84bf0a9 3,12
+crates/infra/thoughts-core/src/workspace/mod.rs
+  97fab895d84bf0a9 14,18,206-213
+apps/thoughts/src/commands/references/sync.rs
+  97fab895d84bf0a9 7,9,64-66,99,101,103-107
+apps/thoughts/tests/sync_exit_status.rs
+  97fab895d84bf0a9 8
+justfile
+  97fab895d84bf0a9 64-67
+crates/infra/thoughts-core/src/git/mod.rs
+  97fab895d84bf0a9 14-15
+crates/infra/thoughts-core/CLAUDE.md
+  97fab895d84bf0a9 18-19,28-31
+apps/thoughts/tests/init_idempotency.rs
+  97fab895d84bf0a9 7,30,61
+crates/infra/thoughts-core/tests/mount_integration.rs
+  97fab895d84bf0a9 8,68
+.github/workflows/ci.yml
+  97fab895d84bf0a9 88
+crates/infra/thoughts-core/src/git/utils.rs
+  97fab895d84bf0a9 175-184,186-187,195-211,213-221,253-260,329-353
+crates/infra/thoughts-core/tests/git_push_shell.rs
+  97fab895d84bf0a9 3,12,50,114
+crates/infra/thoughts-core/tests/git_remote_ref_discovery.rs
+  97fab895d84bf0a9 3,81
+crates/infra/thoughts-core/src/git/sync.rs
+  97fab895d84bf0a9 178,188-189,499-500,506-510,517-527,529-532,565-566,614-621,642,644,646,648-656
+  2c04f42bcf77bccb 477-479,511-516,528,536,538-556,558-559,622-641,643,645,647
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "a36420a73d557b14c8e7e355db7aa1883c27b345",
+  "prompts": {
+    "2c04f42bcf77bccb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_28cf570e9ffen5mhQRXuPEepvW",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 64,
+      "total_deletions": 21,
+      "accepted_lines": 55,
+      "overriden_lines": 0
+    },
+    "97fab895d84bf0a9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_28d129850ffeYuf7Wc3Lzvtyyi",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 247,
+      "total_deletions": 238,
+      "accepted_lines": 210,
+      "overriden_lines": 0
+    }
+  }
+}
