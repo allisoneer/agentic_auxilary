@@ -1,0 +1,64 @@
+apps/opencode-orchestrator-mcp/src/tools.rs
+  30c52262f909424a 1003-1020
+apps/opencode-orchestrator-mcp/tests/list_tools_wiremock.rs
+  30c52262f909424a 187-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "99476e7ff2991a48609252118942b01aec9eaf03",
+  "prompts": {
+    "30c52262f909424a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287dc993affeX1cKB3wlUfDw05",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 28,
+      "total_deletions": 17,
+      "accepted_lines": 26,
+      "overriden_lines": 0
+    },
+    "3ce0d55356d11f49": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287dc5029ffeUTCWJ4DMEktgSf",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 18,
+      "total_deletions": 9,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "630337bd04408b1e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_292380198ffe56g4Vpq0WKkihc",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "884879dbcabe46cd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287dcfb11ffeWN0dP2EI0KDPap",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
