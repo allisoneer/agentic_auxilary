@@ -1,0 +1,35 @@
+.opencode/orchestrator_sysprompt.md
+  630337bd04408b1e 24,222,229-233
+crates/services/opencode-rs/src/http/sessions.rs
+  630337bd04408b1e 116,120-145,154,158-161,170,172,465,471-472,485,487-488
+.opencode/orchestrator_sysprompt_gpt54.md
+  630337bd04408b1e 4,20-26,35,41-42,45-46,235,248
+apps/opencode-orchestrator-mcp/src/tools.rs
+  630337bd04408b1e 1093
+apps/opencode-orchestrator-mcp/tests/list_tools_wiremock.rs
+  630337bd04408b1e 443-519
+crates/services/opencode-rs/src/types/session.rs
+  630337bd04408b1e 178,267,323,325-326,332,334,336-337,339,345,347
+workflow.md
+  630337bd04408b1e 17,20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "fd5c6f2a549adffd688a19ab48e163d8c2e69be2",
+  "prompts": {
+    "630337bd04408b1e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_292380198ffe56g4Vpq0WKkihc",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 167,
+      "total_deletions": 142,
+      "accepted_lines": 164,
+      "overriden_lines": 0
+    }
+  }
+}
