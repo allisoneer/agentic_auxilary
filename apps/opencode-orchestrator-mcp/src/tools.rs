@@ -1000,21 +1000,24 @@ impl Tool for ListSessionsTool {
                     .into_iter()
                     .take(limit)
                     .map(|s| {
-                        let status = status_map.as_ref().and_then(|status_map| {
-                            status_map.get(&s.id).map(|info| match info {
-                                SessionStatusInfo::Idle => SessionStatusSummary::Idle,
-                                SessionStatusInfo::Busy => SessionStatusSummary::Busy,
-                                SessionStatusInfo::Retry {
-                                    attempt,
-                                    message,
-                                    next,
-                                } => SessionStatusSummary::Retry {
-                                    attempt: *attempt,
-                                    message: message.clone(),
-                                    next: *next,
-                                },
-                            })
-                        });
+                        let status =
+                            status_map
+                                .as_ref()
+                                .map(|status_map| match status_map.get(&s.id) {
+                                    Some(SessionStatusInfo::Busy) => SessionStatusSummary::Busy,
+                                    Some(SessionStatusInfo::Retry {
+                                        attempt,
+                                        message,
+                                        next,
+                                    }) => SessionStatusSummary::Retry {
+                                        attempt: *attempt,
+                                        message: message.clone(),
+                                        next: *next,
+                                    },
+                                    Some(SessionStatusInfo::Idle) | None => {
+                                        SessionStatusSummary::Idle
+                                    }
+                                });
 
                         let change_stats = s.summary.as_ref().map(|summary| ChangeStats {
                             additions: summary.additions,

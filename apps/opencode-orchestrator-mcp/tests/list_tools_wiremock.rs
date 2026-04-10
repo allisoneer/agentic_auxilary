@@ -184,6 +184,14 @@ async fn list_sessions_marks_launched_by_you() {
 
     assert!(result.sessions[0].launched_by_you);
     assert!(!result.sessions[1].launched_by_you);
+    assert!(matches!(
+        result.sessions[0].status,
+        Some(SessionStatusSummary::Idle)
+    ));
+    assert!(matches!(
+        result.sessions[1].status,
+        Some(SessionStatusSummary::Idle)
+    ));
 }
 
 #[tokio::test]
