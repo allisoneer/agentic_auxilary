@@ -1,0 +1,23 @@
+.github/workflows/ci.yml
+  4be081f1c85a9e69 87-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "e24383fa6c6fbc20e1b80a84d72badd93e9201c8",
+  "prompts": {
+    "4be081f1c85a9e69": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287e7691fffexU29S7t08q4m5k",
+        "model": "anthropic/claude-opus-4-5"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 2,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}
