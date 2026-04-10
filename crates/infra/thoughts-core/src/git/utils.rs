@@ -251,12 +251,9 @@ pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
 /// Returns the current branch name or an error when sync is unsafe.
 pub fn get_sync_branch(repo_path: &Path) -> Result<String> {
     match get_head_state(repo_path)? {
-        HeadState::Attached(name) => Ok(name),
+        HeadState::Attached(name) | HeadState::Unborn(name) => Ok(name),
         HeadState::Detached => {
             bail!("Repository is in detached HEAD state. Check out a branch before syncing.")
-        }
-        HeadState::Unborn(name) => {
-            bail!("Branch '{name}' has no commits yet. Make an initial commit before syncing.")
         }
     }
 }
@@ -345,10 +342,11 @@ mod tests {
         let err = get_current_branch(repo_path).unwrap_err();
         assert!(err.to_string().contains("no commits yet"));
 
-        // get_sync_branch should also return error with guidance
-        let err = get_sync_branch(repo_path).unwrap_err();
-        assert!(err.to_string().contains("no commits yet"));
-        assert!(err.to_string().contains("Make an initial commit"));
+        let HeadState::Unborn(unborn_name) = state else {
+            unreachable!()
+        };
+
+        assert_eq!(get_sync_branch(repo_path).unwrap(), unborn_name);
     }
 
     fn initial_commit(repo: &Repository) {

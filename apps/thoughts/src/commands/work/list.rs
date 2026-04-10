@@ -98,6 +98,7 @@ pub async fn execute(recent: Option<usize>) -> Result<()> {
             .filter_map(std::result::Result::ok)
             .filter(|e| e.path().is_dir())
             .collect();
+        let total_completed_dirs = entries.len();
 
         // Sort by modification time (newest first)
         entries.sort_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()));
@@ -117,7 +118,7 @@ pub async fn execute(recent: Option<usize>) -> Result<()> {
             }
 
             if let Some(n) = recent
-                && n < fs::read_dir(&completed_dir)?.count()
+                && n < total_completed_dirs
             {
                 println!("  {} (use --recent <n> to show more)", "...".dimmed());
             }

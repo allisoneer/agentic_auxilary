@@ -1,6 +1,6 @@
 #![expect(clippy::expect_used, reason = "Tests should panic on failure")]
 //! Integration tests for git sync JSONL smart-merge during rebase conflicts.
-//! Run with: `just test-integration`
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1 just test-integration`
 //!
 //! Note: Divergence-state tests are unit tests in src/git/sync.rs because they need
 //! access to the crate-private `check_divergence()` method. This integration test
@@ -15,6 +15,10 @@ use tempfile::TempDir;
 
 use thoughts_tool::git::sync::GitSync;
 
+fn should_run_integration_tests() -> bool {
+    std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() == Some("1")
+}
+
 fn ensure_remote_head_points_to_main(remote: &TempDir) {
     let bare_repo = git2::Repository::open(remote.path()).expect("open bare remote");
     bare_repo
@@ -28,6 +32,11 @@ fn ensure_remote_head_points_to_main(remote: &TempDir) {
 #[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_jsonl_smart_merge_on_conflict() {
+    if !should_run_integration_tests() {
+        eprintln!("skipping integration test; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
     // 1. Create bare remote
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare"]);
@@ -159,6 +168,11 @@ async fn sync_jsonl_smart_merge_on_conflict() {
 #[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 async fn sync_remote_behind_with_local_uncommitted_creates_one_final_commit() {
+    if !should_run_integration_tests() {
+        eprintln!("skipping integration test; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare"]);
 
@@ -235,7 +249,103 @@ async fn sync_remote_behind_with_local_uncommitted_creates_one_final_commit() {
 
 #[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
+async fn sync_remote_tool_log_only_behind_fast_forwards_without_auto_sync_commit() {
+    if !should_run_integration_tests() {
+        eprintln!("skipping integration test; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
+    let remote = TempDir::new().unwrap();
+    support::git_ok(remote.path(), &["init", "--bare"]);
+
+    let local = TempDir::new().unwrap();
+    support::git_ok(local.path(), &["init"]);
+    let logs_dir = local.path().join("branch/logs");
+    fs::create_dir_all(&logs_dir).unwrap();
+    let jsonl_path = logs_dir.join("tool_logs_base.jsonl");
+    fs::write(
+        &jsonl_path,
+        r#"{"call_id":"base","started_at":"2025-01-01T10:00:00Z","tool":"init"}"#,
+    )
+    .unwrap();
+    support::git_ok(local.path(), &["add", "."]);
+    support::git_ok(
+        local.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "initial",
+        ],
+    );
+    support::git_ok(local.path(), &["branch", "-M", "main"]);
+    support::git_ok(
+        local.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    support::git_ok(local.path(), &["push", "-u", "origin", "main"]);
+    ensure_remote_head_points_to_main(&remote);
+
+    let other = TempDir::new().unwrap();
+    support::git_ok(
+        other.path(),
+        &["clone", remote.path().to_str().unwrap(), "."],
+    );
+    fs::write(
+        other.path().join("branch/logs/tool_logs_base.jsonl"),
+        "{\"call_id\":\"base\",\"started_at\":\"2025-01-01T10:00:00Z\",\"tool\":\"init\"}\n{\"call_id\":\"remote_only\",\"started_at\":\"2025-01-01T11:00:00Z\",\"tool\":\"remote\"}",
+    )
+    .unwrap();
+    support::git_ok(other.path(), &["add", "."]);
+    support::git_ok(
+        other.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "remote tool log",
+        ],
+    );
+    let remote_head = support::git_stdout(other.path(), &["rev-parse", "HEAD"]);
+    support::git_ok(other.path(), &["push"]);
+
+    let sync = GitSync::new(local.path(), None).unwrap();
+    sync.sync("test-mount").await.unwrap();
+
+    let local_head = support::git_stdout(local.path(), &["rev-parse", "HEAD"]);
+    assert_eq!(local_head, remote_head);
+
+    let auto_sync_count: i32 = support::git_stdout(
+        local.path(),
+        &[
+            "rev-list",
+            "--count",
+            "--grep=^Auto-sync thoughts for test-mount$",
+            "HEAD",
+        ],
+    )
+    .parse()
+    .unwrap();
+    assert_eq!(auto_sync_count, 0);
+
+    let merged = fs::read_to_string(&jsonl_path).unwrap();
+    assert!(merged.contains("remote_only"));
+}
+
+#[ignore = "integration test - run with: just test-integration"]
+#[tokio::test]
 async fn sync_retries_once_after_race_like_push_rejection() {
+    if !should_run_integration_tests() {
+        eprintln!("skipping integration test; set THOUGHTS_INTEGRATION_TESTS=1");
+        return;
+    }
+
     let remote = TempDir::new().unwrap();
     support::git_ok(remote.path(), &["init", "--bare"]);
 

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
+use anyhow::bail;
 use atomicwrites::AtomicFile;
 use atomicwrites::OverwriteBehavior;
 use colored::Colorize;
@@ -68,13 +69,7 @@ pub fn inject_additional_directories(repo_root: &Path) -> Result<InjectionSummar
             .get_mut("permissions")
             .ok_or_else(|| anyhow!("permissions key missing after scaffold — this is a bug"))?;
 
-        // Ensure additionalDirectories array exists
-        if !permissions
-            .get("additionalDirectories")
-            .is_some_and(serde_json::Value::is_array)
-        {
-            permissions["additionalDirectories"] = json!([]);
-        }
+        ensure_array_field(permissions, "additionalDirectories", &settings_path)?;
 
         let add_dirs = permissions["additionalDirectories"]
             .as_array_mut()
@@ -105,13 +100,7 @@ pub fn inject_additional_directories(repo_root: &Path) -> Result<InjectionSummar
             .get_mut("permissions")
             .ok_or_else(|| anyhow!("permissions key missing after scaffold — this is a bug"))?;
 
-        // Ensure allow array exists
-        if !permissions
-            .get("allow")
-            .is_some_and(serde_json::Value::is_array)
-        {
-            permissions["allow"] = json!([]);
-        }
+        ensure_array_field(permissions, "allow", &settings_path)?;
 
         let allow = permissions["allow"]
             .as_array_mut()
@@ -217,7 +206,13 @@ fn read_or_init_settings(settings_path: &Path) -> Result<ReadOutcome> {
             .unwrap_or_default()
             .as_secs();
         let malformed = settings_path.with_extension(format!("json.malformed.{ts}.bak"));
-        let _ = fs::rename(settings_path, &malformed);
+        fs::rename(settings_path, &malformed).with_context(|| {
+            format!(
+                "Failed to quarantine malformed Claude settings {} -> {}",
+                settings_path.display(),
+                malformed.display()
+            )
+        })?;
         eprintln!(
             "{}: Existing Claude settings were malformed. Quarantined to {}",
             "Warning".yellow(),
@@ -254,6 +249,20 @@ fn ensure_permissions_scaffold(root: &mut Value) {
     }
     if root["permissions"].get("ask").is_none() {
         root["permissions"]["ask"] = json!([]);
+    }
+}
+
+fn ensure_array_field(permissions: &mut Value, key: &str, settings_path: &Path) -> Result<()> {
+    match permissions.get(key) {
+        None => {
+            permissions[key] = json!([]);
+            Ok(())
+        }
+        Some(value) if value.is_array() => Ok(()),
+        Some(_) => bail!(
+            "permissions.{key} must be an array in {}",
+            settings_path.display()
+        ),
     }
 }
 
@@ -436,6 +445,50 @@ mod tests {
         let _ = inject_additional_directories(repo).unwrap();
         let bak = settings.with_extension("json.bak");
         assert!(bak.exists());
+    }
+
+    #[test]
+    fn rejects_non_array_additional_directories() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        fs::create_dir_all(repo.join(".thoughts-data")).unwrap();
+
+        let settings = repo.join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(
+            &settings,
+            r#"{"permissions":{"additionalDirectories":"bad","allow":[],"deny":[],"ask":[]}}"#,
+        )
+        .unwrap();
+
+        let err = inject_additional_directories(repo).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("permissions.additionalDirectories must be an array")
+        );
+    }
+
+    #[test]
+    fn rejects_non_array_allow() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        fs::create_dir_all(repo.join(".thoughts-data")).unwrap();
+
+        let settings = repo.join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(
+            &settings,
+            r#"{"permissions":{"additionalDirectories":[],"allow":"bad","deny":[],"ask":[]}}"#,
+        )
+        .unwrap();
+
+        let err = inject_additional_directories(repo).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("permissions.allow must be an array")
+        );
     }
 
     #[test]

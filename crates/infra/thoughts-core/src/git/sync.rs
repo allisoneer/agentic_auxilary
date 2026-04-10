@@ -143,6 +143,19 @@ enum SyncRelation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyncAttemptOutcome {
+    NoHeadChange,
+    FastForwarded,
+    Committed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PushRaceResetMode {
+    Mixed,
+    Hard,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommitParentPlan {
     None,
     HeadOnly,
@@ -190,7 +203,7 @@ impl GitSync {
 
         for attempt in 0..MAX_PUSH_RETRIES {
             let attempt_head = self.head_commit_oid()?;
-            self.sync_once(mount_name, &branch_name)?;
+            let sync_outcome = self.sync_once(mount_name, &branch_name)?;
 
             let push_result =
                 push_current_branch_with_result(&self.repo_path, "origin", &branch_name)?;
@@ -205,7 +218,13 @@ impl GitSync {
                     "    {} Push race detected; retrying after re-fetch",
                     "Info".dimmed()
                 );
-                self.reset_after_push_race(attempt_head)?;
+                let reset_mode = match sync_outcome {
+                    SyncAttemptOutcome::FastForwarded => PushRaceResetMode::Hard,
+                    SyncAttemptOutcome::NoHeadChange | SyncAttemptOutcome::Committed => {
+                        PushRaceResetMode::Mixed
+                    }
+                };
+                self.reset_after_push_race(attempt_head, reset_mode)?;
                 sleep(Duration::from_millis(RETRY_BASE_MS * 2u64.pow(attempt))).await;
                 continue;
             }
@@ -241,7 +260,7 @@ impl GitSync {
         Ok(())
     }
 
-    fn sync_once(&self, mount_name: &str, branch_name: &str) -> Result<()> {
+    fn sync_once(&self, mount_name: &str, branch_name: &str) -> Result<SyncAttemptOutcome> {
         shell_fetch::fetch(&self.repo_path, "origin").with_context(|| {
             format!(
                 "Fetch from origin failed for repo '{}'",
@@ -251,15 +270,17 @@ impl GitSync {
 
         let head_commit = self.head_commit()?;
         let upstream_commit = self.find_upstream_commit(branch_name)?;
+        let relation =
+            self.sync_relation(head_commit.as_ref(), upstream_commit.as_ref(), branch_name)?;
 
-        if let Some(upstream_commit) = upstream_commit.as_ref() {
+        if let Some(upstream_commit) = upstream_commit.as_ref()
+            && self.should_premerge_before_staging(relation)?
+        {
             self.premerge_jsonl_files(&upstream_commit.tree()?)?;
         }
 
         let changes_staged = self.stage_changes()?;
         let local_tree = self.local_tree_from_index()?;
-        let relation =
-            self.sync_relation(head_commit.as_ref(), upstream_commit.as_ref(), branch_name)?;
 
         match relation {
             SyncRelation::NoUpstream => {
@@ -273,8 +294,9 @@ impl GitSync {
                     )?;
                     self.refresh_worktree_after_commit(commit_oid)?;
                     println!("    {} Committed changes", "✓".green());
+                    return Ok(SyncAttemptOutcome::Committed);
                 }
-                return Ok(());
+                return Ok(SyncAttemptOutcome::NoHeadChange);
             }
             SyncRelation::UpToDate | SyncRelation::AheadOnly => {
                 if changes_staged {
@@ -287,10 +309,10 @@ impl GitSync {
                     )?;
                     self.refresh_worktree_after_commit(commit_oid)?;
                     println!("    {} Committed changes", "✓".green());
-                } else {
-                    println!("    {} No changes to commit", "○".dimmed());
+                    return Ok(SyncAttemptOutcome::Committed);
                 }
-                return Ok(());
+                println!("    {} No changes to commit", "○".dimmed());
+                return Ok(SyncAttemptOutcome::NoHeadChange);
             }
             SyncRelation::BehindOnly => {
                 let upstream_commit = upstream_commit.as_ref().ok_or_else(|| {
@@ -299,7 +321,7 @@ impl GitSync {
                 if !changes_staged {
                     self.fast_forward_to_commit(branch_name, upstream_commit)?;
                     println!("    {} Pulled remote changes", "✓".green());
-                    return Ok(());
+                    return Ok(SyncAttemptOutcome::FastForwarded);
                 }
             }
             SyncRelation::Diverged => {
@@ -329,7 +351,15 @@ impl GitSync {
         self.refresh_worktree_after_commit(commit_oid)?;
         println!("    {} Integrated remote changes", "✓".green());
 
-        Ok(())
+        Ok(SyncAttemptOutcome::Committed)
+    }
+
+    fn should_premerge_before_staging(&self, relation: SyncRelation) -> Result<bool> {
+        Ok(match relation {
+            SyncRelation::Diverged => true,
+            SyncRelation::BehindOnly => is_worktree_dirty(&self.repo)?,
+            SyncRelation::NoUpstream | SyncRelation::UpToDate | SyncRelation::AheadOnly => false,
+        })
     }
 
     /// Check if local and remote branches have diverged.
@@ -658,6 +688,8 @@ impl GitSync {
 
     fn refresh_worktree_after_commit(&self, commit_oid: Oid) -> Result<()> {
         if self.subpath.is_some() {
+            let commit = self.repo.find_commit(commit_oid)?;
+            self.refresh_subpath_after_commit(&commit)?;
             return Ok(());
         }
 
@@ -668,6 +700,19 @@ impl GitSync {
             Some(git2::build::CheckoutBuilder::default().force()),
         )?;
         Ok(())
+    }
+
+    fn refresh_subpath_after_commit(&self, commit: &Commit<'_>) -> Result<()> {
+        let subpath = self
+            .subpath
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Missing subpath for subpath refresh"))?;
+        let tree = commit.tree()?;
+        let mut checkout = git2::build::CheckoutBuilder::default();
+        checkout.force().path(subpath);
+        self.repo
+            .checkout_tree(tree.as_object(), Some(&mut checkout))?;
+        self.refresh_index_in_scope()
     }
 
     fn fast_forward_to_commit(
@@ -691,10 +736,25 @@ impl GitSync {
         Ok(())
     }
 
-    fn reset_after_push_race(&self, original_head: Option<Oid>) -> Result<()> {
+    fn reset_after_push_race(
+        &self,
+        original_head: Option<Oid>,
+        reset_mode: PushRaceResetMode,
+    ) -> Result<()> {
         if let Some(original_head) = original_head {
             let obj = self.repo.find_object(original_head, None)?;
-            self.repo.reset(&obj, git2::ResetType::Mixed, None)?;
+            match reset_mode {
+                PushRaceResetMode::Mixed => {
+                    self.repo.reset(&obj, git2::ResetType::Mixed, None)?;
+                }
+                PushRaceResetMode::Hard => {
+                    self.repo.reset(
+                        &obj,
+                        git2::ResetType::Hard,
+                        Some(git2::build::CheckoutBuilder::default().force()),
+                    )?;
+                }
+            }
         } else {
             let branch_name = get_sync_branch(&self.repo_path)?;
             self.repo.set_head(&format!("refs/heads/{branch_name}"))?;
@@ -771,44 +831,9 @@ impl GitSync {
     }
 
     fn stage_changes(&self) -> Result<bool> {
-        let mut index = self.repo.index()?;
+        self.refresh_index_in_scope()?;
 
-        // Get the pathspec for staging
-        let pathspecs: Vec<String> = if let Some(subpath) = &self.subpath {
-            // Only stage files within subpath
-            // Use glob pattern to match all files recursively
-            vec![
-                format!("{}/*", subpath),    // Files directly in subpath
-                format!("{}/**/*", subpath), // Files in subdirectories
-            ]
-        } else {
-            // Stage all changes in repo
-            vec![".".to_string()]
-        };
-
-        // Configure flags for proper subpath handling
-        let flags = IndexAddOption::DEFAULT;
-
-        // Track if we staged anything
-        let mut staged_files = 0;
-
-        // Stage new and modified files with callback to track what we're staging
-        let cb = &mut |_path: &std::path::Path, _matched_spec: &[u8]| -> i32 {
-            staged_files += 1;
-            0 // Include this file
-        };
-
-        // Add all matching files
-        index.add_all(
-            pathspecs.iter(),
-            flags,
-            Some(cb as &mut git2::IndexMatchedPath),
-        )?;
-
-        // Update index to catch deletions in the pathspec
-        index.update_all(pathspecs.iter(), None)?;
-
-        index.write()?;
+        let index = self.repo.index()?;
 
         // Check if we actually have changes to commit
         // Handle empty repo case where HEAD doesn't exist yet
@@ -829,6 +854,28 @@ impl GitSync {
         };
 
         Ok(diff.stats()?.files_changed() > 0)
+    }
+
+    fn refresh_index_in_scope(&self) -> Result<()> {
+        let mut index = self.repo.index()?;
+        let pathspecs = self.scoped_pathspecs();
+
+        index.add_all(pathspecs.iter(), IndexAddOption::DEFAULT, None)?;
+
+        // Update index to catch deletions in the pathspec
+        index.update_all(pathspecs.iter(), None)?;
+
+        index.write()?;
+
+        Ok(())
+    }
+
+    fn scoped_pathspecs(&self) -> Vec<String> {
+        if let Some(subpath) = &self.subpath {
+            vec![format!("{}/*", subpath), format!("{}/**/*", subpath)]
+        } else {
+            vec![".".to_string()]
+        }
     }
 }
 
@@ -1261,5 +1308,108 @@ mod tests {
         assert!(analysis.is_diverged, "should be diverged");
         assert!(analysis.is_ahead, "should be ahead");
         assert!(analysis.is_behind, "should be behind");
+    }
+
+    #[test]
+    fn refresh_worktree_after_commit_refreshes_only_subpath() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::create_dir_all(repo.path().join("branch")).unwrap();
+        std::fs::write(repo.path().join("branch/data.txt"), "committed\n").unwrap();
+        std::fs::write(repo.path().join("outside.txt"), "outside\n").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "initial",
+            ],
+        );
+        git_ok(repo.path(), &["branch", "-M", "main"]);
+
+        std::fs::write(repo.path().join("branch/data.txt"), "stale branch\n").unwrap();
+        std::fs::write(repo.path().join("outside.txt"), "stale outside\n").unwrap();
+        git_ok(repo.path(), &["add", "branch/data.txt", "outside.txt"]);
+
+        let sync = GitSync::new(repo.path(), Some("branch".to_string())).unwrap();
+        let head_oid = Oid::from_str(&git_stdout(repo.path(), &["rev-parse", "HEAD"])).unwrap();
+
+        sync.refresh_worktree_after_commit(head_oid).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("branch/data.txt")).unwrap(),
+            "committed\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("outside.txt")).unwrap(),
+            "stale outside\n"
+        );
+
+        let status = git_stdout(repo.path(), &["status", "--short"]);
+        assert!(!status.contains("branch/data.txt"), "status was: {status}");
+        assert!(status.contains("outside.txt"), "status was: {status}");
+    }
+
+    #[test]
+    fn reset_after_push_race_hard_restores_fast_forwarded_worktree() {
+        let repo = tempfile::TempDir::new().unwrap();
+        git_ok(repo.path(), &["init"]);
+        std::fs::write(repo.path().join("base.txt"), "one\n").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "c1",
+            ],
+        );
+        git_ok(repo.path(), &["branch", "-M", "main"]);
+        let c1 = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+
+        std::fs::write(repo.path().join("base.txt"), "two\n").unwrap();
+        git_ok(repo.path(), &["add", "."]);
+        git_ok(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "c2",
+            ],
+        );
+        let c2 = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+        git_ok(repo.path(), &["reset", "--hard", &c1]);
+
+        let sync = GitSync::new(repo.path(), None).unwrap();
+        let c2_commit = sync.repo.find_commit(Oid::from_str(&c2).unwrap()).unwrap();
+
+        sync.fast_forward_to_commit("main", &c2_commit).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("base.txt")).unwrap(),
+            "two\n"
+        );
+
+        sync.reset_after_push_race(Some(Oid::from_str(&c1).unwrap()), PushRaceResetMode::Hard)
+            .unwrap();
+
+        assert_eq!(git_stdout(repo.path(), &["rev-parse", "HEAD"]), c1);
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("base.txt")).unwrap(),
+            "one\n"
+        );
+        assert!(git_stdout(repo.path(), &["status", "--short"]).is_empty());
     }
 }

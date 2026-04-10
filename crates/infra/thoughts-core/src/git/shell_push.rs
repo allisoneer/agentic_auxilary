@@ -43,6 +43,56 @@ fn print_progress_line(line: &str) {
     }
 }
 
+fn sanitize_push_output(text: &str) -> String {
+    let mut sanitized = text.to_string();
+    for scheme in ["https://", "http://"] {
+        sanitized = sanitize_urls_with_scheme(&sanitized, scheme);
+    }
+    sanitized
+}
+
+fn sanitize_urls_with_scheme(text: &str, scheme: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut remaining = text;
+
+    while let Some(idx) = remaining.find(scheme) {
+        out.push_str(&remaining[..idx]);
+
+        let after_scheme = &remaining[idx + scheme.len()..];
+        let end = after_scheme
+            .find(|c: char| {
+                c.is_whitespace()
+                    || matches!(
+                        c,
+                        '\'' | '"' | '<' | '>' | '(' | ')' | '[' | ']' | '{' | '}'
+                    )
+            })
+            .unwrap_or(after_scheme.len());
+        let url_body = &after_scheme[..end];
+        let tail = &after_scheme[end..];
+
+        out.push_str(scheme);
+        out.push_str(&sanitize_url_body(url_body));
+        remaining = tail;
+    }
+
+    out.push_str(remaining);
+    out
+}
+
+fn sanitize_url_body(url_body: &str) -> String {
+    let (authority, path) = match url_body.find('/') {
+        Some(idx) => (&url_body[..idx], &url_body[idx..]),
+        None => (url_body, ""),
+    };
+
+    if let Some((_, host)) = authority.rsplit_once('@') {
+        format!("***@{host}{path}")
+    } else {
+        url_body.to_string()
+    }
+}
+
 fn classify_push_failure(stderr: &str) -> PushFailureKind {
     let stderr = stderr.to_ascii_lowercase();
 
@@ -97,6 +147,7 @@ pub fn push_current_branch_with_result(
         for line in reader.lines() {
             match line {
                 Ok(line) => {
+                    let line = sanitize_push_output(&line);
                     print_progress_line(&line);
                     stderr_lines.push(line);
                 }
@@ -169,5 +220,23 @@ mod tests {
     fn classify_unknown_push_failure_as_other() {
         let stderr = "fatal: unexpected server failure";
         assert_eq!(classify_push_failure(stderr), PushFailureKind::Other);
+    }
+
+    #[test]
+    fn sanitize_push_output_redacts_https_credentials() {
+        let stderr =
+            "fatal: unable to access 'https://user:secret@example.com/repo.git/': auth failed";
+
+        let sanitized = sanitize_push_output(stderr);
+
+        assert!(sanitized.contains("https://***@example.com/repo.git/"));
+        assert!(!sanitized.contains("user:secret"));
+    }
+
+    #[test]
+    fn sanitize_push_output_keeps_plain_https_urls() {
+        let stderr = "fatal: unable to access 'https://example.com/repo.git/': auth failed";
+
+        assert_eq!(sanitize_push_output(stderr), stderr);
     }
 }
