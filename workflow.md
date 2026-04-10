@@ -35,7 +35,7 @@ Inside of normal we have a handful of tools, most are custom, and pluggable into
 
 ### Agent Variants
 
-| NORMAL (19)   | NORMAL_OPENAI (19) | BASH (20)     | LINEAR (28)   | PLAYWRIGHT (37)       | REVIEW (9)            |
+| NORMAL (19)   | NORMAL_OPENAI (19) | BASH (20)     | LINEAR (28)   | PLAYWRIGHT (41)       | REVIEW (9)            |
 |---------------|--------------------|---------------|---------------|-----------------------|-----------------------|
 | File ops      | File ops           | File ops      | File ops      | File ops              | Read only             |
 | Search        | Search             | Search        | Search        | Search                | Search (cli_*)        |
@@ -44,7 +44,7 @@ Inside of normal we have a handful of tools, most are custom, and pluggable into
 | Thoughts      | Thoughts           | Thoughts      | Thoughts      | Thoughts              | Thoughts (write only) |
 | GitHub PRs    | GitHub PRs         | GitHub PRs    | GitHub PRs    | GitHub PRs            |                       |
 | Sub-agents    | Sub-agents         | Sub-agents    | Sub-agents    | Sub-agents            | Reasoning model       |
-|               | GPT-5.4-oriented commands | + mcp_bash (shell) | + 9 Linear tools | + 18 Browser automation | + review_* tools |
+|               | GPT-5.4-oriented commands | + mcp_bash (shell) | + 9 Linear tools | + 22 Browser automation | + review_* tools |
 
 ### Commands Using Each
 
