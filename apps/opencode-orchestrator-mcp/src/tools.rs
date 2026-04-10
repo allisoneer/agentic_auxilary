@@ -1090,7 +1090,7 @@ fn extract_recent_tool_calls(messages: &[Message], limit: usize) -> Vec<ToolCall
     let mut tool_calls = Vec::new();
 
     for message in messages.iter().rev() {
-        for part in &message.parts {
+        for part in message.parts.iter().rev() {
             if let Part::Tool {
                 call_id,
                 tool,

@@ -14,8 +14,10 @@ First is orchestration level, allowing full management of opencode sessions.
 LEVEL 0: ORCHESTRATOR (Parent Agent)
 ├── orchestrator_run              - Spawn/resume sessions
 ├── orchestrator_list_sessions    - List active sessions
+├── orchestrator_get_session_state - Inspect one session in detail
 ├── orchestrator_list_commands    - List available commands
 ├── orchestrator_respond_permission - Handle permission requests
+├── orchestrator_respond_question - Answer session questions
 ├── read                          - Inspect files for coordination
 └── todowrite                     - Task tracking
                         │

@@ -440,6 +440,84 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
 }
 
 #[tokio::test]
+async fn get_session_state_orders_tool_parts_recent_first_within_message() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_status_fixture(&[("ses-1", busy_status_fixture())])),
+        )
+        .mount(&mock)
+        .await;
+
+    let history = message_history_fixture(vec![message_fixture(
+        "ses-1",
+        "m1",
+        "assistant",
+        1,
+        Some(2),
+        vec![
+            tool_part_fixture(
+                "call-older",
+                "read",
+                Some(json!({
+                    "status": "completed",
+                    "input": {},
+                    "output": "first",
+                    "title": "read",
+                    "metadata": {},
+                    "time": { "start": 10, "end": 11 }
+                })),
+            ),
+            tool_part_fixture(
+                "call-newer",
+                "write",
+                Some(json!({
+                    "status": "completed",
+                    "input": {},
+                    "output": "second",
+                    "title": "write",
+                    "metadata": {},
+                    "time": { "start": 20, "end": 21 }
+                })),
+            ),
+        ],
+    )]);
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1/message"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(history))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let result = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect("get_session_state should succeed");
+
+    assert_eq!(result.recent_tool_calls.len(), 2);
+    assert_eq!(result.recent_tool_calls[0].call_id, "call-newer");
+    assert_eq!(result.recent_tool_calls[0].tool_name, "write");
+    assert_eq!(result.recent_tool_calls[1].call_id, "call-older");
+    assert_eq!(result.recent_tool_calls[1].tool_name, "read");
+}
+
+#[tokio::test]
 async fn get_session_state_returns_error_when_status_lookup_fails() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock);
