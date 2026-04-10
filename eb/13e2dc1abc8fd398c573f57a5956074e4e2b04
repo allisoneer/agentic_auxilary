@@ -1,0 +1,49 @@
+crates/agentic-tools/core/src/schema.rs
+  3ce0d55356d11f49 179-180,362-368,509-514,516-518
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "eb13e2dc1abc8fd398c573f57a5956074e4e2b04",
+  "prompts": {
+    "30c52262f909424a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287dc993affeX1cKB3wlUfDw05",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    },
+    "3ce0d55356d11f49": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287dc5029ffeUTCWJ4DMEktgSf",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "884879dbcabe46cd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287dcfb11ffeWN0dP2EI0KDPap",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
