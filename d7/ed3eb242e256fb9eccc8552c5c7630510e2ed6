@@ -1,0 +1,35 @@
+crates/infra/thoughts-core/src/git/sync.rs
+  7c59f12ed873f3ed 146-157,206,221-227,263,273-274,276-278,297,299,312,314-315,324,354-362,691-692,705-715,739-743,746-757,834,836,858-878,1312-1413
+apps/thoughts/src/commands/work/list.rs
+  7c59f12ed873f3ed 101,121
+crates/infra/thoughts-core/src/git/utils.rs
+  7c59f12ed873f3ed 254,345-349
+crates/infra/thoughts-core/src/git/shell_push.rs
+  7c59f12ed873f3ed 46-95,150,224-240
+crates/infra/thoughts-core/src/utils/claude_settings.rs
+  7c59f12ed873f3ed 4,72,103,209-215,255-265,450-491
+crates/infra/thoughts-core/tests/git_clone_https.rs
+  7c59f12ed873f3ed 2,9,11-12,15,19-21,35,39-41
+crates/infra/thoughts-core/tests/git_sync_divergence.rs
+  7c59f12ed873f3ed 3,18-21,35-39,171-175,252-340,344-348
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "d7ed3eb242e256fb9eccc8552c5c7630510e2ed6",
+  "prompts": {
+    "7c59f12ed873f3ed": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_287a4a41affe5M5Il0c38TNHHT",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 477,
+      "total_deletions": 91,
+      "accepted_lines": 470,
+      "overriden_lines": 0
+    }
+  }
+}
