@@ -176,7 +176,8 @@ impl SchemaEngine {
 ///
 /// This module provides cached schema generation for MCP:
 /// - JSON Schema Draft 2020-12 (MCP protocol requirement)
-/// - `Option<T>` fields generate `{"type": ["T", "null"]}` (schemars default)
+/// - `Option<T>` fields include `null` in schema shape (for example, `type`
+///   arrays for simple scalar cases and `anyOf`/`$ref` forms for complex types)
 /// - Thread-local caching keyed by TypeId for performance
 pub mod mcp_schema {
     use schemars::JsonSchema;
@@ -358,11 +359,13 @@ mod tests {
             let v = serde_json::to_value(root.as_ref()).unwrap();
             let a = &v["properties"]["a"];
             // Option<String> should produce {"type": ["string", "null"]}
-            assert_eq!(
-                a.get("type"),
-                Some(&serde_json::json!(["string", "null"])),
-                "Option<T> fields should have type array with null"
-            );
+            let ty = a
+                .get("type")
+                .and_then(|v| v.as_array())
+                .expect("Option<T> should emit a type array");
+            assert!(ty.contains(&serde_json::json!("string")));
+            assert!(ty.contains(&serde_json::json!("null")));
+            assert_eq!(ty.len(), 2, "Option<T> should contain only string|null");
         }
 
         #[derive(schemars::JsonSchema, Serialize)]
@@ -503,10 +506,16 @@ mod tests {
             let s = &v["properties"]["s"];
 
             // Option<String> should produce {"type": ["string", "null"]}
+            let ty = s
+                .get("type")
+                .and_then(|v| v.as_array())
+                .expect("Option<String> should emit a type array");
+            assert!(ty.contains(&serde_json::json!("string")));
+            assert!(ty.contains(&serde_json::json!("null")));
             assert_eq!(
-                s.get("type"),
-                Some(&serde_json::json!(["string", "null"])),
-                "Option<String> should have type array with null"
+                ty.len(),
+                2,
+                "Option<String> should contain only string|null"
             );
             // Should NOT have nullable keyword (that was from AddNullable)
             assert!(
