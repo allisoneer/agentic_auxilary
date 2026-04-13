@@ -1079,13 +1079,15 @@ fn count_pending_messages(messages: &[Message]) -> usize {
     pending
 }
 
-fn get_last_activity_time(messages: &[Message]) -> Option<i64> {
-    messages.last().map(|message| {
-        message
-            .info
-            .time
-            .completed
-            .unwrap_or(message.info.time.created)
+fn get_last_activity_time(messages: &[Message], fallback: Option<i64>) -> Option<i64> {
+    messages.last().map_or(fallback, |message| {
+        Some(
+            message
+                .info
+                .time
+                .completed
+                .unwrap_or(message.info.time.created),
+        )
     })
 }
 
@@ -1203,7 +1205,10 @@ impl Tool for GetSessionStateTool {
                     ToolError::Internal(format!("Failed to list messages: {e}"))
                 })?;
                 let pending_message_count = count_pending_messages(&messages);
-                let last_activity = get_last_activity_time(&messages);
+                let last_activity = get_last_activity_time(
+                    &messages,
+                    session.time.as_ref().map(|time| time.updated),
+                );
                 let recent_tool_calls = extract_recent_tool_calls(&messages, 10);
 
                 let spawned = server.spawned_sessions().read().await;
@@ -1720,5 +1725,10 @@ mod tests {
         assert_eq!(<ListCommandsTool as Tool>::NAME, "list_commands");
         assert_eq!(<RespondPermissionTool as Tool>::NAME, "respond_permission");
         assert_eq!(<RespondQuestionTool as Tool>::NAME, "respond_question");
+    }
+
+    #[test]
+    fn last_activity_falls_back_to_session_timestamp_when_messages_are_empty() {
+        assert_eq!(get_last_activity_time(&[], Some(1_234)), Some(1_234));
     }
 }
