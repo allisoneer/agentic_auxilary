@@ -1,0 +1,40 @@
+crates/infra/thoughts-core/src/git/sync.rs
+  c7c9c70091c9fa89 191-192,202-203
+crates/infra/thoughts-core/tests/git_edge_cases.rs
+  c7c9c70091c9fa89 80-106
+crates/infra/thoughts-core/src/git/utils.rs
+  c7c9c70091c9fa89 225-230,253-258,480-491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "e5acb95d0fdb3cabf7191073230d8e0a424cfad3",
+  "prompts": {
+    "c313903fc3de4984": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2781d9f82ffeHjYxECNyauxYHR",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "c7c9c70091c9fa89": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_278256b44ffezA6Gq4x2HhDtoT",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 58,
+      "total_deletions": 4,
+      "accepted_lines": 58,
+      "overriden_lines": 0
+    }
+  }
+}
