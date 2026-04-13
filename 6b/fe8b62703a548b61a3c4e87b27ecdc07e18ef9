@@ -1,0 +1,36 @@
+crates/infra/thoughts-core/src/utils/claude_settings.rs
+  120ca05e05bc6196 12,205-206,227-284,480-495
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "6bfe8b62703a548b61a3c4e87b27ecdc07e18ef9",
+  "prompts": {
+    "120ca05e05bc6196": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_278191115ffeFgvxBrzz6KOSXE",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 79,
+      "total_deletions": 12,
+      "accepted_lines": 79,
+      "overriden_lines": 0
+    },
+    "c313903fc3de4984": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2781d9f82ffeHjYxECNyauxYHR",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
