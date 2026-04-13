@@ -16,6 +16,12 @@ mcp = true
 logging = false
 napi = false
 
+[package.metadata.binstall]
+pkg-url = "{repo}/releases/download/{name}-v{version}/{name}-{target}.tar.xz"
+pkg-fmt = "txz"
+bin-dir = "{name}-{target}/{bin}{binary-ext}"
+disabled-strategies = ["quick-install", "compile"]
+
 [dependencies]
 agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }

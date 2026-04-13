@@ -6,6 +6,7 @@ authors = ["Allison Durham"]
 description = "CLI for flexible thought management using filesystem mounts"
 license = "MIT"
 repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = true
 
 [package.metadata.repo]
 role = "app"
@@ -15,6 +16,12 @@ family = "tools"
 mcp = false
 logging = false
 napi = false
+
+[package.metadata.binstall]
+pkg-url = "{repo}/releases/download/{name}-v{version}/{name}-{target}.tar.xz"
+pkg-fmt = "txz"
+bin-dir = "{name}-{target}/{bin}{binary-ext}"
+disabled-strategies = ["quick-install", "compile"]
 
 [[bin]]
 name = "thoughts"
