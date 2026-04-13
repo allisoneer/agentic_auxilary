@@ -216,7 +216,92 @@ pub struct SessionSummary {
     /// Session title
     pub title: String,
     /// Unix timestamp of last update
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub updated: Option<i64>,
+    /// Unix timestamp of creation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<i64>,
+    /// Session working directory
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
+    /// Current session status
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<SessionStatusSummary>,
+    /// File change statistics
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_stats: Option<ChangeStats>,
+    /// True when the current orchestrator created this session.
+    pub launched_by_you: bool,
+}
+
+/// Session status summary for list/detail views.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "state", rename_all = "lowercase")]
+pub enum SessionStatusSummary {
+    Idle,
+    Busy,
+    Retry {
+        attempt: u64,
+        message: String,
+        /// Unix timestamp (ms) of next retry attempt.
+        next: u64,
+    },
+}
+
+/// File change statistics from a session summary.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ChangeStats {
+    pub additions: u64,
+    pub deletions: u64,
+    pub files: u64,
+}
+
+/// Input for the `get_session_state` tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetSessionStateInput {
+    /// The session ID to inspect.
+    pub session_id: String,
+}
+
+/// Detailed session state output.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetSessionStateOutput {
+    pub session_id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
+    pub status: SessionStatusSummary,
+    /// True when the current orchestrator created this session.
+    pub launched_by_you: bool,
+    /// Number of pending messages awaiting an assistant reply.
+    pub pending_message_count: usize,
+    /// Unix timestamp of the latest activity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_activity: Option<i64>,
+    /// Recent tool calls, most recent first.
+    pub recent_tool_calls: Vec<ToolCallSummary>,
+}
+
+/// Summary of a recent tool call in a session.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ToolCallSummary {
+    pub call_id: String,
+    pub tool_name: String,
+    pub state: ToolStateSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<i64>,
+}
+
+/// Simplified tool state for session diagnostics.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "lowercase")]
+pub enum ToolStateSummary {
+    Pending,
+    Running,
+    Completed,
+    Error { message: String },
 }
 
 /// Output from the `list_sessions` tool.
@@ -234,11 +319,68 @@ impl TextFormat for ListSessionsOutput {
             let age = s
                 .updated
                 .map_or_else(|| "unknown".to_string(), format_time_ago);
-            let _ = writeln!(out, "  {} - {} ({age})", s.id, s.title);
+            let status = match &s.status {
+                Some(SessionStatusSummary::Idle) => "idle",
+                Some(SessionStatusSummary::Busy) => "busy",
+                Some(SessionStatusSummary::Retry { .. }) => "retry",
+                None => "unknown",
+            };
+            let launched = if s.launched_by_you {
+                " [launched by you]"
+            } else {
+                ""
+            };
+            let _ = writeln!(out, "  {} - {} ({age}, {status}){launched}", s.id, s.title);
         }
 
         if self.sessions.is_empty() {
             out.push_str("  (no sessions found)\n");
+        }
+
+        out
+    }
+}
+
+impl TextFormat for GetSessionStateOutput {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        let mut out = format!("Session: {} ({})\n", self.session_id, self.title);
+
+        if let Some(dir) = &self.directory {
+            let _ = writeln!(out, "  Directory: {dir}");
+        }
+
+        let status_str = match &self.status {
+            SessionStatusSummary::Idle => "Idle".to_string(),
+            SessionStatusSummary::Busy => "Busy".to_string(),
+            SessionStatusSummary::Retry {
+                attempt,
+                message,
+                next,
+            } => format!("Retry (attempt {attempt}, next at {next}, reason: {message})"),
+        };
+        let _ = writeln!(out, "  Status: {status_str}");
+        let _ = writeln!(out, "  Launched by you: {}", self.launched_by_you);
+        let _ = writeln!(out, "  Pending messages: {}", self.pending_message_count);
+
+        if let Some(last) = self.last_activity {
+            let _ = writeln!(out, "  Last activity: {}", format_time_ago(last));
+        }
+
+        if !self.recent_tool_calls.is_empty() {
+            out.push_str("  Recent tool calls:\n");
+            for tool_call in &self.recent_tool_calls {
+                let state_str = match &tool_call.state {
+                    ToolStateSummary::Pending => "pending".to_string(),
+                    ToolStateSummary::Running => "running".to_string(),
+                    ToolStateSummary::Completed => "completed".to_string(),
+                    ToolStateSummary::Error { message } => format!("error: {message}"),
+                };
+                let _ = writeln!(
+                    out,
+                    "    {} ({}) - {}",
+                    tool_call.call_id, tool_call.tool_name, state_str
+                );
+            }
         }
 
         out
@@ -463,6 +605,15 @@ mod tests {
                 id: "sess-1".into(),
                 title: "Research caching".into(),
                 updated: Some(0),
+                created: Some(0),
+                directory: Some("/tmp/project".into()),
+                status: Some(SessionStatusSummary::Idle),
+                change_stats: Some(ChangeStats {
+                    additions: 1,
+                    deletions: 0,
+                    files: 1,
+                }),
+                launched_by_you: true,
             }],
         };
 
@@ -470,6 +621,8 @@ mod tests {
         assert!(text.contains("Sessions (1)"));
         assert!(text.contains("sess-1"));
         assert!(text.contains("Research caching"));
+        assert!(text.contains("idle"));
+        assert!(text.contains("launched by you"));
     }
 
     #[test]
