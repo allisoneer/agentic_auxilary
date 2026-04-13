@@ -188,7 +188,8 @@ impl GitSync {
 
         ensure_repo_ready_for_sync(&self.repo_path)?;
 
-        // Check for remote before get_sync_branch() so unborn branches work without remotes
+        // Check for remote before get_sync_branch() so local-only sync can run without
+        // resolving a branch name. Detached HEAD is rejected above even on this path.
         if self.repo.find_remote("origin").is_err() {
             println!(
                 "    {} No remote 'origin' configured (local-only)",
@@ -198,7 +199,8 @@ impl GitSync {
             return Ok(());
         }
 
-        // get_sync_branch will fail for unborn/detached with a helpful error message
+        // get_sync_branch rejects detached HEAD as defense-in-depth and is also used
+        // by push-race recovery. Unborn HEAD is still allowed.
         let branch_name = get_sync_branch(&self.repo_path)?;
 
         for attempt in 0..MAX_PUSH_RETRIES {

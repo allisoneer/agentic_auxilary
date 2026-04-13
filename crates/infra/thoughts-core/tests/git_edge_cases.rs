@@ -77,6 +77,35 @@ async fn sync_without_remote_is_ok() {
 
 #[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
+async fn sync_without_remote_detached_head_is_error() {
+    let repo = TempDir::new().unwrap();
+    support::git_ok(repo.path(), &["init"]);
+    fs::write(repo.path().join("a.txt"), "a").unwrap();
+    support::git_ok(repo.path(), &["add", "."]);
+    support::git_ok(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "initial",
+        ],
+    );
+
+    let head = support::git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+    support::git_ok(repo.path(), &["checkout", "--detach", &head]);
+    fs::write(repo.path().join("b.txt"), "b").unwrap();
+
+    let sync = GitSync::new(repo.path(), None).unwrap();
+    let err = sync.sync("test-mount").await.unwrap_err();
+    assert!(err.to_string().contains("detached HEAD state"));
+}
+
+#[ignore = "integration test - run with: just test-integration"]
+#[tokio::test]
 async fn sync_empty_repo_initial_commit() {
     // Create empty repo (no commits)
     let repo = TempDir::new().unwrap();

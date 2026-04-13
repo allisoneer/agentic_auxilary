@@ -222,7 +222,12 @@ pub fn get_current_branch(repo_path: &Path) -> Result<String> {
     }
 }
 
-/// Returns Ok(()) if the repository is in a state suitable for sync.
+/// Returns Ok(()) if the repository is in a state suitable to begin a sync.
+///
+/// Authoritative sync preflight:
+/// - Rejects detached HEAD
+/// - Rejects in-progress merge/rebase/cherry-pick/revert operations
+/// - Allows unborn HEAD so bootstrap sync can create the first commit
 pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
     let repo = Repository::open(repo_path).map_err(|e| {
         anyhow::anyhow!(
@@ -245,7 +250,12 @@ pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
         bail!("Repository has an in-progress revert. Complete or abort it before syncing.");
     }
 
-    Ok(())
+    match repo.head() {
+        Ok(head) if head.is_branch() => Ok(()),
+        Ok(_) => bail!("Repository is in detached HEAD state. Check out a branch before syncing."),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => Ok(()),
+        Err(e) => bail!("Failed to get HEAD reference: {e}"),
+    }
 }
 
 /// Returns the current branch name or an error when sync is unsafe.
@@ -464,6 +474,19 @@ mod tests {
 
         let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
         assert!(err.to_string().contains("in-progress rebase"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_rejects_detached_head() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+
+        initial_commit(&repo);
+        let head_oid = repo.head().unwrap().target().unwrap();
+        repo.set_head_detached(head_oid).unwrap();
+
+        let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("detached HEAD state"));
     }
 
     #[test]
