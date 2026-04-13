@@ -9,6 +9,7 @@ use serde_json::Value;
 use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -201,18 +202,8 @@ fn read_or_init_settings(settings_path: &Path) -> Result<ReadOutcome> {
         })
     } else {
         // Malformed JSON: quarantine and start fresh
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let malformed = settings_path.with_extension(format!("json.malformed.{ts}.bak"));
-        fs::rename(settings_path, &malformed).with_context(|| {
-            format!(
-                "Failed to quarantine malformed Claude settings {} -> {}",
-                settings_path.display(),
-                malformed.display()
-            )
-        })?;
+        let malformed =
+            quarantine_malformed_settings(settings_path, &raw, current_malformed_backup_suffix())?;
         eprintln!(
             "{}: Existing Claude settings were malformed. Quarantined to {}",
             "Warning".yellow(),
@@ -230,6 +221,64 @@ fn read_or_init_settings(settings_path: &Path) -> Result<ReadOutcome> {
             value: json!({}),
             had_valid_json: false,
         })
+    }
+}
+
+fn current_malformed_backup_suffix() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
+fn quarantine_malformed_settings(
+    settings_path: &Path,
+    raw: &str,
+    initial_suffix: u64,
+) -> Result<PathBuf> {
+    let mut suffix = initial_suffix;
+    loop {
+        let malformed = settings_path.with_extension(format!("json.malformed.{suffix}.bak"));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&malformed)
+        {
+            Ok(mut file) => {
+                file.write_all(raw.as_bytes()).with_context(|| {
+                    format!(
+                        "Failed to write quarantined malformed Claude settings {}",
+                        malformed.display()
+                    )
+                })?;
+                drop(file);
+                fs::remove_file(settings_path).with_context(|| {
+                    format!(
+                        "Failed to remove malformed Claude settings {} after quarantine",
+                        settings_path.display()
+                    )
+                })?;
+                return Ok(malformed);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                suffix = suffix.checked_add(1).ok_or_else(|| {
+                    anyhow!(
+                        "Exhausted malformed backup suffixes for {}",
+                        settings_path.display()
+                    )
+                })?;
+            }
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "Failed to reserve malformed Claude settings quarantine path {}",
+                        malformed.display()
+                    )
+                });
+            }
+        }
     }
 }
 
@@ -426,6 +475,24 @@ mod tests {
             }
         }
         assert!(found_malformed);
+    }
+
+    #[test]
+    fn quarantine_uses_next_numeric_suffix_when_backup_exists() {
+        let td = TempDir::new().unwrap();
+        let settings = td.path().join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(&settings, "second").unwrap();
+
+        let existing = settings.with_extension("json.malformed.42.bak");
+        fs::write(&existing, "first").unwrap();
+
+        let malformed = super::quarantine_malformed_settings(&settings, "second", 42).unwrap();
+
+        assert_eq!(malformed, settings.with_extension("json.malformed.43.bak"));
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "first");
+        assert_eq!(fs::read_to_string(&malformed).unwrap(), "second");
+        assert!(!settings.exists());
     }
 
     #[test]
