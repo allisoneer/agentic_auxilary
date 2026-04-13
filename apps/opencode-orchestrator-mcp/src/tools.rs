@@ -4,7 +4,10 @@ use crate::config;
 use crate::logging;
 use crate::server::OrchestratorServer;
 use crate::token_tracker::TokenTracker;
+use crate::types::ChangeStats;
 use crate::types::CommandInfo;
+use crate::types::GetSessionStateInput;
+use crate::types::GetSessionStateOutput;
 use crate::types::ListCommandsInput;
 use crate::types::ListCommandsOutput;
 use crate::types::ListSessionsInput;
@@ -20,7 +23,10 @@ use crate::types::RespondPermissionOutput;
 use crate::types::RespondQuestionInput;
 use crate::types::RespondQuestionOutput;
 use crate::types::RunStatus;
+use crate::types::SessionStatusSummary;
 use crate::types::SessionSummary;
+use crate::types::ToolCallSummary;
+use crate::types::ToolStateSummary;
 use agentic_logging::CallTimer;
 use agentic_logging::ToolCallRecord;
 use agentic_tools_core::Tool;
@@ -32,8 +38,11 @@ use agentic_tools_core::fmt::TextOptions;
 use futures::future::BoxFuture;
 use opencode_rs::types::event::Event;
 use opencode_rs::types::message::CommandRequest;
+use opencode_rs::types::message::Message;
+use opencode_rs::types::message::Part;
 use opencode_rs::types::message::PromptPart;
 use opencode_rs::types::message::PromptRequest;
+use opencode_rs::types::message::ToolState;
 use opencode_rs::types::permission::PermissionReply as ApiPermissionReply;
 use opencode_rs::types::permission::PermissionReplyRequest;
 use opencode_rs::types::question::QuestionReply;
@@ -363,6 +372,12 @@ impl OrchestratorRunTool {
                 .create(&CreateSessionRequest::default())
                 .await
                 .map_err(|e| ToolError::Internal(format!("Failed to create session: {e}")))?;
+
+            {
+                let mut spawned = server.spawned_sessions().write().await;
+                spawned.insert(session.id.clone());
+            }
+
             session.id
         };
 
@@ -977,20 +992,237 @@ impl Tool for ListSessionsTool {
                     server.client().sessions().list().await.map_err(|e| {
                         ToolError::Internal(format!("Failed to list sessions: {e}"))
                     })?;
+                let status_map = server.client().sessions().status_map().await.ok();
+                let spawned = server.spawned_sessions().read().await;
 
                 let limit = input.limit.unwrap_or(20);
                 let summaries: Vec<SessionSummary> = sessions
                     .into_iter()
                     .take(limit)
-                    .map(|s| SessionSummary {
-                        id: s.id,
-                        title: s.title,
-                        updated: s.time.as_ref().map(|t| t.updated),
+                    .map(|s| {
+                        let status =
+                            status_map
+                                .as_ref()
+                                .map(|status_map| match status_map.get(&s.id) {
+                                    Some(SessionStatusInfo::Busy) => SessionStatusSummary::Busy,
+                                    Some(SessionStatusInfo::Retry {
+                                        attempt,
+                                        message,
+                                        next,
+                                    }) => SessionStatusSummary::Retry {
+                                        attempt: *attempt,
+                                        message: message.clone(),
+                                        next: *next,
+                                    },
+                                    Some(SessionStatusInfo::Idle) | None => {
+                                        SessionStatusSummary::Idle
+                                    }
+                                });
+
+                        let change_stats = s.summary.as_ref().map(|summary| ChangeStats {
+                            additions: summary.additions,
+                            deletions: summary.deletions,
+                            files: summary.files,
+                        });
+
+                        SessionSummary {
+                            launched_by_you: spawned.contains(&s.id),
+                            created: s.time.as_ref().map(|t| t.created),
+                            updated: s.time.as_ref().map(|t| t.updated),
+                            directory: s.directory,
+                            title: s.title,
+                            id: s.id,
+                            status,
+                            change_stats,
+                        }
                     })
                     .collect();
 
                 Ok(ListSessionsOutput {
                     sessions: summaries,
+                })
+            }
+            .await;
+
+            match result {
+                Ok(output) => {
+                    log_tool_success(
+                        &timer,
+                        Self::NAME,
+                        &input,
+                        &output,
+                        ToolLogMeta::default(),
+                        false,
+                    );
+                    Ok(output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &input, &error);
+                    Err(error)
+                }
+            }
+        })
+    }
+}
+
+fn count_pending_messages(messages: &[Message]) -> usize {
+    let mut pending = 0;
+
+    for message in messages.iter().rev() {
+        if message.role() == "user" {
+            pending += 1;
+        } else if message.role() == "assistant" {
+            break;
+        }
+    }
+
+    pending
+}
+
+fn get_last_activity_time(messages: &[Message], fallback: Option<i64>) -> Option<i64> {
+    messages.last().map_or(fallback, |message| {
+        Some(
+            message
+                .info
+                .time
+                .completed
+                .unwrap_or(message.info.time.created),
+        )
+    })
+}
+
+fn extract_recent_tool_calls(messages: &[Message], limit: usize) -> Vec<ToolCallSummary> {
+    let mut tool_calls = Vec::new();
+
+    for message in messages.iter().rev() {
+        for part in message.parts.iter().rev() {
+            if let Part::Tool {
+                call_id,
+                tool,
+                state,
+                ..
+            } = part
+            {
+                let (state, started_at, completed_at) = match state {
+                    Some(ToolState::Running(running)) => {
+                        (ToolStateSummary::Running, Some(running.time.start), None)
+                    }
+                    Some(ToolState::Completed(completed)) => (
+                        ToolStateSummary::Completed,
+                        Some(completed.time.start),
+                        Some(completed.time.end),
+                    ),
+                    Some(ToolState::Error(error)) => (
+                        ToolStateSummary::Error {
+                            message: error.error.clone(),
+                        },
+                        Some(error.time.start),
+                        Some(error.time.end),
+                    ),
+                    _ => (ToolStateSummary::Pending, None, None),
+                };
+
+                tool_calls.push(ToolCallSummary {
+                    call_id: call_id.clone(),
+                    tool_name: tool.clone(),
+                    state,
+                    started_at,
+                    completed_at,
+                });
+
+                if tool_calls.len() >= limit {
+                    return tool_calls;
+                }
+            }
+        }
+    }
+
+    tool_calls
+}
+
+/// Tool for getting detailed state of a specific `OpenCode` session.
+#[derive(Clone)]
+pub struct GetSessionStateTool {
+    server: Arc<OnceCell<OrchestratorServer>>,
+}
+
+impl GetSessionStateTool {
+    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+        Self { server }
+    }
+}
+
+impl Tool for GetSessionStateTool {
+    type Input = GetSessionStateInput;
+    type Output = GetSessionStateOutput;
+    const NAME: &'static str = "get_session_state";
+    const DESCRIPTION: &'static str = "Get detailed state of a specific session including status, pending messages, and recent tool calls.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let server_cell = Arc::clone(&self.server);
+        Box::pin(async move {
+            let timer = CallTimer::start();
+            let result: Result<GetSessionStateOutput, ToolError> = async {
+                let server = server_cell
+                    .get_or_try_init(OrchestratorServer::start_lazy)
+                    .await
+                    .map_err(|e| ToolError::Internal(e.to_string()))?;
+
+                let client = server.client();
+                let session_id = &input.session_id;
+
+                let session = client.sessions().get(session_id).await.map_err(|e| {
+                    if e.is_not_found() {
+                        ToolError::InvalidInput(format!(
+                            "Session '{session_id}' not found. Use list_sessions to discover available sessions."
+                        ))
+                    } else {
+                        ToolError::Internal(format!("Failed to get session: {e}"))
+                    }
+                })?;
+
+                let status = match client.sessions().status_for(session_id).await.map_err(|e| {
+                    ToolError::Internal(format!("Failed to get session status: {e}"))
+                })? {
+                    SessionStatusInfo::Busy => SessionStatusSummary::Busy,
+                    SessionStatusInfo::Retry {
+                        attempt,
+                        message,
+                        next,
+                    } => SessionStatusSummary::Retry {
+                        attempt,
+                        message,
+                        next,
+                    },
+                    SessionStatusInfo::Idle => SessionStatusSummary::Idle,
+                };
+
+                let messages = client.messages().list(session_id).await.map_err(|e| {
+                    ToolError::Internal(format!("Failed to list messages: {e}"))
+                })?;
+                let pending_message_count = count_pending_messages(&messages);
+                let last_activity = get_last_activity_time(
+                    &messages,
+                    session.time.as_ref().map(|time| time.updated),
+                );
+                let recent_tool_calls = extract_recent_tool_calls(&messages, 10);
+
+                let spawned = server.spawned_sessions().read().await;
+                let launched_by_you = spawned.contains(session_id);
+
+                Ok(GetSessionStateOutput {
+                    session_id: session.id,
+                    title: session.title,
+                    directory: session.directory,
+                    status,
+                    launched_by_you,
+                    pending_message_count,
+                    last_activity,
+                    recent_tool_calls,
                 })
             }
             .await;
@@ -1473,6 +1705,7 @@ pub fn build_registry(server: &Arc<OnceCell<OrchestratorServer>>) -> ToolRegistr
     ToolRegistry::builder()
         .register::<OrchestratorRunTool, ()>(OrchestratorRunTool::new(Arc::clone(server)))
         .register::<ListSessionsTool, ()>(ListSessionsTool::new(Arc::clone(server)))
+        .register::<GetSessionStateTool, ()>(GetSessionStateTool::new(Arc::clone(server)))
         .register::<ListCommandsTool, ()>(ListCommandsTool::new(Arc::clone(server)))
         .register::<RespondPermissionTool, ()>(RespondPermissionTool::new(Arc::clone(server)))
         .register::<RespondQuestionTool, ()>(RespondQuestionTool::new(Arc::clone(server)))
@@ -1488,8 +1721,14 @@ mod tests {
     fn tool_names_are_short() {
         assert_eq!(<OrchestratorRunTool as Tool>::NAME, "run");
         assert_eq!(<ListSessionsTool as Tool>::NAME, "list_sessions");
+        assert_eq!(<GetSessionStateTool as Tool>::NAME, "get_session_state");
         assert_eq!(<ListCommandsTool as Tool>::NAME, "list_commands");
         assert_eq!(<RespondPermissionTool as Tool>::NAME, "respond_permission");
         assert_eq!(<RespondQuestionTool as Tool>::NAME, "respond_question");
+    }
+
+    #[test]
+    fn last_activity_falls_back_to_session_timestamp_when_messages_are_empty() {
+        assert_eq!(get_last_activity_time(&[], Some(1_234)), Some(1_234));
     }
 }

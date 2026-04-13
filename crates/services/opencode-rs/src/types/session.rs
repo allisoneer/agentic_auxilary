@@ -3,7 +3,6 @@
 use crate::types::permission::Ruleset;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::HashMap;
 
 /// A session in `OpenCode`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,7 +175,7 @@ pub struct RevertRequest {
     pub part_id: Option<String>,
 }
 
-/// Session status response.
+/// Legacy-compatible session status summary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionStatus {
@@ -205,93 +204,6 @@ pub enum SessionStatusInfo {
         /// Next retry timestamp.
         next: u64,
     },
-}
-
-/// Backward-compatible `/session/status` response wrapper.
-#[derive(Debug, Clone)]
-pub enum SessionStatusResponse {
-    /// Legacy global status shape.
-    Legacy(SessionStatus),
-    /// Modern per-session map shape.
-    Map(HashMap<String, SessionStatusInfo>),
-}
-
-impl SessionStatusResponse {
-    /// Get status for a specific session ID.
-    pub fn status_for(&self, session_id: &str) -> SessionStatusInfo {
-        match self {
-            Self::Map(map) => map
-                .get(session_id)
-                .cloned()
-                .unwrap_or(SessionStatusInfo::Idle),
-            Self::Legacy(status) => {
-                if status.busy && status.active_session_id.as_deref() == Some(session_id) {
-                    SessionStatusInfo::Busy
-                } else if status.busy && status.active_session_id.is_none() {
-                    // Conservative fallback for legacy busy-without-active-session responses.
-                    SessionStatusInfo::Busy
-                } else {
-                    SessionStatusInfo::Idle
-                }
-            }
-        }
-    }
-
-    /// Convert to a legacy summary for compatibility with existing API consumers.
-    pub fn into_legacy_summary(self) -> SessionStatus {
-        match self {
-            Self::Legacy(status) => status,
-            Self::Map(map) => {
-                let active: Vec<String> = map
-                    .into_iter()
-                    .filter_map(|(sid, status)| {
-                        if matches!(
-                            status,
-                            SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }
-                        ) {
-                            Some(sid)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                let busy = !active.is_empty();
-                let active_session_id = if active.len() == 1 {
-                    active.into_iter().next()
-                } else {
-                    None
-                };
-
-                SessionStatus {
-                    active_session_id,
-                    busy,
-                }
-            }
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for SessionStatusResponse {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        let is_legacy = value.get("busy").is_some()
-            || value.get("activeSessionId").is_some()
-            || value.get("active_session_id").is_some();
-
-        if is_legacy {
-            let legacy: SessionStatus =
-                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
-            Ok(Self::Legacy(legacy))
-        } else {
-            let map: HashMap<String, SessionStatusInfo> =
-                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
-            Ok(Self::Map(map))
-        }
-    }
 }
 
 /// A file diff entry from the session diff endpoint.
@@ -352,6 +264,7 @@ pub struct TodoItem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_session_deserialize() {
@@ -407,36 +320,31 @@ mod tests {
     }
 
     #[test]
-    fn parse_legacy_status() {
+    fn parse_legacy_status_shape_is_rejected() {
         let json = r#"{"busy": true, "activeSessionId": "s1"}"#;
-        let resp: SessionStatusResponse = serde_json::from_str(json).unwrap();
-
-        assert!(matches!(resp, SessionStatusResponse::Legacy(_)));
-        assert!(matches!(resp.status_for("s1"), SessionStatusInfo::Busy));
-        assert!(matches!(resp.status_for("s2"), SessionStatusInfo::Idle));
+        let resp: Result<HashMap<String, SessionStatusInfo>, _> = serde_json::from_str(json);
+        assert!(resp.is_err());
     }
 
     #[test]
     fn parse_map_status() {
         let json = r#"{"s1": {"type": "busy"}, "s2": {"type": "retry", "attempt": 2, "message": "rate limited", "next": 12345}}"#;
-        let resp: SessionStatusResponse = serde_json::from_str(json).unwrap();
+        let resp: HashMap<String, SessionStatusInfo> = serde_json::from_str(json).unwrap();
 
-        assert!(matches!(resp, SessionStatusResponse::Map(_)));
-        assert!(matches!(resp.status_for("s1"), SessionStatusInfo::Busy));
+        assert!(matches!(resp.get("s1"), Some(SessionStatusInfo::Busy)));
         assert!(matches!(
-            resp.status_for("s2"),
-            SessionStatusInfo::Retry { attempt: 2, .. }
+            resp.get("s2"),
+            Some(SessionStatusInfo::Retry { attempt: 2, .. })
         ));
-        assert!(matches!(resp.status_for("s3"), SessionStatusInfo::Idle));
+        assert!(!resp.contains_key("s3"));
     }
 
     #[test]
     fn parse_empty_map_status() {
         let json = r"{}";
-        let resp: SessionStatusResponse = serde_json::from_str(json).unwrap();
+        let resp: HashMap<String, SessionStatusInfo> = serde_json::from_str(json).unwrap();
 
-        assert!(matches!(resp, SessionStatusResponse::Map(_)));
-        assert!(matches!(resp.status_for("any"), SessionStatusInfo::Idle));
+        assert!(resp.is_empty());
     }
 
     #[test]

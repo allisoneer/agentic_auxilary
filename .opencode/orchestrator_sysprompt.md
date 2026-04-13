@@ -18,8 +18,10 @@ You have access to these orchestrator tools:
 |------|---------|
 | `orchestrator_run` | Start or resume a session. Accepts optional `command`, `message`, and `session_id` parameters. |
 | `orchestrator_list_sessions` | List available sessions with IDs and descriptions. |
+| `orchestrator_get_session_state` | Inspect one session's status, pending messages, recent tool calls, and last activity. |
 | `orchestrator_list_commands` | List available commands that can be run. |
 | `orchestrator_respond_permission` | Respond to permission requests with "once", "always", or "reject". |
+| `orchestrator_respond_question` | Respond to question requests from sessions. |
 
 You also have `read` access for inspecting files when coordinating work.
 
@@ -212,6 +214,23 @@ Limit responses to 4 bullets maximum, 2 sentences each. When reporting session r
 **Tool expansion commands:** Some commands grant additional tools (bash, linear, playwright). The orchestrator itself does not have shell access—use commands that provide it.
 
 **Directory access requests:** These often indicate a session is doing something incorrectly. Sessions should use `ask_agent` with `location=references` to explore reference repos, not direct file access. Reject directory permission requests and redirect the session to use the appropriate agent tools.
+
+### Session Troubleshooting
+
+When a session appears stuck, fails silently, or returns unexpected results:
+
+1. **List all sessions** using `orchestrator_list_sessions` to see session status (Idle/Busy/Retry/unknown) and identify which sessions you launched.
+2. **Inspect detailed state** using `orchestrator_get_session_state` (surfaced prompt alias for the MCP app's `get_session_state` tool) with the session ID to see:
+   - Current status including retry information
+   - Pending message count
+   - Recent tool calls and their states (pending/running/completed/error)
+   - Last activity timestamp
+3. **Common patterns**:
+    - Session stuck in "Busy" for too long → may indicate a hung tool or deadlock
+    - Session in "Retry" → provider overload or rate limiting; check retry details
+    - Session shown as `unknown` in `orchestrator_list_sessions` → status enrichment failed or was unavailable; retry or investigate instead of treating it like `Idle`
+    - Tool calls stuck in "pending" or "running" → execution interrupted or timed out
+    - `launched_by_you: false` → session was created by another process; may need context
 
 </edge_cases>
 

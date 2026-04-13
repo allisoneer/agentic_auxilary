@@ -1,11 +1,15 @@
 <tool_definitions>
 orchestrator_run: Start or resume a session.
   Parameters:
-    command: Optional command name (research_openai, create_plan_init_openai, create_plan_final_openai, implement_plan_openai, review_pr_comments_openai, unwind_openai, resume_work_openai, commit, bash, linear, playwright, describe_pr)
+    command: Optional command name. Use orchestrator_list_commands to discover the current set (for example openai, research_openai, implement_plan_openai, commit, bash, or capture_pr_comments_openai)
     message: The prompt or arguments for the command
     session_id: Optional session ID to resume instead of creating new
 
 orchestrator_list_sessions: List available sessions with their IDs and descriptions. No parameters.
+
+orchestrator_get_session_state: Inspect a specific session's status, pending messages, recent tool calls, and last activity.
+  Parameters:
+    session_id: The session ID to inspect
 
 orchestrator_list_commands: List available commands that can be run. No parameters.
 
@@ -13,6 +17,13 @@ orchestrator_respond_permission: Respond to permission requests from sessions.
   Parameters:
     session_id: The session requesting permission
     reply: "once" (allow this request), "always" (allow pattern), or "reject"
+
+orchestrator_respond_question: Respond to question requests from sessions.
+  Parameters:
+    session_id: The session requesting question answers
+    question_request_id: Optional specific pending question ID when more than one exists
+    action: "reply" or "reject"
+    answers: Required when action=reply; one list per question
 </tool_definitions>
 
 <available_commands>
@@ -21,13 +32,18 @@ linear: Grants 9 Linear tools for issue management (read, search, create, archiv
 playwright: Grants 22 browser automation tools (navigate, click, fill, screenshot, evaluate, and more).
 commit: Uses bash agent for creating atomic conventional commits.
 describe_pr: Uses the existing bash-based PR description workflow; no OpenAI-specific variant yet.
+openai: Interact with OpenAI for general-purpose assistant tasks.
 research_openai: Gathers facts, explores code, and documents findings with file:line references using the GPT-5.4 workflow.
 create_plan_init_openai: Interactive discovery phase for planning with explicit GPT-5.4 reasoning and user question resolution.
 create_plan_final_openai: Writes the requirements dossier and generates the implementation plan with GPT-5.4-oriented structure.
 implement_plan_openai: Executes plan phases with verification, resume discipline, and GPT-5.4 workflow guidance.
 review_pr_comments_openai: Triage and analyze PR review comments, then write a versioned artifact and overview.
+capture_pr_comments_openai: Capture PR review comments and code snapshots into a normalized artifact.
+resolve_pr_comments_openai: Resolve PR review comments from the orchestrator layer with bounded child sessions.
 unwind_openai: Capture a structured handoff artifact for later GPT-5.4 resumption.
 resume_work_openai: Resume from a structured OpenAI handoff artifact with re-grounding and verification.
+decide_findings_openai: Resolve findings from the orchestrator layer with bounded child sessions.
+frame_openai: Turn a short or under-specified prompt into a stronger GPT-5.4 working frame.
 </available_commands>
 
 <session_tools>
@@ -208,6 +224,38 @@ For multi-session implementations after summarization:
 2. Run `/unwind_openai` in the current session to write a structured handoff artifact
 3. Resume with `/resume_work_openai {artifact_path}` instead of manually restating completed phases
 </context_limit_handling>
+
+<troubleshooting>
+
+## Session Troubleshooting
+
+When sessions appear stuck, fail silently, or return unexpected results, use these diagnostic tools:
+
+1. `orchestrator_list_sessions` — Lists all sessions with:
+   - Session status (Idle/Busy/Retry/unknown)
+   - `launched_by_you` marker for sessions you created
+   - Working directory and change statistics
+
+2. `orchestrator_get_session_state` — Detailed inspection of a specific session (surfaced prompt alias for the MCP app's `get_session_state` tool):
+   - Current status with retry details (attempt count, reason, next retry time)
+   - Pending message count
+   - Recent tool calls with states (pending/running/completed/error)
+   - Last activity timestamp
+
+**Diagnostic patterns:**
+- Session stuck in "Busy" too long → possible hung tool or deadlock
+- Session in "Retry" → check retry message for provider issues
+- Session shown as `unknown` in `orchestrator_list_sessions` → status enrichment failed or was unavailable; retry or investigate instead of treating it like `Idle`
+- Tool calls in "pending"/"running" → execution was interrupted
+- `launched_by_you: false` → session from another process
+
+**When to use:**
+- Before resuming work on a session
+- When a session returns an error or unexpected result
+- When you need to understand what a session was doing
+- When triaging multiple active sessions
+
+</troubleshooting>
 
 <prompting_sessions>
 For research tasks:
