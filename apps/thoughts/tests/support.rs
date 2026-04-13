@@ -1,3 +1,8 @@
+#![expect(
+    clippy::expect_used,
+    reason = "Test support code should panic on failure"
+)]
+
 use std::path::Path;
 use std::process::Output;
 
@@ -19,7 +24,7 @@ pub fn git_ok(dir: &Path, args: &[&str]) {
     );
 }
 
-/// Like git_ok, but returns the Output for callers that need stdout/stderr.
+/// Like `git_ok`, but returns the Output for callers that need stdout/stderr.
 pub fn git_ok_out(dir: &Path, args: &[&str]) -> Output {
     let out = std::process::Command::new("git")
         .current_dir(dir)

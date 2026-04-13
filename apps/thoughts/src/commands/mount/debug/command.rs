@@ -9,6 +9,7 @@ use crate::mount::MountSpace;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(mount_name: String) -> Result<()> {
     // Get repository root
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
@@ -21,12 +22,12 @@ pub async fn execute(mount_name: String) -> Result<()> {
 
     // Parse mount name to MountSpace
     let mount_space = MountSpace::parse(&mount_name)
-        .with_context(|| format!("Invalid mount name: {}", mount_name))?;
+        .with_context(|| format!("Invalid mount name: {mount_name}"))?;
 
     // Find mount using MountSpace
     let mount = desired
         .find_mount(&mount_space)
-        .ok_or_else(|| anyhow::anyhow!("Mount '{}' not found in configuration", mount_name))?;
+        .ok_or_else(|| anyhow::anyhow!("Mount '{mount_name}' not found in configuration"))?;
 
     // Resolve mount sources
     let resolver = MountResolver::new()?;
@@ -46,9 +47,9 @@ pub async fn execute(mount_name: String) -> Result<()> {
     // Get the mount command
     let command = mount_manager.get_mount_command(&sources, &target, &options);
 
-    println!("Mount command for '{}':", mount_name);
+    println!("Mount command for '{mount_name}':");
     println!();
-    println!("{}", command);
+    println!("{command}");
     println!();
     println!("Sources:");
     for source in &sources {

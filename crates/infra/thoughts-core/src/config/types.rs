@@ -43,7 +43,7 @@ fn default_git_sync() -> SyncStrategy {
 impl Mount {
     #[cfg(test)] // Only used in tests
     pub fn is_git(&self) -> bool {
-        matches!(self, Mount::Git { .. })
+        matches!(self, Self::Git { .. })
     }
 }
 
@@ -61,11 +61,10 @@ impl std::str::FromStr for SyncStrategy {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "none" => Ok(SyncStrategy::None),
-            "auto" => Ok(SyncStrategy::Auto),
+            "none" => Ok(Self::None),
+            "auto" => Ok(Self::Auto),
             _ => Err(anyhow::anyhow!(
-                "Invalid sync strategy: {}. Must be 'none' or 'auto'",
-                s
+                "Invalid sync strategy: {s}. Must be 'none' or 'auto'"
             )),
         }
     }
@@ -74,8 +73,8 @@ impl std::str::FromStr for SyncStrategy {
 impl std::fmt::Display for SyncStrategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SyncStrategy::None => write!(f, "none"),
-            SyncStrategy::Auto => write!(f, "auto"),
+            Self::None => write!(f, "none"),
+            Self::Auto => write!(f, "auto"),
         }
     }
 }
@@ -85,13 +84,13 @@ impl std::fmt::Display for SyncStrategy {
 // See CLAUDE.md for V2 config API guidance.
 
 /// Maps git URLs to local filesystem paths
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepoMapping {
     pub version: String,
     pub mappings: HashMap<String, RepoLocation>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepoLocation {
     pub path: PathBuf,
     pub auto_managed: bool,
@@ -135,7 +134,7 @@ mod tests {
                 assert_eq!(rm.description.as_deref(), Some("Test repo"));
                 assert_eq!(rm.ref_name, None);
             }
-            _ => panic!("Expected WithMetadata"),
+            ReferenceEntry::Simple(_) => panic!("Expected WithMetadata"),
         }
     }
 
@@ -149,7 +148,7 @@ mod tests {
                 assert_eq!(rm.description, None);
                 assert_eq!(rm.ref_name, None);
             }
-            _ => panic!("Expected WithMetadata"),
+            ReferenceEntry::Simple(_) => panic!("Expected WithMetadata"),
         }
     }
 
@@ -162,7 +161,7 @@ mod tests {
                 assert_eq!(rm.remote, "https://github.com/org/repo.git");
                 assert_eq!(rm.ref_name.as_deref(), Some("refs/tags/v1.2.3"));
             }
-            _ => panic!("Expected WithMetadata"),
+            ReferenceEntry::Simple(_) => panic!("Expected WithMetadata"),
         }
     }
 
@@ -185,7 +184,7 @@ mod tests {
                 assert_eq!(rm.description.as_deref(), Some("Ref 2"));
                 assert_eq!(rm.ref_name, None);
             }
-            _ => panic!("Expected WithMetadata"),
+            ReferenceEntry::Simple(_) => panic!("Expected WithMetadata"),
         }
     }
 
@@ -214,7 +213,7 @@ mod tests {
                 assert_eq!(rm.description.as_deref(), Some("Reference 2"));
                 assert_eq!(rm.ref_name, None);
             }
-            _ => panic!("Expected WithMetadata"),
+            ReferenceEntry::Simple(_) => panic!("Expected WithMetadata"),
         }
     }
 

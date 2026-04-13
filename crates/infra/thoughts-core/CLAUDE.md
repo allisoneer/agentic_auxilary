@@ -15,7 +15,8 @@ This is a Rust CLI application called "thoughts" - a flexible thought management
 ```bash
 # Default targets (silent if successful)
 just check      # Run formatting and clippy checks
-just test       # Run all tests
+just test       # Unit tests only (integration tests show as "ignored")
+just test-integration  # All tests including integration tests
 just build      # Build the project
 just fmt        # Format code
 just fmt-check  # Check formatting
@@ -24,9 +25,10 @@ just fmt-check  # Check formatting
 OUTPUT_MODE=normal just test    # Normal output
 OUTPUT_MODE=verbose just test   # Verbose output
 
-# Specific test types via cargo
-cargo test --lib                # Unit tests only
-THOUGHTS_INTEGRATION_TESTS=1 just test  # Integration tests included
+# Specific test types
+just test                       # Unit tests (fast, default)
+just test-integration           # Include git integration tests
+THOUGHTS_NETWORK_TESTS=1 just test-integration  # Include network-dependent tests
 ```
 
 ## High-Level Architecture

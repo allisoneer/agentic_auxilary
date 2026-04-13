@@ -12,6 +12,7 @@ use colored::Colorize;
 use std::fs;
 use thoughts_tool::workspace::check_branch_allowed;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute() -> Result<()> {
     // Enforce lockout and run migration/auto-archive without creating directories
     check_branch_allowed()?;
@@ -42,7 +43,7 @@ pub async fn execute() -> Result<()> {
         .context("Thoughts mount not cloned")?;
 
     // Use branch name directly - no weekly directories
-    let dir_name = branch.clone();
+    let dir_name = branch;
     let active_dir = thoughts_root.join(&dir_name);
 
     if !active_dir.exists() {
@@ -75,11 +76,14 @@ pub async fn execute() -> Result<()> {
     let end_date = ended_at.format("%Y-%m-%d").to_string();
 
     // Build completed directory name with date range
-    let completed_name = format!("{}_to_{}_{}", start_date, end_date, dir_name);
+    let completed_name = format!("{start_date}_to_{end_date}_{dir_name}");
     let completed_dir = thoughts_root.join("completed").join(&completed_name);
 
     // Ensure completed directory exists
-    fs::create_dir_all(completed_dir.parent().unwrap())?;
+    let completed_parent = completed_dir
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("completed directory has no parent"))?;
+    fs::create_dir_all(completed_parent)?;
 
     // Move directory
     fs::rename(&active_dir, &completed_dir)?;
@@ -89,7 +93,7 @@ pub async fn execute() -> Result<()> {
         "✓".green(),
         completed_dir.display()
     );
-    println!("  Duration: {} to {}", start_date, end_date);
+    println!("  Duration: {start_date} to {end_date}");
 
     Ok(())
 }

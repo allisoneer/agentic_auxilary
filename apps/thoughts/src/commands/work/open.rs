@@ -19,10 +19,10 @@ pub async fn execute(subdir: OpenSubdir) -> Result<()> {
     let aw = ensure_active_work()?;
 
     let target: PathBuf = match subdir {
-        OpenSubdir::Base => aw.base.clone(),
-        OpenSubdir::Research => aw.research.clone(),
-        OpenSubdir::Plans => aw.plans.clone(),
-        OpenSubdir::Artifacts => aw.artifacts.clone(),
+        OpenSubdir::Base => aw.base,
+        OpenSubdir::Research => aw.research,
+        OpenSubdir::Plans => aw.plans,
+        OpenSubdir::Artifacts => aw.artifacts,
     };
 
     if !target.exists() {

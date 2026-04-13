@@ -1,7 +1,7 @@
-//! Library-level document management for thoughts_tool.
+//! Library-level document management for `thoughts_tool`.
 //!
 //! This module provides reusable functions for writing and listing documents,
-//! and is used by both the MCP layer and other crates that depend on thoughts_tool.
+//! and is used by both the MCP layer and other crates that depend on `thoughts_tool`.
 
 use crate::error::Result as TResult;
 use crate::error::ThoughtsError;
@@ -33,13 +33,13 @@ pub enum DocumentType {
 }
 
 impl DocumentType {
-    /// Returns the path for this document type's directory within ActiveWork.
+    /// Returns the path for this document type's directory within `ActiveWork`.
     pub fn subdir<'a>(&self, aw: &'a ActiveWork) -> &'a PathBuf {
         match self {
-            DocumentType::Research => &aw.research,
-            DocumentType::Plan => &aw.plans,
-            DocumentType::Artifact => &aw.artifacts,
-            DocumentType::Log => &aw.logs,
+            Self::Research => &aw.research,
+            Self::Plan => &aw.plans,
+            Self::Artifact => &aw.artifacts,
+            Self::Log => &aw.logs,
         }
     }
 
@@ -49,20 +49,20 @@ impl DocumentType {
     /// This matches conventional filesystem naming while keeping API values consistent.
     pub fn subdir_name(&self) -> &'static str {
         match self {
-            DocumentType::Research => "research",
-            DocumentType::Plan => "plans",
-            DocumentType::Artifact => "artifacts",
-            DocumentType::Log => "logs",
+            Self::Research => "research",
+            Self::Plan => "plans",
+            Self::Artifact => "artifacts",
+            Self::Log => "logs",
         }
     }
 
     /// Returns the singular label for this document type (used in output/reporting).
     pub fn singular_label(&self) -> &'static str {
         match self {
-            DocumentType::Research => "research",
-            DocumentType::Plan => "plan",
-            DocumentType::Artifact => "artifact",
-            DocumentType::Log => "log",
+            Self::Research => "research",
+            Self::Plan => "plan",
+            Self::Artifact => "artifact",
+            Self::Log => "log",
         }
     }
 }
@@ -76,13 +76,12 @@ impl<'de> serde::Deserialize<'de> for DocumentType {
         let s = String::deserialize(deserializer)?;
         let norm = s.trim().to_ascii_lowercase();
         match norm.as_str() {
-            "research" => Ok(DocumentType::Research),
-            "plan" | "plans" => Ok(DocumentType::Plan),
-            "artifact" | "artifacts" => Ok(DocumentType::Artifact),
-            "log" | "logs" => Ok(DocumentType::Log), // accepts both for backward compat
+            "research" => Ok(Self::Research),
+            "plan" | "plans" => Ok(Self::Plan),
+            "artifact" | "artifacts" => Ok(Self::Artifact),
+            "log" | "logs" => Ok(Self::Log), // accepts both for backward compat
             other => Err(serde::de::Error::custom(format!(
-                "invalid doc_type '{}'; expected research|plan(s)|artifact(s)|log(s)",
-                other
+                "invalid doc_type '{other}'; expected research|plan(s)|artifact(s)|log(s)"
             ))),
         }
     }
@@ -216,7 +215,7 @@ fn compute_github_url(
 /// # Returns
 /// A `WriteDocumentOk` with the path, bytes written, and optional GitHub URL on success.
 pub fn write_document(
-    doc_type: DocumentType,
+    doc_type: &DocumentType,
     filename: &str,
     content: &str,
 ) -> TResult<WriteDocumentOk> {
@@ -235,7 +234,7 @@ pub fn write_document(
         aw.repo_subpath.as_deref(),
         aw.thoughts_git_ref.as_deref(),
         &aw.dir_name,
-        &doc_type,
+        doc_type,
         filename,
     );
 
@@ -259,20 +258,20 @@ pub fn write_document(
 ///
 /// # Returns
 /// An `ActiveDocuments` with the base path and list of files.
-pub fn list_documents(subdir: Option<DocumentType>) -> TResult<ActiveDocuments> {
+pub fn list_documents(subdir: Option<&DocumentType>) -> TResult<ActiveDocuments> {
     let aw = ensure_active_work()?;
     let base = format!("./thoughts/{}", aw.dir_name);
 
     // Determine which subdirs to scan
     // Tuple: (singular_label for doc_type output, plural_dirname for paths, PathBuf)
     let sets: Vec<(&str, &str, PathBuf)> = match subdir {
-        Some(ref d) => {
+        Some(d) => {
             vec![(d.singular_label(), d.subdir_name(), d.subdir(&aw).clone())]
         }
         None => vec![
             ("research", "research", aw.research.clone()),
             ("plan", "plans", aw.plans.clone()),
-            ("artifact", "artifacts", aw.artifacts.clone()),
+            ("artifact", "artifacts", aw.artifacts),
             // Do NOT include logs by default - must be explicitly requested
         ],
     };
@@ -288,11 +287,10 @@ pub fn list_documents(subdir: Option<DocumentType>) -> TResult<ActiveDocuments> 
             if meta.is_file() {
                 let modified: DateTime<Utc> = meta
                     .modified()
-                    .map(|t| t.into())
-                    .unwrap_or_else(|_| Utc::now());
+                    .map_or_else(|_| Utc::now(), std::convert::Into::into);
                 let file_name = entry.file_name().to_string_lossy().to_string();
                 files.push(DocumentInfo {
-                    path: format!("{}/{}/{}", base, dirname, file_name),
+                    path: format!("{base}/{dirname}/{file_name}"),
                     doc_type: singular_label.to_string(),
                     size: meta.len(),
                     modified: modified.to_rfc3339(),
@@ -307,7 +305,7 @@ pub fn list_documents(subdir: Option<DocumentType>) -> TResult<ActiveDocuments> 
 /// Get the path to the logs directory in the active work, ensuring it exists.
 ///
 /// This is a convenience function for other crates that need to write log files
-/// directly (e.g., agentic_logging).
+/// directly (e.g., `agentic_logging`).
 ///
 /// # Returns
 /// The absolute path to the logs directory.
@@ -316,7 +314,7 @@ pub fn active_logs_dir() -> TResult<PathBuf> {
     if !aw.logs.exists() {
         std::fs::create_dir_all(&aw.logs)?;
     }
-    Ok(aw.logs.clone())
+    Ok(aw.logs)
 }
 
 #[cfg(test)]

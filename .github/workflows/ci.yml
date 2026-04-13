@@ -83,9 +83,18 @@ jobs:
         env:
           SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
-          THOUGHTS_INTEGRATION_TESTS: "1"
           RUST_BACKTRACE: "1"
         run: cargo nextest run --workspace --profile ci
+
+      # Run thoughts-core integration tests which are #[ignore]d by default.
+      # We use --ignored (not --include-ignored) to run ONLY the ignored tests,
+      # avoiding duplicate runs of the normal tests above.
+      - name: Run thoughts integration tests
+        env:
+          SCCACHE_GHA_ENABLED: "on"
+          RUSTC_WRAPPER: "sccache"
+          RUST_BACKTRACE: "1"
+        run: cargo nextest run -p thoughts-tool -p thoughts-bin --profile ci -- --ignored
 
   audit:
     name: Security Audit (cargo-deny)

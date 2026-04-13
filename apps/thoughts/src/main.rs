@@ -341,7 +341,7 @@ async fn main() -> Result<()> {
                     Some("research") => OpenSubdir::Research,
                     Some("plans") => OpenSubdir::Plans,
                     Some("artifacts") => OpenSubdir::Artifacts,
-                    None => OpenSubdir::Base,
+                    // None and any unrecognized subdirectory default to Base
                     _ => OpenSubdir::Base,
                 };
                 execute(which).await

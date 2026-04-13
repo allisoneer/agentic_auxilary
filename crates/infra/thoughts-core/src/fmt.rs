@@ -1,7 +1,9 @@
-//! TextFormat implementations for thoughts_tool output types.
+//! `TextFormat` implementations for `thoughts_tool` output types.
 //!
-//! These implementations produce identical output to the McpFormatter
+//! These implementations produce identical output to the `McpFormatter`
 //! implementations, preserving Unicode symbols (checkmarks, dashes) for human-readable output.
+
+use std::fmt::Write;
 
 use agentic_tools_core::fmt::TextFormat;
 use agentic_tools_core::fmt::TextOptions;
@@ -22,7 +24,7 @@ impl TextFormat for WriteDocumentOk {
             human_size(self.bytes_written)
         );
         if let Some(url) = &self.github_url {
-            out.push_str(&format!("\n  URL (after sync): {}", url));
+            let _ = write!(out, "\n  URL (after sync): {url}");
         }
         out
     }
@@ -49,7 +51,7 @@ impl TextFormat for ActiveDocuments {
                     .to_string(),
                 Err(_) => f.modified.clone(),
             };
-            out.push_str(&format!("\n{} @ {}", rel, ts));
+            let _ = write!(out, "\n{rel} @ {ts}");
         }
         out
     }
@@ -68,10 +70,10 @@ impl TextFormat for ReferencesList {
                 .unwrap_or(&e.path);
             match &e.description {
                 Some(desc) if !desc.trim().is_empty() => {
-                    out.push_str(&format!("\n{} \u{2014} {}", rel, desc));
+                    let _ = write!(out, "\n{rel} \u{2014} {desc}");
                 }
                 _ => {
-                    out.push_str(&format!("\n{}", rel));
+                    let _ = write!(out, "\n{rel}");
                 }
             }
         }
@@ -97,15 +99,15 @@ impl TextFormat for RepoRefsList {
         };
 
         for entry in &self.entries {
-            out.push_str(&format!("\n{}", entry.name));
+            let _ = write!(out, "\n{}", entry.name);
             if let Some(oid) = &entry.oid {
-                out.push_str(&format!(" oid={oid}"));
+                let _ = write!(out, " oid={oid}");
             }
             if let Some(peeled) = &entry.peeled {
-                out.push_str(&format!(" peeled={peeled}"));
+                let _ = write!(out, " peeled={peeled}");
             }
             if let Some(target) = &entry.target {
-                out.push_str(&format!(" target={target}"));
+                let _ = write!(out, " target={target}");
             }
         }
 
@@ -121,30 +123,33 @@ impl TextFormat for AddReferenceOk {
         } else {
             out.push_str("\u{2713} Added reference\n");
         }
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "  URL: {}\n  Org/Repo: {}/{}",
             self.url, self.org, self.repo
-        ));
+        );
         if let Some(ref_name) = &self.ref_name {
-            out.push_str(&format!("\n  Ref: {}", ref_name));
+            let _ = write!(out, "\n  Ref: {ref_name}");
         }
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\n  Mount: {}\n  Target: {}",
             self.mount_path, self.mount_target
-        ));
+        );
         if let Some(mp) = &self.mapping_path {
-            out.push_str(&format!("\n  Mapping: {}", mp));
+            let _ = write!(out, "\n  Mapping: {mp}");
         } else {
             out.push_str("\n  Mapping: <none>");
         }
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\n  Config updated: {}\n  Cloned: {}\n  Mounted: {}",
             self.config_updated, self.cloned, self.mounted
-        ));
+        );
         if !self.warnings.is_empty() {
             out.push_str("\nWarnings:");
             for w in &self.warnings {
-                out.push_str(&format!("\n- {}", w));
+                let _ = write!(out, "\n- {w}");
             }
         }
         out
@@ -156,10 +161,7 @@ impl TextFormat for TemplateResponse {
         let ty = self.template_type.label();
         let content = self.template_type.content();
         let guidance = self.template_type.guidance();
-        format!(
-            "Here is the {} template:\n\n```markdown\n{}\n```\n\n{}",
-            ty, content, guidance
-        )
+        format!("Here is the {ty} template:\n\n```markdown\n{content}\n```\n\n{guidance}")
     }
 }
 

@@ -6,6 +6,7 @@ use anyhow::Result;
 use anyhow::bail;
 use colored::Colorize;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute() -> Result<()> {
     let repo_root = get_current_control_repo_root().context("Not in a git repository")?;
 

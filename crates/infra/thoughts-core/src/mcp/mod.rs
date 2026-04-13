@@ -78,26 +78,26 @@ pub enum TemplateType {
 impl TemplateType {
     pub fn label(&self) -> &'static str {
         match self {
-            TemplateType::Research => "research",
-            TemplateType::Plan => "plan",
-            TemplateType::Requirements => "requirements",
-            TemplateType::PrDescription => "pr_description",
+            Self::Research => "research",
+            Self::Plan => "plan",
+            Self::Requirements => "requirements",
+            Self::PrDescription => "pr_description",
         }
     }
     pub fn content(&self) -> &'static str {
         match self {
-            TemplateType::Research => templates::RESEARCH_TEMPLATE_MD,
-            TemplateType::Plan => templates::PLAN_TEMPLATE_MD,
-            TemplateType::Requirements => templates::REQUIREMENTS_TEMPLATE_MD,
-            TemplateType::PrDescription => templates::PR_DESCRIPTION_TEMPLATE_MD,
+            Self::Research => templates::RESEARCH_TEMPLATE_MD,
+            Self::Plan => templates::PLAN_TEMPLATE_MD,
+            Self::Requirements => templates::REQUIREMENTS_TEMPLATE_MD,
+            Self::PrDescription => templates::PR_DESCRIPTION_TEMPLATE_MD,
         }
     }
     pub fn guidance(&self) -> &'static str {
         match self {
-            TemplateType::Research => templates::RESEARCH_GUIDANCE,
-            TemplateType::Plan => templates::PLAN_GUIDANCE,
-            TemplateType::Requirements => templates::REQUIREMENTS_GUIDANCE,
-            TemplateType::PrDescription => templates::PR_DESCRIPTION_GUIDANCE,
+            Self::Research => templates::RESEARCH_GUIDANCE,
+            Self::Plan => templates::PLAN_GUIDANCE,
+            Self::Requirements => templates::REQUIREMENTS_GUIDANCE,
+            Self::PrDescription => templates::PR_DESCRIPTION_GUIDANCE,
         }
     }
 }
@@ -152,9 +152,7 @@ pub struct TemplateResponse {
 // Note: Tool implementations are in thoughts-mcp-tools crate using agentic-tools framework.
 
 fn repo_refs_semaphore() -> Arc<Semaphore> {
-    REPO_REFS_SEM
-        .get_or_init(|| Arc::new(Semaphore::new(REPO_REFS_MAX_CONCURRENCY)))
-        .clone()
+    Arc::clone(REPO_REFS_SEM.get_or_init(|| Arc::new(Semaphore::new(REPO_REFS_MAX_CONCURRENCY))))
 }
 
 fn get_repo_refs_blocking(input_url: String, limit: usize) -> Result<RepoRefsList> {
@@ -195,7 +193,7 @@ where
     let deadline = tokio::time::Instant::now() + timeout;
 
     let permit = match tokio::time::timeout_at(deadline, sem.acquire_owned()).await {
-        Ok(permit) => permit.expect("semaphore closed"),
+        Ok(permit) => permit.context("semaphore unexpectedly closed")?,
         Err(_) => anyhow::bail!("timeout while waiting to start {op_label} after {timeout:?}"),
     };
 
@@ -204,14 +202,13 @@ where
         work()
     });
 
-    match tokio::time::timeout_at(deadline, &mut handle).await {
-        Ok(joined) => joined.context("remote ref discovery task failed")?,
-        Err(_) => {
-            tokio::spawn(async move {
-                let _ = handle.await;
-            });
-            anyhow::bail!("timeout while {op_label} after {timeout:?}");
-        }
+    if let Ok(joined) = tokio::time::timeout_at(deadline, &mut handle).await {
+        joined.context("remote ref discovery task failed")?
+    } else {
+        tokio::spawn(async move {
+            let _ = handle.await;
+        });
+        anyhow::bail!("timeout while {op_label} after {timeout:?}");
     }
 }
 
@@ -223,7 +220,7 @@ pub async fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Re
 
     let sem = repo_refs_semaphore();
     let timeout = Duration::from_secs(REPO_REFS_TIMEOUT_SECS);
-    let op_label = format!("discovering remote refs for {}", input_url);
+    let op_label = format!("discovering remote refs for {input_url}");
     let url_for_task = input_url.clone();
 
     run_blocking_repo_refs_with_deadline(sem, timeout, op_label, move || {
@@ -235,10 +232,9 @@ pub async fn get_repo_refs_impl_adapter(url: String, limit: Option<usize>) -> Re
 fn normalize_repo_ref_limit(limit: Option<usize>) -> Result<usize> {
     match limit.unwrap_or(DEFAULT_REPO_REFS_LIMIT) {
         0 => anyhow::bail!("invalid input: limit must be at least 1"),
-        limit if limit > MAX_REPO_REFS_LIMIT => anyhow::bail!(
-            "invalid input: limit must be at most {}",
-            MAX_REPO_REFS_LIMIT
-        ),
+        limit if limit > MAX_REPO_REFS_LIMIT => {
+            anyhow::bail!("invalid input: limit must be at most {MAX_REPO_REFS_LIMIT}")
+        }
         limit => Ok(limit),
     }
 }
@@ -247,18 +243,16 @@ fn response_identity_url<'a>(
     input_url: &'a str,
     matched_existing: Option<&'a (String, Option<String>)>,
 ) -> &'a str {
-    matched_existing
-        .map(|(stored_url, _)| stored_url.as_str())
-        .unwrap_or(input_url)
+    matched_existing.map_or(input_url, |(stored_url, _)| stored_url.as_str())
 }
 
-/// Public adapter for add_reference implementation.
+/// Public adapter for `add_reference` implementation.
 ///
 /// This function is callable by agentic-tools wrappers. It contains the actual
 /// logic for adding a GitHub repository as a reference.
 ///
 /// # Arguments
-/// * `url` - HTTPS GitHub URL (https://github.com/org/repo or .git) or generic https://*.git clone URL
+/// * `url` - HTTPS GitHub URL (<https://github.com/org/repo> or .git) or generic https://*.git clone URL
 /// * `description` - Optional description for why this reference was added
 /// * `ref_name` - Optional full git ref name (for example refs/heads/main)
 ///
@@ -285,9 +279,8 @@ pub async fn add_reference_impl_adapter(
     {
         anyhow::bail!(
             "invalid input: ref must be a full ref name like 'refs/heads/main' or 'refs/tags/v1.2.3' \
-(shorthand like 'main' is not supported). Details: {}. \
-Tip: call thoughts_get_repo_refs to discover full refs.",
-            e
+(shorthand like 'main' is not supported). Details: {e}. \
+Tip: call thoughts_get_repo_refs to discover full refs."
         );
     }
 
@@ -382,7 +375,7 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
 
     // Always attempt to sync clone+mount (best-effort, no rollback)
     if let Err(e) = update_active_mounts().await {
-        warnings.push(format!("Mount synchronization encountered an error: {}", e));
+        warnings.push(format!("Mount synchronization encountered an error: {e}"));
     }
 
     // Post-sync mapping status to infer cloning
@@ -403,10 +396,10 @@ Tip: call thoughts_get_repo_refs to discover full refs.",
         .await
         .context("failed to list mounts")?;
     let target_path = std::path::PathBuf::from(&mount_target);
-    let target_canon = std::fs::canonicalize(&target_path).unwrap_or(target_path.clone());
+    let target_canon = std::fs::canonicalize(&target_path).unwrap_or(target_path);
     let mut mounted = false;
     for mi in active {
-        let canon = std::fs::canonicalize(&mi.target).unwrap_or(mi.target.clone());
+        let canon = std::fs::canonicalize(&mi.target).unwrap_or_else(|_| mi.target.clone());
         if canon == target_canon {
             mounted = true;
             break;
@@ -622,9 +615,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn repo_refs_deadline_includes_semaphore_acquire_time() {
         let sem = Arc::new(Semaphore::new(1));
-        let _held = sem.clone().acquire_owned().await.unwrap();
+        let _held = Arc::clone(&sem).acquire_owned().await.unwrap();
         let work_started = Arc::new(AtomicBool::new(false));
-        let started = work_started.clone();
+        let started = Arc::clone(&work_started);
 
         let err = run_blocking_repo_refs_with_deadline(
             sem,
@@ -650,7 +643,7 @@ mod tests {
         let (finished_tx, finished_rx) = mpsc::channel();
 
         let timed_out = tokio::spawn(run_blocking_repo_refs_with_deadline(
-            sem.clone(),
+            Arc::clone(&sem),
             Duration::from_millis(20),
             "test operation".to_string(),
             move || {
@@ -670,7 +663,7 @@ mod tests {
         assert_eq!(sem.available_permits(), 0, "permit should still be held");
 
         let blocked_err = run_blocking_repo_refs_with_deadline(
-            sem.clone(),
+            Arc::clone(&sem),
             Duration::from_millis(10),
             "follow-up operation".to_string(),
             || Ok(()),
@@ -954,13 +947,11 @@ mod tests {
         for t in all {
             assert!(
                 !t.content().trim().is_empty(),
-                "Embedded content unexpectedly empty for {:?}",
-                t
+                "Embedded content unexpectedly empty for {t:?}"
             );
             assert!(
                 !t.label().trim().is_empty(),
-                "Label unexpectedly empty for {:?}",
-                t
+                "Label unexpectedly empty for {t:?}"
             );
         }
     }

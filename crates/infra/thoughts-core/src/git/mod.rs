@@ -8,4 +8,8 @@ pub mod shell_push;
 pub mod sync;
 pub mod utils;
 
+pub use shell_push::PushFailureKind;
+pub use shell_push::PushResult;
 pub use sync::GitSync;
+pub use utils::HeadState;
+pub use utils::get_head_state;

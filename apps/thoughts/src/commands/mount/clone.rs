@@ -3,9 +3,10 @@ use crate::utils::paths::expand_path;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
-use colored::*;
+use colored::Colorize;
 use std::path::PathBuf;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
     println!("{} repository...", "Cloning".green());
 
@@ -57,7 +58,7 @@ pub async fn execute(url: String, path: Option<PathBuf>) -> Result<()> {
     crate::git::clone::clone_repository(&clone_opts).context("Failed to clone repository")?;
 
     // Add mapping
-    repo_mapping.add_mapping(url.clone(), clone_path.clone(), auto_managed)?;
+    repo_mapping.add_mapping(&url, clone_path, auto_managed)?;
 
     println!("{} Repository cloned successfully", "✓".green());
     println!("\nYou can now use this repository in mounts:");

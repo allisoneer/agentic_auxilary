@@ -14,7 +14,7 @@ use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
 use crate::utils::paths::ensure_dir;
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -133,18 +133,22 @@ pub async fn update_active_mounts() -> Result<()> {
         let key = space.relative_path(&desired.mount_dirs);
         if !active_map.contains_key(&key) {
             let target = desired.get_mount_target(space, &repo_root);
-            ensure_dir(target.parent().unwrap())?;
+            let parent = target.parent().ok_or_else(|| {
+                anyhow::anyhow!("mount target has no parent directory: {}", target.display())
+            })?;
+            ensure_dir(parent)?;
 
             // Resolve mount source
             let src = match (space, m) {
                 (MountSpace::Reference { .. }, Mount::Git { url, .. }) => {
                     let repo_mapping = RepoMappingManager::new()?;
-                    match repo_mapping.resolve_reference_url(url, ref_name.as_deref())? {
-                        Some(path) => path,
-                        None => {
-                            println!("  {} repository {} ...", "Cloning".yellow(), url);
-                            clone_and_map(url, ref_name.as_deref()).await?
-                        }
+                    if let Some(path) =
+                        repo_mapping.resolve_reference_url(url, ref_name.as_deref())?
+                    {
+                        path
+                    } else {
+                        println!("  {} repository {} ...", "Cloning".yellow(), url);
+                        clone_and_map(url, ref_name.as_deref())?
                     }
                 }
                 _ => match resolver.resolve_mount(m) {
@@ -152,7 +156,7 @@ pub async fn update_active_mounts() -> Result<()> {
                     Err(_) => {
                         if let Mount::Git { url, .. } = &m {
                             println!("  {} repository {} ...", "Cloning".yellow(), url);
-                            clone_and_map(url, None).await?
+                            clone_and_map(url, None)?
                         } else {
                             continue;
                         }
@@ -178,7 +182,7 @@ pub async fn update_active_mounts() -> Result<()> {
             );
 
             match mount_manager.mount(&[src], &target, &options).await {
-                Ok(_) => println!("    {} Successfully mounted", "✓".green()),
+                Ok(()) => println!("    {} Successfully mounted", "✓".green()),
                 Err(e) => eprintln!("    {} Failed to mount: {}", "✗".red(), e),
             }
         }
@@ -188,7 +192,7 @@ pub async fn update_active_mounts() -> Result<()> {
     Ok(())
 }
 
-async fn clone_and_map(url: &str, ref_name: Option<&str>) -> Result<PathBuf> {
+fn clone_and_map(url: &str, ref_name: Option<&str>) -> Result<PathBuf> {
     let mut repo_mapping = RepoMappingManager::new()?;
     let default_path = RepoMappingManager::get_default_reference_clone_path(url, ref_name)?;
 
@@ -201,7 +205,7 @@ async fn clone_and_map(url: &str, ref_name: Option<&str>) -> Result<PathBuf> {
     clone_repository(&clone_opts)?;
 
     // Add mapping
-    repo_mapping.add_reference_mapping(url.to_string(), ref_name, default_path.clone(), true)?;
+    repo_mapping.add_reference_mapping(url, ref_name, default_path.clone(), true)?;
 
     Ok(default_path)
 }

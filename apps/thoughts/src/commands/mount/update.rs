@@ -1,5 +1,5 @@
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 
 pub async fn execute() -> Result<()> {
     println!(

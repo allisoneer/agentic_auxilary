@@ -1,6 +1,6 @@
 use anyhow::Context;
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -84,7 +84,7 @@ pub fn clone_repository(options: &CloneOptions) -> Result<()> {
 
     // SAFETY: progress handler is lock-free and alloc-minimal
     unsafe {
-        gix::interrupt::init_handler(1, || {}).ok();
+        let _ = gix::interrupt::init_handler(1, || {});
     }
 
     let url = gix::url::parse(options.url.as_str().into())
@@ -140,7 +140,7 @@ mod tests {
         // Try to "clone" with HTTPS URL (same canonical identity)
         let options = CloneOptions {
             url: "https://github.com/org/repo".to_string(),
-            target_path: target.clone(),
+            target_path: target,
             branch: None,
         };
 
@@ -161,7 +161,7 @@ mod tests {
         // Try to clone a different repo
         let options = CloneOptions {
             url: "https://github.com/bob/utils.git".to_string(),
-            target_path: target.clone(),
+            target_path: target,
             branch: None,
         };
 
@@ -170,8 +170,7 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(
             err.contains("different repository"),
-            "Error should mention different repository: {}",
-            err
+            "Error should mention different repository: {err}"
         );
     }
 
@@ -186,7 +185,7 @@ mod tests {
 
         let options = CloneOptions {
             url: "https://github.com/org/repo.git".to_string(),
-            target_path: target.clone(),
+            target_path: target,
             branch: None,
         };
 
@@ -195,8 +194,7 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(
             err.contains("not a git repo"),
-            "Error should mention not a git repo: {}",
-            err
+            "Error should mention not a git repo: {err}"
         );
     }
 }

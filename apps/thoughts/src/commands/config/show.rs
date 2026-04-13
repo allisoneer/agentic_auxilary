@@ -5,6 +5,7 @@ use crate::config::ReferenceEntry;
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(json: bool) -> Result<()> {
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
@@ -41,7 +42,7 @@ pub async fn execute(json: bool) -> Result<()> {
                 println!("references ({}):", cfg.references.len());
                 for r in &cfg.references {
                     match r {
-                        ReferenceEntry::Simple(u) => println!("  - {}", u),
+                        ReferenceEntry::Simple(u) => println!("  - {u}"),
                         ReferenceEntry::WithMetadata(rm) => println!(
                             "  - {} ({})",
                             rm.remote,

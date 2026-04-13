@@ -10,9 +10,13 @@ use crate::mount::MountResolver;
 use crate::mount::MountSpace;
 use anyhow::Context;
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use std::env;
 
+#[expect(
+    clippy::future_not_send,
+    reason = "git2::Repository is Send but not Sync; this is a known limitation"
+)]
 pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     // Validate arguments
     if mount_name.is_some() && all {
@@ -65,7 +69,7 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
         if sync_list.iter().any(|(space, _)| space == &requested) {
             vec![requested]
         } else {
-            anyhow::bail!("Mount '{}' not found or not configured for sync", name);
+            anyhow::bail!("Mount '{name}' not found or not configured for sync");
         }
     } else if all {
         // All auto-sync mounts
@@ -92,18 +96,30 @@ pub async fn execute(mount_name: Option<String>, all: bool) -> Result<()> {
     println!("{} {} mount(s)...", "Syncing".green(), mounts_to_sync.len());
 
     // Sync each mount
+    let mut any_failed = false;
     for mount_space in &mounts_to_sync {
         if let Some((_, mount)) = sync_list.iter().find(|(space, _)| space == mount_space) {
             match sync_mount(&mount_space.as_str(), mount, &resolver).await {
-                Ok(_) => println!("  {} {}", "✓".green(), mount_space),
-                Err(e) => eprintln!("  {} {}: {}", "✗".red(), mount_space, e),
+                Ok(()) => println!("  {} {}", "✓".green(), mount_space),
+                Err(e) => {
+                    eprintln!("  {} {}: {}", "✗".red(), mount_space, e);
+                    any_failed = true;
+                }
             }
         }
+    }
+
+    if any_failed {
+        anyhow::bail!("One or more mounts failed to sync");
     }
 
     Ok(())
 }
 
+#[expect(
+    clippy::future_not_send,
+    reason = "git2::Repository is Send but not Sync; this is a known limitation"
+)]
 async fn sync_mount(name: &str, mount: &Mount, resolver: &MountResolver) -> Result<()> {
     let mount_path = resolver.resolve_mount(mount).context("Mount not cloned")?;
 

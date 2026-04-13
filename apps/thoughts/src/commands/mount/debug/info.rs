@@ -12,7 +12,7 @@ pub async fn execute(target: String) -> Result<()> {
     let target_path = PathBuf::from(&target);
 
     if let Some(mount_info) = mount_manager.get_mount_info(&target_path).await? {
-        println!("Mount Information for {}:", target);
+        println!("Mount Information for {target}:");
         println!("  Status: {:?}", mount_info.status);
         println!("  Sources:");
         for source in &mount_info.sources {
@@ -21,10 +21,10 @@ pub async fn execute(target: String) -> Result<()> {
         println!("  Filesystem: {}", mount_info.fs_type);
         println!("  Options: {}", mount_info.options.join(", "));
         if let Some(pid) = mount_info.pid {
-            println!("  Process ID: {}", pid);
+            println!("  Process ID: {pid}");
         }
         if let Some(mounted_at) = mount_info.mounted_at {
-            println!("  Mounted at: {:?}", mounted_at);
+            println!("  Mounted at: {mounted_at:?}");
         }
 
         // Print platform-specific metadata
@@ -35,13 +35,13 @@ pub async fn execute(target: String) -> Result<()> {
                 major_minor,
             } => {
                 if let Some(id) = mount_id {
-                    println!("  Mount ID: {}", id);
+                    println!("  Mount ID: {id}");
                 }
                 if let Some(pid) = parent_id {
-                    println!("  Parent ID: {}", pid);
+                    println!("  Parent ID: {pid}");
                 }
                 if let Some(mm) = major_minor {
-                    println!("  Major:Minor: {}", mm);
+                    println!("  Major:Minor: {mm}");
                 }
             }
             crate::mount::MountMetadata::MacOS {
@@ -50,13 +50,13 @@ pub async fn execute(target: String) -> Result<()> {
                 disk_identifier,
             } => {
                 if let Some(name) = volume_name {
-                    println!("  Volume Name: {}", name);
+                    println!("  Volume Name: {name}");
                 }
                 if let Some(uuid) = volume_uuid {
-                    println!("  Volume UUID: {}", uuid);
+                    println!("  Volume UUID: {uuid}");
                 }
                 if let Some(disk) = disk_identifier {
-                    println!("  Disk Identifier: {}", disk);
+                    println!("  Disk Identifier: {disk}");
                 }
             }
             crate::mount::MountMetadata::Unknown => {
@@ -64,7 +64,7 @@ pub async fn execute(target: String) -> Result<()> {
             }
         }
     } else {
-        println!("No mount found at {}", target);
+        println!("No mount found at {target}");
         info!("Mount not found: {}", target);
     }
 
