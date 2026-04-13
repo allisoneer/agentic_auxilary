@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -2880,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -4327,7 +4327,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -4750,7 +4750,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -6318,7 +6318,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "agentic-tools-utils",
  "anyhow",
@@ -6339,7 +6339,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-mcp-tools"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6356,7 +6356,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
