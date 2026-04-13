@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.11.2] - 2026-04-13
+
+### 🐛 Bug Fixes
+- *(thoughts)* Propagate sync failures and return non-zero exit status
+- *(thoughts-core)* Properly resolve merge conflicts and handle unborn branches
+- *(thoughts)* Address sync and config review gaps
+- *(thoughts-core)* Reject detached head before sync
+- *(thoughts-core)* Avoid malformed settings backup collisions
 ## [0.11.1] - 2026-04-13
 
 ### ⚙️  Miscellaneous
