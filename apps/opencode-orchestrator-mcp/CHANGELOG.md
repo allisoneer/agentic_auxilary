@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.4.0] - 2026-04-13
+
+### ⛰️  Features
+- *(opencode_orchestrator_mcp)* Add session troubleshooting diagnostics
+
+### 🐛 Bug Fixes
+- *(opencode_orchestrator_mcp)* Address bounded PR 168 review findings
+- *(orchestrator)* Resolve bounded PR168 review threads
+- *(orchestrator)* Treat missing status-map entries as idle
+- *(opencode_orchestrator_mcp)* Fall back to session metadata for last activity
 ## [0.3.4] - 2026-04-07
 
 ### ⛰️  Features
