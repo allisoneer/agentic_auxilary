@@ -1,6 +1,8 @@
-use anyhow::Result;
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
+
+use anyhow::Result;
 use tracing::info;
 
 /// Ensures a gitignore entry exists in the repository's .gitignore file
@@ -22,14 +24,17 @@ pub fn ensure_gitignore_entry(
             trimmed == entry || trimmed == entry_no_slash || trimmed == format!("{entry_no_slash}/")
         });
 
-        if !has_entry {
+        if has_entry {
+            Ok(false)
+        } else {
             // Append to .gitignore
             let mut new_content = content;
             if !new_content.ends_with('\n') {
                 new_content.push('\n');
             }
             if let Some(comment_text) = comment {
-                new_content.push_str(&format!("\n# {comment_text}\n"));
+                new_content.push('\n');
+                let _ = writeln!(new_content, "# {comment_text}");
             }
             new_content.push_str(entry);
             new_content.push('\n');
@@ -37,16 +42,14 @@ pub fn ensure_gitignore_entry(
             fs::write(&gitignore_path, new_content)?;
             info!("Added {} to .gitignore", entry);
             Ok(true)
-        } else {
-            Ok(false)
         }
     } else {
         // Create new .gitignore
         let mut content = String::new();
         if let Some(comment_text) = comment {
-            content.push_str(&format!("# {comment_text}\n"));
+            let _ = writeln!(content, "# {comment_text}");
         }
-        content.push_str(&format!("{entry}\n"));
+        let _ = writeln!(content, "{entry}");
 
         fs::write(&gitignore_path, content)?;
         info!("Created .gitignore with {} entry", entry);

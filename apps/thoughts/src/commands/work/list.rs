@@ -8,6 +8,7 @@ use anyhow::Result;
 use colored::Colorize;
 use std::fs;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(recent: Option<usize>) -> Result<()> {
     let _code_root = find_repo_root(&std::env::current_dir()?)?;
 
@@ -62,7 +63,7 @@ pub async fn execute(recent: Option<usize>) -> Result<()> {
         }
     }
 
-    all_entries.sort_by_key(|e| e.file_name());
+    all_entries.sort_by_key(std::fs::DirEntry::file_name);
 
     if all_entries.is_empty() {
         println!("  {}", "No active work".dimmed());
@@ -94,9 +95,10 @@ pub async fn execute(recent: Option<usize>) -> Result<()> {
     println!("{}", "Completed Work:".bold());
     if completed_dir.exists() {
         let mut entries: Vec<_> = fs::read_dir(&completed_dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.path().is_dir())
             .collect();
+        let total_completed_dirs = entries.len();
 
         // Sort by modification time (newest first)
         entries.sort_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()));
@@ -115,7 +117,9 @@ pub async fn execute(recent: Option<usize>) -> Result<()> {
                 println!("  - {}", name.to_string_lossy());
             }
 
-            if recent.is_some() && recent.unwrap() < fs::read_dir(&completed_dir)?.count() {
+            if let Some(n) = recent
+                && n < total_completed_dirs
+            {
                 println!("  {} (use --recent <n> to show more)", "...".dimmed());
             }
         }

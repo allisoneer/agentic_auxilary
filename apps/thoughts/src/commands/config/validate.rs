@@ -4,6 +4,7 @@ use colored::Colorize;
 use crate::config::RepoConfigManager;
 use crate::git::utils::get_control_repo_root;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute() -> Result<()> {
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     print!("Validating repository configuration... ");
@@ -26,7 +27,7 @@ pub async fn execute() -> Result<()> {
             if !warnings.is_empty() {
                 println!("\nWarnings:");
                 for w in warnings {
-                    println!("  - {}", w);
+                    println!("  - {w}");
                 }
             }
         }

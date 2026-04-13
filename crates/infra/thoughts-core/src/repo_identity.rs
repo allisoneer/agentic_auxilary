@@ -34,7 +34,7 @@ pub struct RepoIdentityKey {
 }
 
 impl RepoIdentity {
-    /// Parse a git URL into a RepoIdentity.
+    /// Parse a git URL into a `RepoIdentity`.
     ///
     /// Supported formats:
     /// - SSH scp-like: `git@github.com:org/repo.git`
@@ -59,7 +59,7 @@ impl RepoIdentity {
             // HTTPS/HTTP: scheme://[user@]host[:port]/path
             parse_https_url(url)?
         } else {
-            bail!("Unsupported URL format: {}", url);
+            bail!("Unsupported URL format: {url}");
         };
 
         // Normalize path: remove trailing slashes and .git suffix
@@ -72,13 +72,13 @@ impl RepoIdentity {
         let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
         if segments.is_empty() {
-            bail!("URL has no path segments: {}", url);
+            bail!("URL has no path segments: {url}");
         }
 
         // Check for invalid segments
         for seg in &segments {
             if *seg == "." || *seg == ".." {
-                bail!("Invalid path segment '{}' in URL: {}", seg, url);
+                bail!("Invalid path segment '{seg}' in URL: {url}");
             }
         }
 
@@ -94,7 +94,7 @@ impl RepoIdentity {
         // Handle Azure DevOps special case: org/proj/_git/repo
         let (org_path, repo) = if let Some(git_idx) = segments.iter().position(|s| *s == "_git") {
             if git_idx + 1 >= segments.len() {
-                bail!("Azure DevOps URL missing repo after _git: {}", url);
+                bail!("Azure DevOps URL missing repo after _git: {url}");
             }
             let org_segments = &segments[..git_idx];
             let repo = segments[git_idx + 1];
@@ -131,17 +131,17 @@ impl RepoIdentity {
 /// Parse SSH scp-like URL: `git@host:path` or `user@host:path`
 fn parse_scp_url(url: &str) -> Result<(String, String)> {
     // Format: [user@]host:path
-    let without_user = url.find('@').map(|i| &url[i + 1..]).unwrap_or(url);
+    let without_user = url.find('@').map_or(url, |i| &url[i + 1..]);
 
     let colon_pos = without_user
         .find(':')
-        .ok_or_else(|| anyhow::anyhow!("Invalid scp-like URL (missing colon): {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("Invalid scp-like URL (missing colon): {url}"))?;
 
     let host = &without_user[..colon_pos];
     let path = &without_user[colon_pos + 1..];
 
     if host.is_empty() {
-        bail!("Empty host in URL: {}", url);
+        bail!("Empty host in URL: {url}");
     }
 
     Ok((host.to_string(), path.to_string()))
@@ -151,18 +151,17 @@ fn parse_scp_url(url: &str) -> Result<(String, String)> {
 fn parse_ssh_scheme_url(url: &str) -> Result<(String, String)> {
     let without_scheme = url
         .strip_prefix("ssh://")
-        .ok_or_else(|| anyhow::anyhow!("Not an SSH URL: {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("Not an SSH URL: {url}"))?;
 
     // Strip userinfo if present
     let without_user = without_scheme
         .find('@')
-        .map(|i| &without_scheme[i + 1..])
-        .unwrap_or(without_scheme);
+        .map_or(without_scheme, |i| &without_scheme[i + 1..]);
 
     // Find the first slash (separates host[:port] from path)
     let slash_pos = without_user
         .find('/')
-        .ok_or_else(|| anyhow::anyhow!("SSH URL missing path: {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("SSH URL missing path: {url}"))?;
 
     let host_port = &without_user[..slash_pos];
     let path = &without_user[slash_pos + 1..];
@@ -171,10 +170,10 @@ fn parse_ssh_scheme_url(url: &str) -> Result<(String, String)> {
     let host = host_port
         .split(':')
         .next()
-        .ok_or_else(|| anyhow::anyhow!("Empty host in URL: {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("Empty host in URL: {url}"))?;
 
     if host.is_empty() {
-        bail!("Empty host in URL: {}", url);
+        bail!("Empty host in URL: {url}");
     }
 
     Ok((host.to_string(), path.to_string()))
@@ -184,20 +183,19 @@ fn parse_ssh_scheme_url(url: &str) -> Result<(String, String)> {
 fn parse_https_url(url: &str) -> Result<(String, String)> {
     let scheme_end = url
         .find("://")
-        .ok_or_else(|| anyhow::anyhow!("Invalid URL (missing ://): {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("Invalid URL (missing ://): {url}"))?;
 
     let without_scheme = &url[scheme_end + 3..];
 
     // Strip userinfo if present
     let without_user = without_scheme
         .find('@')
-        .map(|i| &without_scheme[i + 1..])
-        .unwrap_or(without_scheme);
+        .map_or(without_scheme, |i| &without_scheme[i + 1..]);
 
     // Find the first slash (separates host[:port] from path)
     let slash_pos = without_user
         .find('/')
-        .ok_or_else(|| anyhow::anyhow!("URL missing path: {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("URL missing path: {url}"))?;
 
     let host_port = &without_user[..slash_pos];
     let path = &without_user[slash_pos + 1..];
@@ -206,16 +204,16 @@ fn parse_https_url(url: &str) -> Result<(String, String)> {
     let host = host_port
         .split(':')
         .next()
-        .ok_or_else(|| anyhow::anyhow!("Empty host in URL: {}", url))?;
+        .ok_or_else(|| anyhow::anyhow!("Empty host in URL: {url}"))?;
 
     if host.is_empty() {
-        bail!("Empty host in URL: {}", url);
+        bail!("Empty host in URL: {url}");
     }
 
     Ok((host.to_string(), path.to_string()))
 }
 
-/// Split `url` into (base_url, optional_subpath) using a last-colon heuristic.
+/// Split `url` into (`base_url`, `optional_subpath`) using a last-colon heuristic.
 ///
 /// Treats it as `URL:subpath` only if the base portion parses as a valid `RepoIdentity`.
 /// This avoids confusing `host:port` for a subpath delimiter.

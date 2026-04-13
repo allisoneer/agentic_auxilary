@@ -2,6 +2,7 @@ use crate::error::ThoughtsError;
 use crate::repo_identity::RepoIdentity;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use git2::ErrorCode;
 use git2::Repository;
 use git2::StatusOptions;
@@ -116,7 +117,6 @@ pub fn is_git_repo(path: &Path) -> bool {
 }
 
 /// Initialize a new git repository
-#[allow(dead_code)]
 // TODO(2): Plan initialization architecture for consumer vs source repos
 pub fn init_repo(path: &Path) -> Result<Repository> {
     Ok(Repository::init(path)?)
@@ -124,8 +124,12 @@ pub fn init_repo(path: &Path) -> Result<Repository> {
 
 /// Get the remote URL for a git repository
 pub fn get_remote_url(repo_path: &Path) -> Result<String> {
-    let repo = Repository::open(repo_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+    let repo = Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open git repository at {}: {e}",
+            repo_path.display()
+        )
+    })?;
 
     let remote = repo
         .find_remote("origin")
@@ -134,7 +138,7 @@ pub fn get_remote_url(repo_path: &Path) -> Result<String> {
     remote
         .url()
         .ok_or_else(|| anyhow::anyhow!("Remote 'origin' has no URL"))
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 /// Get the canonical identity of a repository's origin remote, if available.
@@ -168,19 +172,99 @@ pub fn try_get_origin_identity(repo_path: &Path) -> Result<Option<RepoIdentity>>
     Ok(RepoIdentity::parse(url).ok())
 }
 
-/// Get the current branch name, or "detached" if in detached HEAD state
+/// Represents the state of HEAD in a git repository
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HeadState {
+    /// HEAD points to a branch that has commits
+    Attached(String),
+    /// HEAD points directly to a commit (detached HEAD)
+    Detached,
+    /// HEAD points to a branch that has no commits yet
+    Unborn(String),
+}
+
+/// Get the current HEAD state with full type safety
+pub fn get_head_state(repo_path: &Path) -> Result<HeadState> {
+    let repo = Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open git repository at {}: {e}",
+            repo_path.display()
+        )
+    })?;
+
+    match repo.head() {
+        Ok(head) if head.is_branch() => Ok(HeadState::Attached(
+            head.shorthand().unwrap_or("unknown").to_string(),
+        )),
+        Ok(_) => Ok(HeadState::Detached),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => {
+            // Extract branch name from symbolic HEAD
+            let head_ref = repo.find_reference("HEAD")?;
+            let name = head_ref.symbolic_target().map_or_else(
+                || "unknown".to_string(),
+                |s| s.strip_prefix("refs/heads/").unwrap_or(s).to_string(),
+            );
+            Ok(HeadState::Unborn(name))
+        }
+        Err(e) => Err(anyhow::anyhow!("Failed to get HEAD reference: {e}")),
+    }
+}
+
+/// Get the current branch name, or "detached" if in detached HEAD state.
+/// For unborn branches, returns an error with descriptive message.
 pub fn get_current_branch(repo_path: &Path) -> Result<String> {
-    let repo = Repository::open(repo_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open git repository at {:?}: {}", repo_path, e))?;
+    match get_head_state(repo_path)? {
+        HeadState::Attached(name) => Ok(name),
+        HeadState::Detached => Ok("detached".to_string()),
+        HeadState::Unborn(name) => {
+            bail!("Branch '{name}' has no commits yet")
+        }
+    }
+}
 
-    let head = repo
-        .head()
-        .map_err(|e| anyhow::anyhow!("Failed to get HEAD reference: {}", e))?;
+/// Returns Ok(()) if the repository is in a state suitable to begin a sync.
+///
+/// Authoritative sync preflight:
+/// - Rejects detached HEAD
+/// - Rejects in-progress merge/rebase/cherry-pick/revert operations
+/// - Allows unborn HEAD so bootstrap sync can create the first commit
+pub fn ensure_repo_ready_for_sync(repo_path: &Path) -> Result<()> {
+    let repo = Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open git repository at {}: {e}",
+            repo_path.display()
+        )
+    })?;
+    let git_dir = repo.path();
 
-    if head.is_branch() {
-        Ok(head.shorthand().unwrap_or("unknown").to_string())
-    } else {
-        Ok("detached".to_string())
+    if git_dir.join("MERGE_HEAD").exists() {
+        bail!("Repository has an in-progress merge. Complete or abort it before syncing.");
+    }
+    if git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists() {
+        bail!("Repository has an in-progress rebase. Complete or abort it before syncing.");
+    }
+    if git_dir.join("CHERRY_PICK_HEAD").exists() || git_dir.join("sequencer").exists() {
+        bail!("Repository has an in-progress cherry-pick. Complete or abort it before syncing.");
+    }
+    if git_dir.join("REVERT_HEAD").exists() {
+        bail!("Repository has an in-progress revert. Complete or abort it before syncing.");
+    }
+
+    match repo.head() {
+        Ok(head) if head.is_branch() => Ok(()),
+        Ok(_) => bail!("Repository is in detached HEAD state. Check out a branch before syncing."),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => Ok(()),
+        Err(e) => bail!("Failed to get HEAD reference: {e}"),
+    }
+}
+
+/// Returns the current branch name or an error when sync is unsafe.
+pub fn get_sync_branch(repo_path: &Path) -> Result<String> {
+    match get_head_state(repo_path)? {
+        HeadState::Attached(name) | HeadState::Unborn(name) => Ok(name),
+        HeadState::Detached => {
+            bail!("Repository is in detached HEAD state. Check out a branch before syncing.")
+        }
     }
 }
 
@@ -247,6 +331,32 @@ mod tests {
         repo.set_head_detached(commit_oid).unwrap();
         let branch = get_current_branch(repo_path).unwrap();
         assert_eq!(branch, "detached");
+    }
+
+    #[test]
+    fn test_get_head_state_unborn() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        // Init repo without any commits
+        Repository::init(repo_path).unwrap();
+
+        // Should detect unborn branch
+        let state = get_head_state(repo_path).unwrap();
+        assert!(
+            matches!(state, HeadState::Unborn(_)),
+            "expected Unborn, got {state:?}"
+        );
+
+        // get_current_branch should return error for unborn
+        let err = get_current_branch(repo_path).unwrap_err();
+        assert!(err.to_string().contains("no commits yet"));
+
+        let HeadState::Unborn(unborn_name) = state else {
+            unreachable!()
+        };
+
+        assert_eq!(get_sync_branch(repo_path).unwrap(), unborn_name);
     }
 
     fn initial_commit(repo: &Repository) {
@@ -344,5 +454,67 @@ mod tests {
 
         let err = try_get_origin_identity(&non_repo).unwrap_err();
         assert!(err.to_string().contains("Failed to open git repository"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_rejects_merge_state() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        std::fs::write(repo.path().join("MERGE_HEAD"), "deadbeef\n").unwrap();
+
+        let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("in-progress merge"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_rejects_rebase_state() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        std::fs::create_dir_all(repo.path().join("rebase-merge")).unwrap();
+
+        let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("in-progress rebase"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_rejects_detached_head() {
+        let dir = TempDir::new().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+
+        initial_commit(&repo);
+        let head_oid = repo.head().unwrap().target().unwrap();
+        repo.set_head_detached(head_oid).unwrap();
+
+        let err = ensure_repo_ready_for_sync(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("detached HEAD state"));
+    }
+
+    #[test]
+    fn ensure_repo_ready_for_sync_accepts_clean_repo() {
+        let dir = TempDir::new().unwrap();
+        Repository::init(dir.path()).unwrap();
+
+        ensure_repo_ready_for_sync(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn get_sync_branch_rejects_detached_head() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+        let repo = Repository::init(repo_path).unwrap();
+
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        let tree_id = {
+            let mut index = repo.index().unwrap();
+            index.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_id).unwrap();
+        let commit_oid = repo
+            .commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+            .unwrap();
+        repo.set_head_detached(commit_oid).unwrap();
+
+        let err = get_sync_branch(repo_path).unwrap_err();
+        assert!(err.to_string().contains("detached HEAD state"));
     }
 }

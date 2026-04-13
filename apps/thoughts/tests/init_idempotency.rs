@@ -4,12 +4,9 @@ use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
 use tempfile::TempDir;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn init_twice_returns_ok() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        return;
-    }
-
     let td = TempDir::new().unwrap();
 
     // Initialize git repo
@@ -30,12 +27,9 @@ fn init_twice_returns_ok() {
         .success();
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn incorrect_symlink_requires_force() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        return;
-    }
-
     let td = TempDir::new().unwrap();
 
     // Initialize git repo
@@ -64,12 +58,9 @@ fn incorrect_symlink_requires_force() {
         .failure();
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn gitignore_includes_backup_patterns() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        return;
-    }
-
     let td = TempDir::new().unwrap();
 
     // Initialize git repo

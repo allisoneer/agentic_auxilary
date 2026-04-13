@@ -15,6 +15,7 @@ use anyhow::bail;
 use colored::Colorize;
 use std::path::PathBuf;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(input: String) -> Result<()> {
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
@@ -48,7 +49,7 @@ pub async fn execute(input: String) -> Result<()> {
             return Ok(());
         }
 
-        (input.clone(), None)
+        (input, None)
     } else {
         // Treat as local path
         let path = PathBuf::from(&input);
@@ -87,7 +88,7 @@ pub async fn execute(input: String) -> Result<()> {
 
             // Register mapping so sync can find and git pull this location
             let mut repo_mapping = RepoMappingManager::new()?;
-            repo_mapping.add_mapping(url.clone(), expanded.clone(), false)?;
+            repo_mapping.add_mapping(&url, expanded.clone(), false)?;
 
             (url, Some(expanded))
         } else if let Ok(repo_root) = find_repo_root(&expanded) {
@@ -111,7 +112,7 @@ pub async fn execute(input: String) -> Result<()> {
         .push(ReferenceEntry::Simple(final_url.clone()));
     let warnings = mgr.save_v2_validated(&cfg)?;
     for w in warnings {
-        eprintln!("Warning: {}", w);
+        eprintln!("Warning: {w}");
     }
 
     println!("{} Added reference: {}", "✓".green(), final_url);

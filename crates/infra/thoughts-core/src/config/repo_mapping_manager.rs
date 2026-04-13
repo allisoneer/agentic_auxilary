@@ -224,7 +224,7 @@ impl RepoMappingManager {
     /// to handle URL scheme variants (SSH vs HTTPS).
     pub fn resolve_url(&self, url: &str) -> Result<Option<PathBuf>> {
         if let Some((resolved, subpath)) = self.resolve_url_with_details(url)? {
-            let mut p = resolved.location.path.clone();
+            let mut p = resolved.location.path;
             if let Some(ref sub) = subpath {
                 validate_subpath(sub)?;
                 p = p.join(sub);
@@ -261,9 +261,9 @@ impl RepoMappingManager {
     /// Add a URL-to-path mapping with identity-based upsert.
     ///
     /// If a mapping with the same canonical identity already exists,
-    /// it will be replaced (preserving any existing last_sync time).
+    /// it will be replaced (preserving any existing `last_sync` time).
     /// This prevents duplicate entries for SSH vs HTTPS variants.
-    pub fn add_mapping(&mut self, url: String, path: PathBuf, auto_managed: bool) -> Result<()> {
+    pub fn add_mapping(&mut self, url: &str, path: PathBuf, auto_managed: bool) -> Result<()> {
         let _lock = FileLock::lock_exclusive(self.lock_path())?;
         let mut mapping = self.load()?; // safe under lock for RMW
 
@@ -276,7 +276,7 @@ impl RepoMappingManager {
             bail!("Path is not a directory: {}", path.display());
         }
 
-        let (base_url, _) = parse_url_and_subpath(&url);
+        let (base_url, _) = parse_url_and_subpath(url);
         let new_key = RepoIdentity::parse(&base_url)?.canonical_key();
 
         // Find all existing entries with the same canonical identity
@@ -317,7 +317,7 @@ impl RepoMappingManager {
 
     pub fn add_reference_mapping(
         &mut self,
-        url: String,
+        url: &str,
         ref_name: Option<&str>,
         path: PathBuf,
         auto_managed: bool,
@@ -333,8 +333,8 @@ impl RepoMappingManager {
             bail!("Path is not a directory: {}", path.display());
         }
 
-        let storage_key = reference_mapping_storage_key(&url, ref_name)?;
-        let matching_urls = Self::matching_reference_storage_keys(&mapping, &url, ref_name)?;
+        let storage_key = reference_mapping_storage_key(url, ref_name)?;
+        let matching_urls = Self::matching_reference_storage_keys(&mapping, url, ref_name)?;
 
         let preserved_last_sync = matching_urls
             .iter()
@@ -359,7 +359,6 @@ impl RepoMappingManager {
     }
 
     /// Remove a URL mapping
-    #[allow(dead_code)]
     // TODO(2): Add "thoughts mount unmap" command for cleanup
     pub fn remove_mapping(&mut self, url: &str) -> Result<()> {
         let _lock = FileLock::lock_exclusive(self.lock_path())?;
@@ -375,8 +374,7 @@ impl RepoMappingManager {
         Ok(mapping
             .mappings
             .get(url)
-            .map(|loc| loc.auto_managed)
-            .unwrap_or(false))
+            .is_some_and(|loc| loc.auto_managed))
     }
 
     pub fn is_reference_auto_managed(&self, url: &str, ref_name: Option<&str>) -> Result<bool> {
@@ -385,8 +383,7 @@ impl RepoMappingManager {
         Ok(keys
             .first()
             .and_then(|key| mapping.mappings.get(key))
-            .map(|loc| loc.auto_managed)
-            .unwrap_or(false))
+            .is_some_and(|loc| loc.auto_managed))
     }
 
     /// Get default clone path for a URL using hierarchical layout.
@@ -451,15 +448,11 @@ impl RepoMappingManager {
         // TODO(2): If repos.json contains multiple entries with the same canonical identity (legacy
         // duplicates), the selection below is nondeterministic due to HashMap iteration order.
         // Consider sorting (as in `resolve_url_with_details`) or updating all matches.
-        let matched_key: Option<String> = mapping
-            .mappings
-            .keys()
-            .filter_map(|k| {
-                let (k_base, _) = parse_url_and_subpath(k);
-                let key = RepoIdentity::parse(&k_base).ok()?.canonical_key();
-                (key == target_key).then(|| k.clone())
-            })
-            .next();
+        let matched_key: Option<String> = mapping.mappings.keys().find_map(|k| {
+            let (k_base, _) = parse_url_and_subpath(k);
+            let key = RepoIdentity::parse(&k_base).ok()?.canonical_key();
+            (key == target_key).then(|| k.clone())
+        });
 
         if let Some(key) = matched_key
             && let Some(loc) = mapping.mappings.get_mut(&key)
@@ -536,9 +529,9 @@ pub fn parse_reference_mapping_storage_key(stored_key: &str) -> (String, Option<
     }
 }
 
-/// Parse a URL into (base_url, optional_subpath).
+/// Parse a URL into (`base_url`, `optional_subpath`).
 ///
-/// Delegates to the repo_identity module for robust port-aware parsing.
+/// Delegates to the `repo_identity` module for robust port-aware parsing.
 pub fn parse_url_and_subpath(url: &str) -> (String, Option<String>) {
     identity_parse_url_and_subpath(url)
 }
@@ -550,24 +543,12 @@ pub fn parse_url_and_subpath(url: &str) -> (String, Option<String>) {
 fn validate_subpath(subpath: &str) -> Result<()> {
     let path = Path::new(subpath);
     if path.is_absolute() {
-        bail!(
-            "Invalid subpath (must be relative and not contain '..'): {}",
-            subpath
-        );
+        bail!("Invalid subpath (must be relative and not contain '..'): {subpath}");
     }
     for component in path.components() {
         match component {
-            Component::ParentDir => {
-                bail!(
-                    "Invalid subpath (must be relative and not contain '..'): {}",
-                    subpath
-                );
-            }
-            Component::Prefix(_) => {
-                bail!(
-                    "Invalid subpath (must be relative and not contain '..'): {}",
-                    subpath
-                );
+            Component::ParentDir | Component::Prefix(_) => {
+                bail!("Invalid subpath (must be relative and not contain '..'): {subpath}");
             }
             _ => {}
         }
@@ -589,13 +570,13 @@ pub fn extract_repo_name_from_url(url: &str) -> Result<String> {
             Ok(url[pos + 1..].to_string())
         }
     } else {
-        bail!("Cannot extract repository name from URL: {}", url)
+        bail!("Cannot extract repository name from URL: {url}")
     }
 }
 
-/// Extract org_path and repo from a URL.
+/// Extract `org_path` and repo from a URL.
 ///
-/// Delegates to RepoIdentity for robust parsing that handles:
+/// Delegates to `RepoIdentity` for robust parsing that handles:
 /// - SSH with ports: `ssh://git@host:2222/org/repo.git`
 /// - GitLab subgroups: `https://gitlab.com/a/b/c/repo.git`
 /// - Azure DevOps: `https://dev.azure.com/org/proj/_git/repo`
@@ -728,7 +709,7 @@ mod tests {
 
         manager
             .add_reference_mapping(
-                "https://github.com/org/repo.git".to_string(),
+                "https://github.com/org/repo.git",
                 Some("refs/heads/main"),
                 main_path.clone(),
                 true,
@@ -736,7 +717,7 @@ mod tests {
             .unwrap();
         manager
             .add_reference_mapping(
-                "git@github.com:Org/Repo.git".to_string(),
+                "git@github.com:Org/Repo.git",
                 Some("refs/tags/v1.0.0"),
                 tag_path.clone(),
                 true,
@@ -773,7 +754,7 @@ mod tests {
 
         manager
             .add_reference_mapping(
-                "https://github.com/org/repo.git".to_string(),
+                "https://github.com/org/repo.git",
                 Some("refs/remotes/origin/main"),
                 repo_path.clone(),
                 true,
@@ -800,7 +781,7 @@ mod tests {
 
         manager
             .add_reference_mapping(
-                "https://github.com/org/repo.git".to_string(),
+                "https://github.com/org/repo.git",
                 Some("refs/heads/main"),
                 repo_path,
                 true,
@@ -833,7 +814,7 @@ mod tests {
 
         manager
             .add_reference_mapping(
-                "https://github.com/org/repo.git".to_string(),
+                "https://github.com/org/repo.git",
                 Some("refs/heads/main"),
                 repo_path,
                 true,
@@ -946,9 +927,7 @@ mod tests {
     fn test_load_reads_existing_file() {
         let dir = TempDir::new().unwrap();
         let mapping_path = dir.path().join("repos.json");
-        let mgr = RepoMappingManager {
-            mapping_path: mapping_path.clone(),
-        };
+        let mgr = RepoMappingManager { mapping_path };
 
         let mut m = RepoMapping::default();
         m.mappings.insert(

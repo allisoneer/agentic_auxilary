@@ -5,22 +5,17 @@ use thoughts_tool::MountOptions;
 use thoughts_tool::detect_platform;
 use thoughts_tool::get_mount_manager;
 
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), ignore)]
 async fn test_basic_mount_unmount() {
-    // This test requires appropriate permissions and tools installed
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").is_err() {
-        eprintln!("Skipping integration test. Set THOUGHTS_INTEGRATION_TESTS=1 to run.");
-        return;
-    }
-
     let platform_info = detect_platform().expect("Failed to detect platform");
 
     // Check if platform can mount using the Platform enum's method
     if !platform_info.platform.can_mount() {
         eprintln!("Skipping test: mount tools not available");
         if let Some(tool_name) = platform_info.platform.mount_tool_name() {
-            eprintln!("Required tool: {}", tool_name);
+            eprintln!("Required tool: {tool_name}");
         }
         return;
     }
@@ -43,10 +38,10 @@ async fn test_basic_mount_unmount() {
 
     // Test mount
     let options = MountOptions::default();
-    let sources = vec![source1.clone(), source2.clone()];
+    let source_dirs = vec![source1.clone(), source2.clone()];
 
     manager
-        .mount(&sources, &target, &options)
+        .mount(&source_dirs, &target, &options)
         .await
         .expect("Mount failed");
 
@@ -70,15 +65,10 @@ async fn test_basic_mount_unmount() {
 /// Test that remounting the same target is idempotent (no duplicates)
 /// This is a regression test for GitHub Issue #19 where FUSE-T verification
 /// failures caused duplicate mounts due to retry logic
+#[ignore = "integration test - run with: just test-integration"]
 #[tokio::test]
 #[cfg(target_os = "macos")]
 async fn test_remount_is_idempotent() {
-    // This test requires FUSE-T/macFUSE + unionfs-fuse setup
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").is_err() {
-        eprintln!("Skipping integration test. Set THOUGHTS_INTEGRATION_TESTS=1 to run.");
-        return;
-    }
-
     let platform_info = detect_platform().expect("Failed to detect platform");
 
     if !platform_info.platform.can_mount() {

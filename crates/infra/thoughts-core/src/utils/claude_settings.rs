@@ -1,6 +1,7 @@
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
+use anyhow::bail;
 use atomicwrites::AtomicFile;
 use atomicwrites::OverwriteBehavior;
 use colored::Colorize;
@@ -8,6 +9,7 @@ use serde_json::Value;
 use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -44,7 +46,7 @@ pub fn inject_additional_directories(repo_root: &Path) -> Result<InjectionSummar
                 td.display(),
                 e
             );
-            td.clone()
+            td
         }
     };
 
@@ -64,55 +66,51 @@ pub fn inject_additional_directories(repo_root: &Path) -> Result<InjectionSummar
 
     // Work with additionalDirectories and allow in a nested scope to avoid borrow conflicts
     {
-        let permissions = value.get_mut("permissions").unwrap();
+        let permissions = value
+            .get_mut("permissions")
+            .ok_or_else(|| anyhow!("permissions key missing after scaffold — this is a bug"))?;
 
-        // Ensure additionalDirectories array exists
-        if !permissions
-            .get("additionalDirectories")
-            .map(|x| x.is_array())
-            .unwrap_or(false)
-        {
-            permissions["additionalDirectories"] = json!([]);
-        }
+        ensure_array_field(permissions, "additionalDirectories", &settings_path)?;
 
-        let add_dirs = permissions["additionalDirectories"].as_array_mut().unwrap();
+        let add_dirs = permissions["additionalDirectories"]
+            .as_array_mut()
+            .ok_or_else(|| {
+                anyhow!("additionalDirectories is not an array after scaffold — this is a bug")
+            })?;
 
         // Build existing set for deduplication
         let mut existing_add_dirs: HashSet<String> = add_dirs
             .iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
             .collect();
 
         // 1) Insert canonical .thoughts-data path into additionalDirectories
         let dir_str = canonical_thoughts_data.to_string_lossy().to_string();
         if existing_add_dirs.contains(&dir_str) {
-            already_present_additional_dirs.push(canonical_thoughts_data.clone());
+            already_present_additional_dirs.push(canonical_thoughts_data);
         } else {
             add_dirs.push(Value::String(dir_str.clone()));
             existing_add_dirs.insert(dir_str);
-            added_additional_dirs.push(canonical_thoughts_data.clone());
+            added_additional_dirs.push(canonical_thoughts_data);
         }
     }
 
     // Now work with allow rules in a separate scope
     let warn_conflicting_denies = {
-        let permissions = value.get_mut("permissions").unwrap();
+        let permissions = value
+            .get_mut("permissions")
+            .ok_or_else(|| anyhow!("permissions key missing after scaffold — this is a bug"))?;
 
-        // Ensure allow array exists
-        if !permissions
-            .get("allow")
-            .map(|x| x.is_array())
-            .unwrap_or(false)
-        {
-            permissions["allow"] = json!([]);
-        }
+        ensure_array_field(permissions, "allow", &settings_path)?;
 
-        let allow = permissions["allow"].as_array_mut().unwrap();
+        let allow = permissions["allow"]
+            .as_array_mut()
+            .ok_or_else(|| anyhow!("allow is not an array after scaffold — this is a bug"))?;
 
         // Build existing set for deduplication
         let mut existing_allow: HashSet<String> = allow
             .iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
             .collect();
 
         // 2) Insert narrow relative allow rules
@@ -139,15 +137,16 @@ pub fn inject_additional_directories(repo_root: &Path) -> Result<InjectionSummar
     // Only write if something changed
     if !added_additional_dirs.is_empty() || !added_allow_rules.is_empty() {
         if had_valid_json && settings_path.exists() {
-            backup_valid_to_bak(&settings_path)
-                .with_context(|| format!("Failed to create backup for {:?}", settings_path))?;
+            backup_valid_to_bak(&settings_path).with_context(|| {
+                format!("Failed to create backup for {}", settings_path.display())
+            })?;
         }
         let serialized = serde_json::to_string_pretty(&value)
             .context("Failed to serialize Claude settings JSON")?;
 
         AtomicFile::new(&settings_path, OverwriteBehavior::AllowOverwrite)
             .write(|f| f.write_all(serialized.as_bytes()))
-            .with_context(|| format!("Failed to write {:?}", settings_path))?;
+            .with_context(|| format!("Failed to write {}", settings_path.display()))?;
     }
 
     // Best-effort prune at end of operation to keep directory tidy
@@ -175,7 +174,7 @@ fn get_local_settings_path(repo_root: &Path) -> PathBuf {
 fn ensure_parent_dir(settings_path: &Path) -> Result<()> {
     if let Some(parent) = settings_path.parent() {
         fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory {:?}", parent))?;
+            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
     }
     Ok(())
 }
@@ -194,38 +193,91 @@ fn read_or_init_settings(settings_path: &Path) -> Result<ReadOutcome> {
     }
 
     let raw = fs::read_to_string(settings_path)
-        .with_context(|| format!("Failed to read {:?}", settings_path))?;
+        .with_context(|| format!("Failed to read {}", settings_path.display()))?;
 
-    match serde_json::from_str::<Value>(&raw) {
-        Ok(value) => Ok(ReadOutcome {
+    if let Ok(value) = serde_json::from_str::<Value>(&raw) {
+        Ok(ReadOutcome {
             value,
             had_valid_json: true,
-        }),
-        Err(_) => {
-            // Malformed JSON: quarantine and start fresh
-            let ts = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let malformed = settings_path.with_extension(format!("json.malformed.{}.bak", ts));
-            let _ = fs::rename(settings_path, &malformed);
+        })
+    } else {
+        // Malformed JSON: quarantine and start fresh
+        let malformed =
+            quarantine_malformed_settings(settings_path, &raw, current_malformed_backup_suffix())?;
+        eprintln!(
+            "{}: Existing Claude settings were malformed. Quarantined to {}",
+            "Warning".yellow(),
+            malformed.display()
+        );
+        // Best-effort prune after quarantine
+        if let Err(e) = prune_malformed_backups(settings_path, 3) {
             eprintln!(
-                "{}: Existing Claude settings were malformed. Quarantined to {}",
+                "{}: Failed to prune malformed Claude backups: {}",
                 "Warning".yellow(),
-                malformed.display()
+                e
             );
-            // Best-effort prune after quarantine
-            if let Err(e) = prune_malformed_backups(settings_path, 3) {
-                eprintln!(
-                    "{}: Failed to prune malformed Claude backups: {}",
-                    "Warning".yellow(),
-                    e
-                );
+        }
+        Ok(ReadOutcome {
+            value: json!({}),
+            had_valid_json: false,
+        })
+    }
+}
+
+fn current_malformed_backup_suffix() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
+fn quarantine_malformed_settings(
+    settings_path: &Path,
+    raw: &str,
+    initial_suffix: u64,
+) -> Result<PathBuf> {
+    let mut suffix = initial_suffix;
+    loop {
+        let malformed = settings_path.with_extension(format!("json.malformed.{suffix}.bak"));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&malformed)
+        {
+            Ok(mut file) => {
+                file.write_all(raw.as_bytes()).with_context(|| {
+                    format!(
+                        "Failed to write quarantined malformed Claude settings {}",
+                        malformed.display()
+                    )
+                })?;
+                drop(file);
+                fs::remove_file(settings_path).with_context(|| {
+                    format!(
+                        "Failed to remove malformed Claude settings {} after quarantine",
+                        settings_path.display()
+                    )
+                })?;
+                return Ok(malformed);
             }
-            Ok(ReadOutcome {
-                value: json!({}),
-                had_valid_json: false,
-            })
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                suffix = suffix.checked_add(1).ok_or_else(|| {
+                    anyhow!(
+                        "Exhausted malformed backup suffixes for {}",
+                        settings_path.display()
+                    )
+                })?;
+            }
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "Failed to reserve malformed Claude settings quarantine path {}",
+                        malformed.display()
+                    )
+                });
+            }
         }
     }
 }
@@ -237,8 +289,7 @@ fn ensure_permissions_scaffold(root: &mut Value) {
     }
     if !root
         .get("permissions")
-        .map(|x| x.is_object())
-        .unwrap_or(false)
+        .is_some_and(serde_json::Value::is_object)
     {
         root["permissions"] = json!({});
     }
@@ -250,10 +301,29 @@ fn ensure_permissions_scaffold(root: &mut Value) {
     }
 }
 
+fn ensure_array_field(permissions: &mut Value, key: &str, settings_path: &Path) -> Result<()> {
+    match permissions.get(key) {
+        None => {
+            permissions[key] = json!([]);
+            Ok(())
+        }
+        Some(value) if value.is_array() => Ok(()),
+        Some(_) => bail!(
+            "permissions.{key} must be an array in {}",
+            settings_path.display()
+        ),
+    }
+}
+
 fn backup_valid_to_bak(settings_path: &Path) -> Result<()> {
     let bak = settings_path.with_extension("json.bak");
-    fs::copy(settings_path, &bak)
-        .with_context(|| format!("Failed to copy {:?} -> {:?}", settings_path, bak))?;
+    fs::copy(settings_path, &bak).with_context(|| {
+        format!(
+            "Failed to copy {} -> {}",
+            settings_path.display(),
+            bak.display()
+        )
+    })?;
     Ok(())
 }
 
@@ -278,7 +348,7 @@ fn prune_malformed_backups(settings_path: &Path, keep: usize) -> Result<usize> {
     let prefix = "settings.local.json.malformed.";
     let suffix = ".bak";
     let mut entries: Vec<(u64, PathBuf)> = Vec::new();
-    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {:?}", dir))? {
+    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))? {
         let p = entry?.path();
         let Some(name_os) = p.file_name() else {
             continue;
@@ -298,7 +368,7 @@ fn prune_malformed_backups(settings_path: &Path, keep: usize) -> Result<usize> {
     let mut deleted = 0usize;
     for (_, p) in entries.into_iter().skip(keep) {
         match fs::remove_file(&p) {
-            Ok(_) => deleted += 1,
+            Ok(()) => deleted += 1,
             Err(e) => eprintln!(
                 "{}: Failed to remove old malformed backup {}: {}",
                 "Warning".yellow(),
@@ -374,7 +444,7 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for item in allow {
             if let Some(s) = item.as_str() {
-                assert!(seen.insert(s.to_string()), "Duplicate found: {}", s);
+                assert!(seen.insert(s.to_string()), "Duplicate found: {s}");
             }
         }
     }
@@ -408,6 +478,24 @@ mod tests {
     }
 
     #[test]
+    fn quarantine_uses_next_numeric_suffix_when_backup_exists() {
+        let td = TempDir::new().unwrap();
+        let settings = td.path().join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(&settings, "second").unwrap();
+
+        let existing = settings.with_extension("json.malformed.42.bak");
+        fs::write(&existing, "first").unwrap();
+
+        let malformed = super::quarantine_malformed_settings(&settings, "second", 42).unwrap();
+
+        assert_eq!(malformed, settings.with_extension("json.malformed.43.bak"));
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "first");
+        assert_eq!(fs::read_to_string(&malformed).unwrap(), "second");
+        assert!(!settings.exists());
+    }
+
+    #[test]
     fn backup_valid_before_write() {
         let td = TempDir::new().unwrap();
         let repo = td.path();
@@ -424,6 +512,50 @@ mod tests {
         let _ = inject_additional_directories(repo).unwrap();
         let bak = settings.with_extension("json.bak");
         assert!(bak.exists());
+    }
+
+    #[test]
+    fn rejects_non_array_additional_directories() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        fs::create_dir_all(repo.join(".thoughts-data")).unwrap();
+
+        let settings = repo.join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(
+            &settings,
+            r#"{"permissions":{"additionalDirectories":"bad","allow":[],"deny":[],"ask":[]}}"#,
+        )
+        .unwrap();
+
+        let err = inject_additional_directories(repo).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("permissions.additionalDirectories must be an array")
+        );
+    }
+
+    #[test]
+    fn rejects_non_array_allow() {
+        let td = TempDir::new().unwrap();
+        let repo = td.path();
+        fs::create_dir_all(repo.join(".thoughts-data")).unwrap();
+
+        let settings = repo.join(".claude").join("settings.local.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(
+            &settings,
+            r#"{"permissions":{"additionalDirectories":[],"allow":"bad","deny":[],"ask":[]}}"#,
+        )
+        .unwrap();
+
+        let err = inject_additional_directories(repo).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("permissions.allow must be an array")
+        );
     }
 
     #[test]
@@ -452,7 +584,7 @@ mod tests {
 
         // Create 5 malformed backups with increasing timestamps
         for ts in [100, 200, 300, 400, 500] {
-            let p = settings.with_extension(format!("json.malformed.{}.bak", ts));
+            let p = settings.with_extension(format!("json.malformed.{ts}.bak"));
             fs::write(&p, b"{}").unwrap();
         }
 

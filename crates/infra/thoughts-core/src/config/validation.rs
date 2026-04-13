@@ -27,13 +27,8 @@ pub fn is_git_url(s: &str) -> bool {
 /// Extract host from SSH/HTTPS URLs
 pub fn get_host_from_url(url: &str) -> Result<String> {
     let (base, _) = parse_url_and_subpath(url);
-    let id = RepoIdentity::parse(&base).map_err(|e| {
-        anyhow::anyhow!(
-            "Unsupported URL (cannot parse host): {}\nDetails: {}",
-            url,
-            e
-        )
-    })?;
+    let id = RepoIdentity::parse(&base)
+        .map_err(|e| anyhow::anyhow!("Unsupported URL (cannot parse host): {url}\nDetails: {e}"))?;
     Ok(id.host)
 }
 
@@ -41,43 +36,36 @@ pub fn get_host_from_url(url: &str) -> Result<String> {
 pub fn validate_reference_url(url: &str) -> Result<()> {
     let url = url.trim();
     if url.contains('?') || url.contains('#') {
-        bail!(
-            "Reference URLs cannot contain '?' or '#' alternate ref encodings: {}",
-            url
-        );
+        bail!("Reference URLs cannot contain '?' or '#' alternate ref encodings: {url}");
     }
     let (base, subpath) = parse_url_and_subpath(url);
     if subpath.is_some() {
         bail!(
-            "Cannot add URL with subpath as a reference: {}\n\n\
+            "Cannot add URL with subpath as a reference: {url}\n\n\
              References are repo-level only.\n\
              Try one of:\n\
                - Add the repository URL without a subpath\n\
-               - Use 'thoughts mount add <local-subdir>' for subdirectory mounts",
-            url
+               - Use 'thoughts mount add <local-subdir>' for subdirectory mounts"
         );
     }
     if !is_git_url(&base) {
         bail!(
-            "Invalid reference value: {}\n\n\
-             Must be a git URL using one of:\n  - git@host:org/repo(.git)\n  - https://host/org/repo(.git)\n  - ssh://user@host[:port]/org/repo(.git)\n",
-            url
+            "Invalid reference value: {url}\n\n\
+             Must be a git URL using one of:\n  - git@host:org/repo(.git)\n  - https://host/org/repo(.git)\n  - ssh://user@host[:port]/org/repo(.git)\n"
         );
     }
     // Ensure org/repo structure is parseable via RepoIdentity
     RepoIdentity::parse(&base).map_err(|e| {
         anyhow::anyhow!(
-            "Invalid repository URL: {}\n\n\
+            "Invalid repository URL: {url}\n\n\
              Expected a URL with an org and repo (e.g., github.com/org/repo).\n\
-             Details: {}",
-            url,
-            e
+             Details: {e}"
         )
     })?;
     Ok(())
 }
 
-/// Canonical key (host, org_path, repo) all lowercased, without .git
+/// Canonical key (host, `org_path`, repo) all lowercased, without .git
 pub fn canonical_reference_key(url: &str) -> Result<(String, String, String)> {
     let (base, _) = parse_url_and_subpath(url);
     let key = RepoIdentity::parse(&base)?.canonical_key();
@@ -154,17 +142,13 @@ pub fn validate_pinned_ref_full_name(ref_name: &str) -> Result<()> {
         let remote = parts.next().unwrap_or("");
         let branch = parts.next().unwrap_or("");
         if remote.is_empty() || branch.is_empty() {
-            bail!(
-                "Legacy pinned ref must be 'refs/remotes/<remote>/<branch>' (got '{}')",
-                ref_name
-            );
+            bail!("Legacy pinned ref must be 'refs/remotes/<remote>/<branch>' (got '{ref_name}')");
         }
         return Ok(());
     }
 
     bail!(
-        "Pinned refs must be full ref names starting with 'refs/heads/', 'refs/tags/', or 'refs/remotes/' (got '{}')",
-        ref_name
+        "Pinned refs must be full ref names starting with 'refs/heads/', 'refs/tags/', or 'refs/remotes/' (got '{ref_name}')"
     );
 }
 
@@ -196,8 +180,7 @@ pub fn validate_pinned_ref_full_name_new_input(ref_name: &str) -> Result<()> {
     }
 
     bail!(
-        "Pinned refs must be full ref names starting with 'refs/heads/' or 'refs/tags/' (got '{}')",
-        ref_name
+        "Pinned refs must be full ref names starting with 'refs/heads/' or 'refs/tags/' (got '{ref_name}')"
     );
 }
 
@@ -214,59 +197,52 @@ pub fn is_https_url(s: &str) -> bool {
     s.trim_start().to_lowercase().starts_with("https://")
 }
 
-/// Validate MCP add_reference input:
+/// Validate MCP `add_reference` input:
 /// - Reject SSH and http://
 /// - Reject subpaths
-/// - Accept GitHub web or clone URLs (https://github.com/org/repo[.git])
+/// - Accept GitHub web or clone URLs (<https://github.com/org/repo>[.git])
 /// - Accept generic https://*.git clone URLs
 pub fn validate_reference_url_https_only(url: &str) -> Result<()> {
     let url = url.trim();
 
     if url.contains('?') || url.contains('#') {
-        bail!(
-            "Reference URLs cannot contain '?' or '#' alternate ref encodings: {}",
-            url
-        );
+        bail!("Reference URLs cannot contain '?' or '#' alternate ref encodings: {url}");
     }
 
     // Reject subpaths (URL:subpath)
     let (base, subpath) = parse_url_and_subpath(url);
     if subpath.is_some() {
         bail!(
-            "Cannot add URL with subpath as a reference: {}\n\nReferences are repo-level only.",
-            url
+            "Cannot add URL with subpath as a reference: {url}\n\nReferences are repo-level only."
         );
     }
 
     if is_ssh_url(&base) {
         bail!(
-            "SSH URLs are not supported by the MCP add_reference tool: {}\n\n\
+            "SSH URLs are not supported by the MCP add_reference tool: {base}\n\n\
              Please provide an HTTPS URL, e.g.:\n  https://github.com/org/repo(.git)\n\n\
-             If you must use SSH, run the CLI instead:\n  thoughts references add <git@... or ssh://...>",
-            base
+             If you must use SSH, run the CLI instead:\n  thoughts references add <git@... or ssh://...>"
         );
     }
     if !is_https_url(&base) {
         bail!(
-            "Only HTTPS URLs are supported by the MCP add_reference tool: {}\n\n\
-             Please provide an HTTPS URL, e.g.:\n  https://github.com/org/repo(.git)",
-            base
+            "Only HTTPS URLs are supported by the MCP add_reference tool: {base}\n\n\
+             Please provide an HTTPS URL, e.g.:\n  https://github.com/org/repo(.git)"
         );
     }
 
     // Parse as RepoIdentity to validate structure
     let id = RepoIdentity::parse(&base).map_err(|e| {
-        anyhow::anyhow!(
-            "Invalid repository URL (expected host/org/repo).\nDetails: {}",
-            e
-        )
+        anyhow::anyhow!("Invalid repository URL (expected host/org/repo).\nDetails: {e}")
     })?;
 
     // For non-GitHub hosts, require .git suffix
-    if id.host != "github.com" && !base.ends_with(".git") {
+    let has_git_suffix = std::path::Path::new(&base)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("git"));
+    if id.host != "github.com" && !has_git_suffix {
         bail!(
-            "For non-GitHub hosts, please provide an HTTPS clone URL ending with .git:\n  {}",
-            base
+            "For non-GitHub hosts, please provide an HTTPS clone URL ending with .git:\n  {base}"
         );
     }
 

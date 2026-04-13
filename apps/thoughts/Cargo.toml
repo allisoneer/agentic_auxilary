@@ -42,3 +42,6 @@ assert_cmd = "2.1"
 predicates = "3.1"
 serial_test = "3"
 git2 = "0.20"
+
+[lints]
+workspace = true

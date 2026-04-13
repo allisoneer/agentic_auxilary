@@ -27,7 +27,7 @@ pub struct DesiredState {
 }
 
 impl DesiredState {
-    /// Find a mount by its MountSpace identifier
+    /// Find a mount by its `MountSpace` identifier
     pub fn find_mount(&self, space: &MountSpace) -> Option<Mount> {
         match space {
             MountSpace::Thoughts => self.thoughts_mount.as_ref().map(|tm| Mount::Git {
@@ -69,6 +69,10 @@ pub struct RepoConfigManager {
 }
 
 impl RepoConfigManager {
+    #[expect(
+        clippy::expect_used,
+        reason = "current_dir failure indicates a fatal system state; panicking is appropriate"
+    )]
     pub fn new(repo_root: PathBuf) -> Self {
         // Ensure absolute path at construction (defense-in-depth)
         let abs = if repo_root.is_absolute() {
@@ -125,7 +129,7 @@ impl RepoConfigManager {
         );
     }
 
-    fn validate_remote(&self, remote: &str) -> Result<()> {
+    fn validate_remote(remote: &str) -> Result<()> {
         if remote.starts_with("./") {
             // Local mount - relative path is OK
             return Ok(());
@@ -136,8 +140,7 @@ impl RepoConfigManager {
             && !remote.starts_with("ssh://")
         {
             anyhow::bail!(
-                "Invalid remote URL: {}. Must be a git URL or relative path starting with ./",
-                remote
+                "Invalid remote URL: {remote}. Must be a git URL or relative path starting with ./"
             );
         }
 
@@ -172,7 +175,7 @@ impl RepoConfigManager {
         // Ensure .thoughts directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {parent:?}"))?;
+                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
 
         let json =
@@ -180,7 +183,7 @@ impl RepoConfigManager {
 
         AtomicFile::new(&config_path, OverwriteBehavior::AllowOverwrite)
             .write(|f| f.write_all(json.as_bytes()))
-            .with_context(|| format!("Failed to write config to {config_path:?}"))?;
+            .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
         Ok(())
     }
@@ -228,7 +231,7 @@ impl RepoConfigManager {
                 ReferenceEntry::WithMetadata(rm) => rm.remote.as_str(),
             };
             if let Err(e) = crate::config::validation::validate_reference_url(url) {
-                warnings.push(format!("Invalid reference '{}': {}", url, e));
+                warnings.push(format!("Invalid reference '{url}': {e}"));
             }
         }
         warnings
@@ -244,11 +247,15 @@ impl RepoConfigManager {
         let v: serde_json::Value = serde_json::from_str(&raw)?;
         Ok(v.get("version")
             .and_then(|x| x.as_str())
-            .map(|s| s.to_string()))
+            .map(std::string::ToString::to_string))
     }
 
     /// Hard validator for v2 config. Returns warnings (non-fatal).
     pub fn validate_v2_hard(&self, cfg: &RepoConfigV2) -> Result<Vec<String>> {
+        use crate::config::validation::canonical_reference_instance_key;
+        use crate::config::validation::validate_pinned_ref_full_name;
+        use crate::config::validation::validate_reference_url;
+
         if cfg.version != "2.0" {
             anyhow::bail!("Unsupported configuration version: {}", cfg.version);
         }
@@ -261,23 +268,16 @@ impl RepoConfigManager {
             ("references", &m.references),
         ] {
             if val.trim().is_empty() {
-                anyhow::bail!("Mount directory '{}' cannot be empty", name);
+                anyhow::bail!("Mount directory '{name}' cannot be empty");
             }
             if val == ".thoughts-data" {
-                anyhow::bail!(
-                    "Mount directory '{}' cannot be named '.thoughts-data'",
-                    name
-                );
+                anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
             }
             if val == "." || val == ".." {
-                anyhow::bail!("Mount directory '{}' cannot be '.' or '..'", name);
+                anyhow::bail!("Mount directory '{name}' cannot be '.' or '..'");
             }
             if val.contains('/') || val.contains('\\') {
-                anyhow::bail!(
-                    "Mount directory '{}' must be a single path segment (got {})",
-                    name,
-                    val
-                );
+                anyhow::bail!("Mount directory '{name}' must be a single path segment (got {val})");
             }
         }
         if m.thoughts == m.context || m.thoughts == m.references || m.context == m.references {
@@ -286,7 +286,7 @@ impl RepoConfigManager {
 
         // thoughts_mount remote validation
         if let Some(tm) = &cfg.thoughts_mount {
-            self.validate_remote(&tm.remote)?;
+            Self::validate_remote(&tm.remote)?;
         }
 
         // context_mounts: unique mount_path, valid remotes; warn on sync:None
@@ -324,7 +324,7 @@ impl RepoConfigManager {
             }
 
             // remote validity
-            self.validate_remote(&cm.remote)?;
+            Self::validate_remote(&cm.remote)?;
             if matches!(cm.sync, SyncStrategy::None) {
                 warnings.push(format!(
                     "Context mount '{}' has sync:None; allowed but discouraged. Consider SyncStrategy::Auto.",
@@ -334,30 +334,26 @@ impl RepoConfigManager {
         }
 
         // references: validate and ensure uniqueness by canonical key
-        use crate::config::validation::canonical_reference_instance_key;
-        use crate::config::validation::validate_pinned_ref_full_name;
-        use crate::config::validation::validate_reference_url;
         let mut seen_refs = std::collections::HashSet::new();
         for r in &cfg.references {
             let (url, ref_name) = match r {
                 ReferenceEntry::Simple(s) => (s.as_str(), None),
                 ReferenceEntry::WithMetadata(rm) => (rm.remote.as_str(), rm.ref_name.as_deref()),
             };
-            validate_reference_url(url).with_context(|| format!("Invalid reference '{}'", url))?;
+            validate_reference_url(url).with_context(|| format!("Invalid reference '{url}'"))?;
             if let Some(ref_name) = ref_name {
                 if ref_name.starts_with("refs/remotes/") {
                     warnings.push(format!(
-                        "Reference '{}' uses legacy pinned ref '{}'. New references should use refs/heads/* or refs/tags/*; refs/remotes/* is a local remote-tracking namespace.",
-                        url, ref_name
+                        "Reference '{url}' uses legacy pinned ref '{ref_name}'. New references should use refs/heads/* or refs/tags/*; refs/remotes/* is a local remote-tracking namespace."
                     ));
                 }
                 validate_pinned_ref_full_name(ref_name).with_context(|| {
-                    format!("Invalid pinned ref '{}' for reference '{}'", ref_name, url)
+                    format!("Invalid pinned ref '{ref_name}' for reference '{url}'")
                 })?;
             }
             let key = canonical_reference_instance_key(url, ref_name)?;
             if !seen_refs.insert(key) {
-                anyhow::bail!("Duplicate reference detected: {}", url);
+                anyhow::bail!("Duplicate reference detected: {url}");
             }
         }
 
@@ -588,7 +584,7 @@ mod tests {
         let cfg = RepoConfigV2 {
             version: "2.0".to_string(),
             mount_dirs: MountDirsV2 {
-                thoughts: "".to_string(),
+                thoughts: String::new(),
                 context: "context".to_string(),
                 references: "references".to_string(),
             },
@@ -1270,7 +1266,7 @@ mod tests {
         std::env::set_current_dir(cwd_before).unwrap();
     }
 
-    /// Regression test: validate_v2_hard() rejects mount directories with trailing slashes.
+    /// Regression test: `validate_v2_hard()` rejects mount directories with trailing slashes.
     ///
     /// This documents the invariant that the "single path segment" validation at lines 474-479
     /// implicitly blocks trailing slashes (which contain '/'). This invariant protects against

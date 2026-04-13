@@ -1,6 +1,6 @@
 //! Advisory file locking utilities.
 //!
-//! This module provides a thin RAII wrapper around std::fs file locking (Rust 1.89+).
+//! This module provides a thin RAII wrapper around `std::fs` file locking (Rust 1.89+).
 //! Used for:
 //! - Protecting `repos.json` read-modify-write operations
 //! - Per-repo clone locks to prevent concurrent clones into the same target

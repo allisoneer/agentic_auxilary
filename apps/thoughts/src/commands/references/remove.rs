@@ -77,6 +77,7 @@ fn remove_references_by_canonical(entries: &mut Vec<ReferenceEntry>, input: &str
     }
 }
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(url: String) -> Result<()> {
     let repo_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(repo_root);
@@ -92,7 +93,7 @@ pub async fn execute(url: String) -> Result<()> {
 
     let warnings = mgr.save_v2_validated(&cfg)?;
     for w in warnings {
-        eprintln!("Warning: {}", w);
+        eprintln!("Warning: {w}");
     }
 
     // Print what was removed

@@ -40,7 +40,7 @@ pub async fn execute() -> Result<()> {
             let cfg = mgr.load_v2_or_bail()?;
             let warnings = mgr.save_v2_validated(&cfg)?;
             for w in warnings {
-                eprintln!("Warning: {}", w);
+                eprintln!("Warning: {w}");
             }
             println!("✓ Saved and validated v2 configuration");
         }

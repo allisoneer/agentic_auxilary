@@ -35,7 +35,7 @@ pub struct MountInfo {
 }
 
 /// Mount status
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MountStatus {
     /// Successfully mounted and accessible
     Mounted,
@@ -125,7 +125,7 @@ pub struct CachedMountInfo {
 use anyhow::Result;
 use std::fmt;
 
-/// Represents the different types of mount spaces in thoughts_tool.
+/// Represents the different types of mount spaces in `thoughts_tool`.
 ///
 /// The three-space architecture consists of:
 /// - `Thoughts`: Single workspace for active development thoughts
@@ -151,17 +151,17 @@ pub enum MountSpace {
 }
 
 impl MountSpace {
-    /// Parse a mount identifier string into a MountSpace
+    /// Parse a mount identifier string into a `MountSpace`
     pub fn parse(input: &str) -> Result<Self> {
         if input == "thoughts" {
-            Ok(MountSpace::Thoughts)
+            Ok(Self::Thoughts)
         } else if input.starts_with("references/") {
             let rest = input.trim_start_matches("references/");
             let (org_path, repo_segment) = rest
                 .rsplit_once('/')
-                .ok_or_else(|| anyhow::anyhow!("Invalid reference format: {}", input))?;
+                .ok_or_else(|| anyhow::anyhow!("Invalid reference format: {input}"))?;
             if org_path.is_empty() || repo_segment.is_empty() {
-                anyhow::bail!("Invalid reference format: {}", input);
+                anyhow::bail!("Invalid reference format: {input}");
             }
 
             let (repo, ref_key) = match repo_segment.rsplit_once('@') {
@@ -171,7 +171,7 @@ impl MountSpace {
                 _ => (repo_segment.to_string(), None),
             };
 
-            Ok(MountSpace::Reference {
+            Ok(Self::Reference {
                 org_path: org_path.to_string(),
                 repo,
                 ref_key,
@@ -179,29 +179,28 @@ impl MountSpace {
         } else if let Some(rest) = input.strip_prefix("context/") {
             if rest.is_empty() {
                 anyhow::bail!(
-                    "Invalid context mount name '{}': missing mount path after 'context/'",
-                    input
+                    "Invalid context mount name '{input}': missing mount path after 'context/'"
                 );
             }
-            Ok(MountSpace::Context(rest.to_string()))
+            Ok(Self::Context(rest.to_string()))
         } else {
             // Assume it's a context mount
-            Ok(MountSpace::Context(input.to_string()))
+            Ok(Self::Context(input.to_string()))
         }
     }
 
     /// Get the string identifier for this mount space
     pub fn as_str(&self) -> String {
         match self {
-            MountSpace::Thoughts => "thoughts".to_string(),
-            MountSpace::Context(path) => path.clone(),
-            MountSpace::Reference {
+            Self::Thoughts => "thoughts".to_string(),
+            Self::Context(path) => path.clone(),
+            Self::Reference {
                 org_path,
                 repo,
                 ref_key,
             } => match ref_key {
-                Some(ref_key) => format!("references/{}/{}@{}", org_path, repo, ref_key),
-                None => format!("references/{}/{}", org_path, repo),
+                Some(ref_key) => format!("references/{org_path}/{repo}@{ref_key}"),
+                None => format!("references/{org_path}/{repo}"),
             },
         }
     }
@@ -209,9 +208,9 @@ impl MountSpace {
     /// Get the relative path under .thoughts-data for this mount
     pub fn relative_path(&self, mount_dirs: &crate::config::MountDirsV2) -> String {
         match self {
-            MountSpace::Thoughts => mount_dirs.thoughts.clone(),
-            MountSpace::Context(path) => format!("{}/{}", mount_dirs.context, path),
-            MountSpace::Reference {
+            Self::Thoughts => mount_dirs.thoughts.clone(),
+            Self::Context(path) => format!("{}/{}", mount_dirs.context, path),
+            Self::Reference {
                 org_path,
                 repo,
                 ref_key,
@@ -229,7 +228,7 @@ impl MountSpace {
 
     /// Check if this mount space should be read-only
     pub fn is_read_only(&self) -> bool {
-        matches!(self, MountSpace::Reference { .. })
+        matches!(self, Self::Reference { .. })
     }
 }
 

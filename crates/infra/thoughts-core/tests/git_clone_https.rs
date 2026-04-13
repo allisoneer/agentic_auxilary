@@ -1,20 +1,24 @@
 //! HTTPS clone smoke tests for gitoxide-based clone operations.
-//! Run with:
-//!   THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 cargo test --test git_clone_https
+//! Run with: `THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 just test-integration`
 
 use tempfile::TempDir;
 use thoughts_tool::git::clone::CloneOptions;
 use thoughts_tool::git::clone::clone_repository;
 
-fn should_run() -> bool {
+/// Returns true if network tests should be run.
+/// These tests require `THOUGHTS_INTEGRATION_TESTS=1` and `THOUGHTS_NETWORK_TESTS=1`.
+fn should_run_network_tests() -> bool {
     std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() == Some("1")
         && std::env::var("THOUGHTS_NETWORK_TESTS").ok().as_deref() == Some("1")
 }
 
+#[ignore = "network test - run with: THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 just test-integration"]
 #[test]
 fn https_clone_github_smoke() {
-    if !should_run() {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1 and THOUGHTS_NETWORK_TESTS=1");
+    if !should_run_network_tests() {
+        eprintln!(
+            "skipping network test; set THOUGHTS_INTEGRATION_TESTS=1 and THOUGHTS_NETWORK_TESTS=1"
+        );
         return;
     }
 
@@ -28,10 +32,13 @@ fn https_clone_github_smoke() {
     assert!(tmp.path().join("hello-world/.git").exists());
 }
 
+#[ignore = "network test - run with: THOUGHTS_INTEGRATION_TESTS=1 THOUGHTS_NETWORK_TESTS=1 just test-integration"]
 #[test]
 fn https_clone_gitlab_smoke() {
-    if !should_run() {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1 and THOUGHTS_NETWORK_TESTS=1");
+    if !should_run_network_tests() {
+        eprintln!(
+            "skipping network test; set THOUGHTS_INTEGRATION_TESTS=1 and THOUGHTS_NETWORK_TESTS=1"
+        );
         return;
     }
 

@@ -11,9 +11,11 @@ use tracing::debug;
 
 use crate::config::Mount;
 use crate::config::RepoConfigManager;
+use crate::git::utils::HeadState;
 use crate::git::utils::find_repo_root;
 use crate::git::utils::get_control_repo_root;
 use crate::git::utils::get_current_branch;
+use crate::git::utils::get_head_state;
 use crate::git::utils::get_remote_url;
 use crate::mount::MountResolver;
 
@@ -25,10 +27,9 @@ fn is_main_like(branch: &str) -> bool {
 // Standardized lockout error text for CLI + MCP
 fn main_branch_lockout_error(branch: &str) -> anyhow::Error {
     anyhow::anyhow!(
-        "Branch protection: operations that create or access branch-specific work are blocked on '{}'.\n\
+        "Branch protection: operations that create or access branch-specific work are blocked on '{branch}'.\n\
          Create a feature branch first, then re-run:\n  git checkout -b my/feature\n\n\
-         Note: branch-agnostic commands like 'thoughts work list' and 'thoughts references list' are allowed on main.",
-        branch
+         Note: branch-agnostic commands like 'thoughts work list' and 'thoughts references list' are allowed on main."
     )
 }
 
@@ -66,9 +67,9 @@ fn next_archive_name(completed_dir: &Path, base_name: &str) -> PathBuf {
     let mut i = 1usize;
     loop {
         let with_suffix = if i == 1 {
-            format!("{}-migrated", base_name)
+            format!("{base_name}-migrated")
         } else {
-            format!("{}-migrated-{}", base_name, i)
+            format!("{base_name}-migrated-{i}")
         };
         let p = completed_dir.join(with_suffix);
         if !p.exists() {
@@ -81,7 +82,7 @@ fn next_archive_name(completed_dir: &Path, base_name: &str) -> PathBuf {
 // Auto-archive weekly dirs from thoughts_root/* -> thoughts_root/completed/*
 fn auto_archive_weekly_dirs(thoughts_root: &Path) -> Result<()> {
     let completed = thoughts_root.join("completed");
-    std::fs::create_dir_all(&completed).ok();
+    let _ = std::fs::create_dir_all(&completed);
     for entry in std::fs::read_dir(thoughts_root)? {
         let entry = entry?;
         let p = entry.path();
@@ -176,7 +177,7 @@ struct ResolvedThoughtsRoot {
     thoughts_git_ref: Option<String>,
 }
 
-/// Resolve thoughts root via configured thoughts_mount
+/// Resolve thoughts root via configured `thoughts_mount`
 fn resolve_thoughts_root() -> Result<ResolvedThoughtsRoot> {
     let control_root = get_control_repo_root(&std::env::current_dir()?)?;
     let mgr = RepoConfigManager::new(control_root);
@@ -202,10 +203,14 @@ fn resolve_thoughts_root() -> Result<ResolvedThoughtsRoot> {
         "Thoughts mount not cloned. Run 'thoughts sync' or 'thoughts mount update' first.",
     )?;
 
-    let thoughts_git_ref = find_repo_root(&path)
-        .ok()
-        .and_then(|repo_root| get_current_branch(&repo_root).ok())
-        .filter(|branch| branch != "detached");
+    let thoughts_git_ref = find_repo_root(&path).ok().and_then(|repo_root| {
+        get_head_state(&repo_root)
+            .ok()
+            .and_then(|state| match state {
+                HeadState::Attached(name) => Some(name),
+                _ => None,
+            })
+    });
 
     Ok(ResolvedThoughtsRoot {
         path,
@@ -247,11 +252,35 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
     }
 
     // Use branch name directly - no weekly directories
-    let dir_name = branch.clone();
+    let dir_name = branch;
     let base = resolved.path.join(&dir_name);
 
     // Create structure if missing
-    if !base.exists() {
+    if base.exists() {
+        // Ensure subdirs exist even if base exists
+        for sub in ["research", "plans", "artifacts", "logs"] {
+            let subdir = base.join(sub);
+            if !subdir.exists() {
+                fs::create_dir_all(&subdir)
+                    .with_context(|| format!("Failed to ensure {sub} directory"))?;
+            }
+        }
+        // Ensure manifest exists
+        let manifest_path = base.join("manifest.json");
+        if !manifest_path.exists() {
+            let source_repo = get_remote_url(&code_root).unwrap_or_else(|_| "unknown".to_string());
+            let manifest = json!({
+                "source_repo": source_repo,
+                "branch_or_week": dir_name,
+                "started_at": chrono::Utc::now().to_rfc3339(),
+            });
+            AtomicFile::new(&manifest_path, OverwriteBehavior::AllowOverwrite)
+                .write(|f| f.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes()))
+                .with_context(|| {
+                    format!("Failed to write manifest at {}", manifest_path.display())
+                })?;
+        }
+    } else {
         fs::create_dir_all(base.join("research")).context("Failed to create research directory")?;
         fs::create_dir_all(base.join("plans")).context("Failed to create plans directory")?;
         fs::create_dir_all(base.join("artifacts"))
@@ -270,34 +299,10 @@ pub fn ensure_active_work() -> Result<ActiveWork> {
         AtomicFile::new(&manifest_path, OverwriteBehavior::AllowOverwrite)
             .write(|f| f.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes()))
             .with_context(|| format!("Failed to write manifest at {}", manifest_path.display()))?;
-    } else {
-        // Ensure subdirs exist even if base exists
-        for sub in ["research", "plans", "artifacts", "logs"] {
-            let subdir = base.join(sub);
-            if !subdir.exists() {
-                fs::create_dir_all(&subdir)
-                    .with_context(|| format!("Failed to ensure {} directory", sub))?;
-            }
-        }
-        // Ensure manifest exists
-        let manifest_path = base.join("manifest.json");
-        if !manifest_path.exists() {
-            let source_repo = get_remote_url(&code_root).unwrap_or_else(|_| "unknown".to_string());
-            let manifest = json!({
-                "source_repo": source_repo,
-                "branch_or_week": dir_name,
-                "started_at": chrono::Utc::now().to_rfc3339(),
-            });
-            AtomicFile::new(&manifest_path, OverwriteBehavior::AllowOverwrite)
-                .write(|f| f.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes()))
-                .with_context(|| {
-                    format!("Failed to write manifest at {}", manifest_path.display())
-                })?;
-        }
     }
 
     Ok(ActiveWork {
-        dir_name: dir_name.clone(),
+        dir_name,
         base: base.clone(),
         research: base.join("research"),
         plans: base.join("plans"),

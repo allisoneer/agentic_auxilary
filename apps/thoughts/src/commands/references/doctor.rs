@@ -38,7 +38,7 @@ enum Issue {
         canonical_key: String,
         urls: Vec<String>,
         /// true if ALL duplicate entries are auto-managed (used for messaging nuance)
-        #[allow(dead_code)]
+        #[expect(dead_code)]
         auto_managed: bool,
     },
     /// Mapped path does not exist
@@ -72,7 +72,7 @@ enum Issue {
 impl Issue {
     fn print(&self) {
         match self {
-            Issue::DuplicateIdentity {
+            Self::DuplicateIdentity {
                 canonical_key,
                 urls,
                 auto_managed: _,
@@ -83,19 +83,19 @@ impl Issue {
                     canonical_key
                 );
                 for url in urls {
-                    println!("    - {}", url);
+                    println!("    - {url}");
                 }
                 println!(
                     "    Fix: Run 'thoughts references doctor --fix' to consolidate mappings deterministically."
                 );
             }
-            Issue::MissingPath {
+            Self::MissingPath {
                 url,
                 path,
                 auto_managed,
             } => {
                 println!("{} Missing path for {}", "✗".red(), url);
-                println!("    Path: {}", path);
+                println!("    Path: {path}");
                 if *auto_managed {
                     println!(
                         "    Fix: Run 'thoughts references doctor --fix' to remove the stale auto-managed mapping."
@@ -106,13 +106,13 @@ impl Issue {
                     );
                 }
             }
-            Issue::NotADirectory {
+            Self::NotADirectory {
                 url,
                 path,
                 auto_managed,
             } => {
                 println!("{} Path is not a directory for {}", "✗".red(), url);
-                println!("    Path: {}", path);
+                println!("    Path: {path}");
                 if *auto_managed {
                     println!(
                         "    Fix: Run 'thoughts references doctor --fix' to remove the stale auto-managed mapping."
@@ -123,13 +123,13 @@ impl Issue {
                     );
                 }
             }
-            Issue::NotAGitRepo {
+            Self::NotAGitRepo {
                 url,
                 path,
                 auto_managed,
             } => {
                 println!("{} Path is not a git repository for {}", "⚠".yellow(), url);
-                println!("    Path: {}", path);
+                println!("    Path: {path}");
                 if *auto_managed {
                     println!(
                         "    Fix: Run 'thoughts references doctor --fix' to remove the stale auto-managed mapping."
@@ -140,7 +140,7 @@ impl Issue {
                     );
                 }
             }
-            Issue::OriginMismatch {
+            Self::OriginMismatch {
                 url,
                 path,
                 expected,
@@ -148,9 +148,9 @@ impl Issue {
                 auto_managed,
             } => {
                 println!("{} Origin mismatch for {}", "⚠".yellow(), url);
-                println!("    Path: {}", path);
-                println!("    Expected identity: {}", expected);
-                println!("    Actual origin: {}", actual);
+                println!("    Path: {path}");
+                println!("    Expected identity: {expected}");
+                println!("    Actual origin: {actual}");
                 if *auto_managed {
                     println!(
                         "    Fix: Run 'thoughts references doctor --fix' to remove the auto-managed mapping."
@@ -168,6 +168,7 @@ impl Issue {
     }
 }
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(fix: bool) -> Result<()> {
     let mapping_path = get_repo_mapping_path()?;
 
@@ -198,12 +199,11 @@ pub async fn execute(fix: bool) -> Result<()> {
         let (base_url, _) = parse_url_and_subpath(&stored_url);
 
         // Check if URL parses
-        let identity = match RepoIdentity::parse(&base_url) {
-            Ok(id) => Some(id),
-            Err(_) => {
-                println!("{} Cannot parse URL: {} (skipping)", "⚠".yellow(), url);
-                None
-            }
+        let identity = if let Ok(id) = RepoIdentity::parse(&base_url) {
+            Some(id)
+        } else {
+            println!("{} Cannot parse URL: {} (skipping)", "⚠".yellow(), url);
+            None
         };
 
         // Check if path exists
@@ -277,13 +277,9 @@ pub async fn execute(fix: bool) -> Result<()> {
     for (key, urls) in &identity_map {
         if urls.len() > 1 {
             // Determine if ALL duplicates are auto-managed
-            let all_auto = urls.iter().all(|u| {
-                mapping
-                    .mappings
-                    .get(u)
-                    .map(|loc| loc.auto_managed)
-                    .unwrap_or(false)
-            });
+            let all_auto = urls
+                .iter()
+                .all(|u| mapping.mappings.get(u).is_some_and(|loc| loc.auto_managed));
             issues.push(Issue::DuplicateIdentity {
                 canonical_key: format_instance_key(key),
                 urls: urls.clone(),
@@ -352,8 +348,8 @@ fn health_rank(url: &str, path: &Path) -> u8 {
                 2 // origin mismatch
             }
         }
-        Ok(None) => 3, // origin unknown (missing or unparsable)
-        Err(_) => 3,   // origin unknown on error
+        // origin unknown (missing, unparsable, or error)
+        Ok(None) | Err(_) => 3,
     }
 }
 
@@ -378,7 +374,7 @@ fn build_identity_groups(mapping: &RepoMapping) -> HashMap<InstanceKey, Vec<Stri
 fn format_instance_key(key: &InstanceKey) -> String {
     let repo = format!("{}/{}/{}", key.repo.host, key.repo.org_path, key.repo.repo);
     match &key.ref_key {
-        Some(ref_key) => format!("{} [ref_key={}]", repo, ref_key),
+        Some(ref_key) => format!("{repo} [ref_key={ref_key}]"),
         None => repo,
     }
 }

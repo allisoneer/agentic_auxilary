@@ -1,4 +1,4 @@
-//! Shared tool-call logging for thoughts_tool.
+//! Shared tool-call logging for `thoughts_tool`.
 //!
 //! This module provides logging helpers used by both MCP and agentic-tools
 //! wrappers to ensure consistent logging behavior.

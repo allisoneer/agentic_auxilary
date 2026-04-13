@@ -13,7 +13,7 @@ fn test_worktree_initialization() -> Result<(), Box<dyn std::error::Error>> {
     let worktree = temp.path().join("worktree");
 
     // Initialize main repository
-    fs::create_dir(&main_repo)?;
+    fs::create_dir_all(&main_repo)?;
     support::git_ok(&main_repo, &["init"]);
 
     // Configure git for CI environment
@@ -65,7 +65,7 @@ fn test_worktree_requires_main_init() -> Result<(), Box<dyn std::error::Error>> 
     let worktree = temp.path().join("worktree");
 
     // Create uninitialized main repo
-    fs::create_dir(&main_repo)?;
+    fs::create_dir_all(&main_repo)?;
     support::git_ok(&main_repo, &["init"]);
 
     // Configure git for CI environment
@@ -105,7 +105,7 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
     let worktree = temp.path().join("worktree");
 
     // Initialize main repository
-    fs::create_dir(&main_repo)?;
+    fs::create_dir_all(&main_repo)?;
     support::git_ok(&main_repo, &["init"]);
 
     // Configure git for CI environment
@@ -142,16 +142,14 @@ fn test_worktree_config_routing() -> Result<(), Box<dyn std::error::Error>> {
     let main_config = main_repo.join(".thoughts").join("config.json");
     assert!(
         main_config.exists(),
-        "Config should exist in main repo at {:?}",
-        main_config
+        "Config should exist in main repo at {main_config:?}"
     );
 
     // Verify config does NOT exist in worktree
     let worktree_config = worktree.join(".thoughts").join("config.json");
     assert!(
         !worktree_config.exists(),
-        "Config should NOT exist in worktree at {:?}",
-        worktree_config
+        "Config should NOT exist in worktree at {worktree_config:?}"
     );
 
     // Verify that config show from worktree also works

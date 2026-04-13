@@ -1,5 +1,6 @@
+#![expect(clippy::unwrap_used, reason = "Tests should panic on failure")]
 //! Integration tests for remote ref discovery.
-//! Run with: THOUGHTS_INTEGRATION_TESTS=1 cargo test --test git_remote_ref_discovery
+//! Run with: `just test-integration`
 
 mod support;
 
@@ -77,13 +78,9 @@ fn init_remote_with_branch_and_tag() -> (TempDir, TempDir, String) {
     (remote_dir, work, remote_path.to_string_lossy().into())
 }
 
+#[ignore = "integration test - run with: just test-integration"]
 #[test]
 fn discovers_remote_refs_from_local_bare_remote() {
-    if std::env::var("THOUGHTS_INTEGRATION_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("skipping; set THOUGHTS_INTEGRATION_TESTS=1");
-        return;
-    }
-
     let (_remote_guard, work_guard, remote_path) = init_remote_with_branch_and_tag();
     let refs = discover_remote_refs(work_guard.path(), &remote_path).unwrap();
 

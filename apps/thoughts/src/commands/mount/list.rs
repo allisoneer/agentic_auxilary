@@ -4,9 +4,10 @@ use crate::git::utils::get_control_repo_root;
 use crate::mount::MountResolver;
 use crate::mount::MountSpace;
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use std::env;
 
+#[expect(clippy::unused_async, reason = "async for command API consistency")]
 pub async fn execute(verbose: bool) -> Result<()> {
     let repo_root = get_control_repo_root(&env::current_dir()?)?;
     let repo_manager = RepoConfigManager::new(repo_root);

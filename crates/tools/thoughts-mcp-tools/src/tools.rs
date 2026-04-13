@@ -87,7 +87,7 @@ impl Tool for WriteDocumentTool {
                 "filename": &input.filename,
             });
 
-            let result = write_document(input.doc_type, &input.filename, &input.content);
+            let result = write_document(&input.doc_type, &input.filename, &input.content);
 
             match &result {
                 Ok(ok) => {
@@ -154,7 +154,7 @@ impl Tool for ListActiveDocumentsTool {
                 "subdir": input.subdir.as_ref().map(|d| format!("{:?}", d).to_lowercase()),
             });
 
-            let result = list_documents(input.subdir);
+            let result = list_documents(input.subdir.as_ref());
 
             match &result {
                 Ok(docs) => {
