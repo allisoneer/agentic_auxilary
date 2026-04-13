@@ -21,6 +21,12 @@ mcp = true
 logging = true
 napi = false
 
+[package.metadata.binstall]
+pkg-url = "{repo}/releases/download/{name}-v{version}/{name}-{target}.tar.xz"
+pkg-fmt = "txz"
+bin-dir = "{name}-{target}/{bin}{binary-ext}"
+disabled-strategies = ["quick-install", "compile"]
+
 [[bin]]
 name = "opencode-orchestrator-mcp"
 path = "src/main.rs"
