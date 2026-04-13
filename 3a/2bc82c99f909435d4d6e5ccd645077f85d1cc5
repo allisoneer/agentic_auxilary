@@ -1,0 +1,27 @@
+apps/agentic-mcp/Cargo.toml
+  da4fea0b5774953b 19-24
+apps/thoughts/Cargo.toml
+  da4fea0b5774953b 9,20-25
+apps/opencode-orchestrator-mcp/Cargo.toml
+  da4fea0b5774953b 24-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "3a2bc82c99f909435d4d6e5ccd645077f85d1cc5",
+  "prompts": {
+    "da4fea0b5774953b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_277f96181ffeHgHezYtd3mWVPH",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 19,
+      "total_deletions": 0,
+      "accepted_lines": 19,
+      "overriden_lines": 0
+    }
+  }
+}
