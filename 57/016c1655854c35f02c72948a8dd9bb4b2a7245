@@ -1,0 +1,25 @@
+crates/tools/coding-agent-tools/src/agent/config.rs
+  e50e91e2045e69f9 332
+crates/tools/coding-agent-tools/src/agent/prompts.rs
+  e50e91e2045e69f9 18,65,78-79,146-147,264,361,363,405,422,510,628
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "57016c1655854c35f02c72948a8dd9bb4b2a7245",
+  "prompts": {
+    "e50e91e2045e69f9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2724bb6b5ffeAq6BZShplYbPtv",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 14,
+      "total_deletions": 14,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    }
+  }
+}
