@@ -309,7 +309,9 @@ fn annotate_optional_property(node: &mut Json) {
                 description.push_str(OPTIONAL_PROPERTY_GUIDANCE);
             }
         }
-        Some(_) => {}
+        Some(_) => {
+            // Preserve non-string descriptions as-is; appending guidance only works for strings.
+        }
         None => {
             obj.insert(
                 "description".to_string(),
