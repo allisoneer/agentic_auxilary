@@ -57,6 +57,10 @@ struct Args {
     #[arg(long)]
     cli_grep: bool,
 
+    /// Enable `cli_instant_grep` tool
+    #[arg(long)]
+    cli_instant_grep: bool,
+
     /// Enable `cli_glob` tool
     #[arg(long)]
     cli_glob: bool,
@@ -118,6 +122,9 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
     }
     if args.cli_grep {
         flag_set.insert("cli_grep".to_string());
+    }
+    if args.cli_instant_grep {
+        flag_set.insert("cli_instant_grep".to_string());
     }
     if args.cli_glob {
         flag_set.insert("cli_glob".to_string());

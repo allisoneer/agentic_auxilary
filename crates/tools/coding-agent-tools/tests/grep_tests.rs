@@ -176,6 +176,10 @@ fn test_grep_count_mode() {
     assert!(result.summary.is_some());
     assert!(result.summary.unwrap().contains("Total matches:"));
     assert!(result.lines.is_empty()); // Count mode doesn't return lines
+    assert!(
+        !result.has_more,
+        "Count mode should never report pagination"
+    );
 }
 
 #[test]
@@ -600,4 +604,45 @@ fn test_grep_single_file() {
     .unwrap();
 
     assert!(!result.lines.is_empty(), "Should find match in single file");
+    assert!(
+        result
+            .lines
+            .iter()
+            .any(|line| line.starts_with("hello.txt:1:")),
+        "Expected basename-rooted output; got: {:?}",
+        result.lines
+    );
+    assert!(
+        result.lines.iter().all(|line| !line.starts_with(':')),
+        "Single-file output should not begin with an empty path: {:?}",
+        result.lines
+    );
+}
+
+#[test]
+fn test_grep_single_file_files_mode_uses_basename() {
+    let tmp = setup_test_dir();
+    let file_path = tmp.path().join("hello.txt").to_string_lossy().to_string();
+
+    let result = run_grep(
+        &file_path,
+        "Hello",
+        OutputMode::Files,
+        vec![],
+        vec![],
+        false,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+
+    assert_eq!(result.lines, vec!["hello.txt".to_string()]);
+    assert!(!result.has_more);
 }

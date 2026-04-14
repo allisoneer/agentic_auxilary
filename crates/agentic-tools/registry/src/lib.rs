@@ -85,6 +85,7 @@ const CODING_NAMES: &[&str] = &[
     "cli_ls",
     "ask_agent",
     "cli_grep",
+    "cli_instant_grep",
     "cli_glob",
     "cli_just_search",
     "cli_just_execute",
@@ -245,8 +246,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_30() {
-        assert_eq!(AgenticTools::total_tool_count(), 30);
+    fn total_tool_count_is_31() {
+        assert_eq!(AgenticTools::total_tool_count(), 31);
     }
 
     #[test]
@@ -286,10 +287,10 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 27 tools
+        // Should have all 28 tools
         assert!(
-            names.len() >= 27,
-            "expected at least 27 tools, got {}",
+            names.len() >= 28,
+            "expected at least 28 tools, got {}",
             names.len()
         );
 
@@ -374,7 +375,7 @@ mod tests {
         let reg = AgenticTools::new(config);
 
         // Empty allowlist normalizes to None, enabling all tools
-        assert!(reg.len() >= 27);
+        assert!(reg.len() >= 28);
     }
 
     #[test]

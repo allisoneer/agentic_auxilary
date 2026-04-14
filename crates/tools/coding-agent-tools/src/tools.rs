@@ -265,6 +265,54 @@ impl Tool for SearchGrepTool {
     }
 }
 
+/// Tool for indexed-first regex-based code search.
+#[derive(Clone)]
+pub struct SearchInstantGrepTool {
+    tools: Arc<CodingAgentTools>,
+}
+
+impl SearchInstantGrepTool {
+    pub fn new(tools: Arc<CodingAgentTools>) -> Self {
+        Self { tools }
+    }
+}
+
+impl Tool for SearchInstantGrepTool {
+    type Input = SearchGrepInput;
+    type Output = GrepOutput;
+    const NAME: &'static str = "cli_instant_grep";
+    const DESCRIPTION: &'static str = "Indexed-first regex-based search. Preserves cli_grep-style inputs and falls back to scan when indexed execution is unsupported or unhelpful.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let tools = Arc::clone(&self.tools);
+        Box::pin(async move {
+            tools
+                .search_instant_grep(
+                    input.pattern,
+                    input.path,
+                    input.mode,
+                    input.globs,
+                    input.ignore,
+                    input.include_hidden,
+                    input.case_insensitive,
+                    input.multiline,
+                    input.line_numbers,
+                    input.context,
+                    input.context_before,
+                    input.context_after,
+                    input.include_binary,
+                    input.head_limit,
+                    input.offset,
+                )
+                .await
+        })
+    }
+}
+
 // ============================================================================
 // SearchGlob Tool
 // ============================================================================
@@ -437,6 +485,7 @@ pub fn build_registry(subagents: SubagentsConfig, cli_tools: CliToolsConfig) -> 
         .register::<LsTool, ()>(LsTool::new(Arc::clone(&tools)))
         .register::<AskAgentTool, ()>(AskAgentTool::new(Arc::clone(&tools)))
         .register::<SearchGrepTool, ()>(SearchGrepTool::new(Arc::clone(&tools)))
+        .register::<SearchInstantGrepTool, ()>(SearchInstantGrepTool::new(Arc::clone(&tools)))
         .register::<SearchGlobTool, ()>(SearchGlobTool::new(Arc::clone(&tools)))
         .register::<JustSearchTool, ()>(JustSearchTool::new(Arc::clone(&tools)))
         .register::<JustExecuteTool, ()>(JustExecuteTool::new(tools))

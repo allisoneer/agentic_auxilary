@@ -67,3 +67,16 @@ test('callGrepTyped parses ToolCallResult.data and returns GrepOutput object', a
     cleanupFixture(dir);
   }
 });
+
+test('callInstantGrepTyped parses ToolCallResult.data and returns GrepOutput object', async () => {
+  const dir = makeFixture();
+  try {
+    const out = await tools.callInstantGrepTyped({ pattern: 'hello', path: dir, mode: 'files' });
+    expect(resolve(out.root)).toBe(resolve(dir));
+    expect(out.mode).toBe('files');
+    expect(Array.isArray(out.lines)).toBe(true);
+    expect(out.lines.some((line) => typeof line === 'string' && line.endsWith('a.txt'))).toBe(true);
+  } finally {
+    cleanupFixture(dir);
+  }
+});

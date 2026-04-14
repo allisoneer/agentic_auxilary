@@ -16,9 +16,10 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::path::Path;
+use std::path::PathBuf;
 
 /// Configuration for grep search.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GrepConfig {
     /// Root directory to search
     pub root: String,
@@ -81,6 +82,23 @@ fn build_include_globset(patterns: &[String]) -> Result<Option<GlobSet>, ToolErr
         .build()
         .map_err(|e| ToolError::internal(format!("Failed to build include globset: {e}")))?;
     Ok(Some(gs))
+}
+
+fn rel_path_for_output(root_path: &Path, path: &Path) -> String {
+    match path.strip_prefix(root_path) {
+        Ok(rel) => {
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if rel.is_empty() {
+                path.file_name().map_or_else(
+                    || path.to_string_lossy().to_string(),
+                    |name| name.to_string_lossy().to_string(),
+                )
+            } else {
+                rel
+            }
+        }
+        Err(_) => path.to_string_lossy().to_string(),
+    }
 }
 
 /// A match result from searching a file.
@@ -197,6 +215,156 @@ fn search_file_multiline(
     }))
 }
 
+/// Search a single candidate path and append any warnings.
+fn search_candidate_path(
+    root_path: &Path,
+    path: &Path,
+    regex: &Regex,
+    cfg: &GrepConfig,
+    warnings: &mut Vec<String>,
+    binary_skipped: &mut usize,
+) -> Option<FileMatch> {
+    let rel_path = rel_path_for_output(root_path, path);
+
+    if !cfg.include_binary {
+        match is_binary_file(path) {
+            Ok(true) => {
+                *binary_skipped += 1;
+                return None;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                warnings.push(format!("Could not read {rel_path}: {e}"));
+                return None;
+            }
+        }
+    }
+
+    let search_result = if cfg.multiline {
+        search_file_multiline(path, &rel_path, regex)
+    } else {
+        search_file_lines(path, &rel_path, regex, cfg)
+    };
+
+    match search_result {
+        Ok(Some(m)) => Some(m),
+        Ok(None) => None,
+        Err(e) => {
+            warnings.push(format!("Could not read {rel_path}: {e}"));
+            None
+        }
+    }
+}
+
+fn format_output(
+    cfg: GrepConfig,
+    all_matches: &[FileMatch],
+    mut warnings: Vec<String>,
+    binary_skipped: usize,
+) -> GrepOutput {
+    if binary_skipped > 0 {
+        warnings.push(format!(
+            "{} binary file{} skipped (use include_binary=true to search)",
+            binary_skipped,
+            if binary_skipped == 1 { "" } else { "s" }
+        ));
+    }
+
+    let head_limit = cfg.head_limit.min(MAX_HEAD_LIMIT);
+
+    let (lines, summary, total_count) = match cfg.mode {
+        OutputMode::Files => {
+            let mut seen: HashSet<String> = HashSet::new();
+            let mut file_paths: Vec<String> = Vec::new();
+            for m in all_matches {
+                if seen.insert(m.rel_path.clone()) {
+                    file_paths.push(m.rel_path.clone());
+                }
+            }
+            let total = file_paths.len();
+            (file_paths, None, total)
+        }
+        OutputMode::Content => {
+            let mut output_lines: Vec<String> = Vec::new();
+            for m in all_matches {
+                for (line_num, content) in &m.lines {
+                    if cfg.line_numbers {
+                        output_lines.push(format!("{}:{}: {}", m.rel_path, line_num, content));
+                    } else {
+                        output_lines.push(format!("{}: {}", m.rel_path, content));
+                    }
+                }
+            }
+            let total = output_lines.len();
+            (output_lines, None, total)
+        }
+        OutputMode::Count => {
+            let total: usize = all_matches.iter().map(|m| m.match_count).sum();
+            let summary = format!("Total matches: {total}");
+            (vec![], Some(summary), total)
+        }
+    };
+
+    let offset = cfg.offset;
+    let paginated: Vec<String> = lines.into_iter().skip(offset).take(head_limit).collect();
+    let has_more = match cfg.mode {
+        OutputMode::Count => false,
+        OutputMode::Files | OutputMode::Content => total_count > offset + paginated.len(),
+    };
+
+    GrepOutput {
+        root: cfg.root,
+        mode: cfg.mode,
+        lines: paginated,
+        has_more,
+        warnings,
+        summary,
+    }
+}
+
+/// Run grep verification over an explicit list of file paths.
+pub fn run_on_paths(
+    cfg: GrepConfig,
+    paths: Vec<PathBuf>,
+    warnings: Vec<String>,
+) -> Result<GrepOutput, ToolError> {
+    let root_path = Path::new(&cfg.root);
+    if !root_path.exists() {
+        return Err(ToolError::invalid_input(format!(
+            "Path does not exist: {}",
+            cfg.root
+        )));
+    }
+
+    let mut rb = regex::RegexBuilder::new(&cfg.pattern);
+    rb.case_insensitive(cfg.case_insensitive);
+    if cfg.multiline {
+        rb.multi_line(true).dot_matches_new_line(true);
+    }
+    let regex = rb
+        .build()
+        .map_err(|e| ToolError::invalid_input(format!("Invalid regex: {e}")))?;
+
+    let mut warnings = warnings;
+    let mut all_matches: Vec<FileMatch> = Vec::new();
+    let mut binary_skipped = 0usize;
+
+    for path in paths {
+        if let Some(file_match) = search_candidate_path(
+            root_path,
+            &path,
+            &regex,
+            &cfg,
+            &mut warnings,
+            &mut binary_skipped,
+        ) {
+            all_matches.push(file_match);
+        }
+    }
+
+    Ok(format_output(cfg, &all_matches, warnings, binary_skipped))
+}
+
 /// Run grep search with the given configuration.
 pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
     // Validate root path
@@ -208,67 +376,18 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
         )));
     }
 
-    // Build regex
-    let mut rb = regex::RegexBuilder::new(&cfg.pattern);
-    rb.case_insensitive(cfg.case_insensitive);
-    if cfg.multiline {
-        rb.multi_line(true).dot_matches_new_line(true);
-    }
-    let regex = rb
-        .build()
-        .map_err(|e| ToolError::invalid_input(format!("Invalid regex: {e}")))?;
-
     // Build include globset
     let include_gs = build_include_globset(&cfg.include_globs)?;
 
     // Build ignore globset
     let ignore_gs = walker::build_ignore_globset(&cfg.ignore_globs)?;
 
-    // Cap head_limit
-    let head_limit = cfg.head_limit.min(MAX_HEAD_LIMIT);
-
     let mut warnings: Vec<String> = Vec::new();
-    let mut all_matches: Vec<FileMatch> = Vec::new();
-    let mut binary_skipped = 0usize;
+    let mut candidate_paths: Vec<PathBuf> = Vec::new();
 
     // Handle single file case
     if root_path.is_file() {
-        let rel_path = root_path
-            .file_name()
-            .map_or_else(|| cfg.root.clone(), |s| s.to_string_lossy().to_string());
-
-        // Check binary
-        if cfg.include_binary {
-            let result = if cfg.multiline {
-                search_file_multiline(root_path, &rel_path, &regex)
-            } else {
-                search_file_lines(root_path, &rel_path, &regex, &cfg)
-            };
-            match result {
-                Ok(Some(m)) => all_matches.push(m),
-                Ok(None) => {}
-                Err(e) => warnings.push(format!("Could not read {rel_path}: {e}")),
-            }
-        } else {
-            match is_binary_file(root_path) {
-                Ok(true) => {
-                    binary_skipped = 1;
-                }
-                Ok(false) => {
-                    let result = if cfg.multiline {
-                        search_file_multiline(root_path, &rel_path, &regex)
-                    } else {
-                        search_file_lines(root_path, &rel_path, &regex, &cfg)
-                    };
-                    if let Ok(Some(m)) = result {
-                        all_matches.push(m);
-                    }
-                }
-                Err(e) => {
-                    warnings.push(format!("Could not read {rel_path}: {e}"));
-                }
-            }
-        }
+        candidate_paths.push(root_path.to_path_buf());
     } else {
         // Directory traversal
         let mut builder = WalkBuilder::new(root_path);
@@ -333,32 +452,7 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
                         continue;
                     }
 
-                    // Check binary
-                    if !cfg.include_binary {
-                        match is_binary_file(path) {
-                            Ok(true) => {
-                                binary_skipped += 1;
-                                continue;
-                            }
-                            Ok(false) => {}
-                            Err(_) => continue,
-                        }
-                    }
-
-                    // Search the file
-                    let search_result = if cfg.multiline {
-                        search_file_multiline(path, &rel_path, &regex)
-                    } else {
-                        search_file_lines(path, &rel_path, &regex, &cfg)
-                    };
-
-                    match search_result {
-                        Ok(Some(m)) => all_matches.push(m),
-                        Ok(None) => {}
-                        Err(e) => {
-                            warnings.push(format!("Could not read {rel_path}: {e}"));
-                        }
-                    }
+                    candidate_paths.push(path.to_path_buf());
                 }
                 Err(e) => {
                     warnings.push(format!("Walk error: {e}"));
@@ -367,63 +461,5 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
         }
     }
 
-    // Add binary skip warning if applicable
-    if binary_skipped > 0 {
-        warnings.push(format!(
-            "{} binary file{} skipped (use include_binary=true to search)",
-            binary_skipped,
-            if binary_skipped == 1 { "" } else { "s" }
-        ));
-    }
-
-    // Format output based on mode
-    let (lines, summary, total_count) = match cfg.mode {
-        OutputMode::Files => {
-            // Unique file paths
-            let mut seen: HashSet<String> = HashSet::new();
-            let mut file_paths: Vec<String> = Vec::new();
-            for m in &all_matches {
-                if seen.insert(m.rel_path.clone()) {
-                    file_paths.push(m.rel_path.clone());
-                }
-            }
-            let total = file_paths.len();
-            (file_paths, None, total)
-        }
-        OutputMode::Content => {
-            // path:line: content format
-            let mut output_lines: Vec<String> = Vec::new();
-            for m in &all_matches {
-                for (line_num, content) in &m.lines {
-                    if cfg.line_numbers {
-                        output_lines.push(format!("{}:{}: {}", m.rel_path, line_num, content));
-                    } else {
-                        output_lines.push(format!("{}: {}", m.rel_path, content));
-                    }
-                }
-            }
-            let total = output_lines.len();
-            (output_lines, None, total)
-        }
-        OutputMode::Count => {
-            // Total match count
-            let total: usize = all_matches.iter().map(|m| m.match_count).sum();
-            let summary = format!("Total matches: {total}");
-            (vec![], Some(summary), total)
-        }
-    };
-
-    // Apply pagination
-    let offset = cfg.offset;
-    let paginated: Vec<String> = lines.into_iter().skip(offset).take(head_limit).collect();
-    let has_more = total_count > offset + paginated.len();
-
-    Ok(GrepOutput {
-        root: cfg.root,
-        mode: cfg.mode,
-        lines: paginated,
-        has_more,
-        warnings,
-        summary,
-    })
+    run_on_paths(cfg, candidate_paths, warnings)
 }

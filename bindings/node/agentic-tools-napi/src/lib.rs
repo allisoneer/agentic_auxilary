@@ -15,6 +15,7 @@
 //! Per-tool typed wrappers for commonly used tools:
 //! - `callLs(args)`: List files and directories
 //! - `callGrep(args)`: Regex-based search
+//! - `callInstantGrep(args)`: Indexed-first regex-based search
 //! - `callGlob(args)`: Glob-based file matching
 //! - `callAskAgent(args)`: Spawn Claude subagent
 //! - `callJustSearch(args)`: Search justfile recipes
@@ -387,6 +388,20 @@ pub async fn call_ask_agent(args_json: String) -> Result<ToolCallResult> {
 #[napi]
 pub async fn call_grep(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_grep".to_string(), args_json).await
+}
+
+/// Indexed-first regex-based search (typed wrapper).
+///
+/// # Arguments
+///
+/// * `args_json` - JSON string with: pattern, path?, mode?, globs?, ignore?, etc.
+///
+/// # Returns
+///
+/// `ToolCallResult` with `text` and `data` (JSON string for GrepOutput)
+#[napi]
+pub async fn call_instant_grep(args_json: String) -> Result<ToolCallResult> {
+    call_tool("cli_instant_grep".to_string(), args_json).await
 }
 
 /// Glob-based file matching (typed wrapper).
