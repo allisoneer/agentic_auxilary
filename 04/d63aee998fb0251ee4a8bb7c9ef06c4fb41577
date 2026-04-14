@@ -1,0 +1,23 @@
+crates/agentic-tools/core/src/schema.rs
+  033d3d96c4c4fa5d 198-200,206,212,268-296,949-1024,1026-1029
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "04d63aee998fb0251ee4a8bb7c9ef06c4fb41577",
+  "prompts": {
+    "033d3d96c4c4fa5d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_271a42374ffeecNJHu1T3b1lt2",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 119,
+      "total_deletions": 1,
+      "accepted_lines": 119,
+      "overriden_lines": 0
+    }
+  }
+}
