@@ -50,9 +50,6 @@ These items have dependencies and should be done in order.
 - Currently initializes the old v1 config - that's not used anywhere anymore.
 - Should completely get rid of v1 and all the logic related to it. No need for backwards compatibility when user count is low.
 
-### Align output serialization with StripNullFromOptional
-- Follow-up after the schema transform: add `skip_serializing_if = "Option::is_none"` or equivalent cleanup where output schemas now say optional fields are non-nullable but some output structs may still serialize `None` as `null`.
-
 ### Discord search tool (ENG-392)
 - Search tool for Discord context, similar to Linear search tool. Not the same as glittercowboy/discord-mcp (server admin).
 - Probably only needs one tool for searching, maybe a second for reading context around results.
