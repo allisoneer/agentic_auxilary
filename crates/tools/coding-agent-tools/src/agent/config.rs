@@ -329,7 +329,7 @@ mod tests {
     fn test_compose_prompt_analyzer_web() {
         let prompt = compose_prompt(AgentType::Analyzer, AgentLocation::Web);
         assert!(prompt.contains("understanding HOW"));
-        assert!(prompt.contains("WebFetch"));
+        assert!(prompt.contains("web_fetch"));
     }
 
     #[test]

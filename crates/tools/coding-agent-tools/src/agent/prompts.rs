@@ -15,7 +15,7 @@ Core behaviors:
 - Find by names, keywords, and directory patterns
 - Categorize findings (implementation, tests, config, docs, types, examples)
 - Return structured locations (full paths) and clusters
-- Do not read files deeply (use grep/glob/ls/web search as appropriate)
+- Do not read files deeply (use cli_grep/cli_glob/cli_ls/web_search as appropriate)
 - Output MUST follow the Output Format section exactly
 
 What NOT to do:
@@ -62,7 +62,7 @@ Context: Thought documents (active branch).
 Working directory: THOUGHTS_BASE env or ./thoughts/<branch_or_week>.
 
 Guidelines:
-- Use mcp__agentic-mcp__thoughts_list_documents to identify thought docs, then grep/glob/read within the base
+- Use mcp__agentic-mcp__thoughts_list_documents to identify thought docs, then cli_grep/cli_glob/Read within the base
 - Keep citations and paths relative to the thoughts base
 ";
 
@@ -75,8 +75,8 @@ CRITICAL: Reference Directory Structure
 - Actual files live at `references/{org}/{repo}/...`.
 
 Examples:
-- Grep pattern="error" path="references/dtolnay/thiserror/src"
-- Glob pattern="references/getsentry/sentry-rust/**/*.rs"
+- cli_grep pattern="error" path="references/dtolnay/thiserror/src"
+- cli_glob pattern="references/getsentry/sentry-rust/**/*.rs"
 - Read file_path="references/dtolnay/thiserror/README.md"
 
 Guidelines:
@@ -143,8 +143,8 @@ pub const STRATEGY_LOCATOR_CODEBASE: &str = r"
 - Consider language-specific naming conventions
 
 ### Step 2: Broad Scan
-- Grep for keywords across: src/, lib/, pkg/, internal/, cmd/, components/, pages/, api/
-- Glob for typical names: *service*, *handler*, *controller*, *route*, *model*, *store*, *util*
+- Use cli_grep for keywords across: src/, lib/, pkg/, internal/, cmd/, components/, pages/, api/
+- Use cli_glob for typical names: *service*, *handler*, *controller*, *route*, *model*, *store*, *util*
 
 ### Step 3: Refine by Language
 - **JavaScript/TypeScript**: src/, lib/, components/, pages/, api/
@@ -261,7 +261,7 @@ pub const STRATEGY_LOCATOR_THOUGHTS: &str = r#"
 - **artifact** (artifacts/): Tickets, specs, generated outputs
 
 ### Fallback Strategy
-- If MCP list doesn't surface expected docs, use Grep/Glob
+- If MCP list doesn't surface expected docs, use cli_grep/cli_glob
 - Ask before searching historical/archived branches
 - Default to active branch only
 "#;
@@ -358,9 +358,9 @@ pub const STRATEGY_LOCATOR_REFERENCES: &str = r"
 - Select top 2-3 most relevant for focus
 
 ### Step 2: Survey Each Reference
-- Use ls/Glob to map directory structure: README.md, docs/, examples/, src/
+- Use cli_ls/cli_glob to map directory structure: README.md, docs/, examples/, src/
 - Identify high-value locations (docs, examples, main source)
-- Use Grep to search for topic keywords
+- Use cli_grep to search for topic keywords
 
 ### Step 3: Cluster Results
 - Group by reference repo
@@ -402,7 +402,7 @@ pub const STRATEGY_ANALYZER_REFERENCES: &str = r#"
 ### Step 1: Discover and Select
 - Call `mcp__agentic-mcp__thoughts_list_references` to enumerate references
 - Select top 2-3 most relevant for deep analysis
-- Use ls to verify structure exists
+- Use cli_ls to verify structure exists
 
 ### Step 2: Read High-Value Files First
 - README.md and top-level overviews
@@ -419,7 +419,7 @@ pub const STRATEGY_ANALYZER_REFERENCES: &str = r#"
 
 ### Efficiency
 - Don't exhaustively scan entire repos
-- Use Grep to target keywords before reading files
+- Use cli_grep to target keywords before reading files
 - Stop once you have well-cited coverage
 "#;
 
@@ -507,7 +507,7 @@ pub const STRATEGY_ANALYZER_WEB: &str = r"
 - Refine based on initial results
 
 ### Step 3: Fetch and Analyze Content
-- Use WebFetch to retrieve full content from promising results
+- Use web_fetch to retrieve full content from promising results
 - Prioritize official documentation and authoritative sources
 - Extract specific quotes and relevant sections
 - Note publication dates to ensure currency
@@ -625,7 +625,7 @@ mod tests {
     fn test_compose_prompt_analyzer() {
         let prompt = compose_prompt_impl(AgentType::Analyzer, AgentLocation::Web);
         assert!(prompt.contains(ANALYZER_BASE_PROMPT.trim()));
-        assert!(prompt.contains("WebFetch"));
+        assert!(prompt.contains("web_fetch"));
     }
 
     #[test]
