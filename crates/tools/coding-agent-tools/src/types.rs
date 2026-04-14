@@ -304,7 +304,7 @@ pub struct GrepOutput {
 }
 
 impl TextFormat for GrepOutput {
-    fn fmt_text(&self, _opts: &TextOptions) -> String {
+    fn fmt_text(&self, opts: &TextOptions) -> String {
         use std::fmt::Write;
         let mut out = String::new();
 
@@ -339,8 +339,9 @@ impl TextFormat for GrepOutput {
             let _ = writeln!(out, "Note: {w}");
         }
 
-        // Required REMINDER footer on every call
-        let _ = writeln!(out, "{SEARCH_REMINDER}");
+        if !opts.suppress_search_reminder {
+            let _ = writeln!(out, "{SEARCH_REMINDER}");
+        }
 
         out.trim_end().to_string()
     }
@@ -360,7 +361,7 @@ pub struct GlobOutput {
 }
 
 impl TextFormat for GlobOutput {
-    fn fmt_text(&self, _opts: &TextOptions) -> String {
+    fn fmt_text(&self, opts: &TextOptions) -> String {
         use std::fmt::Write;
         let mut out = String::new();
 
@@ -380,7 +381,9 @@ impl TextFormat for GlobOutput {
             let _ = writeln!(out, "Note: {w}");
         }
 
-        let _ = writeln!(out, "{SEARCH_REMINDER}");
+        if !opts.suppress_search_reminder {
+            let _ = writeln!(out, "{SEARCH_REMINDER}");
+        }
 
         out.trim_end().to_string()
     }
@@ -456,5 +459,61 @@ mod tests {
             serde_json::to_string(&AgentLocation::Web).unwrap(),
             "\"web\""
         );
+    }
+
+    #[test]
+    fn grep_fmt_text_includes_search_reminder_by_default() {
+        let output = GrepOutput {
+            root: "/tmp/repo".into(),
+            mode: OutputMode::Files,
+            lines: vec!["src/lib.rs".into()],
+            has_more: false,
+            warnings: vec![],
+            summary: None,
+        };
+
+        let text = output.fmt_text(&TextOptions::default());
+        assert!(text.contains(SEARCH_REMINDER));
+    }
+
+    #[test]
+    fn grep_fmt_text_suppresses_search_reminder_when_opt_set() {
+        let output = GrepOutput {
+            root: "/tmp/repo".into(),
+            mode: OutputMode::Files,
+            lines: vec!["src/lib.rs".into()],
+            has_more: false,
+            warnings: vec![],
+            summary: None,
+        };
+
+        let text = output.fmt_text(&TextOptions::new().with_suppress_search_reminder(true));
+        assert!(!text.contains(SEARCH_REMINDER));
+    }
+
+    #[test]
+    fn glob_fmt_text_includes_search_reminder_by_default() {
+        let output = GlobOutput {
+            root: "/tmp/repo".into(),
+            entries: vec!["src/lib.rs".into()],
+            has_more: false,
+            warnings: vec![],
+        };
+
+        let text = output.fmt_text(&TextOptions::default());
+        assert!(text.contains(SEARCH_REMINDER));
+    }
+
+    #[test]
+    fn glob_fmt_text_suppresses_search_reminder_when_opt_set() {
+        let output = GlobOutput {
+            root: "/tmp/repo".into(),
+            entries: vec!["src/lib.rs".into()],
+            has_more: false,
+            warnings: vec![],
+        };
+
+        let text = output.fmt_text(&TextOptions::new().with_suppress_search_reminder(true));
+        assert!(!text.contains(SEARCH_REMINDER));
     }
 }

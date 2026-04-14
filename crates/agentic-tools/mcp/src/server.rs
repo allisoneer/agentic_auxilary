@@ -60,6 +60,7 @@ pub struct RegistryServer {
     registry: Arc<ToolRegistry>,
     allowlist: Option<HashSet<String>>,
     output_mode: OutputMode,
+    text_options: TextOptions,
     name: String,
     version: String,
 }
@@ -71,6 +72,7 @@ impl RegistryServer {
             registry,
             allowlist: None,
             output_mode: OutputMode::default(),
+            text_options: TextOptions::default(),
             name: "agentic-tools".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
@@ -87,6 +89,12 @@ impl RegistryServer {
     /// Set the output mode for tool results.
     pub fn with_output_mode(mut self, mode: OutputMode) -> Self {
         self.output_mode = mode;
+        self
+    }
+
+    /// Set text formatting options for tool results.
+    pub fn with_text_options(mut self, text_options: TextOptions) -> Self {
+        self.text_options = text_options;
         self
     }
 
@@ -207,7 +215,7 @@ impl ServerHandler for RegistryServer {
 
             let args = serde_json::Value::Object(req.arguments.unwrap_or_default());
             let ctx = ToolContext::default();
-            let text_opts = TextOptions::default();
+            let text_opts = self.text_options.clone();
 
             match self
                 .registry
@@ -368,6 +376,21 @@ mod tests {
     use agentic_tools_core::fmt::TextFormat;
     use futures::future::BoxFuture;
 
+    async fn dispatch_text_for_test(server: &RegistryServer, tool_name: &str) -> String {
+        let ctx = ToolContext::default();
+        let result = server
+            .registry
+            .dispatch_json_formatted(
+                tool_name,
+                serde_json::json!(null),
+                &ctx,
+                &server.text_options,
+            )
+            .await
+            .unwrap();
+        result.text.unwrap()
+    }
+
     #[test]
     fn test_registry_server_allowlist() {
         let registry = Arc::new(ToolRegistry::builder().finish());
@@ -433,6 +456,39 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
+    struct TestTextOptionsTool;
+
+    #[derive(
+        serde::Serialize, serde::Deserialize, schemars::JsonSchema, Clone, Debug, PartialEq,
+    )]
+    struct TestTextOptionsOut;
+
+    impl TextFormat for TestTextOptionsOut {
+        fn fmt_text(&self, opts: &TextOptions) -> String {
+            if opts.suppress_search_reminder {
+                "suppressed".to_string()
+            } else {
+                "default".to_string()
+            }
+        }
+    }
+
+    impl Tool for TestTextOptionsTool {
+        type Input = ();
+        type Output = TestTextOptionsOut;
+        const NAME: &'static str = "test_text_options_tool";
+        const DESCRIPTION: &'static str = "outputs text that depends on text options";
+
+        fn call(
+            &self,
+            _input: (),
+            _ctx: &ToolContext,
+        ) -> BoxFuture<'static, Result<TestTextOptionsOut, ToolError>> {
+            Box::pin(async move { Ok(TestTextOptionsOut) })
+        }
+    }
+
     #[test]
     fn test_structured_mode_output_schema_gating() {
         // Build registry with TestObjTool
@@ -494,6 +550,28 @@ mod tests {
 
         // In Structured mode with has_schema=true, structured_content would be Some(result.data)
         // In Text mode or has_schema=false, structured_content would be None
+    }
+
+    #[tokio::test]
+    async fn test_registry_server_uses_stored_text_options() {
+        let registry = Arc::new(
+            ToolRegistry::builder()
+                .register::<TestTextOptionsTool, ()>(TestTextOptionsTool)
+                .finish(),
+        );
+
+        let default_server = RegistryServer::new(registry.clone());
+        let suppressed_server = RegistryServer::new(registry)
+            .with_text_options(TextOptions::default().with_suppress_search_reminder(true));
+
+        assert_eq!(
+            dispatch_text_for_test(&default_server, "test_text_options_tool").await,
+            "default"
+        );
+        assert_eq!(
+            dispatch_text_for_test(&suppressed_server, "test_text_options_tool").await,
+            "suppressed"
+        );
     }
 
     #[test]

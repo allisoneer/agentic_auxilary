@@ -9,6 +9,7 @@ compile_error!(
 );
 
 use agentic_config::loader::load_merged;
+use agentic_tools_core::fmt::TextOptions;
 use agentic_tools_mcp::OutputMode;
 use agentic_tools_mcp::RegistryServer;
 use agentic_tools_mcp::ServiceExt;
@@ -41,6 +42,10 @@ struct Args {
     /// Output mode: text | structured (default: text)
     #[arg(long, value_parser = ["text", "structured"])]
     output: Option<String>,
+
+    /// Suppress search reminder footer in grep/glob text output.
+    #[arg(long)]
+    suppress_search_reminder: bool,
 
     // Convenience flags for individual tool filtering
     // TODO(3): Probably don't need these convenience flags. They are kinda archaic for the old
@@ -199,7 +204,10 @@ async fn main() -> anyhow::Result<()> {
 
     let server = RegistryServer::new(Arc::new(reg))
         .with_info("agentic-mcp", env!("CARGO_PKG_VERSION"))
-        .with_output_mode(output_mode);
+        .with_output_mode(output_mode)
+        .with_text_options(
+            TextOptions::default().with_suppress_search_reminder(args.suppress_search_reminder),
+        );
     let transport = stdio();
     let service = server.serve(transport).await?;
     service.waiting().await?;
