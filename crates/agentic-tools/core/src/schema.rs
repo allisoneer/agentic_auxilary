@@ -195,17 +195,21 @@ fn normalize_optional_properties(node: &mut Json) {
         for (property_name, property_schema) in properties {
             if !required.contains(property_name.as_str()) {
                 normalize_known_nullable_shapes(property_schema);
-                annotate_optional_property(property_schema);
+                if explicitly_allows_null(property_schema) {
+                    annotate_optional_property(property_schema);
+                }
             }
             normalize_optional_properties(property_schema);
         }
     }
 
+    recurse_object_entries(obj, "dependentSchemas");
     recurse_object_entries(obj, "patternProperties");
     recurse_schema_entry(obj, "additionalProperties");
     recurse_schema_entry(obj, "propertyNames");
     recurse_schema_entry(obj, "unevaluatedProperties");
     recurse_schema_entry(obj, "items");
+    recurse_schema_entry(obj, "unevaluatedItems");
     recurse_schema_entry(obj, "contains");
     recurse_schema_array_entry(obj, "prefixItems");
     recurse_schema_array_entry(obj, "allOf");
@@ -259,6 +263,37 @@ fn normalize_known_nullable_shapes(node: &mut Json) {
     move_null_to_front_in_type_array(node);
     move_null_to_front_in_enum_values(node);
     move_null_to_front_in_any_of(node);
+}
+
+fn explicitly_allows_null(node: &Json) -> bool {
+    type_array_contains_null(node)
+        || enum_values_contain_null(node)
+        || any_of_contains_explicit_null_branch(node)
+}
+
+fn type_array_contains_null(node: &Json) -> bool {
+    node.as_object()
+        .and_then(|obj| obj.get("type"))
+        .and_then(Json::as_array)
+        .is_some_and(|type_values| {
+            type_values
+                .iter()
+                .any(|value| value == &Json::String("null".into()))
+        })
+}
+
+fn enum_values_contain_null(node: &Json) -> bool {
+    node.as_object()
+        .and_then(|obj| obj.get("enum"))
+        .and_then(Json::as_array)
+        .is_some_and(|enum_values| enum_values.iter().any(Json::is_null))
+}
+
+fn any_of_contains_explicit_null_branch(node: &Json) -> bool {
+    node.as_object()
+        .and_then(|obj| obj.get("anyOf"))
+        .and_then(Json::as_array)
+        .is_some_and(|any_of| any_of.iter().any(is_explicit_null_branch))
 }
 
 fn move_null_to_front_in_type_array(node: &mut Json) {
@@ -909,6 +944,89 @@ mod tests {
             assert_eq!(
                 v["properties"]["optional_field"]["type"],
                 serde_json::json!(["null", "string"])
+            );
+        }
+
+        #[test]
+        fn test_non_nullable_optional_property_does_not_get_null_guidance() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "optional_field": {
+                        "type": "string"
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert!(
+                v["properties"]["optional_field"]
+                    .get("description")
+                    .is_none()
+            );
+        }
+
+        #[test]
+        fn test_dependent_schemas_are_normalized_recursively() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "trigger": { "type": "boolean" }
+                },
+                "dependentSchemas": {
+                    "trigger": {
+                        "type": "object",
+                        "properties": {
+                            "nested_optional": {
+                                "type": ["string", "null"]
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["dependentSchemas"]["trigger"]["properties"]["nested_optional"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+            assert_eq!(
+                v["dependentSchemas"]["trigger"]["properties"]["nested_optional"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
+            );
+        }
+
+        #[test]
+        fn test_unevaluated_items_are_normalized_recursively() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "array",
+                "unevaluatedItems": {
+                    "type": "object",
+                    "properties": {
+                        "nested_optional": {
+                            "type": ["string", "null"]
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["unevaluatedItems"]["properties"]["nested_optional"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+            assert_eq!(
+                v["unevaluatedItems"]["properties"]["nested_optional"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
             );
         }
     }
