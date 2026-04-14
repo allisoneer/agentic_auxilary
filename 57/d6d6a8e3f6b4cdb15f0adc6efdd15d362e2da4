@@ -1,0 +1,31 @@
+crates/tools/coding-agent-tools/src/types.rs
+  08fe0a4cacf137a3 307,342-344,364,384-386,463-518
+apps/agentic-mcp/src/main.rs
+  08fe0a4cacf137a3 12,46-49,207-210
+crates/agentic-tools/core/src/fmt.rs
+  08fe0a4cacf137a3 64-65,91-96,213,221-222,227
+crates/tools/coding-agent-tools/src/agent/config.rs
+  08fe0a4cacf137a3 55-56,61-62,67-68,70-72,77-78,85-86,92-93,97-98,101-102,153-157,236-237,246-247,269-270,279-280,287-293,299-300,307-308,311-312,413,417,420,423-424,431-434,441-444,451,458-461,468-471,478-498
+crates/agentic-tools/mcp/src/server.rs
+  08fe0a4cacf137a3 63,75,95-100,218,379-393,459-488,555-574
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "57d6d6a8e3f6b4cdb15f0adc6efdd15d362e2da4",
+  "prompts": {
+    "08fe0a4cacf137a3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_272cf84d0ffep6C21UPEKdqyqy",
+        "model": "anthropic/claude-opus-4-5-20251101"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 254,
+      "total_deletions": 58,
+      "accepted_lines": 253,
+      "overriden_lines": 0
+    }
+  }
+}
