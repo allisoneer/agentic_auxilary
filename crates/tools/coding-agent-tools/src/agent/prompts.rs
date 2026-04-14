@@ -15,7 +15,7 @@ Core behaviors:
 - Find by names, keywords, and directory patterns
 - Categorize findings (implementation, tests, config, docs, types, examples)
 - Return structured locations (full paths) and clusters
-- Do not read files deeply (use cli_grep/cli_glob/cli_ls/web_search as appropriate)
+- Do not read files deeply (use the available discovery tools appropriate to the current location)
 - Output MUST follow the Output Format section exactly
 
 What NOT to do:
@@ -62,27 +62,27 @@ Context: Thought documents (active branch).
 Working directory: THOUGHTS_BASE env or ./thoughts/<branch_or_week>.
 
 Guidelines:
-- Use mcp__agentic-mcp__thoughts_list_documents to identify thought docs, then cli_grep/cli_glob/Read within the base
+- Use the available document-listing and search capabilities, and read documents only when a read tool is available
 - Keep citations and paths relative to the thoughts base
 ";
 
-pub const REFERENCES_OVERLAY: &str = r#"
+pub const REFERENCES_OVERLAY: &str = r"
 Context: Reference repositories (mirrored into local filesystem).
 Working directory: REFERENCES_BASE env or ./references.
 
 CRITICAL: Reference Directory Structure
-- mcp__agentic-mcp__thoughts_list_references returns lines like `{org}/{repo}`.
+- Reference listings return entries like `{org}/{repo}`.
 - Actual files live at `references/{org}/{repo}/...`.
 
 Examples:
-- cli_grep pattern="error" path="references/dtolnay/thiserror/src"
-- cli_glob pattern="references/getsentry/sentry-rust/**/*.rs"
-- Read file_path="references/dtolnay/thiserror/README.md"
+- Search for `error` under `references/dtolnay/thiserror/src`
+- Find Rust files under `references/getsentry/sentry-rust/`
+- Locate `references/dtolnay/thiserror/README.md`
 
 Guidelines:
 - Always include precise citations using references/org/repo/path:lines
 - Be selective; go deep on 2-3 relevant references
-"#;
+";
 
 pub const WEB_OVERLAY: &str = r"
 Context: The web.
@@ -641,6 +641,22 @@ mod tests {
         assert!(THOUGHTS_OVERLAY.contains("Context: Thought documents"));
         assert!(REFERENCES_OVERLAY.contains("Context: Reference repositories"));
         assert!(WEB_OVERLAY.contains("Context: The web"));
+    }
+
+    #[test]
+    fn test_shared_sections_use_capability_based_language() {
+        assert!(!LOCATOR_BASE_PROMPT.contains("cli_grep/cli_glob/cli_ls/web_search"));
+        assert!(!THOUGHTS_OVERLAY.contains("thoughts_list_documents"));
+        assert!(!THOUGHTS_OVERLAY.contains("Read within the base"));
+        assert!(!REFERENCES_OVERLAY.contains("thoughts_list_references"));
+        assert!(!REFERENCES_OVERLAY.contains("cli_grep pattern"));
+        assert!(!REFERENCES_OVERLAY.contains("Read file_path"));
+        assert!(!REFERENCES_OVERLAY.contains("Read `references/"));
+
+        assert!(LOCATOR_BASE_PROMPT.contains("available discovery tools"));
+        assert!(THOUGHTS_OVERLAY.contains("read documents only when a read tool is available"));
+        assert!(REFERENCES_OVERLAY.contains("Reference listings return entries"));
+        assert!(REFERENCES_OVERLAY.contains("Locate `references/dtolnay/thiserror/README.md`"));
     }
 
     #[test]
