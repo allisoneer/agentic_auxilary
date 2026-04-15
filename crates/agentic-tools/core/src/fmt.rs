@@ -61,6 +61,8 @@ pub struct TextOptions {
     pub markdown: bool,
     /// Maximum number of items to display in collections.
     pub max_items: Option<usize>,
+    /// Whether search tools should omit the search reminder footer.
+    pub suppress_search_reminder: bool,
 }
 
 impl TextOptions {
@@ -84,6 +86,12 @@ impl TextOptions {
     /// Set the maximum number of items to display.
     pub fn with_max_items(mut self, max_items: Option<usize>) -> Self {
         self.max_items = max_items;
+        self
+    }
+
+    /// Enable or disable search reminder suppression for grep/glob text output.
+    pub fn with_suppress_search_reminder(mut self, suppress_search_reminder: bool) -> Self {
+        self.suppress_search_reminder = suppress_search_reminder;
         self
     }
 }
@@ -202,6 +210,7 @@ mod tests {
         assert_eq!(opts.style, TextStyle::Humanized);
         assert!(!opts.markdown);
         assert!(opts.max_items.is_none());
+        assert!(!opts.suppress_search_reminder);
     }
 
     #[test]
@@ -209,11 +218,13 @@ mod tests {
         let opts = TextOptions::new()
             .with_style(TextStyle::Plain)
             .with_markdown(true)
-            .with_max_items(Some(10));
+            .with_max_items(Some(10))
+            .with_suppress_search_reminder(true);
 
         assert_eq!(opts.style, TextStyle::Plain);
         assert!(opts.markdown);
         assert_eq!(opts.max_items, Some(10));
+        assert!(opts.suppress_search_reminder);
     }
 
     #[test]

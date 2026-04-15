@@ -3,6 +3,7 @@
 use schemars::Schema;
 use serde_json::Value as Json;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Field-level constraint to apply to a schema.
 #[derive(Clone, Debug)]
@@ -168,6 +169,224 @@ impl SchemaEngine {
     }
 }
 
+const OPTIONAL_PROPERTY_GUIDANCE: &str = "Optional; omit or use null.";
+
+#[derive(Clone, Default)]
+struct NullFirstOptional;
+
+impl schemars::transform::Transform for NullFirstOptional {
+    fn transform(&mut self, schema: &mut Schema) {
+        let mut value = serde_json::to_value(&*schema).expect("serialize schema");
+        normalize_optional_properties(&mut value);
+        *schema = Schema::try_from(value).expect("NullFirstOptional must preserve schema validity");
+    }
+}
+
+fn normalize_optional_properties(node: &mut Json) {
+    let Some(obj) = node.as_object_mut() else {
+        return;
+    };
+
+    recurse_object_entries(obj, "$defs");
+    recurse_object_entries(obj, "definitions");
+
+    let required = required_property_names(obj.get("required"));
+    if let Some(properties) = obj.get_mut("properties").and_then(Json::as_object_mut) {
+        for (property_name, property_schema) in properties {
+            if !required.contains(property_name.as_str()) {
+                normalize_known_nullable_shapes(property_schema);
+                if explicitly_allows_null(property_schema) {
+                    annotate_optional_property(property_schema);
+                }
+            }
+            normalize_optional_properties(property_schema);
+        }
+    }
+
+    recurse_object_entries(obj, "dependentSchemas");
+    recurse_object_entries(obj, "patternProperties");
+    recurse_schema_entry(obj, "additionalProperties");
+    recurse_schema_entry(obj, "propertyNames");
+    recurse_schema_entry(obj, "unevaluatedProperties");
+    recurse_schema_entry(obj, "items");
+    recurse_schema_entry(obj, "unevaluatedItems");
+    recurse_schema_entry(obj, "contains");
+    recurse_schema_array_entry(obj, "prefixItems");
+    recurse_schema_array_entry(obj, "allOf");
+    recurse_schema_array_entry(obj, "anyOf");
+    recurse_schema_array_entry(obj, "oneOf");
+    recurse_schema_entry(obj, "if");
+    recurse_schema_entry(obj, "then");
+    recurse_schema_entry(obj, "else");
+    recurse_schema_entry(obj, "not");
+}
+
+fn recurse_object_entries(obj: &mut serde_json::Map<String, Json>, key: &str) {
+    let Some(entries) = obj.get_mut(key).and_then(Json::as_object_mut) else {
+        return;
+    };
+
+    for value in entries.values_mut() {
+        normalize_optional_properties(value);
+    }
+}
+
+fn recurse_schema_entry(obj: &mut serde_json::Map<String, Json>, key: &str) {
+    let Some(value) = obj.get_mut(key) else {
+        return;
+    };
+
+    normalize_optional_properties(value);
+}
+
+fn recurse_schema_array_entry(obj: &mut serde_json::Map<String, Json>, key: &str) {
+    let Some(values) = obj.get_mut(key).and_then(Json::as_array_mut) else {
+        return;
+    };
+
+    for value in values {
+        normalize_optional_properties(value);
+    }
+}
+
+fn required_property_names(required: Option<&Json>) -> HashSet<String> {
+    required
+        .and_then(Json::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Json::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
+fn normalize_known_nullable_shapes(node: &mut Json) {
+    move_null_to_front_in_type_array(node);
+    move_null_to_front_in_enum_values(node);
+    move_null_to_front_in_any_of(node);
+}
+
+fn explicitly_allows_null(node: &Json) -> bool {
+    type_array_contains_null(node)
+        || enum_values_contain_null(node)
+        || any_of_contains_explicit_null_branch(node)
+}
+
+fn type_array_contains_null(node: &Json) -> bool {
+    node.as_object()
+        .and_then(|obj| obj.get("type"))
+        .and_then(Json::as_array)
+        .is_some_and(|type_values| {
+            type_values
+                .iter()
+                .any(|value| value == &Json::String("null".into()))
+        })
+}
+
+fn enum_values_contain_null(node: &Json) -> bool {
+    node.as_object()
+        .and_then(|obj| obj.get("enum"))
+        .and_then(Json::as_array)
+        .is_some_and(|enum_values| enum_values.iter().any(Json::is_null))
+}
+
+fn any_of_contains_explicit_null_branch(node: &Json) -> bool {
+    node.as_object()
+        .and_then(|obj| obj.get("anyOf"))
+        .and_then(Json::as_array)
+        .is_some_and(|any_of| any_of.iter().any(is_explicit_null_branch))
+}
+
+fn move_null_to_front_in_type_array(node: &mut Json) {
+    let Some(obj) = node.as_object_mut() else {
+        return;
+    };
+
+    let Some(type_values) = obj.get_mut("type").and_then(Json::as_array_mut) else {
+        return;
+    };
+
+    move_values_to_front(type_values, |value| value == &Json::String("null".into()));
+}
+
+fn move_null_to_front_in_enum_values(node: &mut Json) {
+    let Some(obj) = node.as_object_mut() else {
+        return;
+    };
+
+    let Some(enum_values) = obj.get_mut("enum").and_then(Json::as_array_mut) else {
+        return;
+    };
+
+    move_values_to_front(enum_values, Json::is_null);
+}
+
+fn move_null_to_front_in_any_of(node: &mut Json) {
+    let Some(obj) = node.as_object_mut() else {
+        return;
+    };
+
+    let Some(any_of) = obj.get_mut("anyOf").and_then(Json::as_array_mut) else {
+        return;
+    };
+
+    move_values_to_front(any_of, is_explicit_null_branch);
+}
+
+fn annotate_optional_property(node: &mut Json) {
+    let Some(obj) = node.as_object_mut() else {
+        return;
+    };
+
+    match obj.get_mut("description") {
+        Some(Json::String(description)) => {
+            if !description.contains(OPTIONAL_PROPERTY_GUIDANCE) {
+                description.push_str("\n\n");
+                description.push_str(OPTIONAL_PROPERTY_GUIDANCE);
+            }
+        }
+        Some(_) => {
+            // Preserve non-string descriptions as-is; appending guidance only works for strings.
+        }
+        None => {
+            obj.insert(
+                "description".to_string(),
+                Json::String(OPTIONAL_PROPERTY_GUIDANCE.to_string()),
+            );
+        }
+    }
+}
+
+fn move_values_to_front<F>(values: &mut Vec<Json>, predicate: F)
+where
+    F: Fn(&Json) -> bool,
+{
+    let mut matching = Vec::new();
+    let mut non_matching = Vec::new();
+
+    for value in values.drain(..) {
+        if predicate(&value) {
+            matching.push(value);
+        } else {
+            non_matching.push(value);
+        }
+    }
+
+    if matching.is_empty() {
+        *values = non_matching;
+        return;
+    }
+
+    matching.extend(non_matching);
+    *values = matching;
+}
+
+fn is_explicit_null_branch(node: &Json) -> bool {
+    matches!(
+        node,
+        Json::Object(obj) if obj.get("type") == Some(&Json::String("null".into()))
+    )
+}
+
 // ============================================================================
 // Centralized Draft 2020-12 Generator for MCP + Registry
 // ============================================================================
@@ -176,10 +395,11 @@ impl SchemaEngine {
 ///
 /// This module provides cached schema generation for MCP:
 /// - JSON Schema Draft 2020-12 (MCP protocol requirement)
-/// - `Option<T>` fields include `null` in schema shape (for example, `type`
-///   arrays for simple scalar cases and `anyOf`/`$ref` forms for complex types)
+/// - `Option<T>` object properties remain nullable and are normalized to place
+///   `null` first while preserving inner item/value nullability
 /// - Thread-local caching keyed by TypeId for performance
 pub mod mcp_schema {
+    use super::NullFirstOptional;
     use schemars::JsonSchema;
     use schemars::Schema;
     use schemars::generate::SchemaSettings;
@@ -195,7 +415,9 @@ pub mod mcp_schema {
     }
 
     fn settings() -> SchemaSettings {
-        SchemaSettings::draft2020_12().with_transform(RestrictFormats::default())
+        SchemaSettings::draft2020_12()
+            .with_transform(RestrictFormats::default())
+            .with_transform(NullFirstOptional)
     }
 
     /// Generate a cached schema for type T using Draft 2020-12.
@@ -345,8 +567,33 @@ mod tests {
     // ========================================================================
 
     mod mcp_schema_tests {
+        use super::Json;
+        use super::NullFirstOptional;
+        use super::OPTIONAL_PROPERTY_GUIDANCE;
+        use super::Schema;
         use super::mcp_schema;
+        use schemars::transform::Transform;
         use serde::Serialize;
+
+        fn property<'a>(schema: &'a Json, name: &str) -> &'a Json {
+            &schema["properties"][name]
+        }
+
+        fn required_names(schema: &Json) -> Vec<&str> {
+            schema["required"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Json::as_str)
+                .collect()
+        }
+
+        fn assert_optional_guidance(schema: &Json, name: &str) {
+            assert_eq!(
+                property(schema, name).get("description"),
+                Some(&Json::String(OPTIONAL_PROPERTY_GUIDANCE.to_string()))
+            );
+        }
 
         #[derive(schemars::JsonSchema, Serialize)]
         struct WithOption {
@@ -354,18 +601,15 @@ mod tests {
         }
 
         #[test]
-        fn test_option_generates_type_array() {
+        fn test_option_string_is_optional_nullable_with_null_first() {
             let root = mcp_schema::cached_schema_for::<WithOption>();
             let v = serde_json::to_value(root.as_ref()).unwrap();
-            let a = &v["properties"]["a"];
-            // Option<String> should produce {"type": ["string", "null"]}
-            let ty = a
-                .get("type")
-                .and_then(|v| v.as_array())
-                .expect("Option<T> should emit a type array");
-            assert!(ty.contains(&serde_json::json!("string")));
-            assert!(ty.contains(&serde_json::json!("null")));
-            assert_eq!(ty.len(), 2, "Option<T> should contain only string|null");
+            let a = property(&v, "a");
+
+            assert_eq!(a.get("type"), Some(&serde_json::json!(["null", "string"])));
+            assert!(a.get("nullable").is_none());
+            assert!(required_names(&v).is_empty());
+            assert_optional_guidance(&v, "a");
         }
 
         #[derive(schemars::JsonSchema, Serialize)]
@@ -435,30 +679,16 @@ mod tests {
         }
 
         #[test]
-        fn test_option_enum_anyof_null_branch_has_type() {
+        fn test_option_enum_keeps_any_of_with_null_first() {
             let root = mcp_schema::cached_schema_for::<HasOptEnum>();
             let v = serde_json::to_value(root.as_ref()).unwrap();
-            let any_of = v["properties"]["e"]["anyOf"]
-                .as_array()
-                .expect("Option<Enum> should generate anyOf");
+            let e = property(&v, "e");
+            let any_of = e["anyOf"].as_array().expect("Option enum should use anyOf");
 
-            // There must be a branch with explicit type "null"
-            assert!(
-                any_of
-                    .iter()
-                    .any(|b| b.get("type") == Some(&serde_json::json!("null"))),
-                "anyOf for Option<Enum> must include a branch with type:\"null\""
-            );
-
-            // No branch should have nullable:true without a type
-            for branch in any_of {
-                let has_nullable = branch.get("nullable") == Some(&serde_json::json!(true));
-                let has_type = branch.get("type").is_some() || branch.get("$ref").is_some();
-                assert!(
-                    !has_nullable || has_type,
-                    "No branch may contain nullable:true without a type or $ref"
-                );
-            }
+            assert_eq!(any_of.len(), 2);
+            assert_eq!(any_of[0], serde_json::json!({ "type": "null" }));
+            assert!(any_of[1].get("$ref").is_some());
+            assert_optional_guidance(&v, "e");
         }
 
         #[derive(schemars::JsonSchema, Serialize)]
@@ -500,27 +730,303 @@ mod tests {
         }
 
         #[test]
-        fn test_option_string_uses_type_array() {
+        fn test_option_string_uses_null_first_without_nullable_keyword() {
             let root = mcp_schema::cached_schema_for::<HasOptString>();
             let v = serde_json::to_value(root.as_ref()).unwrap();
-            let s = &v["properties"]["s"];
+            let s = property(&v, "s");
 
-            // Option<String> should produce {"type": ["string", "null"]}
-            let ty = s
-                .get("type")
-                .and_then(|v| v.as_array())
-                .expect("Option<String> should emit a type array");
-            assert!(ty.contains(&serde_json::json!("string")));
-            assert!(ty.contains(&serde_json::json!("null")));
-            assert_eq!(
-                ty.len(),
-                2,
-                "Option<String> should contain only string|null"
-            );
-            // Should NOT have nullable keyword (that was from AddNullable)
+            assert_eq!(s.get("type"), Some(&serde_json::json!(["null", "string"])));
             assert!(
                 s.get("nullable").is_none(),
                 "Option<String> should not have nullable keyword"
+            );
+            assert_optional_guidance(&v, "s");
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct NestedInner {
+            leaf: Option<String>,
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct NestedOuter {
+            nested: Option<NestedInner>,
+        }
+
+        #[test]
+        fn test_nested_optional_properties_are_normalized_recursively() {
+            let root = mcp_schema::cached_schema_for::<NestedOuter>();
+            let v = serde_json::to_value(root.as_ref()).unwrap();
+            let nested = property(&v, "nested");
+            let nested_any_of = nested["anyOf"]
+                .as_array()
+                .expect("Nested option should keep anyOf branches");
+
+            assert_eq!(nested_any_of[0], serde_json::json!({ "type": "null" }));
+            assert!(nested_any_of[1].get("$ref").is_some());
+            assert_optional_guidance(&v, "nested");
+
+            let defs = v["$defs"]
+                .as_object()
+                .expect("Nested type should use $defs");
+            let inner = defs
+                .values()
+                .find(|schema| schema["properties"].get("leaf").is_some())
+                .expect("NestedInner schema should exist in $defs");
+
+            assert_eq!(
+                inner["properties"]["leaf"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+            assert_eq!(
+                inner["properties"]["leaf"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
+            );
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct HasOptVec {
+            values: Option<Vec<String>>,
+        }
+
+        #[test]
+        fn test_option_vec_property_keeps_outer_nullability_with_null_first() {
+            let root = mcp_schema::cached_schema_for::<HasOptVec>();
+            let v = serde_json::to_value(root.as_ref()).unwrap();
+            let values = property(&v, "values");
+
+            assert_eq!(
+                values.get("type"),
+                Some(&serde_json::json!(["null", "array"]))
+            );
+            assert_eq!(values["items"]["type"], serde_json::json!("string"));
+            assert_optional_guidance(&v, "values");
+        }
+
+        #[derive(schemars::JsonSchema, Serialize)]
+        struct HasNestedOptionalItems {
+            values: Option<Vec<Option<String>>>,
+        }
+
+        #[test]
+        fn test_inner_nullability_is_preserved() {
+            let root = mcp_schema::cached_schema_for::<HasNestedOptionalItems>();
+            let v = serde_json::to_value(root.as_ref()).unwrap();
+            let values = property(&v, "values");
+            let item_type = values["items"]["type"]
+                .as_array()
+                .expect("Inner Option<String> should remain nullable");
+
+            assert_eq!(
+                values.get("type"),
+                Some(&serde_json::json!(["null", "array"]))
+            );
+            assert!(item_type.contains(&serde_json::json!("string")));
+            assert!(item_type.contains(&serde_json::json!("null")));
+            assert_optional_guidance(&v, "values");
+        }
+
+        #[test]
+        fn test_required_fields_remain_unchanged() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "required_field": { "type": ["string", "null"] },
+                    "optional_field": { "type": ["string", "null"] }
+                },
+                "required": ["required_field"]
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            let required_type = v["properties"]["required_field"]["type"]
+                .as_array()
+                .expect("Required field should keep nullable type array");
+
+            assert!(required_type.contains(&serde_json::json!("string")));
+            assert!(required_type.contains(&serde_json::json!("null")));
+            assert_eq!(
+                v["properties"]["optional_field"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+            assert_eq!(
+                v["properties"]["optional_field"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
+            );
+            assert!(
+                v["properties"]["required_field"]
+                    .get("description")
+                    .is_none()
+            );
+        }
+
+        #[test]
+        fn test_manual_any_of_null_branch_moves_to_front() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "optional_field": {
+                        "anyOf": [
+                            { "type": "string" },
+                            { "type": "integer" },
+                            { "type": "null" }
+                        ]
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["properties"]["optional_field"]["anyOf"],
+                serde_json::json!([
+                    { "type": "null" },
+                    { "type": "string" },
+                    { "type": "integer" }
+                ])
+            );
+            assert_eq!(
+                v["properties"]["optional_field"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
+            );
+        }
+
+        #[test]
+        fn test_manual_enum_null_moves_to_front() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "optional_field": {
+                        "enum": ["alpha", null, "beta"]
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["properties"]["optional_field"]["enum"],
+                serde_json::json!([null, "alpha", "beta"])
+            );
+            assert_eq!(
+                v["properties"]["optional_field"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
+            );
+        }
+
+        #[test]
+        fn test_existing_description_appends_guidance_once() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "optional_field": {
+                        "description": "Existing description.",
+                        "type": ["string", "null"]
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["properties"]["optional_field"]["description"],
+                serde_json::json!("Existing description.\n\nOptional; omit or use null.")
+            );
+            assert_eq!(
+                v["properties"]["optional_field"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+        }
+
+        #[test]
+        fn test_non_nullable_optional_property_does_not_get_null_guidance() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "optional_field": {
+                        "type": "string"
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert!(
+                v["properties"]["optional_field"]
+                    .get("description")
+                    .is_none()
+            );
+        }
+
+        #[test]
+        fn test_dependent_schemas_are_normalized_recursively() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "trigger": { "type": "boolean" }
+                },
+                "dependentSchemas": {
+                    "trigger": {
+                        "type": "object",
+                        "properties": {
+                            "nested_optional": {
+                                "type": ["string", "null"]
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["dependentSchemas"]["trigger"]["properties"]["nested_optional"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+            assert_eq!(
+                v["dependentSchemas"]["trigger"]["properties"]["nested_optional"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
+            );
+        }
+
+        #[test]
+        fn test_unevaluated_items_are_normalized_recursively() {
+            let mut schema = Schema::try_from(serde_json::json!({
+                "type": "array",
+                "unevaluatedItems": {
+                    "type": "object",
+                    "properties": {
+                        "nested_optional": {
+                            "type": ["string", "null"]
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+            NullFirstOptional.transform(&mut schema);
+
+            let v = serde_json::to_value(&schema).unwrap();
+            assert_eq!(
+                v["unevaluatedItems"]["properties"]["nested_optional"]["type"],
+                serde_json::json!(["null", "string"])
+            );
+            assert_eq!(
+                v["unevaluatedItems"]["properties"]["nested_optional"]["description"],
+                serde_json::json!(OPTIONAL_PROPERTY_GUIDANCE)
             );
         }
     }

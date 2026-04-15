@@ -52,55 +52,54 @@ pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<
     match (agent_type, location) {
         (Locator, Codebase) => vec![
             "mcp__agentic-mcp__cli_ls".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
         ],
         (Locator, Thoughts) => vec![
             "mcp__agentic-mcp__cli_ls".into(),
             "mcp__agentic-mcp__thoughts_list_documents".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
         ],
         (Locator, References) => vec![
             "mcp__agentic-mcp__cli_ls".into(),
             "mcp__agentic-mcp__thoughts_list_references".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
         ],
-        // TODO(3): Replace Claude Code built-in WebSearch/WebFetch with our MCP tools:
-        // - mcp__agentic-mcp__web_search
-        // - mcp__agentic-mcp__web_fetch
-        // This will require updating config tests once the migration happens.
-        (Locator, Web) => vec!["WebSearch".into(), "WebFetch".into()],
+        (Locator, Web) => vec![
+            "mcp__agentic-mcp__web_search".into(),
+            "mcp__agentic-mcp__web_fetch".into(),
+        ],
         (Analyzer, Codebase) => vec![
             "Read".into(),
             "mcp__agentic-mcp__cli_ls".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
             "TodoWrite".into(),
         ],
         (Analyzer, Thoughts) => vec![
             "Read".into(),
             "mcp__agentic-mcp__cli_ls".into(),
             "mcp__agentic-mcp__thoughts_list_documents".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
         ],
         (Analyzer, References) => vec![
             "Read".into(),
             "mcp__agentic-mcp__cli_ls".into(),
             "mcp__agentic-mcp__thoughts_list_references".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
             "TodoWrite".into(),
         ],
         (Analyzer, Web) => vec![
-            "WebSearch".into(),
-            "WebFetch".into(),
+            "mcp__agentic-mcp__web_search".into(),
+            "mcp__agentic-mcp__web_fetch".into(),
             "TodoWrite".into(),
             "Read".into(),
-            "Grep".into(),
-            "Glob".into(),
+            "mcp__agentic-mcp__cli_grep".into(),
+            "mcp__agentic-mcp__cli_glob".into(),
             "mcp__agentic-mcp__cli_ls".into(),
         ],
     }
@@ -151,7 +150,11 @@ pub fn build_mcp_config(_location: AgentLocation, enabled_tools: &[String]) -> M
     }
 
     // Use --allow "tool1,tool2" (no "mcp" subcommand, no individual flags)
-    let args = vec!["--allow".to_string(), allowlist.join(",")];
+    let args = vec![
+        "--allow".to_string(),
+        allowlist.join(","),
+        "--suppress-search-reminder".to_string(),
+    ];
 
     servers.insert(
         "agentic-mcp".to_string(),
@@ -230,8 +233,8 @@ mod tests {
     fn test_enabled_tools_locator_codebase() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Codebase);
         assert!(tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
-        assert!(tools.contains(&"Grep".to_string()));
-        assert!(tools.contains(&"Glob".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
         assert!(!tools.contains(&"Read".to_string())); // Locator doesn't read deeply
     }
 
@@ -240,8 +243,8 @@ mod tests {
         let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Codebase);
         assert!(tools.contains(&"Read".to_string())); // Analyzer can read
         assert!(tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
-        assert!(tools.contains(&"Grep".to_string()));
-        assert!(tools.contains(&"Glob".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
     }
 
     #[test]
@@ -263,8 +266,8 @@ mod tests {
         assert!(tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
         assert!(tools.contains(&"mcp__agentic-mcp__thoughts_list_documents".to_string()));
         assert!(tools.contains(&"Read".to_string()));
-        assert!(tools.contains(&"Grep".to_string()));
-        assert!(tools.contains(&"Glob".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
     }
 
     #[test]
@@ -273,34 +276,40 @@ mod tests {
         assert!(tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
         assert!(tools.contains(&"mcp__agentic-mcp__thoughts_list_references".to_string()));
         assert!(tools.contains(&"Read".to_string()));
-        assert!(tools.contains(&"Grep".to_string()));
-        assert!(tools.contains(&"Glob".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
         assert!(tools.contains(&"TodoWrite".to_string()));
     }
 
     #[test]
     fn test_enabled_tools_locator_web() {
         let tools = enabled_tools_for(AgentType::Locator, AgentLocation::Web);
-        assert_eq!(tools, vec!["WebSearch".to_string(), "WebFetch".to_string()]);
+        assert_eq!(
+            tools,
+            vec![
+                "mcp__agentic-mcp__web_search".to_string(),
+                "mcp__agentic-mcp__web_fetch".to_string()
+            ]
+        );
     }
 
     #[test]
     fn test_enabled_tools_analyzer_web() {
         let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
-        assert!(tools.contains(&"WebSearch".to_string()));
-        assert!(tools.contains(&"WebFetch".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__web_search".to_string()));
+        assert!(tools.contains(&"mcp__agentic-mcp__web_fetch".to_string()));
     }
 
     #[test]
     fn test_enabled_tools_analyzer_web_full_set() {
         let tools = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
         let expected = [
-            "WebSearch",
-            "WebFetch",
+            "mcp__agentic-mcp__web_search",
+            "mcp__agentic-mcp__web_fetch",
             "TodoWrite",
             "Read",
-            "Grep",
-            "Glob",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
             "mcp__agentic-mcp__cli_ls",
         ];
         for t in expected {
@@ -320,7 +329,7 @@ mod tests {
     fn test_compose_prompt_analyzer_web() {
         let prompt = compose_prompt(AgentType::Analyzer, AgentLocation::Web);
         assert!(prompt.contains("understanding HOW"));
-        assert!(prompt.contains("WebFetch"));
+        assert!(prompt.contains("web_fetch"));
     }
 
     #[test]
@@ -401,60 +410,91 @@ mod tests {
     fn test_agentic_mcp_allowlist_locator_codebase() {
         let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Codebase);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert_eq!(list, vec!["cli_ls"]);
+        assert_eq!(list, vec!["cli_glob", "cli_grep", "cli_ls"]);
     }
 
     #[test]
-    fn test_agentic_mcp_allowlist_locator_web_empty_and_no_server() {
+    fn test_agentic_mcp_allowlist_locator_web_and_server_present() {
         let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Web);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert!(list.is_empty());
+        assert_eq!(list, vec!["web_fetch", "web_search"]);
 
         let cfg = build_mcp_config(AgentLocation::Web, &enabled);
-        assert!(!cfg.mcp_servers.contains_key("agentic-mcp"));
-        assert_eq!(cfg.mcp_servers.len(), 0);
+        assert!(cfg.mcp_servers.contains_key("agentic-mcp"));
+        assert_eq!(cfg.mcp_servers.len(), 1);
     }
 
     #[test]
     fn test_agentic_mcp_allowlist_locator_thoughts() {
         let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Thoughts);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert_eq!(list, vec!["cli_ls", "thoughts_list_documents"]);
+        assert_eq!(
+            list,
+            vec!["cli_glob", "cli_grep", "cli_ls", "thoughts_list_documents"]
+        );
     }
 
     #[test]
     fn test_agentic_mcp_allowlist_locator_references() {
         let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::References);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert_eq!(list, vec!["cli_ls", "thoughts_list_references"]);
+        assert_eq!(
+            list,
+            vec!["cli_glob", "cli_grep", "cli_ls", "thoughts_list_references"]
+        );
     }
 
     #[test]
     fn test_agentic_mcp_allowlist_analyzer_codebase() {
         let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::Codebase);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert_eq!(list, vec!["cli_ls"]);
+        assert_eq!(list, vec!["cli_glob", "cli_grep", "cli_ls"]);
     }
 
     #[test]
     fn test_agentic_mcp_allowlist_analyzer_thoughts() {
         let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::Thoughts);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert_eq!(list, vec!["cli_ls", "thoughts_list_documents"]);
+        assert_eq!(
+            list,
+            vec!["cli_glob", "cli_grep", "cli_ls", "thoughts_list_documents"]
+        );
     }
 
     #[test]
     fn test_agentic_mcp_allowlist_analyzer_references() {
         let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::References);
         let list = agentic_mcp_allowlist_from(&enabled);
-        assert_eq!(list, vec!["cli_ls", "thoughts_list_references"]);
+        assert_eq!(
+            list,
+            vec!["cli_glob", "cli_grep", "cli_ls", "thoughts_list_references"]
+        );
     }
 
     #[test]
     fn test_agentic_mcp_allowlist_analyzer_web() {
         let enabled = enabled_tools_for(AgentType::Analyzer, AgentLocation::Web);
         let list = agentic_mcp_allowlist_from(&enabled);
-        // Analyzer+Web includes cli_ls
-        assert_eq!(list, vec!["cli_ls"]);
+        assert_eq!(
+            list,
+            vec!["cli_glob", "cli_grep", "cli_ls", "web_fetch", "web_search"]
+        );
+    }
+
+    #[test]
+    fn test_build_mcp_config_includes_suppress_search_reminder_flag() {
+        let enabled = enabled_tools_for(AgentType::Locator, AgentLocation::Codebase);
+        let config = build_mcp_config(AgentLocation::Codebase, &enabled);
+        let Some(server) = config.mcp_servers.get("agentic-mcp") else {
+            panic!("expected agentic-mcp server to be configured");
+        };
+
+        match server {
+            MCPServer::Stdio { command, args, .. } => {
+                assert_eq!(command, "agentic-mcp");
+                assert!(args.contains(&"--suppress-search-reminder".to_string()));
+            }
+            MCPServer::Http { .. } => panic!("expected stdio MCP server"),
+        }
     }
 }
