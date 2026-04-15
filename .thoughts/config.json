@@ -302,6 +302,10 @@
       "remote": "https://github.com/sst/opencode",
       "description": "OpenCode v1.3.17 for SDK compatibility analysis",
       "ref": "refs/tags/v1.3.17"
+    },
+    {
+      "remote": "https://github.com/vercel/ai",
+      "description": "Vercel AI SDK - checking strict mode handling for OpenAI vs OpenRouter providers"
     }
   ]
 }
