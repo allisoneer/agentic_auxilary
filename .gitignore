@@ -31,6 +31,8 @@ debug_output.txt
 .DS_Store
 Thumbs.db
 
+/.opencode/package-lock.json
+
 # temporary git ignore for a directory I don't need in git
 /thoughts
 
