@@ -1,0 +1,41 @@
+docs/setup/new_repo.md
+  11c90a3b7a4a92fb 3,5,7,9-11,13,15,17-19,21,23,25-27,29,31,33-35,37-54
+docs/setup/reboot.md
+  11c90a3b7a4a92fb 3-5,16,18,20-22,24,26-28,30
+docs/setup/fresh_install.md
+  11c90a3b7a4a92fb 3,5,7,9-10,12-14,16-17,19-20,22-24,26,28,30-32,34,36-40,49,51-55,57,59,61,63,65,67-68,70,72-76,78,80,82,85,89,94,99,102-103,106,108,110,123,125,127,175,179-185
+docs/why_this_stack.md
+  11c90a3b7a4a92fb 1,3,5,7,9,11,13,15,17,19,21-89
+docs/config.md
+  11c90a3b7a4a92fb 3,7,9,17-33,35,37,47,49-55,57,59,61,63,65-72,74,76
+docs/setup/README.md
+  11c90a3b7a4a92fb 3,5-8,10
+docs/auth.md
+  11c90a3b7a4a92fb 3,16-77,83,85
+docs/troubleshooting.md
+  11c90a3b7a4a92fb 3,5,7,13,15,17,20-22,25-29,31-38,42-43,47-49,51-53,56,59,61,63,65-90,93-95,98-100,102,104,106,108,110
+docs/index.md
+  11c90a3b7a4a92fb 3,5,7-11,15-18
+docs/setup/existing_repo.md
+  11c90a3b7a4a92fb 3,5,7,9,11,13,15,17-19,21,23,25-27,29,31-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "9949522ed366f9d803a8cc26f6b295d21db62634",
+  "prompts": {
+    "11c90a3b7a4a92fb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_267e5d379ffehkI0Js5YkNr73r",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 465,
+      "overriden_lines": 0
+    }
+  }
+}
