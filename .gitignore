@@ -2,8 +2,7 @@
 .env
 .env.local
 
-# No more claude
-.claude/settings.json
+# No more claude (except we have the settings.json committed now)
 .claude/settings.local.json
 .claude/agents/**/*.md
 .claude/commands/**/*.md
