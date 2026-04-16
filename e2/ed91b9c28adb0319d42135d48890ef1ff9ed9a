@@ -1,0 +1,35 @@
+docs/setup/fresh_install.md
+  4c0306ef1064d739 180-181
+TODO.md
+  4c0306ef1064d739 111
+.gitignore
+  4c0306ef1064d739 5
+docs/why_this_stack.md
+  4c0306ef1064d739 15,23-25,33-34,69-70,85,91
+docs/troubleshooting.md
+  4c0306ef1064d739 59-61,72
+docs/setup/new_repo.md
+  4c0306ef1064d739 13,29,34,37,46
+docs/config.md
+  4c0306ef1064d739 9-10,39,61-62,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "e2ed91b9c28adb0319d42135d48890ef1ff9ed9a",
+  "prompts": {
+    "4c0306ef1064d739": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2674f1a1cffeeZYY3EgQKxJNli",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 15,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
