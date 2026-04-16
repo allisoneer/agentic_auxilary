@@ -1,0 +1,23 @@
+crates/infra/thoughts-core/README.md
+  11c90a3b7a4a92fb 3,16-23,35-37,226,440
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "0b2307d3a7e8013656a12b602103b637e5e9286d",
+  "prompts": {
+    "11c90a3b7a4a92fb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_267e5d379ffehkI0Js5YkNr73r",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 460,
+      "total_deletions": 255,
+      "accepted_lines": 452,
+      "overriden_lines": 0
+    }
+  }
+}
