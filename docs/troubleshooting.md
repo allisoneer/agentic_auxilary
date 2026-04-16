@@ -1,69 +1,110 @@
 # Troubleshooting
 
-## Thoughts: mounts missing (often after reboot)
+This is the practical version. The goal here is not "list every flag," it is "get you back to a working state without guessing."
 
-**Symptom:** `thoughts/`, `context/`, or `references/` look empty or missing.
+## Mounts are missing (usually after reboot)
 
-**Fix:**
+If `thoughts/`, `context/`, or `references/` are empty or gone after a restart, run:
 
 ```bash
 thoughts mount update
 ```
 
-`thoughts sync` does git sync. It does not recreate mounts.
+`thoughts sync` only does git sync for auto-sync mounts. It does **not** recreate the FUSE mounts.
 
-## Thoughts: `Not in a git repository`
+## Inspecting mount state with `thoughts mount debug`
 
-**Symptom:** `thoughts init` fails with `Not in a git repository. Run 'git init' first.`
+When `mount update` is not enough, use the debug subcommands instead of poking blind.
 
-**Fix:**
+```bash
+thoughts mount debug info <target>
+thoughts mount debug command <mount_name>
+thoughts mount debug remount <mount_name>
+```
+
+- `debug info` shows what the tool thinks is mounted, along with backend/mount metadata.
+- `debug command` prints the exact mount command it would run for that mount.
+- `debug remount` does the blunt thing: unmount, then mount again for one target.
+
+If you just want to see the full surface first, `thoughts mount debug --help` is worth a quick glance.
+
+## Reference clone failures vs mapping issues
+
+These are two different classes of failure, and the commands are different too.
+
+- `thoughts references sync` is where clone/update failures show up. If the repo cannot be cloned because of network, auth, or remote access problems, the command reports that inline as `Failed to clone` or `Failed to update`.
+- `thoughts references doctor` is for local state problems after the fact: stale mappings, missing paths, non-directories, non-git directories, or origin mismatches.
+
+Typical sequence:
+
+```bash
+thoughts references sync
+thoughts references doctor
+thoughts references doctor --fix
+thoughts mount update
+```
+
+`doctor --fix` only applies safe local fixes. It can prune stale auto-managed mappings, but it does not fix a bad network connection and it does not delete clone directories for you.
+
+## You wanted your own clone, but Thoughts made one anyway
+
+That usually means the repo URL had no local mapping yet, so `references sync` or `mount update` fell back to the managed clone path under `~/.thoughts/clones/...`.
+
+If you want to keep a repo in your own directory, register that local path before the auto-clone commands run. For local context repos, the documented CLI path is:
+
+```bash
+thoughts mount add /path/to/repo <mount_path>
+```
+
+The mapping then lands in `~/.config/agentic/repos.json` with `auto_managed=false`.
+
+## `thoughts init` says you're not in a git repo
+
+The error is literal:
 
 ```bash
 git init
 thoughts init
 ```
 
-## References: repos not mounted
+`thoughts init` requires a git repository. No repo, no setup.
 
-**Fix:**
+## `agentic-mcp --list-tools` looks empty
 
-```bash
-thoughts references sync
-thoughts mount update
-```
-
-## References mapping cleanup
-
-If reference mappings are stale or duplicated:
+The gotcha here is simple: `agentic-mcp --list-tools` writes to **stderr**, not stdout.
 
 ```bash
-thoughts references doctor
-thoughts references doctor --fix
+agentic-mcp --list-tools 2>&1
 ```
 
-`doctor --fix` cleans stale auto-managed mappings, but it does not delete clone directories.
+If config loading produced warnings, those are also printed to stderr before startup.
 
-## agentic-mcp: `--list-tools` shows nothing
+## Log locations and levels
 
-**Gotcha:** `agentic-mcp --list-tools` prints to **stderr**, not stdout.
+There are a few layers here.
 
-Try:
+- `RUST_LOG` works directly for `agentic-mcp` because it uses `tracing_subscriber`'s normal env-driven setup.
+- `AGENTIC_LOG_LEVEL` and `AGENTIC_LOG_JSON` are config env overrides for the `agentic.toml` logging section.
+- `OPENCODE_ORCHESTRATOR_LOG_DIR` tells `opencode-orchestrator-mcp` exactly where to write its JSONL/markdown tool-call logs.
+
+Examples:
 
 ```bash
-agentic-mcp --list-tools 2>&1 | sed -n '1,120p'
+RUST_LOG=debug agentic-mcp --list-tools 2>&1
+AGENTIC_LOG_LEVEL=debug AGENTIC_LOG_JSON=1 agentic-mcp --list-tools 2>&1
+OPENCODE_ORCHESTRATOR_LOG_DIR=/tmp/opencode-orchestrator-logs opencode-orchestrator-mcp
 ```
 
-## Orchestrator: OpenCode version mismatch
+If `OPENCODE_ORCHESTRATOR_LOG_DIR` is unset, the orchestrator falls back to the active Thoughts logs directory when one is available.
 
-`opencode-orchestrator-mcp` expects OpenCode v1.3.17.
+## Orchestrator says OpenCode version is wrong
 
-If you are not using the default pinned binary path, set:
+`opencode-orchestrator-mcp` expects OpenCode `v1.3.17`.
 
-- `OPENCODE_BINARY`
-- `OPENCODE_BINARY_ARGS`
+If the binary on `PATH` is not the one you want, set `OPENCODE_BINARY`. If you are using launcher mode (for example `bunx --yes opencode-ai@1.3.17`), also set `OPENCODE_BINARY_ARGS`.
 
-## More docs
+## One small gotcha worth knowing
 
-- Setup entrypoint: [`./setup/README.md`](./setup/README.md)
-- Configuration: [`./config.md`](./config.md)
-- Authentication: [`./auth.md`](./auth.md)
+`thoughts status --detailed` currently does not add extra detail beyond `thoughts status`, so do not burn time expecting hidden output there.
+
+If you need the setup flow again, go back to [`./setup/README.md`](./setup/README.md). If the problem is clearly credentials rather than mounts or mappings, jump to [`./auth.md`](./auth.md).

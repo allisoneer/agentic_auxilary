@@ -1,34 +1,43 @@
 # Fresh install (new machine)
 
-## Supported platforms
+This is the from-zero path: machine first, repo second. Linux and macOS are supported here; Windows is not.
 
-- Linux and macOS are supported.
-- Windows is not supported.
+## Install the OS-level tools first
 
-## System prerequisites
+Do these in this order. It saves a little backtracking later.
 
-### Linux
+1. Install **bun** with your preferred method. I treat this as base machine setup because OpenCode depends on it.
+2. Install **rustup** if you want `cargo install` / `cargo binstall`, then set the default toolchain:
 
-- Git
-- FUSE support
-- `mergerfs`
+   ```bash
+   rustup default stable
+   ```
 
-### macOS (FUSE-T first)
+3. Optionally install **cargo-binstall**. It is not required, just nicer for the binaries that publish binstall metadata.
+4. Install the platform-specific mount tooling:
 
-Install **FUSE-T** (preferred), plus `unionfs-fuse`:
+   - **Linux:** install `mergerfs`, make sure FUSE support is enabled, and keep Git available. Allison's own notes call out mergerfs `2.41.1`; if Ubuntu makes this annoying, check [issue #2](https://github.com/allisoneer/agentic_auxilary/issues/2).
+   - **macOS:** install **FUSE-T** first if you can:
 
-- FUSE-T (preferred)
-- `unionfs-fuse`
+     ```bash
+     brew install macos-fuse-t/homebrew-cask/fuse-t
+     ```
 
-**Alternative:** macFUSE (if you can't use FUSE-T), plus `unionfs-fuse`.
+     `unionfs-fuse` is also required on macOS. If you already use **macFUSE**, that works too; when both are present, the runtime prefers FUSE-T.
 
-> If both FUSE-T and macFUSE are installed, the code prefers FUSE-T.
+5. Install **OpenCode** at the version this repo currently expects:
 
-## Install the binaries
+   ```bash
+   bun install -g opencode-ai@1.3.17
+   ```
 
-Choose one approach:
+6. Install **Claude Code** with whatever install method you already trust. The official docs are here: <https://code.claude.com/docs/en/authentication.md>.
 
-### A) Install from source (workspace)
+## Install the Rust binaries
+
+There are four binaries in the usual setup story here: `thoughts`, `agentic-mcp`, `opencode-orchestrator-mcp`, and `agentic`.
+
+### `cargo install` works for all four
 
 ```bash
 cargo install --path apps/thoughts
@@ -37,75 +46,68 @@ cargo install --path apps/opencode-orchestrator-mcp
 cargo install --path apps/agentic
 ```
 
-### B) Install via cargo-binstall (where supported)
+### `cargo binstall` works where metadata exists
 
-- `thoughts-bin`
-- `agentic-mcp`
-- `opencode-orchestrator-mcp`
+```bash
+cargo binstall thoughts-bin
+cargo binstall agentic-mcp
+cargo binstall opencode-orchestrator-mcp
+```
 
-> Note: `agentic-bin` currently does not ship binstall metadata, so `cargo binstall` may not work for it.
+`agentic-bin` does not currently publish binstall metadata, so use `cargo install` or a release artifact for that one.
 
-### C) GitHub Releases
+### GitHub Releases are also valid
 
-This repo publishes release artifacts; download the appropriate binary for your platform.
+If you prefer prebuilt binaries, this repo publishes release artifacts. Grab the right one for your platform and put it somewhere on `PATH`.
+
+## Log into Claude Code and OpenCode
+
+Do this before you start blaming MCP wiring.
+
+- **Claude Code:** launch `claude` and complete auth with your preferred method. The documented first-run path opens a browser login and can fall back to a pasted code flow. On macOS, credentials live in Keychain; on Linux they live in `~/.claude/.credentials.json`.
+- **OpenCode:** launch `opencode` and make sure the providers you plan to use are authenticated there. OpenCode keeps config under `~/.config/opencode/`; provider auth state lives in its `auth.json` data file.
 
 ## OpenCode version pin (orchestrator)
 
-`opencode-orchestrator-mcp` expects OpenCode **v1.3.17**. A mismatched OpenCode version will fail startup.
+`opencode-orchestrator-mcp` validates against OpenCode **v1.3.17**. If you point it at another version, startup can fail.
 
-If you need launcher mode, the orchestrator supports:
+You usually do not need extra env vars here. `OPENCODE_BINARY` and `OPENCODE_BINARY_ARGS` are only for cases where the default pinned binary path or the plain `opencode` on `PATH` is not the one you want.
 
-- `OPENCODE_BINARY`
-- `OPENCODE_BINARY_ARGS`
+## MCP wiring examples
 
-## Next steps
+This is the part people usually want to copy-paste, so it belongs before the cheerful "you're done" section.
 
-- If you are setting up an existing repository, continue with [`existing_repo.md`](./existing_repo.md).
-- If you are adding Thoughts to a repository for the first time, continue with [`new_repo.md`](./new_repo.md).
-- For config details, see [`../config.md`](../config.md).
-- For auth details, see [`../auth.md`](../auth.md).
+### OpenCode (`opencode.json`)
 
-## MCP wiring examples (copy/paste)
-
-### OpenCode (`opencode.json`) — exact block from this repo
+This is the same `mcp` block shape used in this repo, just lifted as a standalone snippet so it pastes cleanly:
 
 ```json
+{
   "mcp": {
     "tools": {
       "type": "local",
-      "command": [
-        "agentic-mcp"
-      ],
+      "command": ["agentic-mcp"],
       "enabled": true
     },
     "orchestrator": {
       "type": "local",
-      "command": [
-        "opencode-orchestrator-mcp"
-      ],
+      "command": ["opencode-orchestrator-mcp"],
       "enabled": true
     },
     "playwright": {
       "type": "local",
-      "command": [
-        "npx",
-        "@playwright/mcp@latest"
-      ],
+      "command": ["npx", "@playwright/mcp@latest"],
       "enabled": true
     }
-  },
+  }
+}
 ```
 
-Key fields:
+`mcp.tools` runs `agentic-mcp`, `mcp.orchestrator` runs `opencode-orchestrator-mcp`, and `type: "local"` tells OpenCode to launch each one as a local subprocess.
 
-- `mcp.tools`: runs `agentic-mcp`.
-- `mcp.orchestrator`: runs `opencode-orchestrator-mcp`.
-- `type: "local"` with `command: [...]`: OpenCode's local MCP server shape.
-- `enabled: true`: enables each configured server.
+### Minimal stdio MCP config (`.mcp.json`)
 
-> Note: This block includes the trailing comma because the source block sits inside a larger JSON file.
-
-### Minimal stdio MCP config (`.mcp.json`) — exact file example
+If you want the smallest possible stdio example, this repo also includes one:
 
 ```json
 {
@@ -118,13 +120,11 @@ Key fields:
 }
 ```
 
-Key fields:
+That is just a named server map plus the binary to execute. Good enough for sanity-checking a client before you layer on more config.
 
-- `mcpServers`: map of named servers.
-- `type: "stdio"`: launches the MCP server as a subprocess over stdin/stdout.
-- `command`: binary to execute.
+### Claude Code permissions example (`.claude/settings.json`)
 
-### Claude Code permissions example (`.claude/settings.json`) — exact file example
+This repo's Claude settings are intentionally narrow. The point is to allow only the orchestrator tools and deny a pile of built-ins.
 
 ```json
 {
@@ -172,13 +172,14 @@ Key fields:
 }
 ```
 
-Key fields:
-
-- `permissions.allow`: explicitly allowed tool IDs.
-- `permissions.deny`: explicitly denied built-ins and tools.
+If you use Claude Code this way, the interesting bit is `permissions.allow`: it whitelists the orchestrator namespace explicitly instead of letting the session wander into everything else.
 
 ## Quick verification
 
-- `agentic-mcp --list-tools` prints to **stderr**, so do not rely on stdout capture.
-- In a git repo, `thoughts init` should succeed. Outside a git repo it errors with `Not in a git repository. Run 'git init' first.`
-- If mounts disappear after reboot, use [`reboot.md`](./reboot.md), not `thoughts sync`.
+- `agentic-mcp --list-tools` prints to **stderr**, so do not judge success by stdout alone.
+- In a git repo, `thoughts init` should work. Outside one, it fails with `Not in a git repository. Run 'git init' first.`
+- If mounts vanish after a reboot, use [`./reboot.md`](./reboot.md). `thoughts sync` is not the remount command.
+
+## Next steps
+
+If the repo already has `.thoughts/config.json`, continue with [`./existing_repo.md`](./existing_repo.md). If you're adding Thoughts to a repo for the first time, continue with [`./new_repo.md`](./new_repo.md). When you need the file-level details, jump to [`../config.md`](../config.md) and [`../auth.md`](../auth.md).

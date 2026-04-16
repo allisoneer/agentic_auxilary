@@ -1,6 +1,8 @@
 # After reboot: remounting and recovery
 
-## The important distinction
+The short version is that FUSE mounts are process-level state. They do not survive a reboot just because the config file still exists. `thoughts mount update` re-establishes the live mounts from the desired state on disk.
+
+## `mount update` vs `sync`
 
 - `thoughts mount update`
   - reconciles desired state versus active mounts
@@ -11,18 +13,18 @@
   - performs git sync for auto-sync mounts
   - does not recreate FUSE mounts
 
-## Steps after reboot
+## After-reboot flow
 
-1. Recreate mounts:
+1. Recreate the mounts.
 
-```bash
-thoughts mount update
-```
+   ```bash
+   thoughts mount update
+   ```
 
-2. Optional: sync git-backed mounts:
+2. If you also want the git-backed thoughts/context repos refreshed, do that separately.
 
-```bash
-thoughts sync --all
-```
+   ```bash
+   thoughts sync --all
+   ```
 
-If mounts fail to come up, see [`../troubleshooting.md`](../troubleshooting.md).
+If `mount update` still leaves things empty, head to [`../troubleshooting.md`](../troubleshooting.md). That is usually a mount/backend issue, not a sync issue.

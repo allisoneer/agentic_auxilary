@@ -1,38 +1,55 @@
 # Existing repo setup (repo already has Thoughts config)
 
-Use this path if the repository already contains `.thoughts/config.json` and you're setting up a new machine or a new checkout.
+Use this path when the repo already has `.thoughts/config.json` and you mostly need local state to catch up.
 
-## Steps
+One nuance that matters more than it first appears: a lot of people do **not** want every thoughts/context/reference repo auto-managed for them. If you cloned something yourself because you want to edit it directly, inspect `git status`, keep it private, or just control where it lives, register that local clone **before** you run commands that auto-clone missing repos. The auto-clone paths are `thoughts references sync` and `thoughts mount update`; if there is no mapping yet, those commands will use the managed clone location under `~/.thoughts/clones/...` and record it as auto-managed in `~/.config/agentic/repos.json`.
 
-1. Ensure you are inside a git repository.
-   - If you run `thoughts init` outside a git repo, you'll see:
-     `Not in a git repository. Run 'git init' first.`
+For local context repos, `thoughts mount add /path/to/repo <mount_path>` is the clean CLI path: it records the local path with `auto_managed=false` and adds the mount to `.thoughts/config.json`. The broader rule is simple even if your setup is a little weirder than that: get your local mapping in place first, then let the sync/update commands reconcile around it.
 
-2. Initialize Thoughts in the repo:
+## Setup steps
 
-```bash
-thoughts init
-```
+1. Make sure you are inside the repo you actually want to use.
 
-3. Reconcile or remount configured mounts:
+   `thoughts init` only works inside a git repository; outside one it fails with `Not in a git repository. Run 'git init' first.`
 
-```bash
-thoughts mount update
-```
+2. Initialize the local checkout.
 
-4. Sync git-backed mounts if needed. This is not the remount command:
+   ```bash
+   thoughts init
+   ```
 
-```bash
-thoughts sync --all
-```
+   This refreshes the local Thoughts scaffolding for the repo and makes sure the symlinks and control state are in place for your current checkout.
 
-5. If references are configured, ensure they are cloned, then remount:
+3. If you already cloned a context repo yourself and want to keep using that clone, register it before any auto-clone command runs.
 
-```bash
-thoughts references sync
-thoughts mount update
-```
+   ```bash
+   thoughts mount add /path/to/repo <mount_path>
+   ```
 
-6. For configuration details, see [`../config.md`](../config.md).
+   This adds the context mount to config and stores the repo mapping as user-managed instead of auto-managed.
 
-If something fails, see [`../troubleshooting.md`](../troubleshooting.md).
+4. Sync configured references.
+
+   ```bash
+   thoughts references sync
+   ```
+
+   This clones or fast-forwards the configured reference repos and writes auto-managed mappings for anything it had to manage itself.
+
+5. Reconcile the live mounts.
+
+   ```bash
+   thoughts mount update
+   ```
+
+   This is the FUSE reconciliation step: it compares desired state to active mounts, remounts what is missing, and is also the command you need after a reboot.
+
+6. Optionally sync the git-backed thoughts/context mounts.
+
+   ```bash
+   thoughts sync --all
+   ```
+
+   This does git sync for auto-sync mounts. It is useful, but it is not a substitute for `thoughts mount update`.
+
+If you need to change what is mounted, not just bring it up, read [`../config.md`](../config.md). If something still looks wrong after that, go straight to [`../troubleshooting.md`](../troubleshooting.md).
