@@ -2,7 +2,7 @@
 .env
 .env.local
 
-# No more claude (except we have the settings.json committed now)
+# Claude settings: keep the shared MCP config, ignore local overrides and generated files
 .claude/settings.local.json
 .claude/agents/**/*.md
 .claude/commands/**/*.md

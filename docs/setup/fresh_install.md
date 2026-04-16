@@ -177,7 +177,8 @@ If you use Claude Code this way, the interesting bit is `permissions.allow`: it 
 ## Quick verification
 
 - `agentic-mcp --list-tools` prints to **stderr**, so do not judge success by stdout alone.
-- In a git repo, `thoughts init` should work. Outside one, it fails with `Not in a git repository. Run 'git init' first.`
+- In a git repo, `thoughts init` should work. Outside one, it fails with `Not in a git repository. Run 'git init' first.` It only needs a git repo for that step, not an existing remote.
+- If you later register an already-cloned repo by local path (for example `thoughts mount add /path/to/repo ...`), that local repo needs an `origin` remote so Thoughts can record the canonical repo mapping.
 - If mounts vanish after a reboot, use [`./reboot.md`](./reboot.md). `thoughts sync` is not the remount command.
 
 ## Next steps

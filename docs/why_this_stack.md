@@ -12,7 +12,7 @@ It is not the interesting part by itself.
 
 Yes, the tools speak MCP. That part is deliberately portable.
 
-The interesting part is everything built behind that interface: an orchestrator layer that manages long-lived OpenCode sessions, primary work agents with different permission and tool profiles, and an explicit locator/analyzer × codebase/thoughts/references/web sub-agent matrix instead of a vague "go spawn a helper if you feel like it" story.
+The interesting part is everything built behind that interface: an orchestrator layer that manages long-lived OpenCode sessions, primary work agents with different permission and tool profiles, reasoning-model calls for deep passes, and an explicit locator/analyzer × codebase/thoughts/references/web sub-agent matrix instead of a vague "go spawn a helper if you feel like it" story.
 
 That design shows up in a few concrete ways.
 
@@ -20,13 +20,17 @@ There is a dedicated orchestrator MCP server because session work is not just a 
 
 There is a unified `agentic-mcp` entry point because the repo is trying to expose a shaped tool surface, not a pile of unrelated binaries.
 
-And there is `--allow` scoping because being able to narrow the server to exactly the tools a role should see is part of the safety model, not an afterthought.
+And there is `--allow` scoping because the single `agentic-mcp` binary is meant to be portable and highly configurable: the same entry point can expose a deliberately narrow tool surface for a given client or role.
+
+The safety/control story is adjacent but separate: tools are grouped into explicit namespaces, and sub-agents run with strict MCP config plus preselected tool sets instead of inheriting a giant ambient surface.
 
 This is also why the repo has an actual agent hierarchy instead of one mega-agent with everything attached.
 
 There is orchestration-level control.
 
 There are primary work agents.
+
+There are reasoning-model calls that sit alongside the sub-agent system.
 
 There are sub-agents that are split by role and location on purpose.
 
@@ -62,6 +66,8 @@ Thin wrappers are easy to make.
 
 The hard and useful part is deciding what an agent should be allowed to do, how it should discover information, when it should ask for help, and what work should be mechanically separated instead of prompt-separated.
 
+That also shows up in tool shape: the repo prefers fewer tools, fewer required parameters, and low-ceremony interfaces so context goes to the task instead of the call surface. `cli_ls` doubles as both an `ls` and a tree via `depth`, some tools paginate implicitly when repeating the same request is the cleanest shape, and others use explicit `head_limit`/`offset` when a stateless scan is the better fit.
+
 ## The workflow is explicit: research, then plan, then implement
 
 The command surface in this repo encodes an actual working loop.
@@ -76,13 +82,13 @@ That same design philosophy shows up in the model split too.
 
 There are distinct agent variants for Claude and GPT-5.4-oriented workflows.
 
-The reasoner tool itself is two-phase: first optimize what context matters, then run the expensive reasoning pass.
+The reasoner tool itself is two-phase: first do GPT-specific prompt optimization over the available context, then run the expensive reasoning pass.
 
 Even the existence of a separate Bash agent follows the same pattern — shell access is available when it is truly the right tool, but it is not the default shape of every session.
 
 The repo is trying to make good workflows easier to repeat.
 
-It is not trying to make ad hoc prompting feel magical.
+Ad hoc prompting can still feel pretty magical here; the point is that explicit workflows are what make long-tail work repeatable instead of relying on a great one-off prompt.
 
 So the short version is: this repo uses MCP everywhere, but it is not "just MCP." It is a constrained Rust agent stack built around session control, scoped tools, specialized sub-agents, structured execution, and an explicit research → plan → implement loop.
 

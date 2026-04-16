@@ -108,7 +108,7 @@ The core ENG-454 issues have been addressed. Remaining follow-up work:
   there should be a "no-template" option or something. For scenarios like the last turn of create_plan_final where it asks if you want to
   persist it and really all you need to say is "yes". I think the same style of functionality as claude code, where the final assistance
   response is returned back, makes sense to me. We can probably continue that trend. I think all of our "final assistant responses" are
-  already setup to be clear of what happened and such. - I *THINK* this is done.
+  already setup to be clear of what happened and such. Status: needs verification.
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
 - README.md could use a huge refresh. We'll be at the point where we can have all-inclusive instructions for setting up for any repo soon. Would be a lot better than just "Here is a list of tools" if we mentioned how they are used and what they are for and how to do the entire setup.

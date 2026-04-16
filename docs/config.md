@@ -6,6 +6,8 @@ There are three config surfaces worth caring about here: `agentic.toml` for non-
 
 `agentic.toml` is the non-secret config layer used by `agentic-mcp`, the reasoning tool, the orchestrator, and a few other pieces. The merge order is defaults → global `~/.config/agentic/agentic.toml` → local `./agentic.toml` → environment variables.
 
+These commands come from the `agentic` binary specifically, and today they are focused on managing this config surface:
+
 Useful commands:
 
 ```bash
@@ -34,7 +36,7 @@ Think of this as orientation and defaults, not secret storage. Models, base URLs
 
 ## `.thoughts/config.json` (per repo, v2 only)
 
-This file lives at `<repo>/.thoughts/config.json` and tells `thoughts` what the repo wants mounted. Current runtime expects `version: "2.0"`; older v1 configs are not supported anymore.
+This file lives at `<repo>/.thoughts/config.json` and tells `thoughts` what the repo wants to mount. Current runtime expects `version: "2.0"`; older v1 configs are not supported anymore.
 
 Useful commands:
 
@@ -56,9 +58,13 @@ Minimal shape:
 
 The real file can also include `mount_dirs` and `references`, but the shape above is the part most people need to orient themselves: one optional thoughts repo, zero or more context repos, then a reference list.
 
+`thoughts config edit` is a thin wrapper around editing this file directly: it opens `<repo>/.thoughts/config.json` in `VISUAL`, then `EDITOR`, then `vi`; after you exit, it validates the file, rewrites it in normalized JSON, and updates active mounts.
+
 ## `~/.config/agentic/repos.json` (repo mappings)
 
 This is the canonical mapping file for repo URLs to local paths. `~/.thoughts/repos.json` is only legacy input now, not the current home for the file.
+
+This file is intentionally local and context-specific: different developers can map the same canonical repo identity to different clone paths on their own machines. By contrast, `agentic.toml` and `.thoughts/config.json` are the shareable, team-oriented layers that describe defaults and mount intent rather than one person's filesystem layout.
 
 Minimal shape:
 

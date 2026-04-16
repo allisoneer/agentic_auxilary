@@ -56,7 +56,9 @@ If you want to keep a repo in your own directory, register that local path befor
 thoughts mount add /path/to/repo <mount_path>
 ```
 
-The mapping then lands in `~/.config/agentic/repos.json` with `auto_managed=false`.
+That local repo needs an `origin` remote so Thoughts can key the mapping by canonical repo identity. When the command succeeds, the mapping lands in `~/.config/agentic/repos.json` with `auto_managed=false`.
+
+If the same canonical repo was already mapped somewhere else, `thoughts mount add` replaces that old `repos.json` mapping with the new path. What it does **not** replace is a duplicate `mount_path` in `.thoughts/config.json`; if that alias already exists, the command errors and you need to choose a different mount name or edit the config first.
 
 ## `thoughts init` says you're not in a git repo
 
@@ -67,7 +69,7 @@ git init
 thoughts init
 ```
 
-`thoughts init` requires a git repository. No repo, no setup.
+`thoughts init` requires a git repository. No repo, no setup. It does **not** require a remote just to initialize the repo, but later local-path helper flows such as `thoughts mount add /path/to/repo ...` and `thoughts references add /path/to/repo` do expect that local repo to have an `origin` remote.
 
 ## `agentic-mcp --list-tools` looks empty
 
