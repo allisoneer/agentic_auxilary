@@ -132,6 +132,12 @@ project. Either than or tooling for interacting with cargo cache
 in a clean/streamlined abstraction. Probably both would be ideal
 long term.
 
+- `gpt5_reasoner`: `reasoning.api_base_url` / `AGENTIC_REASONING_API_BASE_URL` exists in config but the client hardcodes OpenRouter base URL (see `crates/tools/gpt5-reasoner/src/client.rs`).
+- `thoughts`: `status --detailed` flag is accepted but currently has no effect (unused parameter in `apps/thoughts/src/commands/status.rs`).
+- `thoughts`: `sync` code comment claims "repository-aware sync" but behavior does not filter by repo (see `apps/thoughts/src/commands/sync.rs`).
+- `agentic-bin`: missing `[package.metadata.binstall]` unlike other shipped binaries (see `apps/agentic/Cargo.toml`).
+- `opencode-orchestrator-mcp`: stale "five tools" comment despite six tools being registered (see `apps/opencode-orchestrator-mcp/src/main.rs` vs registry).
+
 ## To validate:
 - ENG-397: Linear MCP should return issue URL after creation. May already be implemented - needs verification.
 
