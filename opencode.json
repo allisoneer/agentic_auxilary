@@ -87,7 +87,6 @@
       }
     },
     "Bash": {
-      "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary",
       "permission": {
         "bash": {

@@ -30,12 +30,7 @@ These items have dependencies and should be done in order.
 
 ## To plan/design:
 
-### Configuration system (should come first - unblocks big lifts)
-- Need to develop a configuration system so everything can be configurable. Need heavy inspiration from opencode. E.g. similar "here is the schema" header stuff as their config and similar granularity of configurable options available.
-- This absolutely needs to come before any "big lifts" or "large changes" (e.g. before database or before doing more agent work).
-- Will provide proper place to specify: thoughts root, clones dir, DB path, profiles, etc.
-
-### SQLite migration for thoughts (blocked by: config system)
+### SQLite migration for thoughts (blocked by: config system, which is mostly done now)
 - Current file-based structure (thoughts/{branch}/ with research/, plans/, artifacts/, logs/) would become database tables. Key questions:
   - Schema design: documents table, tool_calls table, branches table?
   - Sync strategy without git (SQLite replication? export/import?)
@@ -44,7 +39,7 @@ These items have dependencies and should be done in order.
   - I'm also considering postgres. Some deeper thoughts around postgres vs sqlite and the full agent setup come to mind.
 - Note: The "Unified Canonical Identity System" for references (full repos.json migration) should be folded into this work - canonical identity becomes a DB column with unique index, repos.json deleted entirely.
 
-### Thoughts setup experience + v1 removal (after config system)
+### Thoughts setup experience + v1 removal (after config system - I think this is done now)
 - Re-look at the brand-new thoughts setup experience. How can we make that more streamlined?
 - Should enforce/require a primary "thoughts" repo, and have an initial setup command that populates it with everything it needs.
 - Currently initializes the old v1 config - that's not used anywhere anymore.
@@ -113,7 +108,7 @@ The core ENG-454 issues have been addressed. Remaining follow-up work:
   there should be a "no-template" option or something. For scenarios like the last turn of create_plan_final where it asks if you want to
   persist it and really all you need to say is "yes". I think the same style of functionality as claude code, where the final assistance
   response is returned back, makes sense to me. We can probably continue that trend. I think all of our "final assistant responses" are
-  already setup to be clear of what happened and such.
+  already setup to be clear of what happened and such. - I *THINK* this is done.
 - Ambient git repo detection failures should be handled consistently across tool registries (TODO(2)):
   avoid empty owner/repo fallbacks; prefer clear, fast errors and consider a shared override mechanism.
 - README.md could use a huge refresh. We'll be at the point where we can have all-inclusive instructions for setting up for any repo soon. Would be a lot better than just "Here is a list of tools" if we mentioned how they are used and what they are for and how to do the entire setup.
