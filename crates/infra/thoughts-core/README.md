@@ -1,6 +1,6 @@
 # Thoughts Tool v2
 
-A flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux, fuse-t on macOS) with a three-space architecture.
+A flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux; FUSE-T or macFUSE plus unionfs-fuse on macOS) with a three-space architecture.
 
 ## What is Thoughts Tool?
 
@@ -13,14 +13,14 @@ It automatically mounts and syncs git-backed directories, allowing you to access
 
 ## Key Features
 
-- 🗂️ **Three-Space Architecture**: Organized separation of thoughts, context, and references
-- 🔄 **Automatic Git Sync**: Keep your documentation synchronized across repositories
-- 🖥️ **Cross-Platform**: Works on Linux (mergerfs) and macOS (fuse-t)
-- 📚 **Reference Management**: Read-only mounts for external code repositories
-- 🌿 **Branch-Based Work Organization**: Automatic directory structure based on current branch
-- 🔧 **Repository Integration**: Seamlessly integrates with existing git workflows
-- 🎯 **Worktree Support**: Full support for git worktrees
-- 🚀 **Auto-Mount System**: Automatic mount management for all three spaces
+- **Three-Space Architecture**: Organized separation of thoughts, context, and references
+- **Automatic Git Sync**: Keep your documentation synchronized across repositories
+- **Cross-Platform**: Works on Linux (mergerfs) and macOS (FUSE-T or macFUSE, with `unionfs-fuse` for the union layer)
+- **Reference Management**: Read-only mounts for external code repositories
+- **Branch-Based Work Organization**: Automatic directory structure based on current branch
+- **Repository Integration**: Seamlessly integrates with existing git workflows
+- **Worktree Support**: Full support for git worktrees
+- **Auto-Mount System**: Automatic mount management for all three spaces
 
 ## Installation
 
@@ -32,7 +32,9 @@ It automatically mounts and syncs git-backed directories, allowing you to access
 - Git installed
 
 #### macOS
-- fuse-t installed (`brew install macos-fuse-t/homebrew-cask/fuse-t`)
+- FUSE-T (preferred) installed (`brew install macos-fuse-t/homebrew-cask/fuse-t`)
+- Or macFUSE installed as the alternative backend
+- `unionfs-fuse` installed for the union layer
 - Git installed
 
 ### Building from Source
@@ -221,7 +223,7 @@ The tool organizes all mounts into three distinct spaces:
 ### Platform Abstraction
 The tool automatically detects your platform and uses the appropriate mount technology:
 - **Linux**: Uses mergerfs for high-performance union filesystem
-- **macOS**: Uses fuse-t for FUSE support on Apple Silicon and Intel Macs
+- **macOS**: Uses FUSE-T or macFUSE (prefers FUSE-T when both are present), plus `unionfs-fuse` for the union layer
 
 ### Mount Resolution
 1. Uses type-safe `MountSpace` enum for mount identification
@@ -435,7 +437,7 @@ If you encounter permission errors:
 ### Platform Detection Failed
 The tool will inform you if required mount utilities are missing:
 - Linux: Install mergerfs
-- macOS: Install fuse-t via Homebrew
+- macOS: Install FUSE-T via Homebrew (preferred) or macFUSE, and make sure `unionfs-fuse` is installed too
 
 ### Git Sync Conflicts
 When sync conflicts occur:
