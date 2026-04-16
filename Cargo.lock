@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -4327,7 +4327,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -6318,7 +6318,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "agentic-tools-utils",
  "anyhow",
