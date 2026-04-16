@@ -4,6 +4,18 @@ Development tools and libraries for agentic workflows (MCP, CLIs, and Rust SDKs)
 
 OpenCode is supported as a first-class workflow in this repo. The codebase uses `just` for task automation and `xtask` for repository maintenance. AI-assisted development is facilitated through per-crate `CLAUDE.md` files containing context and commands.
 
+## Why this is different
+
+This repo treats MCP as the transport layer, not the product: it ships an opinionated harness for agentic workflows with orchestrated sessions, constrained agent roles, scoped tool access, and supporting CLIs like `thoughts`.
+
+For the short version, see [`docs/why_this_stack.md`](./docs/why_this_stack.md). For the full architecture map, see [`workflow.md`](./workflow.md).
+
+## Docs / Setup
+
+- Start here: [`docs/index.md`](./docs/index.md)
+- Setup paths: [`docs/setup/README.md`](./docs/setup/README.md)
+- Troubleshooting: [`docs/troubleshooting.md`](./docs/troubleshooting.md)
+
 ## Primary Tools
 
 ### [`agentic-mcp`](apps/agentic-mcp/)

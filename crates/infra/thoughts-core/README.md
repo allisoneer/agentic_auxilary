@@ -149,7 +149,11 @@ thoughts [COMMAND] [OPTIONS]
 
 ## Configuration
 
-Thoughts Tool uses a repository-based configuration system with automatic v1 to v2 migration support.
+Thoughts Tool uses a v2 repository configuration file at `.thoughts/config.json`.
+
+- Current runtime expects `version: "2.0"`.
+- Older v1 configs are not supported by the current runtime.
+- For user-facing setup, configuration, and troubleshooting docs, see [`../../../docs/index.md`](../../../docs/index.md).
 
 ### Configuration Structure
 
@@ -194,26 +198,6 @@ The configuration file (`.thoughts/config.json`) defines:
 }
 ```
 
-### Migration from v1
-
-**Automatic migration happens on the first write operation** (e.g., `thoughts init`, `thoughts mount add`, `thoughts references add`):
-
-- V1 configs are automatically converted to v2 format
-- A timestamped backup is created if you have non-empty mounts or rules (`.thoughts/config.v1.bak-*.json`)
-- Migration rules:
-  - Mounts with `sync: none` or paths starting with `references/` → become references
-  - Other mounts → become context mounts
-  - Rules field → dropped (preserved in backup only)
-- One-line message confirms migration with link to full guide
-
-You can also explicitly migrate with:
-```bash
-thoughts config migrate-to-v2 --dry-run  # Preview
-thoughts config migrate-to-v2 --yes      # Execute
-```
-
-For detailed migration instructions, see [MIGRATION_V1_TO_V2.md](./MIGRATION_V1_TO_V2.md).
-
 ## Architecture
 
 ### Three-Space Design
@@ -243,7 +227,7 @@ The tool automatically detects your platform and uses the appropriate mount tech
 1. Uses type-safe `MountSpace` enum for mount identification
 2. Resolves to unique paths under `.thoughts-data/`
 3. Handles automatic cloning for missing repositories
-4. Maintains mappings in `~/.thoughts/repos.json`
+4. Maintains mappings in `~/.config/agentic/repos.json` (legacy input: `~/.thoughts/repos.json`)
 
 ### Git Integration
 - Full support for worktrees (see Git Worktree Support section)
