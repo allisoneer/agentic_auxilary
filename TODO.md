@@ -31,6 +31,7 @@ These items have dependencies and should be done in order.
 ## To plan/design:
 
 ### SQLite migration for thoughts (blocked by: config system, which is mostly done now)
+
 - Current file-based structure (thoughts/{branch}/ with research/, plans/, artifacts/, logs/) would become database tables. Key questions:
   - Schema design: documents table, tool_calls table, branches table?
   - Sync strategy without git (SQLite replication? export/import?)
@@ -132,11 +133,11 @@ project. Either than or tooling for interacting with cargo cache
 in a clean/streamlined abstraction. Probably both would be ideal
 long term.
 
-- `gpt5_reasoner`: `reasoning.api_base_url` / `AGENTIC_REASONING_API_BASE_URL` exists in config but the client hardcodes OpenRouter base URL (see `crates/tools/gpt5-reasoner/src/client.rs`).
-- `thoughts`: `status --detailed` flag is accepted but currently has no effect (unused parameter in `apps/thoughts/src/commands/status.rs`).
-- `thoughts`: `sync` code comment claims "repository-aware sync" but behavior does not filter by repo (see `apps/thoughts/src/commands/sync.rs`).
-- `agentic-bin`: missing `[package.metadata.binstall]` unlike other shipped binaries (see `apps/agentic/Cargo.toml`).
-- `opencode-orchestrator-mcp`: stale "five tools" comment despite six tools being registered (see `apps/opencode-orchestrator-mcp/src/main.rs` vs registry).
+- TODO(2): `gpt5_reasoner`: `reasoning.api_base_url` / `AGENTIC_REASONING_API_BASE_URL` exists in config but the client hardcodes OpenRouter base URL (see `crates/tools/gpt5-reasoner/src/client.rs`).
+- TODO(2): `thoughts`: `status --detailed` flag is accepted but currently has no effect (unused parameter in `apps/thoughts/src/commands/status.rs`).
+- TODO(2): `thoughts`: `sync` code comment claims "repository-aware sync" but behavior does not filter by repo (see `apps/thoughts/src/commands/sync.rs`).
+- TODO(2): `agentic-bin`: missing `[package.metadata.binstall]` unlike other shipped binaries (see `apps/agentic/Cargo.toml`).
+- TODO(2): `opencode-orchestrator-mcp`: stale "five tools" comment despite six tools being registered (see `apps/opencode-orchestrator-mcp/src/main.rs` vs registry).
 
 ## To validate:
 - ENG-397: Linear MCP should return issue URL after creation. May already be implemented - needs verification.
