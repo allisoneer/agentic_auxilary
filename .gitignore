@@ -2,8 +2,7 @@
 .env
 .env.local
 
-# No more claude
-.claude/settings.json
+# Claude settings: keep the shared MCP config, ignore local overrides and generated files
 .claude/settings.local.json
 .claude/agents/**/*.md
 .claude/commands/**/*.md
@@ -41,3 +40,5 @@ Thumbs.db
 
 # Claude settings quarantine backups (auto-pruned)
 /.claude/settings.local.json.malformed.*.bak
+
+doc_updates.md

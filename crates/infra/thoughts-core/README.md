@@ -1,6 +1,6 @@
 # Thoughts Tool v2
 
-A flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux, fuse-t on macOS) with a three-space architecture.
+A flexible thought management tool that helps developers organize notes and documentation across git repositories using filesystem mounts (mergerfs on Linux; FUSE-T or macFUSE plus unionfs-fuse on macOS) with a three-space architecture.
 
 ## What is Thoughts Tool?
 
@@ -13,14 +13,14 @@ It automatically mounts and syncs git-backed directories, allowing you to access
 
 ## Key Features
 
-- 🗂️ **Three-Space Architecture**: Organized separation of thoughts, context, and references
-- 🔄 **Automatic Git Sync**: Keep your documentation synchronized across repositories
-- 🖥️ **Cross-Platform**: Works on Linux (mergerfs) and macOS (fuse-t)
-- 📚 **Reference Management**: Read-only mounts for external code repositories
-- 🌿 **Branch-Based Work Organization**: Automatic directory structure based on current branch
-- 🔧 **Repository Integration**: Seamlessly integrates with existing git workflows
-- 🎯 **Worktree Support**: Full support for git worktrees
-- 🚀 **Auto-Mount System**: Automatic mount management for all three spaces
+- **Three-Space Architecture**: Organized separation of thoughts, context, and references
+- **Automatic Git Sync**: Keep your documentation synchronized across repositories
+- **Cross-Platform**: Works on Linux (mergerfs) and macOS (FUSE-T or macFUSE, with `unionfs-fuse` for the union layer)
+- **Reference Management**: Read-only mounts for external code repositories
+- **Branch-Based Work Organization**: Automatic directory structure based on current branch
+- **Repository Integration**: Seamlessly integrates with existing git workflows
+- **Worktree Support**: Full support for git worktrees
+- **Auto-Mount System**: Automatic mount management for all three spaces
 
 ## Installation
 
@@ -32,7 +32,9 @@ It automatically mounts and syncs git-backed directories, allowing you to access
 - Git installed
 
 #### macOS
-- fuse-t installed (`brew install macos-fuse-t/homebrew-cask/fuse-t`)
+- FUSE-T (preferred) installed (`brew install macos-fuse-t/homebrew-cask/fuse-t`)
+- Or macFUSE installed as the alternative backend
+- `unionfs-fuse` installed for the union layer
 - Git installed
 
 ### Building from Source
@@ -149,7 +151,11 @@ thoughts [COMMAND] [OPTIONS]
 
 ## Configuration
 
-Thoughts Tool uses a repository-based configuration system with automatic v1 to v2 migration support.
+Thoughts Tool uses a v2 repository configuration file at `.thoughts/config.json`.
+
+- Current runtime expects `version: "2.0"`.
+- Older v1 configs are not supported by the current runtime.
+- For user-facing setup, configuration, and troubleshooting docs, see [`../../../docs/index.md`](../../../docs/index.md).
 
 ### Configuration Structure
 
@@ -194,26 +200,6 @@ The configuration file (`.thoughts/config.json`) defines:
 }
 ```
 
-### Migration from v1
-
-**Automatic migration happens on the first write operation** (e.g., `thoughts init`, `thoughts mount add`, `thoughts references add`):
-
-- V1 configs are automatically converted to v2 format
-- A timestamped backup is created if you have non-empty mounts or rules (`.thoughts/config.v1.bak-*.json`)
-- Migration rules:
-  - Mounts with `sync: none` or paths starting with `references/` → become references
-  - Other mounts → become context mounts
-  - Rules field → dropped (preserved in backup only)
-- One-line message confirms migration with link to full guide
-
-You can also explicitly migrate with:
-```bash
-thoughts config migrate-to-v2 --dry-run  # Preview
-thoughts config migrate-to-v2 --yes      # Execute
-```
-
-For detailed migration instructions, see [MIGRATION_V1_TO_V2.md](./MIGRATION_V1_TO_V2.md).
-
 ## Architecture
 
 ### Three-Space Design
@@ -237,13 +223,13 @@ The tool organizes all mounts into three distinct spaces:
 ### Platform Abstraction
 The tool automatically detects your platform and uses the appropriate mount technology:
 - **Linux**: Uses mergerfs for high-performance union filesystem
-- **macOS**: Uses fuse-t for FUSE support on Apple Silicon and Intel Macs
+- **macOS**: Uses FUSE-T or macFUSE (prefers FUSE-T when both are present), plus `unionfs-fuse` for the union layer
 
 ### Mount Resolution
 1. Uses type-safe `MountSpace` enum for mount identification
 2. Resolves to unique paths under `.thoughts-data/`
 3. Handles automatic cloning for missing repositories
-4. Maintains mappings in `~/.thoughts/repos.json`
+4. Maintains mappings in `~/.config/agentic/repos.json` (legacy input: `~/.thoughts/repos.json`)
 
 ### Git Integration
 - Full support for worktrees (see Git Worktree Support section)
@@ -451,7 +437,7 @@ If you encounter permission errors:
 ### Platform Detection Failed
 The tool will inform you if required mount utilities are missing:
 - Linux: Install mergerfs
-- macOS: Install fuse-t via Homebrew
+- macOS: Install FUSE-T via Homebrew (preferred) or macFUSE, and make sure `unionfs-fuse` is installed too
 
 ### Git Sync Conflicts
 When sync conflicts occur:

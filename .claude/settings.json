@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__orchestrator__run",
+      "mcp__orchestrator__list_sessions",
+      "mcp__orchestrator__list_commands",
+      "mcp__orchestrator__get_session_state",
+      "mcp__orchestrator__respond_permission",
+      "mcp__orchestrator__respond_question"
+    ],
+    "deny": [
+      "Bash",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Agent",
+      "Skill",
+      "EnterWorktree",
+      "ExitWorktree",
+      "CronDelete",
+      "CronList",
+      "CronCreate",
+      "ScheduleWakeup",
+      "Monitor",
+      "TaskStop",
+      "WebSearch",
+      "WebFetch",
+      "NotebookEdit",
+      "RemoteTrigger",
+      "PushNotification",
+      "ToolSearch",
+      "TaskCreate",
+      "TaskGet",
+      "TaskList",
+      "TaskOutput",
+      "TaskUpdate",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "AskUserQuestion"
+    ]
+  }
+}

@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/allisoneer/agentic_auxilary"
 description = "Agentic unified CLI for configuration management"
+publish = true
 
 [package.metadata.repo]
 role = "app"
@@ -14,6 +15,12 @@ family = "tools"
 mcp = false
 logging = false
 napi = false
+
+[package.metadata.binstall]
+pkg-url = "{repo}/releases/download/{name}-v{version}/{name}-{target}.tar.xz"
+pkg-fmt = "txz"
+bin-dir = "{name}-{target}/{bin}{binary-ext}"
+disabled-strategies = ["quick-install", "compile"]
 
 [[bin]]
 name = "agentic"
