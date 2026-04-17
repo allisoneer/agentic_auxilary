@@ -39,6 +39,8 @@ There are four binaries in the usual setup story here: `thoughts`, `agentic-mcp`
 
 ### `cargo install` works for all four
 
+These commands install from the current repo checkout; published crates and release artifacts can lag behind it.
+
 ```bash
 cargo install --path apps/thoughts
 cargo install --path apps/agentic-mcp
@@ -54,7 +56,7 @@ cargo binstall agentic-mcp
 cargo binstall opencode-orchestrator-mcp
 ```
 
-`agentic-bin` does not currently publish binstall metadata, so use `cargo install` or a release artifact for that one.
+`agentic-bin` binstall support is release-dependent: it will work once a released `agentic-bin` version includes binstall metadata. Until then, use `cargo install --path apps/agentic` or a GitHub Release artifact.
 
 ### GitHub Releases are also valid
 
