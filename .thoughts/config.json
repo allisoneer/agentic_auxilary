@@ -34,6 +34,11 @@
       "subpath": "projects/claudecode_rs",
       "mount_path": "claudecode_rs",
       "sync": "auto"
+    },
+    {
+      "remote": "git@github.com:allisoneer/personal_thoughts.git",
+      "mount_path": "personal_thoughts",
+      "sync": "auto"
     }
   ],
   "references": [
@@ -272,16 +277,6 @@
     },
     {
       "remote": "https://github.com/anomalyco/opencode",
-      "description": "Pinned upstream OpenCode reference for timeout behavior comparison against local orchestrator expectations.",
-      "ref": "refs/tags/v1.3.3"
-    },
-    {
-      "remote": "https://github.com/anomalyco/opencode",
-      "description": "Retry pinned upstream OpenCode v1.3.0 reference for timeout behavior comparison.",
-      "ref": "refs/tags/v1.3.0"
-    },
-    {
-      "remote": "https://github.com/sst/opencode",
       "description": "Latest upstream OpenCode dev branch for spotting post-release behavioral changes.",
       "ref": "refs/heads/dev"
     },
@@ -295,11 +290,6 @@
     },
     {
       "remote": "https://github.com/anomalyco/opencode",
-      "description": "OpenCode v1.3.13 server implementation to compare against SDK",
-      "ref": "refs/tags/v1.3.13"
-    },
-    {
-      "remote": "https://github.com/sst/opencode",
       "description": "OpenCode v1.3.17 for SDK compatibility analysis",
       "ref": "refs/tags/v1.3.17"
     },
