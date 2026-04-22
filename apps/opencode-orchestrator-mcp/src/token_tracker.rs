@@ -211,7 +211,6 @@ mod tests {
                         completed: None,
                     },
                     agent: None,
-                    variant: None,
                     format: None,
                     model: None,
                     system: None,

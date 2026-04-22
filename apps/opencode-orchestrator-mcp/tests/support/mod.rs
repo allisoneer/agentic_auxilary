@@ -141,7 +141,7 @@ impl Respond for SequenceResponder {
 }
 
 // ============================================================================
-// JSON Fixtures matching opencode-rs field names (camelCase)
+// JSON Fixtures matching upstream v1.14.19 `...ID` wire casing.
 // ============================================================================
 
 /// Create a session fixture with the given session ID.
@@ -231,7 +231,7 @@ pub fn question_fixture(
 ) -> serde_json::Value {
     serde_json::json!({
         "id": id,
-        "sessionId": session_id,
+        "sessionID": session_id,
         "questions": questions,
         "tool": null,
     })
@@ -243,13 +243,13 @@ pub fn question_fixture(
 /// If `None`, only includes a user message (simulating stale/not-yet-persisted state).
 pub fn messages_fixture(session_id: &str, assistant_text: Option<&str>) -> serde_json::Value {
     let mut msgs = vec![serde_json::json!({
-        "info": {"id": "u1", "sessionId": session_id, "role": "user", "time": {"created": 1}},
+        "info": {"id": "u1", "sessionID": session_id, "role": "user", "time": {"created": 1}},
         "parts": []
     })];
 
     if let Some(text) = assistant_text {
         msgs.push(serde_json::json!({
-            "info": {"id": "a1", "sessionId": session_id, "role": "assistant", "time": {"created": 2}},
+            "info": {"id": "a1", "sessionID": session_id, "role": "assistant", "time": {"created": 2}},
             "parts": [{"type": "text", "text": text}]
         }));
     }
@@ -275,7 +275,7 @@ pub fn message_fixture(
     serde_json::json!({
         "info": {
             "id": message_id,
-            "sessionId": session_id,
+            "sessionID": session_id,
             "role": role,
             "time": time,
         },
