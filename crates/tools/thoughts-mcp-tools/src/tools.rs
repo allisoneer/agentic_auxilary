@@ -57,7 +57,6 @@ fn map_anyhow_to_tool_error(e: anyhow::Error) -> ToolError {
 /// Input for the write_document tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct WriteDocumentInput {
-    /// Document type categories for thoughts workspace.
     pub doc_type: DocumentType,
     /// Filename for the document.
     pub filename: String,
