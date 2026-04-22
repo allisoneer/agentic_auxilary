@@ -2,9 +2,8 @@
 //!
 //! Endpoints for pseudo-terminal management.
 //!
-//! Note: Unit tests are intentionally skipped for this module because the
-//! `GET /pty/{id}/connect` endpoint requires WebSocket support, which is
-//! out of scope for this SDK version.
+//! WebSocket PTY streaming is intentionally out of scope for this SDK version,
+//! so `GET /pty/{id}/connect` is not exposed here.
 
 use crate::error::Result;
 use crate::http::HttpClient;
@@ -82,48 +81,5 @@ impl PtyApi {
         self.http
             .request_json::<bool>(Method::DELETE, &format!("/pty/{id}"), None)
             .await
-    }
-
-    /// Connect a PTY stream.
-    pub async fn connect(&self, id: &str) -> Result<bool> {
-        let id = encode_path_segment(id);
-        self.http
-            .request_json(Method::GET, &format!("/pty/{id}/connect"), None)
-            .await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::http::HttpConfig;
-    use std::time::Duration;
-    use wiremock::Mock;
-    use wiremock::MockServer;
-    use wiremock::ResponseTemplate;
-    use wiremock::matchers::method;
-    use wiremock::matchers::path;
-
-    #[tokio::test]
-    async fn test_connect() {
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/pty/pty-1/connect"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(true))
-            .mount(&mock_server)
-            .await;
-
-        let http = HttpClient::new(HttpConfig {
-            base_url: mock_server.uri(),
-            directory: None,
-            workspace: None,
-            timeout: Duration::from_secs(30),
-        })
-        .unwrap();
-
-        let pty = PtyApi::new(http);
-        let connected = pty.connect("pty-1").await.unwrap();
-        assert!(connected);
     }
 }

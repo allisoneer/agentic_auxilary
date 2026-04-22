@@ -1,9 +1,10 @@
 use anyhow::Context;
 use anyhow::anyhow;
+pub use opencode_rs::version::PINNED_OPENCODE_VERSION;
+pub use opencode_rs::version::validate_exact_version;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub const PINNED_OPENCODE_VERSION: &str = "1.14.19";
 pub const OPENCODE_BINARY_ENV: &str = "OPENCODE_BINARY";
 /// Environment variable for extra arguments between binary and `serve` command.
 ///
@@ -28,26 +29,9 @@ pub struct LauncherConfig {
     pub launcher_args: Vec<String>,
 }
 
+#[cfg(test)]
 pub fn normalize_version(raw: &str) -> &str {
-    let trimmed = raw.trim();
-    trimmed.strip_prefix('v').unwrap_or(trimmed)
-}
-
-pub fn validate_exact_version(actual: Option<&str>) -> anyhow::Result<()> {
-    let Some(actual) = actual else {
-        return Err(anyhow!(
-            "OpenCode /global/health did not return a version; expected {PINNED_OPENCODE_VERSION}"
-        ));
-    };
-
-    let normalized = normalize_version(actual);
-    if normalized != PINNED_OPENCODE_VERSION {
-        return Err(anyhow!(
-            "OpenCode version mismatch: expected {PINNED_OPENCODE_VERSION} but got {actual}"
-        ));
-    }
-
-    Ok(())
+    opencode_rs::version::normalize_version(raw)
 }
 
 pub fn default_pinned_binary_path(base_dir: &Path) -> PathBuf {

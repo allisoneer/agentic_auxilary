@@ -153,15 +153,6 @@ pub struct UpdateProjectRequest {
     pub settings: Option<ProjectSettings>,
 }
 
-/// Request to initialize a git repository.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitInitRequest {
-    /// Optional initial branch name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_branch: Option<String>,
-}
-
 /// Response from git init operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

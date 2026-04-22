@@ -400,32 +400,43 @@ async fn test_session_init_required_body() {
                 variant: None,
             },
         )
-        .await;
+        .await
+        .expect("Failed to create a message for session.init preconditions");
 
     let providers = client.providers().list().await.expect("providers list");
-    if let Some(provider) = providers.all.first()
-        && let Some((model_id, _)) = provider.models.iter().next()
-    {
-        let messages = client
-            .messages()
-            .list(&session.id)
-            .await
-            .expect("messages list");
-        if let Some(message) = messages.first() {
-            let ok = client
-                .sessions()
-                .init(
-                    &session.id,
-                    &SessionInitRequest {
-                        model_id: model_id.clone(),
-                        provider_id: provider.id.clone(),
-                        message_id: message.id().to_string(),
-                    },
-                )
-                .await;
-            println!("session.init result: {ok:?}");
-        }
-    }
+    let provider = providers
+        .all
+        .first()
+        .expect("session.init test requires at least one provider");
+    let (model_id, _) = provider
+        .models
+        .iter()
+        .next()
+        .expect("session.init test requires at least one provider model");
+
+    let messages = client
+        .messages()
+        .list(&session.id)
+        .await
+        .expect("messages list");
+    let message = messages
+        .first()
+        .expect("session.init test requires the prompt to create a message");
+
+    let ok = client
+        .sessions()
+        .init(
+            &session.id,
+            &SessionInitRequest {
+                model_id: model_id.clone(),
+                provider_id: provider.id.clone(),
+                message_id: message.id().to_string(),
+            },
+        )
+        .await
+        .expect("session.init should succeed");
+
+    assert!(ok, "session.init should return true");
 
     let _ = client.sessions().delete(&session.id).await;
 }

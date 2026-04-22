@@ -5,6 +5,7 @@
 use super::create_test_client;
 use super::should_run;
 use opencode_rs::types::Event;
+use opencode_rs::types::GlobalEventPayload;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -243,7 +244,15 @@ async fn test_sse_global_event_envelope() {
 
     let event = timeout(Duration::from_secs(5), subscription.recv())
         .await
-        .expect("Timeout waiting for global event");
+        .expect("Timeout waiting for global event")
+        .expect("Global SSE stream closed before first event");
 
-    println!("global event: {event:?}");
+    let GlobalEventPayload::Event(event) = &event.payload else {
+        panic!("Expected bus event payload, got: {event:?}");
+    };
+
+    assert!(
+        event.is_connected(),
+        "First global event should be server.connected, got: {event:?}"
+    );
 }

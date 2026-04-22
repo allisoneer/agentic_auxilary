@@ -87,11 +87,10 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     ("GET", "/question"),
     ("POST", "/question/{id}/reply"),
     ("POST", "/question/{id}/reject"),
-    // pty.rs (excluding WebSocket connect)
+    // pty.rs
     ("GET", "/pty"),
     ("POST", "/pty"),
     ("GET", "/pty/{id}"),
-    ("GET", "/pty/{id}/connect"),
     ("PUT", "/pty/{id}"),
     ("DELETE", "/pty/{id}"),
     // files.rs
@@ -139,8 +138,6 @@ const SKIP_ENDPOINTS: &[(&str, &str)] = &[
     ("PATCH", "/global/config"),
     ("POST", "/global/upgrade"),
     // TUI-specific endpoints
-    ("GET", "/tui/env"),
-    ("POST", "/tui/command"),
     ("GET", "/tui/palette"),
     ("POST", "/tui/search"),
     ("POST", "/tui/clear"),
