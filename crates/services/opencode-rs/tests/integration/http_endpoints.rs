@@ -9,6 +9,8 @@ use super::create_test_client;
 use super::should_run;
 use opencode_rs::types::message::PromptPart;
 use opencode_rs::types::message::PromptRequest;
+use opencode_rs::types::message::ShellRequest;
+use opencode_rs::types::session::SessionInitRequest;
 
 /// Test session CRUD with typed responses.
 #[tokio::test]
@@ -361,6 +363,121 @@ async fn test_message_parts_typed() {
     }
 
     // Clean up
+    let _ = client.sessions().delete(&session.id).await;
+}
+
+/// Test session init with required body fields.
+#[tokio::test]
+#[ignore = "requires: opencode serve"]
+async fn test_session_init_required_body() {
+    if !should_run() {
+        return;
+    }
+
+    let client = create_test_client().await;
+    let session = client
+        .sessions()
+        .create(&Default::default())
+        .await
+        .expect("Failed to create session");
+
+    let _ = client
+        .messages()
+        .prompt(
+            &session.id,
+            &PromptRequest {
+                parts: vec![PromptPart::Text {
+                    text: "Initialize this session".to_string(),
+                    synthetic: None,
+                    ignored: None,
+                    metadata: None,
+                }],
+                message_id: None,
+                model: None,
+                agent: None,
+                no_reply: Some(true),
+                system: None,
+                variant: None,
+            },
+        )
+        .await;
+
+    let providers = client.providers().list().await.expect("providers list");
+    if let Some(provider) = providers.all.first()
+        && let Some((model_id, _)) = provider.models.iter().next()
+    {
+        let messages = client
+            .messages()
+            .list(&session.id)
+            .await
+            .expect("messages list");
+        if let Some(message) = messages.first() {
+            let ok = client
+                .sessions()
+                .init(
+                    &session.id,
+                    &SessionInitRequest {
+                        model_id: model_id.clone(),
+                        provider_id: provider.id.clone(),
+                        message_id: message.id().to_string(),
+                    },
+                )
+                .await;
+            println!("session.init result: {ok:?}");
+        }
+    }
+
+    let _ = client.sessions().delete(&session.id).await;
+}
+
+/// Test session diff patch schema.
+#[tokio::test]
+#[ignore = "requires: opencode serve"]
+async fn test_session_diff_patch_typed() {
+    if !should_run() {
+        return;
+    }
+
+    let client = create_test_client().await;
+    let session = client
+        .sessions()
+        .create(&Default::default())
+        .await
+        .expect("Failed to create session");
+
+    let diff = client.sessions().diff(&session.id).await;
+    println!("session.diff result: {diff:?}");
+
+    let _ = client.sessions().delete(&session.id).await;
+}
+
+/// Test shell response shape.
+#[tokio::test]
+#[ignore = "requires: opencode serve"]
+async fn test_shell_returns_info_and_parts() {
+    if !should_run() {
+        return;
+    }
+
+    let client = create_test_client().await;
+    let session = client
+        .sessions()
+        .create(&Default::default())
+        .await
+        .expect("Failed to create session");
+
+    let shell = client
+        .messages()
+        .shell(
+            &session.id,
+            &ShellRequest {
+                command: "echo hello".to_string(),
+                model: None,
+            },
+        )
+        .await;
+    println!("shell result: {shell:?}");
+
     let _ = client.sessions().delete(&session.id).await;
 }
 

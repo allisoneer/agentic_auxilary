@@ -5,12 +5,14 @@
 use crate::error::Result;
 use crate::http::HttpClient;
 use crate::http::encode_path_segment;
+use crate::types::provider::OAuthAuthorizeRequest;
 use crate::types::provider::OAuthAuthorizeResponse;
 use crate::types::provider::OAuthCallbackRequest;
-use crate::types::provider::ProviderAuth;
+use crate::types::provider::ProviderAuthMethod;
 use crate::types::provider::ProviderListResponse;
 use crate::types::provider::SetAuthRequest;
 use reqwest::Method;
+use std::collections::HashMap;
 
 /// Providers API client.
 #[derive(Clone)]
@@ -41,7 +43,7 @@ impl ProvidersApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn auth(&self) -> Result<Vec<ProviderAuth>> {
+    pub async fn auth(&self) -> Result<HashMap<String, Vec<ProviderAuthMethod>>> {
         self.http
             .request_json(Method::GET, "/provider/auth", None)
             .await
@@ -52,13 +54,18 @@ impl ProvidersApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn oauth_authorize(&self, provider_id: &str) -> Result<OAuthAuthorizeResponse> {
+    pub async fn oauth_authorize(
+        &self,
+        provider_id: &str,
+        req: &OAuthAuthorizeRequest,
+    ) -> Result<Option<OAuthAuthorizeResponse>> {
         let pid = encode_path_segment(provider_id);
+        let body = serde_json::to_value(req)?;
         self.http
             .request_json(
                 Method::POST,
                 &format!("/provider/{pid}/oauth/authorize"),
-                Some(serde_json::json!({})),
+                Some(body),
             )
             .await
     }
@@ -153,6 +160,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -170,19 +178,18 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/provider/auth"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                {
-                    "providerId": "anthropic",
-                    "method": {"type": "api-key"},
-                    "configured": true
-                }
-            ])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "anthropic": [
+                    {"type": "api-key"}
+                ]
+            })))
             .mount(&mock_server)
             .await;
 
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -199,7 +206,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/provider/openai/oauth/authorize"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "url": "https://oauth.openai.com/authorize?client_id=..."
+                "url": "https://oauth.openai.com/authorize?client_id=...",
+                "method": "oauth"
             })))
             .mount(&mock_server)
             .await;
@@ -207,12 +215,21 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let providers = ProvidersApi::new(http);
-        let result = providers.oauth_authorize("openai").await;
+        let result = providers
+            .oauth_authorize(
+                "openai",
+                &OAuthAuthorizeRequest {
+                    method: "oauth".to_string(),
+                    inputs: None,
+                },
+            )
+            .await;
         assert!(result.is_ok());
     }
 
@@ -229,6 +246,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -238,8 +256,8 @@ mod tests {
             .oauth_callback(
                 "openai",
                 &OAuthCallbackRequest {
+                    method: "oauth".to_string(),
                     code: "auth_code_123".to_string(),
-                    state: None,
                 },
             )
             .await;
@@ -259,6 +277,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -288,6 +307,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -313,12 +333,21 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let providers = ProvidersApi::new(http);
-        let result = providers.oauth_authorize("unknown").await;
+        let result = providers
+            .oauth_authorize(
+                "unknown",
+                &OAuthAuthorizeRequest {
+                    method: "oauth".to_string(),
+                    inputs: None,
+                },
+            )
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().is_not_found());
     }

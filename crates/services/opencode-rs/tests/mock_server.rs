@@ -162,16 +162,16 @@ async fn session_lifecycle() {
     client.sessions().delete(&session.id).await.unwrap();
 }
 
-/// Test x-opencode-directory header is sent.
+/// Test directory query parameter is sent.
 #[tokio::test]
-async fn directory_header_sent() {
-    use wiremock::matchers::header;
+async fn directory_query_sent() {
+    use wiremock::matchers::query_param;
 
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
         .and(path("/session"))
-        .and(header("x-opencode-directory", "/my/project"))
+        .and(query_param("directory", "/my/project"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&server)
         .await;

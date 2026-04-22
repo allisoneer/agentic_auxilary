@@ -80,7 +80,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
                     "id": "req-123",
-                    "sessionId": "sess-456",
+                    "sessionID": "sess-456",
                     "questions": [
                         {"question": "Continue?", "header": "Confirm"}
                     ]
@@ -92,6 +92,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -115,6 +116,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -140,6 +142,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();

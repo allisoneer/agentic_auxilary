@@ -6,7 +6,6 @@ use crate::error::Result;
 use crate::http::HttpClient;
 use crate::types::config::Config;
 use crate::types::config::ConfigProviders;
-use crate::types::config::UpdateConfigRequest;
 use reqwest::Method;
 
 /// Config API client.
@@ -35,7 +34,7 @@ impl ConfigApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn update(&self, req: &UpdateConfigRequest) -> Result<Config> {
+    pub async fn update(&self, req: &Config) -> Result<Config> {
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(Method::PATCH, "/config", Some(body))
@@ -81,6 +80,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -106,16 +106,20 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let config = ConfigApi::new(http);
         let result = config
-            .update(&UpdateConfigRequest {
-                provider: Some("openai".to_string()),
-                model: Some("gpt-4".to_string()),
-                ..Default::default()
+            .update(&Config {
+                provider: Some(serde_json::json!("openai")),
+                model: Some(serde_json::json!("gpt-4")),
+                agent: None,
+                auto_compact: None,
+                mcp: None,
+                extra: serde_json::Value::Null,
             })
             .await;
         assert!(result.is_ok());
@@ -139,6 +143,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -164,15 +169,20 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let config = ConfigApi::new(http);
         let result = config
-            .update(&UpdateConfigRequest {
-                provider: Some("invalid".to_string()),
-                ..Default::default()
+            .update(&Config {
+                provider: Some(serde_json::json!("invalid")),
+                model: None,
+                agent: None,
+                auto_compact: None,
+                mcp: None,
+                extra: serde_json::Value::Null,
             })
             .await;
         assert!(result.is_err());

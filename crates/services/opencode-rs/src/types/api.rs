@@ -15,7 +15,7 @@ pub struct PromptResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     /// Message ID created.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "messageID")]
     pub message_id: Option<String>,
     /// Additional fields.
     #[serde(flatten)]
@@ -35,7 +35,7 @@ pub struct CommandResponse {
 }
 
 /// Response from shell endpoint.
-pub type ShellResponse = CommandResponse;
+pub type ShellResponse = crate::types::message::MessageWithParts;
 
 // ==================== Find API Responses ====================
 
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_prompt_response_deserialize() {
-        let json = r#"{"status":"ok","messageId":"msg-123"}"#;
+        let json = r#"{"status":"ok","messageID":"msg-123"}"#;
         let resp: PromptResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.status, Some("ok".to_string()));
         assert_eq!(resp.message_id, Some("msg-123".to_string()));
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_prompt_response_with_extra() {
-        let json = r#"{"status":"ok","messageId":"msg-123","futureField":"value"}"#;
+        let json = r#"{"status":"ok","messageID":"msg-123","futureField":"value"}"#;
         let resp: PromptResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.extra.get("futureField").unwrap(), "value");
     }
