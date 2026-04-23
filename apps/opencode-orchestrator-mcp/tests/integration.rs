@@ -447,7 +447,7 @@ async fn permission_reject_returns_none_with_warning() {
 
     let tmp_file = unique_tmp_path("orch-reject-test");
     let prompt = format!(
-        "Create a file at '{}' containing 'test'. Use write_file tool.",
+        "Create a file at '{}' with the exact content 'test'. Use the write tool.",
         tmp_file.display()
     );
 
