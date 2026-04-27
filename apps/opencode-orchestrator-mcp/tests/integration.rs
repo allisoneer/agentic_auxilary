@@ -75,6 +75,26 @@ fn unique_tmp_path(prefix: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{prefix}-{nanos}.txt"))
 }
 
+fn load_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()))
+}
+
+fn write_tool_prompt(file_path: &Path, content: &str) -> String {
+    format!(
+        "You MUST call the `write` tool exactly once.\n\
+         Tool arguments:\n\
+         - filePath: \"{path}\"\n\
+         - content: \"{content}\"\n\
+         Do not use any other tool. Do not include any other text.",
+        path = file_path.display(),
+        content = content
+    )
+}
+
 #[tokio::test]
 #[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
 async fn unknown_command_errors_fast() {
@@ -555,8 +575,7 @@ async fn live_question_tool_infrastructure() {
     // Load test config fixture
     let config_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/opencode.config.json");
-    let config_json =
-        std::fs::read_to_string(&config_path).expect("Failed to read test config fixture");
+    let config_json = load_fixture("opencode.config.json");
 
     tracing::info!("Loaded config from {}", config_path.display());
 
