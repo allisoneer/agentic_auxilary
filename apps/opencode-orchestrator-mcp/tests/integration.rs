@@ -75,6 +75,35 @@ fn unique_tmp_path(prefix: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{prefix}-{nanos}.txt"))
 }
 
+const PERMISSION_CONFIG_FIXTURE: &str = "opencode.permission.config.json";
+
+// NOTE: This fixture pins a concrete model ID (currently anthropic/claude-sonnet-4-5).
+// OpenCode v1.14.19 resolves model availability dynamically at runtime. If this pin is invalid
+// or unavailable, the server should fail loudly (no silent fallback). If needed, update the
+// fixture model string to another concrete (non-*-latest) model ID.
+struct TempFileGuard {
+    path: std::path::PathBuf,
+}
+
+impl TempFileGuard {
+    fn new(prefix: &str, contents: &str) -> Self {
+        let path = unique_tmp_path(prefix);
+        std::fs::write(&path, contents)
+            .unwrap_or_else(|e| panic!("failed to write temp file {}: {e}", path.display()));
+        Self { path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
 fn load_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
@@ -83,15 +112,13 @@ fn load_fixture(name: &str) -> String {
         .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()))
 }
 
-fn write_tool_prompt(file_path: &Path, content: &str) -> String {
+fn external_read_prompt(file_path: &Path) -> String {
     format!(
-        "You MUST call the `write` tool exactly once.\n\
-         Tool arguments:\n\
-         - filePath: \"{path}\"\n\
-         - content: \"{content}\"\n\
-         Do not use any other tool. Do not include any other text.",
+        "There is a text file at \"{path}\".\n\
+         The file contains a unique token.\n\
+         Use the `read` tool to read it, then reply with the exact file contents and nothing else.\n\
+         Do not guess the contents.",
         path = file_path.display(),
-        content = content
     )
 }
 
@@ -266,7 +293,7 @@ async fn permission_request_returns_status() {
     let tmp_file = unique_tmp_path("orch-perm-test");
 
     // Prompt that should trigger a file.write permission request
-    let prompt = write_tool_prompt(&tmp_file, "test");
+    let prompt = external_read_prompt(&tmp_file);
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
@@ -300,7 +327,6 @@ async fn permission_request_returns_status() {
         result.permission_request_id.is_some(),
         "permission_request_id should be set when status is PermissionRequired"
     );
-
     // Log for debugging
     tracing::info!(
         permission_id = ?result.permission_request_id,
@@ -309,8 +335,6 @@ async fn permission_request_returns_status() {
         "received permission request"
     );
 
-    // Cleanup - best effort, don't fail test if cleanup fails
-    let _ = std::fs::remove_file(&tmp_file);
     cleanup_session(&server, &session_id).await;
 }
 
@@ -338,7 +362,7 @@ async fn permission_response_resumes_and_completes() {
     let session_id = create_session(&server).await;
 
     let tmp_file = unique_tmp_path("orch-perm-flow");
-    let prompt = write_tool_prompt(&tmp_file, "hello");
+    let prompt = external_read_prompt(&tmp_file);
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -365,7 +389,6 @@ async fn permission_response_resumes_and_completes() {
         "expected PermissionRequired, got {:?}",
         result1.status
     );
-
     tracing::info!(
         permission_id = ?result1.permission_request_id,
         "received permission request, responding with Once"
@@ -436,14 +459,6 @@ async fn permission_response_resumes_and_completes() {
         }
     }
 
-    // Verify the file was created (optional - confirms the work was done)
-    if tmp_file.exists() {
-        let contents = std::fs::read_to_string(&tmp_file).unwrap_or_default();
-        tracing::info!(file = %tmp_file.display(), contents = %contents, "file created");
-    }
-
-    // Cleanup
-    let _ = std::fs::remove_file(&tmp_file);
     cleanup_session(&server, &session_id).await;
 }
 
@@ -463,7 +478,7 @@ async fn permission_reject_returns_none_with_warning() {
     let session_id = create_session(&server).await;
 
     let tmp_file = unique_tmp_path("orch-reject-test");
-    let prompt = write_tool_prompt(&tmp_file, "test");
+    let prompt = external_read_prompt(&tmp_file);
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -490,7 +505,6 @@ async fn permission_reject_returns_none_with_warning() {
         "expected PermissionRequired, got {:?}",
         result.status
     );
-
     // Step 2: Reject the permission
     let reject_result = timeout(
         Duration::from_secs(60),
@@ -533,8 +547,6 @@ async fn permission_reject_returns_none_with_warning() {
         "rejection completed with expected warnings"
     );
 
-    // Cleanup
-    let _ = std::fs::remove_file(&tmp_file);
     cleanup_session(&server, &session_id).await;
 }
 
