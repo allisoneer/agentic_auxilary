@@ -33,7 +33,7 @@ jobs:
           cache: true
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install tools
         uses: taiki-e/install-action@v2
@@ -74,7 +74,7 @@ jobs:
           tool: nextest@0.9.72,just
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       # TODO(3): Use `just test` instead of calling nextest directly, so profile
       # selection is driven by the justfile. Requires splitting mcp-test into
@@ -226,7 +226,7 @@ jobs:
           tool: nextest@0.9.72,just
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Run network-enabled tests (nextest)
         env:
