@@ -1,0 +1,25 @@
+apps/opencode-orchestrator-mcp/tests/fixtures/opencode.permission.config.json
+  816f01195b8308d0 1-10
+apps/opencode-orchestrator-mcp/tests/integration.rs
+  816f01195b8308d0 78-97,578
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "aa69d534e73a9ea7b4a53bf0f417f04d813730e0",
+  "prompts": {
+    "816f01195b8308d0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2305388afffeD1U3Kn71UdZCni",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 55,
+      "total_deletions": 26,
+      "accepted_lines": 46,
+      "overriden_lines": 0
+    }
+  }
+}
