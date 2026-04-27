@@ -103,7 +103,8 @@ async fn unknown_command_errors_fast() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture("opencode.permission.config.json");
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
@@ -265,10 +266,7 @@ async fn permission_request_returns_status() {
     let tmp_file = unique_tmp_path("orch-perm-test");
 
     // Prompt that should trigger a file.write permission request
-    let prompt = format!(
-        "Create a file at '{}' with the exact content 'test'. Use the write_file tool.",
-        tmp_file.display()
-    );
+    let prompt = write_tool_prompt(&tmp_file, "test");
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
@@ -335,14 +333,12 @@ async fn permission_response_resumes_and_completes() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture("opencode.permission.config.json");
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
     let tmp_file = unique_tmp_path("orch-perm-flow");
-    let prompt = format!(
-        "Create a file at '{}' containing exactly 'hello'. Use write_file tool.",
-        tmp_file.display()
-    );
+    let prompt = write_tool_prompt(&tmp_file, "hello");
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -462,14 +458,12 @@ async fn permission_reject_returns_none_with_warning() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture("opencode.permission.config.json");
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
     let tmp_file = unique_tmp_path("orch-reject-test");
-    let prompt = format!(
-        "Create a file at '{}' with the exact content 'test'. Use the write tool.",
-        tmp_file.display()
-    );
+    let prompt = write_tool_prompt(&tmp_file, "test");
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
