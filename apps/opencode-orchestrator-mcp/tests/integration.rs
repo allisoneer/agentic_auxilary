@@ -272,10 +272,10 @@ async fn session_resumption_works() {
     assert_eq!(result2.session_id, session_id);
 }
 
-/// Test that a prompt requiring file write triggers a permission request.
+/// Test that reading an external file triggers a permission request.
 ///
 /// This test verifies:
-/// 1. Running a prompt that writes to /tmp triggers `PermissionRequired` status
+/// 1. Running a prompt that reads from /tmp triggers `PermissionRequired` status
 /// 2. The `permission_request_id` is populated
 /// 3. The response comes back within a reasonable timeout (not hanging)
 #[tokio::test]
@@ -286,14 +286,19 @@ async fn permission_request_returns_status() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture(PERMISSION_CONFIG_FIXTURE);
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
-    // Generate unique temp file path to avoid conflicts
-    let tmp_file = unique_tmp_path("orch-perm-test");
-
-    // Prompt that should trigger a file.write permission request
-    let prompt = external_read_prompt(&tmp_file);
+    let token = format!(
+        "opencode-orchestrator-mcp permission token: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
+    );
+    let tmp_file = TempFileGuard::new("orch-perm-test", &token);
+    let prompt = external_read_prompt(tmp_file.path());
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
@@ -327,6 +332,11 @@ async fn permission_request_returns_status() {
         result.permission_request_id.is_some(),
         "permission_request_id should be set when status is PermissionRequired"
     );
+    assert_eq!(
+        result.permission_type.as_deref(),
+        Some("external_directory")
+    );
+
     // Log for debugging
     tracing::info!(
         permission_id = ?result.permission_request_id,
@@ -357,12 +367,19 @@ async fn permission_response_resumes_and_completes() {
     }
     init_tracing();
 
-    let config_json = load_fixture("opencode.permission.config.json");
+    let config_json = load_fixture(PERMISSION_CONFIG_FIXTURE);
     let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
-    let tmp_file = unique_tmp_path("orch-perm-flow");
-    let prompt = external_read_prompt(&tmp_file);
+    let token = format!(
+        "opencode-orchestrator-mcp permission flow token: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
+    );
+    let tmp_file = TempFileGuard::new("orch-perm-flow", &token);
+    let prompt = external_read_prompt(tmp_file.path());
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -389,6 +406,11 @@ async fn permission_response_resumes_and_completes() {
         "expected PermissionRequired, got {:?}",
         result1.status
     );
+    assert_eq!(
+        result1.permission_type.as_deref(),
+        Some("external_directory")
+    );
+
     tracing::info!(
         permission_id = ?result1.permission_request_id,
         "received permission request, responding with Once"
@@ -398,7 +420,7 @@ async fn permission_response_resumes_and_completes() {
     // This is where Bug 1 causes hangs - the race between permission reply
     // and SSE subscription can cause SessionIdle to be missed.
     //
-    // We use a loop to handle potential multiple permissions (e.g., directory + file)
+    // We use a loop to handle potential multiple permissions if the runtime config changes.
     let current_session_id = session_id.clone();
     let mut attempts = 0;
 
@@ -437,8 +459,8 @@ async fn permission_response_resumes_and_completes() {
                     .as_deref()
                     .expect("expected response after permission approval");
                 assert!(
-                    !resp.trim().is_empty(),
-                    "response should not be empty after permission approval"
+                    resp.contains(&token),
+                    "expected response to include token, got {resp:?}"
                 );
                 break;
             }
@@ -473,12 +495,19 @@ async fn permission_reject_returns_none_with_warning() {
     }
     init_tracing();
 
-    let config_json = load_fixture("opencode.permission.config.json");
+    let config_json = load_fixture(PERMISSION_CONFIG_FIXTURE);
     let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
-    let tmp_file = unique_tmp_path("orch-reject-test");
-    let prompt = external_read_prompt(&tmp_file);
+    let token = format!(
+        "opencode-orchestrator-mcp permission reject token: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
+    );
+    let tmp_file = TempFileGuard::new("orch-reject-test", &token);
+    let prompt = external_read_prompt(tmp_file.path());
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -505,6 +534,11 @@ async fn permission_reject_returns_none_with_warning() {
         "expected PermissionRequired, got {:?}",
         result.status
     );
+    assert_eq!(
+        result.permission_type.as_deref(),
+        Some("external_directory")
+    );
+
     // Step 2: Reject the permission
     let reject_result = timeout(
         Duration::from_secs(60),
