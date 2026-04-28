@@ -36,9 +36,13 @@ impl FilesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn read(&self, path: &str) -> Result<FileContent> {
-        let encoded = urlencoding::encode(path);
         self.http
-            .request_json(Method::GET, &format!("/file/content?path={encoded}"), None)
+            .request_json_with_query(
+                Method::GET,
+                "/file/content",
+                &[("path", path.to_string())],
+                None,
+            )
             .await
     }
 
@@ -82,6 +86,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -111,6 +116,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -136,6 +142,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -162,6 +169,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();

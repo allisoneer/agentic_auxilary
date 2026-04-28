@@ -25,9 +25,13 @@ impl FindApi {
     ///
     /// Returns an error if the request fails.
     pub async fn text(&self, pattern: &str) -> Result<FindResponse> {
-        let encoded = urlencoding::encode(pattern);
         self.http
-            .request_json(Method::GET, &format!("/find?pattern={encoded}"), None)
+            .request_json_with_query(
+                Method::GET,
+                "/find",
+                &[("pattern", pattern.to_string())],
+                None,
+            )
             .await
     }
 
@@ -37,9 +41,13 @@ impl FindApi {
     ///
     /// Returns an error if the request fails.
     pub async fn files(&self, query: &str) -> Result<FindResponse> {
-        let encoded = urlencoding::encode(query);
         self.http
-            .request_json(Method::GET, &format!("/find/file?query={encoded}"), None)
+            .request_json_with_query(
+                Method::GET,
+                "/find/file",
+                &[("query", query.to_string())],
+                None,
+            )
             .await
     }
 
@@ -49,9 +57,13 @@ impl FindApi {
     ///
     /// Returns an error if the request fails.
     pub async fn symbols(&self, query: &str) -> Result<FindResponse> {
-        let encoded = urlencoding::encode(query);
         self.http
-            .request_json(Method::GET, &format!("/find/symbol?query={encoded}"), None)
+            .request_json_with_query(
+                Method::GET,
+                "/find/symbol",
+                &[("query", query.to_string())],
+                None,
+            )
             .await
     }
 }
@@ -86,6 +98,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -113,6 +126,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -138,6 +152,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -163,6 +178,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();

@@ -5,7 +5,6 @@
 use crate::error::Result;
 use crate::http::HttpClient;
 use crate::http::encode_path_segment;
-use crate::types::project::GitInitRequest;
 use crate::types::project::GitInitResponse;
 use crate::types::project::Project;
 use crate::types::project::UpdateProjectRequest;
@@ -61,10 +60,9 @@ impl ProjectApi {
     /// # Errors
     ///
     /// Returns an error if git initialization fails.
-    pub async fn git_init(&self, req: &GitInitRequest) -> Result<GitInitResponse> {
-        let body = serde_json::to_value(req)?;
+    pub async fn git_init(&self) -> Result<GitInitResponse> {
         self.http
-            .request_json(Method::POST, "/project/git/init", Some(body))
+            .request_json(Method::POST, "/project/git/init", None)
             .await
     }
 }
@@ -98,6 +96,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -125,6 +124,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -150,6 +150,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -183,16 +184,13 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let project = ProjectApi::new(http);
-        let result = project
-            .git_init(&GitInitRequest {
-                default_branch: Some("main".to_string()),
-            })
-            .await;
+        let result = project.git_init().await;
         assert!(result.is_ok());
         let response = result.unwrap();
         assert!(response.success);
@@ -214,16 +212,13 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let project = ProjectApi::new(http);
-        let result = project
-            .git_init(&GitInitRequest {
-                default_branch: None,
-            })
-            .await;
+        let result = project.git_init().await;
         assert!(result.is_err());
     }
 }

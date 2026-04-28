@@ -133,6 +133,9 @@ pub struct ModelRef {
     /// Model identifier.
     #[serde(rename = "modelID", default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+    /// Optional model variant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
     /// Additional fields from server.
     #[serde(flatten)]
     pub extra: serde_json::Value,
@@ -148,15 +151,6 @@ pub struct UpdateProjectRequest {
     /// New project settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<ProjectSettings>,
-}
-
-/// Request to initialize a git repository.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitInitRequest {
-    /// Optional initial branch name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_branch: Option<String>,
 }
 
 /// Response from git init operation.
@@ -290,11 +284,13 @@ mod tests {
         let model_ref = ModelRef {
             provider_id: Some("openai".to_string()),
             model_id: Some("gpt-4".to_string()),
+            variant: Some("turbo".to_string()),
             extra: serde_json::Value::Null,
         };
         let json = serde_json::to_string(&model_ref).unwrap();
         assert!(json.contains("providerID"));
         assert!(json.contains("modelID"));
+        assert!(json.contains(r#""variant":"turbo""#));
         assert!(!json.contains("providerId"));
         assert!(!json.contains("modelId"));
     }

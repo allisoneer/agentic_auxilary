@@ -5,6 +5,7 @@
 use super::create_test_client;
 use super::should_run;
 use opencode_rs::types::Event;
+use opencode_rs::types::GlobalEventPayload;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -226,4 +227,32 @@ async fn test_sse_heartbeat() {
     }
 
     // Heartbeat may not happen in short test windows, so don't fail
+}
+
+/// Test that global SSE subscription parses the typed envelope.
+#[tokio::test]
+#[ignore = "requires: opencode serve"]
+async fn test_sse_global_event_envelope() {
+    if !should_run() {
+        return;
+    }
+
+    let client = create_test_client().await;
+    let mut subscription = client
+        .subscribe_global()
+        .expect("Failed to subscribe to global SSE");
+
+    let event = timeout(Duration::from_secs(5), subscription.recv())
+        .await
+        .expect("Timeout waiting for global event")
+        .expect("Global SSE stream closed before first event");
+
+    let GlobalEventPayload::Event(event) = &event.payload else {
+        panic!("Expected bus event payload, got: {event:?}");
+    };
+
+    assert!(
+        event.is_connected(),
+        "First global event should be server.connected, got: {event:?}"
+    );
 }

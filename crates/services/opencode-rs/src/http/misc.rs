@@ -41,6 +41,18 @@ impl MiscApi {
         self.http.request_json(Method::GET, "/vcs", None).await
     }
 
+    /// Get VCS diff for the current project.
+    pub async fn vcs_diff(&self, mode: VcsDiffMode) -> Result<Vec<VcsFileDiff>> {
+        self.http
+            .request_json_with_query(
+                Method::GET,
+                "/vcs/diff",
+                &[("mode", mode.as_str().to_string())],
+                None,
+            )
+            .await
+    }
+
     /// Dispose instance.
     ///
     /// # Errors
@@ -144,6 +156,40 @@ pub struct VcsInfo {
     /// Remote URL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<String>,
+    /// Default branch name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
+}
+
+/// VCS diff mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VcsDiffMode {
+    Head,
+    Staged,
+    Working,
+}
+
+impl VcsDiffMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Head => "head",
+            Self::Staged => "staged",
+            Self::Working => "working",
+        }
+    }
+}
+
+/// File diff entry from `/vcs/diff`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VcsFileDiff {
+    pub file: String,
+    pub patch: String,
+    pub additions: u64,
+    pub deletions: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
 }
 
 /// Log entry.
@@ -198,6 +244,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -227,6 +274,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -251,6 +299,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -268,7 +317,8 @@ mod tests {
             .and(path("/vcs"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "type": "git",
-                "branch": "main"
+                "branch": "main",
+                "defaultBranch": "main"
             })))
             .mount(&mock_server)
             .await;
@@ -276,6 +326,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -283,6 +334,40 @@ mod tests {
         let misc = MiscApi::new(http);
         let result = misc.vcs().await;
         assert!(result.is_ok());
+        assert_eq!(result.unwrap().default_branch.as_deref(), Some("main"));
+    }
+
+    #[tokio::test]
+    async fn test_vcs_diff_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/vcs/diff"))
+            .and(wiremock::matchers::query_param("mode", "working"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "file": "src/main.rs",
+                    "patch": "@@ -1 +1 @@\n-old\n+new",
+                    "additions": 1,
+                    "deletions": 1,
+                    "status": "modified"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let misc = MiscApi::new(http);
+        let diff = misc.vcs_diff(VcsDiffMode::Working).await.unwrap();
+        assert_eq!(diff.len(), 1);
+        assert_eq!(diff[0].file, "src/main.rs");
     }
 
     #[tokio::test]
@@ -298,6 +383,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -320,6 +406,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -342,6 +429,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -364,6 +452,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -389,6 +478,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -412,6 +502,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -443,6 +534,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();

@@ -4,6 +4,7 @@
 
 use crate::error::Result;
 use crate::types::event::Event;
+use crate::types::event::GlobalEvent;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
 use futures::StreamExt;
@@ -40,17 +41,17 @@ impl Default for SseOptions {
 /// Handle to an active SSE subscription.
 ///
 /// Dropping this handle will cancel the subscription.
-pub struct SseSubscription {
-    rx: mpsc::Receiver<Event>,
+pub struct SseSubscription<T> {
+    rx: mpsc::Receiver<T>,
     cancel: CancellationToken,
     _task: tokio::task::JoinHandle<()>,
 }
 
-impl SseSubscription {
+impl<T> SseSubscription<T> {
     /// Receive the next event.
     ///
     /// Returns `None` if the stream is closed.
-    pub async fn recv(&mut self) -> Option<Event> {
+    pub async fn recv(&mut self) -> Option<T> {
         self.rx.recv().await
     }
 
@@ -60,7 +61,7 @@ impl SseSubscription {
     }
 }
 
-impl Drop for SseSubscription {
+impl<T> Drop for SseSubscription<T> {
     fn drop(&mut self) {
         self.cancel.cancel();
     }
@@ -72,6 +73,7 @@ pub struct SseSubscriber {
     http: ReqClient,
     base_url: String,
     directory: Option<String>,
+    workspace: Option<String>,
     last_event_id: Arc<RwLock<Option<String>>>,
 }
 
@@ -82,12 +84,14 @@ impl SseSubscriber {
     pub fn new(
         base_url: String,
         directory: Option<String>,
+        workspace: Option<String>,
         last_event_id: Arc<RwLock<Option<String>>>,
     ) -> Self {
         Self {
             http: ReqClient::new(),
             base_url,
             directory,
+            workspace,
             last_event_id,
         }
     }
@@ -101,58 +105,70 @@ impl SseSubscriber {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub fn subscribe_session(&self, session_id: &str, opts: SseOptions) -> Result<SseSubscription> {
+    pub fn subscribe_session(
+        &self,
+        session_id: &str,
+        opts: SseOptions,
+    ) -> Result<SseSubscription<Event>> {
         let url = format!("{}/event", self.base_url);
-        self.subscribe_filtered(url, Some(session_id.to_string()), opts)
+        let session_id = session_id.to_string();
+        self.subscribe_filtered(url, opts, move |event: &Event| {
+            event.session_id() == Some(session_id.as_str())
+        })
     }
 
     /// Subscribe to all events for the configured directory.
     ///
     /// This uses the `/event` endpoint which streams all events for the
-    /// directory specified via the `x-opencode-directory` header.
+    /// directory specified via query parameters.
     ///
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub fn subscribe(&self, opts: SseOptions) -> Result<SseSubscription> {
+    pub fn subscribe(&self, opts: SseOptions) -> Result<SseSubscription<Event>> {
         let url = format!("{}/event", self.base_url);
-        self.subscribe_filtered(url, None, opts)
+        self.subscribe_filtered(url, opts, |_| true)
     }
 
     /// Subscribe to global events (all directories).
     ///
     /// This uses the `/global/event` endpoint which streams events from all
     /// `OpenCode` instances across all directories. Events are wrapped in a
-    /// `GlobalEventEnvelope` with directory context.
+    /// `GlobalEvent` values with directory/workspace context.
     ///
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub fn subscribe_global(&self, opts: SseOptions) -> Result<SseSubscription> {
+    pub fn subscribe_global(&self, opts: SseOptions) -> Result<SseSubscription<GlobalEvent>> {
         let url = format!("{}/global/event", self.base_url);
-        self.subscribe_filtered(url, None, opts)
+        self.subscribe_filtered(url, opts, |_| true)
     }
 
     #[expect(
         clippy::unnecessary_wraps,
         reason = "API consistency with public methods"
     )]
-    fn subscribe_filtered(
+    fn subscribe_filtered<T, F>(
         &self,
         url: String,
-        session_filter: Option<String>,
         opts: SseOptions,
-    ) -> Result<SseSubscription> {
+        should_send: F,
+    ) -> Result<SseSubscription<T>>
+    where
+        T: serde::de::DeserializeOwned + Send + 'static,
+        F: Fn(&T) -> bool + Send + Sync + 'static,
+    {
         let (tx, rx) = mpsc::channel(opts.capacity);
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
 
         let http = self.http.clone();
         let dir = self.directory.clone();
+        let workspace = self.workspace.clone();
         let lei = Arc::clone(&self.last_event_id);
         let initial = opts.initial_interval;
         let max = opts.max_interval;
-        let filter = session_filter;
+        let should_send = Arc::new(should_send);
 
         let task = tokio::spawn(async move {
             // Note: No max_times means the subscriber will retry indefinitely.
@@ -172,8 +188,13 @@ impl SseSubscriber {
                 }
 
                 let mut req = http.get(&url);
-                if let Some(d) = &dir {
-                    req = req.header("x-opencode-directory", d);
+                if !url.ends_with("/global/event") {
+                    if let Some(d) = &dir {
+                        req = req.query(&[("directory", d)]);
+                    }
+                    if let Some(ws) = &workspace {
+                        req = req.query(&[("workspace", ws)]);
+                    }
                 }
                 let last_id = lei.read().await.clone();
                 if let Some(id) = last_id {
@@ -214,15 +235,9 @@ impl SseSubscriber {
                             }
 
                             // Parse event
-                            match serde_json::from_str::<Event>(&msg.data) {
+                            match serde_json::from_str::<T>(&msg.data) {
                                 Ok(ev) => {
-                                    // Apply session filter if specified
-                                    let should_send = match &filter {
-                                        Some(sid) => ev.session_id() == Some(sid.as_str()),
-                                        None => true,
-                                    };
-
-                                    if should_send && tx.send(ev).await.is_err() {
+                                    if should_send.as_ref()(&ev) && tx.send(ev).await.is_err() {
                                         es.close();
                                         return;
                                     }
@@ -280,6 +295,7 @@ mod tests {
         let subscriber = SseSubscriber::new(
             "http://localhost:9999".to_string(),
             None,
+            None,
             Arc::new(RwLock::new(None)),
         );
 
@@ -304,7 +320,7 @@ mod tests {
             "type": "question.asked",
             "properties": {
                 "id": "req-123",
-                "sessionId": "sess-456",
+                "sessionID": "sess-456",
                 "questions": [
                     {"question": "Continue?", "header": "Confirm action"}
                 ]
@@ -324,8 +340,8 @@ mod tests {
         let json = r#"{
             "type": "question.replied",
             "properties": {
-                "sessionId": "sess-456",
-                "requestId": "req-123",
+                "sessionID": "sess-456",
+                "requestID": "req-123",
                 "answers": [["Yes", "Confirm"], ["Option B"]]
             }
         }"#;
@@ -344,8 +360,8 @@ mod tests {
         let json = r#"{
             "type": "question.rejected",
             "properties": {
-                "sessionId": "sess-456",
-                "requestId": "req-123",
+                "sessionID": "sess-456",
+                "requestID": "req-123",
                 "reason": "User cancelled the operation"
             }
         }"#;
@@ -366,8 +382,8 @@ mod tests {
         let json = r#"{
             "type": "question.rejected",
             "properties": {
-                "sessionId": "sess-456",
-                "requestId": "req-123"
+                "sessionID": "sess-456",
+                "requestID": "req-123"
             }
         }"#;
         let event: Event = serde_json::from_str(json).unwrap();
@@ -383,7 +399,7 @@ mod tests {
             "type": "question.asked",
             "properties": {
                 "id": "req-1",
-                "sessionId": "sess-asked",
+                "sessionID": "sess-asked",
                 "questions": []
             }
         }"#;
@@ -393,8 +409,8 @@ mod tests {
         let replied_json = r#"{
             "type": "question.replied",
             "properties": {
-                "sessionId": "sess-replied",
-                "requestId": "req-1",
+                "sessionID": "sess-replied",
+                "requestID": "req-1",
                 "answers": []
             }
         }"#;
@@ -404,8 +420,8 @@ mod tests {
         let rejected_json = r#"{
             "type": "question.rejected",
             "properties": {
-                "sessionId": "sess-rejected",
-                "requestId": "req-1"
+                "sessionID": "sess-rejected",
+                "requestID": "req-1"
             }
         }"#;
         let rejected: Event = serde_json::from_str(rejected_json).unwrap();

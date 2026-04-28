@@ -2,12 +2,12 @@
 //!
 //! Endpoints for pseudo-terminal management.
 //!
-//! Note: Unit tests are intentionally skipped for this module because the
-//! `GET /pty/{id}/connect` endpoint requires WebSocket support, which is
-//! out of scope for this SDK version.
+//! WebSocket PTY streaming is intentionally out of scope for this SDK version,
+//! so `GET /pty/{id}/connect` is not exposed here.
 
 use crate::error::Result;
 use crate::http::HttpClient;
+use crate::http::encode_path_segment;
 use crate::types::pty::CreatePtyRequest;
 use crate::types::pty::Pty;
 use crate::types::pty::UpdatePtyRequest;
@@ -52,6 +52,7 @@ impl PtyApi {
     ///
     /// Returns an error if the request fails.
     pub async fn get(&self, id: &str) -> Result<Pty> {
+        let id = encode_path_segment(id);
         self.http
             .request_json(Method::GET, &format!("/pty/{id}"), None)
             .await
@@ -63,6 +64,7 @@ impl PtyApi {
     ///
     /// Returns an error if the request fails.
     pub async fn update(&self, id: &str, req: &UpdatePtyRequest) -> Result<Pty> {
+        let id = encode_path_segment(id);
         let body = serde_json::to_value(req)?;
         self.http
             .request_json(Method::PUT, &format!("/pty/{id}"), Some(body))
@@ -75,6 +77,7 @@ impl PtyApi {
     ///
     /// Returns an error if the request fails.
     pub async fn delete(&self, id: &str) -> Result<bool> {
+        let id = encode_path_segment(id);
         self.http
             .request_json::<bool>(Method::DELETE, &format!("/pty/{id}"), None)
             .await

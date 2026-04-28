@@ -28,6 +28,7 @@ pub struct Client {
 pub struct ClientBuilder {
     base_url: String,
     directory: Option<String>,
+    workspace: Option<String>,
     timeout: Duration,
 }
 
@@ -36,6 +37,7 @@ impl Default for ClientBuilder {
         Self {
             base_url: "http://127.0.0.1:4096".to_string(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(1800), // 30 min for long-running tool calls
         }
     }
@@ -60,10 +62,17 @@ impl ClientBuilder {
 
     /// Set the directory context for requests.
     ///
-    /// This sets the `x-opencode-directory` header on all requests.
+    /// This sets the `directory` query parameter on non-global requests.
     #[must_use]
     pub fn directory(mut self, dir: impl Into<String>) -> Self {
         self.directory = Some(dir.into());
+        self
+    }
+
+    /// Set the workspace context for requests.
+    #[must_use]
+    pub fn workspace(mut self, workspace: impl Into<String>) -> Self {
+        self.workspace = Some(workspace.into());
         self
     }
 
@@ -85,6 +94,7 @@ impl ClientBuilder {
         let http = HttpClient::new(HttpConfig {
             base_url: self.base_url,
             directory: self.directory,
+            workspace: self.workspace,
             timeout: self.timeout,
         })?;
 
@@ -191,6 +201,38 @@ impl Client {
         crate::http::worktree::WorktreeApi::new(self.http.clone())
     }
 
+    /// Get the sync API.
+    #[cfg(feature = "http")]
+    pub fn sync(&self) -> crate::http::sync::SyncApi {
+        crate::http::sync::SyncApi::new(self.http.clone())
+    }
+
+    /// Get the TUI API.
+    #[cfg(feature = "http")]
+    pub fn tui(&self) -> crate::http::tui::TuiApi {
+        crate::http::tui::TuiApi::new(self.http.clone())
+    }
+
+    /// Get the workspaces API.
+    #[cfg(feature = "http")]
+    pub fn workspaces(&self) -> crate::http::workspaces::WorkspacesApi {
+        crate::http::workspaces::WorkspacesApi::new(self.http.clone())
+    }
+
+    /// Get the console API.
+    #[cfg(feature = "http")]
+    pub fn console(&self) -> crate::http::console::ConsoleApi {
+        crate::http::console::ConsoleApi::new(self.http.clone())
+    }
+
+    /// Get the experimental session API.
+    #[cfg(feature = "http")]
+    pub fn experimental_session(
+        &self,
+    ) -> crate::http::experimental_session::ExperimentalSessionApi {
+        crate::http::experimental_session::ExperimentalSessionApi::new(self.http.clone())
+    }
+
     /// Get the misc API.
     #[cfg(feature = "http")]
     pub fn misc(&self) -> crate::http::misc::MiscApi {
@@ -207,12 +249,6 @@ impl Client {
     #[cfg(feature = "http")]
     pub fn skills(&self) -> crate::http::skills::SkillsApi {
         crate::http::skills::SkillsApi::new(self.http.clone())
-    }
-
-    /// Get the snapshots API.
-    #[cfg(feature = "http")]
-    pub fn snapshots(&self) -> crate::http::snapshots::SnapshotsApi {
-        crate::http::snapshots::SnapshotsApi::new(self.http.clone())
     }
 
     /// Get the resource API (experimental).
@@ -310,6 +346,7 @@ impl Client {
         crate::sse::SseSubscriber::new(
             self.http.base().to_string(),
             self.http.directory().map(std::string::ToString::to_string),
+            self.http.workspace().map(std::string::ToString::to_string),
             Arc::clone(&self.last_event_id),
         )
     }
@@ -322,7 +359,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub fn subscribe(&self) -> Result<crate::sse::SseSubscription> {
+    pub fn subscribe(&self) -> Result<crate::sse::SseSubscription<crate::types::event::Event>> {
         self.sse_subscriber()
             .subscribe(crate::sse::SseOptions::default())
     }
@@ -335,7 +372,10 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub fn subscribe_session(&self, session_id: &str) -> Result<crate::sse::SseSubscription> {
+    pub fn subscribe_session(
+        &self,
+        session_id: &str,
+    ) -> Result<crate::sse::SseSubscription<crate::types::event::Event>> {
         self.sse_subscriber()
             .subscribe_session(session_id, crate::sse::SseOptions::default())
     }
@@ -345,7 +385,9 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the subscription cannot be created.
-    pub fn subscribe_global(&self) -> Result<crate::sse::SseSubscription> {
+    pub fn subscribe_global(
+        &self,
+    ) -> Result<crate::sse::SseSubscription<crate::types::event::GlobalEvent>> {
         self.sse_subscriber()
             .subscribe_global(crate::sse::SseOptions::default())
     }
@@ -362,6 +404,7 @@ mod tests {
         assert_eq!(builder.base_url, "http://127.0.0.1:4096");
         assert_eq!(builder.timeout, Duration::from_secs(1800));
         assert!(builder.directory.is_none());
+        assert!(builder.workspace.is_none());
     }
 
     #[test]
@@ -369,10 +412,12 @@ mod tests {
         let builder = ClientBuilder::new()
             .base_url("http://localhost:8080")
             .directory("/my/project")
+            .workspace("workspace-1")
             .timeout_secs(60);
 
         assert_eq!(builder.base_url, "http://localhost:8080");
         assert_eq!(builder.directory, Some("/my/project".to_string()));
+        assert_eq!(builder.workspace, Some("workspace-1".to_string()));
         assert_eq!(builder.timeout, Duration::from_secs(60));
     }
 

@@ -165,6 +165,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -201,11 +202,11 @@ mod tests {
             .and(path("/session/s1/message"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
-                    "info": {"id": "m1", "sessionId": "s1", "role": "user", "time": {"created": 1_234_567_890}},
+                    "info": {"id": "m1", "sessionID": "s1", "role": "user", "time": {"created": 1_234_567_890}},
                     "parts": []
                 },
                 {
-                    "info": {"id": "m2", "sessionId": "s1", "role": "assistant", "time": {"created": 1_234_567_891}},
+                    "info": {"id": "m2", "sessionID": "s1", "role": "assistant", "time": {"created": 1_234_567_891}},
                     "parts": []
                 }
             ])))
@@ -215,6 +216,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -245,6 +247,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -287,6 +290,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -313,7 +317,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/session/s1/shell"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "running"
+                "info": {"id": "m1", "sessionID": "s1", "role": "assistant", "time": {"created": 1}},
+                "parts": [{"type": "text", "text": "running"}]
             })))
             .mount(&mock_server)
             .await;
@@ -321,6 +326,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -336,7 +342,8 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result.status, Some("running".to_string()));
+        assert_eq!(result.info.id, "m1");
+        assert_eq!(result.parts.len(), 1);
     }
 
     // ==================== Error Case Tests ====================
@@ -357,6 +364,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -401,6 +409,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -440,6 +449,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -466,6 +476,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -492,6 +503,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -536,6 +548,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -571,6 +584,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -602,6 +616,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -627,6 +642,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -653,6 +669,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();

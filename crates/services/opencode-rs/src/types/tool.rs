@@ -6,10 +6,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
-/// A tool definition (matches 1.3.17 `ToolListItem`).
+/// A tool definition returned by `GET /experimental/tool`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Tool {
+pub struct ToolListItem {
     /// Tool identifier.
     pub id: String,
     /// Tool description.
@@ -131,6 +131,9 @@ pub struct Command {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ToolIds(pub Vec<String>);
+
+/// Tool list response.
+pub type ToolList = Vec<ToolListItem>;
 
 impl ToolIds {
     /// Returns the inner vector of tool IDs.
@@ -318,6 +321,7 @@ mod tests {
             model: Some(ModelRef {
                 provider_id: Some("openai".to_string()),
                 model_id: Some("gpt-4".to_string()),
+                variant: None,
                 extra: serde_json::Value::Null,
             }),
             variant: Some("turbo".to_string()),
@@ -366,7 +370,7 @@ mod tests {
         assert_eq!(ids.as_slice(), &["x", "y"]);
     }
 
-    // ==================== Tool Tests (1.3.17 schema) ====================
+    // ==================== Tool List Tests ====================
 
     #[test]
     fn test_tool_deserialize() {
@@ -375,7 +379,7 @@ mod tests {
             "description": "Read a file from the filesystem",
             "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}
         }"#;
-        let tool: Tool = serde_json::from_str(json).unwrap();
+        let tool: ToolListItem = serde_json::from_str(json).unwrap();
         assert_eq!(tool.id, "read_file");
         assert_eq!(tool.description, "Read a file from the filesystem");
         assert_eq!(tool.parameters["type"], "object");
@@ -383,13 +387,13 @@ mod tests {
 
     #[test]
     fn test_tool_round_trip() {
-        let tool = Tool {
+        let tool = ToolListItem {
             id: "bash".to_string(),
             description: "Execute a bash command".to_string(),
             parameters: serde_json::json!({"type": "object"}),
         };
         let json = serde_json::to_string(&tool).unwrap();
-        let parsed: Tool = serde_json::from_str(&json).unwrap();
+        let parsed: ToolListItem = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.id, "bash");
         assert_eq!(parsed.description, "Execute a bash command");
     }

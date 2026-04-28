@@ -7,12 +7,12 @@ use serde::Serialize;
 
 /// A question request from the server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QuestionRequest {
     /// Unique request identifier.
     pub id: String,
 
     /// Session ID.
+    #[serde(rename = "sessionID")]
     pub session_id: String,
 
     /// List of questions to present.
@@ -73,14 +73,13 @@ pub struct QuestionOption {
 
 /// Tool context for a question.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QuestionToolContext {
     /// Message ID containing the tool call.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "messageID")]
     pub message_id: Option<String>,
 
     /// Tool call ID.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "callID")]
     pub call_id: Option<String>,
 
     /// Tool name.
@@ -112,7 +111,7 @@ mod tests {
     fn test_question_request_minimal() {
         let json = r#"{
             "id": "req-123",
-            "sessionId": "sess-456",
+            "sessionID": "sess-456",
             "questions": []
         }"#;
         let req: QuestionRequest = serde_json::from_str(json).unwrap();
@@ -126,7 +125,7 @@ mod tests {
     fn test_question_request_full() {
         let json = r#"{
             "id": "req-123",
-            "sessionId": "sess-456",
+            "sessionID": "sess-456",
             "questions": [
                 {
                     "question": "What do you want to do?",
@@ -140,8 +139,8 @@ mod tests {
                 }
             ],
             "tool": {
-                "messageId": "msg-1",
-                "callId": "call-1",
+                "messageID": "msg-1",
+                "callID": "call-1",
                 "name": "confirm"
             }
         }"#;
@@ -206,7 +205,7 @@ mod tests {
     fn test_question_extra_fields_preserved() {
         let json = r#"{
             "id": "req-123",
-            "sessionId": "sess-456",
+            "sessionID": "sess-456",
             "questions": [],
             "futureField": "value"
         }"#;

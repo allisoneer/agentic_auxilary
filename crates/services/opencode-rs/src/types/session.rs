@@ -58,31 +58,7 @@ pub struct SessionSummary {
     pub files: u64,
     /// File diffs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diffs: Option<Vec<FileDiffLite>>,
-}
-
-/// Lightweight file diff information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileDiffLite {
-    /// File path.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub file: Option<String>,
-    /// Content before changes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before: Option<String>,
-    /// Content after changes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after: Option<String>,
-    /// Lines added.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub additions: Option<u64>,
-    /// Lines deleted.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub deletions: Option<u64>,
-    /// Additional fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
+    pub diffs: Option<Vec<SnapshotFileDiff>>,
 }
 
 /// Share information.
@@ -140,6 +116,13 @@ pub struct CreateSessionRequest {
     /// Initial permission ruleset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission: Option<Ruleset>,
+    /// Optional workspace ID for the session.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "workspaceID"
+    )]
+    pub workspace_id: Option<String>,
 }
 
 /// Request to update a session.
@@ -149,6 +132,20 @@ pub struct UpdateSessionRequest {
     /// New title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+}
+
+/// Request body for `POST /session/{sessionID}/init`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionInitRequest {
+    /// Model identifier.
+    #[serde(rename = "modelID")]
+    pub model_id: String,
+    /// Provider identifier.
+    #[serde(rename = "providerID")]
+    pub provider_id: String,
+    /// Message identifier.
+    #[serde(rename = "messageID")]
+    pub message_id: String,
 }
 
 /// Request to summarize a session.
@@ -211,13 +208,11 @@ pub enum SessionStatusInfo {
 /// The server returns an array of these objects representing changes to each file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionFileDiff {
+pub struct SnapshotFileDiff {
     /// File path.
     pub file: String,
-    /// Content before changes.
-    pub before: String,
-    /// Content after changes.
-    pub after: String,
+    /// Unified patch content.
+    pub patch: String,
     /// Number of lines added.
     pub additions: u64,
     /// Number of lines deleted.
@@ -243,7 +238,7 @@ pub enum SessionDiffStatus {
 }
 
 /// Session diff response - a list of file diffs.
-pub type SessionDiff = Vec<SessionFileDiff>;
+pub type SessionDiff = Vec<SnapshotFileDiff>;
 
 /// Session todo item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -351,13 +346,12 @@ mod tests {
     fn parse_session_file_diff() {
         let json = r#"{
             "file": "src/main.rs",
-            "before": "fn main() {}",
-            "after": "fn main() { println!(\"hello\"); }",
+            "patch": "@@ -1 +1 @@\n-fn main() {}\n+fn main() { println!(\"hello\"); }",
             "additions": 1,
             "deletions": 0,
             "status": "modified"
         }"#;
-        let diff: SessionFileDiff = serde_json::from_str(json).unwrap();
+        let diff: SnapshotFileDiff = serde_json::from_str(json).unwrap();
         assert_eq!(diff.file, "src/main.rs");
         assert_eq!(diff.additions, 1);
         assert_eq!(diff.deletions, 0);
@@ -365,10 +359,35 @@ mod tests {
     }
 
     #[test]
+    fn parse_session_summary_with_patch_diffs() {
+        let json = r#"{
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "diffs": [
+                {
+                    "file": "src/main.rs",
+                    "patch": "@@ -0,0 +1 @@\n+fn main() {}",
+                    "additions": 1,
+                    "deletions": 0,
+                    "status": "added"
+                }
+            ]
+        }"#;
+
+        let summary: SessionSummary = serde_json::from_str(json).unwrap();
+        let diffs = summary.diffs.expect("summary diffs should parse");
+        assert_eq!(diffs.len(), 1);
+        assert_eq!(diffs[0].file, "src/main.rs");
+        assert!(diffs[0].patch.contains("fn main"));
+        assert_eq!(diffs[0].status, Some(SessionDiffStatus::Added));
+    }
+
+    #[test]
     fn parse_session_diff_array() {
         let json = r#"[
-            {"file": "a.rs", "before": "", "after": "new", "additions": 1, "deletions": 0, "status": "added"},
-            {"file": "b.rs", "before": "old", "after": "", "additions": 0, "deletions": 1, "status": "deleted"}
+            {"file": "a.rs", "patch": "@@ -0,0 +1 @@\n+new", "additions": 1, "deletions": 0, "status": "added"},
+            {"file": "b.rs", "patch": "@@ -1 +0,0 @@\n-old", "additions": 0, "deletions": 1, "status": "deleted"}
         ]"#;
         let diff: SessionDiff = serde_json::from_str(json).unwrap();
         assert_eq!(diff.len(), 2);
@@ -384,6 +403,7 @@ mod tests {
             parent_id: Some("ses-123".to_string()),
             title: None,
             permission: None,
+            workspace_id: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains(r#""parentID""#));
@@ -396,10 +416,24 @@ mod tests {
             parent_id: None,
             title: Some("Test Session".to_string()),
             permission: None,
+            workspace_id: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         // parentID should not appear when None
         assert!(!json.contains("parentID"));
         assert!(json.contains(r#""title":"Test Session""#));
+    }
+
+    #[test]
+    fn test_session_init_request_uses_uppercase_ids() {
+        let req = SessionInitRequest {
+            model_id: "claude-sonnet-4".to_string(),
+            provider_id: "anthropic".to_string(),
+            message_id: "msg-123".to_string(),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains(r#""modelID""#));
+        assert!(json.contains(r#""providerID""#));
+        assert!(json.contains(r#""messageID""#));
     }
 }

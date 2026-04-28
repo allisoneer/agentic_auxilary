@@ -4,7 +4,8 @@
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::types::event::GlobalEventEnvelope;
+use crate::types::event::GlobalEvent;
+use crate::types::event::GlobalEventPayload;
 use reqwest::Method;
 
 /// Global API client.
@@ -45,30 +46,32 @@ impl GlobalApi {
     /// # Errors
     ///
     /// Returns an error if the server is unreachable.
-    pub async fn health(&self) -> Result<bool> {
-        use crate::http::misc::HealthInfo;
-        let info: HealthInfo = self
-            .http
+    pub async fn health(&self) -> Result<crate::http::misc::HealthInfo> {
+        self.http
             .request_json(Method::GET, "/global/health", None)
-            .await?;
-        Ok(info.healthy)
+            .await
     }
 }
 
 /// Helper functions for parsing global event envelopes.
-impl GlobalEventEnvelope {
+impl GlobalEvent {
     /// Check if this envelope is for a specific directory.
     pub fn is_directory(&self, dir: &str) -> bool {
-        self.directory == dir
+        self.directory.as_deref() == Some(dir)
     }
 
     /// Check if the payload is a question event.
     pub fn is_question_event(&self) -> bool {
         matches!(
             &self.payload,
-            crate::types::event::Event::QuestionAsked { .. }
-                | crate::types::event::Event::QuestionReplied { .. }
-                | crate::types::event::Event::QuestionRejected { .. }
+            GlobalEventPayload::Event(
+                event
+            ) if matches!(
+                **event,
+                crate::types::event::Event::QuestionAsked { .. }
+                    | crate::types::event::Event::QuestionReplied { .. }
+                    | crate::types::event::Event::QuestionRejected { .. }
+            )
         )
     }
 
@@ -76,11 +79,16 @@ impl GlobalEventEnvelope {
     pub fn is_session_event(&self) -> bool {
         matches!(
             &self.payload,
-            crate::types::event::Event::SessionCreated { .. }
-                | crate::types::event::Event::SessionUpdated { .. }
-                | crate::types::event::Event::SessionDeleted { .. }
-                | crate::types::event::Event::SessionError { .. }
-                | crate::types::event::Event::SessionIdle { .. }
+            GlobalEventPayload::Event(
+                event
+            ) if matches!(
+                **event,
+                crate::types::event::Event::SessionCreated { .. }
+                    | crate::types::event::Event::SessionUpdated { .. }
+                    | crate::types::event::Event::SessionDeleted { .. }
+                    | crate::types::event::Event::SessionError { .. }
+                    | crate::types::event::Event::SessionIdle { .. }
+            )
         )
     }
 
@@ -88,10 +96,15 @@ impl GlobalEventEnvelope {
     pub fn is_message_event(&self) -> bool {
         matches!(
             &self.payload,
-            crate::types::event::Event::MessageUpdated { .. }
-                | crate::types::event::Event::MessageRemoved { .. }
-                | crate::types::event::Event::MessagePartUpdated { .. }
-                | crate::types::event::Event::MessagePartRemoved { .. }
+            GlobalEventPayload::Event(
+                event
+            ) if matches!(
+                **event,
+                crate::types::event::Event::MessageUpdated { .. }
+                    | crate::types::event::Event::MessageRemoved { .. }
+                    | crate::types::event::Event::MessagePartUpdated { .. }
+                    | crate::types::event::Event::MessagePartRemoved { .. }
+            )
         )
     }
 }
@@ -101,6 +114,7 @@ mod tests {
     use super::*;
     use crate::http::HttpConfig;
     use crate::types::event::Event;
+    use crate::types::event::GlobalEventPayload;
     use crate::types::event::QuestionAskedProps;
     use crate::types::question::QuestionRequest;
     use std::time::Duration;
@@ -117,6 +131,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -133,6 +148,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: Some("/my/project".to_string()),
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -158,22 +174,25 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let api = GlobalApi::new(client);
         let result = api.health().await.unwrap();
-        assert!(result);
+        assert!(result.healthy);
     }
 
     #[test]
     fn test_global_event_envelope_is_directory() {
-        let envelope = GlobalEventEnvelope {
-            directory: "/my/project".to_string(),
-            payload: Event::ServerHeartbeat {
+        let envelope = GlobalEvent {
+            directory: Some("/my/project".to_string()),
+            project: None,
+            workspace: None,
+            payload: GlobalEventPayload::Event(Box::new(Event::ServerHeartbeat {
                 properties: serde_json::Value::Null,
-            },
+            })),
         };
         assert!(envelope.is_directory("/my/project"));
         assert!(!envelope.is_directory("/other/project"));
@@ -181,9 +200,11 @@ mod tests {
 
     #[test]
     fn test_global_event_envelope_is_question_event() {
-        let envelope = GlobalEventEnvelope {
-            directory: "/test".to_string(),
-            payload: Event::QuestionAsked {
+        let envelope = GlobalEvent {
+            directory: Some("/test".to_string()),
+            project: None,
+            workspace: None,
+            payload: GlobalEventPayload::Event(Box::new(Event::QuestionAsked {
                 properties: QuestionAskedProps {
                     request: QuestionRequest {
                         id: "q1".to_string(),
@@ -193,7 +214,7 @@ mod tests {
                         extra: serde_json::Value::Null,
                     },
                 },
-            },
+            })),
         };
         assert!(envelope.is_question_event());
         assert!(!envelope.is_session_event());
@@ -202,14 +223,16 @@ mod tests {
 
     #[test]
     fn test_global_event_envelope_is_session_event() {
-        let envelope = GlobalEventEnvelope {
-            directory: "/test".to_string(),
-            payload: Event::SessionIdle {
+        let envelope = GlobalEvent {
+            directory: Some("/test".to_string()),
+            project: None,
+            workspace: None,
+            payload: GlobalEventPayload::Event(Box::new(Event::SessionIdle {
                 properties: crate::types::event::SessionIdleProps {
                     session_id: "s1".to_string(),
                     extra: serde_json::Value::Null,
                 },
-            },
+            })),
         };
         assert!(envelope.is_session_event());
         assert!(!envelope.is_question_event());
@@ -224,8 +247,11 @@ mod tests {
                 "properties": {}
             }
         }"#;
-        let envelope: GlobalEventEnvelope = serde_json::from_str(json).unwrap();
-        assert_eq!(envelope.directory, "/project/path");
-        assert!(matches!(envelope.payload, Event::ServerHeartbeat { .. }));
+        let envelope: GlobalEvent = serde_json::from_str(json).unwrap();
+        assert_eq!(envelope.directory.as_deref(), Some("/project/path"));
+        assert!(matches!(
+            envelope.payload,
+            GlobalEventPayload::Event(event) if matches!(*event, Event::ServerHeartbeat { .. })
+        ));
     }
 }

@@ -73,12 +73,12 @@ async fn command_retries_on_timeout() {
         command_requests.len()
     );
 
-    // Verify both retry attempts share identical messageId
+    // Verify both retry attempts share identical messageID
     let b1: serde_json::Value = serde_json::from_slice(&command_requests[0].body).unwrap();
     let b2: serde_json::Value = serde_json::from_slice(&command_requests[1].body).unwrap();
 
-    let mid1 = b1.get("messageId").and_then(|v| v.as_str()).unwrap();
-    let mid2 = b2.get("messageId").and_then(|v| v.as_str()).unwrap();
+    let mid1 = b1.get("messageID").and_then(|v| v.as_str()).unwrap();
+    let mid2 = b2.get("messageID").and_then(|v| v.as_str()).unwrap();
     assert!(!mid1.is_empty());
-    assert_eq!(mid1, mid2, "expected stable messageId across retries");
+    assert_eq!(mid1, mid2, "expected stable messageID across retries");
 }

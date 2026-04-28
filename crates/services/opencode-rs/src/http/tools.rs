@@ -6,8 +6,8 @@ use crate::error::Result;
 use crate::http::HttpClient;
 use crate::types::tool::Agent;
 use crate::types::tool::Command;
-use crate::types::tool::Tool;
 use crate::types::tool::ToolIds;
+use crate::types::tool::ToolList;
 use reqwest::Method;
 
 /// Tools API client.
@@ -38,9 +38,17 @@ impl ToolsApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<Tool>> {
+    pub async fn list(&self, provider: &str, model: &str) -> Result<ToolList> {
         self.http
-            .request_json(Method::GET, "/experimental/tool", None)
+            .request_json_with_query(
+                Method::GET,
+                "/experimental/tool",
+                &[
+                    ("provider", provider.to_string()),
+                    ("model", model.to_string()),
+                ],
+                None,
+            )
             .await
     }
 
@@ -92,6 +100,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -111,6 +120,8 @@ mod tests {
         // 1.3.17 ToolListItem has: id, description, parameters (no name field)
         Mock::given(method("GET"))
             .and(path("/experimental/tool"))
+            .and(wiremock::matchers::query_param("provider", "anthropic"))
+            .and(wiremock::matchers::query_param("model", "claude-sonnet-4"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
                     "id": "read_file",
@@ -124,12 +135,13 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let tools = ToolsApi::new(http);
-        let result = tools.list().await;
+        let result = tools.list("anthropic", "claude-sonnet-4").await;
         assert!(result.is_ok());
         let list = result.unwrap();
         assert_eq!(list.len(), 1);
@@ -155,6 +167,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -182,6 +195,7 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -207,12 +221,13 @@ mod tests {
         let http = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let tools = ToolsApi::new(http);
-        let result = tools.list().await;
+        let result = tools.list("anthropic", "claude-sonnet-4").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().is_server_error());
     }

@@ -229,18 +229,8 @@ pub enum InterleavedField {
     Unknown,
 }
 
-/// Provider authentication info.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderAuth {
-    /// Provider identifier.
-    pub provider_id: String,
-    /// Authentication method.
-    pub method: AuthMethod,
-    /// Whether auth is configured.
-    #[serde(default)]
-    pub configured: bool,
-}
+/// Provider authentication method information.
+pub type ProviderAuthMethod = AuthMethod;
 
 /// Authentication method for a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -280,17 +270,30 @@ pub struct SetAuthRequest {
 pub struct OAuthAuthorizeResponse {
     /// The authorization URL to redirect to.
     pub url: String,
+    /// Selected auth method.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+}
+
+/// OAuth authorize request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthAuthorizeRequest {
+    /// Provider auth method to use.
+    pub method: String,
+    /// Optional method-specific inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<serde_json::Value>,
 }
 
 /// OAuth callback request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthCallbackRequest {
+    /// Provider auth method to use.
+    pub method: String,
     /// The authorization code.
     pub code: String,
-    /// Optional state parameter.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<String>,
 }
 
 #[cfg(test)]

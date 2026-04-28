@@ -638,18 +638,18 @@ impl OrchestratorRunTool {
                             ), &token_tracker));
                         }
 
-                        Event::MessagePartUpdated { properties } => {
+                        Event::MessagePartDelta { properties } => {
                             last_activity_time = tokio::time::Instant::now();
                             // Message streaming means session is actively processing
                             observed_busy = true;
                             awaiting_idle_grace_check = false;
-                            // Collect streaming text
+                            // Collect streaming text from field-level delta events.
                             if let Some(delta) = &properties.delta {
                                 partial_response.push_str(delta);
                             }
                         }
 
-                        Event::MessageUpdated { .. } => {
+                        Event::MessagePartUpdated { .. } | Event::MessageUpdated { .. } => {
                             last_activity_time = tokio::time::Instant::now();
                             observed_busy = true;
                             awaiting_idle_grace_check = false;

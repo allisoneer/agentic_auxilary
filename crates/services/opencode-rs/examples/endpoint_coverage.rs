@@ -26,15 +26,12 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     ("POST", "/session/{id}/summarize"),
     ("POST", "/session/{id}/share"),
     ("DELETE", "/session/{id}/share"),
-    ("GET", "/session/{id}/share"),
     ("POST", "/session/{id}/revert"),
+    ("POST", "/session/{id}/init"),
+    ("GET", "/session/{id}/diff"),
     ("GET", "/session/{id}/todo"),
     ("PATCH", "/session/{id}"),
     ("GET", "/session/status"),
-    ("GET", "/session/{id}/snapshot"),
-    ("POST", "/session/{id}/snapshot"),
-    ("POST", "/session/{id}/snapshot/{snapshotId}/restore"),
-    ("DELETE", "/session/{id}/snapshot/{snapshotId}"),
     // messages.rs
     ("POST", "/session/{id}/message"),
     ("GET", "/session/{id}/message"),
@@ -52,6 +49,7 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     ("GET", "/config/providers"),
     // global.rs
     ("GET", "/global/health"),
+    ("GET", "/global/event"),
     // misc.rs
     ("GET", "/doc"),
     ("GET", "/path"),
@@ -89,7 +87,7 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     ("GET", "/question"),
     ("POST", "/question/{id}/reply"),
     ("POST", "/question/{id}/reject"),
-    // pty.rs (excluding WebSocket connect)
+    // pty.rs
     ("GET", "/pty"),
     ("POST", "/pty"),
     ("GET", "/pty/{id}"),
@@ -106,40 +104,40 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     // tools.rs
     ("GET", "/experimental/tool/ids"),
     ("GET", "/experimental/tool"),
+    ("GET", "/experimental/session"),
     ("GET", "/agent"),
     ("GET", "/command"),
     // worktree.rs
-    ("GET", "/worktree"),
-    ("POST", "/worktree"),
-    ("DELETE", "/worktree/{id}"),
-    ("POST", "/worktree/{id}/switch"),
-    // snapshots.rs
-    ("GET", "/snapshot"),
-    ("POST", "/snapshot"),
-    ("GET", "/snapshot/{id}"),
-    ("DELETE", "/snapshot/{id}"),
-    ("POST", "/snapshot/{id}/restore"),
-    ("GET", "/snapshot/{id}/diff"),
+    ("GET", "/experimental/worktree"),
+    ("POST", "/experimental/worktree"),
+    ("DELETE", "/experimental/worktree"),
+    ("POST", "/experimental/worktree/reset"),
+    // sync.rs
+    ("POST", "/sync/start"),
+    ("POST", "/sync/replay"),
+    ("POST", "/sync/history"),
+    // tui.rs
+    ("GET", "/tui/env"),
+    ("POST", "/tui/command"),
+    // workspaces.rs
+    ("GET", "/experimental/workspace"),
+    ("GET", "/experimental/workspace/current"),
+    // console.rs
+    ("GET", "/experimental/console"),
+    ("POST", "/experimental/console"),
     // skills.rs
     ("GET", "/skill"),
-    ("GET", "/skill/{id}"),
-    ("POST", "/skill/{id}/run"),
     // resource.rs
-    ("POST", "/resource"),
+    ("GET", "/experimental/resource"),
 ];
 
 /// Endpoints intentionally not implemented in SDK.
 const SKIP_ENDPOINTS: &[(&str, &str)] = &[
-    // WebSocket endpoint
-    ("GET", "/pty/{id}/connect"),
-    // Global endpoints (low priority)
-    ("GET", "/global/sync-event"),
+    // Global endpoints not yet implemented in the SDK
     ("GET", "/global/config"),
     ("PATCH", "/global/config"),
     ("POST", "/global/upgrade"),
     // TUI-specific endpoints
-    ("GET", "/tui/env"),
-    ("POST", "/tui/command"),
     ("GET", "/tui/palette"),
     ("POST", "/tui/search"),
     ("POST", "/tui/clear"),

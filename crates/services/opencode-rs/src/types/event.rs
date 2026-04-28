@@ -3,19 +3,215 @@
 //! Contains 40 event variants matching `OpenCode`'s server.ts.
 
 use crate::types::error::APIError;
+use crate::types::message::Message;
+use crate::types::message::Part;
 use crate::types::permission::PermissionReply;
 use crate::types::permission::PermissionRequest;
+use crate::types::session::RevertInfo;
 use crate::types::session::Session;
+use crate::types::session::SessionSummary;
+use crate::types::session::SessionTime;
+use crate::types::session::ShareInfo;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// Wrapper for events from /global/event which include directory context.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlobalEventEnvelope {
+pub struct GlobalEvent {
     /// Directory context for the event.
-    pub directory: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
+    /// Optional project identifier.
+    #[serde(default)]
+    pub project: Option<String>,
+    /// Optional workspace identifier.
+    #[serde(default)]
+    pub workspace: Option<String>,
     /// The actual event payload.
-    pub payload: Event,
+    pub payload: GlobalEventPayload,
+}
+
+/// Payload union for `/global/event`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GlobalEventPayload {
+    /// Typed sync-event payload wrapper.
+    Sync(Box<GlobalSyncEventPayload>),
+    /// Standard bus event payload.
+    Event(Box<Event>),
+}
+
+/// Wrapper for sync payloads emitted on `/global/event`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlobalSyncEventPayload {
+    /// Payload discriminator.
+    #[serde(rename = "type")]
+    pub kind: GlobalSyncPayloadKind,
+    /// Nested typed sync event.
+    #[serde(rename = "syncEvent")]
+    pub sync_event: SyncEvent,
+}
+
+/// Discriminator for sync payload wrappers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GlobalSyncPayloadKind {
+    /// Sync payload wrapper.
+    #[serde(rename = "sync")]
+    Sync,
+}
+
+/// Typed sync events carried inside `/global/event`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SyncEvent {
+    /// Full message update sync event.
+    #[serde(rename = "message.updated.1")]
+    MessageUpdated {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncMessageUpdatedData>,
+    },
+    /// Message removal sync event.
+    #[serde(rename = "message.removed.1")]
+    MessageRemoved {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncMessageRemovedData>,
+    },
+    /// Message part update sync event.
+    #[serde(rename = "message.part.updated.1")]
+    MessagePartUpdated {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncMessagePartUpdatedData>,
+    },
+    /// Message part removal sync event.
+    #[serde(rename = "message.part.removed.1")]
+    MessagePartRemoved {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncMessagePartRemovedData>,
+    },
+    /// Session created sync event.
+    #[serde(rename = "session.created.1")]
+    SessionCreated {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncSessionData>,
+    },
+    /// Session updated sync event with partial session info.
+    #[serde(rename = "session.updated.1")]
+    SessionUpdated {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncSessionUpdatedData>,
+    },
+    /// Session deleted sync event.
+    #[serde(rename = "session.deleted.1")]
+    SessionDeleted {
+        id: String,
+        seq: u64,
+        #[serde(rename = "aggregateID")]
+        aggregate_id: String,
+        data: Box<SyncSessionData>,
+    },
+}
+
+/// Data for `message.updated.1` sync events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncMessageUpdatedData {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub info: Message,
+}
+
+/// Data for `message.removed.1` sync events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncMessageRemovedData {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    #[serde(rename = "messageID")]
+    pub message_id: String,
+}
+
+/// Data for `message.part.updated.1` sync events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncMessagePartUpdatedData {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub part: Part,
+    pub time: u64,
+}
+
+/// Data for `message.part.removed.1` sync events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncMessagePartRemovedData {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    #[serde(rename = "messageID")]
+    pub message_id: String,
+    #[serde(rename = "partID")]
+    pub part_id: String,
+}
+
+/// Data for full-session sync events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncSessionData {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub info: Session,
+}
+
+/// Data for `session.updated.1` sync events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncSessionUpdatedData {
+    #[serde(rename = "sessionID")]
+    pub session_id: String,
+    pub info: SyncSessionPatch,
+}
+
+/// Partial session payload used by sync updates.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSessionPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slug: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<SessionSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub share: Option<ShareInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<SessionTime>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<crate::types::permission::Ruleset>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revert: Option<RevertInfo>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 /// SSE Event from `OpenCode` server (40 variants).
@@ -455,10 +651,9 @@ pub enum AssistantError {
 
 /// Properties for session error events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SessionErrorProps {
     /// Session ID.
-    #[serde(default)]
+    #[serde(default, rename = "sessionID")]
     pub session_id: Option<String>,
     /// Typed error.
     #[serde(default)]
@@ -483,11 +678,12 @@ pub struct MessageUpdatedProps {
 
 /// Properties for message.removed events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct MessageRemovedProps {
     /// Session ID.
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     /// Message ID.
+    #[serde(rename = "messageID")]
     pub message_id: String,
     /// Additional properties.
     #[serde(flatten)]
@@ -496,13 +692,12 @@ pub struct MessageRemovedProps {
 
 /// Properties for message part update events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct MessagePartEventProps {
     /// Session ID.
-    #[serde(default)]
+    #[serde(default, rename = "sessionID")]
     pub session_id: Option<String>,
     /// Message ID.
-    #[serde(default)]
+    #[serde(default, rename = "messageID")]
     pub message_id: Option<String>,
     /// Part index.
     #[serde(default)]
@@ -531,11 +726,12 @@ pub struct PermissionAskedProps {
 
 /// Properties for permission.replied events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PermissionRepliedProps {
     /// Session ID.
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     /// Request ID that was replied to.
+    #[serde(rename = "requestID")]
     pub request_id: String,
     /// The reply given.
     pub reply: PermissionReply,
@@ -557,11 +753,12 @@ pub struct QuestionAskedProps {
 
 /// Properties for question.replied events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QuestionRepliedProps {
     /// Session ID.
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     /// Request ID that was replied to.
+    #[serde(rename = "requestID")]
     pub request_id: String,
     /// The answers given.
     pub answers: Vec<Vec<String>>,
@@ -572,11 +769,12 @@ pub struct QuestionRepliedProps {
 
 /// Properties for question.rejected events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QuestionRejectedProps {
     /// Session ID.
+    #[serde(rename = "sessionID")]
     pub session_id: String,
     /// Request ID that was rejected.
+    #[serde(rename = "requestID")]
     pub request_id: String,
     /// Optional reason for rejection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -661,7 +859,7 @@ mod tests {
 
     #[test]
     fn test_message_part_with_delta() {
-        let json = r#"{"type":"message.part.updated","properties":{"sessionId":"s1","messageId":"m1","delta":"Hello"}}"#;
+        let json = r#"{"type":"message.part.updated","properties":{"sessionID":"s1","messageID":"m1","delta":"Hello"}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         if let Event::MessagePartUpdated { properties } = &event {
             assert_eq!(properties.delta, Some("Hello".to_string()));
@@ -698,8 +896,8 @@ mod tests {
         let json = r#"{
             "type": "permission.replied",
             "properties": {
-                "sessionId": "sess-456",
-                "requestId": "req-123",
+                "sessionID": "sess-456",
+                "requestID": "req-123",
                 "reply": "always"
             }
         }"#;
@@ -715,7 +913,7 @@ mod tests {
             "properties": {
                 "info": {
                     "id": "msg-123",
-                    "sessionId": "sess-456",
+                    "sessionID": "sess-456",
                     "role": "assistant",
                     "time": {"created": 1234567890}
                 }
@@ -731,8 +929,8 @@ mod tests {
         let json = r#"{
             "type": "message.removed",
             "properties": {
-                "sessionId": "sess-456",
-                "messageId": "msg-123"
+                "sessionID": "sess-456",
+                "messageID": "msg-123"
             }
         }"#;
         let event: Event = serde_json::from_str(json).unwrap();
@@ -745,7 +943,7 @@ mod tests {
         let json = r#"{
             "type": "session.error",
             "properties": {
-                "sessionId": "sess-456",
+                "sessionID": "sess-456",
                 "error": {"message": "Something went wrong", "isRetryable": false}
             }
         }"#;
@@ -775,7 +973,7 @@ mod tests {
             "type": "question.asked",
             "properties": {
                 "id": "req-123",
-                "sessionId": "sess-456",
+                "sessionID": "sess-456",
                 "questions": [{"question": "Continue?"}]
             }
         }"#;
@@ -789,8 +987,8 @@ mod tests {
         let json = r#"{
             "type": "question.replied",
             "properties": {
-                "sessionId": "sess-456",
-                "requestId": "req-123",
+                "sessionID": "sess-456",
+                "requestID": "req-123",
                 "answers": [["Yes"]]
             }
         }"#;
@@ -809,8 +1007,8 @@ mod tests {
         let json = r#"{
             "type": "question.rejected",
             "properties": {
-                "sessionId": "sess-456",
-                "requestId": "req-123",
+                "sessionID": "sess-456",
+                "requestID": "req-123",
                 "reason": "User cancelled"
             }
         }"#;
@@ -828,7 +1026,7 @@ mod tests {
 
     #[test]
     fn test_message_part_delta_deserialize() {
-        let json = r#"{"type": "message.part.delta", "properties": {"sessionId": "ses-1", "messageId": "msg-1", "index": 0}}"#;
+        let json = r#"{"type": "message.part.delta", "properties": {"sessionID": "ses-1", "messageID": "msg-1", "index": 0}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::MessagePartDelta { .. }));
         assert_eq!(event.session_id(), Some("ses-1"));
@@ -869,5 +1067,116 @@ mod tests {
         assert!(matches!(event, Event::McpBrowserOpenFailed { .. }));
     }
 
-    // TODO(3): Add tests for GlobalEventEnvelope deserialization and round-trip serialization
+    #[test]
+    fn test_global_event_directory_payload_deserialize() {
+        let json = r#"{
+            "directory": "/workspace/project",
+            "project": "proj-1",
+            "workspace": "ws-1",
+            "payload": {
+                "type": "question.asked",
+                "properties": {
+                    "id": "req-123",
+                    "sessionID": "sess-456",
+                    "questions": [{"question": "Continue?"}]
+                }
+            }
+        }"#;
+
+        let event: GlobalEvent = serde_json::from_str(json).unwrap();
+        assert_eq!(event.directory.as_deref(), Some("/workspace/project"));
+        assert_eq!(event.project.as_deref(), Some("proj-1"));
+        assert_eq!(event.workspace.as_deref(), Some("ws-1"));
+        assert!(matches!(
+            event.payload,
+            GlobalEventPayload::Event(event) if matches!(*event, Event::QuestionAsked { .. })
+        ));
+    }
+
+    #[test]
+    fn test_global_event_sync_payload_deserialize() {
+        let json = r#"{
+            "directory": "/workspace/project",
+            "project": "proj-1",
+            "workspace": "ws-1",
+            "payload": {
+                "type": "sync",
+                "syncEvent": {
+                    "type": "message.updated.1",
+                    "id": "sync-1",
+                    "seq": 7,
+                    "aggregateID": "sess-456",
+                    "data": {
+                        "sessionID": "sess-456",
+                        "info": {
+                            "info": {
+                                "id": "msg-123",
+                                "sessionID": "sess-456",
+                                "role": "assistant",
+                                "time": {"created": 1234567890},
+                                "model": {
+                                    "providerID": "anthropic",
+                                    "modelID": "claude-sonnet-4",
+                                    "variant": "thinking"
+                                }
+                            },
+                            "parts": []
+                        }
+                    }
+                }
+            }
+        }"#;
+
+        let event: GlobalEvent = serde_json::from_str(json).unwrap();
+        match event.payload {
+            GlobalEventPayload::Sync(sync_payload) => {
+                let GlobalSyncEventPayload { kind, sync_event } = *sync_payload;
+                assert_eq!(kind, GlobalSyncPayloadKind::Sync);
+
+                let SyncEvent::MessageUpdated {
+                    id,
+                    seq,
+                    aggregate_id,
+                    data,
+                } = sync_event
+                else {
+                    panic!("expected message.updated.1 sync event");
+                };
+
+                assert_eq!(id, "sync-1");
+                assert_eq!(seq, 7);
+                assert_eq!(aggregate_id, "sess-456");
+                assert_eq!(data.session_id, "sess-456");
+                assert_eq!(data.info.info.id, "msg-123");
+                assert_eq!(
+                    data.info
+                        .info
+                        .model
+                        .as_ref()
+                        .and_then(|model| model.variant.as_deref()),
+                    Some("thinking")
+                );
+            }
+            GlobalEventPayload::Event(other) => {
+                panic!("expected sync payload, got event payload {other:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_global_event_server_connected_without_directory() {
+        let json = r#"{
+            "payload": {
+                "type": "server.connected",
+                "properties": {}
+            }
+        }"#;
+
+        let event: GlobalEvent = serde_json::from_str(json).unwrap();
+        assert!(event.directory.is_none());
+        assert!(matches!(
+            event.payload,
+            GlobalEventPayload::Event(event) if matches!(*event, Event::ServerConnected { .. })
+        ));
+    }
 }

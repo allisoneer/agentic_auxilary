@@ -1,13 +1,11 @@
 //! Resource API for `OpenCode`.
-//!
-//! Experimental endpoint for resource access.
 
 use crate::error::Result;
 use crate::http::HttpClient;
-use crate::http::encode_path_segment;
 use reqwest::Method;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
 
 /// Resource API client.
 #[derive(Clone)]
@@ -15,29 +13,15 @@ pub struct ResourceApi {
     http: HttpClient,
 }
 
-/// Resource information.
+/// MCP resource information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ResourceInfo {
-    /// Resource URI.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub uri: Option<String>,
-
-    /// Resource name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-
-    /// Resource content.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
-
-    /// Resource MIME type.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+pub struct McpResource {
+    pub name: String,
+    pub uri: String,
+    pub description: Option<String>,
     pub mime_type: Option<String>,
-
-    /// Additional fields from server.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
+    pub client: String,
 }
 
 impl ResourceApi {
@@ -46,19 +30,10 @@ impl ResourceApi {
         Self { http }
     }
 
-    /// Get a resource by URI.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the request fails.
-    pub async fn get(&self, uri: &str) -> Result<ResourceInfo> {
-        let encoded_uri = encode_path_segment(uri);
+    /// List all resources by URI.
+    pub async fn list(&self) -> Result<HashMap<String, McpResource>> {
         self.http
-            .request_json(
-                Method::GET,
-                &format!("/experimental/resource?uri={encoded_uri}"),
-                None,
-            )
+            .request_json(Method::GET, "/experimental/resource", None)
             .await
     }
 }
@@ -73,20 +48,21 @@ mod tests {
     use wiremock::ResponseTemplate;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
-    use wiremock::matchers::query_param;
 
     #[tokio::test]
-    async fn test_get_resource() {
+    async fn test_list_resources() {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
             .and(path("/experimental/resource"))
-            .and(query_param("uri", "file:///path/to/file.txt"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "uri": "file:///path/to/file.txt",
-                "name": "file.txt",
-                "content": "Hello, world!",
-                "mimeType": "text/plain"
+                "file:///path/to/file.txt": {
+                    "name": "file.txt",
+                    "uri": "file:///path/to/file.txt",
+                    "description": "Text file",
+                    "mimeType": "text/plain",
+                    "client": "filesystem"
+                }
             })))
             .mount(&mock_server)
             .await;
@@ -94,31 +70,14 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
 
         let api = ResourceApi::new(client);
-        let resource = api.get("file:///path/to/file.txt").await.unwrap();
-        assert_eq!(resource.uri, Some("file:///path/to/file.txt".to_string()));
-        assert_eq!(resource.name, Some("file.txt".to_string()));
-        assert_eq!(resource.content, Some("Hello, world!".to_string()));
-        assert_eq!(resource.mime_type, Some("text/plain".to_string()));
-    }
-
-    #[test]
-    fn test_resource_info_minimal() {
-        let json = r"{}";
-        let resource: ResourceInfo = serde_json::from_str(json).unwrap();
-        assert!(resource.uri.is_none());
-        assert!(resource.content.is_none());
-    }
-
-    #[test]
-    fn test_resource_info_extra_fields() {
-        let json = r#"{"uri": "test://uri", "futureField": "value"}"#;
-        let resource: ResourceInfo = serde_json::from_str(json).unwrap();
-        assert_eq!(resource.uri, Some("test://uri".to_string()));
-        assert_eq!(resource.extra["futureField"], "value");
+        let resources = api.list().await.unwrap();
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources["file:///path/to/file.txt"].client, "filesystem");
     }
 }

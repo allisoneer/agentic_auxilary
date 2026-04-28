@@ -75,6 +75,53 @@ fn unique_tmp_path(prefix: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{prefix}-{nanos}.txt"))
 }
 
+const PERMISSION_CONFIG_FIXTURE: &str = "opencode.permission.config.json";
+
+// NOTE: This fixture pins a concrete model ID (currently anthropic/claude-sonnet-4-5).
+// OpenCode v1.14.19 resolves model availability dynamically at runtime. If this pin is invalid
+// or unavailable, the server should fail loudly (no silent fallback). If needed, update the
+// fixture model string to another concrete (non-*-latest) model ID.
+struct TempFileGuard {
+    path: std::path::PathBuf,
+}
+
+impl TempFileGuard {
+    fn new(prefix: &str, contents: &str) -> Self {
+        let path = unique_tmp_path(prefix);
+        std::fs::write(&path, contents)
+            .unwrap_or_else(|e| panic!("failed to write temp file {}: {e}", path.display()));
+        Self { path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn load_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()))
+}
+
+fn external_read_prompt(file_path: &Path) -> String {
+    format!(
+        "There is a text file at \"{path}\".\n\
+         The file contains a unique token.\n\
+         Use the `read` tool to read it, then reply with the exact file contents and nothing else.\n\
+         Do not guess the contents.",
+        path = file_path.display(),
+    )
+}
+
 #[tokio::test]
 #[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
 async fn unknown_command_errors_fast() {
@@ -224,10 +271,10 @@ async fn session_resumption_works() {
     assert_eq!(result2.session_id, session_id);
 }
 
-/// Test that a prompt requiring file write triggers a permission request.
+/// Test that reading an external file triggers a permission request.
 ///
 /// This test verifies:
-/// 1. Running a prompt that writes to /tmp triggers `PermissionRequired` status
+/// 1. Running a prompt that reads from /tmp triggers `PermissionRequired` status
 /// 2. The `permission_request_id` is populated
 /// 3. The response comes back within a reasonable timeout (not hanging)
 #[tokio::test]
@@ -238,17 +285,19 @@ async fn permission_request_returns_status() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture(PERMISSION_CONFIG_FIXTURE);
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
-    // Generate unique temp file path to avoid conflicts
-    let tmp_file = unique_tmp_path("orch-perm-test");
-
-    // Prompt that should trigger a file.write permission request
-    let prompt = format!(
-        "Create a file at '{}' with the exact content 'test'. Use the write_file tool.",
-        tmp_file.display()
+    let token = format!(
+        "opencode-orchestrator-mcp permission token: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
     );
+    let tmp_file = TempFileGuard::new("orch-perm-test", &token);
+    let prompt = external_read_prompt(tmp_file.path());
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
@@ -282,6 +331,10 @@ async fn permission_request_returns_status() {
         result.permission_request_id.is_some(),
         "permission_request_id should be set when status is PermissionRequired"
     );
+    assert_eq!(
+        result.permission_type.as_deref(),
+        Some("external_directory")
+    );
 
     // Log for debugging
     tracing::info!(
@@ -291,8 +344,6 @@ async fn permission_request_returns_status() {
         "received permission request"
     );
 
-    // Cleanup - best effort, don't fail test if cleanup fails
-    let _ = std::fs::remove_file(&tmp_file);
     cleanup_session(&server, &session_id).await;
 }
 
@@ -315,14 +366,19 @@ async fn permission_response_resumes_and_completes() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture(PERMISSION_CONFIG_FIXTURE);
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
-    let tmp_file = unique_tmp_path("orch-perm-flow");
-    let prompt = format!(
-        "Create a file at '{}' containing exactly 'hello'. Use write_file tool.",
-        tmp_file.display()
+    let token = format!(
+        "opencode-orchestrator-mcp permission flow token: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
     );
+    let tmp_file = TempFileGuard::new("orch-perm-flow", &token);
+    let prompt = external_read_prompt(tmp_file.path());
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -349,6 +405,10 @@ async fn permission_response_resumes_and_completes() {
         "expected PermissionRequired, got {:?}",
         result1.status
     );
+    assert_eq!(
+        result1.permission_type.as_deref(),
+        Some("external_directory")
+    );
 
     tracing::info!(
         permission_id = ?result1.permission_request_id,
@@ -359,7 +419,7 @@ async fn permission_response_resumes_and_completes() {
     // This is where Bug 1 causes hangs - the race between permission reply
     // and SSE subscription can cause SessionIdle to be missed.
     //
-    // We use a loop to handle potential multiple permissions (e.g., directory + file)
+    // We use a loop to handle potential multiple permissions if the runtime config changes.
     let current_session_id = session_id.clone();
     let mut attempts = 0;
 
@@ -398,8 +458,8 @@ async fn permission_response_resumes_and_completes() {
                     .as_deref()
                     .expect("expected response after permission approval");
                 assert!(
-                    !resp.trim().is_empty(),
-                    "response should not be empty after permission approval"
+                    resp.contains(&token),
+                    "expected response to include token, got {resp:?}"
                 );
                 break;
             }
@@ -420,14 +480,6 @@ async fn permission_response_resumes_and_completes() {
         }
     }
 
-    // Verify the file was created (optional - confirms the work was done)
-    if tmp_file.exists() {
-        let contents = std::fs::read_to_string(&tmp_file).unwrap_or_default();
-        tracing::info!(file = %tmp_file.display(), contents = %contents, "file created");
-    }
-
-    // Cleanup
-    let _ = std::fs::remove_file(&tmp_file);
     cleanup_session(&server, &session_id).await;
 }
 
@@ -442,14 +494,19 @@ async fn permission_reject_returns_none_with_warning() {
     }
     init_tracing();
 
-    let server = start_server().await;
+    let config_json = load_fixture(PERMISSION_CONFIG_FIXTURE);
+    let server = start_server_with_config(config_json).await;
     let session_id = create_session(&server).await;
 
-    let tmp_file = unique_tmp_path("orch-reject-test");
-    let prompt = format!(
-        "Create a file at '{}' containing 'test'. Use write_file tool.",
-        tmp_file.display()
+    let token = format!(
+        "opencode-orchestrator-mcp permission reject token: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
     );
+    let tmp_file = TempFileGuard::new("orch-reject-test", &token);
+    let prompt = external_read_prompt(tmp_file.path());
 
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -475,6 +532,10 @@ async fn permission_reject_returns_none_with_warning() {
         matches!(result.status, RunStatus::PermissionRequired),
         "expected PermissionRequired, got {:?}",
         result.status
+    );
+    assert_eq!(
+        result.permission_type.as_deref(),
+        Some("external_directory")
     );
 
     // Step 2: Reject the permission
@@ -519,8 +580,6 @@ async fn permission_reject_returns_none_with_warning() {
         "rejection completed with expected warnings"
     );
 
-    // Cleanup
-    let _ = std::fs::remove_file(&tmp_file);
     cleanup_session(&server, &session_id).await;
 }
 
@@ -555,8 +614,7 @@ async fn live_question_tool_infrastructure() {
     // Load test config fixture
     let config_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/opencode.config.json");
-    let config_json =
-        std::fs::read_to_string(&config_path).expect("Failed to read test config fixture");
+    let config_json = load_fixture("opencode.config.json");
 
     tracing::info!("Loaded config from {}", config_path.display());
 

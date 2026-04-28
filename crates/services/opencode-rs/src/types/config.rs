@@ -18,7 +18,7 @@ pub struct Config {
     pub agent: Option<serde_json::Value>,
     /// Auto-compaction settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_compact: Option<AutoCompactConfig>,
+    pub auto_compact: Option<CompactionConfig>,
     /// MCP servers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp: Option<serde_json::Value>,
@@ -27,34 +27,22 @@ pub struct Config {
     pub extra: serde_json::Value,
 }
 
-/// Auto-compaction configuration.
+/// Compaction configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AutoCompactConfig {
+pub struct CompactionConfig {
     /// Whether auto-compaction is enabled.
     #[serde(default)]
     pub enabled: bool,
     /// Token threshold for triggering compaction.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub threshold: Option<u64>,
-}
-
-/// Request to update configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateConfigRequest {
-    /// New default provider.
+    /// Number of turns to retain at the tail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    /// New default model.
+    pub tail_turns: Option<u64>,
+    /// Number of recent tokens to preserve.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    /// New default agent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<String>,
-    /// Additional configuration updates.
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
+    pub preserve_recent_tokens: Option<u64>,
 }
 
 /// Provider configuration info.

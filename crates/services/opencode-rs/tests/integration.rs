@@ -6,7 +6,7 @@
 //!   `OPENCODE_INTEGRATION=1 cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
 //! For bunx-provisioned testing:
-//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.3.17" OPENCODE_INTEGRATION=1 \
+//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.19" OPENCODE_INTEGRATION=1 \
 //!    cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
 //! Without `server` feature (requires pre-running server):
@@ -16,7 +16,7 @@
 //! Environment variables:
 //!   `OPENCODE_INTEGRATION` - Must be set to run integration tests
 //!   `OPENCODE_BINARY` - Path to opencode binary or launcher (default: "opencode")
-//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.3.17")
+//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.14.19")
 //!   `OPENCODE_BASE_URL` - Base URL when not using managed server (default: <http://127.0.0.1:4096>)
 //!   `OPENCODE_DIRECTORY` - Directory context for requests (default: current directory)
 

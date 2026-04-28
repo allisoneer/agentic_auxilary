@@ -16,6 +16,13 @@ just build
 
 Integration tests are `#[ignore]` by default and require a working `opencode` binary plus local provider configuration.
 
+Use the pinned v1.14.19 bunx lane for live integration validation:
+
+```bash
+just smoke-bunx-stable-version
+just integration-test-bunx-stable
+```
+
 ## Local timeout smoke (recommended)
 
 1. `just test`

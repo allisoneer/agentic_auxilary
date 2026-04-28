@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 pub mod config;
+pub mod console;
+pub mod experimental_session;
 pub mod files;
 pub mod find;
 pub mod global;
@@ -35,8 +37,10 @@ pub mod question;
 pub mod resource;
 pub mod sessions;
 pub mod skills;
-pub mod snapshots;
+pub mod sync;
 pub mod tools;
+pub mod tui;
+pub mod workspaces;
 pub mod worktree;
 
 /// Configuration for the HTTP client.
@@ -44,8 +48,10 @@ pub mod worktree;
 pub struct HttpConfig {
     /// Base URL for the `OpenCode` server.
     pub base_url: String,
-    /// Optional directory context header.
+    /// Optional directory context query parameter.
     pub directory: Option<String>,
+    /// Optional workspace context query parameter.
+    pub workspace: Option<String>,
     /// Request timeout.
     pub timeout: Duration,
 }
@@ -101,6 +107,7 @@ impl HttpClient {
             cfg: HttpConfig {
                 base_url: base_url.to_string().trim_end_matches('/').to_string(),
                 directory: directory.map(|p| p.to_string_lossy().to_string()),
+                workspace: None,
                 timeout,
             },
         })
@@ -116,13 +123,23 @@ impl HttpClient {
         self.cfg.directory.as_deref()
     }
 
-    /// Build request headers including directory context.
+    /// Get the workspace context.
+    pub fn workspace(&self) -> Option<&str> {
+        self.cfg.workspace.as_deref()
+    }
+
+    /// Build request with standard directory/workspace query context.
     fn build_request(&self, method: Method, path: &str) -> reqwest::RequestBuilder {
         let url = format!("{}{}", self.cfg.base_url, path);
         let mut req = self.inner.request(method, &url);
 
-        if let Some(dir) = &self.cfg.directory {
-            req = req.header("x-opencode-directory", dir);
+        if !path.starts_with("/global/") {
+            if let Some(dir) = &self.cfg.directory {
+                req = req.query(&[("directory", dir)]);
+            }
+            if let Some(workspace) = &self.cfg.workspace {
+                req = req.query(&[("workspace", workspace)]);
+            }
         }
 
         req
@@ -274,6 +291,39 @@ impl HttpClient {
         Self::map_json_response(resp).await
     }
 
+    /// Make a JSON request with query parameters and deserialize the response.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails or the response cannot be deserialized.
+    pub async fn request_json_with_query<T: DeserializeOwned>(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, String)],
+        body: Option<serde_json::Value>,
+    ) -> Result<T> {
+        let mut req = self.build_request(method, path);
+
+        if !query.is_empty() {
+            let query_pairs: Vec<(&str, &str)> = query
+                .iter()
+                .map(|(key, value)| (*key, value.as_str()))
+                .collect();
+            req = req.query(&query_pairs);
+        }
+
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        Self::map_json_response(resp).await
+    }
+
     /// Make a request that expects no response body.
     ///
     /// # Errors
@@ -402,7 +452,6 @@ mod tests {
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
-    use wiremock::matchers::header;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
@@ -422,6 +471,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -446,6 +496,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -456,12 +507,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_request_with_directory_header() {
+    async fn test_request_with_directory_query() {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
             .and(path("/test"))
-            .and(header("x-opencode-directory", "/my/project"))
+            .and(wiremock::matchers::query_param("directory", "/my/project"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
             .mount(&mock_server)
             .await;
@@ -469,6 +520,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: Some("/my/project".to_string()),
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -494,6 +546,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -529,6 +582,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -556,6 +610,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();
@@ -580,6 +635,7 @@ mod tests {
         let client = HttpClient::new(HttpConfig {
             base_url: mock_server.uri(),
             directory: None,
+            workspace: None,
             timeout: Duration::from_secs(30),
         })
         .unwrap();

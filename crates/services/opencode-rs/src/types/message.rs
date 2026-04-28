@@ -14,7 +14,7 @@ pub struct MessageInfo {
     /// Unique message identifier.
     pub id: String,
     /// Session ID (may be omitted when context implies it).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "sessionID")]
     pub session_id: Option<String>,
     /// Message role (user, assistant, system).
     pub role: String,
@@ -23,10 +23,6 @@ pub struct MessageInfo {
     /// Agent name if applicable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
-    /// Message variant.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub variant: Option<String>,
-
     // Upstream parity fields
     /// Message format.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -41,13 +37,17 @@ pub struct MessageInfo {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub tools: HashMap<String, bool>,
     /// Parent message ID.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "parentID")]
     pub parent_id: Option<String>,
     /// Model ID (denormalized).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "modelID")]
     pub model_id: Option<String>,
     /// Provider ID (denormalized).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "providerID"
+    )]
     pub provider_id: Option<String>,
     /// Path context for this message.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -603,7 +603,7 @@ pub struct PromptRequest {
     /// Content parts to send.
     pub parts: Vec<PromptPart>,
     /// Message ID to reply to.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "messageID")]
     pub message_id: Option<String>,
     /// Model to use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -679,7 +679,7 @@ pub struct CommandRequest {
     /// Command arguments (passed as `$ARGUMENTS` for template expansion).
     pub arguments: String,
     /// Client-generated message ID (used for idempotency/deduplication).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "messageID")]
     pub message_id: Option<String>,
 }
 
@@ -890,20 +890,19 @@ mod tests {
 
     #[test]
     fn test_message_info_with_new_fields() {
-        // Note: ModelRef uses uppercase ID casing (1.3.17), but denormalized
-        // fields modelId/providerId use camelCase via rename_all
+        // Upstream uses explicit uppercase ID casing on wire fields.
         let json = r#"{
             "id": "msg-123",
-            "sessionId": "sess-456",
+            "sessionID": "sess-456",
             "role": "assistant",
             "time": {"created": 1234567890, "completed": 1234567900},
             "format": "markdown",
-            "model": {"providerID": "anthropic", "modelID": "claude-3"},
+            "model": {"providerID": "anthropic", "modelID": "claude-3", "variant": "thinking"},
             "system": "You are a helpful assistant",
             "tools": {"read_file": true, "write_file": false},
-            "parentId": "msg-100",
-            "modelId": "claude-3",
-            "providerId": "anthropic",
+            "parentID": "msg-100",
+            "modelID": "claude-3",
+            "providerID": "anthropic",
             "cost": 0.0125,
             "tokens": {"total": 1500, "input": 1000, "output": 500, "reasoning": 0},
             "finish": "stop"
@@ -917,6 +916,10 @@ mod tests {
         assert_eq!(
             info.model.as_ref().unwrap().provider_id,
             Some("anthropic".to_string())
+        );
+        assert_eq!(
+            info.model.as_ref().unwrap().variant,
+            Some("thinking".to_string())
         );
         assert_eq!(info.system, Some("You are a helpful assistant".to_string()));
         assert_eq!(info.tools.len(), 2);
@@ -932,6 +935,18 @@ mod tests {
         assert_eq!(tokens.input, 1000);
         assert_eq!(tokens.output, 500);
         assert_eq!(info.finish, Some("stop".to_string()));
+    }
+
+    #[test]
+    fn test_message_info_top_level_variant_is_not_typed() {
+        let json = r#"{
+            "id": "msg-123",
+            "role": "user",
+            "time": {"created": 1234567890},
+            "variant": "legacy-top-level"
+        }"#;
+        let info: MessageInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.extra["variant"], "legacy-top-level");
     }
 
     #[test]
