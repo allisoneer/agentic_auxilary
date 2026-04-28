@@ -296,6 +296,11 @@
     {
       "remote": "https://github.com/vercel/ai",
       "description": "Vercel AI SDK - checking strict mode handling for OpenAI vs OpenRouter providers"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "OpenCode latest release reference for upgrade research: v1.14.19, release notes https://github.com/anomalyco/opencode/releases/tag/v1.14.19 . Migration notes: v1.4.0 introduced SDK breaking changes to diff payloads and UserMessage variant nesting; v1.14.19 renamed compaction setting to preserve_recent_tokens and fixed compiled-binary startup circular schema issue.",
+      "ref": "refs/tags/v1.14.19"
     }
   ]
 }
