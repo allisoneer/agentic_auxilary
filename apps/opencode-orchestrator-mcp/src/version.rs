@@ -1,20 +1,11 @@
 use anyhow::Context;
 use anyhow::anyhow;
+pub use opencode_rs::version::OPENCODE_BINARY_ARGS_ENV;
+pub use opencode_rs::version::OPENCODE_BINARY_ENV;
 pub use opencode_rs::version::PINNED_OPENCODE_VERSION;
 pub use opencode_rs::version::validate_exact_version;
 use std::path::Path;
 use std::path::PathBuf;
-
-pub const OPENCODE_BINARY_ENV: &str = "OPENCODE_BINARY";
-/// Environment variable for extra arguments between binary and `serve` command.
-///
-/// Useful for launchers like `bunx` where the full command is:
-/// `bunx --yes opencode-ai@1.14.19 serve --hostname ... --port ...`
-///
-/// Example: `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.19"`
-///
-/// The `--yes` flag makes bunx non-interactive (skips confirmation prompts).
-pub const OPENCODE_BINARY_ARGS_ENV: &str = "OPENCODE_BINARY_ARGS";
 
 /// Configuration for launching the `OpenCode` server.
 ///

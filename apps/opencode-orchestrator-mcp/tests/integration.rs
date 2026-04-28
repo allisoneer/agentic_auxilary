@@ -130,8 +130,7 @@ async fn unknown_command_errors_fast() {
     }
     init_tracing();
 
-    let config_json = load_fixture("opencode.permission.config.json");
-    let server = start_server_with_config(config_json).await;
+    let server = start_server().await;
     let session_id = create_session(&server).await;
 
     let tool = OrchestratorRunTool::new(Arc::clone(&server));

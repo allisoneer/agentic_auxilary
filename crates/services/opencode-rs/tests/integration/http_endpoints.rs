@@ -404,14 +404,16 @@ async fn test_session_init_required_body() {
         .expect("Failed to create a message for session.init preconditions");
 
     let providers = client.providers().list().await.expect("providers list");
-    let provider = providers
+    let (provider_id, model_id) = providers
         .all
-        .first()
-        .expect("session.init test requires at least one provider");
-    let (model_id, _) = provider
-        .models
         .iter()
-        .next()
+        .find_map(|provider| {
+            provider
+                .models
+                .iter()
+                .next()
+                .map(|(model_id, _)| (provider.id.clone(), model_id.clone()))
+        })
         .expect("session.init test requires at least one provider model");
 
     let messages = client
@@ -428,8 +430,8 @@ async fn test_session_init_required_body() {
         .init(
             &session.id,
             &SessionInitRequest {
-                model_id: model_id.clone(),
-                provider_id: provider.id.clone(),
+                model_id,
+                provider_id,
                 message_id: message.id().to_string(),
             },
         )
