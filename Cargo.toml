@@ -93,8 +93,8 @@ linear-queries = { version = "0.3.0", path = "crates/linear/queries" }
 claudecode = { version = "0.1.17", path = "crates/services/claudecode-rs" }
 anthropic-async = { version = "0.5.2", path = "crates/services/anthropic-async" }
 exa-async = { version = "0.1.2", path = "crates/services/exa-async" }
-opencode_rs = { version = "0.7.0", path = "crates/services/opencode-rs" }
-web-retrieval = { version = "0.2.5", path = "crates/tools/web-retrieval" }
+opencode_rs = { version = "0.8.0", path = "crates/services/opencode-rs" }
+web-retrieval = { version = "0.2.6", path = "crates/tools/web-retrieval" }
 review_tools = { version = "0.1.7", path = "crates/tools/review-tools" }
 message_optimizer = { version = "0.1.1", path = "crates/tools/message-optimizer" }
 universal-tool-core = { version = "0.2.8", path = "crates/legacy/universal-tool-core" }

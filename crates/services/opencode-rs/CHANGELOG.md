@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.8.0] - 2026-04-28
+
+### ⚙️  Miscellaneous
+- *(opencode)* Pin OpenCode to v1.14.19
+
+### ⛰️  Features
+- *(opencode_rs)* [**breaking**] Align SDK contracts with OpenCode v1.14.19
+
+### 🐛 Bug Fixes
+- *(opencode_rs)* Align bounded PR 182 review fixes with actual contracts
+- Address bounded PR 182 review fixes
+
+### 🚜 Refactor
+- *(opencode_rs)* Remove snapshot APIs and simplify skills surface
 ## [0.7.0] - 2026-04-13
 
 ### ⛰️  Features

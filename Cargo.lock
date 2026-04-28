@@ -4344,7 +4344,7 @@ dependencies = [
 
 [[package]]
 name = "opencode_rs"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "backon",
@@ -7175,7 +7175,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
