@@ -70,7 +70,7 @@ cargo install --path apps/thoughts
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-claudecode = "0.1.16"
+claudecode = "0.1.17"
 ```
 <!-- END:autodeps -->
 
