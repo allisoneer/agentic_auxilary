@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.2.6] - 2026-04-28
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: opencode_rs
 ## [0.2.5] - 2026-04-15
 
 ### ⚙️  Miscellaneous
