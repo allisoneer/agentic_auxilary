@@ -79,9 +79,13 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> SingleJsonParser<R1, R2> {
         let mut stdout_content = String::new();
         let mut stderr_content = String::new();
 
-        // Read both streams
-        self.stdout.read_to_string(&mut stdout_content).await?;
-        self.stderr.read_to_string(&mut stderr_content).await?;
+        // Drain both streams concurrently so stderr backpressure cannot block stdout EOF.
+        let stdout = &mut self.stdout;
+        let stderr = &mut self.stderr;
+        tokio::try_join!(
+            stdout.read_to_string(&mut stdout_content),
+            stderr.read_to_string(&mut stderr_content)
+        )?;
 
         // If stderr has content, this is an error
         if !stderr_content.trim().is_empty() {
@@ -119,9 +123,13 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> TextParser<R1, R2> {
         let mut stdout_content = String::new();
         let mut stderr_content = String::new();
 
-        // Read both streams
-        self.stdout.read_to_string(&mut stdout_content).await?;
-        self.stderr.read_to_string(&mut stderr_content).await?;
+        // Drain both streams concurrently so stderr backpressure cannot block stdout EOF.
+        let stdout = &mut self.stdout;
+        let stderr = &mut self.stderr;
+        tokio::try_join!(
+            stdout.read_to_string(&mut stdout_content),
+            stderr.read_to_string(&mut stderr_content)
+        )?;
 
         // Determine if this is an error based on stderr content
         let is_error = !stderr_content.trim().is_empty();
@@ -156,7 +164,15 @@ mod text_parser_tests {
     use std::pin::Pin;
     use std::task::Context;
     use std::task::Poll;
+    use std::time::Duration;
+    use tokio::io::AsyncWriteExt;
+    use tokio::io::DuplexStream;
     use tokio::io::ReadBuf;
+    use tokio::time::timeout;
+
+    const PIPE_BUFFER_SIZE: usize = 64;
+    const LARGE_STDERR_LEN: usize = 128 * 1024;
+    const PARSE_TIMEOUT: Duration = Duration::from_secs(2);
 
     /// Minimal AsyncRead adapter over in-memory bytes for tests
     struct AsyncCursor {
@@ -187,6 +203,28 @@ mod text_parser_tests {
             buf.put_slice(&temp[..n]);
             Poll::Ready(Ok(()))
         }
+    }
+
+    fn streams_with_stdout_open_until_stderr_written(
+        stdout_content: &'static [u8],
+        stderr_content: Vec<u8>,
+    ) -> (
+        DuplexStream,
+        DuplexStream,
+        tokio::task::JoinHandle<std::io::Result<()>>,
+    ) {
+        let (stdout_reader, mut stdout_writer) = tokio::io::duplex(PIPE_BUFFER_SIZE);
+        let (stderr_reader, mut stderr_writer) = tokio::io::duplex(PIPE_BUFFER_SIZE);
+
+        let writer = tokio::spawn(async move {
+            stdout_writer.write_all(stdout_content).await?;
+            stderr_writer.write_all(&stderr_content).await?;
+            stderr_writer.shutdown().await?;
+            stdout_writer.shutdown().await?;
+            Ok(())
+        });
+
+        (stdout_reader, stderr_reader, writer)
     }
 
     #[tokio::test]
@@ -229,5 +267,65 @@ mod text_parser_tests {
                 .unwrap_or("")
                 .contains("Process wrote to stderr")
         );
+    }
+
+    #[tokio::test]
+    async fn textparser_drains_stderr_while_stdout_remains_open() {
+        let stderr_content = vec![b'e'; LARGE_STDERR_LEN];
+        let (stdout, stderr, writer) =
+            streams_with_stdout_open_until_stderr_written(b"stdout stays open", stderr_content);
+
+        let parsed = timeout(PARSE_TIMEOUT, TextParser::new(stdout, stderr).parse()).await;
+        if parsed.is_err() {
+            writer.abort();
+        }
+        let res = parsed.expect("text parser timed out").unwrap();
+        writer.await.unwrap().unwrap();
+
+        assert!(res.is_error);
+        assert_eq!(
+            res.content.as_ref().map(String::len),
+            Some(LARGE_STDERR_LEN)
+        );
+        assert_eq!(res.error.as_deref(), Some("Process wrote to stderr"));
+    }
+
+    #[tokio::test]
+    async fn singlejsonparser_stdout_json_returns_result() {
+        let stdout = AsyncCursor::new(br#"{"result":"ok","is_error":false}"#);
+        let stderr = AsyncCursor::new(b"");
+        let res = SingleJsonParser::new(stdout, stderr).parse().await.unwrap();
+        assert!(!res.is_error);
+        assert_eq!(res.result.as_deref(), Some("ok"));
+    }
+
+    #[tokio::test]
+    async fn singlejsonparser_stderr_marks_error_and_skips_stdout_parse() {
+        let stdout = AsyncCursor::new(b"not json");
+        let stderr = AsyncCursor::new(b" boom ");
+        let res = SingleJsonParser::new(stdout, stderr).parse().await.unwrap();
+        assert!(res.is_error);
+        assert_eq!(res.error.as_deref(), Some("boom"));
+        assert!(res.content.is_none());
+    }
+
+    #[tokio::test]
+    async fn singlejsonparser_drains_stderr_while_stdout_remains_open() {
+        let stderr_content = vec![b'e'; LARGE_STDERR_LEN];
+        let (stdout, stderr, writer) = streams_with_stdout_open_until_stderr_written(
+            br#"{"result":"ok","is_error":false}"#,
+            stderr_content,
+        );
+
+        let parsed = timeout(PARSE_TIMEOUT, SingleJsonParser::new(stdout, stderr).parse()).await;
+        if parsed.is_err() {
+            writer.abort();
+        }
+        let res = parsed.expect("single-json parser timed out").unwrap();
+        writer.await.unwrap().unwrap();
+
+        assert!(res.is_error);
+        assert_eq!(res.error.as_ref().map(String::len), Some(LARGE_STDERR_LEN));
+        assert!(res.content.is_none());
     }
 }
