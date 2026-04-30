@@ -353,6 +353,80 @@ schema-generate:
     cargo run -p agentic-bin -- config schema > agentic.schema.json
 
 # ------------------------------------------------------------------------------
+# Git - Write Operations (for agents without shell access)
+#
+# These recipes enforce git-aware move/remove semantics via git mv / git rm.
+# They fail loudly on unsuitable git state instead of falling back to plain mv/rm.
+# ------------------------------------------------------------------------------
+
+# git-mv: Move or rename a tracked path with git-aware semantics. Optionally create dst parent first.
+git-mv src dst mkdir_parents="true":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    SRC="{{ src }}"
+    DST="{{ dst }}"
+    MKDIR_PARENTS="{{ mkdir_parents }}"
+
+    if [ -z "$SRC" ] || [ -z "$DST" ]; then
+      echo "Usage: just git-mv <src> <dst> [mkdir_parents]" >&2
+      exit 2
+    fi
+
+    case "$MKDIR_PARENTS" in
+      true|false) ;;
+      *) echo "Invalid mkdir_parents: '$MKDIR_PARENTS'. Allowed: true|false" >&2; exit 2 ;;
+    esac
+
+    if [ "$MKDIR_PARENTS" = "true" ]; then
+      mkdir -p "$(dirname "$DST")"
+    fi
+
+    git mv -- "$SRC" "$DST"
+
+# git-rm: Remove a tracked path with git-aware semantics. force: true|false. recursive: auto|true|false.
+git-rm path force="false" recursive="auto":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    P="{{ path }}"
+    FORCE="{{ force }}"
+    RECURSIVE="{{ recursive }}"
+
+    if [ -z "$P" ]; then
+      echo "Usage: just git-rm <path> [force] [recursive]" >&2
+      exit 2
+    fi
+
+    case "$FORCE" in
+      true|false) ;;
+      *) echo "Invalid force: '$FORCE'. Allowed: true|false" >&2; exit 2 ;;
+    esac
+
+    case "$RECURSIVE" in
+      auto|true|false) ;;
+      *) echo "Invalid recursive: '$RECURSIVE'. Allowed: auto|true|false" >&2; exit 2 ;;
+    esac
+
+    rm_flags=()
+    if [ "$FORCE" = "true" ]; then
+      rm_flags+=(-f)
+    fi
+
+    case "$RECURSIVE" in
+      true)
+        rm_flags+=(-r)
+        ;;
+      auto)
+        if [ -d "$P" ]; then
+          rm_flags+=(-r)
+        fi
+        ;;
+    esac
+
+    git rm "${rm_flags[@]}" -- "$P"
+
+# ------------------------------------------------------------------------------
 # MCP Inspector Recipes
 # ------------------------------------------------------------------------------
 # Interactive MCP Inspector for troubleshooting
