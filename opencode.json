@@ -1,5 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "tui": {
+    "disabled_animations": [
+      "spinner",
+      "status_background"
+    ]
+  },
   "autoupdate": false,
   "default_agent": "NormalOpenAI",
   "permission": {
@@ -24,8 +30,7 @@
   "agent": {
     "Normal": {
       "prompt": "{file:./.opencode/sysprompt.md}",
-      "mode": "primary",
-      "model": "anthropic/claude-opus-4-5"
+      "mode": "primary"
     },
     "NormalOpenAI": {
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
@@ -151,11 +156,6 @@
     "Linear": {
       "permission": {
         "tools_linear_*": "allow"
-      }
-    },
-    "Web": {
-      "permission": {
-        "tools_web_*": "allow"
       }
     },
     "build": {
