@@ -2,7 +2,6 @@
 
 use crate::types::GrepOutput;
 use crate::types::OutputMode;
-use crate::walker::BUILTIN_IGNORES;
 use crate::walker::{self};
 use agentic_tools_core::ToolError;
 use globset::Glob;
@@ -281,7 +280,6 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
 
         // Apply custom ignore filter
         let root_clone = root_path.to_path_buf();
-        let gs_clone = ignore_gs.clone();
         builder.filter_entry(move |entry| {
             let rel = entry
                 .path()
@@ -291,7 +289,7 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
             if rel.is_empty() {
                 return true;
             }
-            !gs_clone.is_match(&rel)
+            !ignore_gs.is_match(&rel)
         });
 
         for result in builder.build() {
@@ -308,23 +306,6 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
                         |_| path.to_string_lossy().to_string(),
                         |p| p.to_string_lossy().replace('\\', "/"),
                     );
-
-                    // Double-check against ignore patterns
-                    if ignore_gs.is_match(&rel_path) {
-                        continue;
-                    }
-
-                    // Check against builtin ignores
-                    let matches_builtin = BUILTIN_IGNORES.iter().any(|pattern| {
-                        if let Ok(g) = Glob::new(pattern) {
-                            g.compile_matcher().is_match(&rel_path)
-                        } else {
-                            false
-                        }
-                    });
-                    if matches_builtin {
-                        continue;
-                    }
 
                     // Check include patterns
                     if let Some(ref inc_gs) = include_gs
