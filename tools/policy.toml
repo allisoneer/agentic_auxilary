@@ -106,6 +106,7 @@ ignore_paths = [
   "crates/legacy/universal-tool-examples/",               # Legacy example READMEs with CLI examples
   "crates/tools/coding-agent-tools/src/agent/prompts.rs", # Prompt template string
   ".opencode/",                                           # Editor command/config docs
+  "vendor/",                                              # Foreign vendored source tree
 ]
 
 # Filename suffixes to exclude (matches any path ending with the suffix).

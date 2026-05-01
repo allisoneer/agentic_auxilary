@@ -51,7 +51,7 @@ members = [
   # Meta
   "crates/meta/xtask",
 ]
-exclude = ["crates/legacy/universal-tool-examples"]
+exclude = ["crates/legacy/universal-tool-examples", "vendor"]
 
 [workspace.dependencies]
 # Shared core dependencies

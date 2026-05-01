@@ -37,6 +37,12 @@ help:
     @echo "  just fmt              # format entire workspace"
     @echo "  just fmt-check        # check formatting for entire workspace"
     @echo ""
+    @echo "Vendored Codex commands:"
+    @echo "  just codex-check      # check vendored Codex workspace"
+    @echo "  just codex-build      # build vendored Codex CLI"
+    @echo "  just codex-test       # run vendored Codex tests (best-effort)"
+    @echo "  just codex-run -- ... # run vendored Codex binary"
+    @echo ""
     @echo "Per-crate commands:"
     @echo "  just crate-check <c>  # check a single crate by name"
     @echo "  just crate-test <c>   # test a single crate by name"
@@ -68,13 +74,25 @@ test-integration: mcp-test
 build:
     {{ exec }}cargo build --workspace
 
+codex-check:
+    cd vendor/codex/codex-rs && cargo check -p codex-cli --all-targets
+
+codex-build:
+    cd vendor/codex/codex-rs && cargo build -p codex-cli
+
+codex-test:
+    cd vendor/codex/codex-rs && RUST_MIN_STACK=8388608 cargo nextest run --no-fail-fast
+
+codex-run *args:
+    cd vendor/codex/codex-rs && cargo run --bin codex -- {{ args }}
+
 fmt:
     {{ exec }}cargo +nightly fmt --all
-    {{ exec }}taplo fmt
+    {{ exec }}taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
 
 fmt-check:
     {{ exec }}cargo +nightly fmt --all -- --check
-    {{ exec }}taplo fmt --check
+    {{ exec }}taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
 
 # Security audit with cargo-deny
 deny:
