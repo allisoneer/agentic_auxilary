@@ -2,7 +2,6 @@
 
 use crate::types::GrepOutput;
 use crate::types::OutputMode;
-use crate::walker::BUILTIN_IGNORES;
 use crate::walker::{self};
 use agentic_tools_core::ToolError;
 use globset::Glob;
@@ -230,6 +229,7 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
     let mut warnings: Vec<String> = Vec::new();
     let mut all_matches: Vec<FileMatch> = Vec::new();
     let mut binary_skipped = 0usize;
+    let legacy_ignore_recheck = walker::legacy_ignore_recheck_enabled();
 
     // Handle single file case
     if root_path.is_file() {
@@ -309,20 +309,12 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
                         |p| p.to_string_lossy().replace('\\', "/"),
                     );
 
-                    // Double-check against ignore patterns
+                    // Built-in ignores are already part of `ignore_gs`; keep this per-file check cheap.
                     if ignore_gs.is_match(&rel_path) {
                         continue;
                     }
 
-                    // Check against builtin ignores
-                    let matches_builtin = BUILTIN_IGNORES.iter().any(|pattern| {
-                        if let Ok(g) = Glob::new(pattern) {
-                            g.compile_matcher().is_match(&rel_path)
-                        } else {
-                            false
-                        }
-                    });
-                    if matches_builtin {
+                    if legacy_ignore_recheck && walker::legacy_builtin_ignore_recheck(&rel_path) {
                         continue;
                     }
 

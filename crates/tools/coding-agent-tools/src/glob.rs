@@ -2,7 +2,6 @@
 
 use crate::types::GlobOutput;
 use crate::types::SortOrder;
-use crate::walker::BUILTIN_IGNORES;
 use crate::walker::{self};
 use agentic_tools_core::ToolError;
 use globset::Glob;
@@ -63,6 +62,7 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
 
     let mut warnings: Vec<String> = Vec::new();
     let mut entries: Vec<GlobEntry> = Vec::new();
+    let legacy_ignore_recheck = walker::legacy_ignore_recheck_enabled();
 
     // Configure walker
     let mut builder = WalkBuilder::new(root_path);
@@ -103,20 +103,12 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
                     |p| p.to_string_lossy().replace('\\', "/"),
                 );
 
-                // Double-check against ignore patterns
+                // Built-in ignores are already part of `ignore_gs`; keep this per-entry check cheap.
                 if ignore_gs.is_match(&rel_path) {
                     continue;
                 }
 
-                // Check against builtin ignores
-                let matches_builtin = BUILTIN_IGNORES.iter().any(|pattern| {
-                    if let Ok(g) = Glob::new(pattern) {
-                        g.compile_matcher().is_match(&rel_path)
-                    } else {
-                        false
-                    }
-                });
-                if matches_builtin {
+                if legacy_ignore_recheck && walker::legacy_builtin_ignore_recheck(&rel_path) {
                     continue;
                 }
 

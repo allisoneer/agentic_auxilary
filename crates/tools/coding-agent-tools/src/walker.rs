@@ -10,6 +10,8 @@ use globset::GlobSetBuilder;
 use ignore::WalkBuilder;
 use std::path::Path;
 
+pub const LEGACY_IGNORE_RECHECK_ENV: &str = "AGENTIC_CLI_SEARCH_LEGACY_IGNORE_RECHECK";
+
 /// Built-in ignore patterns for common non-essential directories.
 /// Each directory has two patterns: one for the directory itself and one for its contents.
 pub const BUILTIN_IGNORES: &[&str] = &[
@@ -71,6 +73,25 @@ pub const BUILTIN_IGNORES: &[&str] = &[
     "**/env",
     "**/env/**",
 ];
+
+pub fn legacy_ignore_recheck_enabled() -> bool {
+    std::env::var(LEGACY_IGNORE_RECHECK_ENV)
+        .ok()
+        .is_some_and(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "legacy"
+            )
+        })
+}
+
+pub fn legacy_builtin_ignore_recheck(rel_path: &str) -> bool {
+    BUILTIN_IGNORES.iter().any(|pattern| {
+        Glob::new(pattern)
+            .map(|glob| glob.compile_matcher().is_match(rel_path))
+            .unwrap_or(false)
+    })
+}
 
 /// Build a `GlobSet` from built-in and user patterns.
 /// Public for reuse in grep/glob tools.
