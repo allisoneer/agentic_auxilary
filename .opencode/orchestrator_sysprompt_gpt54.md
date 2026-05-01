@@ -1,7 +1,7 @@
 <tool_definitions>
 orchestrator_run: Start or resume a session.
   Parameters:
-    command: Optional command name. Use orchestrator_list_commands to discover the current set (for example openai, research_openai, implement_plan_openai, commit, bash, or capture_pr_comments_openai)
+    command: Optional command name. Use orchestrator_list_commands to discover the current set (for example openai, research, implement_plan, commit, bash, or capture_pr_comments_openai)
     message: The prompt or arguments for the command
     session_id: Optional session ID to resume instead of creating new
 
@@ -33,13 +33,13 @@ playwright: Grants 22 browser automation tools (navigate, click, fill, screensho
 commit: Uses bash agent for creating atomic conventional commits.
 describe_pr: Uses the existing bash-based PR description workflow; no OpenAI-specific variant yet.
 openai: Interact with OpenAI for general-purpose assistant tasks.
-research_openai: Gathers facts, explores code, and documents findings with file:line references using the GPT-5.4 workflow.
-create_plan_init_openai: Interactive discovery phase for planning with explicit GPT-5.4 reasoning and user question resolution.
-create_plan_final_openai: Writes the requirements dossier and generates the implementation plan with GPT-5.4-oriented structure.
-implement_plan_openai: Executes plan phases with verification, resume discipline, and GPT-5.4 workflow guidance.
-review_pr_comments_openai: Triage and analyze PR review comments, then write a versioned artifact and overview.
+research: Gathers facts, explores code, and documents findings with file:line references using the GPT-5.4 workflow.
+create_plan_init: Interactive discovery phase for planning with explicit GPT-5.4 reasoning and user question resolution.
+create_plan_final: Writes the requirements dossier and generates the implementation plan with GPT-5.4-oriented structure.
+implement_plan: Executes plan phases with verification, resume discipline, and GPT-5.4 workflow guidance.
+review_pr_comments: Triage and analyze PR review comments, then write a versioned artifact and overview.
 capture_pr_comments_openai: Capture PR review comments and code snapshots into a normalized artifact.
-resolve_pr_comments_openai: Resolve PR review comments from the orchestrator layer with bounded child sessions.
+resolve_pr_comments: Resolve PR review comments from the orchestrator layer with bounded child sessions.
 unwind_openai: Capture a structured handoff artifact for later GPT-5.4 resumption.
 resume_work_openai: Resume from a structured OpenAI handoff artifact with re-grounding and verification.
 decide_findings_openai: Resolve findings from the orchestrator layer with bounded child sessions.
@@ -141,10 +141,10 @@ Use tools until the task is complete and verification passes. Continue calling t
 </tool_persistence_rules>
 
 <workflow_pipeline>
-Standard workflow sequence: research_openai, create_plan_init_openai, create_plan_final_openai, implement_plan_openai, commit
+Standard workflow sequence: research, create_plan_init, create_plan_final, implement_plan, commit
 
 Phase 1 - Research:
-1. Use command `research_openai` with a specific question or investigation goal
+1. Use command `research` with a specific question or investigation goal
 2. When investigating multiple areas, spawn multiple research sessions in parallel for efficiency
 3. Sessions use ask_agent with agent_type=locator to find files first
 4. Sessions use ask_agent with agent_type=analyzer to understand code
@@ -153,7 +153,7 @@ Phase 1 - Research:
 7. Research is complete when the document has clear recommendations and all gaps are documented
 
 Phase 2 - Plan Init:
-1. Use command `create_plan_init_openai` with the path to the research document
+1. Use command `create_plan_init` with the path to the research document
 2. Answer technical questions about architecture, approach, tradeoffs
 3. Redirect logistical questions (commit grouping, phases) with "Handled later, focus on implementation"
 4. Send unclear questions back for investigation with specific direction
@@ -161,13 +161,13 @@ Phase 2 - Plan Init:
 6. Ask "Is there anything else we're missing?" before proceeding
 
 Phase 3 - Plan Final:
-1. Run `create_plan_final_openai` in the SAME session as `create_plan_init_openai`
+1. Run `create_plan_final` in the SAME session as `create_plan_init`
 2. Resolve all open questions before proceeding (no plan persists with open questions)
 3. Either answer questions directly or spawn new research to find answers
 4. When the summary looks reasonable and no questions remain, respond "Looks good, persist the plan!"
 
 Phase 4 - Implementation:
-1. Use command `implement_plan_openai` with the implementation plan path; the command will load the sibling requirements file when the plan uses the paired `*_implementation.md` naming
+1. Use command `implement_plan` with the implementation plan path; the command will load the sibling requirements file when the plan uses the paired `*_implementation.md` naming
 2. Sessions use todowrite to track progress
 3. Sessions use just_execute for builds/tests
 4. Sessions use edit for file modifications

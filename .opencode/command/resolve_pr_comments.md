@@ -23,9 +23,9 @@ The goal is to move every in-scope thread into one of these end states:
 5. Prefer an in-thread clarifying question when confidence is materially low instead of forcing a shaky decision.
 6. Choose the lightest route that still gives high confidence; if information is incomplete, consequences are unclear, or multiple plausible paths remain, escalate to research and/or planned execution rather than forcing a direct change.
 7. Any reply that claims a code/doc/config fix must be posted only after the relevant changes are verified, committed, and pushed.
-8. If code changes are made outside `implement_plan_openai`, still require strong verification — at minimum `just check` and `just test` unless a stricter command set is clearly necessary.
+8. If code changes are made outside `implement_plan`, still require strong verification — at minimum `just check` and `just test` unless a stricter command set is clearly necessary.
 9. Refresh comment state after material replies or code changes before declaring completion.
-10. Do not call `review_pr_comments_openai`; this workflow replaces that session-centric pattern.
+10. Do not call `review_pr_comments`; this workflow replaces that session-centric pattern.
 </workflow_contract>
 
 <userMessage>
@@ -126,7 +126,7 @@ $ARGUMENTS
     - drafts and posts the grounded reply/question,
     - reports the exact comment IDs handled.
 2. For `research` clusters:
-   - run `research_openai` on only the disputed threads or related code/contract area,
+   - run `research` on only the disputed threads or related code/contract area,
    - read the resulting research doc,
    - then reclassify the cluster.
 3. For `bounded_change` clusters:
@@ -136,9 +136,9 @@ $ARGUMENTS
     - push that commit,
     - only then post grounded replies in a follow-up bounded NormalOpenAI session.
 4. For `planned_change` clusters:
-    - run `create_plan_init_openai`,
-    - then `create_plan_final_openai`,
-    - then `implement_plan_openai`,
+    - run `create_plan_init`,
+    - then `create_plan_final`,
+    - then `implement_plan`,
     - ensure the resulting implementation verification includes `just check` and `just test` or a stronger justified equivalent,
     - create an atomic commit,
     - push it,

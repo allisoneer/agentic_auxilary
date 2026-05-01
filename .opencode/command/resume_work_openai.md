@@ -59,7 +59,7 @@ $ARGUMENTS
 6. Treat the handoff artifact as the carried-forward state and progress context.
 7. Treat any current-session overrides from `<userMessage>` as higher priority than the artifact.
 8. If the artifact's `## Validation Status` includes `inferred` or `unconfirmed` items, treat those as needing fresh verification rather than as proven completion.
-9. If the artifact's `## Files Changed` or remaining work includes `.opencode/command/*_openai.md` files or `AGENTS.md`, plan an independent comparison pass before considering prompt-file edits complete.
+9. If the artifact's `## Files Changed` or remaining work includes `.opencode/command/*.md` workflow files or `AGENTS.md`, plan an independent comparison pass before considering prompt-file edits complete.
 10. Compare the artifact against the current repo and document state. If a meaningful contradiction exists, report it before continuing.
 
 </step_2>
@@ -94,7 +94,7 @@ $ARGUMENTS
 
 1. Follow the source workflow command file as the primary instruction set.
 2. Use the handoff artifact as state and progress context, not as a replacement for the workflow instructions.
-3. If `source_workflow_command` is `/implement_plan_openai`, or `/implement_plan` from a legacy pre-migration artifact, or the artifact names requirements plus implementation plan documents, resume from the highest-priority unfinished item and preserve the verify-and-reflect loop before closing a phase.
+3. If `source_workflow_command` is `/implement_plan`, or `/implement_plan_openai` from a legacy pre-migration artifact, or the artifact names requirements plus implementation plan documents, resume from the highest-priority unfinished item and preserve the verify-and-reflect loop before closing a phase.
 4. If the plan file's checkmarks conflict with the handoff artifact, report the mismatch and prefer the handoff artifact as the newer progress snapshot unless current files clearly contradict it.
 5. If completed work is only `inferred` or `unconfirmed`, schedule verification before treating it as done.
 

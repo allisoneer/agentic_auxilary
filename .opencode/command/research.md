@@ -1,14 +1,20 @@
 ---
-description: Research the codebase, references, or anything else
+description: Research the codebase, references, or anything else (GPT-5.4 optimized)
+agent: NormalOpenAI
 ---
 
 <task>
-You are conducting comprehensive codebase research to gather factual information about a topic or question. Your goal is to explore the codebase, discover relevant code and patterns, synthesize what you find, and document it thoroughly for future use.
-
-**Important**: Focus on verifiable facts with file:line references. Document what exists, where it exists, and how it works. Recommendations come after thorough factual research. Use todowrite to track your progress through the research process.
+Research the user's topic thoroughly enough to produce a grounded research artifact with file:line evidence, clearly documented gaps, and actionable recommendations. Treat this as orchestration work: use sub-agents for discovery and deep reading, then use the main agent for planning, synthesis, and the final artifact. Do not jump to recommendations until the factual research is grounded.
 </task>
 
-**MAKE SURE** you follow ALL 7 steps in the process, EXACTLY as you are instructed to, AND track each of the steps with your todo list to make sure you stay on track.
+<workflow_contract>
+1. Follow all 7 steps in order.
+2. Use `todowrite` starting in Step 2, keep exactly one item `in_progress`, and mark items complete immediately. This is your running session's execution checklist, not content for the research document.
+3. Prefer `tools_ask_agent` for exploration; the main agent should synthesize rather than manually brute-force the codebase.
+4. Do not write the research document until coverage is sufficient or remaining gaps are explicitly documented.
+5. If the request is too vague to research, ask a clarification question and stop there.
+6. Do not stop on intermediate agent output; keep iterating until the research is ready for handoff.
+</workflow_contract>
 
 <userMessage>
 $ARGUMENTS
@@ -16,202 +22,139 @@ $ARGUMENTS
 
 <process>
 
-<step name="context_gathering" id="1">
+<step_1>
 
-## Context Gathering
+## Step 1: Gather Context
 
-**User Input:**
-- If the user provided parameters (files, tickets, research question) in `<userMessage>`, read all referenced files FULLY (no limit/offset).
-- Gain an understanding of the desired topic to research.
-- If no clear research question was provided, ask for clarification and wait.
+1. Infer the concrete research objective from `<userMessage>`.
+2. If the user named files, tickets, documents, or repositories, read each referenced file fully before doing anything else.
+3. If there is no concrete research target after reading the user input, ask one clarification question and wait.
+4. If the request is mostly clear but still has minor ambiguity, proceed with the best reasonable interpretation and state that assumption in your next user-facing update.
+5. Call `tools_thoughts_list_documents`.
+6. If Step 5 reveals relevant existing thoughts artifacts, note them for possible `tools_ask_agent` calls with `location=thoughts`. Do not read those documents directly in this step.
+7. Call `tools_thoughts_list_references` and note which references may matter.
 
-**Thoughts and References:**
-1. Call `tools_thoughts_list_documents` to see what exists. If relevant artifacts are found, keep them in mind for potential investigation via `tools_ask_agent` with `location=thoughts` during research—do not read them directly here.
-2. Call `tools_thoughts_list_references` to identify which external references may be useful for this research topic.
+</step_1>
 
-</step>
+<step_2>
 
-<step name="decompose_and_plan" id="2">
+## Step 2: Decompose and Plan
 
-## Decompose and Plan
+1. Break the research target into sub-areas such as APIs, data models, configs, components, workflows, tests, and reference implementations.
+2. Decide which sub-areas need:
+   - `tools_ask_agent` with `agent_type=locator`
+   - `tools_ask_agent` with `agent_type=analyzer`
+   - `tools_ask_agent` with `location=references`
+   - `tools_ask_agent` with `location=thoughts`
+   - `tools_ask_agent` with `location=web`
+3. Create a detailed `todowrite` plan that matches the actual research work you will do in this session.
+4. Keep todos concrete and action-oriented.
 
-Break the research question into sub-areas (APIs, data models, configuration, components, patterns). Decide on your `tools_ask_agent` strategy:
-- Locators (`agent_type=locator`): Find where things live
-- Analyzers (`agent_type=analyzer`): 1–3 for distinct subsystems or components
-- Reference analysis (`agent_type=analyzer`, `location=references`): Per selected reference
-- Web knowledge (`location=web`): When external docs are needed
+**Good todo examples:**
+- `Spawn locator for authentication-related files in src/`
+- `Spawn analyzer for rate limiting flow across middleware and config`
+- `Spawn reference analyzer on references/openai/codex for command prompt patterns`
+- `Reflect on returned findings and decide whether another research pass is needed`
+- `Write research artifact and sync it`
 
-**Create Your Todo List:**
+</step_2>
 
-Now use `todowrite` to create a detailed research plan. This is your active scratch pad—not generic step tracking. Be specific about what you will actually do:
+<step_3>
 
-- **Good example todos:**
-  - "Spawn locator to find all authentication-related files in src/"
-  - "Spawn analyzer for the database layer focusing on connection pooling"
-  - "Spawn analyzer on references/org/repo for their rate limiting patterns"
-  - "Spawn web analyzer to find official docs on X library's retry behavior"
-  - "Reflect on agent results, identify gaps, and decide if another iteration of research is necessary"
-  - "Write research document"
+## Step 3: Launch Parallel Research
 
-- **Bad example todos:**
-  - "Do step 3"
-  - "Research the codebase"
-  - "Spawn some agents"
+1. Launch independent `tools_ask_agent` calls in parallel in a single response block.
+2. Start with a locator when you need to map unfamiliar terrain.
+3. Launch 1-3 analyzers for distinct subsystems or layers.
+4. Launch one analyzer per selected reference repository when external examples matter.
+5. Use `location=thoughts` only if Step 1 found relevant existing documents.
+6. Use `location=web` only when official docs or external behavior matters.
+7. Ask every analyzer for file:line references.
+8. The main agent should focus on orchestration and synthesis rather than doing all deep reading itself.
 
-Each todo should be actionable and specific enough that you know exactly what to do when you reach it.
+</step_3>
 
-</step>
+<step_4>
 
-<step name="parallel_research" id="3">
+## Step 4: Reflect, Verify, and Resolve Gaps
 
-## Spawn Parallel Agents
+1. Review all returned findings and decide what is now well-understood.
+2. Identify what is still missing, uncertain, conflicting, or insufficiently grounded.
+3. Do not fill gaps by speculation. Either investigate further or document the gap explicitly.
+4. Use `tools_ask_reasoning_model` with `prompt_type="reasoning"` when:
+   - agent findings conflict
+   - a claim looks plausible but unverified
+   - cross-cutting behavior spans multiple subsystems
+   - two or more research passes still leave important gaps
+   - file:line references contradict each other
+5. When using `tools_ask_reasoning_model`, pass all relevant files/directories, not just the file currently in focus.
+6. Give each file/directory a concise 1-2 sentence description of what it contains and why it matters.
+7. Ask specific questions, request file:line support for code claims, and ask for alternatives or tradeoffs when the answer is not obvious.
+8. After the reasoning-model response, cross-check important claims against tests, configs, or usage sites when possible.
+9. Update `todowrite` immediately to reflect remaining research work or synthesis tasks.
 
-Launch agents concurrently (in parallel) using `tools_ask_agent`:
+</step_4>
 
-- Start with a locator to map the landscape.
-- Spawn 1-3 analyzers for distinct subsystems or layers.
-- Spawn 1 analyzer per selected reference.
-- Use `location=thoughts` only if Step 1 found relevant existing documents.
+<step_5>
 
-**Guidance**:
-- Be specific about directories and what to extract. Request file:line references.
-- Main agent focuses on orchestration and synthesis; sub-agents do deep, parallel reading.
-- Prefer multiple concurrent agents to maximize coverage efficiently.
+## Step 5: Iterate Intentionally
 
-</step>
+1. Return to Step 2 if new sub-areas emerged, the research question changed, or your agent strategy needs to change.
+2. Return to Step 3 if the plan is still sound and you just need targeted follow-up investigation.
+3. Proceed to Step 6 only when coverage is sufficient and the remaining gaps are either resolved or explicitly documented.
 
-<step name="reflection" id="4">
+</step_5>
 
-## Reflection
+<step_6>
 
-Review everything returned from your agents. Think critically about what you've learned and what's still missing.
+## Step 6: Write the Research Document
 
-**Assess Coverage:**
-- What areas of the research question are now well-understood?
-- What areas still have gaps or insufficient detail?
-- Are there new sub-areas that emerged from the research that weren't in your original plan?
+The 2 targeted approaches and 2 comprehensive approaches should give the planning stage a real choice, not just fill a template slot.
 
-**Evaluate Quality:**
-- Do any findings seem "sketchy"—they look right but feel uncertain or unverified?
-- Are there conflicting answers from different agents or sources?
-- Do any file:line references contradict each other?
+Clarifications:
+- **Todo list** = this session's `todowrite` checklist for tracking the work you actually perform, not a section to include in the research document.
+- **Targeted approaches** = narrower-scope options that address the immediate question with lower effort or risk.
+- **Comprehensive approaches** = broader-scope options that address root causes or adjacent concerns with higher effort or risk.
+- Each numbered approach should stand on its own as a candidate option for planning. If approaches can be combined, say so explicitly; if they are mutually exclusive, say that explicitly too.
 
-**Consider Using `tools_ask_reasoning_model`:**
-When you encounter uncertainty that agents can't resolve, use the reasoning model for a second opinion:
-- Conflicting information from multiple agents
-- Findings that look correct but feel suspicious
-- Complex cross-cutting concerns spanning multiple subsystems
-- You've done 2+ research iterations and gaps persist
-- Contradictory file:line references that need disambiguation
+1. Before writing, verify:
+   - your `todowrite` checklist reflects the work you actually completed, including writing and syncing the research document
+   - the key findings are grounded in file:line references
+   - unresolved gaps are documented honestly
+   - you have 2 targeted approaches and 2 comprehensive approaches with tradeoffs
+2. Call `tools_thoughts_get_template` with `template=research`.
+3. Write the document with `tools_thoughts_write_document` using:
+   - `doc_type: "research"`
+   - `filename: {readable_topic_name}.md` using only `A-Za-z0-9._-`
+   - `content:` the completed research artifact following the template
+4. The document must include:
+   - the original request verbatim from `<userMessage>`
+   - factual findings with file:line references
+   - unresolved gaps or caveats
+   - 2 targeted approaches with tradeoffs
+   - 2 comprehensive approaches with tradeoffs
+   - any useful iteration notes
+5. After writing, execute `thoughts_sync` with `tools_cli_just_execute`. Do not use shell commands for sync.
 
-When calling, provide all relevant files with concise descriptions of what each contains and why it matters.
+</step_6>
 
-**Update Your Todos:**
-Based on your reflection, update your todo list with any remaining research work:
-- Additional agent calls needed (and to which locations)
-- Specific questions for the reasoning model
-- Areas ready for synthesis
+<step_7>
 
-</step>
+## Step 7: Hand Off Clearly
 
-<guidance name="using_reasoning_model">
+1. Tell the user what you found, using the most important file:line references.
+2. Call out unresolved gaps or risks briefly and explicitly.
+3. Summarize the recommendations compactly.
+4. Give the saved research path.
+5. If they want to continue into planning, tell them to run `/create_plan_init {path/to/saved/research.md}`.
+6. If they want more research instead, wait for direction.
 
-## Using the Reasoning Model Effectively
-
-When you decide to use `tools_ask_reasoning_model`, here's how to get the most value:
-
-**Provide Context Well:**
-- Include ALL relevant files, not just the one you're focused on
-- For each file/directory, write 1-2 sentences explaining what it contains and why it matters for your question
-- Use directories when many related files exist; set `extensions` and `recursive` appropriately
-
-**Frame Your Request:**
-- Be specific about what's uncertain and why
-- Request file:line references for any code-related claims
-- Ask it to enumerate possibilities when multiple explanations exist, with evidence for each
-
-**Good Prompts:**
-- "These two files seem to contradict each other on X. Can you clarify which is authoritative and why?"
-- "I found this pattern in 3 places but I'm not confident I understand the invariant. What constraints does this impose?"
-- "Given these interfaces, what are the actual data flow paths and where might Y occur?"
-- "Based on these findings, what are some targeted vs comprehensive approaches to address this? Include tradeoffs for each."
-
-**After Getting a Response:**
-- Cross-validate claims against tests, configs, or usage sites when possible
-- If still uncertain, that's useful information—note it as an open gap
-
-</guidance>
-
-<step name="iteration" id="5">
-
-## Iteration
-
-Check your todo list. If there's remaining research work, continue iterating.
-
-**If todos have more research to do:**
-
-Return to the appropriate earlier step based on what's needed:
-
-- **Go to Step 2 (Decompose and Plan)** when:
-  - New sub-areas emerged that weren't in your original plan
-  - The research question has evolved based on what you learned
-  - You need to fundamentally rethink your agent strategy
-
-- **Go to Step 3 (Parallel Research)** when:
-  - You just need more agent calls on already-identified areas
-  - You're filling in specific gaps with targeted queries
-  - You're calling the reasoning model for clarification
-
-**If research is complete:**
-
-When your reflection shows sufficient coverage and your todos have no remaining research items, proceed to Step 6 (Write Document).
-
-</step>
-
-<step name="write_document" id="6">
-
-## Write Research Document
-
-**Before Writing — Consider Recommendations:**
-
-Think about what recommendations you can offer. The research document should include a Recommendations section with:
-- **2 Targeted Approaches**: Focused fixes that address the immediate problem with minimal scope. Include tradeoffs (what you gain vs what you defer).
-- **2 Comprehensive Approaches**: Broader solutions that address root causes or adjacent concerns. Include tradeoffs (what you gain vs the cost in effort/complexity).
-
-Neither category is inherently better—the right choice depends on context. Present both honestly so the planning stage can make an informed decision.
-
-**Write the Document:**
-
-1. Call `tools_thoughts_get_template` with `template=research` to get the exact structure and tone.
-
-2. Write the document using `tools_thoughts_write_document`:
-
-**Parameters:**
-- **doc_type**: "research"
-- **filename**: `{readable_topic_name}.md` (A–Z, a–z, 0–9, dot, underscore, hyphen only; no slashes)
-- **content**: The completed research per the template, including:
-  - Original Request (verbatim from `<userMessage>`)
-  - Factual findings with file:line references
-  - Recommendations (2 targeted + 2 comprehensive approaches, each with tradeoffs)
-  - Any iteration comments
-
-3. After writing, sync via the Just MCP tools: execute the "thoughts_sync" recipe with `tools_cli_just_execute`. Do not run shell commands directly.
-
-</step>
-
-<step name="handoff" id="7">
-
-## Handoff
-
-Provide a summary of your research findings to the user:
-- Key discoveries and their locations (file:line references for the most important items)
-- Any unresolved gaps or areas that need further investigation
-- Your recommendations (brief summary of the 2+2 approaches)
-
-Then let the user know their options:
-- If they want to proceed to planning: "Run `/create_plan_init {path/to/saved/research.md}` to start creating an implementation plan."
-- If they have follow-up questions or want more research, wait for their direction.
-
-</step>
+</step_7>
 
 </process>
+
+<completion_gate>
+You are done only when one of these is true:
+1. You asked a necessary clarification question because the research target is still unclear.
+2. You wrote and synced the research artifact, all relevant todos are complete, and the user received a grounded handoff with key findings, open gaps, recommendations, and the saved path.
+</completion_gate>

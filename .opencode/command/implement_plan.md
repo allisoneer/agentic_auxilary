@@ -1,14 +1,23 @@
 ---
-description: Implement an approved technical plan phase by phase
+description: Implement an approved technical plan phase by phase (GPT-5.4 optimized)
+agent: NormalOpenAI
 ---
 
-# Implement Plan
-
 <task>
-Implement an approved technical plan phase by phase. For each phase: make the changes, verify they work, then move to the next phase. Track every change and verification as a todo item so nothing gets missed.
+Implement an approved technical plan phase by phase. For each phase, make the planned changes, verify them, reflect on gaps, and iterate until the plan is complete or a real mismatch requires user input.
 </task>
 
-**MAKE SURE** you follow ALL 4 steps in the process. Step 1 loads context and creates your detailed todo list. Steps 2-4 form the implementation loop: implement phase → verify and reflect → iterate (loop back or complete). Track your progress with todowrite throughout—every change and every verification should be a todo item.
+<workflow_contract>
+1. Follow all 4 steps in order.
+2. Read the implementation plan fully before doing any code changes.
+3. Use `todowrite` in Step 1 to create granular implementation and verification todos.
+4. Keep exactly one todo `in_progress` at a time and mark items complete immediately after finishing them.
+5. Do not skip verification; each phase must be implemented, verified, and reflected on before advancing.
+6. If the codebase materially diverges from plan expectations, stop, document the mismatch, and ask the user before proceeding.
+7. When resuming partial work, trust completed checkmarks and prior artifacts unless current files clearly contradict them.
+</workflow_contract>
+
+**MAKE SURE** you follow ALL 4 steps in order. Step 1 loads context and creates your detailed todo list. Steps 2-4 form the implementation loop: implement phase → verify and reflect → iterate.
 
 <userMessage>
 $ARGUMENTS
@@ -16,129 +25,116 @@ $ARGUMENTS
 
 <process>
 
-<step name="load_plan_context" id="1">
+<step_1>
 
-## Load Plan and Context
+## Step 1: Load Plan Context and Build the Todo List
 
-**Validate Input:**
-- If no plan path provided in `<userMessage>`, return an error asking the user to provide the path to an implementation plan.
-- Read the plan fully. If it doesn't exist, return an error.
+1. Parse the implementation plan path from `<userMessage>`.
+2. If no plan path was provided, ask the user for the implementation plan path and stop.
+3. Read the implementation plan fully. If it does not exist, report that clearly and stop.
+4. If the plan filename ends with `_implementation.md`, read the sibling `{pair_base}_requirements.md`. Warn if it is missing, but continue.
+5. Call `tools_thoughts_list_documents` filtered to artifact documents and look for prior handoff or progress artifacts whose filenames start with `plan_{basename}_`.
+6. Read any matching artifacts so you understand completed work, past decisions, and resume context.
+7. Read all files explicitly referenced in the implementation plan before editing them.
+8. Parse the plan into granular todos. For each phase, create:
+   - one todo per significant implementation change
+   - one verification todo for that phase's success criteria
+9. If the plan already contains completed checkmarks or the artifacts show prior completion, reflect that in the initial todo state unless the current code clearly contradicts it.
 
-**Load Related Context:**
-1. If the plan filename ends with `_implementation.md`, read the sibling `{pair_base}_requirements.md`. Warn if not found but continue.
-2. Call `tools_thoughts_list_documents` filtered to `doc_type == "artifacts"` with filename starting `plan_{basename}_`. Read any artifacts to understand prior progress.
-3. Read all files referenced in the plan.
+**Good example todos**
+- `Phase 1: Add rate_limit.rs middleware file` — New file with RateLimiter struct and middleware fn
+- `Phase 1: Update router.rs to use rate limiter` — Import and wrap routes
+- `Phase 1: Add RATE_LIMIT_RPS config key` — Add to config.rs with default 100
+- `Verify Phase 1` — Run `cargo test rate_limit`, check middleware applies to `/api` routes
+- `Phase 2: Add Redis backend for rate limiting` — Add redis client, update RateLimiter
 
-**Create Implementation Todo List:**
+**Bad example todos**
+- `Phase 1`
+- `Do the implementation`
+- `Run tests`
 
-Parse the plan's phases and create granular todos. For each phase, create:
-- One todo per significant change (not just "Phase 1" but each file/component change)
-- One verification todo for that phase's success criteria
+</step_1>
 
-**Good example todos:**
-- "Phase 1: Add rate_limit.rs middleware file" — New file with RateLimiter struct and middleware fn
-- "Phase 1: Update router.rs to use rate limiter" — Import and wrap routes
-- "Phase 1: Add RATE_LIMIT_RPS config key" — Add to config.rs with default 100
-- "Verify Phase 1" — Run `cargo test rate_limit`, check middleware applies to /api routes
-- "Phase 2: Add Redis backend for rate limiting" — Add redis client, update RateLimiter
+<step_2>
 
-**Bad example todos:**
-- "Phase 1"
-- "Do the implementation"
-- "Run tests"
+## Step 2: Implement the Current Phase
 
-</step>
+1. Identify the first incomplete implementation todo in the current phase and mark it `in_progress`.
+2. Make the planned change exactly where the plan says it belongs.
+3. Before every edit, read the target file fully enough to understand the existing implementation.
+4. If the codebase differs meaningfully from the plan, stop and capture:
+   - Expected
+   - Found
+   - Why it matters
+   - Plausible adaptation paths, if known
+5. For complex mismatches, you may call `tools_ask_reasoning_model` with `prompt_type="reasoning"` to evaluate options.
+6. Present the options and wait for user guidance before proceeding.
+7. Mark the implementation todo complete immediately after finishing it.
+8. Repeat until all implementation todos for the current phase are complete.
 
-<step name="implement_phase" id="2">
+Do NOT run verification yet—that is Step 3.
 
-## Implement Current Phase
+</step_2>
 
-For the current phase's implementation todos:
+<step_3>
 
-1. **Mark the first incomplete implementation todo as in_progress**
-2. **Execute the change** exactly as specified in the plan
-3. **Handle divergence** — If codebase differs from plan expectations:
-   - STOP and capture: Expected vs Found, Why it matters
-   - Optionally call `tools_ask_reasoning_model` with `prompt_type: "reasoning"` to evaluate adaptation paths
-   - Present options and wait for user guidance before proceeding
-4. **Mark the implementation todo complete**
-5. **Repeat** for each implementation todo in this phase
+## Step 3: Verify and Reflect
 
-Do NOT run verification yet—that's step 3.
+**Run Verification**
 
-</step>
-
-<step name="verify_and_reflect" id="3">
-
-## Verify and Reflect
-
-**Run Verification:**
-1. Mark the phase's verification todo as in_progress
-2. Run ALL verification steps via the Just MCP tools:
-   - Discover relevant recipes with `tools_cli_just_search`
-   - Execute necessary recipes (e.g., "check", "test") using `tools_cli_just_execute`
-3. Check for regressions (run broader test suite if specified)
+1. Mark the current phase's verification todo `in_progress`.
+2. Discover relevant verification commands with `tools_cli_just_search`.
+3. Execute the necessary verification recipes with `tools_cli_just_execute` (for example `check` or `test`).
+4. Run all applicable verification commands for the current phase using `tools_cli_just_search` and `tools_cli_just_execute`, plus any broader regression checks.
 
 **Reflect — Did I Complete Everything?**
 
-Before marking verification complete, explicitly check:
-- Did I complete ALL implementation todos for this phase?
-- Did ALL verification commands pass?
-- Are there any gaps, skipped items, or partial implementations?
+5. Before marking verification complete, explicitly confirm:
+   - all implementation todos for the phase are complete
+   - all required verification commands passed
+   - no gaps, skipped items, or partial implementations remain
 
-**Identify Gaps:**
-If anything was missed or failed:
-- Note specifically what's incomplete
-- Do NOT mark verification todo complete
-- These gaps will be addressed in step 4
+**Identify Gaps**
 
-If everything passed:
-- Mark verification todo complete
-- Proceed to step 4
+6. If verification fails or a gap remains, do not mark the verification todo complete.
+7. If everything passed, mark the verification todo complete.
 
-</step>
+</step_3>
 
-<step name="iterate" id="4">
+<step_4>
 
-## Iterate
+## Step 4: Iterate or Finish
 
-Check your todo list and decide what to do next:
+1. Check the todo list after reflection.
+2. If the current phase still has incomplete work, return to Step 2 and finish the gaps.
+3. If the current phase is complete and more phases remain, return to Step 2 with the next phase.
+4. If all phases are complete, run final verification across the full success criteria.
+5. Summarize completed work, verification results, any issues encountered, and any divergences handled.
 
-**If current phase has gaps:**
-- Return to Step 2 (Implement Current Phase) to address the gaps
-- Focus only on the incomplete items
+</step_4>
 
-**If current phase is complete but more phases remain:**
-- Return to Step 2 (Implement Current Phase) with the next phase
-- Start with the first implementation todo of that phase
+</process>
 
-**If all phases are complete:**
-- Run final verification across all success criteria
-- Summarize status: completed, any issues encountered, any divergences handled
-- Report completion to user
-
-</step>
-
-<guidance name="resume_protocol">
+<guidance>
 
 ## Resume Protocol
 
-If returning to partially complete plan:
-- Trust checkmarks indicate completed work
-- Review context artifacts (plan_{basename}_*) for journey understanding
-- Start from first unchecked item
-
-</guidance>
-
-<guidance name="mismatch_handling">
+When returning to partially completed implementation work:
+1. Trust completed checkmarks in the plan and prior `plan_{basename}_*` artifacts as the newest progress record unless current files clearly contradict them.
+2. Start from the first unchecked or incomplete item.
+3. Preserve the implement → verify → reflect loop instead of jumping straight to later phases.
 
 ## Mismatch Handling
 
-When encountering significant divergence:
-- Present clear format: Expected, Found, Why this matters, How should I proceed?
-- Wait for guidance before proceeding if plan explicitly requires it
-- Use reasoning model for complex architectural decisions if needed
+When encountering significant divergence from the plan:
+1. Present the mismatch using the format: Expected, Found, Why this matters, How should I proceed?
+2. Wait for user guidance before proceeding.
+3. Use the reasoning model only to clarify options, not to silently rewrite the plan.
 
 </guidance>
 
-</process>
+<completion_gate>
+You are done only when one of these is true:
+1. You are waiting on the user because no plan path was provided or a material mismatch requires guidance.
+2. The implementation is complete, all relevant verification passed, all todos are complete, and the user received a grounded summary of changes and verification.
+</completion_gate>
