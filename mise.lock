@@ -234,6 +234,68 @@ checksum = "sha256:badde353e402565108fbce6042c46ff8968d563ebab33376efc3056372986
 url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.17/source.tar.gz"
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410040322"
 
+[[tools.agentic-mcp]]
+version = "0.2.18"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.agentic-mcp.options]
+version_prefix = "agentic-mcp-v"
+
+[tools.agentic-mcp."platforms.linux-arm64"]
+checksum = "sha256:d81a7f3c0553dc26694b35f4fdad2a32ee3cdbb5b90549fa599a0636059d8395"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141873"
+
+[tools.agentic-mcp."platforms.linux-arm64-musl"]
+checksum = "sha256:d81a7f3c0553dc26694b35f4fdad2a32ee3cdbb5b90549fa599a0636059d8395"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141873"
+
+[tools.agentic-mcp."platforms.linux-x64"]
+checksum = "sha256:bd7711b87d5376b070828a40ed6e255224cb31aaa5e4abbadb702ed5d810a688"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141888"
+
+[tools.agentic-mcp."platforms.linux-x64-baseline"]
+checksum = "sha256:bd7711b87d5376b070828a40ed6e255224cb31aaa5e4abbadb702ed5d810a688"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141888"
+
+[tools.agentic-mcp."platforms.linux-x64-musl"]
+checksum = "sha256:bd7711b87d5376b070828a40ed6e255224cb31aaa5e4abbadb702ed5d810a688"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141888"
+
+[tools.agentic-mcp."platforms.linux-x64-musl-baseline"]
+checksum = "sha256:bd7711b87d5376b070828a40ed6e255224cb31aaa5e4abbadb702ed5d810a688"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141888"
+
+[tools.agentic-mcp."platforms.macos-arm64"]
+checksum = "sha256:c3748ff7ea4334c2d2a8a050997d2f804323c427ea50091aa4b197af2f1b623d"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141870"
+
+[tools.agentic-mcp."platforms.macos-x64"]
+checksum = "sha256:a28d11cfa762c1e1425e88919c7830adde3c6869ac933111b71a1097d7d363d5"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141879"
+
+[tools.agentic-mcp."platforms.macos-x64-baseline"]
+checksum = "sha256:a28d11cfa762c1e1425e88919c7830adde3c6869ac933111b71a1097d7d363d5"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/agentic-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141879"
+
+[tools.agentic-mcp."platforms.windows-x64"]
+checksum = "sha256:1270eb795b1a4f2e012fc39790997209cd0dfcd45c91841a33a6f3de9ca533bc"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141901"
+
+[tools.agentic-mcp."platforms.windows-x64-baseline"]
+checksum = "sha256:1270eb795b1a4f2e012fc39790997209cd0dfcd45c91841a33a6f3de9ca533bc"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.18/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410141901"
+
 [[tools."aqua:taiki-e/cargo-llvm-cov"]]
 version = "0.6.14"
 backend = "aqua:taiki-e/cargo-llvm-cov"
@@ -923,6 +985,68 @@ url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/ass
 checksum = "sha256:e78872d43097b25d8dd743b9e1c64465eb410af32a697dca59158674fc37041e"
 url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.5/source.tar.gz"
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/400776020"
+
+[[tools.opencode-orchestrator-mcp]]
+version = "0.4.8"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.opencode-orchestrator-mcp.options]
+version_prefix = "opencode-orchestrator-mcp-v"
+
+[tools.opencode-orchestrator-mcp."platforms.linux-arm64"]
+checksum = "sha256:f3c83c135d2b17dcb76b388fb4be62987e9dd739060e4929f962c395a6bae41e"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134557"
+
+[tools.opencode-orchestrator-mcp."platforms.linux-arm64-musl"]
+checksum = "sha256:f3c83c135d2b17dcb76b388fb4be62987e9dd739060e4929f962c395a6bae41e"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134557"
+
+[tools.opencode-orchestrator-mcp."platforms.linux-x64"]
+checksum = "sha256:88528ec7ceca824f5240bd6e3fbaafd14b9469f59f34a6325df4ce3fcee557cf"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134566"
+
+[tools.opencode-orchestrator-mcp."platforms.linux-x64-baseline"]
+checksum = "sha256:88528ec7ceca824f5240bd6e3fbaafd14b9469f59f34a6325df4ce3fcee557cf"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134566"
+
+[tools.opencode-orchestrator-mcp."platforms.linux-x64-musl"]
+checksum = "sha256:88528ec7ceca824f5240bd6e3fbaafd14b9469f59f34a6325df4ce3fcee557cf"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134566"
+
+[tools.opencode-orchestrator-mcp."platforms.linux-x64-musl-baseline"]
+checksum = "sha256:88528ec7ceca824f5240bd6e3fbaafd14b9469f59f34a6325df4ce3fcee557cf"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134566"
+
+[tools.opencode-orchestrator-mcp."platforms.macos-arm64"]
+checksum = "sha256:b8255c8011286ea44fd58a6c9c7387fd71c72cdf1a1084240be42c79e310d647"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134555"
+
+[tools.opencode-orchestrator-mcp."platforms.macos-x64"]
+checksum = "sha256:6bd58d10dc241734a160fe223cde03ac5002b08faca2bc50e6bf46fe015e6a4c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134564"
+
+[tools.opencode-orchestrator-mcp."platforms.macos-x64-baseline"]
+checksum = "sha256:6bd58d10dc241734a160fe223cde03ac5002b08faca2bc50e6bf46fe015e6a4c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134564"
+
+[tools.opencode-orchestrator-mcp."platforms.windows-x64"]
+checksum = "sha256:696c0ba2ba2f809596bcc3c5ca690d8c74e4456ebe81ffcbd469437434262aa0"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134578"
+
+[tools.opencode-orchestrator-mcp."platforms.windows-x64-baseline"]
+checksum = "sha256:696c0ba2ba2f809596bcc3c5ca690d8c74e4456ebe81ffcbd469437434262aa0"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.4.8/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/410134578"
 
 [[tools.opentofu]]
 version = "1.11.5"
