@@ -172,7 +172,7 @@ jobs:
       - name: Run ShellCheck
         run: |
           set -euo pipefail
-          mapfile -t scripts < <(git ls-files '*.sh')
+          mapfile -t scripts < <(git ls-files '*.sh' ':!:vendor/**')
           if [ ${#scripts[@]} -gt 0 ]; then
             shellcheck "${scripts[@]}"
           else
