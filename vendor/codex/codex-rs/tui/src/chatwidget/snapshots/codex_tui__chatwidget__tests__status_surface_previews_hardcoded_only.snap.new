@@ -1,0 +1,7 @@
+---
+source: tui/src/chatwidget/tests/status_surface_previews.rs
+assertion_line: 123
+expression: snapshot
+---
+status line: tmp · feat/awesome-feature · thread title
+terminal title: thread title | feat/awesome-feature | Tasks 0/0
