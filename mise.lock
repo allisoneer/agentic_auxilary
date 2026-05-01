@@ -172,6 +172,13 @@ checksum = "sha256:2dd286d2e0dd040bc165c438b720c4dec65c486f7c9ae2448368e0a392578
 url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.15/source.tar.gz"
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/409399670"
 
+[[tools.agentic-mcp]]
+version = "0.2.17"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.agentic-mcp.options]
+version_prefix = "agentic-mcp-v"
+
 [[tools."aqua:taiki-e/cargo-llvm-cov"]]
 version = "0.6.14"
 backend = "aqua:taiki-e/cargo-llvm-cov"

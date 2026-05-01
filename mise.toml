@@ -81,7 +81,7 @@ macos-x64 = { asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-mcp]
-version = "0.2.15"
+version = "0.2.17"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp.platforms]
