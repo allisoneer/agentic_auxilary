@@ -80,11 +80,9 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> SingleJsonParser<R1, R2> {
         let mut stderr_content = String::new();
 
         // Drain both streams concurrently so stderr backpressure cannot block stdout EOF.
-        let stdout = &mut self.stdout;
-        let stderr = &mut self.stderr;
         tokio::try_join!(
-            stdout.read_to_string(&mut stdout_content),
-            stderr.read_to_string(&mut stderr_content)
+            self.stdout.read_to_string(&mut stdout_content),
+            self.stderr.read_to_string(&mut stderr_content)
         )?;
 
         // If stderr has content, this is an error
@@ -124,11 +122,9 @@ impl<R1: AsyncRead + Unpin, R2: AsyncRead + Unpin> TextParser<R1, R2> {
         let mut stderr_content = String::new();
 
         // Drain both streams concurrently so stderr backpressure cannot block stdout EOF.
-        let stdout = &mut self.stdout;
-        let stderr = &mut self.stderr;
         tokio::try_join!(
-            stdout.read_to_string(&mut stdout_content),
-            stderr.read_to_string(&mut stderr_content)
+            self.stdout.read_to_string(&mut stdout_content),
+            self.stderr.read_to_string(&mut stderr_content)
         )?;
 
         // Determine if this is an error based on stderr content
