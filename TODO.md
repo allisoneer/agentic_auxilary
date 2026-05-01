@@ -51,6 +51,9 @@ These items have dependencies and should be done in order.
 - Probably only needs one tool for searching, maybe a second for reading context around results.
 - Could bundle with Linear tools in same agent.
 
+### Wire live opencode command-path integration tests into CI
+- `crates/services/opencode-rs/tests/integration.rs:6-18,53-55,153-156` and `apps/opencode-orchestrator-mcp/tests/integration.rs:24-26,125-128` show the live tests are both `#[ignore]`-gated and require `OPENCODE_INTEGRATION` / `OPENCODE_ORCHESTRATOR_INTEGRATION`, while `.github/workflows/ci.yml:71-87` and `.github/workflows/ci.yml:223-238` never set those env vars or pass `--ignored`. Result: CI never exercises the real `POST /session/{id}/command` path, which is how the recent `messageID` validator regression in `opencode-rs` slipped through. Decide where these should run (probably nightly), wire the env vars in, and run the ignored tests there.
+
 ## To classify/investigate:
 
 ### CLAUDE.md cargo commands → just commands

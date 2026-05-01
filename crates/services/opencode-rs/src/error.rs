@@ -96,6 +96,71 @@ pub struct HttpErrorBody {
     pub data: Option<serde_json::Value>,
 }
 
+fn format_error_path(path: &[serde_json::Value]) -> Option<String> {
+    let formatted: Vec<String> = path
+        .iter()
+        .map(|segment| match segment {
+            serde_json::Value::String(value) => value.clone(),
+            other => other.to_string(),
+        })
+        .collect();
+
+    if formatted.is_empty() {
+        None
+    } else {
+        Some(formatted.join("."))
+    }
+}
+
+fn format_validator_entry(entry: &serde_json::Value) -> String {
+    let path = entry
+        .get("path")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|segments| format_error_path(segments));
+    let message = entry
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .map(std::string::ToString::to_string);
+
+    match (path, message) {
+        (Some(path), Some(message)) => format!("{path}: {message}"),
+        (Some(path), None) => format!("{path}: {entry}"),
+        (None, Some(message)) => message,
+        (None, None) => entry.to_string(),
+    }
+}
+
+fn extract_http_error_message(v: &serde_json::Value) -> Option<String> {
+    if matches!(v.get("success"), Some(serde_json::Value::Bool(false)))
+        && let Some(errors) = v.get("error").and_then(serde_json::Value::as_array)
+    {
+        let messages: Vec<String> = errors.iter().map(format_validator_entry).collect();
+        if !messages.is_empty() {
+            return Some(messages.join("; "));
+        }
+    }
+
+    if let (Some(name), Some(message)) = (
+        v.get("name").and_then(serde_json::Value::as_str),
+        v.get("data")
+            .and_then(|data| data.get("message"))
+            .and_then(serde_json::Value::as_str),
+    ) {
+        return Some(format!("{name}: {message}"));
+    }
+
+    v.get("message")
+        .and_then(serde_json::Value::as_str)
+        .map(std::string::ToString::to_string)
+}
+
+fn truncate_body_text(body_text: &str, max_chars: usize) -> String {
+    match body_text.char_indices().nth(max_chars) {
+        Some((idx, _)) => format!("{}…", &body_text[..idx]),
+        None => body_text.to_string(),
+    }
+}
+
 impl HttpErrorBody {
     /// Parse from a JSON value.
     pub fn from_json(v: &serde_json::Value) -> Self {
@@ -104,10 +169,7 @@ impl HttpErrorBody {
                 .get("name")
                 .and_then(|x| x.as_str())
                 .map(std::string::ToString::to_string),
-            message: v
-                .get("message")
-                .and_then(|x| x.as_str())
-                .map(std::string::ToString::to_string),
+            message: extract_http_error_message(v),
             data: v.get("data").cloned(),
         }
     }
@@ -116,17 +178,17 @@ impl HttpErrorBody {
 impl OpencodeError {
     /// Create an HTTP error from status and optional JSON body.
     pub fn http(status: u16, body_text: &str) -> Self {
-        // Try to parse as JSON to extract NamedError fields
         let parsed: Option<serde_json::Value> = serde_json::from_str(body_text).ok();
         let info = parsed.as_ref().map(HttpErrorBody::from_json);
+        let message = info
+            .as_ref()
+            .and_then(|i| i.message.clone())
+            .unwrap_or_else(|| truncate_body_text(body_text, 1024));
 
         Self::Http {
             status,
             name: info.as_ref().and_then(|i| i.name.clone()),
-            message: info
-                .as_ref()
-                .and_then(|i| i.message.clone())
-                .unwrap_or_else(|| format!("HTTP {status}")),
+            message,
             data: info.and_then(|i| i.data),
         }
     }
@@ -161,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_http_error_from_named_error() {
-        let body = r#"{"name":"NotFound","message":"Session not found","data":{"id":"123"}}"#;
+        let body = r#"{"name":"NotFound","data":{"message":"Session not found","id":"123"}}"#;
         let err = OpencodeError::http(404, body);
 
         match err {
@@ -173,7 +235,7 @@ mod tests {
             } => {
                 assert_eq!(status, 404);
                 assert_eq!(name, Some("NotFound".to_string()));
-                assert_eq!(message, "Session not found");
+                assert_eq!(message, "NotFound: Session not found");
                 assert!(data.is_some());
             }
             _ => panic!("Expected Http error"),
@@ -193,7 +255,89 @@ mod tests {
             } => {
                 assert_eq!(status, 500);
                 assert!(name.is_none());
-                assert_eq!(message, "HTTP 500");
+                assert_eq!(message, "Internal Server Error");
+            }
+            _ => panic!("Expected Http error"),
+        }
+    }
+
+    #[test]
+    fn test_http_error_from_legacy_top_level_message() {
+        let body = r#"{"name":"ValidationError","message":"Legacy message"}"#;
+        let err = OpencodeError::http(400, body);
+
+        match err {
+            OpencodeError::Http { name, message, .. } => {
+                assert_eq!(name, Some("ValidationError".to_string()));
+                assert_eq!(message, "Legacy message");
+            }
+            _ => panic!("Expected Http error"),
+        }
+    }
+
+    #[test]
+    fn test_http_error_from_validator_messageid_invalid() {
+        let body = r#"{
+  "data": {"command":"linear","arguments":"hello","messageID":"550e8400-e29b-41d4-a716-446655440000"},
+  "error": [
+    {
+      "origin": "string",
+      "code": "invalid_format",
+      "format": "starts_with",
+      "prefix": "msg",
+      "path": ["messageID"],
+      "message": "Invalid string: must start with \"msg\""
+    }
+  ],
+  "success": false
+}"#;
+        let err = OpencodeError::http(400, body);
+
+        match err {
+            OpencodeError::Http { message, .. } => {
+                assert!(message.contains("messageID"), "message was: {message}");
+                assert!(
+                    message.contains("must start with"),
+                    "message was: {message}"
+                );
+            }
+            _ => panic!("Expected Http error"),
+        }
+    }
+
+    #[test]
+    fn test_http_error_from_named_error_unknown_command() {
+        let body = r#"{
+  "name": "UnknownError",
+  "data": {
+    "message": "Command not found: \"___definitely_not_a_real_command___\". Available commands: init, review, ..."
+  }
+}"#;
+        let err = OpencodeError::http(400, body);
+
+        match err {
+            OpencodeError::Http { message, .. } => {
+                assert!(
+                    message.contains("Command not found"),
+                    "message was: {message}"
+                );
+                assert!(
+                    message.contains("___definitely_not_a_real_command___"),
+                    "message was: {message}"
+                );
+            }
+            _ => panic!("Expected Http error"),
+        }
+    }
+
+    #[test]
+    fn test_http_error_from_unknown_shape_preserves_body() {
+        let body = r#"{ "weird": "shape" }"#;
+        let err = OpencodeError::http(418, body);
+
+        match err {
+            OpencodeError::Http { message, .. } => {
+                assert!(message.contains(body), "message was: {message}");
             }
             _ => panic!("Expected Http error"),
         }
