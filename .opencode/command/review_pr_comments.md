@@ -1,5 +1,6 @@
 ---
-description: Review PR comments — triage, analyze, present overview for user direction
+description: Review PR comments with triage, analysis, and artifact output (GPT-5.4 optimized)
+agent: NormalOpenAI
 ---
 
 <task>
@@ -7,17 +8,27 @@ Triage PR review comments, analyze them, and present a structured overview so th
 
 Default behavior (no args):
 - Fetch all unresolved comments on the current PR
-- Triage all threads (actionable, question, context, nit) with severity
-- Spawn 1 sub-agent per actionable/question thread for deep analysis
-- Assess nits inline (validity, effort, worth addressing) without sub-agents
+- Triage all threads (`actionable`, `question`, `context`, `nit`) with severity
+- Spawn 1 sub-agent per actionable or question thread for deep analysis
+- Assess nits inline (`validity`, `effort`, `worth_addressing`) without sub-agents
 - Write a versioned artifact with all threads analyzed and nits categorized
-- Present an **overview summary** in the assistant response with categorized comments
+- Present an overview summary in the assistant response with categorized comments
 
-The user then decides what to do: fix issues, add TODOs, send replies, investigate further, etc.
-Do NOT proactively draft replies or suggest sending them — let the user steer.
+The user then decides what to do: fix issues, add TODOs, send replies, investigate further, and so on.
+Do NOT proactively draft replies in the user-facing response or suggest sending them — let the user steer.
 
-Keep instructions LEAN — you already understand tool mechanics from their descriptions.
+Keep instructions lean. The system prompt already covers tool mechanics.
 </task>
+
+<workflow_contract>
+1. Follow all 9 steps in order.
+2. Infer intent from `<userMessage>` and use smart defaults when the request is mostly clear.
+3. Fetch all relevant comment threads before final triage or conclusions.
+4. Use sub-agents for deeper analysis where warranted, but keep nit and context assessment lightweight unless the user asks for more.
+5. All threads must be evaluated; the difference is analysis depth, not whether they are analyzed.
+6. Write a versioned artifact before giving the final overview.
+7. Do not call `tools_gh_add_comment_reply` unless the user explicitly asks for a reply.
+</workflow_contract>
 
 <userMessage>
 $ARGUMENTS
@@ -25,260 +36,222 @@ $ARGUMENTS
 
 <process>
 
-<step name="interpret_intent" id="1">
+<step_1>
 
-## Interpret Intent (Free-text)
+## Step 1: Interpret Intent
 
-Infer user intent from `$ARGUMENTS`. Apply smart defaults if unspecified:
-- Scope: current PR, all unresolved comments, comment_source_type = all
-- Actions: triage all threads; deep-analyze actionable/question; inline-assess nits
-- Output: versioned artifact (with nits categorized) + overview summary in response
+1. Infer user intent from `<userMessage>`.
+2. If the user did not specify scope, default to the current PR, unresolved comments only, and `comment_source_type=all`.
+3. Recognize intent modifiers such as:
+   - `just triage`
+   - `analyze everything`
+   - `include resolved`
+   - `humans only` or `robots only`
+   - `pr 123`
+   - `only questions` or `only actionable`
+   - `skip nits`
+   - `high severity only`
+4. Ask a clarifying question only if the requested scope is truly ambiguous.
+5. State any default assumptions clearly in the user-facing summary.
 
-Recognize common intents:
-- "just triage" → skip all analysis (deep and inline), just categorize
-- "analyze everything" → use sub-agents for ALL categories (including nits)
-- "include resolved" → include resolved threads
-- "humans only" / "robots only" → filter by comment_source_type
-- "pr 123" → target specific PR
-- "only questions" / "only actionable" → filter categories for analysis
-- "skip nits" → exclude nit category from analysis
-- "high severity only" → analyze only high-severity threads
+</step_1>
 
-Only ask a clarifying question if intent is truly ambiguous. Otherwise proceed with defaults.
+<step_2>
 
-When making assumptions (e.g., auto-detected PR, default filters), state them explicitly in your response so the user knows what scope is being analyzed.
+## Step 2: Identify the PR
 
-</step>
+1. Prefer auto-detection by calling `tools_gh_get_comments` without `pr_number` first.
+2. If auto-detection fails or the user specified a PR number, use that explicit PR.
+3. If the PR is still unknown, call `tools_gh_get_prs`, follow the tool-visible pagination cues if more results remain, stop when the tool says completion, then present the candidates and ask the user to choose.
+4. Treat GitHub tool output as the authoritative source for PR identification and PR metadata in this workflow.
 
-<step name="identify_pr" id="2">
+</step_2>
 
-## Identify the PR
+<step_3>
 
-Prefer auto-detection: call `tools_gh_get_comments` without pr_number — the tool infers from current branch.
+## Step 3: Fetch All Relevant Comment Threads
 
-If auto-detection fails or user specified a PR number, use that.
+1. Call `tools_gh_get_comments` using the chosen PR and the intent-derived filters.
+   - `comment_source_type` from intent (`all` by default)
+   - `include_resolved` from intent (`false` by default)
+   - `pr_number` from Step 2
+2. Handle pagination by repeating the same request only while the tool output says more results remain.
+3. Stop immediately when the tool output says the result is complete.
+   - Do not call again after completion, because another identical call restarts pagination from page 1.
+4. For each thread, capture:
+    - thread_id (parent comment ID)
+    - file path and line
+    - top-level thread URL
+    - ordered thread comments (parent first, then replies), each with:
+      - comment_id (numeric ID if present in tool output; parent comment_id == thread_id)
+      - author_login
+      - body
+    - If per-comment IDs are not visible (e.g., `PR_COMMENTS_EXTRAS=noid`), keep reply comment_id unknown and rely on the Step 6 fallback; do NOT guess IDs.
+5. Also capture PR metadata from the tool output:
+    - owner/repo
+    - PR number
+    - PR URL
+6. Treat reply URLs, bot markers, dates, and review IDs as optional extras only when the tool output includes them.
+7. If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
+8. If no matching threads exist, continue through artifact writing with a grounded `no unresolved comments` summary.
 
-If still unknown, call `tools_gh_get_prs`, follow the tool-visible pagination cues if more results remain, stop when the tool says completion, then ask the user to select. State assumptions clearly.
+</step_3>
 
-Treat GitHub tool output as the authoritative source for PR identification and PR metadata in this workflow.
+<step_4>
 
-</step>
+## Step 4: Triage Every Thread
 
-<step name="fetch_comments" id="3">
+1. Classify each thread as `actionable`, `question`, `context`, or `nit`.
+2. Assign a severity of `high`, `medium`, or `low`.
+3. Decide whether the thread is likely `reply_worthy` (`questions` and `actionable` are usually `yes`).
+4. Keep this pass lightweight; do not do deep technical analysis yet.
 
-## Fetch All Comment Threads (Paginated)
+</step_4>
 
-Use `tools_gh_get_comments` with:
-- comment_source_type from intent ("all" default)
-- include_resolved from intent (false default)
-- pr_number from Step 2
+<step_5>
 
-Handle pagination: repeat calls with same params only while the tool output says more results remain.
+## Step 5: Select Analysis Depth
 
-Stop immediately when the tool output says the result is complete.
-- Do not call again after completion, because another identical call restarts pagination from page 1.
+1. Default deep analysis targets: `actionable` and `question`.
+2. Default inline assessment targets: `nit` and `context`.
+3. All threads get evaluated — the difference is depth, not whether they are analyzed.
+4. Adjust the selection based on user intent, including:
+   - skip all analysis for `just triage`
+   - use sub-agents for all categories for `analyze everything`
+   - omit nits for `skip nits`
+   - honor any category or severity narrowing from the user
+5. Record which thread IDs will receive deep analysis versus inline assessment.
 
-For each thread, capture:
-- thread_id (parent comment id)
-- path, line, top-level thread URL
-- ordered thread comments (parent first, then replies), each with:
-  - comment_id (numeric ID if present in tool output; parent comment_id == thread_id)
-  - author_login
-  - body
+</step_5>
 
-If per-comment IDs are not visible in the tool output (e.g., `PR_COMMENTS_EXTRAS=noid`), record reply `comment_id` as unknown and rely on the Step 6 fallback (`target_comment_id = thread_id`). Do NOT guess IDs.
+<step_6>
 
-Also capture PR metadata from the tool output:
-- owner/repo
-- PR number
-- PR URL
+## Step 6: Analyze Threads at the Right Depth
 
-Treat reply URLs, bot markers, dates, and review IDs as optional extras only when the tool output includes them.
+1. For each deep-analysis thread, spawn a `tools_ask_agent` analyzer with the thread content, file path, line number, URL, and author information.
+   - Use `agent_type=analyzer`.
+2. Ask each analyzer to return:
+   - a concise problem summary
+   - why it matters
+   - a proposed resolution path
+   - a `reply_draft` if the thread is reply-worthy — do NOT include a `🤖` or bot-marker prefix
+   - the best target comment ID for a future reply (prefer the last comment_id in the provided thread; if per-comment IDs are missing or unavailable, set `target_comment_id = thread_id` and explicitly note the limitation — do NOT guess)
+3. Launch independent thread analyzers in parallel.
 
-If a PR URL is not available from GitHub tool output, mark it unavailable or omit it rather than deriving it from another source.
+</step_6>
 
-If zero threads found, proceed to artifact writing with "no unresolved comments" summary.
+<step_6b>
 
-</step>
+## Step 6b: Inline Assessment for Nits and Context
 
-<step name="triage_threads" id="4">
+1. For each `nit` or `context` thread, assess it inline without spawning a sub-agent.
+2. For each nit, determine:
+   - `validity`: `valid` | `partially-valid` | `invalid`
+   - `worth_addressing`: `yes` | `maybe` | `no`
+   - `effort`: `trivial` | `small` | `medium`
+   - `one_liner`: brief rationale in one sentence
+3. Use these heuristics:
+   - `Trivial + valid + yes` means a quick win that should usually be fixed
+   - `Invalid` usually means decline or ignore
+   - `Valid but not worth it` usually means defer to a future PR
+   - group related nits by file when that makes the output easier to act on
+4. This assessment happens in the main agent context — no extra tool calls are required.
 
-## Triage All Threads
+</step_6b>
 
-For each thread, classify:
-- category: actionable | question | context | nit
-- severity: high | medium | low
-- reply_worthy: yes/no (heuristic; questions and actionable usually yes)
+<step_7>
 
-Keep this pass lightweight — just categorization, no deep analysis.
+## Step 7: Consolidate Results
 
-</step>
+1. Combine the sub-agent results with the inline assessments.
+2. Organize findings into these groups:
+   - **Actionable** — by severity (`high` → `medium` → `low`), then by file
+   - **Context** — informational threads worth surfacing without treating them as action items
+   - **Nits: Quick Wins** — `valid` + worth addressing + `trivial` or `small` effort
+   - **Nits: Deferred** — valid but not worth addressing in this PR
+   - **Nits: Declined** — invalid or not applicable
+3. Make sure every included claim is grounded in the actual thread content and any cited code context.
+4. This grouping should make it easy to batch-fix quick wins and understand what to skip.
 
-<step name="select_targets" id="5">
+</step_7>
 
-## Select Threads for Analysis
+<step_8>
 
-**Deep analysis (sub-agents):** actionable + question threads.
-**Inline assessment (no sub-agent):** nit + context threads.
+## Step 8: Write a Versioned Artifact
 
-All threads get evaluated — the difference is depth, not whether they're analyzed.
-
-Adjustments based on intent:
-- "just triage" → skip all analysis (deep and inline)
-- "analyze everything" → use sub-agents for ALL categories
-- "skip nits" → exclude nit category entirely
-- User narrowed scope (e.g., "only humans") → honor that
-
-Record selected thread IDs by analysis type.
-
-</step>
-
-<step name="spawn_analysis_agents" id="6">
-
-## Deep Analysis with Sub-Agents (1 per Thread)
-
-For each **actionable/question** thread, spawn a sub-agent using `tools_ask_agent` with `agent_type=analyzer`.
-
-Each sub-agent receives:
-- The single thread: parent comment + all replies
-- File path, line number, html_url
-- Author information for each comment
-
-Each sub-agent returns:
-- Brief problem summary
-- Why it matters (risk/impact)
-- Proposed resolution path
-- reply_draft (if reply_worthy) — do NOT include "🤖" prefix
-- target_comment_id to reply to (prefer the last comment_id in the thread; if per-comment IDs are unavailable or missing, set `target_comment_id = thread_id` and explicitly note that per-comment IDs were not available — do NOT guess)
-
-Spawn all sub-agents in parallel for efficiency.
-
-</step>
-
-<step name="assess_nits_inline" id="6b">
-
-## Inline Assessment for Nits/Context (No Sub-Agent)
-
-For each **nit/context** thread, perform a quick inline assessment WITHOUT spawning a sub-agent. This is cheaper but still provides actionable information.
-
-For each nit, determine:
-- **validity**: valid | partially-valid | invalid (is the suggestion technically correct?)
-- **worth_addressing**: yes | maybe | no (cost/benefit for this PR)
-- **effort**: trivial | small | medium (how hard to fix?)
-- **one_liner**: Brief rationale (1 sentence max)
-
-Guidelines:
-- "Trivial + valid + yes" = quick win, should fix
-- "Invalid" = politely decline or ignore
-- "Valid but not worth it" = acknowledge, defer to future PR
-- Group by file when multiple nits target the same file
-
-This assessment happens in the main agent's context — no tool calls needed, just reasoning over the comment text.
-
-</step>
-
-<step name="consolidate_results" id="7">
-
-## Consolidate All Results
-
-Collect:
-1. Sub-agent responses (deep analysis for actionable/question)
-2. Inline assessments (nits/context)
-
-Organize into sections:
-- **Actionable** — by severity (high → medium → low), then by file
-- **Nits: Quick Wins** — valid + worth addressing + trivial/small effort
-- **Nits: Deferred** — valid but not worth addressing in this PR
-- **Nits: Declined** — invalid or not applicable
-
-This grouping makes it easy to batch-fix quick wins and know what to skip.
-
-</step>
-
-<step name="write_artifact" id="8">
-
-## Write Versioned Artifact
-
-Determine artifact filename:
-- Call `tools_thoughts_list_documents`
-- Find existing `pr_{number}_review_comments_*.md` files
-- Compute N = 1 + max existing suffix (or 1 if none)
-- Filename: `pr_{number}_review_comments_{N}.md`
-
-Artifact content:
+1. Call `tools_thoughts_list_documents` to find existing `pr_{number}_review_comments_*.md` artifacts.
+2. Compute the next version number.
+3. Write a new artifact with `tools_thoughts_write_document` using `doc_type="artifact"`.
+4. Structure the artifact like this:
 
 ### Header
 - PR number, URL if available from GitHub tool output, timestamp
-- Triage summary: counts by category and severity
+- scope assumptions
+- triage counts by category and severity
 
 ### Actionable Threads (Deep Analysis)
-For each actionable/question thread:
-- path:line, comment_id, author(s), category/severity
-- Original comment (preserve full text)
-- Analysis: problem, impact, resolution
-- Reply draft (if any)
+For each actionable or question thread:
+- `path:line`, `comment_id`, author(s), category, severity
+- original comment text in full
+- analysis covering problem, impact, and resolution path
+- `reply_draft` if any
 
 ### Nits: Quick Wins
 For each nit worth addressing:
-- path:line, comment_id, author
-- Original comment (full text, use `<details>` if long)
-- Assessment: validity, effort, one-liner rationale
-- Suggested fix (if obvious)
+- `path:line`, `comment_id`, author
+- original comment text in full (use `<details>` if long)
+- assessment: validity, effort, one-line rationale
+- suggested fix if obvious
+
+### Context Threads
+For each context thread:
+- `path:line`, `comment_id`, author
+- original comment text in full if it is useful context
+- one line explaining why it matters for understanding the PR
 
 ### Nits: Deferred
 For each valid-but-not-now nit:
-- path:line, comment_id
-- One-liner: why deferred
+- `path:line`, `comment_id`
+- one line saying why it is deferred
 
 ### Nits: Declined
-For each invalid/not-applicable nit:
-- path:line, comment_id
-- One-liner: why declined
+For each invalid or not-applicable nit:
+- `path:line`, `comment_id`
+- one line saying why it is declined
 
 ### Footer
-- Quick command reference: "fix quick wins", "fix X", "add TODO for Y", "reply to Z saying...", "tell me more about W"
+- quick command reference such as `fix quick wins`, `fix X`, `add TODO for Y`, `reply to Z saying...`, `tell me more about W`
 
-Write using `tools_thoughts_write_document` with doc_type="artifact".
+</step_8>
 
-</step>
+<step_9>
 
-<step name="present_overview" id="9">
+## Step 9: Present the Overview and Hand Control Back to the User
 
-## Present Overview in Response
+1. Present a compact summary line with counts by category.
+   - Example: `Found X comments: Y actionable, Z nits (W quick wins), ...`
+2. Show actionable and question threads ordered by severity (`high` → `medium` → `low`).
+   - Format each as `` `path:line` — brief summary `` with category tags such as `[actionable/high]` or `[question/medium]`
+3. Show any context threads separately using `` `path:line` — why this context matters ``.
+4. Show quick wins as `` `path:line` — what to fix ``.
+5. Show deferred items as `` `path:line` — why deferred ``.
+6. Show declined items as `` `path:line` — why declined ``.
+7. Do not surface reply drafts in the response unless the user asks for them.
+8. End with `What would you like to do?` and offer user-steerable next actions such as:
+   - `fix the quick wins`
+   - `fix X and Y`
+   - `add TODO for Z` with the appropriate severity
+   - `reply to X saying...`
+   - `tell me more about X`
+   - `create ticket for X` (if Linear is available)
+9. Do NOT call `tools_gh_add_comment_reply` unless the user explicitly requests a reply.
 
-In your assistant response, present a **structured overview** of all comments organized by category. Do NOT show reply drafts unless the user asks for them.
-
-### Format
-
-**Summary line**: "Found X comments: Y actionable, Z nits (W quick wins), ..."
-
-**Actionable/Questions** (ordered by severity: high → medium → low):
-For each, show:
-- `path:line` — Brief summary of what the comment asks/requests
-- Category tag: `[actionable/high]` or `[question/medium]` etc.
-
-**Quick Wins** (trivial effort, valid nits worth fixing):
-For each, show:
-- `path:line` — What to fix (1 line)
-
-**Deferred** (valid but not worth it now):
-- `path:line` — Why deferred (1 line)
-
-**Declined** (invalid or N/A):
-- `path:line` — Why declined (1 line)
-
-### User Steers Next Steps
-
-End with: "What would you like to do?" — let the user decide:
-- "fix the quick wins" → make the code changes
-- "fix X and Y" → fix specific items
-- "add TODO for Z" → add TODO comment with appropriate severity
-- "reply to X saying..." → draft and send a reply
-- "tell me more about X" → deeper investigation
-- "create ticket for X" → (if Linear available) create follow-up issue
-
-Do NOT call `tools_gh_add_comment_reply` unless the user explicitly requests a reply.
-
-</step>
+</step_9>
 
 </process>
+
+<completion_gate>
+You are done only when one of these is true:
+1. You asked a necessary clarification question because the PR or scope could not be determined.
+2. You produced the versioned artifact and presented the overview summary, and the user can now choose the next action.
+</completion_gate>

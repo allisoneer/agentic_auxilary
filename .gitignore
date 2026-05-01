@@ -21,7 +21,8 @@ debug_output.txt
 **/*.tmp
 
 # IDE files
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo

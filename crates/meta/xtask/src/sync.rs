@@ -1,10 +1,11 @@
 //! Sync command implementation.
 //!
 //! Updates autogen blocks in CLAUDE.md files, release-plz.toml, README.md, justfile,
-//! and agentic.schema.json.
+//! mise.toml, and agentic.schema.json.
 
 use crate::claude;
 use crate::justfile;
+use crate::mise;
 use crate::policy::Policy;
 use crate::readme;
 use crate::release_plz;
@@ -20,6 +21,7 @@ use std::fs;
 /// - Root CLAUDE.md crate-index
 /// - Per-crate CLAUDE.md files
 /// - release-plz.toml packages block
+/// - mise.toml managed blocks
 /// - README.md version markers
 /// - justfile generated sections
 pub fn run(dry_run: bool, check: bool) -> Result<()> {
@@ -48,6 +50,10 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     let release_changed =
         release_plz::sync_release_plz("release-plz.toml", &metadata, &policy, dry_run, check)?;
 
+    // mise.toml
+    eprintln!("[sync] Syncing mise.toml...");
+    let mise_changed = mise::sync_mise(mise::MISE_PATH, &metadata, dry_run, check)?;
+
     // README.md
     eprintln!("[sync] Syncing README.md...");
     let readme_changed = readme::sync_root_readme("README.md", &metadata, dry_run, check)?;
@@ -64,6 +70,7 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     let total_changes = (root_changed as usize)
         + crate_count
         + (release_changed as usize)
+        + (mise_changed as usize)
         + (readme_changed as usize)
         + (justfile_changed as usize)
         + (schema_changed as usize);

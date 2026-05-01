@@ -10,6 +10,7 @@ pub mod claude;
 pub mod endpoint_coverage;
 pub mod justfile;
 pub mod marker;
+pub mod mise;
 pub mod policy;
 pub mod readme;
 pub mod release_plz;

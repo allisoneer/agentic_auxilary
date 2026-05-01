@@ -1,0 +1,7 @@
+---
+source: tui/src/chatwidget/tests/status_surface_previews.rs
+assertion_line: 161
+expression: snapshot
+---
+status line: tmp · feature/mixed-preview · Mixed preview thread
+terminal title: tmp | Mixed preview thread | Tasks 0/0

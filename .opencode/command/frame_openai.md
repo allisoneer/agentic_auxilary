@@ -88,11 +88,11 @@ $ARGUMENTS
 3. If important uncertainty remains but the task is still actionable, preserve it as an explicit caveat rather than stopping.
 4. If ambiguity is meaningful, compare 2 plausible frames briefly before choosing one.
 5. Decide the best execution mode:
-   - question → answer directly or recommend `/research_openai`
-   - research → recommend `/research_openai`
-   - planning → recommend `/create_plan_init_openai`
-   - implementation with an approved plan → recommend `/implement_plan_openai`
-   - review of PR comments → recommend `/review_pr_comments_openai`
+   - question → answer directly or recommend `/research`
+   - research → recommend `/research`
+   - planning → recommend `/create_plan_init`
+   - implementation with an approved plan → recommend `/implement_plan`
+   - review of PR comments → recommend `/review_pr_comments`
    - resume of interrupted work → recommend `/resume_work_openai`
    - handoff or context extraction → recommend `/unwind_openai`
    - bounded ad hoc work that does not clearly fit a specialized workflow → continue directly

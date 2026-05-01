@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+for arg in "$@"; do
+	[[ "$arg" == "--" ]] && break
+
+	case "$arg" in
+	--system-prompt | --system-prompt=* | \
+		--system-prompt-file | --system-prompt-file=* | \
+		--append-system-prompt | --append-system-prompt=* | \
+		--append-system-prompt-file | --append-system-prompt-file=*)
+		exec claude "$@"
+		;;
+	esac
+done
+
+if ! repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+	echo "orchestrator: error: failed to resolve repo root (git rev-parse --show-toplevel)" >&2
+	echo "orchestrator: error: run this inside the agentic_auxilary repository worktree" >&2
+	exit 1
+fi
+
+prompt_file="$repo_root/.claude/orchestrator_sysprompt.md"
+if [[ ! -f "$prompt_file" ]]; then
+	echo "orchestrator: error: missing prompt file: $prompt_file" >&2
+	echo "orchestrator: error: are you in a nested git repo or wrong checkout root?" >&2
+	exit 1
+fi
+
+exec claude --system-prompt-file "$prompt_file" "$@"

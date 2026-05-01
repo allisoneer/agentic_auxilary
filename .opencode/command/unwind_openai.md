@@ -31,14 +31,14 @@ $ARGUMENTS
 1. Infer the current task and handoff scope from the active session plus `<userMessage>`.
 2. Treat additional user text as handoff focus, resume emphasis, or overrides.
 3. Determine whether the current work is primarily associated with a known workflow command such as:
-   - `.opencode/command/implement_plan_openai.md`
-   - `.opencode/command/research_openai.md`
-   - `.opencode/command/create_plan_init_openai.md`
-   - `.opencode/command/create_plan_final_openai.md`
-   - `.opencode/command/review_pr_comments_openai.md`
+    - `.opencode/command/implement_plan.md`
+    - `.opencode/command/research.md`
+    - `.opencode/command/create_plan_init.md`
+    - `.opencode/command/create_plan_final.md`
+    - `.opencode/command/review_pr_comments.md`
 4. If a known workflow is identified, record:
-   - `source_workflow_command` = slash-command form such as `/implement_plan_openai`
-   - `source_workflow_file` = repo path such as `.opencode/command/implement_plan_openai.md`
+    - `source_workflow_command` = slash-command form such as `/implement_plan`
+    - `source_workflow_file` = repo path such as `.opencode/command/implement_plan.md`
    - `resume_mode` = one of `continue_source_workflow`, `continue_generic_work`, or `ask_user_first`
 5. If the workflow is unclear, fall back to a generic handoff and say so explicitly in the artifact.
 
@@ -58,7 +58,7 @@ $ARGUMENTS
    - verification status
    - meaningful divergences from the original plan
 4. For research or planning work, make sure you know the latest research, open questions, and recommended next command.
-5. If the current session edited `.opencode/command/*_openai.md` files or `AGENTS.md`, re-read those changed files and note whether they already received a post-write comparison or external review.
+5. If the current session edited `.opencode/command/*.md` workflow files or `AGENTS.md`, re-read those changed files and note whether they already received a post-write comparison or external review.
 6. Do not do a broad new investigation here. Reload only the files and documents needed for an accurate handoff.
 
 </step_2>

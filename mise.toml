@@ -1,0 +1,103 @@
+[tool_alias]
+dockerfmt = "github:reteps/dockerfmt"
+cargo-machete = "github:bnjbvr/cargo-machete"
+cargo-nextest = "github:nextest-rs/nextest"
+cargo-audit = "cargo:cargo-audit"
+cargo-llvm-cov = "aqua:taiki-e/cargo-llvm-cov"
+cargo-binutils = "cargo:cargo-binutils"
+cargo-modules = "cargo:cargo-modules"
+cargo-depgraph = "cargo:cargo-depgraph"
+watchexec = "aqua:watchexec/watchexec"
+systemfd = "cargo:systemfd"
+diesel = "cargo:diesel_cli"
+thoughts-bin = "github:allisoneer/agentic_auxilary"
+agentic-bin = "github:allisoneer/agentic_auxilary"
+agentic-mcp = "github:allisoneer/agentic_auxilary"
+opencode-orchestrator-mcp = "github:allisoneer/agentic_auxilary"
+
+[settings]
+lockfile = true
+locked = true
+status = { missing_tools = "always" }
+
+[env]
+_.path = ["tools/bin"]
+
+[tools]
+# Provides cargo-binstall so the cargo backend can download pre-built binaries
+# instead of compiling from source. Using github backend for proper lockfile support.
+"github:cargo-bins/cargo-binstall" = "latest"
+# BEGIN:xtask:autogen mise:tool-pins
+claude = "2.1.116"
+"npm:opencode-ai" = "1.3.17"
+# END:xtask:autogen
+just = "latest"
+shellcheck = "0.11.0"
+shfmt = "3.8.0"
+actionlint = "1.7.9"
+hadolint = "2.12.0"
+uv = "latest"
+bun = "1.2.21"
+"github:reteps/dockerfmt" = "0.3.9"
+"github:bnjbvr/cargo-machete" = "latest"
+"github:nextest-rs/nextest" = { version = "0.9.72", version_prefix = "cargo-nextest-" }
+# Prebuilt binaries need glibc 2.38+; no musl build available for all platforms
+"cargo:cargo-audit" = "latest"
+"aqua:taiki-e/cargo-llvm-cov" = "0.6.14"
+# Prebuilt binaries need glibc 2.39+; no musl or linux-arm64 builds available
+"cargo:cargo-binutils" = "0.4.0"
+# No GitHub releases published
+"cargo:cargo-modules" = "latest"
+# Generates Rust workspace dependency graphs (used by tools/gen-depgraph.sh)
+"cargo:cargo-depgraph" = "latest"
+trivy = "latest"
+opentofu = "latest"
+"aqua:watchexec/watchexec" = "latest"
+"cargo:systemfd" = "latest"
+# Pre-built binary includes all database backends on supported targets,
+# avoiding feature-specific source builds in typical setups.
+"cargo:diesel_cli" = "latest"
+
+# Keep nested per-platform tables at the end so later flat tool entries remain in top-level [tools].
+# BEGIN:xtask:autogen mise:agentic-binaries
+[tools.thoughts-bin]
+version = "0.1.16"
+version_prefix = "thoughts-bin-v"
+
+[tools.thoughts-bin.platforms]
+linux-x64 = { asset_pattern = "thoughts-bin-x86_64-unknown-linux-gnu.tar.xz" }
+linux-arm64 = { asset_pattern = "thoughts-bin-aarch64-unknown-linux-gnu.tar.xz" }
+macos-x64 = { asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz" }
+macos-arm64 = { asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz" }
+
+[tools.agentic-bin]
+version = "0.1.4"
+version_prefix = "agentic-bin-v"
+
+[tools.agentic-bin.platforms]
+linux-x64 = { asset_pattern = "agentic-bin-x86_64-unknown-linux-gnu.tar.xz" }
+linux-arm64 = { asset_pattern = "agentic-bin-aarch64-unknown-linux-gnu.tar.xz" }
+macos-x64 = { asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz" }
+macos-arm64 = { asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz" }
+
+[tools.agentic-mcp]
+version = "0.2.15"
+version_prefix = "agentic-mcp-v"
+
+[tools.agentic-mcp.platforms]
+linux-x64 = { asset_pattern = "agentic-mcp-x86_64-unknown-linux-gnu.tar.xz" }
+linux-arm64 = { asset_pattern = "agentic-mcp-aarch64-unknown-linux-gnu.tar.xz" }
+macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
+macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
+
+[tools.opencode-orchestrator-mcp]
+version = "0.4.7"
+version_prefix = "opencode-orchestrator-mcp-v"
+
+[tools.opencode-orchestrator-mcp.platforms]
+linux-x64 = { asset_pattern = "opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz" }
+linux-arm64 = { asset_pattern = "opencode-orchestrator-mcp-aarch64-unknown-linux-gnu.tar.xz" }
+macos-x64 = { asset_pattern = "opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz" }
+macos-arm64 = { asset_pattern = "opencode-orchestrator-mcp-aarch64-apple-darwin.tar.xz" }
+
+# END:xtask:autogen
