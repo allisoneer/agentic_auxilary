@@ -109,6 +109,16 @@ just xtask-sync-check   # Check if sync is needed (for CI)
 just xtask-verify-check # Full verification including generated files
 ```
 
+### Vendored Codex
+```bash
+just codex-check        # Check vendored Codex from vendor/codex/codex-rs
+just codex-build        # Build vendored Codex CLI
+just codex-test         # Run vendored Codex tests (best-effort)
+just codex-run -- ...   # Run the vendored codex binary
+```
+
+`vendor/codex/` is a foreign vendored subtree. Keep it out of the root workspace, do not edit it as if it were a first-class workspace family, and run Codex commands by delegating into `vendor/codex/codex-rs`.
+
 ### Output modes
 ```bash
 # Default: minimal (quiet on success, verbose on failure)
