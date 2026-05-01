@@ -353,6 +353,7 @@ fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
     let mut paths = vec![
         "CLAUDE.md".to_string(),
         "release-plz.toml".to_string(),
+        "mise.toml".to_string(),
         "README.md".to_string(),
         "justfile".to_string(),
         "agentic.schema.json".to_string(),
