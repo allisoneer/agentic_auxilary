@@ -183,7 +183,14 @@ impl OpencodeError {
         let message = info
             .as_ref()
             .and_then(|i| i.message.clone())
-            .unwrap_or_else(|| truncate_body_text(body_text, 1024));
+            .unwrap_or_else(|| {
+                let truncated = truncate_body_text(body_text, 1024);
+                if truncated.trim().is_empty() {
+                    format!("HTTP {status}")
+                } else {
+                    truncated
+                }
+            });
 
         Self::Http {
             status,
@@ -256,6 +263,44 @@ mod tests {
                 assert_eq!(status, 500);
                 assert!(name.is_none());
                 assert_eq!(message, "Internal Server Error");
+            }
+            _ => panic!("Expected Http error"),
+        }
+    }
+
+    #[test]
+    fn test_http_error_from_empty_body_uses_status_fallback() {
+        let err = OpencodeError::http(502, "");
+
+        match err {
+            OpencodeError::Http {
+                status,
+                name,
+                message,
+                ..
+            } => {
+                assert_eq!(status, 502);
+                assert!(name.is_none());
+                assert_eq!(message, "HTTP 502");
+            }
+            _ => panic!("Expected Http error"),
+        }
+    }
+
+    #[test]
+    fn test_http_error_from_whitespace_body_uses_status_fallback() {
+        let err = OpencodeError::http(503, "   \n");
+
+        match err {
+            OpencodeError::Http {
+                status,
+                name,
+                message,
+                ..
+            } => {
+                assert_eq!(status, 503);
+                assert!(name.is_none());
+                assert_eq!(message, "HTTP 503");
             }
             _ => panic!("Expected Http error"),
         }

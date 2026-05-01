@@ -52,7 +52,12 @@ These items have dependencies and should be done in order.
 - Could bundle with Linear tools in same agent.
 
 ### Wire live opencode command-path integration tests into CI
-- `crates/services/opencode-rs/tests/integration.rs:6-18,53-55,153-156` and `apps/opencode-orchestrator-mcp/tests/integration.rs:24-26,125-128` show the live tests are both `#[ignore]`-gated and require `OPENCODE_INTEGRATION` / `OPENCODE_ORCHESTRATOR_INTEGRATION`, while `.github/workflows/ci.yml:71-87` and `.github/workflows/ci.yml:223-238` never set those env vars or pass `--ignored`. Result: CI never exercises the real `POST /session/{id}/command` path, which is how the recent `messageID` validator regression in `opencode-rs` slipped through. Decide where these should run (probably nightly), wire the env vars in, and run the ignored tests there.
+
+- TODO(1): `crates/services/opencode-rs/tests/integration.rs:6-18,53-55,153-156` and `apps/opencode-orchestrator-mcp/tests/integration.rs:24-26,125-128` show the live tests are both `#[ignore]`-gated and require `OPENCODE_INTEGRATION` / `OPENCODE_ORCHESTRATOR_INTEGRATION`, while `.github/workflows/ci.yml:71-87` and `.github/workflows/ci.yml:223-238` never set those env vars or pass `--ignored`. Result: CI never exercises the real `POST /session/{id}/command` path, which is how the recent `messageID` validator regression in `opencode-rs` slipped through. Decide where these should run (probably nightly), wire the env vars in, and run the ignored tests there.
+
+### Decide on idempotency semantics for opencode-rs command dispatch retries
+
+- TODO(1): `crates/services/opencode-rs/src/http/messages.rs:94-99` (`command()`) currently uses `post_json_with_retry`, but upstream opencode 1.14.19 does not dedupe by `messageID` (`references/anomalyco/opencode@r-refs~2ftags~2fv1.14.19/packages/opencode/src/session/prompt.ts:940-942,1276-1293`, `packages/opencode/src/session/projectors.ts:83-96`). A retry fired after server-side execution has begun (e.g., connection dropped mid-response) can cause duplicate command execution. Decide between (a) disabling transport retries on `/session/{id}/command` to fail fast, (b) implementing a real server-side idempotency contract upstream, or (c) accepting at-least-once semantics and documenting it. Currently the code path is documented but unchanged.
 
 ## To classify/investigate:
 
