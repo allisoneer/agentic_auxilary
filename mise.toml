@@ -91,7 +91,7 @@ macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
 [tools.opencode-orchestrator-mcp]
-version = "0.4.5"
+version = "0.4.7"
 version_prefix = "opencode-orchestrator-mcp-v"
 
 [tools.opencode-orchestrator-mcp.platforms]
