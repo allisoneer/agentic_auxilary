@@ -11,7 +11,7 @@ fn tracing_setup_explicitly_uses_stderr_writer() {
         .expect("main function should exist");
     let startup = &main_rs[main_start..];
     let rustls_start = startup
-        .find("// Install the rustls CryptoProvider")
+        .find("default_provider().install_default()")
         .expect("rustls setup should follow tracing setup");
     let tracing_setup = &startup[..rustls_start];
 
