@@ -18,6 +18,7 @@ pub use tools::build_registry;
 
 use agentic_config::types::CliToolsConfig;
 use agentic_config::types::SubagentsConfig;
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use std::sync::Arc;
 use types::AgentOutput;
@@ -263,6 +264,19 @@ impl CodingAgentTools {
         location: Option<types::AgentLocation>,
         query: String,
     ) -> Result<AgentOutput, ToolError> {
+        let ctx = ToolContext::default();
+        self.ask_agent_with_context(agent_type, location, query, &ctx)
+            .await
+    }
+
+    /// Spawn an opinionated Claude subagent with a tool execution context.
+    pub async fn ask_agent_with_context(
+        &self,
+        agent_type: Option<types::AgentType>,
+        location: Option<types::AgentLocation>,
+        query: String,
+        ctx: &ToolContext,
+    ) -> Result<AgentOutput, ToolError> {
         use claudecode::client::Client;
         use claudecode::config::SessionConfig;
         use claudecode::mcp::validate::ValidateOptions;
@@ -296,6 +310,20 @@ impl CodingAgentTools {
 
         // Compose configuration
         let model = agent::model_for(agent_type, &self.subagents);
+        if ctx.is_cancelled() {
+            let error_msg = "ask_agent cancelled".to_string();
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                Some(model.to_string()),
+                None,
+            );
+            return Err(ToolError::Internal(error_msg));
+        }
+
         let system_prompt = agent::compose_prompt(agent_type, location);
         let enabled_tools = agent::enabled_tools_for(agent_type, location);
 
@@ -310,7 +338,23 @@ impl CodingAgentTools {
 
         // Validate MCP servers before launching (spawn, handshake, tools/list)
         let opts = ValidateOptions::default();
-        if let Err(e) = ensure_valid_mcp_config(&mcp_config, &opts).await {
+        let validation_result = tokio::select! {
+            () = ctx.cancelled() => {
+                let error_msg = "ask_agent cancelled".to_string();
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(ToolError::Internal(error_msg));
+            }
+            result = ensure_valid_mcp_config(&mcp_config, &opts) => result,
+        };
+        if let Err(e) = validation_result {
             use std::fmt::Write;
             let mut details = String::new();
             for (name, err) in &e.errors {
@@ -318,6 +362,20 @@ impl CodingAgentTools {
             }
             let error_msg =
                 format!("ask_agent unavailable: MCP config validation failed.\n{details}");
+            log_ctx.finish(
+                req_json,
+                None,
+                false,
+                Some(error_msg.clone()),
+                None,
+                Some(model.to_string()),
+                None,
+            );
+            return Err(ToolError::Internal(error_msg));
+        }
+
+        if ctx.is_cancelled() {
+            let error_msg = "ask_agent cancelled".to_string();
             log_ctx.finish(
                 req_json,
                 None,
@@ -378,7 +436,24 @@ impl CodingAgentTools {
             }
         };
 
-        let result = match client.launch_and_wait(config).await {
+        let launch_result = tokio::select! {
+            () = ctx.cancelled() => {
+                let error_msg = "ask_agent cancelled".to_string();
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(ToolError::Internal(error_msg));
+            }
+            result = client.launch_and_wait(config) => result,
+        };
+
+        let result = match launch_result {
             Ok(r) => r,
             Err(e) => {
                 let error_msg = format!("Failed to run Claude session: {e}");

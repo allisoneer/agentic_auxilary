@@ -3,9 +3,37 @@
 //! Run with: cargo test -p `coding_agent_tools` -- --ignored
 #![expect(clippy::unwrap_used)]
 
+use agentic_tools_core::CancellationToken;
+use agentic_tools_core::Tool;
+use agentic_tools_core::ToolContext;
 use coding_agent_tools::CodingAgentTools;
+use coding_agent_tools::tools::AskAgentInput;
+use coding_agent_tools::tools::AskAgentTool;
 use coding_agent_tools::types::AgentLocation;
 use coding_agent_tools::types::AgentType;
+use std::sync::Arc;
+
+#[tokio::test]
+async fn ask_agent_tool_returns_promptly_when_context_is_cancelled() {
+    let token = CancellationToken::new();
+    token.cancel();
+    let ctx = ToolContext::with_cancellation_token(token);
+    let tool = AskAgentTool::new(Arc::new(CodingAgentTools::new()));
+
+    let err = tool
+        .call(
+            AskAgentInput {
+                agent_type: Some(AgentType::Locator),
+                location: Some(AgentLocation::Codebase),
+                query: "This should not launch Claude".to_string(),
+            },
+            &ctx,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("cancelled"));
+}
 
 #[tokio::test]
 #[ignore = "requires live API key and network access"]

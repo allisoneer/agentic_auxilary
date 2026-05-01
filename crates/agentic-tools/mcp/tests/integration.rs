@@ -12,10 +12,18 @@ use agentic_tools_core::fmt::TextOptions;
 use agentic_tools_mcp::OutputMode;
 use agentic_tools_mcp::RegistryServer;
 use futures::future::BoxFuture;
+use rmcp::model as m;
+use rmcp::service::RoleServer;
+use rmcp::service::RxJsonRpcMessage;
+use rmcp::service::TxJsonRpcMessage;
+use rmcp::transport::Transport;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
+use tokio::sync::Notify;
+use tokio::sync::mpsc;
+use tokio::time::Duration;
 
 // =============================================================================
 // Test Tool Definitions
@@ -99,6 +107,68 @@ impl Tool for CalculateTool {
             };
             Ok(CalculateOutput { result })
         })
+    }
+}
+
+#[derive(Clone)]
+struct WaitForCancelTool {
+    started: Arc<Notify>,
+}
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+struct WaitForCancelInput {}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+struct WaitForCancelOutput {
+    cancelled: bool,
+}
+
+impl TextFormat for WaitForCancelOutput {}
+
+impl Tool for WaitForCancelTool {
+    type Input = WaitForCancelInput;
+    type Output = WaitForCancelOutput;
+    const NAME: &'static str = "wait_for_cancel";
+    const DESCRIPTION: &'static str = "Wait until the request is cancelled";
+
+    fn call(
+        &self,
+        _input: Self::Input,
+        ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let ctx = ctx.clone();
+        let started = Arc::clone(&self.started);
+
+        Box::pin(async move {
+            started.notify_waiters();
+            ctx.cancelled().await;
+            Ok(WaitForCancelOutput { cancelled: true })
+        })
+    }
+}
+
+struct TestTransport {
+    rx: mpsc::Receiver<RxJsonRpcMessage<RoleServer>>,
+    tx: mpsc::Sender<TxJsonRpcMessage<RoleServer>>,
+}
+
+impl Transport<RoleServer> for TestTransport {
+    type Error = mpsc::error::SendError<TxJsonRpcMessage<RoleServer>>;
+
+    fn send(
+        &mut self,
+        item: TxJsonRpcMessage<RoleServer>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static {
+        let tx = self.tx.clone();
+        async move { tx.send(item).await }
+    }
+
+    async fn receive(&mut self) -> Option<RxJsonRpcMessage<RoleServer>> {
+        self.rx.recv().await
+    }
+
+    fn close(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        std::future::ready(Ok(()))
     }
 }
 
@@ -368,4 +438,72 @@ async fn test_dispatch_json_formatted_fallback_for_unknown_tool() {
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Unknown tool"));
+}
+
+#[tokio::test]
+async fn cancelled_notification_reaches_tool_context() {
+    let started = Arc::new(Notify::new());
+    let registry = Arc::new(
+        ToolRegistry::builder()
+            .register::<WaitForCancelTool, ()>(WaitForCancelTool {
+                started: Arc::clone(&started),
+            })
+            .finish(),
+    );
+    let server = RegistryServer::new(registry);
+    let (client_tx, server_rx) = mpsc::channel(8);
+    let (server_tx, mut client_rx) = mpsc::channel(8);
+    let transport = TestTransport {
+        rx: server_rx,
+        tx: server_tx,
+    };
+    let mut running =
+        rmcp::service::serve_directly::<RoleServer, _, _, _, _>(server, transport, None);
+
+    let call_id = m::RequestId::String("wait-call".into());
+    let call =
+        m::CallToolRequestParams::new("wait_for_cancel").with_arguments(serde_json::Map::new());
+    let started_wait = started.notified();
+
+    client_tx
+        .send(m::ClientJsonRpcMessage::request(
+            m::ClientRequest::CallToolRequest(m::CallToolRequest::new(call)),
+            call_id.clone(),
+        ))
+        .await
+        .unwrap();
+
+    tokio::time::timeout(Duration::from_secs(1), started_wait)
+        .await
+        .unwrap();
+
+    let cancel = m::CancelledNotification::new(m::CancelledNotificationParam {
+        request_id: call_id.clone(),
+        reason: Some("test cancellation".to_string()),
+    });
+    client_tx
+        .send(m::ClientJsonRpcMessage::notification(
+            m::ClientNotification::CancelledNotification(cancel),
+        ))
+        .await
+        .unwrap();
+
+    let response = tokio::time::timeout(Duration::from_secs(1), client_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let (result, response_id) = response.into_response().unwrap();
+    assert_eq!(response_id, call_id);
+
+    let m::ServerResult::CallToolResult(result) = result else {
+        panic!("expected call tool result");
+    };
+    assert_eq!(result.is_error, Some(false));
+    assert!(
+        serde_json::to_string(&result)
+            .unwrap()
+            .contains("cancelled")
+    );
+
+    running.close().await.unwrap();
 }

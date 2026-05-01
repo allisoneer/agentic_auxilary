@@ -202,7 +202,7 @@ impl ServerHandler for RegistryServer {
     fn call_tool(
         &self,
         req: m::CallToolRequestParams,
-        _ctx: RequestContext<RoleServer>,
+        request_ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::CallToolResult, m::ErrorData>> + Send + '_
     {
         async move {
@@ -214,7 +214,7 @@ impl ServerHandler for RegistryServer {
             }
 
             let args = serde_json::Value::Object(req.arguments.unwrap_or_default());
-            let ctx = ToolContext::default();
+            let ctx = ToolContext::with_cancellation_token(request_ctx.ct.clone());
             let text_opts = self.text_options.clone();
 
             match self

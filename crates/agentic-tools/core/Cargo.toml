@@ -15,6 +15,7 @@ schemars = { workspace = true }
 thiserror = { workspace = true }
 json-patch = "4"
 rmcp = { workspace = true, features = ["server", "transport-io"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 
 [features]
 default = []

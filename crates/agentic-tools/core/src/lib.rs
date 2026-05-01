@@ -16,6 +16,7 @@ pub mod registry;
 pub mod schema;
 pub mod tool;
 
+pub use context::CancellationToken;
 pub use context::ToolContext;
 pub use error::ToolError;
 pub use fmt::ErasedFmt;
