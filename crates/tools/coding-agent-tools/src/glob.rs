@@ -74,7 +74,6 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
 
     // Apply custom ignore filter
     let root_clone = root_path.to_path_buf();
-    let gs_clone = ignore_gs.clone();
     builder.filter_entry(move |entry| {
         let rel = entry
             .path()
@@ -84,7 +83,7 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
         if rel.is_empty() {
             return true;
         }
-        !gs_clone.is_match(&rel)
+        !ignore_gs.is_match(&rel)
     });
 
     for result in builder.build() {
@@ -101,11 +100,6 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
                     |_| path.to_string_lossy().to_string(),
                     |p| p.to_string_lossy().replace('\\', "/"),
                 );
-
-                // Built-in ignores are already part of `ignore_gs`; keep this per-entry check cheap.
-                if ignore_gs.is_match(&rel_path) {
-                    continue;
-                }
 
                 // Check if path matches the glob pattern
                 if !pattern_matcher.is_match(&rel_path) {
