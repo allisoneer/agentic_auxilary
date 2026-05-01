@@ -13,7 +13,6 @@ use crate::types::message::Message;
 use crate::types::message::PromptRequest;
 use crate::types::message::ShellRequest;
 use reqwest::Method;
-use uuid::Uuid;
 
 /// Messages API client.
 #[derive(Clone)]
@@ -88,21 +87,20 @@ impl MessagesApi {
     /// Execute a command in a session.
     ///
     /// Uses transport-level retry for transient network failures (connect/timeout).
-    /// To make retries safe, the SDK ensures each dispatch includes a stable `message_id`
-    /// (generated UUID if not provided) so the server can deduplicate repeated requests.
+    ///
+    /// Upstream opencode 1.14.19 does not dedupe command dispatch by `messageID`,
+    /// so supplying `CommandRequest::message_id` does not provide an idempotency
+    /// guarantee. If the server has already started executing the command before a
+    /// retryable network failure occurs (for example, a connection drop
+    /// mid-response), a retry can trigger duplicate command execution. Callers
+    /// should therefore treat this endpoint as at-least-once, not exactly-once.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails after retries.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
         let sid = encode_path_segment(session_id);
-
-        let mut req = req.clone();
-        if req.message_id.is_none() {
-            req.message_id = Some(Uuid::new_v4().to_string());
-        }
-
-        let body = serde_json::to_value(&req)?;
+        let body = serde_json::to_value(req)?;
         self.http
             .post_json_with_retry(&format!("/session/{sid}/command"), Some(body))
             .await

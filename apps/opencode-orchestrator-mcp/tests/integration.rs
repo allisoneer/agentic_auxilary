@@ -152,9 +152,12 @@ async fn unknown_command_errors_fast() {
     cleanup_session(&server, &session_id).await;
 
     let result = result.expect("REGRESSION: timed out waiting for error (should fail fast)");
+    let err = result.expect_err("expected error for unknown command");
+    let err_text = err.to_string();
     assert!(
-        result.is_err(),
-        "expected error for unknown command, got: {result:?}"
+        err_text.contains("Command not found")
+            || err_text.contains("___definitely_not_a_real_command___"),
+        "expected surfaced command lookup error, got: {err_text}"
     );
     assert!(
         elapsed < Duration::from_secs(5),

@@ -43,6 +43,7 @@ use tokio::sync::OnceCell;
 use opencode_rs::Client;
 use opencode_rs::ClientBuilder;
 use opencode_rs::types::event::Event;
+use opencode_rs::types::message::CommandRequest;
 use opencode_rs::types::message::PromptPart;
 use opencode_rs::types::message::PromptRequest;
 use opencode_rs::types::session::CreateSessionRequest;
@@ -533,6 +534,55 @@ async fn test_agents_list() {
 
     // Should have at least one agent
     assert!(!agents.is_empty(), "Should have at least one agent");
+}
+
+/// Test that command dispatch reaches command lookup instead of request validation.
+#[tokio::test]
+#[ignore = "requires: opencode serve"]
+async fn test_command_dispatch_passes_request_validation_v1_14_19() {
+    if !should_run() {
+        return;
+    }
+
+    let client = build_client().await;
+    let session = client
+        .sessions()
+        .create(&CreateSessionRequest::default())
+        .await
+        .expect("Failed to create session");
+
+    let result = client
+        .messages()
+        .command(
+            &session.id,
+            &CommandRequest {
+                command: "___definitely_not_a_real_command___".into(),
+                arguments: "hello".into(),
+                message_id: None,
+            },
+        )
+        .await;
+
+    client
+        .sessions()
+        .delete(&session.id)
+        .await
+        .expect("Failed to delete session");
+
+    let err = result.expect_err("unknown command should fail after request validation passes");
+    let err_text = err.to_string();
+    assert!(
+        err_text.contains("Command not found"),
+        "expected command lookup error, got: {err_text}"
+    );
+    assert!(
+        err_text.contains("___definitely_not_a_real_command___"),
+        "expected unknown command name in error, got: {err_text}"
+    );
+    assert!(
+        !err_text.contains("messageID"),
+        "request should not fail validation on messageID anymore: {err_text}"
+    );
 }
 
 /// Test commands list.

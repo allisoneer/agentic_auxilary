@@ -40,8 +40,11 @@ async fn default_timeout_allows_301s_command_response() {
         "request should not time out with 1800s default, got: {result:?}"
     );
 
-    // Verify messageID was sent
+    // Verify messageID is omitted when the caller passes None.
     let received = server.received_requests().await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&received[0].body).unwrap();
-    assert!(body.get("messageID").and_then(|v| v.as_str()).is_some());
+    assert!(
+        body.get("messageID").is_none(),
+        "expected messageID to be omitted when request.message_id is None, got {body:?}"
+    );
 }

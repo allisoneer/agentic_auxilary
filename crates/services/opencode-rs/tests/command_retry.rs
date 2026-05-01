@@ -73,12 +73,15 @@ async fn command_retries_on_timeout() {
         command_requests.len()
     );
 
-    // Verify both retry attempts share identical messageID
-    let b1: serde_json::Value = serde_json::from_slice(&command_requests[0].body).unwrap();
-    let b2: serde_json::Value = serde_json::from_slice(&command_requests[1].body).unwrap();
+    // Verify both retry attempts reused the exact same serialized body bytes.
+    assert_eq!(
+        command_requests[0].body, command_requests[1].body,
+        "expected identical request bodies across retries"
+    );
 
-    let mid1 = b1.get("messageID").and_then(|v| v.as_str()).unwrap();
-    let mid2 = b2.get("messageID").and_then(|v| v.as_str()).unwrap();
-    assert!(!mid1.is_empty());
-    assert_eq!(mid1, mid2, "expected stable messageID across retries");
+    let body: serde_json::Value = serde_json::from_slice(&command_requests[0].body).unwrap();
+    assert!(
+        body.get("messageID").is_none(),
+        "expected messageID to be omitted when request.message_id is None, got {body:?}"
+    );
 }
