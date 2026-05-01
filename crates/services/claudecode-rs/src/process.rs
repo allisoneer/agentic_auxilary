@@ -4,13 +4,116 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tokio::io::BufReader;
 use tokio::process::Child;
 use tokio::process::Command;
 use which::which;
 
+const PROCESS_TERMINATION_GRACE: Duration = Duration::from_millis(500);
+
+#[derive(Clone, Debug)]
+pub(crate) struct ProcessControl {
+    pid: Option<u32>,
+    #[cfg(unix)]
+    process_group_id: Option<i32>,
+    exited: Arc<AtomicBool>,
+}
+
+impl ProcessControl {
+    fn new(pid: Option<u32>) -> Self {
+        Self {
+            pid,
+            #[cfg(unix)]
+            process_group_id: pid.and_then(|pid| i32::try_from(pid).ok()),
+            exited: Arc::new(AtomicBool::new(pid.is_none())),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn empty() -> Self {
+        Self::new(None)
+    }
+
+    pub(crate) fn id(&self) -> Option<u32> {
+        if self.is_exited() { None } else { self.pid }
+    }
+
+    pub(crate) fn is_exited(&self) -> bool {
+        self.exited.load(Ordering::Acquire)
+    }
+
+    fn mark_exited(&self) {
+        self.exited.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn interrupt(&self) -> Result<()> {
+        self.signal(libc::SIGINT, false)?;
+        Ok(())
+    }
+
+    pub(crate) fn start_kill(&self) -> Result<()> {
+        self.signal(libc::SIGKILL, false)?;
+        Ok(())
+    }
+
+    pub(crate) async fn terminate_with_grace(&self) -> Result<()> {
+        self.signal(libc::SIGTERM, true)?;
+        tokio::time::sleep(PROCESS_TERMINATION_GRACE).await;
+        self.signal(libc::SIGKILL, true)?;
+        Ok(())
+    }
+
+    fn signal(&self, signal: libc::c_int, include_exited: bool) -> std::io::Result<()> {
+        if !include_exited && self.is_exited() {
+            return Ok(());
+        }
+
+        #[cfg(unix)]
+        if let Some(process_group_id) = self.process_group_id {
+            return signal_process_group(process_group_id, signal);
+        }
+
+        if let Some(pid) = self.pid.and_then(|pid| i32::try_from(pid).ok()) {
+            signal_process(pid, signal)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(unix)]
+fn signal_process_group(process_group_id: i32, signal: libc::c_int) -> std::io::Result<()> {
+    if process_group_id <= 1 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("refusing to signal unsafe process group {process_group_id}"),
+        ));
+    }
+
+    signal_process(-process_group_id, signal)
+}
+
+fn signal_process(pid: i32, signal: libc::c_int) -> std::io::Result<()> {
+    let result = unsafe { libc::kill(pid, signal) };
+    if result == 0 {
+        return Ok(());
+    }
+
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        Ok(())
+    } else {
+        Err(error)
+    }
+}
+
 pub struct ProcessHandle {
     child: Child,
+    control: ProcessControl,
     stdout_reader: Option<BufReader<tokio::process::ChildStdout>>,
     stderr_reader: Option<BufReader<tokio::process::ChildStderr>>,
 }
@@ -35,6 +138,9 @@ impl ProcessHandle {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+
+        #[cfg(unix)]
+        cmd.process_group(0);
 
         // Set working directory if specified
         if let Some(dir) = working_dir {
@@ -70,28 +176,43 @@ impl ProcessHandle {
                 message: "Failed to capture stderr".to_string(),
             })?;
 
+        let control = ProcessControl::new(child.id());
+
         Ok(ProcessHandle {
             child,
+            control,
             stdout_reader: Some(BufReader::new(stdout)),
             stderr_reader: Some(BufReader::new(stderr)),
         })
     }
 
     pub async fn wait(mut self) -> Result<std::process::ExitStatus> {
-        Ok(self.child.wait().await?)
+        let status = self.child.wait().await?;
+        self.control.mark_exited();
+        Ok(status)
     }
 
     pub async fn kill(&mut self) -> Result<()> {
-        self.child.kill().await?;
+        self.control.terminate_with_grace().await?;
+        self.child.wait().await?;
+        self.control.mark_exited();
         Ok(())
     }
 
     pub fn id(&self) -> Option<u32> {
-        self.child.id()
+        self.control.id()
+    }
+
+    pub(crate) fn control(&self) -> ProcessControl {
+        self.control.clone()
     }
 
     pub fn try_wait(&mut self) -> Result<Option<std::process::ExitStatus>> {
-        Ok(self.child.try_wait()?)
+        let status = self.child.try_wait()?;
+        if status.is_some() {
+            self.control.mark_exited();
+        }
+        Ok(status)
     }
 
     pub(crate) fn take_stdout(&mut self) -> Option<BufReader<tokio::process::ChildStdout>> {
@@ -100,6 +221,19 @@ impl ProcessHandle {
 
     pub(crate) fn take_stderr(&mut self) -> Option<BufReader<tokio::process::ChildStderr>> {
         self.stderr_reader.take()
+    }
+}
+
+impl Drop for ProcessHandle {
+    fn drop(&mut self) {
+        if !self.control.is_exited() {
+            if let Err(error) = self.control.start_kill() {
+                tracing::warn!("failed to signal Claude process group on drop: {error}");
+            }
+            if let Err(error) = self.child.start_kill() {
+                tracing::warn!("failed to kill Claude process on drop: {error}");
+            }
+        }
     }
 }
 
