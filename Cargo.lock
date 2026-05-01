@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.15"
+version = "0.2.16"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -1025,7 +1025,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "claudecode"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "chrono",
  "dirs",
@@ -1067,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -5317,7 +5317,7 @@ dependencies = [
 
 [[package]]
 name = "review_tools"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-utils",
