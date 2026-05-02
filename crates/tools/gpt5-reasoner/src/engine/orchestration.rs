@@ -49,6 +49,10 @@ pub async fn gpt5_reasoner_impl(
     output_filename: Option<String>,
     ctx: &ToolContext,
 ) -> std::result::Result<String, ToolError> {
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
+
     // Start logging timer
     let timer = CallTimer::start();
     let server = "gpt5_reasoner".to_string();
@@ -566,8 +570,18 @@ mod retry_tests {
 
         let result = gpt5_reasoner_impl(
             "test".to_string(),
-            vec![],
-            None,
+            vec![FileMeta {
+                filename: "/definitely/not/present.txt".into(),
+                description: "missing file that should never be prechecked".into(),
+            }],
+            Some(vec![DirectoryMeta {
+                directory_path: "/definitely/not/a/real/directory".into(),
+                description: "directory expansion should be skipped".into(),
+                extensions: None,
+                recursive: true,
+                include_hidden: false,
+                max_files: 1000,
+            }]),
             &ReasoningConfig::default(),
             PromptType::Reasoning,
             None,

@@ -112,15 +112,7 @@ pub async fn web_fetch(
     let word_count = content.split_whitespace().count();
 
     // Optional summarization
-    let summary = if input.summarize {
-        Some(
-            crate::haiku::summarize_markdown(tools, &content, ctx)
-                .await
-                .map_err(|e| ToolError::external(format!("Summarization failed: {e}")))?,
-        )
-    } else {
-        None
-    };
+    let summary = summarize_content_if_requested(tools, &content, input.summarize, ctx).await?;
 
     if ctx.is_cancelled() {
         return Err(ToolError::cancelled(None));
@@ -136,6 +128,23 @@ pub async fn web_fetch(
         content,
         summary,
     })
+}
+
+async fn summarize_content_if_requested(
+    tools: &WebTools,
+    content: &str,
+    summarize: bool,
+    ctx: &ToolContext,
+) -> Result<Option<String>, ToolError> {
+    if !summarize {
+        return Ok(None);
+    }
+
+    match crate::haiku::summarize_markdown(tools, content, ctx).await {
+        Ok(summary) => Ok(Some(summary)),
+        Err(ToolError::Cancelled { reason }) => Err(ToolError::Cancelled { reason }),
+        Err(e) => Err(ToolError::external(format!("Summarization failed: {e}"))),
+    }
 }
 
 /// Decode bytes and convert to a useful text format based on content-type.
@@ -436,6 +445,17 @@ mod tests {
             let result = web_fetch(&tools, input, &ctx).await;
             assert!(matches!(result, Err(ToolError::Cancelled { .. })));
             assert!(mock_server.received_requests().await.unwrap().is_empty());
+        }
+
+        #[tokio::test]
+        async fn summarization_preserves_cancelled_error() {
+            let tools = WebTools::with_http_client(reqwest::Client::new());
+            let ctx = ToolContext::default();
+            ctx.cancellation_token().cancel();
+
+            let result = summarize_content_if_requested(&tools, "content", true, &ctx).await;
+
+            assert!(matches!(result, Err(ToolError::Cancelled { .. })));
         }
     }
 }

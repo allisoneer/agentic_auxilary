@@ -60,9 +60,9 @@ where
 {
     tokio::select! {
         () = ctx.cancelled() => {
-            cancel_fn()
-                .await
-                .map_err(|e| ToolError::Internal(format!("Failed to cancel Claude session cleanly: {e}")))?;
+            if let Err(e) = cancel_fn().await {
+                tracing::warn!(error = %e, "Failed to cancel Claude session cleanly");
+            }
             Err(ToolError::cancelled(None))
         }
         result = wait_fut => {
@@ -845,7 +845,7 @@ impl CodingAgentTools {
                 Ok(output)
             }
             Err(e) => {
-                if e == "Just execution cancelled" {
+                if ctx.is_cancelled() {
                     log_ctx.finish(req_json, None, false, Some(e), None, None, None);
                     return Err(ToolError::cancelled(None));
                 }
@@ -870,6 +870,32 @@ impl CodingAgentTools {
 mod ask_agent_filter_tests {
     use super::*;
     use claudecode::types::Result as ClaudeResult;
+    use serial_test::serial;
+    use std::fs;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    struct DirGuard {
+        prev: PathBuf,
+    }
+
+    impl DirGuard {
+        fn set(to: &Path) -> Self {
+            let prev =
+                std::env::current_dir().unwrap_or_else(|e| panic!("current_dir failed: {e}"));
+            std::env::set_current_dir(to)
+                .unwrap_or_else(|e| panic!("set_current_dir({}) failed: {e}", to.display()));
+            Self { prev }
+        }
+    }
+
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.prev)
+                .unwrap_or_else(|e| panic!("restore cwd failed: {e}"));
+        }
+    }
 
     #[test]
     fn prefers_content_when_result_is_empty_string() {
@@ -954,5 +980,68 @@ mod ask_agent_filter_tests {
         };
         assert!(matches!(result, Err(ToolError::Cancelled { .. })));
         assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn wait_for_claude_result_preserves_cancelled_when_cleanup_fails() {
+        let ctx = agentic_tools_core::ToolContext::default();
+        let cancel = ctx.cancellation_token();
+
+        let task = tokio::spawn(async move {
+            wait_for_claude_result(
+                &ctx,
+                std::future::pending::<claudecode::Result<ClaudeResult>>(),
+                || async move {
+                    Err(claudecode::ClaudeError::IoError {
+                        source: std::io::Error::other("cleanup failed during cancellation"),
+                    })
+                },
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        cancel.cancel();
+
+        let result = match task.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_returns_structured_cancelled_without_string_match() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        fs::write(tmp.path().join("justfile"), "hang:\n    sleep 30")
+            .unwrap_or_else(|e| panic!("writing justfile failed: {e}"));
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+        let cancel = ctx.cancellation_token();
+
+        let handle =
+            tokio::spawn(async move { tools.just_execute("hang".into(), None, None, &ctx).await });
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        cancel.cancel();
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
     }
 }
