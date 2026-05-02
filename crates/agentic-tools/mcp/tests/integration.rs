@@ -11,11 +11,17 @@ use agentic_tools_core::ToolRegistry;
 use agentic_tools_core::fmt::TextOptions;
 use agentic_tools_mcp::OutputMode;
 use agentic_tools_mcp::RegistryServer;
+use agentic_tools_mcp::ServerHandler;
 use futures::future::BoxFuture;
+use rmcp::ServiceExt;
+use rmcp::model as m;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
+use tokio::sync::Notify;
+use tokio::time::Duration;
+use tokio::time::timeout;
 
 // =============================================================================
 // Test Tool Definitions
@@ -70,6 +76,47 @@ struct CalculateInput {
     a: i32,
     b: i32,
     operation: String,
+}
+
+#[derive(Clone)]
+struct CancellationProbeTool {
+    started: Arc<Notify>,
+    observed_cancel: Arc<Notify>,
+}
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+struct CancellationProbeInput {}
+
+struct TestClient;
+
+impl rmcp::ClientHandler for TestClient {}
+
+impl Tool for CancellationProbeTool {
+    type Input = CancellationProbeInput;
+    type Output = String;
+    const NAME: &'static str = "cancellation_probe";
+    const DESCRIPTION: &'static str = "Waits for rmcp request cancellation";
+
+    fn call(
+        &self,
+        _input: Self::Input,
+        ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let started = Arc::clone(&self.started);
+        let observed_cancel = Arc::clone(&self.observed_cancel);
+        let ctx = ctx.clone();
+
+        Box::pin(async move {
+            started.notify_one();
+            ctx.cancelled().await;
+
+            if ctx.is_cancelled() {
+                observed_cancel.notify_one();
+            }
+
+            Err(ToolError::cancelled(None))
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -368,4 +415,71 @@ async fn test_dispatch_json_formatted_fallback_for_unknown_tool() {
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Unknown tool"));
+}
+
+#[tokio::test]
+async fn test_rmcp_cancellation_flips_tool_context_mid_call() -> Result<(), String> {
+    let started = Arc::new(Notify::new());
+    let observed_cancel = Arc::new(Notify::new());
+    let server = Arc::new(RegistryServer::new(Arc::new(
+        ToolRegistry::builder()
+            .register::<CancellationProbeTool, ()>(CancellationProbeTool {
+                started: Arc::clone(&started),
+                observed_cancel: Arc::clone(&observed_cancel),
+            })
+            .finish(),
+    )));
+
+    let (server_transport, client_transport) = tokio::io::duplex(4096);
+    let (running, client) = tokio::try_join!(
+        async {
+            server
+                .clone()
+                .serve(server_transport)
+                .await
+                .map_err(|err| err.to_string())
+        },
+        async {
+            TestClient
+                .serve(client_transport)
+                .await
+                .map_err(|err| err.to_string())
+        },
+    )?;
+
+    let request_context =
+        rmcp::service::RequestContext::new(m::NumberOrString::Number(1), running.peer().clone());
+    let cancel = request_context.ct.clone();
+    let server_for_call = Arc::clone(&server);
+    let call_task = tokio::spawn(async move {
+        server_for_call
+            .call_tool(
+                m::CallToolRequestParams::new("cancellation_probe"),
+                request_context,
+            )
+            .await
+            .map_err(|err| err.to_string())
+    });
+
+    timeout(Duration::from_secs(5), started.notified())
+        .await
+        .map_err(|_| "cancellation probe never started".to_string())?;
+
+    cancel.cancel();
+
+    timeout(Duration::from_secs(5), observed_cancel.notified())
+        .await
+        .map_err(|_| "tool context never observed cancellation".to_string())?;
+
+    let tool_result = call_task.await.map_err(|err| err.to_string())??;
+
+    assert_eq!(tool_result.is_error, Some(true));
+    let content_json =
+        serde_json::to_string(&tool_result.content).map_err(|err| err.to_string())?;
+    assert!(content_json.contains("cancelled"));
+
+    drop(client);
+    drop(running);
+
+    Ok(())
 }
