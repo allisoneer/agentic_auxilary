@@ -3,6 +3,7 @@
 
 //! Haiku summarization via Anthropic API.
 
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::error::ToolError;
 use anthropic_async::types::ContentBlock;
 use anthropic_async::types::MessageParam;
@@ -12,6 +13,8 @@ use tracing::debug;
 
 use crate::WebTools;
 
+const MAX_MARKDOWN_CHARS: usize = 100_000;
+
 /// Summarize markdown content using Claude Haiku.
 ///
 /// Lazy-initializes the Anthropic client on first call.
@@ -19,9 +22,16 @@ use crate::WebTools;
 ///
 /// # Errors
 /// Returns `ToolError` if the Anthropic client cannot be initialized or the API call fails.
-pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<String, ToolError> {
+pub async fn summarize_markdown(
+    tools: &WebTools,
+    markdown: &str,
+    ctx: &ToolContext,
+) -> Result<String, ToolError> {
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
+
     // Truncate to avoid context window overflow (~25K tokens, well under 200K limit)
-    const MAX_MARKDOWN_CHARS: usize = 100_000;
     let markdown: String = markdown.chars().take(MAX_MARKDOWN_CHARS).collect();
 
     let base_url = tools.anthropic_cfg.base_url.clone();
@@ -47,11 +57,15 @@ pub async fn summarize_markdown(tools: &WebTools, markdown: &str) -> Result<Stri
         ..Default::default()
     };
 
-    let resp = client
-        .messages()
-        .create(req)
-        .await
-        .map_err(|e| ToolError::external(format!("Haiku API call failed: {e}")))?;
+    let resp = ctx
+        .run_cancellable(async {
+            client
+                .messages()
+                .create(req)
+                .await
+                .map_err(|e| ToolError::external(format!("Haiku API call failed: {e}")))
+        })
+        .await?;
 
     // Extract text from content blocks
     let text = resp

@@ -24,6 +24,18 @@ pub enum ToolError {
     /// Requested resource not found.
     #[error("not found: {0}")]
     NotFound(String),
+
+    /// Tool execution stopped because the caller cancelled the request.
+    #[error(
+        "cancelled{}",
+        .reason
+            .as_deref()
+            .map_or_else(String::new, |reason| format!(": {reason}"))
+    )]
+    Cancelled {
+        /// Optional detail about the cancellation reason.
+        reason: Option<String>,
+    },
 }
 
 impl ToolError {
@@ -50,5 +62,10 @@ impl ToolError {
     /// Create a permission denied error.
     pub fn permission<S: ToString>(s: S) -> Self {
         ToolError::Permission(s.to_string())
+    }
+
+    /// Create a cancelled error.
+    pub fn cancelled(reason: Option<String>) -> Self {
+        ToolError::Cancelled { reason }
     }
 }

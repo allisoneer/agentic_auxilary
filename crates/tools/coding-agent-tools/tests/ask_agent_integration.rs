@@ -3,6 +3,7 @@
 //! Run with: cargo test -p `coding_agent_tools` -- --ignored
 #![expect(clippy::unwrap_used)]
 
+use agentic_tools_core::ToolContext;
 use coding_agent_tools::CodingAgentTools;
 use coding_agent_tools::types::AgentLocation;
 use coding_agent_tools::types::AgentType;
@@ -11,11 +12,13 @@ use coding_agent_tools::types::AgentType;
 #[ignore = "requires live API key and network access"]
 async fn locator_codebase_basic() {
     let tools = CodingAgentTools::new();
+    let ctx = ToolContext::default();
     let out = tools
         .ask_agent(
             Some(AgentType::Locator),
             Some(AgentLocation::Codebase),
             "Find Cargo.toml files and related config".into(),
+            &ctx,
         )
         .await;
 
@@ -33,11 +36,13 @@ async fn locator_codebase_basic() {
 #[ignore = "requires live API key and network access"]
 async fn analyzer_web_basic() {
     let tools = CodingAgentTools::new();
+    let ctx = ToolContext::default();
     let out = tools
         .ask_agent(
             Some(AgentType::Analyzer),
             Some(AgentLocation::Web),
             "Summarize the core concepts of Rust error handling with sources".into(),
+            &ctx,
         )
         .await;
 
@@ -55,11 +60,13 @@ async fn analyzer_web_basic() {
 #[ignore = "requires live API key and network access"]
 async fn locator_web_basic() {
     let tools = CodingAgentTools::new();
+    let ctx = ToolContext::default();
     let out = tools
         .ask_agent(
             Some(AgentType::Locator),
             Some(AgentLocation::Web),
             "Find the official Rust documentation for the Result type".into(),
+            &ctx,
         )
         .await;
 
@@ -77,11 +84,13 @@ async fn locator_web_basic() {
 #[ignore = "requires live API key and network access"]
 async fn analyzer_codebase_basic() {
     let tools = CodingAgentTools::new();
+    let ctx = ToolContext::default();
     let out = tools
         .ask_agent(
             Some(AgentType::Analyzer),
             Some(AgentLocation::Codebase),
             "Analyze how the ls tool handles pagination in this codebase".into(),
+            &ctx,
         )
         .await;
 
@@ -99,11 +108,13 @@ async fn analyzer_codebase_basic() {
 #[ignore = "requires live API key and network access"]
 async fn ask_agent_empty_query_fails() {
     let tools = CodingAgentTools::new();
+    let ctx = ToolContext::default();
     let out = tools
         .ask_agent(
             Some(AgentType::Locator),
             Some(AgentLocation::Codebase),
             "   ".into(), // empty/whitespace only
+            &ctx,
         )
         .await;
 
@@ -116,9 +127,10 @@ async fn ask_agent_empty_query_fails() {
 #[ignore = "requires live API key and network access"]
 async fn ask_agent_defaults_to_locator_codebase() {
     let tools = CodingAgentTools::new();
+    let ctx = ToolContext::default();
     // Test that defaults work (locator + codebase)
     let out = tools
-        .ask_agent(None, None, "Find test files in this project".into())
+        .ask_agent(None, None, "Find test files in this project".into(), &ctx)
         .await;
 
     match out {

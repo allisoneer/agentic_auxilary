@@ -16,6 +16,7 @@ pub mod validation;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use agentic_tools_utils::prompt::wrap_untrusted;
 use cache::SnapshotCache;
@@ -166,7 +167,11 @@ impl ReviewTools {
     }
 
     /// Run a lens-based code review over a cached snapshot.
-    pub async fn review_run(&self, input: ReviewRunInput) -> Result<ReviewRunOutput, ToolError> {
+    pub async fn review_run(
+        &self,
+        input: ReviewRunInput,
+        ctx: &ToolContext,
+    ) -> Result<ReviewRunOutput, ToolError> {
         let snap = self.cache.get(&input.diff_handle).ok_or_else(|| {
             ToolError::InvalidInput(format!(
                 "Invalid or expired diff_handle '{}'. Run review_diff_snapshot to generate a new snapshot.",
@@ -222,7 +227,9 @@ impl ReviewTools {
         let user_prompt = compose_user_prompt(input.lens, &combined_diff, input.focus.as_deref());
 
         // Run reviewer with retry
-        let raw1 = self.run_with_retry(&system_prompt, &user_prompt).await?;
+        let raw1 = self
+            .run_with_retry(&system_prompt, &user_prompt, ctx)
+            .await?;
 
         // Parse attempt #1
         let report1 = match parse_and_validate_report(&raw1, input.lens) {
@@ -253,7 +260,9 @@ impl ReviewTools {
                     wrap_untrusted("untrusted_previous_response", &raw1_trunc),
                 );
 
-                let raw2 = self.run_with_retry(&system_prompt, &repair_prompt).await?;
+                let raw2 = self
+                    .run_with_retry(&system_prompt, &repair_prompt, ctx)
+                    .await?;
                 parse_and_validate_report(&raw2, input.lens)?
             }
         };
@@ -320,7 +329,7 @@ impl ReviewTools {
         );
 
         let raw2 = self
-            .run_with_retry(&system_prompt, &grounding_repair_prompt)
+            .run_with_retry(&system_prompt, &grounding_repair_prompt, ctx)
             .await?;
         let mut report2 = parse_and_validate_report(&raw2, input.lens)?;
 
@@ -375,6 +384,7 @@ impl ReviewTools {
         &self,
         system_prompt: &str,
         user_prompt: &str,
+        ctx: &ToolContext,
     ) -> Result<String, ToolError> {
         let mut last_err = None;
 
@@ -383,7 +393,11 @@ impl ReviewTools {
 
             match self
                 .runner
-                .run_text(system_prompt.to_string(), user_prompt.to_string())
+                .run_text(
+                    system_prompt.to_string(),
+                    user_prompt.to_string(),
+                    ctx.clone(),
+                )
                 .await
             {
                 Ok(v) => return Ok(v),

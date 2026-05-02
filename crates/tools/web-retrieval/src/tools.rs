@@ -42,10 +42,11 @@ impl Tool for WebFetchTool {
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let tools = Arc::clone(&self.tools);
-        Box::pin(async move { crate::fetch::web_fetch(&tools, input).await })
+        let ctx = ctx.clone();
+        Box::pin(async move { crate::fetch::web_fetch(&tools, input, &ctx).await })
     }
 }
 
@@ -77,10 +78,11 @@ impl Tool for WebSearchTool {
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let tools = Arc::clone(&self.tools);
-        Box::pin(async move { crate::search::web_search(&tools, input).await })
+        let ctx = ctx.clone();
+        Box::pin(async move { crate::search::web_search(&tools, input, &ctx).await })
     }
 }
 

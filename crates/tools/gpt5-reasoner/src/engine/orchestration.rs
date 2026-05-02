@@ -20,6 +20,7 @@ use agentic_config::types::ReasoningConfig;
 use agentic_logging::CallTimer;
 use agentic_logging::LogWriter;
 use agentic_logging::ToolCallRecord;
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use async_openai::types::chat::ChatCompletionRequestMessage;
 use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
@@ -46,7 +47,12 @@ pub async fn gpt5_reasoner_impl(
     cfg: &ReasoningConfig,
     prompt_type: PromptType,
     output_filename: Option<String>,
+    ctx: &ToolContext,
 ) -> std::result::Result<String, ToolError> {
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
+
     // Start logging timer
     let timer = CallTimer::start();
     let server = "gpt5_reasoner".to_string();
@@ -167,6 +173,10 @@ pub async fn gpt5_reasoner_impl(
     // Auto-inject plan_structure.md for Plan prompts (before optimizer)
     maybe_inject_plan_structure_meta(&prompt_type, &mut files);
 
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
+
     // Load env OpenRouter key (CLI already optionally did dotenv)
     let client = OrClient::from_env().map_err(ToolError::from)?;
 
@@ -186,16 +196,28 @@ pub async fn gpt5_reasoner_impl(
                 attempt + 1,
                 TEMPLATE_RETRIES + 1
             );
-            tokio::time::sleep(TEMPLATE_RETRY_DELAY).await;
+            tokio::select! {
+                () = ctx.cancelled() => return Err(ToolError::cancelled(None)),
+                () = tokio::time::sleep(TEMPLATE_RETRY_DELAY) => {}
+            }
         }
 
         // Call optimizer (this has its own Layer 2 network retry)
-        let raw = match call_optimizer(&client, &opt_model, &prompt_type, &prompt, &files).await {
+        let raw = match ctx
+            .run_cancellable(call_optimizer(
+                &client,
+                &opt_model,
+                &prompt_type,
+                &prompt,
+                &files,
+            ))
+            .await
+        {
             Ok(v) => v,
             Err(e) => {
                 let msg = format!("stage=optimizer_call: {}", e);
                 log_record(false, Some(msg), None, None, None, files.len());
-                return Err(ToolError::from(e));
+                return Err(e);
             }
         };
 
@@ -304,7 +326,10 @@ pub async fn gpt5_reasoner_impl(
                 attempt + 1,
                 EXECUTOR_RETRIES + 1
             );
-            tokio::time::sleep(EXECUTOR_DELAY).await;
+            tokio::select! {
+                () = ctx.cancelled() => return Err(ToolError::cancelled(None)),
+                () = tokio::time::sleep(EXECUTOR_DELAY) => {}
+            }
         }
 
         // Build request inside the loop; clone final_prompt to keep ownership
@@ -336,7 +361,13 @@ pub async fn gpt5_reasoner_impl(
         };
 
         let start = std::time::Instant::now();
-        match client.client.chat().create(req).await {
+        let chat = client.client.chat();
+        let executor_response = tokio::select! {
+            () = ctx.cancelled() => return Err(ToolError::cancelled(None)),
+            response = chat.create(req) => response,
+        };
+
+        match executor_response {
             Ok(resp) => {
                 let duration = start.elapsed();
                 tracing::debug!("Executor API succeeded in {:?}", duration);
@@ -511,7 +542,9 @@ pub async fn gpt5_reasoner_impl(
 
 #[cfg(test)]
 mod retry_tests {
+    use super::*;
     use crate::errors::ReasonerError;
+    use agentic_config::types::ReasoningConfig;
 
     #[test]
     fn test_template_error_is_retryable() {
@@ -522,11 +555,40 @@ mod retry_tests {
     #[test]
     fn test_yaml_error_is_not_template_error() {
         // Create a YAML error by parsing invalid YAML
-        let yaml_result: Result<serde_yaml::Value, _> =
+        let yaml_result: std::result::Result<serde_yaml::Value, _> =
             serde_yaml::from_str("invalid: yaml: syntax");
         assert!(yaml_result.is_err());
 
         let yaml_err = ReasonerError::Yaml(yaml_result.unwrap_err());
         assert!(!matches!(yaml_err, ReasonerError::Template(_)));
+    }
+
+    #[tokio::test]
+    async fn pre_cancelled_context_returns_cancelled_before_api_setup() {
+        let ctx = agentic_tools_core::ToolContext::default();
+        ctx.cancellation_token().cancel();
+
+        let result = gpt5_reasoner_impl(
+            "test".to_string(),
+            vec![FileMeta {
+                filename: "/definitely/not/present.txt".into(),
+                description: "missing file that should never be prechecked".into(),
+            }],
+            Some(vec![DirectoryMeta {
+                directory_path: "/definitely/not/a/real/directory".into(),
+                description: "directory expansion should be skipped".into(),
+                extensions: None,
+                recursive: true,
+                include_hidden: false,
+                max_files: 1000,
+            }]),
+            &ReasoningConfig::default(),
+            PromptType::Reasoning,
+            None,
+            &ctx,
+        )
+        .await;
+
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
     }
 }

@@ -1,5 +1,6 @@
 //! Reviewer runner infrastructure for spawning Claude sessions.
 
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use claudecode::client::Client;
 use claudecode::config::MCPConfig;
@@ -11,6 +12,7 @@ use claudecode::types::PermissionMode;
 use claudecode::types::Result as ClaudeResult;
 use futures::future::BoxFuture;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -44,7 +46,31 @@ pub trait ReviewerRunner: Send + Sync {
         &self,
         system_prompt: String,
         user_prompt: String,
+        ctx: ToolContext,
     ) -> BoxFuture<'static, Result<String, ToolError>>;
+}
+
+async fn wait_for_review_result<F, C, CFn>(
+    ctx: &ToolContext,
+    wait_fut: F,
+    cancel_fn: CFn,
+) -> Result<ClaudeResult, ToolError>
+where
+    F: Future<Output = claudecode::Result<ClaudeResult>>,
+    C: Future<Output = claudecode::Result<()>>,
+    CFn: FnOnce() -> C,
+{
+    tokio::select! {
+        () = ctx.cancelled() => {
+            cancel_fn()
+                .await
+                .map_err(|e| ToolError::Internal(format!("Failed to cancel Claude session: {e}")))?;
+            Err(ToolError::cancelled(None))
+        }
+        result = wait_fut => {
+            result.map_err(|e| ToolError::Internal(format!("Failed to run Claude session: {e}")))
+        }
+    }
 }
 
 /// Production implementation using Claude CLI.
@@ -103,6 +129,7 @@ impl ReviewerRunner for ClaudeCliRunner {
         &self,
         system_prompt: String,
         user_prompt: String,
+        ctx: ToolContext,
     ) -> BoxFuture<'static, Result<String, ToolError>> {
         let semaphore = Arc::clone(&self.semaphore);
         let builtin_tools = Self::builtin_tools();
@@ -135,10 +162,11 @@ impl ReviewerRunner for ClaudeCliRunner {
                     .await
                     .map_err(|e| ToolError::Internal(format!("Claude CLI not runnable: {e}")))?;
 
-                client
-                    .launch_and_wait(cfg)
-                    .await
-                    .map_err(|e| ToolError::Internal(format!("Failed to run Claude session: {e}")))
+                let session = client.launch(cfg).await.map_err(|e| {
+                    ToolError::Internal(format!("Failed to start Claude session: {e}"))
+                })?;
+
+                wait_for_review_result(&ctx, session.wait(), || session.cancel()).await
             })
             .await
             .map_err(|_| {
@@ -188,6 +216,7 @@ impl ReviewerRunner for MockRunner {
         &self,
         _system_prompt: String,
         _user_prompt: String,
+        _ctx: ToolContext,
     ) -> BoxFuture<'static, Result<String, ToolError>> {
         let response = {
             let mut responses = self.responses.lock().expect("lock poisoned");
@@ -204,6 +233,8 @@ impl ReviewerRunner for MockRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn reviewer_tool_constants() {
@@ -237,14 +268,48 @@ mod tests {
     #[tokio::test]
     async fn mock_runner_returns_responses() {
         let runner = MockRunner::new(vec![Ok("test response".into())]);
-        let result = runner.run_text("system".into(), "user".into()).await;
+        let result = runner
+            .run_text("system".into(), "user".into(), ToolContext::default())
+            .await;
         assert_eq!(result.unwrap(), "test response");
     }
 
     #[tokio::test]
     async fn mock_runner_exhaustion() {
         let runner = MockRunner::new(vec![]);
-        let result = runner.run_text("system".into(), "user".into()).await;
+        let result = runner
+            .run_text("system".into(), "user".into(), ToolContext::default())
+            .await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn wait_for_review_result_runs_cancel_branch() {
+        let ctx = ToolContext::default();
+        let cancel = ctx.cancellation_token();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_flag = Arc::clone(&cancelled);
+
+        let task = tokio::spawn(async move {
+            wait_for_review_result(
+                &ctx,
+                std::future::pending::<claudecode::Result<ClaudeResult>>(),
+                move || async move {
+                    cancelled_flag.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        cancel.cancel();
+
+        let result = match task.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+        assert!(cancelled.load(Ordering::SeqCst));
     }
 }

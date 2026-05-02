@@ -1,5 +1,6 @@
 //! Integration tests for streaming download behavior in `web_fetch`.
 
+use agentic_tools_core::ToolContext;
 use web_retrieval::WebTools;
 use web_retrieval::fetch::HARD_MAX_BYTES;
 use web_retrieval::fetch::web_fetch;
@@ -33,7 +34,9 @@ async fn fetch_under_cap_is_not_truncated() {
         max_bytes: Some(1024),
     };
 
-    let out = web_fetch(&tools, input).await.unwrap();
+    let out = web_fetch(&tools, input, &ToolContext::default())
+        .await
+        .unwrap();
     assert!(!out.truncated);
     assert_eq!(out.content.len(), body.len());
 }
@@ -62,7 +65,9 @@ async fn fetch_over_cap_is_truncated_and_returns_exactly_max_bytes() {
         max_bytes: Some(cap),
     };
 
-    let out = web_fetch(&tools, input).await.unwrap();
+    let out = web_fetch(&tools, input, &ToolContext::default())
+        .await
+        .unwrap();
     assert!(out.truncated);
     assert_eq!(out.content.len(), cap);
 }
@@ -78,7 +83,9 @@ async fn max_bytes_over_hard_cap_is_rejected_before_request() {
         max_bytes: Some(HARD_MAX_BYTES + 1),
     };
 
-    let err = web_fetch(&tools, input).await.unwrap_err();
+    let err = web_fetch(&tools, input, &ToolContext::default())
+        .await
+        .unwrap_err();
     assert!(err.to_string().contains("max_bytes"));
 
     let received = server.received_requests().await.unwrap();

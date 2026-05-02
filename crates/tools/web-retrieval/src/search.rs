@@ -1,5 +1,6 @@
 //! Web search implementation using Exa API.
 
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::error::ToolError;
 use chrono::Utc;
 use url::Url;
@@ -21,7 +22,12 @@ const MAX_SNIPPET_CHARS: usize = 300;
 pub async fn web_search(
     tools: &WebTools,
     input: WebSearchInput,
+    ctx: &ToolContext,
 ) -> Result<WebSearchOutput, ToolError> {
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
+
     let default_results = tools.cfg.default_search_results;
     let max_results = tools.cfg.max_search_results;
     let num_results = input
@@ -45,12 +51,16 @@ pub async fn web_search(
             summary: Some(exa_async::types::common::SummaryContentsOptions::default()),
         });
 
-    let resp = tools
-        .exa
-        .search()
-        .create(req)
-        .await
-        .map_err(|e| ToolError::external(format!("Exa search failed: {e}")))?;
+    let resp = ctx
+        .run_cancellable(async {
+            tools
+                .exa
+                .search()
+                .create(req)
+                .await
+                .map_err(|e| ToolError::external(format!("Exa search failed: {e}")))
+        })
+        .await?;
 
     // Trim context
     let context = resp
@@ -130,6 +140,8 @@ fn trim_chars(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::WebTools;
+    use agentic_tools_core::ToolContext;
 
     #[test]
     fn test_extract_domain() {
@@ -175,6 +187,25 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(pick_snippet(&result), Some("highlight text".into()));
+    }
+
+    #[tokio::test]
+    async fn web_search_returns_cancelled_when_context_cancelled() {
+        let tools = WebTools::new();
+        let ctx = ToolContext::default();
+        ctx.cancellation_token().cancel();
+
+        let result = web_search(
+            &tools,
+            WebSearchInput {
+                query: "rust error handling".into(),
+                num_results: None,
+            },
+            &ctx,
+        )
+        .await;
+
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
     }
 
     #[test]

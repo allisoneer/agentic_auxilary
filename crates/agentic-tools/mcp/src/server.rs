@@ -1,6 +1,7 @@
 //! MCP server handler backed by ToolRegistry.
 
 use agentic_tools_core::ToolContext;
+use agentic_tools_core::ToolError;
 use agentic_tools_core::ToolRegistry;
 use agentic_tools_core::fmt::TextOptions;
 use agentic_tools_core::fmt::fallback_text_from_json;
@@ -202,7 +203,7 @@ impl ServerHandler for RegistryServer {
     fn call_tool(
         &self,
         req: m::CallToolRequestParams,
-        _ctx: RequestContext<RoleServer>,
+        request_context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::CallToolResult, m::ErrorData>> + Send + '_
     {
         async move {
@@ -214,14 +215,21 @@ impl ServerHandler for RegistryServer {
             }
 
             let args = serde_json::Value::Object(req.arguments.unwrap_or_default());
-            let ctx = ToolContext::default();
+            let ctx = ToolContext::with_cancel(request_context.ct.child_token());
             let text_opts = self.text_options.clone();
 
-            match self
+            tracing::info!(tool = %req.name, "tool dispatch started");
+
+            let dispatch_result = self
                 .registry
                 .dispatch_json_formatted(&req.name, args, &ctx, &text_opts)
-                .await
-            {
+                .await;
+
+            if matches!(&dispatch_result, Err(ToolError::Cancelled { .. })) || ctx.is_cancelled() {
+                tracing::info!(tool = %req.name, "tool dispatch exiting after cancellation");
+            }
+
+            match dispatch_result {
                 Ok(res) => {
                     let text = res
                         .text

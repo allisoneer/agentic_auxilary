@@ -1,5 +1,6 @@
 // TODO(1): Add optional JS-rendering sidecar for dynamic pages (Playwright/etc.)
 
+use agentic_tools_core::ToolContext;
 use agentic_tools_core::error::ToolError;
 use chrono::Utc;
 
@@ -17,6 +18,7 @@ pub const HARD_MAX_BYTES: usize = 20 * 1024 * 1024;
 pub async fn web_fetch(
     tools: &WebTools,
     input: WebFetchInput,
+    ctx: &ToolContext,
 ) -> Result<WebFetchOutput, ToolError> {
     #[expect(clippy::cast_possible_truncation)]
     let default_max_bytes = tools.cfg.default_max_bytes as usize;
@@ -28,13 +30,21 @@ pub async fn web_fetch(
         )));
     }
 
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
+
     // Send GET request
-    let mut response = tools
-        .http
-        .get(&input.url)
-        .send()
-        .await
-        .map_err(|e| ToolError::external(format!("HTTP request failed: {e}")))?;
+    let mut response = ctx
+        .run_cancellable(async {
+            tools
+                .http
+                .get(&input.url)
+                .send()
+                .await
+                .map_err(|e| ToolError::external(format!("HTTP request failed: {e}")))
+        })
+        .await?;
 
     let status = response.status();
     if !status.is_success() {
@@ -70,10 +80,18 @@ pub async fn web_fetch(
             break;
         }
 
-        let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|e| ToolError::external(format!("Failed to read response body: {e}")))?
+        if ctx.is_cancelled() {
+            return Err(ToolError::cancelled(None));
+        }
+
+        let Some(chunk) = ctx
+            .run_cancellable(async {
+                response
+                    .chunk()
+                    .await
+                    .map_err(|e| ToolError::external(format!("Failed to read response body: {e}")))
+            })
+            .await?
         else {
             break;
         };
@@ -94,15 +112,11 @@ pub async fn web_fetch(
     let word_count = content.split_whitespace().count();
 
     // Optional summarization
-    let summary = if input.summarize {
-        Some(
-            crate::haiku::summarize_markdown(tools, &content)
-                .await
-                .map_err(|e| ToolError::external(format!("Summarization failed: {e}")))?,
-        )
-    } else {
-        None
-    };
+    let summary = summarize_content_if_requested(tools, &content, input.summarize, ctx).await?;
+
+    if ctx.is_cancelled() {
+        return Err(ToolError::cancelled(None));
+    }
 
     Ok(WebFetchOutput {
         final_url,
@@ -114,6 +128,23 @@ pub async fn web_fetch(
         content,
         summary,
     })
+}
+
+async fn summarize_content_if_requested(
+    tools: &WebTools,
+    content: &str,
+    summarize: bool,
+    ctx: &ToolContext,
+) -> Result<Option<String>, ToolError> {
+    if !summarize {
+        return Ok(None);
+    }
+
+    match crate::haiku::summarize_markdown(tools, content, ctx).await {
+        Ok(summary) => Ok(Some(summary)),
+        Err(ToolError::Cancelled { reason }) => Err(ToolError::Cancelled { reason }),
+        Err(e) => Err(ToolError::external(format!("Summarization failed: {e}"))),
+    }
 }
 
 /// Decode bytes and convert to a useful text format based on content-type.
@@ -257,6 +288,7 @@ mod tests {
         use super::*;
         use crate::WebTools;
         use crate::types::WebFetchInput;
+        use agentic_tools_core::ToolContext;
         use wiremock::Mock;
         use wiremock::MockServer;
         use wiremock::ResponseTemplate;
@@ -280,7 +312,7 @@ mod tests {
                 max_bytes: None,
             };
 
-            let result = web_fetch(&tools, input).await;
+            let result = web_fetch(&tools, input, &ToolContext::default()).await;
             assert!(result.is_err(), "Expected error for 404 response");
             let err = result.unwrap_err();
             assert!(
@@ -307,7 +339,7 @@ mod tests {
                 max_bytes: None,
             };
 
-            let result = web_fetch(&tools, input).await;
+            let result = web_fetch(&tools, input, &ToolContext::default()).await;
             assert!(result.is_err(), "Expected error for 500 response");
             let err = result.unwrap_err();
             assert!(
@@ -338,7 +370,7 @@ mod tests {
                 max_bytes: None,
             };
 
-            let result = web_fetch(&tools, input).await;
+            let result = web_fetch(&tools, input, &ToolContext::default()).await;
             assert!(result.is_ok(), "Expected success for 200 response");
             let output = result.unwrap();
             assert_eq!(output.content, "Hello, world!");
@@ -366,7 +398,7 @@ mod tests {
                 max_bytes: None,
             };
 
-            let result = web_fetch(&tools, input).await;
+            let result = web_fetch(&tools, input, &ToolContext::default()).await;
             assert!(
                 result.is_ok(),
                 "Expected success for HTML without Content-Type"
@@ -394,6 +426,36 @@ mod tests {
                 !output.content.contains("<p>"),
                 "HTML tags should be removed by markdown conversion"
             );
+        }
+
+        #[tokio::test]
+        async fn web_fetch_returns_cancelled_before_sending_request() {
+            let mock_server = MockServer::start().await;
+            let http = reqwest::Client::new();
+            let tools = WebTools::with_http_client(http);
+            let ctx = ToolContext::default();
+            ctx.cancellation_token().cancel();
+
+            let input = WebFetchInput {
+                url: mock_server.uri(),
+                summarize: false,
+                max_bytes: None,
+            };
+
+            let result = web_fetch(&tools, input, &ctx).await;
+            assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+            assert!(mock_server.received_requests().await.unwrap().is_empty());
+        }
+
+        #[tokio::test]
+        async fn summarization_preserves_cancelled_error() {
+            let tools = WebTools::with_http_client(reqwest::Client::new());
+            let ctx = ToolContext::default();
+            ctx.cancellation_token().cancel();
+
+            let result = summarize_content_if_requested(&tools, "content", true, &ctx).await;
+
+            assert!(matches!(result, Err(ToolError::Cancelled { .. })));
         }
     }
 }

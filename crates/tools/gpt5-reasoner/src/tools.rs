@@ -73,9 +73,10 @@ impl Tool for RequestTool {
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let cfg = self.cfg.clone();
+        let ctx = ctx.clone();
         Box::pin(async move {
             gpt5_reasoner_impl(
                 input.prompt,
@@ -84,6 +85,7 @@ impl Tool for RequestTool {
                 &cfg,
                 input.prompt_type,
                 input.output_filename,
+                &ctx,
             )
             .await
         })

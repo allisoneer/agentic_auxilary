@@ -89,6 +89,13 @@ impl RunOutcome {
     }
 }
 
+async fn abort_command_task(task: &mut Option<JoinHandle<Result<(), String>>>) {
+    if let Some(handle) = task.take() {
+        handle.abort();
+        let _ = handle.await;
+    }
+}
+
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
     serde_json::to_value(request)
         .unwrap_or_else(|error| serde_json::json!({"serialization_error": error.to_string()}))
@@ -306,7 +313,11 @@ impl OrchestratorRunTool {
         }
     }
 
-    async fn run_impl_outcome(&self, input: OrchestratorRunInput) -> Result<RunOutcome, ToolError> {
+    async fn run_impl_outcome(
+        &self,
+        input: OrchestratorRunInput,
+        ctx: &ToolContext,
+    ) -> Result<RunOutcome, ToolError> {
         // Input validation
         if input.session_id.is_none() && input.message.is_none() && input.command.is_none() {
             return Err(ToolError::InvalidInput(
@@ -582,6 +593,11 @@ impl OrchestratorRunTool {
             let command_task_active = command_task.is_some();
 
             tokio::select! {
+                () = ctx.cancelled() => {
+                    abort_command_task(&mut command_task).await;
+                    return Err(ToolError::cancelled(None));
+                }
+
                 maybe_event = subscription.recv(), if sse_active => {
                     let Some(event) = maybe_event else {
                         // SSE stream closed - this can happen due to network issues,
@@ -924,12 +940,13 @@ Examples:
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let this = self.clone();
+        let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
-            match this.run_impl_outcome(input.clone()).await {
+            match this.run_impl_outcome(input.clone(), &ctx).await {
                 Ok(outcome) => {
                     log_tool_success(
                         &timer,
@@ -1361,9 +1378,10 @@ Parameters:
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let server_cell = Arc::clone(&self.server);
+        let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let request = input.clone();
@@ -1478,12 +1496,15 @@ Parameters:
                 let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
                 let wait_for_activity = (!is_reject).then_some(true);
                 let outcome = run_tool
-                    .run_impl_outcome(OrchestratorRunInput {
-                        session_id: Some(input.session_id),
-                        command: None,
-                        message: None,
-                        wait_for_activity,
-                    })
+                    .run_impl_outcome(
+                        OrchestratorRunInput {
+                            session_id: Some(input.session_id),
+                            command: None,
+                            message: None,
+                            wait_for_activity,
+                        },
+                        &ctx,
+                    )
                     .await?;
                 let mut out = outcome.output;
 
@@ -1563,9 +1584,10 @@ Parameters:
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let server_cell = Arc::clone(&self.server);
+        let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let request = input.clone();
@@ -1657,7 +1679,7 @@ Parameters:
                             command: None,
                             message: None,
                             wait_for_activity: Some(true),
-                        })
+                        }, &ctx)
                         .await?;
                     Ok((outcome.output, outcome.log_meta))
                 }
@@ -1672,7 +1694,7 @@ Parameters:
                             command: None,
                             message: None,
                             wait_for_activity: None,
-                        })
+                        }, &ctx)
                         .await?;
                     Ok((outcome.output, outcome.log_meta))
                 }

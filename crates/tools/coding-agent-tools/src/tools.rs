@@ -153,12 +153,13 @@ Usage notes:
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let tools = Arc::clone(&self.tools);
+        let ctx = ctx.clone();
         Box::pin(async move {
             tools
-                .ask_agent(input.agent_type, input.location, input.query)
+                .ask_agent(input.agent_type, input.location, input.query, &ctx)
                 .await
         })
     }
@@ -415,12 +416,13 @@ impl Tool for JustExecuteTool {
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let tools = Arc::clone(&self.tools);
+        let ctx = ctx.clone();
         Box::pin(async move {
             tools
-                .just_execute(input.recipe, input.dir, input.args)
+                .just_execute(input.recipe, input.dir, input.args, &ctx)
                 .await
         })
     }

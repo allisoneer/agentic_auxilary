@@ -16,8 +16,9 @@ dist = false
 
 [dependencies]
 # Core async runtime
-tokio = { version = "1.40", features = ["full"] }
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+nix = { workspace = true }
 
 # Async traits and utilities
 futures = "0.3"

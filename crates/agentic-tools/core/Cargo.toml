@@ -15,6 +15,9 @@ schemars = { workspace = true }
 thiserror = { workspace = true }
 json-patch = "4"
 rmcp = { workspace = true, features = ["server", "transport-io"] }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 default = []
@@ -25,7 +28,6 @@ version = "0.3"
 optional = true
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
 
 [package.metadata.repo]
 role = "lib"
