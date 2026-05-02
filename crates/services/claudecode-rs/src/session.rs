@@ -13,6 +13,8 @@ use chrono::Utc;
 use futures::StreamExt;
 use nix::sys::signal::Signal;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tempfile::NamedTempFile;
 use tokio::io::AsyncBufReadExt;
@@ -39,6 +41,7 @@ pub struct Session {
     // Background tasks
     worker_task: std::sync::Mutex<Option<JoinHandle<()>>>,
     stderr_task: std::sync::Mutex<Option<JoinHandle<()>>>,
+    process_group_owned: Arc<AtomicBool>,
 
     // Result storage
     result: Arc<RwLock<Option<ClaudeResult>>>,
@@ -70,6 +73,7 @@ impl Session {
         let kill = process.kill_handle()?;
         let result = Arc::new(RwLock::new(None));
         let error = Arc::new(RwLock::new(None));
+        let process_group_owned = Arc::new(AtomicBool::new(true));
 
         let mut session = Self {
             id,
@@ -80,6 +84,7 @@ impl Session {
             events,
             worker_task: std::sync::Mutex::new(None),
             stderr_task: std::sync::Mutex::new(None),
+            process_group_owned,
             result: result.clone(),
             error: error.clone(),
             _mcp_temp_file: None,
@@ -94,6 +99,7 @@ impl Session {
     async fn start_tasks(&mut self, mut process: ProcessHandle) -> Result<()> {
         let result = self.result.clone();
         let error = self.error.clone();
+        let process_group_owned = self.process_group_owned.clone();
 
         match self.config.output_format {
             OutputFormat::StreamingJson => {
@@ -113,10 +119,16 @@ impl Session {
                 });
                 Self::store_task(&self.stderr_task, stderr_task)?;
 
+                let process_group_owned = process_group_owned.clone();
                 let worker_task = tokio::spawn(async move {
-                    if let Err(e) =
-                        Self::handle_streaming_json(process, events_tx, result_clone, error.clone())
-                            .await
+                    if let Err(e) = Self::handle_streaming_json(
+                        process,
+                        events_tx,
+                        result_clone,
+                        error.clone(),
+                        process_group_owned,
+                    )
+                    .await
                     {
                         error.write().await.replace(e);
                     }
@@ -124,8 +136,9 @@ impl Session {
                 Self::store_task(&self.worker_task, worker_task)?;
             }
             OutputFormat::Json => {
+                let process_group_owned = process_group_owned.clone();
                 let worker_task = tokio::spawn(async move {
-                    match Self::handle_json(process, error.clone()).await {
+                    match Self::handle_json(process, error.clone(), process_group_owned).await {
                         Ok(r) => {
                             result.write().await.replace(r);
                         }
@@ -137,8 +150,9 @@ impl Session {
                 Self::store_task(&self.worker_task, worker_task)?;
             }
             OutputFormat::Text => {
+                let process_group_owned = process_group_owned.clone();
                 let worker_task = tokio::spawn(async move {
-                    match Self::handle_text(process, error.clone()).await {
+                    match Self::handle_text(process, error.clone(), process_group_owned).await {
                         Ok(r) => {
                             result.write().await.replace(r);
                         }
@@ -219,6 +233,7 @@ impl Session {
         events_tx: mpsc::UnboundedSender<Event>,
         result_arc: Arc<RwLock<Option<ClaudeResult>>>,
         error: Arc<RwLock<Option<ClaudeError>>>,
+        process_group_owned: Arc<AtomicBool>,
     ) -> Result<()> {
         let stdout = process
             .take_stdout()
@@ -272,6 +287,7 @@ impl Session {
 
         // Wait for process to complete
         let status = process.wait().await?;
+        process_group_owned.store(false, Ordering::Release);
         if !status.success() {
             let code = status.code().unwrap_or(-1);
             if error.read().await.is_none() {
@@ -288,6 +304,7 @@ impl Session {
     async fn handle_json(
         mut process: ProcessHandle,
         _error: Arc<RwLock<Option<ClaudeError>>>,
+        process_group_owned: Arc<AtomicBool>,
     ) -> Result<ClaudeResult> {
         let stdout = process
             .take_stdout()
@@ -306,6 +323,7 @@ impl Session {
 
         // Wait for process
         let status = process.wait().await?;
+        process_group_owned.store(false, Ordering::Release);
         if !status.success() && !result.is_error {
             return Err(ClaudeError::ProcessFailed {
                 code: status.code().unwrap_or(-1),
@@ -319,6 +337,7 @@ impl Session {
     async fn handle_text(
         mut process: ProcessHandle,
         _error: Arc<RwLock<Option<ClaudeError>>>,
+        process_group_owned: Arc<AtomicBool>,
     ) -> Result<ClaudeResult> {
         let stdout = process
             .take_stdout()
@@ -337,6 +356,7 @@ impl Session {
 
         // Wait for process
         let status = process.wait().await?;
+        process_group_owned.store(false, Ordering::Release);
         if !status.success() && !result.is_error {
             return Err(ClaudeError::ProcessFailed {
                 code: status.code().unwrap_or(-1),
@@ -373,6 +393,7 @@ impl Session {
     pub async fn cancel(&self) -> Result<()> {
         info!(session_id = %self.id, "cancelling Claude session");
         self.kill.graceful_terminate().await?;
+        self.process_group_owned.store(false, Ordering::Release);
 
         let worker_task = Self::take_task(&self.worker_task)?;
         let stderr_task = Self::take_task(&self.stderr_task)?;
@@ -431,7 +452,9 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        let _ = self.kill.kill_now();
+        if self.process_group_owned.load(Ordering::Acquire) {
+            let _ = self.kill.kill_now();
+        }
 
         if let Ok(mut worker_task) = self.worker_task.lock()
             && let Some(task) = worker_task.take()
@@ -486,6 +509,7 @@ mod tests {
             events: None,
             worker_task: std::sync::Mutex::new(None),
             stderr_task: std::sync::Mutex::new(None),
+            process_group_owned: Arc::new(AtomicBool::new(false)),
             result: Arc::new(RwLock::new(None)),
             error: Arc::new(RwLock::new(Some(ClaudeError::ProcessFailed {
                 code: 1,
@@ -522,6 +546,7 @@ mod tests {
             events: None,
             worker_task: std::sync::Mutex::new(None),
             stderr_task: std::sync::Mutex::new(None),
+            process_group_owned: Arc::new(AtomicBool::new(false)),
             result: Arc::new(RwLock::new(None)),
             error: Arc::new(RwLock::new(Some(ClaudeError::SessionError {
                 message: "custom session error".into(),
@@ -555,6 +580,7 @@ mod tests {
             events: None,
             worker_task: std::sync::Mutex::new(None),
             stderr_task: std::sync::Mutex::new(None),
+            process_group_owned: Arc::new(AtomicBool::new(false)),
             result: Arc::new(RwLock::new(None)),
             error: Arc::new(RwLock::new(Some(io.into()))),
             _mcp_temp_file: None,
@@ -588,6 +614,7 @@ mod tests {
             events: None,
             worker_task: std::sync::Mutex::new(None),
             stderr_task: std::sync::Mutex::new(None),
+            process_group_owned: Arc::new(AtomicBool::new(false)),
             result: Arc::new(RwLock::new(None)),
             error: Arc::new(RwLock::new(None)),
             _mcp_temp_file: None,
@@ -598,5 +625,45 @@ mod tests {
             ClaudeError::SessionError { message } => assert_eq!(message, "No result available"),
             other => panic!("expected SessionError, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn drop_skips_kill_when_process_group_is_released() {
+        let cfg = SessionConfig::builder("test".to_string())
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let mut process = ProcessHandle::spawn(
+            Path::new("/bin/sh"),
+            vec!["-c".to_string(), "sleep 5".to_string()],
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let kill = process.kill_handle().unwrap();
+
+        let session = Session {
+            id: "test".into(),
+            config: cfg,
+            start_time: Utc::now(),
+            kill,
+            events_tx: None,
+            events: None,
+            worker_task: std::sync::Mutex::new(None),
+            stderr_task: std::sync::Mutex::new(None),
+            process_group_owned: Arc::new(AtomicBool::new(false)),
+            result: Arc::new(RwLock::new(None)),
+            error: Arc::new(RwLock::new(None)),
+            _mcp_temp_file: None,
+        };
+
+        drop(session);
+
+        assert!(process.try_wait().unwrap().is_none());
+
+        process.kill().await.unwrap();
+        process.wait().await.unwrap();
     }
 }

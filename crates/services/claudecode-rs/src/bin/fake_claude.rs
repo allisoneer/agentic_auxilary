@@ -4,6 +4,7 @@ use claudecode::types::ResultEvent;
 use claudecode::types::SystemEvent;
 use std::env;
 use std::path::PathBuf;
+use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
@@ -13,6 +14,36 @@ use tokio::signal::unix::SignalKind;
 struct PidInfo {
     parent_pid: u32,
     child_pid: u32,
+}
+
+struct HelperChild {
+    child: Option<Child>,
+}
+
+impl HelperChild {
+    fn new(child: Child) -> Self {
+        Self { child: Some(child) }
+    }
+
+    fn id(&self) -> u32 {
+        self.child
+            .as_ref()
+            .expect("helper child must exist while pid is queried")
+            .id()
+    }
+
+    fn cleanup(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Drop for HelperChild {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
 }
 
 #[tokio::main]
@@ -34,6 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
+    let child = HelperChild::new(child);
 
     if let Some(pid_file) = env::var_os("FAKE_CLAUDE_PID_FILE") {
         let info = PidInfo {
@@ -42,6 +74,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         std::fs::write(PathBuf::from(pid_file), serde_json::to_vec(&info)?)?;
     }
+
+    maybe_force_error_after_spawn()?;
 
     emit_output(&output_format).await?;
 
@@ -61,6 +95,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
         }
+    }
+
+    Ok(())
+}
+
+fn maybe_force_error_after_spawn() -> Result<(), Box<dyn std::error::Error>> {
+    if env::var_os("FAKE_CLAUDE_FORCE_ERROR_AFTER_SPAWN").is_some() {
+        return Err(std::io::Error::other("forced fake_claude error after helper spawn").into());
     }
 
     Ok(())
