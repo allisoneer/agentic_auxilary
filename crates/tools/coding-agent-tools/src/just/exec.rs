@@ -7,8 +7,10 @@ use super::parser::ParamKind;
 use super::security::SecurityValidator;
 use super::types::ExecuteOutput;
 use crate::paths;
+use agentic_tools_core::ToolContext;
 use serde_json::Value;
 use std::collections::HashMap;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 /// Execute a recipe by name, with optional directory disambiguation and arguments.
@@ -29,6 +31,7 @@ pub async fn execute_recipe(
     dir_opt: Option<String>,
     args_opt: Option<HashMap<String, Value>>,
     repo_root: &str,
+    ctx: &ToolContext,
 ) -> Result<ExecuteOutput, String> {
     // Canonicalize to resolve symlinks (e.g., /var -> /private/var on macOS)
     let repo_root = paths::to_abs_string(repo_root)?;
@@ -126,20 +129,62 @@ pub async fn execute_recipe(
         }
     }
 
-    let output = Command::new("just")
+    let mut child = Command::new("just")
         .args(&argv)
         .current_dir(&chosen_dir)
-        .output()
-        .await
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
         .map_err(|e| format!("Failed to execute just: {e}"))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Failed to capture just stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to capture just stderr".to_string())?;
+
+    let stdout_task = tokio::spawn(async move {
+        let mut stdout = stdout;
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
+    let stderr_task = tokio::spawn(async move {
+        let mut stderr = stderr;
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
+
+    let status = tokio::select! {
+        () = ctx.cancelled() => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            return Err("Just execution cancelled".to_string());
+        }
+        status = child.wait() => status.map_err(|e| format!("Failed to execute just: {e}"))?,
+    };
+
+    let stdout = stdout_task
+        .await
+        .map_err(|e| format!("Failed to join stdout reader: {e}"))?
+        .map_err(|e| format!("Failed to read just stdout: {e}"))?;
+    let stderr = stderr_task
+        .await
+        .map_err(|e| format!("Failed to join stderr reader: {e}"))?
+        .map_err(|e| format!("Failed to read just stderr: {e}"))?;
 
     Ok(ExecuteOutput {
         dir: chosen_dir,
         recipe: recipe_name.to_string(),
-        success: output.status.success(),
-        exit_code: output.status.code(),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        success: status.success(),
+        exit_code: status.code(),
+        stdout: String::from_utf8_lossy(&stdout).to_string(),
+        stderr: String::from_utf8_lossy(&stderr).to_string(),
     })
 }
 
@@ -158,6 +203,7 @@ fn value_to_arg(v: &Value) -> Result<String, String> {
 #[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use agentic_tools_core::ToolContext;
     use serde_json::json;
     use std::fs;
     use tempfile::TempDir;
@@ -215,8 +261,15 @@ mod tests {
         fs::write(root.join("justfile"), "build:\n    echo building").unwrap();
 
         let registry = JustRegistry::new();
-        let result =
-            execute_recipe(&registry, "nonexistent", None, None, root.to_str().unwrap()).await;
+        let result = execute_recipe(
+            &registry,
+            "nonexistent",
+            None,
+            None,
+            root.to_str().unwrap(),
+            &ToolContext::default(),
+        )
+        .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -238,7 +291,15 @@ mod tests {
 
         let registry = JustRegistry::new();
         // No dir specified - should default to root
-        let result = execute_recipe(&registry, "check", None, None, root.to_str().unwrap()).await;
+        let result = execute_recipe(
+            &registry,
+            "check",
+            None,
+            None,
+            root.to_str().unwrap(),
+            &ToolContext::default(),
+        )
+        .await;
 
         assert!(result.is_ok());
         let output = result.unwrap();
@@ -262,7 +323,15 @@ mod tests {
 
         let registry = JustRegistry::new();
         // No dir specified, recipe not in root - should error
-        let result = execute_recipe(&registry, "check", None, None, root.to_str().unwrap()).await;
+        let result = execute_recipe(
+            &registry,
+            "check",
+            None,
+            None,
+            root.to_str().unwrap(),
+            &ToolContext::default(),
+        )
+        .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -285,7 +354,15 @@ mod tests {
 
         let registry = JustRegistry::new();
         // Call without providing the required arg
-        let result = execute_recipe(&registry, "greet", None, None, root.to_str().unwrap()).await;
+        let result = execute_recipe(
+            &registry,
+            "greet",
+            None,
+            None,
+            root.to_str().unwrap(),
+            &ToolContext::default(),
+        )
+        .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -302,7 +379,15 @@ mod tests {
         fs::write(root.join("justfile"), "hello:\n    echo hello world").unwrap();
 
         let registry = JustRegistry::new();
-        let result = execute_recipe(&registry, "hello", None, None, root.to_str().unwrap()).await;
+        let result = execute_recipe(
+            &registry,
+            "hello",
+            None,
+            None,
+            root.to_str().unwrap(),
+            &ToolContext::default(),
+        )
+        .await;
 
         assert!(result.is_ok());
         let output = result.unwrap();
@@ -320,7 +405,15 @@ mod tests {
         fs::write(root.join("justfile"), "fail:\n    exit 42").unwrap();
 
         let registry = JustRegistry::new();
-        let result = execute_recipe(&registry, "fail", None, None, root.to_str().unwrap()).await;
+        let result = execute_recipe(
+            &registry,
+            "fail",
+            None,
+            None,
+            root.to_str().unwrap(),
+            &ToolContext::default(),
+        )
+        .await;
 
         assert!(result.is_ok());
         let output = result.unwrap();
@@ -351,6 +444,7 @@ mod tests {
             Some(sub_dir),
             None,
             root.to_str().unwrap(),
+            &ToolContext::default(),
         )
         .await;
 
@@ -384,6 +478,7 @@ mod tests {
             None,
             Some(wrong_args),
             root.to_str().unwrap(),
+            &ToolContext::default(),
         )
         .await;
 
@@ -396,5 +491,29 @@ mod tests {
         assert!(err.contains("tgt"));
         // Should list expected parameters
         assert!(err.contains("Expected parameter"));
+    }
+
+    #[tokio::test]
+    async fn cancellation_stops_recipe_execution() {
+        skip_if_just_unavailable!();
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("justfile"), "hang:\n    sleep 30").unwrap();
+
+        let registry = JustRegistry::new();
+        let ctx = ToolContext::default();
+        let cancel = ctx.cancellation_token();
+
+        let handle = tokio::spawn({
+            let repo_root = root.to_str().unwrap().to_string();
+            async move { execute_recipe(&registry, "hang", None, None, &repo_root, &ctx).await }
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        cancel.cancel();
+
+        let result = handle.await.unwrap();
+        assert_eq!(result.unwrap_err(), "Just execution cancelled");
     }
 }

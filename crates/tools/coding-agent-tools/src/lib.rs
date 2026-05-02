@@ -19,6 +19,8 @@ pub use tools::build_registry;
 use agentic_config::types::CliToolsConfig;
 use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::ToolError;
+use claudecode::types::Result as ClaudeResult;
+use std::future::Future;
 use std::sync::Arc;
 use types::AgentOutput;
 use types::Depth;
@@ -44,6 +46,29 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
                 .filter(|s| !s.trim().is_empty())
                 .cloned()
         })
+}
+
+async fn wait_for_claude_result<F, C, CFn>(
+    ctx: &agentic_tools_core::ToolContext,
+    wait_fut: F,
+    cancel_fn: CFn,
+) -> Result<ClaudeResult, ToolError>
+where
+    F: Future<Output = claudecode::Result<ClaudeResult>>,
+    C: Future<Output = claudecode::Result<()>>,
+    CFn: FnOnce() -> C,
+{
+    tokio::select! {
+        () = ctx.cancelled() => {
+            cancel_fn()
+                .await
+                .map_err(|e| ToolError::Internal(format!("Failed to cancel Claude session cleanly: {e}")))?;
+            Err(ToolError::cancelled(None))
+        }
+        result = wait_fut => {
+            result.map_err(|e| ToolError::Internal(format!("Failed to run Claude session: {e}")))
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -262,6 +287,7 @@ impl CodingAgentTools {
         agent_type: Option<types::AgentType>,
         location: Option<types::AgentLocation>,
         query: String,
+        ctx: &agentic_tools_core::ToolContext,
     ) -> Result<AgentOutput, ToolError> {
         use claudecode::client::Client;
         use claudecode::config::SessionConfig;
@@ -378,10 +404,10 @@ impl CodingAgentTools {
             }
         };
 
-        let result = match client.launch_and_wait(config).await {
-            Ok(r) => r,
+        let session = match client.launch(config).await {
+            Ok(session) => session,
             Err(e) => {
-                let error_msg = format!("Failed to run Claude session: {e}");
+                let error_msg = format!("Failed to start Claude session: {e}");
                 log_ctx.finish(
                     req_json,
                     None,
@@ -392,6 +418,34 @@ impl CodingAgentTools {
                     None,
                 );
                 return Err(ToolError::Internal(error_msg));
+            }
+        };
+
+        let result = match wait_for_claude_result(ctx, session.wait(), || session.cancel()).await {
+            Ok(result) => result,
+            Err(ToolError::Cancelled { .. }) => {
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some("Request cancelled".into()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(ToolError::cancelled(None));
+            }
+            Err(e) => {
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(e.to_string()),
+                    None,
+                    Some(model.to_string()),
+                    None,
+                );
+                return Err(e);
             }
         };
 
@@ -746,6 +800,7 @@ impl CodingAgentTools {
         recipe: String,
         dir: Option<String>,
         args: Option<std::collections::HashMap<String, serde_json::Value>>,
+        ctx: &agentic_tools_core::ToolContext,
     ) -> Result<just::ExecuteOutput, ToolError> {
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("cli_just_execute");
@@ -777,7 +832,8 @@ impl CodingAgentTools {
             }
         };
 
-        match just::exec::execute_recipe(&self.just_registry, &recipe, dir, args, &repo_root).await
+        match just::exec::execute_recipe(&self.just_registry, &recipe, dir, args, &repo_root, ctx)
+            .await
         {
             Ok(output) => {
                 let summary = serde_json::json!({
@@ -789,6 +845,11 @@ impl CodingAgentTools {
                 Ok(output)
             }
             Err(e) => {
+                if e == "Just execution cancelled" {
+                    log_ctx.finish(req_json, None, false, Some(e), None, None, None);
+                    return Err(ToolError::cancelled(None));
+                }
+
                 let error_msg = e;
                 log_ctx.finish(
                     req_json,
@@ -863,5 +924,35 @@ mod ask_agent_filter_tests {
         };
         // Helper uses trim().is_empty() for emptiness check, but returns original string
         assert_eq!(pick_non_empty_text(&r).as_deref(), Some("  result text  "));
+    }
+
+    #[tokio::test]
+    async fn wait_for_claude_result_runs_cancel_branch() {
+        let ctx = agentic_tools_core::ToolContext::default();
+        let cancel = ctx.cancellation_token();
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cancelled_flag = Arc::clone(&cancelled);
+
+        let task = tokio::spawn(async move {
+            wait_for_claude_result(
+                &ctx,
+                std::future::pending::<claudecode::Result<ClaudeResult>>(),
+                move || async move {
+                    cancelled_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        cancel.cancel();
+
+        let result = match task.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+        assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
     }
 }

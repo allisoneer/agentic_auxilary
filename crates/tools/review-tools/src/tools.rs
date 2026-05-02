@@ -81,10 +81,11 @@ impl Tool for RunTool {
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let svc = Arc::clone(&self.svc);
-        Box::pin(async move { svc.review_run(input).await })
+        let ctx = ctx.clone();
+        Box::pin(async move { svc.review_run(input, &ctx).await })
     }
 }
 
