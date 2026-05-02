@@ -61,6 +61,14 @@ These items have dependencies and should be done in order.
 
 ## To classify/investigate:
 
+- TODO(2): ENG-762 follow-up — add Node/NAPI abort-signal propagation so JS callers can drive `ToolContext` cancellation instead of always using `ToolContext::default()`.
+- TODO(2): ENG-762 follow-up — define mutation-tool cancellation semantics beyond local post-commit monitoring, including whether/when remote rollback is possible.
+- TODO(2): ENG-762 follow-up — have orchestrator monitoring call OpenCode `sessions().abort()` once the API contract and side effects are clearly defined.
+- TODO(2): ENG-762 follow-up — adopt cancellation for `cli_just_search` if the subprocess helper shape remains stable.
+- TODO(2): ENG-762 follow-up — adopt cancellation for remaining blocking-style tools such as `thoughts_get_repo_refs` and `review_diff_snapshot`.
+- TODO(2): ENG-762 follow-up — add Windows-specific process-group/process-tree handling for `claudecode-rs`.
+- TODO(2): ENG-762 follow-up — revisit `[lints] workspace = true` rollout for `agentic-tools-core`, `agentic-tools-mcp`, `claudecode`, and `gpt5_reasoner` after unrelated clippy cleanup is separated from cancellation work.
+
 ### CLAUDE.md cargo commands → just commands
 The xtask autogen system generates raw cargo commands in per-crate CLAUDE.md files (`crates/meta/xtask/src/claude.rs:183-196`), but our primary agents don't use bash and the root CLAUDE.md already documents the preferred `just crate-*` commands. This creates inconsistency where per-crate docs show cargo commands while root docs show just commands. Update xtask to generate:
 - `just crate-check <crate>` instead of `cargo fmt -p ... && cargo clippy -p ...`

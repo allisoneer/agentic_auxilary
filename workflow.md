@@ -99,6 +99,8 @@ REVIEW:     review
 
 If I ever need additional tools that aren't in the list of ones above, I'll tab over to a different agent that has access to them. Also, sometimes commands will automatically bring those tools into context just for the duration of the command being ran, e.g. `/commit`
 
+Request-scoped MCP cancellation now flows through `ToolContext`, so long-running tools can stop promptly and clean up subprocesses before returning.
+
 ---
 
 ## Agent-Specific Additional Tools
