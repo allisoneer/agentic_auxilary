@@ -11,7 +11,7 @@ use std::path::PathBuf;
 ///
 /// Supports both direct binary invocation and launcher-based invocation:
 /// - Direct: `binary = "/path/to/opencode"`, `launcher_args = []`
-/// - Launcher: `binary = "bunx"`, `launcher_args = ["--yes", "opencode-ai@1.14.19"]`
+/// - Launcher: `binary = "bunx"`, `launcher_args = ["--yes", "opencode-ai@1.14.33"]`
 #[derive(Debug, Clone)]
 pub struct LauncherConfig {
     /// Path to the binary (or launcher binary like `bunx`).
@@ -65,7 +65,7 @@ pub fn resolve_opencode_binary(base_dir: &Path) -> anyhow::Result<PathBuf> {
 /// Note: This uses simple whitespace splitting and does not support shell-style
 /// quoting. Arguments containing spaces (e.g., `--message "hello world"`) will
 /// be incorrectly split. This is acceptable for the documented use case
-/// (`--yes opencode-ai@1.14.19`).
+/// (`--yes opencode-ai@1.14.33`).
 pub fn parse_launcher_args() -> Vec<String> {
     match std::env::var(OPENCODE_BINARY_ARGS_ENV) {
         Ok(value) => {
@@ -130,9 +130,9 @@ mod tests {
 
     #[test]
     fn normalize_strips_v_prefix() {
-        assert_eq!(normalize_version("v1.14.19"), "1.14.19");
-        assert_eq!(normalize_version("1.14.19"), "1.14.19");
-        assert_eq!(normalize_version("  v1.14.19 "), "1.14.19");
+        assert_eq!(normalize_version("v1.14.33"), "1.14.33");
+        assert_eq!(normalize_version("1.14.33"), "1.14.33");
+        assert_eq!(normalize_version("  v1.14.33 "), "1.14.33");
     }
 
     #[test]
@@ -166,12 +166,12 @@ mod tests {
     #[serial(env)]
     fn parse_launcher_args_splits_on_whitespace() {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.14.19") };
-        assert_eq!(parse_launcher_args(), vec!["opencode-ai@1.14.19"]);
+        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.14.33") };
+        assert_eq!(parse_launcher_args(), vec!["opencode-ai@1.14.33"]);
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "--yes opencode-ai@1.14.19") };
-        assert_eq!(parse_launcher_args(), vec!["--yes", "opencode-ai@1.14.19"]);
+        unsafe { std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "--yes opencode-ai@1.14.33") };
+        assert_eq!(parse_launcher_args(), vec!["--yes", "opencode-ai@1.14.33"]);
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_BINARY_ARGS_ENV) };
@@ -194,14 +194,14 @@ mod tests {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::set_var(OPENCODE_BINARY_ENV, "bunx");
-            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.14.19");
+            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.14.33");
         }
 
         let base = Path::new("/tmp/project");
         let config = resolve_launcher_config(base).unwrap();
 
         assert_eq!(config.binary, "bunx");
-        assert_eq!(config.launcher_args, vec!["opencode-ai@1.14.19"]);
+        assert_eq!(config.launcher_args, vec!["opencode-ai@1.14.33"]);
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
@@ -216,7 +216,7 @@ mod tests {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe {
             std::env::set_var(OPENCODE_BINARY_ENV, "   ");
-            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.14.19");
+            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.14.33");
         }
 
         let base = Path::new("/tmp/project");

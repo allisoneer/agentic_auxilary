@@ -30,6 +30,7 @@ use support::message_history_fixture;
 use support::retry_status_fixture;
 use support::seed_spawned_sessions;
 use support::session_fixture;
+use support::session_fixture_with_path;
 use support::session_status_fixture;
 use support::sessions_list_fixture;
 use support::test_orchestrator_server;
@@ -96,6 +97,7 @@ async fn list_sessions_returns_enriched_fields() {
                 "slug": "ses-1",
                 "projectId": "proj1",
                 "directory": "/tmp/project-a",
+                "path": "src/a.rs",
                 "title": "Session A",
                 "version": "1.0",
                 "summary": { "additions": 5, "deletions": 2, "files": 1 },
@@ -106,6 +108,7 @@ async fn list_sessions_returns_enriched_fields() {
                 "slug": "ses-2",
                 "projectId": "proj1",
                 "directory": "/tmp/project-b",
+                "path": "src/b.rs",
                 "title": "Session B",
                 "version": "1.0",
                 "summary": { "additions": 1, "deletions": 0, "files": 3 },
@@ -138,6 +141,7 @@ async fn list_sessions_returns_enriched_fields() {
     assert_eq!(first.created, Some(10));
     assert_eq!(first.updated, Some(20));
     assert_eq!(first.directory.as_deref(), Some("/tmp/project-a"));
+    assert_eq!(first.path.as_deref(), Some("src/a.rs"));
     assert!(matches!(first.status, Some(SessionStatusSummary::Busy)));
     let first_stats = first.change_stats.as_ref().expect("change stats expected");
     assert_eq!(first_stats.additions, 5);
@@ -153,6 +157,7 @@ async fn list_sessions_returns_enriched_fields() {
             next: 1234,
         }) if message == "rate limited"
     ));
+    assert_eq!(second.path.as_deref(), Some("src/b.rs"));
 }
 
 #[tokio::test]
@@ -201,7 +206,10 @@ async fn get_session_state_returns_idle_status() {
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_path("ses-1", Some("src/session.rs"))),
+        )
         .mount(&mock)
         .await;
 
@@ -230,6 +238,7 @@ async fn get_session_state_returns_idle_status() {
 
     assert!(matches!(result.status, SessionStatusSummary::Idle));
     assert!(!result.launched_by_you);
+    assert_eq!(result.path.as_deref(), Some("src/session.rs"));
 }
 
 #[tokio::test]
@@ -239,7 +248,10 @@ async fn get_session_state_returns_busy_status() {
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_path("ses-1", Some("src/session.rs"))),
+        )
         .mount(&mock)
         .await;
 
@@ -270,6 +282,7 @@ async fn get_session_state_returns_busy_status() {
         .expect("get_session_state should succeed");
 
     assert!(matches!(result.status, SessionStatusSummary::Busy));
+    assert_eq!(result.path.as_deref(), Some("src/session.rs"));
 }
 
 #[tokio::test]
@@ -279,7 +292,10 @@ async fn get_session_state_returns_retry_status() {
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_path("ses-1", Some("src/session.rs"))),
+        )
         .mount(&mock)
         .await;
 
@@ -319,6 +335,7 @@ async fn get_session_state_returns_retry_status() {
             next: 9876,
         } if message == "provider overloaded"
     ));
+    assert_eq!(result.path.as_deref(), Some("src/session.rs"));
 }
 
 #[tokio::test]
@@ -330,7 +347,10 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("ses-1")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_path("ses-1", Some("src/session.rs"))),
+        )
         .mount(&mock)
         .await;
 
@@ -428,6 +448,7 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
     assert_eq!(result.pending_message_count, 1);
     assert_eq!(result.last_activity, Some(6));
     assert_eq!(result.directory.as_deref(), Some("/tmp"));
+    assert_eq!(result.path.as_deref(), Some("src/session.rs"));
     assert_eq!(result.recent_tool_calls.len(), 4);
     assert!(matches!(
         result.recent_tool_calls[0].state,
