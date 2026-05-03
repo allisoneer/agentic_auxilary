@@ -156,6 +156,21 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     {
         cfg.reasoning.token_limit = Some(n);
     }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_EXECUTOR_TIMEOUT_SECS")
+        && let Ok(n) = v.parse()
+    {
+        cfg.reasoning.executor_timeout_secs = n;
+    }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_EMPTY_RESPONSE_NO_RETRY_AFTER_SECS")
+        && let Ok(n) = v.parse()
+    {
+        cfg.reasoning.empty_response_no_retry_after_secs = n;
+    }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_STREAM_HEARTBEAT_SECS")
+        && let Ok(n) = v.parse()
+    {
+        cfg.reasoning.stream_heartbeat_secs = n;
+    }
 
     // --- Logging overrides ---
     if let Some(v) = env_trimmed("AGENTIC_LOG_LEVEL") {
@@ -301,6 +316,41 @@ optimizer_model = "file-model"
 
         let loaded = load_merged(temp.path()).unwrap();
         assert_eq!(loaded.config.reasoning.optimizer_model, "env-model");
+    }
+
+    #[test]
+    #[serial]
+    fn test_reasoning_defaults_include_streaming_recovery_fields() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        let loaded = load_merged(temp.path()).unwrap();
+
+        assert_eq!(loaded.config.reasoning.executor_timeout_secs, 2700);
+        assert_eq!(
+            loaded.config.reasoning.empty_response_no_retry_after_secs,
+            600
+        );
+        assert_eq!(loaded.config.reasoning.stream_heartbeat_secs, 30);
+    }
+
+    #[test]
+    #[serial]
+    fn test_reasoning_streaming_env_overrides_apply() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+        let _g1 = EnvGuard::set("AGENTIC_REASONING_EXECUTOR_TIMEOUT_SECS", "123");
+        let _g2 = EnvGuard::set("AGENTIC_REASONING_EMPTY_RESPONSE_NO_RETRY_AFTER_SECS", "45");
+        let _g3 = EnvGuard::set("AGENTIC_REASONING_STREAM_HEARTBEAT_SECS", "9");
+
+        let loaded = load_merged(temp.path()).unwrap();
+
+        assert_eq!(loaded.config.reasoning.executor_timeout_secs, 123);
+        assert_eq!(
+            loaded.config.reasoning.empty_response_no_retry_after_secs,
+            45
+        );
+        assert_eq!(loaded.config.reasoning.stream_heartbeat_secs, 9);
     }
 
     #[test]

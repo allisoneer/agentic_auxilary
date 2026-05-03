@@ -44,8 +44,11 @@
       "description": "Tool-specific config for gpt5-reasoner.",
       "$ref": "#/$defs/ReasoningConfig",
       "default": {
+        "empty_response_no_retry_after_secs": 600,
         "executor_model": "openai/gpt-5.2",
-        "optimizer_model": "anthropic/claude-sonnet-4.6"
+        "executor_timeout_secs": 2700,
+        "optimizer_model": "anthropic/claude-sonnet-4.6",
+        "stream_heartbeat_secs": 30
       }
     },
     "services": {
@@ -209,10 +212,24 @@
             "null"
           ]
         },
+        "empty_response_no_retry_after_secs": {
+          "description": "Suppress empty-response retry when attempt duration exceeds this threshold.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 600,
+          "minimum": 0
+        },
         "executor_model": {
           "description": "`OpenRouter` model ID for executor/reasoner step.",
           "type": "string",
           "default": "openai/gpt-5.2"
+        },
+        "executor_timeout_secs": {
+          "description": "Executor timeout in seconds.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 2700,
+          "minimum": 0
         },
         "optimizer_model": {
           "description": "`OpenRouter` model ID for optimizer step.",
@@ -229,6 +246,13 @@
               "type": "null"
             }
           ]
+        },
+        "stream_heartbeat_secs": {
+          "description": "Heartbeat cadence for executor streaming logs.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 30,
+          "minimum": 0
         },
         "token_limit": {
           "description": "Optional token limit for reasoning requests.",

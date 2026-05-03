@@ -445,6 +445,9 @@ mod tests {
                 reasoning_effort: Some("high".into()),
                 api_base_url: None,
                 token_limit: None,
+                executor_timeout_secs: 2700,
+                empty_response_no_retry_after_secs: 600,
+                stream_heartbeat_secs: 30,
             },
             ..Default::default()
         };
