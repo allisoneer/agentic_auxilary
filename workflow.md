@@ -228,10 +228,11 @@ Need to do something?
 - Review tools (`review_*`) are **not available** to the Normal agent.
 - Workflow (fileless, cache-based):
   1. `review_diff_snapshot` generates a paginated git diff via pure git2, caches it server-side, and returns a `diff_handle`
-  2. Four parallel `review_run(diff_handle, lens)` calls execute lens reviewers (security/correctness/maintainability/testing)
+  2. Six parallel `review_run(diff_handle, lens)` calls execute lens reviewers (security/correctness/maintainability/testing/simplification/completeness)
   3. Diff content is embedded directly in reviewer prompts (no `review.diff` file created)
-  4. Findings are consolidated, deduped, and written as a thoughts artifact
-  5. `just thoughts_sync` is executed
+  4. Completeness is a required lens; simplification is advisory-only and excluded from verdict gating
+  5. Findings are consolidated, deduped, and written as a thoughts artifact
+  6. `just thoughts_sync` is executed
 
 ### Review Tools
 
@@ -244,7 +245,8 @@ Need to do something?
 ### Tool boundaries
 
 - Review orchestrator agent: may read files, run `just thoughts_sync`, call `review_*` tools, and write the artifact.
-- Reviewer sub-agents: **Read + cli_ls/cli_grep/cli_glob only** (no git/bash/write/edit/just_execute).
+- Non-Completeness reviewer sub-agents: **Read + Grep + Glob + cli_ls only** (no git/bash/write/edit/just_execute).
+- Completeness reviewer sub-agent: same narrow profile plus direct `ask_agent` access for exploration (still no git/bash/write/edit/just_execute).
 
 ---
 

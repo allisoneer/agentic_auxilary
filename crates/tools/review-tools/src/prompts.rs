@@ -67,17 +67,34 @@ Testing lens focus:
 - Determinism issues in tests
 ";
 
+/// Simplification lens focus areas.
+pub const STRATEGY_REVIEW_SIMPLIFICATION: &str = r"
+Simplification lens focus (ADVISORY):
+- Opportunities to reduce complexity and cognitive load
+- Remove redundancy, simplify control flow
+- Prefer small, safe refactors; avoid speculative rewrites
+";
+
+/// Completeness lens focus areas.
+pub const STRATEGY_REVIEW_COMPLETENESS: &str = r"
+Completeness lens focus (REQUIRED):
+- Missing related updates: docs, tests, config, error handling, metrics
+- Cross-file consistency: types, callers, feature flags, migrations
+- File-level gaps are allowed: use line=0 with a clear explanation
+- You may use `ask_agent` for broader exploration when needed
+";
+
 /// JSON output template embedded in prompts.
 pub const JSON_TEMPLATE: &str = r#"
 Return ONLY this JSON structure (no markdown fences):
 {
-  "lens": "security|correctness|maintainability|testing",
+  "lens": "security|correctness|maintainability|testing|simplification|completeness",
   "verdict": "approved|needs_changes",
   "findings": [
     {
       "file": "path/to/file",
       "line": 0,
-      "category": "security|correctness|maintainability|testing",
+      "category": "security|correctness|maintainability|testing|simplification|completeness",
       "severity": "critical|high|medium|low",
       "confidence": "high|medium",
       "title": "short title",
@@ -107,6 +124,8 @@ pub fn compose_system_prompt(lens: ReviewLens) -> String {
         ReviewLens::Correctness => STRATEGY_REVIEW_CORRECTNESS,
         ReviewLens::Maintainability => STRATEGY_REVIEW_MAINTAINABILITY,
         ReviewLens::Testing => STRATEGY_REVIEW_TESTING,
+        ReviewLens::Simplification => STRATEGY_REVIEW_SIMPLIFICATION,
+        ReviewLens::Completeness => STRATEGY_REVIEW_COMPLETENESS,
     };
 
     [
@@ -126,6 +145,8 @@ pub fn compose_user_prompt(lens: ReviewLens, diff_content: &str, focus: Option<&
         ReviewLens::Correctness => "correctness",
         ReviewLens::Maintainability => "maintainability",
         ReviewLens::Testing => "testing",
+        ReviewLens::Simplification => "simplification",
+        ReviewLens::Completeness => "completeness",
     };
 
     format!(
@@ -166,11 +187,19 @@ mod tests {
             ReviewLens::Correctness,
             ReviewLens::Maintainability,
             ReviewLens::Testing,
+            ReviewLens::Simplification,
+            ReviewLens::Completeness,
         ] {
             let prompt = compose_system_prompt(lens);
             assert!(!prompt.is_empty());
             assert!(prompt.contains("lens focus"));
         }
+    }
+
+    #[test]
+    fn json_template_includes_new_lenses() {
+        assert!(JSON_TEMPLATE.contains("simplification"));
+        assert!(JSON_TEMPLATE.contains("completeness"));
     }
 
     #[test]

@@ -24,7 +24,9 @@ use prompts::compose_system_prompt;
 use prompts::compose_user_prompt;
 use reviewer::ClaudeCliRunner;
 use reviewer::RETRY_DELAYS;
+use reviewer::ReviewerCapabilityProfile;
 use reviewer::ReviewerRunner;
+use reviewer::capability_profile_for_lens;
 use types::DEFAULT_PAGE_SIZE_LINES;
 use types::DiffPageIndex;
 use types::DiffPaging;
@@ -225,10 +227,11 @@ impl ReviewTools {
         // Compose prompts
         let system_prompt = compose_system_prompt(input.lens);
         let user_prompt = compose_user_prompt(input.lens, &combined_diff, input.focus.as_deref());
+        let profile = capability_profile_for_lens(input.lens);
 
         // Run reviewer with retry
         let raw1 = self
-            .run_with_retry(&system_prompt, &user_prompt, ctx)
+            .run_with_retry(profile, &system_prompt, &user_prompt, ctx)
             .await?;
 
         // Parse attempt #1
@@ -261,7 +264,7 @@ impl ReviewTools {
                 );
 
                 let raw2 = self
-                    .run_with_retry(&system_prompt, &repair_prompt, ctx)
+                    .run_with_retry(profile, &system_prompt, &repair_prompt, ctx)
                     .await?;
                 parse_and_validate_report(&raw2, input.lens)?
             }
@@ -329,7 +332,7 @@ impl ReviewTools {
         );
 
         let raw2 = self
-            .run_with_retry(&system_prompt, &grounding_repair_prompt, ctx)
+            .run_with_retry(profile, &system_prompt, &grounding_repair_prompt, ctx)
             .await?;
         let mut report2 = parse_and_validate_report(&raw2, input.lens)?;
 
@@ -382,6 +385,7 @@ impl ReviewTools {
     /// Run reviewer with retry logic.
     async fn run_with_retry(
         &self,
+        profile: ReviewerCapabilityProfile,
         system_prompt: &str,
         user_prompt: &str,
         ctx: &ToolContext,
@@ -394,6 +398,7 @@ impl ReviewTools {
             match self
                 .runner
                 .run_text(
+                    profile,
                     system_prompt.to_string(),
                     user_prompt.to_string(),
                     ctx.clone(),

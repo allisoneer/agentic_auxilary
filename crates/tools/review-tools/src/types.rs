@@ -183,6 +183,8 @@ pub enum ReviewLens {
     Correctness,
     Maintainability,
     Testing,
+    Simplification,
+    Completeness,
 }
 
 /// Overall verdict from the review.
@@ -300,6 +302,7 @@ impl TextFormat for ReviewRunOutput {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn default_mode_is_default() {
@@ -310,5 +313,17 @@ mod tests {
     #[test]
     fn default_page_size_is_800() {
         assert_eq!(DEFAULT_PAGE_SIZE_LINES, 800);
+    }
+
+    #[test]
+    fn review_lens_serializes_new_variants_as_snake_case() {
+        assert_eq!(
+            serde_json::to_value(ReviewLens::Simplification).unwrap(),
+            json!("simplification")
+        );
+        assert_eq!(
+            serde_json::to_value(ReviewLens::Completeness).unwrap(),
+            json!("completeness")
+        );
     }
 }

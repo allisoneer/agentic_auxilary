@@ -325,6 +325,32 @@ mod tests {
     }
 
     #[test]
+    fn grounding_allows_line_zero_for_completeness_missing_file() {
+        let dir = tempdir().unwrap();
+        let repo = dir.path();
+
+        let report = ReviewReport {
+            lens: ReviewLens::Completeness,
+            verdict: ReviewVerdict::Approved,
+            findings: vec![ReviewFinding {
+                file: "does_not_exist.rs".into(),
+                line: 0,
+                category: ReviewLens::Completeness,
+                severity: Severity::Medium,
+                confidence: Confidence::Medium,
+                title: "Missing related update".into(),
+                evidence: "diff implies other updates needed".into(),
+                suggested_fix: "update related file".into(),
+                caveat: Some("file-level completeness check".into()),
+            }],
+            notes: vec![],
+        };
+
+        let issues = collect_grounding_issues(repo, &report).unwrap();
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn fallback_sets_invalid_lines_to_zero() {
         let mut report = ReviewReport {
             lens: ReviewLens::Security,
