@@ -8,6 +8,28 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
+struct EnvVarGuard {
+    key: &'static str,
+    prev: Option<String>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let prev = std::env::var(key).ok();
+        unsafe { std::env::set_var(key, value) };
+        Self { key, prev }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.prev {
+            Some(prev) => unsafe { std::env::set_var(self.key, prev) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
+    }
+}
+
 #[tokio::test]
 #[serial(env)]
 async fn orclient_honors_api_base_url() {
@@ -28,7 +50,7 @@ async fn orclient_honors_api_base_url() {
         .mount(&server)
         .await;
 
-    unsafe { std::env::set_var("OPENROUTER_API_KEY", "test") };
+    let _api_key_guard = EnvVarGuard::set("OPENROUTER_API_KEY", "test");
 
     let client =
         gpt5_reasoner::client::OrClient::from_env(Some(&format!("{}/api/v1", server.uri())))
