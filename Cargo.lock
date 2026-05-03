@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-bin"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "agentic-config",
  "agentic-tools-utils",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-config"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "atomicwrites",
@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.19"
+version = "0.2.20"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.3.16"
+version = "0.3.17"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -2868,7 +2868,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -4334,7 +4334,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -7192,7 +7192,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
