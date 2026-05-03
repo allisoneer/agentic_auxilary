@@ -30,6 +30,9 @@ These items have dependencies and should be done in order.
 
 ## To plan/design:
 
+### Optional config escape hatch for project-wide orchestrator session listing
+- Consider an `agentic.toml` boolean to opt orchestrator session browsing into project-wide listing instead of launch-directory scope. Deferred for now because it feels like scope creep and probably not worth this migration PR.
+
 ### SQLite migration for thoughts (blocked by: config system, which is mostly done now)
 
 - Current file-based structure (thoughts/{branch}/ with research/, plans/, artifacts/, logs/) would become database tables. Key questions:

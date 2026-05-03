@@ -8,7 +8,7 @@ use std::fs;
 
 pub(crate) const MISE_PATH: &str = "mise.toml";
 
-const TOOL_PINS_BLOCK: &str = "claude = \"2.1.116\"\n\"npm:opencode-ai\" = \"1.14.19\"";
+const TOOL_PINS_BLOCK: &str = "claude = \"2.1.116\"\n\"npm:opencode-ai\" = \"1.14.33\"";
 
 const PLATFORM_TARGETS: [(&str, &str); 4] = [
     ("linux-x64", "x86_64-unknown-linux-gnu"),
@@ -167,7 +167,7 @@ macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
 [tools.opencode-orchestrator-mcp]
-version = "0.4.7"
+version = "0.5.0"
 version_prefix = "opencode-orchestrator-mcp-v"
 
 [tools.opencode-orchestrator-mcp.platforms]
@@ -198,7 +198,7 @@ macos-arm64 = { asset_pattern = "opencode-orchestrator-mcp-aarch64-apple-darwin.
             ResolvedBinarySpec {
                 tool_name: "opencode-orchestrator-mcp",
                 version_prefix: "opencode-orchestrator-mcp-v",
-                version: "0.4.7".to_string(),
+                version: "0.5.0".to_string(),
             },
         ]
     }

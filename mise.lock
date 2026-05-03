@@ -862,6 +862,10 @@ backend = "npm:opencode-ai"
 version = "1.14.19"
 backend = "npm:opencode-ai"
 
+[[tools."npm:opencode-ai"]]
+version = "1.14.33"
+backend = "npm:opencode-ai"
+
 [[tools.opencode-orchestrator-mcp]]
 version = "0.4.7"
 backend = "github:allisoneer/agentic_auxilary"
