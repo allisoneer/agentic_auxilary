@@ -366,19 +366,13 @@ async fn test_files_list() {
 
     let client = build_client().await;
 
-    // List files in project
-    // Note: This endpoint may require specific project context or return 400
-    // if not properly configured
-    match client.files().list().await {
-        Ok(files) => {
-            // Should have some files in a project directory
-            let _ = files.len();
-        }
-        Err(e) => {
-            // Some OpenCode configurations may not support this endpoint
-            println!("Files list not available: {e:?}");
-        }
-    }
+    let files = client
+        .files()
+        .list(".")
+        .await
+        .expect("Files list should succeed with required path query");
+
+    let _ = files.len();
 }
 
 /// Test file status.
