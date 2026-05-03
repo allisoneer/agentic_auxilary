@@ -301,6 +301,11 @@
       "remote": "https://github.com/anomalyco/opencode",
       "description": "OpenCode latest release reference for upgrade research: v1.14.19, release notes https://github.com/anomalyco/opencode/releases/tag/v1.14.19 . Migration notes: v1.4.0 introduced SDK breaking changes to diff payloads and UserMessage variant nesting; v1.14.19 renamed compaction setting to preserve_recent_tokens and fixed compiled-binary startup circular schema issue.",
       "ref": "refs/tags/v1.14.19"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "OpenCode v1.14.33 release for SDK upgrade research from v1.14.19 → v1.14.33. Release notes: https://github.com/anomalyco/opencode/releases/tag/v1.14.33",
+      "ref": "refs/tags/v1.14.33"
     }
   ]
 }
