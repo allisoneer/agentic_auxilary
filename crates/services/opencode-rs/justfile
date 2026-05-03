@@ -33,3 +33,13 @@ integration-test-bunx-verbose:
     OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.33" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration -- --ignored --nocapture --test-threads=1
+
+# Targeted fallback for MCP timeouts on the full bunx suite
+[no-exit-message]
+integration-test-bunx-session-init:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    OPENCODE_BINARY=bunx \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.33" \
+    OPENCODE_INTEGRATION=1 \
+    cargo test -p opencode_rs --features server --test integration test_session_init_required_body -- --ignored --nocapture
