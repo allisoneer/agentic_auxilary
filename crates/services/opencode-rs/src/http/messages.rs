@@ -334,7 +334,9 @@ mod tests {
             .shell(
                 "s1",
                 &ShellRequest {
+                    agent: "build".to_string(),
                     command: "echo hello".to_string(),
+                    message_id: None,
                     model: None,
                 },
             )
@@ -592,7 +594,9 @@ mod tests {
             .shell(
                 "s1",
                 &ShellRequest {
+                    agent: "build".to_string(),
                     command: String::new(),
+                    message_id: None,
                     model: None,
                 },
             )

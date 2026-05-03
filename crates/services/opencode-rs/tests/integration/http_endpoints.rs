@@ -515,14 +515,25 @@ async fn test_shell_returns_info_and_parts() {
         .shell(
             &session.id,
             &ShellRequest {
+                agent: "build".to_string(),
                 command: "echo hello".to_string(),
+                message_id: None,
                 model: None,
             },
         )
         .await;
-    println!("shell result: {shell:?}");
 
     let _ = client.sessions().delete(&session.id).await;
+
+    let shell = shell.expect("Shell call should succeed with upstream-compatible request shape");
+    assert!(
+        !shell.info.id.is_empty(),
+        "shell response should include info.id"
+    );
+    assert!(
+        !shell.parts.is_empty(),
+        "shell response should include at least one part"
+    );
 }
 
 /// Test session with permission ruleset.
