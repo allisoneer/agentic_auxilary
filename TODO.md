@@ -155,7 +155,6 @@ project. Either than or tooling for interacting with cargo cache
 in a clean/streamlined abstraction. Probably both would be ideal
 long term.
 
-- TODO(2): `gpt5_reasoner`: `reasoning.api_base_url` / `AGENTIC_REASONING_API_BASE_URL` exists in config but the client hardcodes OpenRouter base URL (see `crates/tools/gpt5-reasoner/src/client.rs`).
 - TODO(2): `thoughts`: `status --detailed` flag is accepted but currently has no effect (unused parameter in `apps/thoughts/src/commands/status.rs`).
 - TODO(2): `thoughts`: `sync` code comment claims "repository-aware sync" but behavior does not filter by repo (see `apps/thoughts/src/commands/sync.rs`).
 - TODO(2): `agentic-bin`: missing `[package.metadata.binstall]` unlike other shipped binaries (see `apps/agentic/Cargo.toml`).

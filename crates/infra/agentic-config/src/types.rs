@@ -115,6 +115,12 @@ pub struct ReasoningConfig {
     /// Optional token limit for reasoning requests.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token_limit: Option<u32>,
+    /// Executor timeout in seconds.
+    pub executor_timeout_secs: u64,
+    /// Suppress empty-response retry when attempt duration exceeds this threshold.
+    pub empty_response_no_retry_after_secs: u64,
+    /// Heartbeat cadence for executor streaming logs.
+    pub stream_heartbeat_secs: u64,
 }
 
 impl Default for ReasoningConfig {
@@ -125,6 +131,9 @@ impl Default for ReasoningConfig {
             reasoning_effort: None,
             api_base_url: None,
             token_limit: None,
+            executor_timeout_secs: 2700,
+            empty_response_no_retry_after_secs: 600,
+            stream_heartbeat_secs: 30,
         }
     }
 }
