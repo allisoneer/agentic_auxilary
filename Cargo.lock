@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.18"
+version = "0.2.19"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures",
  "inventory",
@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-mcp"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "agentic-tools-core",
  "futures",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.3.15"
+version = "0.3.16"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -1028,7 +1028,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "claudecode"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "chrono",
  "dirs",
@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "coding_agent_tools"
-version = "0.3.9"
+version = "0.4.0"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -2868,7 +2868,7 @@ dependencies = [
 
 [[package]]
 name = "gpt5_reasoner"
-version = "0.8.6"
+version = "0.9.0"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -3771,7 +3771,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -4333,7 +4333,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -4750,7 +4750,7 @@ dependencies = [
 
 [[package]]
 name = "pr_comments"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-mcp",
@@ -5333,7 +5333,7 @@ dependencies = [
 
 [[package]]
 name = "review_tools"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "agentic-tools-core",
  "agentic-tools-utils",
@@ -6328,7 +6328,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-bin"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "agentic-tools-utils",
  "anyhow",
@@ -6349,7 +6349,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-mcp-tools"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -6366,7 +6366,7 @@ dependencies = [
 
 [[package]]
 name = "thoughts-tool"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "agentic-tools-core",
  "agentic_logging",
@@ -7191,7 +7191,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
