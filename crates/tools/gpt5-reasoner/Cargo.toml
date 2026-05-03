@@ -41,6 +41,7 @@ path = "src/lib.rs"
 tempfile = "3"
 tokio-test = "0.4"
 serial_test = "3"
+wiremock = "0.6"
 
 [package.metadata.repo]
 role = "tool-lib"

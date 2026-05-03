@@ -22,12 +22,70 @@ use agentic_logging::LogWriter;
 use agentic_logging::ToolCallRecord;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
+use async_openai::error::OpenAIError;
 use async_openai::types::chat::ChatCompletionRequestMessage;
 use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
+use async_openai::types::chat::ChatCompletionStreamOptions;
+use async_openai::types::chat::CompletionUsage;
 use async_openai::types::chat::CreateChatCompletionRequestArgs;
 use async_openai::types::chat::ReasoningEffort;
+use futures::StreamExt;
 use thoughts_tool::DocumentType;
 use thoughts_tool::write_document;
+
+const PARTIAL_REASONING_MARKER: &str = "> **Warning:** Partial response (executor stream interrupted). Content below may be incomplete.\n\n";
+
+const PARTIAL_PLAN_MARKER: &str = "**WARNING: INCOMPLETE PLAN**\nThe plan below may be incomplete because the executor stream ended unexpectedly.\n\n---\n\n";
+
+#[derive(Debug)]
+enum ExecutorStreamError {
+    Cancelled,
+    OpenAI(OpenAIError),
+}
+
+#[derive(Debug, Default)]
+struct ExecutorStreamState {
+    content: String,
+    usage: Option<CompletionUsage>,
+    chunks: usize,
+    first_content_ms: Option<u128>,
+}
+
+impl ExecutorStreamState {
+    fn has_content(&self) -> bool {
+        !self.content.trim().is_empty()
+    }
+}
+
+fn prepend_partial_output(prompt_type: &PromptType, content: &str) -> String {
+    match prompt_type {
+        PromptType::Reasoning => format!("{PARTIAL_REASONING_MARKER}{content}"),
+        PromptType::Plan => format!("{PARTIAL_PLAN_MARKER}{content}"),
+    }
+}
+
+fn executor_stream_summary(
+    attempt: usize,
+    duration: std::time::Duration,
+    state: &ExecutorStreamState,
+    partial: bool,
+    timeout: bool,
+    empty: bool,
+    stream_error: Option<&str>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "attempt": attempt + 1,
+        "duration_ms": duration.as_millis(),
+        "chunks": state.chunks,
+        "chars": state.content.len(),
+        "first_content_ms": state.first_content_ms,
+        "usage_present": state.usage.is_some(),
+        "partial": partial,
+        "timeout": timeout,
+        "empty": empty,
+        "stream_error": stream_error,
+    })
+}
 
 /// Parse reasoning effort string to enum, defaulting to Xhigh.
 fn parse_reasoning_effort(v: Option<&str>) -> ReasoningEffort {
@@ -78,7 +136,8 @@ pub async fn gpt5_reasoner_impl(
                       response_file: Option<String>,
                       model: Option<String>,
                       token_usage: Option<agentic_logging::TokenUsage>,
-                      files_count: usize| {
+                      files_count: usize,
+                      summary: Option<serde_json::Value>| {
         if let Some(ref w) = writer {
             let (completed_at, duration_ms) = timer.finish();
             // TODO(2): Consider truncating large payloads (prompt, directories) to reduce log
@@ -103,7 +162,7 @@ pub async fn gpt5_reasoner_impl(
                 error,
                 model,
                 token_usage,
-                summary: None,
+                summary,
             };
             if let Err(e) = w.append_jsonl(&record) {
                 tracing::warn!("Failed to append JSONL log: {}", e);
@@ -117,7 +176,7 @@ pub async fn gpt5_reasoner_impl(
             Ok(v) => v,
             Err(e) => {
                 let msg = format!("stage=expand_directories: {}", e);
-                log_record(false, Some(msg), None, None, None, files.len());
+                log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(e));
             }
         };
@@ -165,7 +224,7 @@ pub async fn gpt5_reasoner_impl(
     tracing::info!("Pre-validating {} file(s) before optimizer", files.len());
     if let Err(e) = precheck_files(&files) {
         let msg = format!("stage=precheck_files: {}", e);
-        log_record(false, Some(msg), None, None, None, files.len());
+        log_record(false, Some(msg), None, None, None, files.len(), None);
         return Err(e);
     }
     // ===== END NEW =====
@@ -178,7 +237,7 @@ pub async fn gpt5_reasoner_impl(
     }
 
     // Load env OpenRouter key (CLI already optionally did dotenv)
-    let client = OrClient::from_env().map_err(ToolError::from)?;
+    let client = OrClient::from_env(cfg.api_base_url.as_deref()).map_err(ToolError::from)?;
 
     // Step 1: optimize with retry on validation errors
     let opt_model = cfg.optimizer_model.clone();
@@ -216,7 +275,7 @@ pub async fn gpt5_reasoner_impl(
             Ok(v) => v,
             Err(e) => {
                 let msg = format!("stage=optimizer_call: {}", e);
-                log_record(false, Some(msg), None, None, None, files.len());
+                log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(e);
             }
         };
@@ -252,7 +311,7 @@ pub async fn gpt5_reasoner_impl(
                 };
 
                 let msg = format!("stage={}: {}", stage, e);
-                log_record(false, Some(msg), None, None, None, files.len());
+                log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(e));
             }
         }
@@ -278,7 +337,7 @@ pub async fn gpt5_reasoner_impl(
         Ok(v) => v,
         Err(e) => {
             let msg = format!("stage=inject_files: {}", e);
-            log_record(false, Some(msg), None, None, None, files.len());
+            log_record(false, Some(msg), None, None, None, files.len(), None);
             return Err(ToolError::from(e));
         }
     };
@@ -290,7 +349,7 @@ pub async fn gpt5_reasoner_impl(
         Ok(v) => v,
         Err(e) => {
             let msg = format!("stage=count_tokens: {}", e);
-            log_record(false, Some(msg), None, None, None, files.len());
+            log_record(false, Some(msg), None, None, None, files.len(), None);
             return Err(ToolError::from(e));
         }
     };
@@ -302,9 +361,75 @@ pub async fn gpt5_reasoner_impl(
 
     if let Err(e) = enforce_limit(&final_prompt) {
         let msg = format!("stage=enforce_limit: {}", e);
-        log_record(false, Some(msg), None, None, None, files.len());
+        log_record(false, Some(msg), None, None, None, files.len(), None);
         return Err(ToolError::from(e));
     }
+
+    let finalize_executor_success = |content: String,
+                                     usage: Option<agentic_logging::TokenUsage>,
+                                     partial: bool,
+                                     summary: Option<serde_json::Value>|
+     -> std::result::Result<String, ToolError> {
+        let rendered = if partial {
+            prepend_partial_output(&prompt_type, &content)
+        } else {
+            content
+        };
+
+        let mut response_file = None;
+        let returned: String;
+
+        match prompt_type {
+            PromptType::Plan => {
+                if let Some(ref name) = output_filename {
+                    match write_document(&DocumentType::Plan, name, &rendered) {
+                        Ok(ok) => {
+                            returned = ok.path;
+                        }
+                        Err(e) => {
+                            let msg = format!("stage=write_plan_document: {}", e);
+                            log_record(
+                                false,
+                                Some(msg),
+                                None,
+                                Some(cfg.executor_model.clone()),
+                                None,
+                                files.len(),
+                                summary,
+                            );
+                            return Err(ToolError::internal(e.to_string()));
+                        }
+                    }
+                } else {
+                    returned = rendered;
+                }
+            }
+            PromptType::Reasoning => {
+                if let Some(ref w) = writer {
+                    let (completed_at, _) = timer.finish();
+                    if let Ok(md_name) =
+                        w.write_markdown_response(completed_at, &timer.call_id, &rendered)
+                        && !md_name.is_empty()
+                    {
+                        response_file = Some(md_name);
+                    }
+                }
+                returned = rendered;
+            }
+        }
+
+        log_record(
+            true,
+            None,
+            response_file,
+            Some(cfg.executor_model.clone()),
+            usage,
+            files.len(),
+            summary,
+        );
+
+        Ok(returned)
+    };
 
     // Execute with application-level retries for network/transport errors
     const EXECUTOR_RETRIES: usize = 1;
@@ -340,7 +465,7 @@ pub async fn gpt5_reasoner_impl(
             Ok(m) => m,
             Err(e) => {
                 let msg = format!("stage=build_chat_request: user message build failed: {}", e);
-                log_record(false, Some(msg), None, None, None, files.len());
+                log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(ReasonerError::from(e)));
             }
         };
@@ -350,178 +475,271 @@ pub async fn gpt5_reasoner_impl(
             .messages([ChatCompletionRequestMessage::User(user_msg)])
             .reasoning_effort(reasoning_effort.clone())
             .temperature(0.2)
+            .stream_options(ChatCompletionStreamOptions {
+                include_usage: Some(true),
+                include_obfuscation: None,
+            })
             .build()
         {
             Ok(r) => r,
             Err(e) => {
                 let msg = format!("stage=build_chat_request: request build failed: {}", e);
-                log_record(false, Some(msg), None, None, None, files.len());
+                log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(ReasonerError::from(e)));
             }
         };
 
-        let start = std::time::Instant::now();
-        let chat = client.client.chat();
-        let executor_response = tokio::select! {
-            () = ctx.cancelled() => return Err(ToolError::cancelled(None)),
-            response = chat.create(req) => response,
-        };
+        let attempt_started = std::time::Instant::now();
+        let executor_timeout = std::time::Duration::from_secs(cfg.executor_timeout_secs);
+        let heartbeat = std::time::Duration::from_secs(cfg.stream_heartbeat_secs);
+        let mut stream_state = ExecutorStreamState::default();
 
-        match executor_response {
-            Ok(resp) => {
-                let duration = start.elapsed();
-                tracing::debug!("Executor API succeeded in {:?}", duration);
+        let stream_result = tokio::time::timeout(executor_timeout, async {
+            let chat = client.client.chat();
+            let mut stream = tokio::select! {
+                () = ctx.cancelled() => return Err(ExecutorStreamError::Cancelled),
+                response = chat.create_stream(req) => response.map_err(ExecutorStreamError::OpenAI)?,
+            };
+            let mut heartbeat_sleep =
+                (heartbeat.as_secs() > 0).then(|| Box::pin(tokio::time::sleep(heartbeat)));
 
-                // NEW: log response metadata + classify emptiness
-                let empty_kind = crate::logging::log_chat_response("executor", &resp, duration);
-
-                // Extract content option
-                let content_opt = resp.choices.first().and_then(|c| c.message.content.clone());
-
-                // Determine if content is effectively empty
-                let is_effectively_empty = match &content_opt {
-                    None => true,
-                    Some(s) if s.is_empty() => true,
-                    Some(s) if s.trim().is_empty() => true,
-                    _ => false,
+            loop {
+                let item = if let Some(ref mut heartbeat_sleep) = heartbeat_sleep {
+                    tokio::select! {
+                        () = ctx.cancelled() => return Err(ExecutorStreamError::Cancelled),
+                        _ = heartbeat_sleep.as_mut() => {
+                            tracing::debug!(
+                                elapsed_ms = attempt_started.elapsed().as_millis(),
+                                chars_so_far = stream_state.content.len(),
+                                chunks = stream_state.chunks,
+                                "executor stream heartbeat"
+                            );
+                            heartbeat_sleep
+                                .as_mut()
+                                .reset(tokio::time::Instant::now() + heartbeat);
+                            continue;
+                        }
+                        item = stream.next() => item,
+                    }
+                } else {
+                    tokio::select! {
+                        () = ctx.cancelled() => return Err(ExecutorStreamError::Cancelled),
+                        item = stream.next() => item,
+                    }
                 };
 
-                if is_effectively_empty {
-                    // Warn with specific classification if available
-                    if let Some(kind) = empty_kind {
-                        crate::logging::log_empty_warning("executor", kind, &resp);
-                    } else {
-                        tracing::warn!("Executor received empty content (unclassified)");
-                    }
+                match item {
+                    None => break,
+                    Some(Ok(chunk)) => {
+                        stream_state.chunks += 1;
 
-                    // NEW: Treat as retryable anomaly once, then return helpful error
-                    if attempt < EXECUTOR_RETRIES {
+                        if let Some(usage) = chunk.usage {
+                            stream_state.usage = Some(usage);
+                        }
+
+                        for choice in chunk.choices {
+                            if let Some(delta) = choice.delta.content
+                                && !delta.is_empty()
+                            {
+                                if stream_state.first_content_ms.is_none() {
+                                    stream_state.first_content_ms =
+                                        Some(attempt_started.elapsed().as_millis());
+                                }
+                                stream_state.content.push_str(&delta);
+                            }
+                        }
+
+                        if let Some(ref mut heartbeat_sleep) = heartbeat_sleep {
+                            heartbeat_sleep
+                                .as_mut()
+                                .reset(tokio::time::Instant::now() + heartbeat);
+                        }
+                    }
+                    Some(Err(e)) => return Err(ExecutorStreamError::OpenAI(e)),
+                }
+            }
+
+            Ok(())
+        })
+        .await;
+
+        let duration = attempt_started.elapsed();
+        let usage = stream_state
+            .usage
+            .as_ref()
+            .map(crate::logging::token_usage_from_completion_usage);
+
+        match stream_result {
+            Ok(Ok(())) => {
+                tracing::debug!(
+                    duration_ms = duration.as_millis(),
+                    chunks = stream_state.chunks,
+                    chars = stream_state.content.len(),
+                    "Executor stream completed"
+                );
+
+                if !stream_state.has_content() {
+                    let summary = Some(executor_stream_summary(
+                        attempt,
+                        duration,
+                        &stream_state,
+                        false,
+                        false,
+                        true,
+                        None,
+                    ));
+                    let attempt_secs = duration.as_secs();
+
+                    if attempt == 0 && attempt_secs <= cfg.empty_response_no_retry_after_secs {
                         tracing::warn!(
-                            "Empty response from executor model {}; retrying (attempt {} of {})",
-                            executor_model,
-                            attempt + 2,
-                            EXECUTOR_RETRIES + 1
+                            duration_secs = attempt_secs,
+                            threshold_secs = cfg.empty_response_no_retry_after_secs,
+                            "Executor stream completed empty; retrying once"
                         );
                         continue;
                     }
 
-                    // Final failure after retry
-                    let err_msg = format!(
-                        "Reasoning model returned no response after {} attempt(s). \
-                         Possible causes: content filtering, prompt issues, or API anomaly.",
-                        attempt + 1
-                    );
+                    let err_msg = if attempt == 0
+                        && attempt_secs > cfg.empty_response_no_retry_after_secs
+                    {
+                        format!(
+                            "Reasoning model returned no response after a long attempt ({}s); retry suppressed.",
+                            attempt_secs
+                        )
+                    } else {
+                        format!(
+                            "Reasoning model returned no response after {} attempt(s). Possible causes: content filtering, prompt issues, or API anomaly.",
+                            attempt + 1
+                        )
+                    };
+
                     tracing::error!("{}", err_msg);
                     log_record(
                         false,
                         Some(format!("stage=empty_response: {}", err_msg)),
                         None,
                         Some(executor_model.to_string()),
-                        None,
+                        usage,
                         files.len(),
+                        summary,
                     );
-                    return Err(ToolError::Internal(
-                        "Reasoning model returned no response after retry. \
-                         Check logs for response metadata (id, finish_reason, usage). \
-                         Possible causes: content filtering, prompt issues, or API anomaly."
-                            .to_string(),
-                    ));
+                    return Err(ToolError::internal(err_msg));
                 }
 
-                // Non-empty content → success
-                let content = content_opt.expect("guarded by is_effectively_empty=false");
-
-                // Extract token usage (includes reasoning_tokens when present)
-                let usage = crate::logging::extract_token_usage(&resp);
-
-                let mut response_file = None;
-                let returned: String;
-
-                match prompt_type {
-                    PromptType::Plan => {
-                        if let Some(ref name) = output_filename {
-                            // Write plan to plans/ directory
-                            match write_document(&DocumentType::Plan, name, &content) {
-                                Ok(ok) => {
-                                    returned = ok.path;
-                                }
-                                Err(e) => {
-                                    let msg = format!("stage=write_plan_document: {}", e);
-                                    log_record(
-                                        false,
-                                        Some(msg),
-                                        None,
-                                        Some(executor_model.to_string()),
-                                        None,
-                                        files.len(),
-                                    );
-                                    // TODO(3): Use ErrorCode::IoError instead of internal() for better error semantics
-                                    return Err(ToolError::internal(e.to_string()));
-                                }
-                            }
-                        } else {
-                            // Return content directly
-                            returned = content;
-                        }
-                    }
-                    PromptType::Reasoning => {
-                        // Write response markdown to logs/ daily dir (best-effort)
-                        // TODO(2): timer.finish() is non-idempotent (returns fresh Utc::now() each call).
-                        // The log_record closure also calls timer.finish() at line 57, causing timestamp
-                        // drift between the markdown filename and JSONL log. Refactor to call finish()
-                        // once and pass (completed_at, duration_ms) to log_record as params.
-                        if let Some(ref w) = writer {
-                            let (completed_at, _) = timer.finish();
-                            if let Ok(md_name) =
-                                w.write_markdown_response(completed_at, &timer.call_id, &content)
-                                && !md_name.is_empty()
-                            {
-                                response_file = Some(md_name);
-                            }
-                        }
-                        returned = content;
-                    }
-                }
-
-                // Append JSONL via closure (best-effort)
-                log_record(
-                    true,
+                let summary = Some(executor_stream_summary(
+                    attempt,
+                    duration,
+                    &stream_state,
+                    false,
+                    false,
+                    false,
                     None,
-                    response_file,
-                    Some(executor_model.to_string()),
-                    usage,
-                    files.len(),
-                );
-
-                return Ok(returned);
+                ));
+                return finalize_executor_success(stream_state.content, usage, false, summary);
             }
-            Err(e) => {
+            Ok(Err(ExecutorStreamError::Cancelled)) => return Err(ToolError::cancelled(None)),
+            Ok(Err(ExecutorStreamError::OpenAI(e))) => {
+                let error_text = e.to_string();
+                if stream_state.has_content() {
+                    tracing::warn!(
+                        error = %e,
+                        chars = stream_state.content.len(),
+                        chunks = stream_state.chunks,
+                        "Executor stream failed after partial content; salvaging"
+                    );
+                    let summary = Some(executor_stream_summary(
+                        attempt,
+                        duration,
+                        &stream_state,
+                        true,
+                        false,
+                        false,
+                        Some(&error_text),
+                    ));
+                    return finalize_executor_success(stream_state.content, usage, true, summary);
+                }
+
                 let retryable = crate::errors::is_retryable_app_level(&e);
                 if attempt < EXECUTOR_RETRIES && retryable {
-                    tracing::warn!("Executor call failed with retryable error: {e}; retrying...");
+                    tracing::warn!("Executor stream failed with retryable error: {e}; retrying...");
                     continue;
                 }
 
-                // Not retryable or retries exhausted
                 if retryable {
                     tracing::error!(
-                        "Executor call failed after {} attempts with retryable error: {}",
+                        "Executor stream failed after {} attempts with retryable error: {}",
                         attempt + 1,
                         e
                     );
                 } else {
-                    tracing::error!("Executor call failed with non-retryable error: {}", e);
+                    tracing::error!("Executor stream failed with non-retryable error: {}", e);
                 }
+
+                let summary = Some(executor_stream_summary(
+                    attempt,
+                    duration,
+                    &stream_state,
+                    false,
+                    false,
+                    false,
+                    Some(&error_text),
+                ));
                 let msg = format!("stage=chat_execute: {}", e);
                 log_record(
                     false,
                     Some(msg),
                     None,
                     Some(executor_model.to_string()),
-                    None,
+                    usage,
                     files.len(),
+                    summary,
                 );
                 return Err(ToolError::from(ReasonerError::from(e)));
+            }
+            Err(_) => {
+                if stream_state.has_content() {
+                    tracing::warn!(
+                        timeout_secs = cfg.executor_timeout_secs,
+                        chars = stream_state.content.len(),
+                        chunks = stream_state.chunks,
+                        "Executor stream timed out after partial content; salvaging"
+                    );
+                    let summary = Some(executor_stream_summary(
+                        attempt,
+                        duration,
+                        &stream_state,
+                        true,
+                        true,
+                        false,
+                        Some("executor_timeout"),
+                    ));
+                    return finalize_executor_success(stream_state.content, usage, true, summary);
+                }
+
+                let err_msg = format!(
+                    "Executor stream timed out after {} second(s) before any content arrived.",
+                    cfg.executor_timeout_secs
+                );
+                tracing::error!("{}", err_msg);
+                let summary = Some(executor_stream_summary(
+                    attempt,
+                    duration,
+                    &stream_state,
+                    false,
+                    true,
+                    false,
+                    Some("executor_timeout"),
+                ));
+                log_record(
+                    false,
+                    Some(format!("stage=executor_timeout: {}", err_msg)),
+                    None,
+                    Some(executor_model.to_string()),
+                    usage,
+                    files.len(),
+                    summary,
+                );
+                return Err(ToolError::external(err_msg));
             }
         }
     }
@@ -534,6 +752,7 @@ pub async fn gpt5_reasoner_impl(
         Some(executor_model.to_string()),
         None,
         files.len(),
+        None,
     );
     Err(ToolError::Internal(
         "Executor failed after all retries".to_string(),

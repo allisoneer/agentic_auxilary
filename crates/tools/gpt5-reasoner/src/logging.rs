@@ -1,21 +1,21 @@
 // crates/tools/gpt5-reasoner/src/logging.rs
 use agentic_logging::TokenUsage;
+use async_openai::types::chat::CompletionUsage;
 use async_openai::types::chat::CreateChatCompletionResponse;
 use std::time::Duration;
 
-/// Extract TokenUsage (including optional reasoning_tokens) from an OpenAI chat response.
-pub fn extract_token_usage(resp: &CreateChatCompletionResponse) -> Option<TokenUsage> {
-    let usage = resp.usage.as_ref()?;
+/// Convert streamed completion usage into the shared logging shape.
+pub fn token_usage_from_completion_usage(usage: &CompletionUsage) -> TokenUsage {
     let reasoning_tokens = usage
         .completion_tokens_details
         .as_ref()
         .and_then(|d| d.reasoning_tokens);
-    Some(TokenUsage {
+    TokenUsage {
         prompt: usage.prompt_tokens,
         completion: usage.completion_tokens,
         total: usage.total_tokens,
         reasoning_tokens,
-    })
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -191,31 +191,19 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_token_usage_parses_all_fields() {
+    fn test_token_usage_from_completion_usage_parses_all_fields() {
         let raw = serde_json::json!({
-            "id": "chatcmpl-1",
-            "object": "chat.completion",
-            "created": 1234567890,
-            "model": "openai/gpt-5.2",
-            "choices": [{
-                "index": 0,
-                "message": { "role": "assistant", "content": "ok" },
-                "logprobs": null,
-                "finish_reason": "stop"
-            }],
-            "usage": {
-                "prompt_tokens": 10,
-                "completion_tokens": 20,
-                "total_tokens": 30,
-                "completion_tokens_details": { "reasoning_tokens": 7 }
-            }
+            "prompt_tokens": 11,
+            "completion_tokens": 21,
+            "total_tokens": 32,
+            "completion_tokens_details": { "reasoning_tokens": 8 }
         });
-        let resp: CreateChatCompletionResponse = serde_json::from_value(raw).unwrap();
+        let usage: CompletionUsage = serde_json::from_value(raw).unwrap();
 
-        let usage = extract_token_usage(&resp).expect("usage present");
-        assert_eq!(usage.prompt, 10);
-        assert_eq!(usage.completion, 20);
-        assert_eq!(usage.total, 30);
-        assert_eq!(usage.reasoning_tokens, Some(7));
+        let parsed = token_usage_from_completion_usage(&usage);
+        assert_eq!(parsed.prompt, 11);
+        assert_eq!(parsed.completion, 21);
+        assert_eq!(parsed.total, 32);
+        assert_eq!(parsed.reasoning_tokens, Some(8));
     }
 }
