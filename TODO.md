@@ -3,6 +3,8 @@
 
 ## Researched / Ready for implementation:
 - Workspace lint inheritance rollout: Add `[lints] workspace = true` to all crates (currently only anthropic-async has it). Then add xtask policy check to `verify` command that ensures all workspace members have lint inheritance enabled. Prevents drift when new crates are added. Reference: OpenAI Codex repo has 100% lint inheritance across 58 crates.
+- TODO(1): `opencode-rs` shell live test still omits required `agent` in `ShellRequest`, causing `test_shell_returns_info_and_parts` to receive `agent: Invalid input: expected string, received undefined` (`crates/services/opencode-rs/tests/integration/http_endpoints.rs:470-493`, `crates/services/opencode-rs/src/types/message.rs:687-695`). Follow-up should update the request shape and test data to match upstream shell requirements.
+- TODO(1): `opencode-rs` `files.list()` still sends no required `path` query parameter, so `test_files_list` tolerates a 400 instead of exercising a valid `GET /file` call (`crates/services/opencode-rs/tests/integration.rs:359-380`, `crates/services/opencode-rs/src/http/files.rs:24-31`). Follow-up should add the required path-bearing API/test shape and verify against upstream.
 
 ## Blocked / Sequenced:
 These items have dependencies and should be done in order.
