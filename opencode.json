@@ -50,7 +50,7 @@
     },
     "OrchestratorOpenAI": {
       "prompt": "{file:./.opencode/orchestrator_sysprompt_gpt54.md}",
-      "model": "opencode/gpt-5.4",
+      "model": "openai/gpt-5.5",
       "mode": "primary",
       "permission": {
         "*": "deny",
@@ -77,7 +77,7 @@
     },
     "ReviewOpenAI": {
       "prompt": "{file:./.opencode/review_sysprompt_gpt54.md}",
-      "model": "opencode/gpt-5.4",
+      "model": "openai/gpt-5.5",
       "mode": "primary",
       "permission": {
         "*": "deny",
