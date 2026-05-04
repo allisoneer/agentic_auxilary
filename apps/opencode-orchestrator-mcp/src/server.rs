@@ -80,6 +80,8 @@ enum ServerEntryState {
     NeedsRecovery { reason: String },
 }
 
+const TOOL_ENTRY_HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Shared recoverable handle for the process-global orchestrator server snapshot.
 pub struct OrchestratorServerHandle {
     cached: AsyncMutex<Option<Arc<OrchestratorServer>>>,
@@ -435,6 +437,14 @@ impl OrchestratorServer {
     }
 
     async fn validate_for_tool_entry(&self) -> anyhow::Result<ServerEntryState> {
+        self.validate_for_tool_entry_with_timeout(TOOL_ENTRY_HEALTH_PROBE_TIMEOUT)
+            .await
+    }
+
+    async fn validate_for_tool_entry_with_timeout(
+        &self,
+        health_probe_timeout: Duration,
+    ) -> anyhow::Result<ServerEntryState> {
         if self.is_managed() {
             let is_running = {
                 let mut managed = self.managed_server_lock();
@@ -450,13 +460,16 @@ impl OrchestratorServer {
             }
         }
 
-        match self.client.misc().health().await {
-            Ok(health) if health.healthy => Ok(ServerEntryState::Healthy),
-            Ok(_health) => Ok(ServerEntryState::NeedsRecovery {
+        match tokio::time::timeout(health_probe_timeout, self.client.misc().health()).await {
+            Ok(Ok(health)) if health.healthy => Ok(ServerEntryState::Healthy),
+            Ok(Ok(_health)) => Ok(ServerEntryState::NeedsRecovery {
                 reason: "/global/health reported unhealthy".to_string(),
             }),
-            Err(error) => Ok(ServerEntryState::NeedsRecovery {
+            Ok(Err(error)) => Ok(ServerEntryState::NeedsRecovery {
                 reason: format!("/global/health probe failed: {error}"),
+            }),
+            Err(_elapsed) => Ok(ServerEntryState::NeedsRecovery {
+                reason: format!("/global/health probe timed out after {health_probe_timeout:?}"),
             }),
         }
     }
@@ -576,6 +589,33 @@ mod tests {
     use wiremock::ResponseTemplate;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
+
+    struct ManagedEnvGuard {
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl ManagedEnvGuard {
+        fn new() -> Self {
+            Self {
+                previous: std::env::var_os(OPENCODE_ORCHESTRATOR_MANAGED_ENV),
+            }
+        }
+    }
+
+    impl Drop for ManagedEnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+                Some(value) => unsafe {
+                    std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, value);
+                },
+                // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+                None => unsafe {
+                    std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV);
+                },
+            }
+        }
+    }
 
     async fn health_mock_server() -> MockServer {
         let mock = MockServer::start().await;
@@ -736,6 +776,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn validate_for_tool_entry_times_out_health_probe() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/health"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(30))
+                    .set_body_json(serde_json::json!({
+                        "healthy": true,
+                        "version": version::PINNED_OPENCODE_VERSION,
+                    })),
+            )
+            .mount(&mock)
+            .await;
+        let server = external_server(&mock.uri());
+
+        let state = server
+            .validate_for_tool_entry_with_timeout(Duration::from_millis(25))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            state,
+            ServerEntryState::NeedsRecovery {
+                reason: "/global/health probe timed out after 25ms".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
     async fn validate_for_tool_entry_short_circuits_dead_managed_server() {
         let server = managed_server_with_exited_child("http://127.0.0.1:9").await;
 
@@ -780,6 +850,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_not_set() {
+        let _env = ManagedEnvGuard::new();
         // Ensure the env var is not set
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
@@ -789,56 +860,52 @@ mod tests {
     #[test]
     #[serial(env)]
     fn managed_guard_enabled_when_env_is_1() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_is_0() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "0") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_is_empty() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_is_whitespace() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "   ") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_enabled_when_env_is_truthy() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "true") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[tokio::test]
     #[serial(env)]
     async fn recursion_guard_only_blocks_real_startup_paths() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
 
@@ -856,8 +923,5 @@ mod tests {
             Err(error) => error,
         };
         assert!(err.to_string().contains(ORCHESTRATOR_MANAGED_GUARD_MESSAGE));
-
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 }
