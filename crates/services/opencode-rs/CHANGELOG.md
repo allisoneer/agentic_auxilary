@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.9.0] - 2026-05-04
+
+### ⛰️  Features
+- *(opencode_rs)* Add v1.14.33 session path and filtered listing
+
+### 🐛 Bug Fixes
+- *(opencode_rs)* Select connected provider in session.init live test
+- *(opencode_rs)* Add required agent field to ShellRequest
+- *(opencode_rs)* Require path query param on FilesApi::list
+- *(opencode_rs)* Pick agent dynamically in shell live test
 ## [0.8.1] - 2026-05-01
 ## [0.8.0] - 2026-04-28
 
