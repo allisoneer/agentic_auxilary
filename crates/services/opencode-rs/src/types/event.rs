@@ -195,6 +195,8 @@ pub struct SyncSessionPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<SessionSummary>,
@@ -1161,6 +1163,24 @@ mod tests {
                 panic!("expected sync payload, got event payload {other:?}");
             }
         }
+    }
+
+    #[test]
+    fn test_sync_session_patch_deserializes_path() {
+        let json = r#"{
+            "sessionID": "sess-123",
+            "info": {
+                "directory": "/workspace/project",
+                "path": "src/lib.rs",
+                "title": "Patched title"
+            }
+        }"#;
+
+        let data: SyncSessionUpdatedData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.session_id, "sess-123");
+        assert_eq!(data.info.directory.as_deref(), Some("/workspace/project"));
+        assert_eq!(data.info.path.as_deref(), Some("src/lib.rs"));
+        assert_eq!(data.info.title.as_deref(), Some("Patched title"));
     }
 
     #[test]

@@ -10,6 +10,7 @@ use crate::types::session::RevertRequest;
 use crate::types::session::Session;
 use crate::types::session::SessionDiff;
 use crate::types::session::SessionInitRequest;
+use crate::types::session::SessionListParams;
 use crate::types::session::SessionStatus;
 use crate::types::session::SessionStatusInfo;
 use crate::types::session::ShareInfo;
@@ -61,7 +62,19 @@ impl SessionsApi {
     ///
     /// Returns an error if the request fails.
     pub async fn list(&self) -> Result<Vec<Session>> {
-        self.http.request_json(Method::GET, "/session", None).await
+        self.list_filtered(&SessionListParams::default()).await
+    }
+
+    /// List sessions with typed query parameters.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn list_filtered(&self, params: &SessionListParams) -> Result<Vec<Session>> {
+        let query = params.to_query_pairs();
+        self.http
+            .request_json_with_query(Method::GET, "/session", &query, None)
+            .await
     }
 
     /// Delete session by ID.
@@ -431,6 +444,46 @@ mod tests {
         let sessions = SessionsApi::new(http);
         let list = sessions.list().await.unwrap();
         assert_eq!(list.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_filtered_sessions_encodes_query() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/session"))
+            .and(query_param("scope", "project"))
+            .and(query_param("path", "src/lib.rs"))
+            .and(query_param("roots", "true"))
+            .and(query_param("start", "1234567890"))
+            .and(query_param("search", "hello"))
+            .and(query_param("limit", "25"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let sessions = SessionsApi::new(http);
+        let list = sessions
+            .list_filtered(&SessionListParams {
+                scope: Some(crate::types::session::SessionListScope::Project),
+                path: Some("src/lib.rs".to_string()),
+                roots: Some(true),
+                start: Some(1_234_567_890),
+                search: Some("hello".to_string()),
+                limit: Some(25),
+            })
+            .await
+            .unwrap();
+
+        assert!(list.is_empty());
     }
 
     #[tokio::test]

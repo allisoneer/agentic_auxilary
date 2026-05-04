@@ -26,8 +26,10 @@ impl FilesApi {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<FileInfo>> {
-        self.http.request_json(Method::GET, "/file", None).await
+    pub async fn list(&self, path: &str) -> Result<Vec<FileInfo>> {
+        self.http
+            .request_json_with_query(Method::GET, "/file", &[("path", path.to_string())], None)
+            .await
     }
 
     /// Read file content.
@@ -76,6 +78,7 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/file"))
+            .and(query_param("path", "."))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {"path": "src/main.rs", "type": "file"},
                 {"path": "src/lib.rs", "type": "file"}
@@ -92,7 +95,7 @@ mod tests {
         .unwrap();
 
         let files = FilesApi::new(http);
-        let result = files.list().await;
+        let result = files.list(".").await;
         assert!(result.is_ok());
         let file_list = result.unwrap();
         assert_eq!(file_list.len(), 2);

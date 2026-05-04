@@ -141,16 +141,22 @@ impl Respond for SequenceResponder {
 }
 
 // ============================================================================
-// JSON Fixtures matching upstream v1.14.19 `...ID` wire casing.
+// JSON Fixtures matching upstream v1.14.33 `...ID` wire casing.
 // ============================================================================
 
 /// Create a session fixture with the given session ID.
 pub fn session_fixture(session_id: &str) -> serde_json::Value {
+    session_fixture_with_path(session_id, None)
+}
+
+/// Create a session fixture with an optional project-relative path.
+pub fn session_fixture_with_path(session_id: &str, path: Option<&str>) -> serde_json::Value {
     serde_json::json!({
         "id": session_id,
         "slug": session_id,
         "projectId": "proj1",
         "directory": "/tmp",
+        "path": path,
         "title": "Test Session",
         "version": "1.0",
         "time": { "created": 1_234_567_890, "updated": 1_234_567_890 }

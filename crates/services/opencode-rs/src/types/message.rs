@@ -687,8 +687,13 @@ pub struct CommandRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellRequest {
+    /// Agent to execute the shell command.
+    pub agent: String,
     /// Shell command to execute.
     pub command: String,
+    /// Client-generated message ID (used for idempotency/deduplication).
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "messageID")]
+    pub message_id: Option<String>,
     /// Model to use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<crate::types::project::ModelRef>,
@@ -731,6 +736,37 @@ mod tests {
         let json = r#"{"type":"future-part-type","data":"whatever"}"#;
         let part: Part = serde_json::from_str(json).unwrap();
         assert!(matches!(part, Part::Unknown));
+    }
+
+    #[test]
+    fn test_shell_request_serializes_message_id_as_message_id() {
+        let request = ShellRequest {
+            agent: "build".to_string(),
+            command: "echo hello".to_string(),
+            message_id: Some("msg-123".to_string()),
+            model: None,
+        };
+
+        let value = serde_json::to_value(&request).unwrap();
+
+        assert_eq!(value.get("agent"), Some(&serde_json::json!("build")));
+        assert_eq!(value.get("command"), Some(&serde_json::json!("echo hello")));
+        assert_eq!(value.get("messageID"), Some(&serde_json::json!("msg-123")));
+        assert_eq!(value.get("message_id"), None);
+    }
+
+    #[test]
+    fn test_shell_request_omits_message_id_when_none() {
+        let request = ShellRequest {
+            agent: "build".to_string(),
+            command: "echo hello".to_string(),
+            message_id: None,
+            model: None,
+        };
+
+        let value = serde_json::to_value(&request).unwrap();
+
+        assert_eq!(value.get("messageID"), None);
     }
 
     // ==================== ToolState Tests ====================
