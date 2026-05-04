@@ -736,8 +736,12 @@ mod tests {
                             started_requests.fetch_add(1, Ordering::SeqCst);
                             started_notify.notify_waiters();
 
-                            while !released.load(Ordering::SeqCst) {
-                                release_notify.notified().await;
+                            loop {
+                                let notified = release_notify.notified();
+                                if released.load(Ordering::SeqCst) {
+                                    break;
+                                }
+                                notified.await;
                             }
 
                             stream.write_all(response.as_bytes()).await.unwrap();
