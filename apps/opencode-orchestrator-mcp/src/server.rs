@@ -118,25 +118,51 @@ impl OrchestratorServerHandle {
         F: FnMut() -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<OrchestratorServer>>,
     {
-        let mut cached = self.cached.lock().await;
+        loop {
+            let snapshot = {
+                let mut cached = self.cached.lock().await;
 
-        if let Some(snapshot) = cached.as_ref() {
-            match snapshot.validate_for_tool_entry().await? {
-                ServerEntryState::Healthy => return Ok(Arc::clone(snapshot)),
+                if let Some(snapshot) = cached.as_ref() {
+                    Arc::clone(snapshot)
+                } else {
+                    tracing::info!(
+                        "orchestrator server missing cached snapshot; starting embedded server"
+                    );
+
+                    let rebuilt = Arc::new(start().await?);
+                    // Full rebuild intentionally replaces the entire cached snapshot, which
+                    // also resets `spawned_sessions` so `launched_by_you` only describes
+                    // sessions owned by the current cached server instance.
+                    *cached = Some(Arc::clone(&rebuilt));
+                    return Ok(rebuilt);
+                }
+            };
+
+            let state = snapshot.validate_for_tool_entry().await?;
+
+            let mut cached = self.cached.lock().await;
+            let Some(current) = cached.as_ref() else {
+                continue;
+            };
+
+            if !Arc::ptr_eq(current, &snapshot) {
+                continue;
+            }
+
+            match state {
+                ServerEntryState::Healthy => return Ok(snapshot),
                 ServerEntryState::NeedsRecovery { reason } => {
                     tracing::warn!(reason = %reason, "cached orchestrator server failed liveness check; rebuilding");
+
+                    let rebuilt = Arc::new(start().await?);
+                    // Full rebuild intentionally replaces the entire cached snapshot, which
+                    // also resets `spawned_sessions` so `launched_by_you` only describes
+                    // sessions owned by the current cached server instance.
+                    *cached = Some(Arc::clone(&rebuilt));
+                    return Ok(rebuilt);
                 }
             }
-        } else {
-            tracing::info!("orchestrator server missing cached snapshot; starting embedded server");
         }
-
-        let rebuilt = Arc::new(start().await?);
-        // Full rebuild intentionally replaces the entire cached snapshot, which
-        // also resets `spawned_sessions` so `launched_by_you` only describes
-        // sessions owned by the current cached server instance.
-        *cached = Some(Arc::clone(&rebuilt));
-        Ok(rebuilt)
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -580,10 +606,16 @@ mod tests {
     use super::*;
     use serial_test::serial;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
+    use std::time::Instant;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
     use tokio::process::Command;
+    use tokio::sync::Notify;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
@@ -651,6 +683,105 @@ mod tests {
     async fn managed_server_with_exited_child(base_url: &str) -> OrchestratorServer {
         let managed = ManagedServer::from_child_for_testing(exited_child().await, base_url, 9);
         OrchestratorServer::from_managed_for_testing(managed, test_client(base_url), base_url)
+    }
+
+    struct BlockingHealthServer {
+        base_url: String,
+        started_requests: Arc<AtomicUsize>,
+        started_notify: Arc<Notify>,
+        released: Arc<AtomicBool>,
+        release_notify: Arc<Notify>,
+        task: tokio::task::JoinHandle<()>,
+    }
+
+    impl BlockingHealthServer {
+        async fn start(expected_requests: usize) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let started_requests = Arc::new(AtomicUsize::new(0));
+            let started_notify = Arc::new(Notify::new());
+            let released = Arc::new(AtomicBool::new(false));
+            let release_notify = Arc::new(Notify::new());
+            let body = format!(
+                r#"{{"healthy":true,"version":"{}"}}"#,
+                version::PINNED_OPENCODE_VERSION
+            );
+            let response = Arc::new(format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            ));
+
+            let task = tokio::spawn({
+                let started_requests = Arc::clone(&started_requests);
+                let started_notify = Arc::clone(&started_notify);
+                let released = Arc::clone(&released);
+                let release_notify = Arc::clone(&release_notify);
+                let response = Arc::clone(&response);
+
+                async move {
+                    let mut connections = Vec::with_capacity(expected_requests);
+
+                    for _ in 0..expected_requests {
+                        let (mut stream, _addr) = listener.accept().await.unwrap();
+                        let started_requests = Arc::clone(&started_requests);
+                        let started_notify = Arc::clone(&started_notify);
+                        let released = Arc::clone(&released);
+                        let release_notify = Arc::clone(&release_notify);
+                        let response = Arc::clone(&response);
+
+                        connections.push(tokio::spawn(async move {
+                            let mut request = [0_u8; 1024];
+                            let _read = stream.read(&mut request).await.unwrap();
+                            started_requests.fetch_add(1, Ordering::SeqCst);
+                            started_notify.notify_waiters();
+
+                            while !released.load(Ordering::SeqCst) {
+                                release_notify.notified().await;
+                            }
+
+                            stream.write_all(response.as_bytes()).await.unwrap();
+                            stream.shutdown().await.unwrap();
+                        }));
+                    }
+
+                    for connection in connections {
+                        connection.await.unwrap();
+                    }
+                }
+            });
+
+            Self {
+                base_url: format!("http://{addr}"),
+                started_requests,
+                started_notify,
+                released,
+                release_notify,
+                task,
+            }
+        }
+
+        async fn wait_for_requests(&self, expected_requests: usize) {
+            tokio::time::timeout(Duration::from_secs(1), async {
+                while self.started_requests.load(Ordering::SeqCst) < expected_requests {
+                    self.started_notify.notified().await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        fn release(&self) {
+            self.released.store(true, Ordering::SeqCst);
+            self.release_notify.notify_waiters();
+        }
+    }
+
+    impl Drop for BlockingHealthServer {
+        fn drop(&mut self) {
+            self.release();
+            self.task.abort();
+        }
     }
 
     #[tokio::test]
@@ -817,6 +948,116 @@ mod tests {
                 reason: "managed child is no longer running".to_string(),
             }
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn handle_allows_concurrent_healthy_acquires_without_serializing_validation() {
+        let health = BlockingHealthServer::start(3).await;
+        let handle = Arc::new(OrchestratorServerHandle::from_server_unshared(
+            external_server(&health.base_url),
+        ));
+
+        let started_at = Instant::now();
+        let tasks = (0..3)
+            .map(|_| {
+                let handle = Arc::clone(&handle);
+                tokio::spawn(async move { handle.acquire().await })
+            })
+            .collect::<Vec<_>>();
+
+        health.wait_for_requests(3).await;
+        tokio::time::sleep(Duration::from_millis(75)).await;
+        health.release();
+
+        let mut snapshots = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            snapshots.push(task.await.unwrap().unwrap());
+        }
+
+        assert!(
+            started_at.elapsed() < Duration::from_millis(250),
+            "healthy acquires should overlap rather than serialize"
+        );
+        assert!(Arc::ptr_eq(&snapshots[0], &snapshots[1]));
+        assert!(Arc::ptr_eq(&snapshots[1], &snapshots[2]));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn handle_single_flights_concurrent_stale_acquires() {
+        let stale = Arc::new(managed_server_with_exited_child("http://127.0.0.1:9").await);
+        let handle = Arc::new(OrchestratorServerHandle {
+            cached: AsyncMutex::new(Some(Arc::clone(&stale))),
+        });
+        let mock = health_mock_server().await;
+        let base_url = mock.uri();
+        let starts = Arc::new(AtomicUsize::new(0));
+
+        let tasks = (0..3)
+            .map(|_| {
+                let handle = Arc::clone(&handle);
+                let starts = Arc::clone(&starts);
+                let base_url = base_url.clone();
+                tokio::spawn(async move {
+                    handle
+                        .get_or_recover_with(|| {
+                            let starts = Arc::clone(&starts);
+                            let base_url = base_url.clone();
+                            async move {
+                                starts.fetch_add(1, Ordering::SeqCst);
+                                tokio::time::sleep(Duration::from_millis(50)).await;
+                                Ok(external_server(&base_url))
+                            }
+                        })
+                        .await
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut snapshots = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            snapshots.push(task.await.unwrap().unwrap());
+        }
+
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert!(!Arc::ptr_eq(&stale, &snapshots[0]));
+        assert!(Arc::ptr_eq(&snapshots[0], &snapshots[1]));
+        assert!(Arc::ptr_eq(&snapshots[1], &snapshots[2]));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn handle_retries_if_cache_changes_while_validating() {
+        let old_health = BlockingHealthServer::start(1).await;
+        let original = Arc::new(external_server(&old_health.base_url));
+        let handle = Arc::new(OrchestratorServerHandle {
+            cached: AsyncMutex::new(Some(Arc::clone(&original))),
+        });
+        let replacement_mock = health_mock_server().await;
+        let replacement = Arc::new(external_server(&replacement_mock.uri()));
+
+        let acquire = {
+            let handle = Arc::clone(&handle);
+            tokio::spawn(async move {
+                handle
+                    .acquire_or_recover_with(|| async { anyhow::bail!("should not rebuild") })
+                    .await
+            })
+        };
+
+        old_health.wait_for_requests(1).await;
+
+        {
+            let mut cached = tokio::time::timeout(Duration::from_millis(100), handle.cached.lock())
+                .await
+                .expect("validation should not hold the handle mutex");
+            *cached = Some(Arc::clone(&replacement));
+        }
+
+        old_health.release();
+
+        let snapshot = acquire.await.unwrap().unwrap();
+
+        assert!(!Arc::ptr_eq(&snapshot, &original));
+        assert!(Arc::ptr_eq(&snapshot, &replacement));
     }
 
     #[tokio::test]
