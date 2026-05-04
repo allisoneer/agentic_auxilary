@@ -504,6 +504,23 @@ async fn test_shell_returns_info_and_parts() {
     }
 
     let client = create_test_client().await;
+
+    // Pick a real agent name from the live server. v1.14.33 strictly validates
+    // `agent` against the configured agent list; hardcoding upstream defaults
+    // (e.g. "build") fails in environments with custom agent definitions.
+    let mut agents = client
+        .tools()
+        .agents()
+        .await
+        .expect("Failed to list agents");
+    agents.sort_by(|a, b| a.name.cmp(&b.name));
+    let Some(agent) = agents.into_iter().next() else {
+        println!("Skipping shell test: no agents configured on the live server");
+        return;
+    };
+    let agent_name = agent.name;
+    println!("shell test using agent={agent_name}");
+
     let session = client
         .sessions()
         .create(&Default::default())
@@ -515,7 +532,7 @@ async fn test_shell_returns_info_and_parts() {
         .shell(
             &session.id,
             &ShellRequest {
-                agent: "build".to_string(),
+                agent: agent_name,
                 command: "echo hello".to_string(),
                 message_id: None,
                 model: None,
