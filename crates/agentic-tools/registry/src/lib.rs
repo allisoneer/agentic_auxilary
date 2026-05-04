@@ -1,8 +1,8 @@
 //! Unified tool registry aggregating all agentic-tools domain registries.
 //!
 //! This crate provides a single entry point for building a `ToolRegistry` containing
-//! all available tools from the various domain crates (coding_agent_tools, pr_comments,
-//! linear_tools, gpt5_reasoner, thoughts_mcp_tools, web_retrieval).
+//! all available tools from the various domain crates (`coding_agent_tools`, `pr_comments`,
+//! `linear_tools`, `gpt5_reasoner`, `thoughts_mcp_tools`, `web_retrieval`).
 //!
 //! # Example
 //!
@@ -77,7 +77,7 @@ pub struct AgenticToolsConfig {
     pub extras: serde_json::Value,
 }
 
-/// Unified AgenticTools entrypoint.
+/// Unified `AgenticTools` entrypoint.
 pub struct AgenticTools;
 
 // Tool name constants for each domain
@@ -120,10 +120,15 @@ const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
 const REVIEW_NAMES: &[&str] = &["review_diff_snapshot", "review_diff_page", "review_run"];
 
 impl AgenticTools {
-    /// Build the unified ToolRegistry using domain registries.
+    /// Build the unified `ToolRegistry` using domain registries.
     ///
     /// Lazy domain gating: When an allowlist is provided, only build domains
     /// whose tools intersect the allowlist.
+    #[expect(
+        clippy::allow_attributes,
+        reason = "incremental legacy lint mitigation for pre-existing API shape"
+    )]
+    // TODO(3): clean up new_ret_no_self as part of broader agentic-tools-registry lint conformance pass.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(config: AgenticToolsConfig) -> ToolRegistry {
         let allow = normalize_allowlist(config.allowlist);
@@ -156,7 +161,7 @@ impl AgenticTools {
                         "pr_comments: ambient repo detection failed ({}); tools will return a clear error until repo context is available",
                         e
                     );
-                    pr_comments::PrComments::disabled(format!("{:#}", e))
+                    pr_comments::PrComments::disabled(format!("{e:#}"))
                 }
             };
             regs.push(pr_comments::build_registry(Arc::new(tool)));
@@ -198,7 +203,7 @@ impl AgenticTools {
 
         // Final allowlist filtering at registry level (authoritative)
         if let Some(set) = allow {
-            let names: Vec<&str> = set.iter().map(|s| s.as_str()).collect();
+            let names: Vec<&str> = set.iter().map(String::as_str).collect();
             // Warn about unknown tool names in allowlist
             for name in &names {
                 if !merged.contains(name) {
@@ -263,7 +268,7 @@ mod tests {
     #[test]
     fn normalize_allowlist_filters_empty() {
         let mut set = HashSet::new();
-        set.insert("".to_string());
+        set.insert(String::new());
         set.insert("   ".to_string());
         set.insert("cli_ls".to_string());
         let normalized = normalize_allowlist(Some(set)).unwrap();
@@ -444,7 +449,8 @@ mod tests {
                 executor_model: "openai/custom-executor".into(),
                 reasoning_effort: Some("high".into()),
                 api_base_url: None,
-                token_limit: None,
+                max_input_tokens: None,
+                max_completion_tokens: Some(128_000),
                 executor_timeout_secs: 2700,
                 empty_response_no_retry_after_secs: 600,
                 stream_heartbeat_secs: 30,

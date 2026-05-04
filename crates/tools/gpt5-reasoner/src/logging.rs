@@ -1,3 +1,10 @@
+#![expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing code"
+)]
+// TODO(3): clean up map_unwrap_or as part of broader gpt5_reasoner lint conformance pass.
+#![allow(clippy::map_unwrap_or)]
+
 // crates/tools/gpt5-reasoner/src/logging.rs
 use agentic_logging::TokenUsage;
 use async_openai::types::chat::CompletionUsage;
@@ -29,10 +36,10 @@ pub enum EmptyContentKind {
 impl std::fmt::Display for EmptyContentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EmptyContentKind::NoChoices => write!(f, "no_choices"),
-            EmptyContentKind::NoContent => write!(f, "none_content"),
-            EmptyContentKind::EmptyString => write!(f, "empty_string"),
-            EmptyContentKind::WhitespaceOnly => write!(f, "whitespace_only"),
+            Self::NoChoices => write!(f, "no_choices"),
+            Self::NoContent => write!(f, "none_content"),
+            Self::EmptyString => write!(f, "empty_string"),
+            Self::WhitespaceOnly => write!(f, "whitespace_only"),
         }
     }
 }
@@ -176,6 +183,12 @@ pub fn log_empty_warning(phase: &str, kind: EmptyContentKind, resp: &CreateChatC
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

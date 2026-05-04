@@ -37,49 +37,44 @@ pub enum ReasonerError {
 impl From<ReasonerError> for ToolError {
     fn from(e: ReasonerError) -> Self {
         match &e {
-            ReasonerError::MissingEnv(_) => ToolError::InvalidInput(e.to_string()),
-            ReasonerError::MissingFile(_) => ToolError::NotFound(e.to_string()),
-            ReasonerError::NonUtf8(_) => ToolError::InvalidInput(e.to_string()),
-            ReasonerError::TokenLimit { .. } => ToolError::InvalidInput(e.to_string()),
+            ReasonerError::MissingFile(_) => Self::NotFound(e.to_string()),
+            ReasonerError::MissingEnv(_)
+            | ReasonerError::NonUtf8(_)
+            | ReasonerError::TokenLimit { .. } => Self::InvalidInput(e.to_string()),
             ReasonerError::Template(_) | ReasonerError::Yaml(_) | ReasonerError::Json(_) => {
-                ToolError::InvalidInput(e.to_string())
+                Self::InvalidInput(e.to_string())
             }
-            ReasonerError::OpenAI(_) => ToolError::External(e.to_string()),
-            ReasonerError::Io(_) => ToolError::Internal(e.to_string()),
+            ReasonerError::OpenAI(_) => Self::External(e.to_string()),
+            ReasonerError::Io(_) => Self::Internal(e.to_string()),
         }
     }
 }
 
-/// Determine if an OpenAI error is retryable at the application level
+/// Determine if an `OpenAI` error is retryable at the application level.
 ///
 /// The async-openai library already retries 5xx and 429 errors with exponential backoff.
 /// This function identifies errors that are NOT retried by the library but are safe to retry.
 ///
 /// Retryable errors:
 /// - Reqwest: Network/transport failures (timeouts, DNS, connection reset, TLS)
-/// - StreamError: Network-layer streaming issues (not used for non-streaming, but conservative)
-/// - JSONDeserialize: Rare parsing glitches that may resolve on retry
+/// - `StreamError`: Network-layer streaming issues (not used for non-streaming, but conservative)
+/// - `JSONDeserialize`: Rare parsing glitches that may resolve on retry
 ///
 /// Non-retryable errors:
-/// - InvalidArgument: Client-side validation errors
-/// - Other errors: Assume not retryable (ApiError, file errors, etc.)
+/// - `InvalidArgument`: Client-side validation errors
+/// - Other errors: Assume not retryable (`ApiError`, file errors, etc.)
 pub fn is_retryable_app_level(e: &async_openai::error::OpenAIError) -> bool {
     use async_openai::error::OpenAIError;
     match e {
         // Transient network failures - safe to retry
-        OpenAIError::Reqwest(_) => true,
-
         // Stream errors - not expected for non-streaming, but conservative to retry
-        OpenAIError::StreamError(_) => true,
-
         // Rare JSON deserialization glitches - defensive retry during unstable period
-        OpenAIError::JSONDeserialize(_, _) => true,
+        OpenAIError::Reqwest(_)
+        | OpenAIError::StreamError(_)
+        | OpenAIError::JSONDeserialize(_, _) => true,
 
-        // Client-side validation errors - not retryable
-        OpenAIError::InvalidArgument(_) => false,
-
-        // All other errors (ApiError, file errors, etc.) - assume not retryable
-        // ApiError: library already retried 5xx/429
+        // All other errors (`InvalidArgument`, `ApiError`, file errors, etc.)
+        // are assumed not retryable. `ApiError` already retried 5xx/429 in the library.
         _ => false,
     }
 }

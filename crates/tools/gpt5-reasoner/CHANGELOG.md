@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+
+### 🐛 Bug Fixes
+- *(gpt5_reasoner)* Add explicit completion token caps and richer executor diagnostics
+
 ## [0.10.0] - 2026-05-03
 
 ### ⛰️  Features

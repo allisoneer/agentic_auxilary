@@ -1,4 +1,5 @@
-use crate::errors::*;
+use crate::errors::ReasonerError;
+use crate::errors::Result;
 use regex::Regex;
 use serde::Deserialize;
 
@@ -39,8 +40,8 @@ enum CandidateScanMode {
 /// Allows up to 3 leading spaces for markdown compatibility.
 ///
 /// Mode behavior:
-/// - GreedyCollectAll: Never stops on inner openers, collects all closers up to search_end
-/// - StopOnLangOpenerAfterFirstCloser: Stops when hitting a language-tagged opener after finding a closer
+/// - `GreedyCollectAll`: Never stops on inner openers, collects all closers up to `search_end`
+/// - `StopOnLangOpenerAfterFirstCloser`: Stops when hitting a language-tagged opener after finding a closer
 fn collect_closing_candidates(
     s: &str,
     start: usize,
@@ -100,7 +101,7 @@ fn collect_closing_candidates(
 /// 2. Collect ALL closing fence candidates (≥N backticks, only whitespace after)
 /// 3. Return the last candidate as a heuristic
 ///
-/// For XML blocks, the caller (parse_optimizer_output) will validate candidates contain
+/// For XML blocks, the caller (`parse_optimizer_output`) will validate candidates contain
 /// required GROUP markers and pick the first valid one.
 fn extract_fenced_block_fence_aware(s: &str, label: &str, lang: &str) -> Option<String> {
     // 1. Find label anchor
@@ -283,14 +284,13 @@ fn extract_xml_with_validation(s: &str, label: &str, groups: &FileGrouping) -> O
                 xml_candidate.len()
             );
             return Some(xml_candidate.to_string());
-        } else {
-            tracing::debug!(
-                "Candidate {} (of {}) failed validation (length: {} chars)",
-                idx + 1,
-                candidates.len(),
-                xml_candidate.len()
-            );
         }
+        tracing::debug!(
+            "Candidate {} (of {}) failed validation (length: {} chars)",
+            idx + 1,
+            candidates.len(),
+            xml_candidate.len()
+        );
     }
 
     // 5. Fallback: use last candidate even if it doesn't validate
@@ -330,7 +330,7 @@ pub fn parse_optimizer_output(raw: &str) -> Result<OptimizerOutput> {
                 .filter(|line| {
                     line.trim().starts_with("<!-- GROUP:") && line.trim().ends_with("-->")
                 })
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect();
 
             return Err(ReasonerError::Template(format!(
@@ -355,12 +355,18 @@ fn extract_yaml_by_anchor(s: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_valid_output_with_fenced_blocks() {
-        let raw = r#"Here's the optimized output:
+        let raw = r"Here's the optimized output:
 
 FILE_GROUPING
 ```yaml
@@ -389,7 +395,7 @@ OPTIMIZED_TEMPLATE
 </codebase>
 ```
 
-That should work!"#;
+That should work!";
 
         let result = parse_optimizer_output(raw).unwrap();
         assert_eq!(result.groups.file_groups.len(), 2);
@@ -402,7 +408,7 @@ That should work!"#;
 
     #[test]
     fn test_missing_group_marker_error() {
-        let raw = r#"FILE_GROUPING
+        let raw = r"FILE_GROUPING
 ```yaml
 file_groups:
   - name: missing_marker
@@ -415,7 +421,7 @@ OPTIMIZED_TEMPLATE
 <codebase>
   <!-- No marker for missing_marker group -->
 </codebase>
-```"#;
+```";
 
         let err = parse_optimizer_output(raw).unwrap_err();
         match err {
@@ -428,7 +434,7 @@ OPTIMIZED_TEMPLATE
 
     #[test]
     fn test_yaml_missing_fields() {
-        let raw = r#"FILE_GROUPING
+        let raw = r"FILE_GROUPING
 ```yaml
 file_groups:
   - purpose: Missing name field
@@ -441,7 +447,7 @@ OPTIMIZED_TEMPLATE
 <codebase>
   <!-- GROUP: something -->
 </codebase>
-```"#;
+```";
 
         let err = parse_optimizer_output(raw).unwrap_err();
         match err {
@@ -454,7 +460,7 @@ OPTIMIZED_TEMPLATE
 
     #[test]
     fn test_multiple_code_blocks_first_wins() {
-        let raw = r#"First attempt:
+        let raw = r"First attempt:
 
 FILE_GROUPING
 ```yaml
@@ -474,7 +480,7 @@ Template:
 OPTIMIZED_TEMPLATE
 ```xml
 <!-- GROUP: first -->
-```"#;
+```";
 
         let result = parse_optimizer_output(raw).unwrap();
         assert_eq!(result.groups.file_groups.len(), 1);
@@ -483,7 +489,7 @@ OPTIMIZED_TEMPLATE
 
     #[test]
     fn test_fallback_yaml_extraction() {
-        let raw = r#"Here's the output without fenced blocks:
+        let raw = r"Here's the output without fenced blocks:
 
 FILE_GROUPING
 file_groups:
@@ -496,7 +502,7 @@ OPTIMIZED_TEMPLATE
 <codebase>
   <!-- GROUP: fallback_test -->
 </codebase>
-```"#;
+```";
 
         let result = parse_optimizer_output(raw).unwrap();
         assert_eq!(result.groups.file_groups[0].name, "fallback_test");
@@ -504,13 +510,13 @@ OPTIMIZED_TEMPLATE
 
     #[test]
     fn test_no_yaml_found_error() {
-        let raw = r#"Some text without any YAML
+        let raw = r"Some text without any YAML
 
 ```xml
 <codebase>
   <!-- Some XML -->
 </codebase>
-```"#;
+```";
 
         let err = parse_optimizer_output(raw).unwrap_err();
         match err {
@@ -523,14 +529,14 @@ OPTIMIZED_TEMPLATE
 
     #[test]
     fn test_no_xml_found_error() {
-        let raw = r#"FILE_GROUPING
+        let raw = r"FILE_GROUPING
 ```yaml
 file_groups:
   - name: test
     files: [test.rs]
 ```
 
-But no XML template!"#;
+But no XML template!";
 
         let err = parse_optimizer_output(raw).unwrap_err();
         match err {
@@ -553,12 +559,12 @@ But no XML template!"#;
 
     #[test]
     fn test_extract_yaml_by_anchor() {
-        let content = r#"Some text
+        let content = r"Some text
 file_groups:
   - name: test
     files: [a.rs]
 ```
-End"#;
+End";
 
         let result = extract_yaml_by_anchor(content);
         assert!(result.is_some());
@@ -567,7 +573,7 @@ End"#;
 
     #[test]
     fn test_original_prompt_placeholder() {
-        let raw = r#"FILE_GROUPING
+        let raw = r"FILE_GROUPING
 ```yaml
 file_groups:
   - name: test
@@ -578,7 +584,7 @@ OPTIMIZED_TEMPLATE
 ```xml
 <primary_task>{original_prompt}</primary_task>
 <!-- GROUP: test -->
-```"#;
+```";
 
         let result = parse_optimizer_output(raw).unwrap();
         assert!(result.xml_template.contains("{original_prompt}"));
@@ -586,7 +592,7 @@ OPTIMIZED_TEMPLATE
 
     #[test]
     fn test_markdown_header_cleanup() {
-        let raw = r#"**FILE_GROUPING**
+        let raw = r"**FILE_GROUPING**
 ```yaml
 file_groups:
   - name: test
@@ -596,7 +602,7 @@ file_groups:
 **OPTIMIZED_TEMPLATE**
 ```xml
 <!-- GROUP: test -->
-```"#;
+```";
 
         // Should parse successfully despite markdown formatting
         let result = parse_optimizer_output(raw).unwrap();
@@ -646,7 +652,7 @@ More content after example...
 
     #[test]
     fn test_outer_four_backticks_with_inner_triple() {
-        let raw = r#"
+        let raw = r"
 FILE_GROUPING
 ````yaml
 file_groups:
@@ -665,7 +671,7 @@ No collision!
 </note>
 <!-- GROUP: demo -->
 ````
-"#;
+";
 
         let result = parse_optimizer_output(raw);
         assert!(
@@ -680,7 +686,7 @@ No collision!
 
     #[test]
     fn test_label_anchoring_ignores_earlier_fences() {
-        let raw = r#"
+        let raw = r"
 Here's an example of how to format the output:
 
 ```yaml
@@ -701,7 +707,7 @@ OPTIMIZED_TEMPLATE
 ```xml
 <!-- GROUP: real -->
 ```
-"#;
+";
 
         let result = parse_optimizer_output(raw);
         assert!(

@@ -1,4 +1,4 @@
-//! Tool wrappers for gpt5_reasoner using agentic-tools-core.
+//! Tool wrappers for `gpt5_reasoner` using agentic-tools-core.
 //!
 //! Provides the `request` tool that wraps the reasoning model functionality.
 
@@ -45,8 +45,8 @@ pub struct RequestInput {
     /// plans given a certain desire and context.
     pub prompt_type: PromptType,
 
-    /// When PromptType::Plan, optional filename to write directly into
-    /// thoughts/{branch}/plans/. If set, returns the repo-relative path of the
+    /// When `PromptType::Plan`, optional filename to write directly into
+    /// `thoughts/{branch}/plans/`. If set, returns the repo-relative path of the
     /// created file instead of the content.
     #[serde(default)]
     pub output_filename: Option<String>,
@@ -96,7 +96,7 @@ impl Tool for RequestTool {
 // Registry Builder
 // ============================================================================
 
-/// Build a ToolRegistry containing all gpt5_reasoner tools.
+/// Build a `ToolRegistry` containing all `gpt5_reasoner` tools.
 pub fn build_registry(cfg: ReasoningConfig) -> ToolRegistry {
     ToolRegistry::builder()
         .register::<RequestTool, ()>(RequestTool::new(cfg))

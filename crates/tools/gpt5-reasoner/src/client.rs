@@ -20,6 +20,9 @@ impl OrClient {
             .with_api_base(base)
             .with_api_key(api_key);
 
+        // TODO(2): Capture OpenRouter provider identity in executor summaries.
+        // async-openai's chat streaming transport does not expose response headers,
+        // so this likely needs a custom transport seam or upstream crate changes.
         Ok(Self {
             client: Client::with_config(config),
         })
