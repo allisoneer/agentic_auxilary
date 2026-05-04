@@ -224,6 +224,9 @@ pub struct SessionSummary {
     /// Session working directory
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
+    /// Project-relative session path
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     /// Current session status
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<SessionStatusSummary>,
@@ -270,6 +273,8 @@ pub struct GetSessionStateOutput {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     pub status: SessionStatusSummary,
     /// True when the current orchestrator created this session.
     pub launched_by_you: bool,
@@ -331,6 +336,9 @@ impl TextFormat for ListSessionsOutput {
                 ""
             };
             let _ = writeln!(out, "  {} - {} ({age}, {status}){launched}", s.id, s.title);
+            if let Some(path) = &s.path {
+                let _ = writeln!(out, "    Path: {path}");
+            }
         }
 
         if self.sessions.is_empty() {
@@ -347,6 +355,10 @@ impl TextFormat for GetSessionStateOutput {
 
         if let Some(dir) = &self.directory {
             let _ = writeln!(out, "  Directory: {dir}");
+        }
+
+        if let Some(path) = &self.path {
+            let _ = writeln!(out, "  Path: {path}");
         }
 
         let status_str = match &self.status {
@@ -607,6 +619,7 @@ mod tests {
                 updated: Some(0),
                 created: Some(0),
                 directory: Some("/tmp/project".into()),
+                path: Some("src/cache.rs".into()),
                 status: Some(SessionStatusSummary::Idle),
                 change_stats: Some(ChangeStats {
                     additions: 1,
@@ -623,6 +636,26 @@ mod tests {
         assert!(text.contains("Research caching"));
         assert!(text.contains("idle"));
         assert!(text.contains("launched by you"));
+        assert!(text.contains("Path: src/cache.rs"));
+    }
+
+    #[test]
+    fn get_session_state_text_format_includes_path() {
+        let out = GetSessionStateOutput {
+            session_id: "sess-1".into(),
+            title: "Research caching".into(),
+            directory: Some("/tmp/project".into()),
+            path: Some("src/cache.rs".into()),
+            status: SessionStatusSummary::Idle,
+            launched_by_you: false,
+            pending_message_count: 0,
+            last_activity: None,
+            recent_tool_calls: vec![],
+        };
+
+        let text = out.fmt_text(&TextOptions::default());
+        assert!(text.contains("Directory: /tmp/project"));
+        assert!(text.contains("Path: src/cache.rs"));
     }
 
     #[test]

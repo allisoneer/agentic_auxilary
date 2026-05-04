@@ -1006,6 +1006,7 @@ impl Tool for ListSessionsTool {
                     .map_err(|e| ToolError::Internal(e.to_string()))?;
 
                 let sessions =
+                    // Intentionally keep zero-arg list() so SDK directory context preserves launch-directory scoping.
                     server.client().sessions().list().await.map_err(|e| {
                         ToolError::Internal(format!("Failed to list sessions: {e}"))
                     })?;
@@ -1047,6 +1048,7 @@ impl Tool for ListSessionsTool {
                             created: s.time.as_ref().map(|t| t.created),
                             updated: s.time.as_ref().map(|t| t.updated),
                             directory: s.directory,
+                            path: s.path,
                             title: s.title,
                             id: s.id,
                             status,
@@ -1235,6 +1237,7 @@ impl Tool for GetSessionStateTool {
                     session_id: session.id,
                     title: session.title,
                     directory: session.directory,
+                    path: session.path,
                     status,
                     launched_by_you,
                     pending_message_count,

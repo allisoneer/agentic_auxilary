@@ -375,6 +375,50 @@ async fn test_session_init_required_body() {
     }
 
     let client = create_test_client().await;
+    let providers = client.providers().list().await.expect("providers list");
+
+    let mut connected_ids = providers.connected.clone();
+    connected_ids.sort();
+    connected_ids.dedup();
+
+    let mut selected = None;
+    for provider_id in connected_ids {
+        let Some(provider) = providers
+            .all
+            .iter()
+            .find(|provider| provider.id == provider_id)
+        else {
+            continue;
+        };
+
+        let model_id = match providers.default.get(&provider_id) {
+            Some(default_model_id) if provider.models.contains_key(default_model_id) => {
+                default_model_id.clone()
+            }
+            _ => {
+                let mut model_ids: Vec<String> = provider.models.keys().cloned().collect();
+                model_ids.sort();
+                let Some(first_model_id) = model_ids.into_iter().next() else {
+                    continue;
+                };
+                first_model_id
+            }
+        };
+
+        selected = Some((provider_id, model_id));
+        break;
+    }
+
+    let Some((provider_id, model_id)) = selected else {
+        println!(
+            "Skipping session.init required-body test: no connected providers with usable models (connected={:?})",
+            providers.connected
+        );
+        return;
+    };
+
+    println!("session.init test using provider={provider_id} model={model_id}");
+
     let session = client
         .sessions()
         .create(&Default::default())
@@ -402,19 +446,6 @@ async fn test_session_init_required_body() {
         )
         .await
         .expect("Failed to create a message for session.init preconditions");
-
-    let providers = client.providers().list().await.expect("providers list");
-    let (provider_id, model_id) = providers
-        .all
-        .iter()
-        .find_map(|provider| {
-            provider
-                .models
-                .iter()
-                .next()
-                .map(|(model_id, _)| (provider.id.clone(), model_id.clone()))
-        })
-        .expect("session.init test requires at least one provider model");
 
     let messages = client
         .messages()
@@ -473,6 +504,23 @@ async fn test_shell_returns_info_and_parts() {
     }
 
     let client = create_test_client().await;
+
+    // Pick a real agent name from the live server. v1.14.33 strictly validates
+    // `agent` against the configured agent list; hardcoding upstream defaults
+    // (e.g. "build") fails in environments with custom agent definitions.
+    let mut agents = client
+        .tools()
+        .agents()
+        .await
+        .expect("Failed to list agents");
+    agents.sort_by(|a, b| a.name.cmp(&b.name));
+    let Some(agent) = agents.into_iter().next() else {
+        println!("Skipping shell test: no agents configured on the live server");
+        return;
+    };
+    let agent_name = agent.name;
+    println!("shell test using agent={agent_name}");
+
     let session = client
         .sessions()
         .create(&Default::default())
@@ -484,14 +532,25 @@ async fn test_shell_returns_info_and_parts() {
         .shell(
             &session.id,
             &ShellRequest {
+                agent: agent_name,
                 command: "echo hello".to_string(),
+                message_id: None,
                 model: None,
             },
         )
         .await;
-    println!("shell result: {shell:?}");
 
     let _ = client.sessions().delete(&session.id).await;
+
+    let shell = shell.expect("Shell call should succeed with upstream-compatible request shape");
+    assert!(
+        !shell.info.id.is_empty(),
+        "shell response should include info.id"
+    );
+    assert!(
+        !shell.parts.is_empty(),
+        "shell response should include at least one part"
+    );
 }
 
 /// Test session with permission ruleset.

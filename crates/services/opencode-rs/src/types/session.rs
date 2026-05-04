@@ -18,6 +18,9 @@ pub struct Session {
     /// Working directory for the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
+    /// Project-relative path for the session when provided by the server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     /// Parent session ID (for forked sessions).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
@@ -132,6 +135,84 @@ pub struct UpdateSessionRequest {
     /// New title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+}
+
+/// Scope options for `GET /session` filtering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionListScope {
+    /// List sessions across the current project.
+    Project,
+}
+
+/// Typed query parameters for `GET /session`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionListParams {
+    /// Optional scope override for whole-project listing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<SessionListScope>,
+    /// Optional project-relative path filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Whether only root sessions should be returned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roots: Option<bool>,
+    /// Only include sessions updated at or after this timestamp.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<i64>,
+    /// Optional case-insensitive title search term.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search: Option<String>,
+    /// Optional maximum number of sessions to return.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
+}
+
+impl SessionListParams {
+    /// Construct params for whole-project listing.
+    pub fn project() -> Self {
+        Self {
+            scope: Some(SessionListScope::Project),
+            ..Self::default()
+        }
+    }
+
+    /// Encode params into query pairs for `GET /session`.
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+        let mut query = Vec::new();
+
+        if let Some(scope) = self.scope {
+            query.push((
+                "scope",
+                match scope {
+                    SessionListScope::Project => "project".to_string(),
+                },
+            ));
+        }
+
+        if let Some(path) = &self.path {
+            query.push(("path", path.clone()));
+        }
+
+        if let Some(roots) = self.roots {
+            query.push(("roots", roots.to_string()));
+        }
+
+        if let Some(start) = self.start {
+            query.push(("start", start.to_string()));
+        }
+
+        if let Some(search) = &self.search {
+            query.push(("search", search.clone()));
+        }
+
+        if let Some(limit) = self.limit {
+            query.push(("limit", limit.to_string()));
+        }
+
+        query
+    }
 }
 
 /// Request body for `POST /session/{sessionID}/init`.
@@ -268,6 +349,7 @@ mod tests {
             "slug": "s1",
             "projectId": "p1",
             "directory": "/path/to/project",
+            "path": "src/lib.rs",
             "title": "Test Session",
             "version": "1.0",
             "time": {"created": 1234567890, "updated": 1234567890}
@@ -276,6 +358,7 @@ mod tests {
         assert_eq!(session.id, "s1");
         assert_eq!(session.slug, "s1");
         assert_eq!(session.title, "Test Session");
+        assert_eq!(session.path.as_deref(), Some("src/lib.rs"));
     }
 
     #[test]
@@ -302,6 +385,7 @@ mod tests {
             "slug": "s1",
             "projectId": "p1",
             "directory": "/path",
+            "path": "src/main.rs",
             "title": "Test",
             "version": "1.0",
             "time": {"created": 1234567890, "updated": 1234567890},
@@ -310,6 +394,7 @@ mod tests {
         }"#;
         let session: Session = serde_json::from_str(json).unwrap();
         assert_eq!(session.slug, "s1");
+        assert_eq!(session.path.as_deref(), Some("src/main.rs"));
         assert_eq!(session.parent_id, Some("s0".to_string()));
         assert!(session.share.is_some());
     }
@@ -435,5 +520,40 @@ mod tests {
         assert!(json.contains(r#""modelID""#));
         assert!(json.contains(r#""providerID""#));
         assert!(json.contains(r#""messageID""#));
+    }
+
+    #[test]
+    fn test_session_list_params_project_helper() {
+        assert_eq!(
+            SessionListParams::project(),
+            SessionListParams {
+                scope: Some(SessionListScope::Project),
+                ..SessionListParams::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_session_list_params_to_query_pairs() {
+        let params = SessionListParams {
+            scope: Some(SessionListScope::Project),
+            path: Some("src/lib.rs".to_string()),
+            roots: Some(true),
+            start: Some(1_234_567_890),
+            search: Some("hello".to_string()),
+            limit: Some(25),
+        };
+
+        assert_eq!(
+            params.to_query_pairs(),
+            vec![
+                ("scope", "project".to_string()),
+                ("path", "src/lib.rs".to_string()),
+                ("roots", "true".to_string()),
+                ("start", "1234567890".to_string()),
+                ("search", "hello".to_string()),
+                ("limit", "25".to_string()),
+            ]
+        );
     }
 }
