@@ -231,8 +231,10 @@ Need to do something?
   2. Six parallel `review_run(diff_handle, lens)` calls execute lens reviewers (security/correctness/maintainability/testing/simplification/completeness)
   3. Diff content is embedded directly in reviewer prompts (no `review.diff` file created)
   4. Completeness is a required lens; simplification is advisory-only and excluded from verdict gating
-  5. Findings are consolidated, deduped, and written as a thoughts artifact
-  6. `just thoughts_sync` is executed
+  5. The overall `/review` is incomplete only if the completeness run is missing, fails, times out, or produces unusable/invalid output
+  6. If completeness returns a normal report with material caveats (for example large-diff limitations or `line=0` fallback warnings), the review is still complete and those caveats must be surfaced in the final consolidated review output
+  7. Findings are consolidated, deduped, and written as a thoughts artifact
+  8. `just thoughts_sync` is executed
 
 ### Review Tools
 
@@ -245,7 +247,7 @@ Need to do something?
 ### Tool boundaries
 
 - Review orchestrator agent: may read files, run `just thoughts_sync`, call `review_*` tools, and write the artifact.
-- Non-Completeness reviewer sub-agents: **Read + Grep + Glob + cli_ls only** (no git/bash/write/edit/just_execute).
+- Non-Completeness reviewer sub-agents: **Read + cli_ls + cli_grep + cli_glob only** (no git/bash/write/edit/just_execute).
 - Completeness reviewer sub-agent: same narrow profile plus direct `ask_agent` access for exploration (still no git/bash/write/edit/just_execute).
 
 ---

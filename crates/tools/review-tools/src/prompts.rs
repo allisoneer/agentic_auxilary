@@ -9,13 +9,16 @@ use crate::types::ReviewLens;
 pub const REVIEWER_BASE_PROMPT: &str = r#"
 You are an adversarial code reviewer. Your task is to review LOCAL git changes provided inline in this prompt.
 The diff content will be provided within <untrusted_diff> tags. You cannot use git or bash.
-You may only use read-only tools (Read, Grep, Glob) for source file inspection.
+You may only use read-only tools for source file inspection:
+- Native: `Read`
+- MCP: `cli_ls`, `cli_grep`, `cli_glob`
+- Completeness lens only: you may additionally use `ask_agent` for broader exploration.
 
 Hard requirements:
 - Review the diff content provided in <untrusted_diff> tags.
 - The `line` field MUST be a SOURCE-FILE line number (1-based) in the file named by `file`.
   - DO NOT use line numbers from the inline diff.
-  - Use Grep on the source file to locate a unique snippet from the diff; use the Grep result line number.
+  - Use `cli_grep` on the source file to locate a unique snippet from the diff; use the grep result line number.
   - If the file is deleted/non-existent OR you cannot verify the exact source line: set "line": 0 (do not guess).
 - Output MUST be valid JSON matching the provided template.
 - No markdown, no code fences, no commentary outside JSON.
@@ -81,7 +84,7 @@ Completeness lens focus (REQUIRED):
 - Missing related updates: docs, tests, config, error handling, metrics
 - Cross-file consistency: types, callers, feature flags, migrations
 - File-level gaps are allowed: use line=0 with a clear explanation
-- You may use `ask_agent` for broader exploration when needed
+- Completeness may additionally use `ask_agent` for broader exploration when needed
 ";
 
 /// JSON output template embedded in prompts.
@@ -215,6 +218,30 @@ mod tests {
         assert!(
             REVIEWER_BASE_PROMPT.contains(r#"set "line": 0"#),
             "REVIEWER_BASE_PROMPT must instruct using line=0 when unverifiable"
+        );
+    }
+
+    #[test]
+    fn reviewer_base_prompt_uses_mcp_search_tools_and_completeness_exception() {
+        assert!(REVIEWER_BASE_PROMPT.contains("`Read`"));
+        assert!(REVIEWER_BASE_PROMPT.contains("`cli_ls`"));
+        assert!(REVIEWER_BASE_PROMPT.contains("`cli_grep`"));
+        assert!(REVIEWER_BASE_PROMPT.contains("`cli_glob`"));
+        assert!(REVIEWER_BASE_PROMPT.contains("`ask_agent`"));
+        assert!(REVIEWER_BASE_PROMPT.contains("Completeness lens only"));
+        assert!(!REVIEWER_BASE_PROMPT.contains("Grep"));
+        assert!(!REVIEWER_BASE_PROMPT.contains("Glob"));
+    }
+
+    #[test]
+    fn completeness_strategy_mentions_ask_agent_only_for_completeness() {
+        assert!(
+            STRATEGY_REVIEW_COMPLETENESS.contains("`ask_agent`"),
+            "completeness strategy should mention ask_agent"
+        );
+        assert!(
+            STRATEGY_REVIEW_COMPLETENESS.contains("Completeness may additionally use"),
+            "completeness strategy should frame ask_agent as completeness-only"
         );
     }
 

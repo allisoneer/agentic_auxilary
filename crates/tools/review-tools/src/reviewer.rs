@@ -20,7 +20,7 @@ use tokio::sync::Semaphore;
 use crate::types::ReviewLens;
 
 /// Reviewer sub-agent builtin tools (Claude Code native).
-pub const REVIEWER_BUILTIN_TOOLS: [&str; 3] = ["Read", "Grep", "Glob"];
+pub const REVIEWER_BUILTIN_TOOLS: [&str; 1] = ["Read"];
 
 /// Reviewer capability profile for a lens-specific reviewer session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,17 +30,26 @@ pub enum ReviewerCapabilityProfile {
 }
 
 /// Reviewer sub-agent MCP tool allowlist for the narrow profile.
-pub const REVIEWER_MCP_ALLOWLIST_NARROW: [&str; 1] = ["cli_ls"];
+pub const REVIEWER_MCP_ALLOWLIST_NARROW: [&str; 3] = ["cli_ls", "cli_grep", "cli_glob"];
 
 /// Reviewer sub-agent MCP tool allowlist for the completeness profile.
-pub const REVIEWER_MCP_ALLOWLIST_COMPLETENESS: [&str; 2] = ["cli_ls", "ask_agent"];
+pub const REVIEWER_MCP_ALLOWLIST_COMPLETENESS: [&str; 4] =
+    ["cli_ls", "cli_grep", "cli_glob", "ask_agent"];
 
 /// Reviewer sub-agent MCP tool names for the narrow profile.
-pub const REVIEWER_MCP_TOOL_NAMES_NARROW: [&str; 1] = ["mcp__agentic-mcp__cli_ls"];
+pub const REVIEWER_MCP_TOOL_NAMES_NARROW: [&str; 3] = [
+    "mcp__agentic-mcp__cli_ls",
+    "mcp__agentic-mcp__cli_grep",
+    "mcp__agentic-mcp__cli_glob",
+];
 
 /// Reviewer sub-agent MCP tool names for the completeness profile.
-pub const REVIEWER_MCP_TOOL_NAMES_COMPLETENESS: [&str; 2] =
-    ["mcp__agentic-mcp__cli_ls", "mcp__agentic-mcp__ask_agent"];
+pub const REVIEWER_MCP_TOOL_NAMES_COMPLETENESS: [&str; 4] = [
+    "mcp__agentic-mcp__cli_ls",
+    "mcp__agentic-mcp__cli_grep",
+    "mcp__agentic-mcp__cli_glob",
+    "mcp__agentic-mcp__ask_agent",
+];
 
 /// Maximum concurrent Claude reviewer sessions.
 pub const MAX_CONCURRENT_SESSIONS: usize = 3;
@@ -288,13 +297,31 @@ mod tests {
 
     #[test]
     fn reviewer_tool_constants_cover_both_profiles() {
-        assert_eq!(REVIEWER_BUILTIN_TOOLS, ["Read", "Grep", "Glob"]);
-        assert_eq!(REVIEWER_MCP_ALLOWLIST_NARROW, ["cli_ls"]);
-        assert_eq!(REVIEWER_MCP_TOOL_NAMES_NARROW, ["mcp__agentic-mcp__cli_ls"]);
-        assert_eq!(REVIEWER_MCP_ALLOWLIST_COMPLETENESS, ["cli_ls", "ask_agent"]);
+        assert_eq!(REVIEWER_BUILTIN_TOOLS, ["Read"]);
+        assert_eq!(
+            REVIEWER_MCP_ALLOWLIST_NARROW,
+            ["cli_ls", "cli_grep", "cli_glob"]
+        );
+        assert_eq!(
+            REVIEWER_MCP_TOOL_NAMES_NARROW,
+            [
+                "mcp__agentic-mcp__cli_ls",
+                "mcp__agentic-mcp__cli_grep",
+                "mcp__agentic-mcp__cli_glob"
+            ]
+        );
+        assert_eq!(
+            REVIEWER_MCP_ALLOWLIST_COMPLETENESS,
+            ["cli_ls", "cli_grep", "cli_glob", "ask_agent"]
+        );
         assert_eq!(
             REVIEWER_MCP_TOOL_NAMES_COMPLETENESS,
-            ["mcp__agentic-mcp__cli_ls", "mcp__agentic-mcp__ask_agent"]
+            [
+                "mcp__agentic-mcp__cli_ls",
+                "mcp__agentic-mcp__cli_grep",
+                "mcp__agentic-mcp__cli_glob",
+                "mcp__agentic-mcp__ask_agent"
+            ]
         );
     }
 
@@ -326,14 +353,18 @@ mod tests {
 
     #[test]
     fn completeness_profile_includes_ask_agent_only() {
-        assert!(
-            ClaudeCliRunner::all_tools(ReviewerCapabilityProfile::Completeness)
-                .contains(&"mcp__agentic-mcp__ask_agent".to_string())
-        );
-        assert!(
-            !ClaudeCliRunner::all_tools(ReviewerCapabilityProfile::Narrow)
-                .contains(&"mcp__agentic-mcp__ask_agent".to_string())
-        );
+        let completeness_tools =
+            ClaudeCliRunner::all_tools(ReviewerCapabilityProfile::Completeness);
+        let narrow_tools = ClaudeCliRunner::all_tools(ReviewerCapabilityProfile::Narrow);
+
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__ask_agent".to_string()));
+        assert!(narrow_tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
+        assert!(narrow_tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(narrow_tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
+        assert!(!narrow_tools.contains(&"mcp__agentic-mcp__ask_agent".to_string()));
     }
 
     #[test]

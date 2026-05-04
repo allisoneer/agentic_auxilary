@@ -322,7 +322,7 @@ impl ReviewTools {
              Invalid file:line pairs:\n{}\n\
              Instructions:\n\
              - The `line` field must be a SOURCE-FILE line number (1-based), NOT an inline diff line number.\n\
-             - Use Grep on the source file to find the snippet and get the real line number.\n\
+             - Use `cli_grep` on the source file to find the snippet and get the real line number.\n\
              - If you cannot verify the exact source line or the file is missing/deleted: set \"line\": 0.\n\
              - Do not add new findings; only repair file/line fields and formatting.\n\n\
              Previous response:\n{}\n\n\
