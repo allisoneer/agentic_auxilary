@@ -1,6 +1,6 @@
 [package]
 name = "agentic-mcp"
-version = "0.2.22"
+version = "0.2.23"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Unified MCP server for all agentic-tools"
