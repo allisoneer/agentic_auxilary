@@ -4,8 +4,10 @@ mod support;
 
 use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
+use opencode_orchestrator_mcp::tools::ListCommandsTool;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::tools::RespondPermissionTool;
+use opencode_orchestrator_mcp::types::ListCommandsInput;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use opencode_orchestrator_mcp::types::PermissionReply;
 use opencode_orchestrator_mcp::types::RespondPermissionInput;
@@ -20,6 +22,7 @@ use wiremock::matchers::path;
 use wiremock::matchers::path_regex;
 
 use support::SequenceResponder;
+use support::commands_list_fixture;
 use support::permission_fixture;
 use support::session_fixture;
 use support::status_v2_busy;
@@ -28,7 +31,7 @@ use support::test_orchestrator_server;
 #[tokio::test]
 async fn run_returns_cancelled_when_request_context_is_cancelled() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let session_id = "cancel-run";
 
@@ -66,6 +69,11 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
         .respond_with(ResponseTemplate::new(204).set_delay(Duration::from_secs(30)))
         .mount(&mock)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/command"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(commands_list_fixture()))
+        .mount(&mock)
+        .await;
 
     let ctx = ToolContext::default();
     let cancel = ctx.cancellation_token();
@@ -93,12 +101,18 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
         result,
         Err(agentic_tools_core::ToolError::Cancelled { .. })
     ));
+
+    let commands = ListCommandsTool::new(Arc::clone(&server))
+        .call(ListCommandsInput {}, &ToolContext::default())
+        .await
+        .expect("expected second call on same handle to succeed after cancellation");
+    assert_eq!(commands.commands.len(), 3);
 }
 
 #[tokio::test]
 async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondPermissionTool::new(Arc::clone(&server));
     let session_id = "cancel-perm";
     let permission_id = "perm-1";

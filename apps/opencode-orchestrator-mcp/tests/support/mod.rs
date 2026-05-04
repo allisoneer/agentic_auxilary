@@ -7,21 +7,33 @@
 #![allow(dead_code)]
 
 use opencode_orchestrator_mcp::server::OrchestratorServer;
+use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
 use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use tokio::sync::OnceCell;
+use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::Request;
 use wiremock::Respond;
 use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
-/// Build an `OrchestratorServer` cell connected to a wiremock `MockServer`.
+/// Build an `OrchestratorServerHandle` connected to a wiremock `MockServer`.
 ///
-/// The cell is pre-initialized with a server backed by the mock.
+/// The handle is pre-initialized with a server backed by the mock.
 /// Uses a short 5-second timeout suitable for tests.
-pub fn test_orchestrator_server(mock: &MockServer) -> Arc<OnceCell<OrchestratorServer>> {
+pub async fn test_orchestrator_server(mock: &MockServer) -> Arc<OrchestratorServerHandle> {
+    Mock::given(method("GET"))
+        .and(path("/global/health"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "healthy": true,
+            "version": "test",
+        })))
+        .mount(mock)
+        .await;
+
     let base_url = mock.uri().trim_end_matches('/').to_string();
     let client = opencode_rs::ClientBuilder::new()
         .base_url(&base_url)
@@ -29,11 +41,9 @@ pub fn test_orchestrator_server(mock: &MockServer) -> Arc<OnceCell<OrchestratorS
         .build()
         .unwrap();
 
-    let cell = Arc::new(OnceCell::new());
-    // Pre-initialize with the mock-backed server (bypasses managed server spawn)
-    cell.set(OrchestratorServer::from_client_unshared(client, base_url))
-        .unwrap_or_else(|_| panic!("cell should be empty"));
-    cell
+    Arc::new(OrchestratorServerHandle::from_server_unshared(
+        OrchestratorServer::from_client_unshared(client, base_url),
+    ))
 }
 
 /// Respond with different responses in sequence; after exhausting, repeat last.
@@ -330,11 +340,11 @@ pub fn commands_list_fixture() -> serde_json::Value {
 }
 
 /// Seed launched sessions on the in-memory test server.
-pub async fn seed_spawned_sessions(
-    server: &Arc<OnceCell<OrchestratorServer>>,
-    session_ids: &[&str],
-) {
-    let srv = server.get().expect("test server should be initialized");
+pub async fn seed_spawned_sessions(server: &Arc<OrchestratorServerHandle>, session_ids: &[&str]) {
+    let srv = server
+        .acquire()
+        .await
+        .expect("test server should be initialized");
     let mut spawned = srv.spawned_sessions().write().await;
     for session_id in session_ids {
         spawned.insert((*session_id).to_string());

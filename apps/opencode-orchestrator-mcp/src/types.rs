@@ -233,7 +233,8 @@ pub struct SessionSummary {
     /// File change statistics
     #[serde(skip_serializing_if = "Option::is_none")]
     pub change_stats: Option<ChangeStats>,
-    /// True when the current orchestrator created this session.
+    /// True when the current cached orchestrator server instance created this session.
+    /// Resets after a full embedded-server rebuild.
     pub launched_by_you: bool,
 }
 
@@ -276,7 +277,8 @@ pub struct GetSessionStateOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     pub status: SessionStatusSummary,
-    /// True when the current orchestrator created this session.
+    /// True when the current cached orchestrator server instance created this session.
+    /// Resets after a full embedded-server rebuild.
     pub launched_by_you: bool,
     /// Number of pending messages awaiting an assistant reply.
     pub pending_message_count: usize,

@@ -13,7 +13,9 @@ use opencode_rs::types::provider::ProviderListResponse;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::time::Duration;
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::RwLock;
 
 use crate::version;
@@ -72,11 +74,95 @@ where
 /// Key for looking up model context limits: (`provider_id`, `model_id`)
 pub type ModelKey = (String, String);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ServerEntryState {
+    Healthy,
+    NeedsRecovery { reason: String },
+}
+
+/// Shared recoverable handle for the process-global orchestrator server snapshot.
+pub struct OrchestratorServerHandle {
+    cached: AsyncMutex<Option<Arc<OrchestratorServer>>>,
+}
+
+impl Default for OrchestratorServerHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OrchestratorServerHandle {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            cached: AsyncMutex::new(None),
+        }
+    }
+
+    /// Acquire a live orchestrator server snapshot for a tool entry.
+    ///
+    /// Existing callers keep their previously acquired `Arc<OrchestratorServer>`
+    /// even if this handle later replaces the cached snapshot during recovery.
+    pub async fn acquire(&self) -> anyhow::Result<Arc<OrchestratorServer>> {
+        self.get_or_recover_with(OrchestratorServer::start_lazy)
+            .await
+    }
+
+    async fn get_or_recover_with<F, Fut>(
+        &self,
+        mut start: F,
+    ) -> anyhow::Result<Arc<OrchestratorServer>>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<OrchestratorServer>>,
+    {
+        let mut cached = self.cached.lock().await;
+
+        if let Some(snapshot) = cached.as_ref() {
+            match snapshot.validate_for_tool_entry().await? {
+                ServerEntryState::Healthy => return Ok(Arc::clone(snapshot)),
+                ServerEntryState::NeedsRecovery { reason } => {
+                    tracing::warn!(reason = %reason, "cached orchestrator server failed liveness check; rebuilding");
+                }
+            }
+        } else {
+            tracing::info!("orchestrator server missing cached snapshot; starting embedded server");
+        }
+
+        let rebuilt = Arc::new(start().await?);
+        // Full rebuild intentionally replaces the entire cached snapshot, which
+        // also resets `spawned_sessions` so `launched_by_you` only describes
+        // sessions owned by the current cached server instance.
+        *cached = Some(Arc::clone(&rebuilt));
+        Ok(rebuilt)
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn from_server_unshared(server: OrchestratorServer) -> Self {
+        Self {
+            cached: AsyncMutex::new(Some(Arc::new(server))),
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn acquire_or_recover_with<F, Fut>(
+        &self,
+        start: F,
+    ) -> anyhow::Result<Arc<OrchestratorServer>>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<OrchestratorServer>>,
+    {
+        self.get_or_recover_with(start).await
+    }
+}
+
 /// Shared state wrapping the managed `OpenCode` server and HTTP client.
 pub struct OrchestratorServer {
     /// Keep alive for lifecycle; Drop kills the opencode serve process.
     /// `None` when using an external client (e.g., wiremock tests).
-    _managed: Option<ManagedServer>,
+    managed_server: StdMutex<Option<ManagedServer>>,
     /// HTTP client for `OpenCode` API
     client: Client,
     /// Cached model context limits from GET /provider
@@ -207,7 +293,7 @@ impl OrchestratorServer {
         tracing::info!("Loaded {} model context limits", model_context_limits.len());
 
         Ok(Self {
-            _managed: Some(managed),
+            managed_server: StdMutex::new(Some(managed)),
             client,
             model_context_limits,
             base_url,
@@ -291,7 +377,7 @@ impl OrchestratorServer {
         tracing::info!("Loaded {} model context limits", model_context_limits.len());
 
         Ok(Self {
-            _managed: Some(managed),
+            managed_server: StdMutex::new(Some(managed)),
             client,
             model_context_limits,
             base_url,
@@ -336,6 +422,43 @@ impl OrchestratorServer {
     /// Returns session IDs created by this orchestrator instance.
     pub fn spawned_sessions(&self) -> &Arc<RwLock<HashSet<String>>> {
         &self.spawned_sessions
+    }
+
+    fn managed_server_lock(&self) -> std::sync::MutexGuard<'_, Option<ManagedServer>> {
+        self.managed_server
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn is_managed(&self) -> bool {
+        self.managed_server_lock().is_some()
+    }
+
+    async fn validate_for_tool_entry(&self) -> anyhow::Result<ServerEntryState> {
+        if self.is_managed() {
+            let is_running = {
+                let mut managed = self.managed_server_lock();
+                managed
+                    .as_mut()
+                    .is_some_and(opencode_rs::server::ManagedServer::is_running)
+            };
+
+            if !is_running {
+                return Ok(ServerEntryState::NeedsRecovery {
+                    reason: "managed child is no longer running".to_string(),
+                });
+            }
+        }
+
+        match self.client.misc().health().await {
+            Ok(health) if health.healthy => Ok(ServerEntryState::Healthy),
+            Ok(_health) => Ok(ServerEntryState::NeedsRecovery {
+                reason: "/global/health reported unhealthy".to_string(),
+            }),
+            Err(error) => Ok(ServerEntryState::NeedsRecovery {
+                reason: format!("/global/health probe failed: {error}"),
+            }),
+        }
     }
 
     /// Load model context limits from GET /provider.
@@ -386,7 +509,7 @@ impl OrchestratorServer {
 /// These functions may appear unused when compiling non-test targets because
 /// cargo's feature unification enables the feature for all targets when tests
 /// are compiled. The `dead_code` warning is expected and suppressed.
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[allow(dead_code, clippy::allow_attributes)]
 impl OrchestratorServer {
     /// Build an `OrchestratorServer` wrapper around an existing client.
@@ -399,15 +522,42 @@ impl OrchestratorServer {
 
     /// Build an `OrchestratorServer` wrapper returning `Self` (not `Arc<Self>`).
     ///
-    /// Useful for tests that need to populate an `OnceCell` directly.
+    /// Useful for tests that need to preseed an `OrchestratorServerHandle` directly.
     pub fn from_client_unshared(client: Client, base_url: impl Into<String>) -> Self {
         Self {
-            _managed: None,
+            managed_server: StdMutex::new(None),
             client,
             model_context_limits: HashMap::new(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
             config: OrchestratorConfig::default(),
             spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    pub fn from_managed_for_testing(
+        managed: ManagedServer,
+        client: Client,
+        base_url: impl Into<String>,
+    ) -> Self {
+        Self {
+            managed_server: StdMutex::new(Some(managed)),
+            client,
+            model_context_limits: HashMap::new(),
+            base_url: base_url.into().trim_end_matches('/').to_string(),
+            config: OrchestratorConfig::default(),
+            spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    pub async fn stop_managed_for_testing(&self) -> anyhow::Result<()> {
+        let managed = {
+            let mut guard = self.managed_server_lock();
+            guard.take()
+        };
+
+        match managed {
+            Some(managed) => managed.stop().await.map_err(Into::into),
+            None => anyhow::bail!("no managed server is attached to this snapshot"),
         }
     }
 }
@@ -416,8 +566,52 @@ impl OrchestratorServer {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
+    use std::time::Duration;
+    use tokio::process::Command;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    async fn health_mock_server() -> MockServer {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "healthy": true,
+                "version": version::PINNED_OPENCODE_VERSION,
+            })))
+            .mount(&mock)
+            .await;
+        mock
+    }
+
+    fn test_client(base_url: &str) -> Client {
+        opencode_rs::ClientBuilder::new()
+            .base_url(base_url)
+            .timeout_secs(5)
+            .build()
+            .unwrap()
+    }
+
+    fn external_server(base_url: &str) -> OrchestratorServer {
+        OrchestratorServer::from_client_unshared(test_client(base_url), base_url)
+    }
+
+    async fn exited_child() -> tokio::process::Child {
+        let mut child = Command::new("sh").arg("-c").arg("exit 0").spawn().unwrap();
+        let _status = child.wait().await.unwrap();
+        child
+    }
+
+    async fn managed_server_with_exited_child(base_url: &str) -> OrchestratorServer {
+        let managed = ManagedServer::from_child_for_testing(exited_child().await, base_url, 9);
+        OrchestratorServer::from_managed_for_testing(managed, test_client(base_url), base_url)
+    }
 
     #[tokio::test]
     async fn init_with_retry_succeeds_on_first_attempt() {
@@ -471,6 +665,116 @@ mod tests {
 
         assert!(err.to_string().contains("always fail"));
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn handle_serializes_initialization_and_reuses_snapshot() {
+        let mock = health_mock_server().await;
+        let base_url = mock.uri();
+        let handle = Arc::new(OrchestratorServerHandle::new());
+        let starts = Arc::new(AtomicUsize::new(0));
+
+        let first = {
+            let handle = Arc::clone(&handle);
+            let starts = Arc::clone(&starts);
+            let base_url = base_url.clone();
+            tokio::spawn(async move {
+                handle
+                    .get_or_recover_with(|| {
+                        let starts = Arc::clone(&starts);
+                        let base_url = base_url.clone();
+                        async move {
+                            starts.fetch_add(1, Ordering::SeqCst);
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+                            Ok(external_server(&base_url))
+                        }
+                    })
+                    .await
+            })
+        };
+
+        let second = {
+            let handle = Arc::clone(&handle);
+            let starts = Arc::clone(&starts);
+            let base_url = base_url.clone();
+            tokio::spawn(async move {
+                handle
+                    .get_or_recover_with(|| {
+                        let starts = Arc::clone(&starts);
+                        let base_url = base_url.clone();
+                        async move {
+                            starts.fetch_add(1, Ordering::SeqCst);
+                            Ok(external_server(&base_url))
+                        }
+                    })
+                    .await
+            })
+        };
+
+        let first = first.await.unwrap().unwrap();
+        let second = second.await.unwrap().unwrap();
+
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[tokio::test]
+    async fn validate_for_tool_entry_uses_health_for_external_server() {
+        let mock = health_mock_server().await;
+        let server = external_server(&mock.uri());
+
+        let state = server.validate_for_tool_entry().await.unwrap();
+
+        assert_eq!(state, ServerEntryState::Healthy);
+        let requests = mock.received_requests().await.unwrap();
+        assert!(
+            requests
+                .iter()
+                .any(|request| request.url.path() == "/global/health"),
+            "expected /global/health request"
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_for_tool_entry_short_circuits_dead_managed_server() {
+        let server = managed_server_with_exited_child("http://127.0.0.1:9").await;
+
+        let state = server.validate_for_tool_entry().await.unwrap();
+
+        assert_eq!(
+            state,
+            ServerEntryState::NeedsRecovery {
+                reason: "managed child is no longer running".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_rebuilds_without_invalidating_held_snapshot() {
+        let stale = Arc::new(managed_server_with_exited_child("http://127.0.0.1:9").await);
+        let handle = OrchestratorServerHandle {
+            cached: AsyncMutex::new(Some(Arc::clone(&stale))),
+        };
+        let mock = health_mock_server().await;
+        let base_url = mock.uri();
+        let starts = Arc::new(AtomicUsize::new(0));
+
+        let rebuilt = handle
+            .get_or_recover_with(|| {
+                let starts = Arc::clone(&starts);
+                let base_url = base_url.clone();
+                async move {
+                    starts.fetch_add(1, Ordering::SeqCst);
+                    Ok(external_server(&base_url))
+                }
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert!(!Arc::ptr_eq(&stale, &rebuilt));
+        assert_eq!(stale.base_url(), "http://127.0.0.1:9");
+        assert_eq!(rebuilt.base_url(), base_url.trim_end_matches('/'));
     }
 
     #[test]
@@ -528,6 +832,31 @@ mod tests {
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "true") };
         assert!(managed_guard_enabled());
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn recursion_guard_only_blocks_real_startup_paths() {
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+        unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
+
+        let mock = health_mock_server().await;
+        let handle = OrchestratorServerHandle::from_server_unshared(external_server(&mock.uri()));
+        let reused = handle
+            .get_or_recover_with(|| async { anyhow::bail!("should not start") })
+            .await
+            .unwrap();
+        assert_eq!(reused.base_url(), mock.uri().trim_end_matches('/'));
+
+        let fresh_handle = OrchestratorServerHandle::new();
+        let err = match fresh_handle.acquire().await {
+            Ok(_server) => panic!("expected recursion guard to block fresh startup"),
+            Err(error) => error,
+        };
+        assert!(err.to_string().contains(ORCHESTRATOR_MANAGED_GUARD_MESSAGE));
+
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }

@@ -256,6 +256,23 @@ impl ManagedServer {
     pub fn is_running(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(None))
     }
+
+    /// Build a managed server wrapper from an existing child process.
+    ///
+    /// This is intended for higher-level recovery tests that need to simulate
+    /// a managed child without starting a real `opencode serve` instance.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn from_child_for_testing(child: Child, base_url: impl AsRef<str>, port: u16) -> Self {
+        Self {
+            base_url: match Url::parse(base_url.as_ref()) {
+                Ok(url) => url,
+                Err(error) => panic!("managed server test helper requires a valid URL: {error}"),
+            },
+            child,
+            port,
+        }
+    }
 }
 
 impl Drop for ManagedServer {
