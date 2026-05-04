@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.0] - 2026-05-04
+
+### ⛰️  Features
+- *(review_tools)* Add ENG-647 simplification and completeness review lenses
+
+### 🐛 Bug Fixes
+- *(review_tools)* Align reviewer tool contract with workflow docs
 ## [0.2.0] - 2026-05-03
 
 ### 🐛 Bug Fixes
