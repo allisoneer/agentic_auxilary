@@ -82,11 +82,8 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     let mut warnings = Vec::new();
 
     // Read configs as TOML Values
-    let mut global_v = read_toml_table_or_empty(&global_path)?;
-    let mut local_v = read_toml_table_or_empty(&local_path)?;
-
-    alias_reasoning_token_limit_to_max_input_tokens(&mut global_v);
-    alias_reasoning_token_limit_to_max_input_tokens(&mut local_v);
+    let global_v = read_toml_table_or_empty(&global_path)?;
+    let local_v = read_toml_table_or_empty(&local_path)?;
 
     // Merge: global as base, local as patch
     let merged = deep_merge(global_v, local_v);
@@ -108,7 +105,7 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
 
     // Apply env var overrides (highest precedence)
     let mut cfg = cfg;
-    apply_env_overrides(&mut cfg, &mut warnings);
+    apply_env_overrides(&mut cfg);
 
     // Run advisory validation and add to warnings
     warnings.extend(crate::validation::validate(&cfg));
@@ -123,36 +120,8 @@ pub fn load_merged(local_dir: &Path) -> Result<LoadedAgenticConfig> {
     })
 }
 
-fn alias_reasoning_token_limit_to_max_input_tokens(v: &mut toml::Value) {
-    let Some(root) = v.as_table_mut() else {
-        return;
-    };
-    let Some(reasoning) = root
-        .get_mut("reasoning")
-        .and_then(toml::Value::as_table_mut)
-    else {
-        return;
-    };
-
-    if reasoning.contains_key("max_input_tokens") {
-        return;
-    }
-
-    let Some(raw) = reasoning.get("token_limit") else {
-        return;
-    };
-    let Some(n_i64) = raw.as_integer() else {
-        return;
-    };
-    if !(0..=i64::from(u32::MAX)).contains(&n_i64) {
-        return;
-    }
-
-    reasoning.insert("max_input_tokens".into(), toml::Value::Integer(n_i64));
-}
-
 /// Apply environment variable overrides to the config.
-fn apply_env_overrides(cfg: &mut AgenticConfig, warnings: &mut Vec<AdvisoryWarning>) {
+fn apply_env_overrides(cfg: &mut AgenticConfig) {
     // --- Service URLs ---
     if let Some(v) = env_trimmed("ANTHROPIC_BASE_URL") {
         cfg.services.anthropic.base_url = v;
@@ -182,19 +151,7 @@ fn apply_env_overrides(cfg: &mut AgenticConfig, warnings: &mut Vec<AdvisoryWarni
     if let Some(v) = env_trimmed("AGENTIC_REASONING_API_BASE_URL") {
         cfg.reasoning.api_base_url = Some(v);
     }
-    let deprecated_input_env = env_trimmed("AGENTIC_REASONING_TOKEN_LIMIT");
-    if deprecated_input_env.is_some() {
-        warnings.push(AdvisoryWarning::new(
-            "config.deprecated.env.reasoning_token_limit",
-            "env.AGENTIC_REASONING_TOKEN_LIMIT",
-            "AGENTIC_REASONING_TOKEN_LIMIT is deprecated; use AGENTIC_REASONING_MAX_INPUT_TOKENS. It aliases to max_input_tokens only.",
-        ));
-    }
     if let Some(v) = env_trimmed("AGENTIC_REASONING_MAX_INPUT_TOKENS")
-        && let Ok(n) = v.parse()
-    {
-        cfg.reasoning.max_input_tokens = Some(n);
-    } else if let Some(v) = deprecated_input_env
         && let Ok(n) = v.parse()
     {
         cfg.reasoning.max_input_tokens = Some(n);
@@ -399,77 +356,6 @@ optimizer_model = "file-model"
             45
         );
         assert_eq!(loaded.config.reasoning.stream_heartbeat_secs, 9);
-    }
-
-    #[test]
-    #[serial]
-    fn test_reasoning_token_limit_toml_aliases_to_max_input_tokens_and_warns() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        std::fs::write(
-            temp.path().join(LOCAL_FILE),
-            r"
-[reasoning]
-token_limit = 12345
-",
-        )
-        .unwrap();
-
-        let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(loaded.config.reasoning.max_input_tokens, Some(12_345));
-        assert_eq!(loaded.config.reasoning.max_completion_tokens, Some(128_000));
-        assert!(
-            loaded
-                .warnings
-                .iter()
-                .any(|w| w.code == "config.deprecated.reasoning.token_limit")
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_reasoning_max_input_tokens_wins_over_token_limit_in_same_toml_layer() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        std::fs::write(
-            temp.path().join(LOCAL_FILE),
-            r"
-[reasoning]
-max_input_tokens = 111
-token_limit = 222
-",
-        )
-        .unwrap();
-
-        let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(loaded.config.reasoning.max_input_tokens, Some(111));
-        assert!(
-            loaded
-                .warnings
-                .iter()
-                .any(|w| w.code == "config.deprecated.reasoning.token_limit")
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_deprecated_env_token_limit_warns_and_new_env_wins() {
-        let temp = TempDir::new().unwrap();
-        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
-
-        let _g_old = EnvGuard::set("AGENTIC_REASONING_TOKEN_LIMIT", "222");
-        let _g_new = EnvGuard::set("AGENTIC_REASONING_MAX_INPUT_TOKENS", "111");
-
-        let loaded = load_merged(temp.path()).unwrap();
-        assert_eq!(loaded.config.reasoning.max_input_tokens, Some(111));
-        assert!(
-            loaded
-                .warnings
-                .iter()
-                .any(|w| w.code == "config.deprecated.env.reasoning_token_limit")
-        );
     }
 
     #[test]
