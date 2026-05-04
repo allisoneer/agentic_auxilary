@@ -17,17 +17,42 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
 
+use crate::types::ReviewLens;
+
 /// Reviewer sub-agent builtin tools (Claude Code native).
-pub const REVIEWER_BUILTIN_TOOLS: [&str; 3] = ["Read", "Grep", "Glob"];
+pub const REVIEWER_BUILTIN_TOOLS: [&str; 1] = ["Read"];
 
-/// Reviewer sub-agent MCP tool allowlist (short names for config).
-pub const REVIEWER_MCP_ALLOWLIST: [&str; 1] = ["cli_ls"];
+/// Reviewer capability profile for a lens-specific reviewer session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewerCapabilityProfile {
+    Narrow,
+    Completeness,
+}
 
-/// Reviewer sub-agent MCP tool names (fully qualified for session config).
-pub const REVIEWER_MCP_TOOL_NAMES: [&str; 1] = ["mcp__agentic-mcp__cli_ls"];
+/// Reviewer sub-agent MCP tool allowlist for the narrow profile.
+pub const REVIEWER_MCP_ALLOWLIST_NARROW: [&str; 3] = ["cli_ls", "cli_grep", "cli_glob"];
+
+/// Reviewer sub-agent MCP tool allowlist for the completeness profile.
+pub const REVIEWER_MCP_ALLOWLIST_COMPLETENESS: [&str; 4] =
+    ["cli_ls", "cli_grep", "cli_glob", "ask_agent"];
+
+/// Reviewer sub-agent MCP tool names for the narrow profile.
+pub const REVIEWER_MCP_TOOL_NAMES_NARROW: [&str; 3] = [
+    "mcp__agentic-mcp__cli_ls",
+    "mcp__agentic-mcp__cli_grep",
+    "mcp__agentic-mcp__cli_glob",
+];
+
+/// Reviewer sub-agent MCP tool names for the completeness profile.
+pub const REVIEWER_MCP_TOOL_NAMES_COMPLETENESS: [&str; 4] = [
+    "mcp__agentic-mcp__cli_ls",
+    "mcp__agentic-mcp__cli_grep",
+    "mcp__agentic-mcp__cli_glob",
+    "mcp__agentic-mcp__ask_agent",
+];
 
 /// Maximum concurrent Claude reviewer sessions.
-pub const MAX_CONCURRENT_SESSIONS: usize = 2;
+pub const MAX_CONCURRENT_SESSIONS: usize = 3;
 
 /// Wall-clock timeout for a single reviewer session (30 minutes).
 pub const SESSION_TIMEOUT: Duration = Duration::from_secs(1800);
@@ -44,10 +69,23 @@ pub trait ReviewerRunner: Send + Sync {
     /// Run a reviewer session and return the raw text output.
     fn run_text(
         &self,
+        profile: ReviewerCapabilityProfile,
         system_prompt: String,
         user_prompt: String,
         ctx: ToolContext,
     ) -> BoxFuture<'static, Result<String, ToolError>>;
+}
+
+/// Select the reviewer capability profile for a lens.
+pub fn capability_profile_for_lens(lens: ReviewLens) -> ReviewerCapabilityProfile {
+    match lens {
+        ReviewLens::Completeness => ReviewerCapabilityProfile::Completeness,
+        ReviewLens::Security
+        | ReviewLens::Correctness
+        | ReviewLens::Maintainability
+        | ReviewLens::Testing
+        | ReviewLens::Simplification => ReviewerCapabilityProfile::Narrow,
+    }
 }
 
 async fn wait_for_review_result<F, C, CFn>(
@@ -96,18 +134,37 @@ impl ClaudeCliRunner {
     }
 
     /// Build the complete list of all tool names (builtin + MCP) for reviewer sessions.
-    fn all_tools() -> Vec<String> {
+    fn all_tools(profile: ReviewerCapabilityProfile) -> Vec<String> {
         REVIEWER_BUILTIN_TOOLS
             .iter()
-            .chain(REVIEWER_MCP_TOOL_NAMES.iter())
+            .chain(Self::mcp_tool_names(profile).iter())
             .map(|s| (*s).to_string())
             .collect()
     }
 
+    /// Select allowed MCP short names for a reviewer profile.
+    fn mcp_allowlist(profile: ReviewerCapabilityProfile) -> &'static [&'static str] {
+        match profile {
+            ReviewerCapabilityProfile::Narrow => &REVIEWER_MCP_ALLOWLIST_NARROW,
+            ReviewerCapabilityProfile::Completeness => &REVIEWER_MCP_ALLOWLIST_COMPLETENESS,
+        }
+    }
+
+    /// Select allowed MCP fully qualified tool names for a reviewer profile.
+    fn mcp_tool_names(profile: ReviewerCapabilityProfile) -> &'static [&'static str] {
+        match profile {
+            ReviewerCapabilityProfile::Narrow => &REVIEWER_MCP_TOOL_NAMES_NARROW,
+            ReviewerCapabilityProfile::Completeness => &REVIEWER_MCP_TOOL_NAMES_COMPLETENESS,
+        }
+    }
+
     /// Build MCP config for reviewer subagents.
-    fn mcp_config() -> MCPConfig {
+    fn mcp_config(profile: ReviewerCapabilityProfile) -> MCPConfig {
         let mut servers: HashMap<String, MCPServer> = HashMap::new();
-        let args = vec!["--allow".to_string(), REVIEWER_MCP_ALLOWLIST.join(",")];
+        let args = vec![
+            "--allow".to_string(),
+            Self::mcp_allowlist(profile).join(","),
+        ];
         servers.insert(
             "agentic-mcp".to_string(),
             MCPServer::stdio("agentic-mcp", args),
@@ -127,14 +184,15 @@ impl Default for ClaudeCliRunner {
 impl ReviewerRunner for ClaudeCliRunner {
     fn run_text(
         &self,
+        profile: ReviewerCapabilityProfile,
         system_prompt: String,
         user_prompt: String,
         ctx: ToolContext,
     ) -> BoxFuture<'static, Result<String, ToolError>> {
         let semaphore = Arc::clone(&self.semaphore);
         let builtin_tools = Self::builtin_tools();
-        let all_tools = Self::all_tools();
-        let mcp_config = Self::mcp_config();
+        let all_tools = Self::all_tools(profile);
+        let mcp_config = Self::mcp_config(profile);
 
         Box::pin(async move {
             // Acquire semaphore permit
@@ -214,6 +272,7 @@ impl MockRunner {
 impl ReviewerRunner for MockRunner {
     fn run_text(
         &self,
+        _profile: ReviewerCapabilityProfile,
         _system_prompt: String,
         _user_prompt: String,
         _ctx: ToolContext,
@@ -237,15 +296,75 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[test]
-    fn reviewer_tool_constants() {
-        assert_eq!(REVIEWER_BUILTIN_TOOLS, ["Read", "Grep", "Glob"]);
-        assert_eq!(REVIEWER_MCP_ALLOWLIST, ["cli_ls"]);
-        assert_eq!(REVIEWER_MCP_TOOL_NAMES, ["mcp__agentic-mcp__cli_ls"]);
+    fn reviewer_tool_constants_cover_both_profiles() {
+        assert_eq!(REVIEWER_BUILTIN_TOOLS, ["Read"]);
+        assert_eq!(
+            REVIEWER_MCP_ALLOWLIST_NARROW,
+            ["cli_ls", "cli_grep", "cli_glob"]
+        );
+        assert_eq!(
+            REVIEWER_MCP_TOOL_NAMES_NARROW,
+            [
+                "mcp__agentic-mcp__cli_ls",
+                "mcp__agentic-mcp__cli_grep",
+                "mcp__agentic-mcp__cli_glob"
+            ]
+        );
+        assert_eq!(
+            REVIEWER_MCP_ALLOWLIST_COMPLETENESS,
+            ["cli_ls", "cli_grep", "cli_glob", "ask_agent"]
+        );
+        assert_eq!(
+            REVIEWER_MCP_TOOL_NAMES_COMPLETENESS,
+            [
+                "mcp__agentic-mcp__cli_ls",
+                "mcp__agentic-mcp__cli_grep",
+                "mcp__agentic-mcp__cli_glob",
+                "mcp__agentic-mcp__ask_agent"
+            ]
+        );
     }
 
     #[test]
-    fn max_concurrent_sessions_is_2() {
-        assert_eq!(MAX_CONCURRENT_SESSIONS, 2);
+    fn max_concurrent_sessions_is_3() {
+        assert_eq!(MAX_CONCURRENT_SESSIONS, 3);
+    }
+
+    #[test]
+    fn capability_profile_for_lens_maps_completeness_only() {
+        assert_eq!(
+            capability_profile_for_lens(ReviewLens::Completeness),
+            ReviewerCapabilityProfile::Completeness
+        );
+
+        for lens in [
+            ReviewLens::Security,
+            ReviewLens::Correctness,
+            ReviewLens::Maintainability,
+            ReviewLens::Testing,
+            ReviewLens::Simplification,
+        ] {
+            assert_eq!(
+                capability_profile_for_lens(lens),
+                ReviewerCapabilityProfile::Narrow
+            );
+        }
+    }
+
+    #[test]
+    fn completeness_profile_includes_ask_agent_only() {
+        let completeness_tools =
+            ClaudeCliRunner::all_tools(ReviewerCapabilityProfile::Completeness);
+        let narrow_tools = ClaudeCliRunner::all_tools(ReviewerCapabilityProfile::Narrow);
+
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
+        assert!(completeness_tools.contains(&"mcp__agentic-mcp__ask_agent".to_string()));
+        assert!(narrow_tools.contains(&"mcp__agentic-mcp__cli_ls".to_string()));
+        assert!(narrow_tools.contains(&"mcp__agentic-mcp__cli_grep".to_string()));
+        assert!(narrow_tools.contains(&"mcp__agentic-mcp__cli_glob".to_string()));
+        assert!(!narrow_tools.contains(&"mcp__agentic-mcp__ask_agent".to_string()));
     }
 
     #[test]
@@ -269,7 +388,12 @@ mod tests {
     async fn mock_runner_returns_responses() {
         let runner = MockRunner::new(vec![Ok("test response".into())]);
         let result = runner
-            .run_text("system".into(), "user".into(), ToolContext::default())
+            .run_text(
+                ReviewerCapabilityProfile::Narrow,
+                "system".into(),
+                "user".into(),
+                ToolContext::default(),
+            )
             .await;
         assert_eq!(result.unwrap(), "test response");
     }
@@ -278,7 +402,12 @@ mod tests {
     async fn mock_runner_exhaustion() {
         let runner = MockRunner::new(vec![]);
         let result = runner
-            .run_text("system".into(), "user".into(), ToolContext::default())
+            .run_text(
+                ReviewerCapabilityProfile::Narrow,
+                "system".into(),
+                "user".into(),
+                ToolContext::default(),
+            )
             .await;
         assert!(result.is_err());
     }

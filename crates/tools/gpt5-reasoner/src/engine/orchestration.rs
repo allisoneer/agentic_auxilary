@@ -7,7 +7,7 @@ use crate::engine::memory::injection_enabled_from_env;
 use crate::engine::paths::dedup_files_in_place;
 use crate::engine::paths::normalize_paths_in_place;
 use crate::engine::paths::precheck_files;
-use crate::errors::*;
+use crate::errors::ReasonerError;
 use crate::optimizer::call_optimizer;
 use crate::optimizer::parser::OptimizerOutput;
 use crate::optimizer::parser::parse_optimizer_output;
@@ -28,6 +28,7 @@ use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
 use async_openai::types::chat::ChatCompletionStreamOptions;
 use async_openai::types::chat::CompletionUsage;
 use async_openai::types::chat::CreateChatCompletionRequestArgs;
+use async_openai::types::chat::FinishReason;
 use async_openai::types::chat::ReasoningEffort;
 use futures::StreamExt;
 use thoughts_tool::DocumentType;
@@ -36,6 +37,11 @@ use thoughts_tool::write_document;
 const PARTIAL_REASONING_MARKER: &str = "> **Warning:** Partial response (executor stream interrupted). Content below may be incomplete.\n\n";
 
 const PARTIAL_PLAN_MARKER: &str = "**WARNING: INCOMPLETE PLAN**\nThe plan below may be incomplete because the executor stream ended unexpectedly.\n\n---\n\n";
+
+const TEMPLATE_RETRIES: usize = 2;
+const TEMPLATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(900);
+const EXECUTOR_RETRIES: usize = 1;
+const EXECUTOR_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
 #[derive(Debug)]
 enum ExecutorStreamError {
@@ -49,6 +55,17 @@ struct ExecutorStreamState {
     usage: Option<CompletionUsage>,
     chunks: usize,
     first_content_ms: Option<u128>,
+    response_id: Option<String>,
+    finish_reason: Option<FinishReason>,
+}
+
+#[derive(Clone, Copy)]
+struct ExecutorStreamOutcome<'a> {
+    partial: bool,
+    timeout: bool,
+    empty: bool,
+    stream_error: Option<&'a str>,
+    stream_error_class: Option<&'a str>,
 }
 
 impl ExecutorStreamState {
@@ -68,23 +85,40 @@ fn executor_stream_summary(
     attempt: usize,
     duration: std::time::Duration,
     state: &ExecutorStreamState,
-    partial: bool,
-    timeout: bool,
-    empty: bool,
-    stream_error: Option<&str>,
+    outcome: ExecutorStreamOutcome<'_>,
 ) -> serde_json::Value {
+    let completion_tokens_details = state
+        .usage
+        .as_ref()
+        .and_then(|usage| usage.completion_tokens_details.clone());
+
     serde_json::json!({
-        "attempt": attempt + 1,
-        "duration_ms": duration.as_millis(),
-        "chunks": state.chunks,
+        "attempt_index": attempt,
+        "attempt_duration_ms": duration.as_millis(),
+        "chunks_received": state.chunks,
         "chars": state.content.len(),
-        "first_content_ms": state.first_content_ms,
-        "usage_present": state.usage.is_some(),
-        "partial": partial,
-        "timeout": timeout,
-        "empty": empty,
-        "stream_error": stream_error,
+        "time_to_first_content_ms": state.first_content_ms,
+        "usage_chunk_observed": state.usage.is_some(),
+        "partial": outcome.partial,
+        "timeout": outcome.timeout,
+        "empty": outcome.empty,
+        "stream_error": outcome.stream_error,
+        "response_id": state.response_id.clone(),
+        "finish_reason": state.finish_reason.clone(),
+        "completion_tokens_details": completion_tokens_details,
+        "stream_error_class": outcome.stream_error_class,
     })
+}
+
+fn stream_error_class_from_openai(e: &OpenAIError) -> &'static str {
+    match e {
+        OpenAIError::Reqwest(_) => "reqwest",
+        OpenAIError::StreamError(_) => "stream",
+        OpenAIError::JSONDeserialize(_, _) => "json_deserialize",
+        OpenAIError::ApiError(_) => "api",
+        OpenAIError::InvalidArgument(_) => "invalid_argument",
+        _ => "other",
+    }
 }
 
 /// Parse reasoning effort string to enum, defaulting to Xhigh.
@@ -93,7 +127,6 @@ fn parse_reasoning_effort(v: Option<&str>) -> ReasoningEffort {
         Some("low") => ReasoningEffort::Low,
         Some("medium") => ReasoningEffort::Medium,
         Some("high") => ReasoningEffort::High,
-        Some("xhigh") => ReasoningEffort::Xhigh,
         _ => ReasoningEffort::Xhigh, // default
     }
 }
@@ -175,7 +208,7 @@ pub async fn gpt5_reasoner_impl(
         let expanded = match expand_directories_to_filemeta(dirs) {
             Ok(v) => v,
             Err(e) => {
-                let msg = format!("stage=expand_directories: {}", e);
+                let msg = format!("stage=expand_directories: {e}");
                 log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(e));
             }
@@ -223,7 +256,7 @@ pub async fn gpt5_reasoner_impl(
     // Pre-validate after injection so newly discovered files are checked
     tracing::info!("Pre-validating {} file(s) before optimizer", files.len());
     if let Err(e) = precheck_files(&files) {
-        let msg = format!("stage=precheck_files: {}", e);
+        let msg = format!("stage=precheck_files: {e}");
         log_record(false, Some(msg), None, None, None, files.len(), None);
         return Err(e);
     }
@@ -243,8 +276,6 @@ pub async fn gpt5_reasoner_impl(
     let opt_model = cfg.optimizer_model.clone();
 
     // Layer 3: Validation retry (complements Layer 2 network retry in optimizer/mod.rs)
-    const TEMPLATE_RETRIES: usize = 2; // 3 total attempts
-    const TEMPLATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(900);
 
     let mut parsed: Option<OptimizerOutput> = None;
 
@@ -274,7 +305,7 @@ pub async fn gpt5_reasoner_impl(
         {
             Ok(v) => v,
             Err(e) => {
-                let msg = format!("stage=optimizer_call: {}", e);
+                let msg = format!("stage=optimizer_call: {e}");
                 log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(e);
             }
@@ -310,14 +341,26 @@ pub async fn gpt5_reasoner_impl(
                     "parse_output"
                 };
 
-                let msg = format!("stage={}: {}", stage, e);
+                let msg = format!("stage={stage}: {e}");
                 log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(e));
             }
         }
     }
 
-    let mut parsed = parsed.expect("retry loop must exit via break or return");
+    let Some(mut parsed) = parsed else {
+        let msg = "stage=template_validation: optimizer retry loop exited without a result";
+        log_record(
+            false,
+            Some(msg.to_string()),
+            None,
+            None,
+            None,
+            files.len(),
+            None,
+        );
+        return Err(ToolError::internal(msg));
+    };
 
     tracing::debug!(
         "Parsed optimizer output: {} groups found",
@@ -336,7 +379,7 @@ pub async fn gpt5_reasoner_impl(
     let mut final_prompt = match inject_files(&parsed.xml_template, &parsed.groups).await {
         Ok(v) => v,
         Err(e) => {
-            let msg = format!("stage=inject_files: {}", e);
+            let msg = format!("stage=inject_files: {e}");
             log_record(false, Some(msg), None, None, None, files.len(), None);
             return Err(ToolError::from(e));
         }
@@ -348,7 +391,7 @@ pub async fn gpt5_reasoner_impl(
     let token_count = match crate::token::count_tokens(&final_prompt) {
         Ok(v) => v,
         Err(e) => {
-            let msg = format!("stage=count_tokens: {}", e);
+            let msg = format!("stage=count_tokens: {e}");
             log_record(false, Some(msg), None, None, None, files.len(), None);
             return Err(ToolError::from(e));
         }
@@ -359,8 +402,8 @@ pub async fn gpt5_reasoner_impl(
         final_prompt.chars().take(500).collect::<String>()
     );
 
-    if let Err(e) = enforce_limit(&final_prompt) {
-        let msg = format!("stage=enforce_limit: {}", e);
+    if let Err(e) = enforce_limit(&final_prompt, cfg.max_input_tokens) {
+        let msg = format!("stage=enforce_limit: {e}");
         log_record(false, Some(msg), None, None, None, files.len(), None);
         return Err(ToolError::from(e));
     }
@@ -387,7 +430,7 @@ pub async fn gpt5_reasoner_impl(
                             returned = ok.path;
                         }
                         Err(e) => {
-                            let msg = format!("stage=write_plan_document: {}", e);
+                            let msg = format!("stage=write_plan_document: {e}");
                             log_record(
                                 false,
                                 Some(msg),
@@ -432,8 +475,6 @@ pub async fn gpt5_reasoner_impl(
     };
 
     // Execute with application-level retries for network/transport errors
-    const EXECUTOR_RETRIES: usize = 1;
-    const EXECUTOR_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
     let executor_model = cfg.executor_model.as_str();
     let reasoning_effort = parse_reasoning_effort(cfg.reasoning_effort.as_deref());
@@ -464,13 +505,14 @@ pub async fn gpt5_reasoner_impl(
         {
             Ok(m) => m,
             Err(e) => {
-                let msg = format!("stage=build_chat_request: user message build failed: {}", e);
+                let msg = format!("stage=build_chat_request: user message build failed: {e}");
                 log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(ReasonerError::from(e)));
             }
         };
 
-        let req = match CreateChatCompletionRequestArgs::default()
+        let mut req_builder = CreateChatCompletionRequestArgs::default();
+        req_builder
             .model(executor_model)
             .messages([ChatCompletionRequestMessage::User(user_msg)])
             .reasoning_effort(reasoning_effort.clone())
@@ -478,12 +520,15 @@ pub async fn gpt5_reasoner_impl(
             .stream_options(ChatCompletionStreamOptions {
                 include_usage: Some(true),
                 include_obfuscation: None,
-            })
-            .build()
-        {
+            });
+        if let Some(n) = cfg.max_completion_tokens {
+            req_builder.max_completion_tokens(n);
+        }
+
+        let req = match req_builder.build() {
             Ok(r) => r,
             Err(e) => {
-                let msg = format!("stage=build_chat_request: request build failed: {}", e);
+                let msg = format!("stage=build_chat_request: request build failed: {e}");
                 log_record(false, Some(msg), None, None, None, files.len(), None);
                 return Err(ToolError::from(ReasonerError::from(e)));
             }
@@ -507,7 +552,7 @@ pub async fn gpt5_reasoner_impl(
                 let item = if let Some(ref mut heartbeat_sleep) = heartbeat_sleep {
                     tokio::select! {
                         () = ctx.cancelled() => return Err(ExecutorStreamError::Cancelled),
-                        _ = heartbeat_sleep.as_mut() => {
+                        () = heartbeat_sleep.as_mut() => {
                             tracing::debug!(
                                 elapsed_ms = attempt_started.elapsed().as_millis(),
                                 chars_so_far = stream_state.content.len(),
@@ -533,11 +578,18 @@ pub async fn gpt5_reasoner_impl(
                     Some(Ok(chunk)) => {
                         stream_state.chunks += 1;
 
+                        if stream_state.response_id.is_none() {
+                            stream_state.response_id = Some(chunk.id.clone());
+                        }
+
                         if let Some(usage) = chunk.usage {
                             stream_state.usage = Some(usage);
                         }
 
                         for choice in chunk.choices {
+                            if let Some(finish_reason) = choice.finish_reason {
+                                stream_state.finish_reason = Some(finish_reason);
+                            }
                             if let Some(delta) = choice.delta.content
                                 && !delta.is_empty()
                             {
@@ -583,10 +635,13 @@ pub async fn gpt5_reasoner_impl(
                         attempt,
                         duration,
                         &stream_state,
-                        false,
-                        false,
-                        true,
-                        None,
+                        ExecutorStreamOutcome {
+                            partial: false,
+                            timeout: false,
+                            empty: true,
+                            stream_error: None,
+                            stream_error_class: None,
+                        },
                     ));
                     let attempt_secs = duration.as_secs();
 
@@ -603,8 +658,7 @@ pub async fn gpt5_reasoner_impl(
                         && attempt_secs > cfg.empty_response_no_retry_after_secs
                     {
                         format!(
-                            "Reasoning model returned no response after a long attempt ({}s); retry suppressed.",
-                            attempt_secs
+                            "Reasoning model returned no response after a long attempt ({attempt_secs}s); retry suppressed."
                         )
                     } else {
                         format!(
@@ -616,7 +670,7 @@ pub async fn gpt5_reasoner_impl(
                     tracing::error!("{}", err_msg);
                     log_record(
                         false,
-                        Some(format!("stage=empty_response: {}", err_msg)),
+                        Some(format!("stage=empty_response: {err_msg}")),
                         None,
                         Some(executor_model.to_string()),
                         usage,
@@ -630,16 +684,20 @@ pub async fn gpt5_reasoner_impl(
                     attempt,
                     duration,
                     &stream_state,
-                    false,
-                    false,
-                    false,
-                    None,
+                    ExecutorStreamOutcome {
+                        partial: false,
+                        timeout: false,
+                        empty: false,
+                        stream_error: None,
+                        stream_error_class: None,
+                    },
                 ));
                 return finalize_executor_success(stream_state.content, usage, false, summary);
             }
             Ok(Err(ExecutorStreamError::Cancelled)) => return Err(ToolError::cancelled(None)),
             Ok(Err(ExecutorStreamError::OpenAI(e))) => {
                 let error_text = e.to_string();
+                let stream_error_class = stream_error_class_from_openai(&e);
                 if stream_state.has_content() {
                     tracing::warn!(
                         error = %e,
@@ -651,10 +709,13 @@ pub async fn gpt5_reasoner_impl(
                         attempt,
                         duration,
                         &stream_state,
-                        true,
-                        false,
-                        false,
-                        Some(&error_text),
+                        ExecutorStreamOutcome {
+                            partial: true,
+                            timeout: false,
+                            empty: false,
+                            stream_error: Some(&error_text),
+                            stream_error_class: Some(stream_error_class),
+                        },
                     ));
                     return finalize_executor_success(stream_state.content, usage, true, summary);
                 }
@@ -679,12 +740,15 @@ pub async fn gpt5_reasoner_impl(
                     attempt,
                     duration,
                     &stream_state,
-                    false,
-                    false,
-                    false,
-                    Some(&error_text),
+                    ExecutorStreamOutcome {
+                        partial: false,
+                        timeout: false,
+                        empty: false,
+                        stream_error: Some(&error_text),
+                        stream_error_class: Some(stream_error_class),
+                    },
                 ));
-                let msg = format!("stage=chat_execute: {}", e);
+                let msg = format!("stage=chat_execute: {e}");
                 log_record(
                     false,
                     Some(msg),
@@ -708,10 +772,13 @@ pub async fn gpt5_reasoner_impl(
                         attempt,
                         duration,
                         &stream_state,
-                        true,
-                        true,
-                        false,
-                        Some("executor_timeout"),
+                        ExecutorStreamOutcome {
+                            partial: true,
+                            timeout: true,
+                            empty: false,
+                            stream_error: Some("executor_timeout"),
+                            stream_error_class: Some("timeout"),
+                        },
                     ));
                     return finalize_executor_success(stream_state.content, usage, true, summary);
                 }
@@ -725,14 +792,17 @@ pub async fn gpt5_reasoner_impl(
                     attempt,
                     duration,
                     &stream_state,
-                    false,
-                    true,
-                    false,
-                    Some("executor_timeout"),
+                    ExecutorStreamOutcome {
+                        partial: false,
+                        timeout: true,
+                        empty: false,
+                        stream_error: Some("executor_timeout"),
+                        stream_error_class: Some("timeout"),
+                    },
                 ));
                 log_record(
                     false,
-                    Some(format!("stage=executor_timeout: {}", err_msg)),
+                    Some(format!("stage=executor_timeout: {err_msg}")),
                     None,
                     Some(executor_model.to_string()),
                     usage,
@@ -760,6 +830,12 @@ pub async fn gpt5_reasoner_impl(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod retry_tests {
     use super::*;
     use crate::errors::ReasonerError;
@@ -780,6 +856,54 @@ mod retry_tests {
 
         let yaml_err = ReasonerError::Yaml(yaml_result.unwrap_err());
         assert!(!matches!(yaml_err, ReasonerError::Template(_)));
+    }
+
+    #[test]
+    fn executor_stream_summary_emits_descriptive_diagnostics_only() {
+        let usage: CompletionUsage = serde_json::from_value(serde_json::json!({
+            "prompt_tokens": 11,
+            "completion_tokens": 21,
+            "total_tokens": 32,
+            "completion_tokens_details": { "reasoning_tokens": 8 }
+        }))
+        .unwrap();
+
+        let state = ExecutorStreamState {
+            content: "abc".into(),
+            usage: Some(usage),
+            chunks: 3,
+            first_content_ms: Some(15),
+            response_id: Some("resp_123".into()),
+            finish_reason: Some(FinishReason::Stop),
+        };
+
+        let summary = executor_stream_summary(
+            0,
+            std::time::Duration::from_millis(100),
+            &state,
+            ExecutorStreamOutcome {
+                partial: false,
+                timeout: false,
+                empty: false,
+                stream_error: None,
+                stream_error_class: None,
+            },
+        );
+
+        assert_eq!(summary["attempt_index"], 0);
+        assert_eq!(summary["attempt_duration_ms"], 100);
+        assert_eq!(summary["chunks_received"], 3);
+        assert_eq!(summary["time_to_first_content_ms"], 15);
+        assert_eq!(summary["usage_chunk_observed"], true);
+        assert_eq!(summary["response_id"], "resp_123");
+        assert_eq!(summary["finish_reason"], "stop");
+        assert_eq!(summary["completion_tokens_details"]["reasoning_tokens"], 8);
+        assert!(summary.get("stream_error_class").is_some());
+        assert!(summary.get("attempt").is_none());
+        assert!(summary.get("duration_ms").is_none());
+        assert!(summary.get("chunks").is_none());
+        assert!(summary.get("first_content_ms").is_none());
+        assert!(summary.get("usage_present").is_none());
     }
 
     #[tokio::test]

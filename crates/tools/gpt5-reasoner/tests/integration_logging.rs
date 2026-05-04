@@ -1,13 +1,16 @@
-//! Integration tests for gpt5_reasoner logging and output_filename behavior.
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#![allow(clippy::unwrap_used)]
+
+//! Integration tests for `gpt5_reasoner` logging and `output_filename` behavior.
 //!
-//! These tests verify the return value semantics of the request() function:
-//! - When output_filename is Some and prompt_type is Plan, returns a path string
-//! - When output_filename is None, returns content directly
+//! These tests verify the return value semantics of the `request()` function:
+//! - When `output_filename` is `Some` and `prompt_type` is `Plan`, returns a path string
+//! - When `output_filename` is `None`, returns content directly
 //!
-//! Note: Full integration tests requiring OpenRouter API are not run in CI.
+//! Note: Full integration tests requiring the `OpenRouter` API are not run in CI.
 //! These tests focus on verifying the expected return value shapes and contracts.
 
-/// Verify that a path returned by gpt5_reasoner with output_filename follows the expected format.
+/// Verify that a path returned by `gpt5_reasoner` with `output_filename` follows the expected format.
 ///
 /// Expected format: `./thoughts/{work_dir}/plans/{filename}`
 #[test]
@@ -25,7 +28,9 @@ fn plan_path_format_is_valid() {
         "Path should contain /plans/ subdirectory"
     );
     assert!(
-        example_path.ends_with(".md"),
+        std::path::Path::new(example_path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md")),
         "Path should end with .md extension"
     );
 
@@ -42,16 +47,16 @@ fn plan_path_format_is_valid() {
     // parts[4] is the filename
 }
 
-/// Verify that content returned without output_filename is not a path.
+/// Verify that content returned without `output_filename` is not a path.
 #[test]
 fn content_return_is_not_path() {
     // Example markdown content that would be returned when output_filename is None
-    let example_content = r#"# Implementation Plan
+    let example_content = r"# Implementation Plan
 
 ## Phase 1: Setup
 
 This is the implementation plan content...
-"#;
+";
 
     // Verify this is content, not a path
     assert!(
@@ -68,7 +73,7 @@ This is the implementation plan content...
     );
 }
 
-/// Verify the request JSON structure logged for Plan requests includes output_filename.
+/// Verify the request JSON structure logged for Plan requests includes `output_filename`.
 #[test]
 fn request_json_shape_includes_output_filename() {
     // Simulate the JSON structure logged in orchestration.rs
@@ -94,7 +99,7 @@ fn request_json_shape_includes_output_filename() {
     assert_eq!(request_json["prompt_type"].as_str(), Some("plan"));
 }
 
-/// Verify the request JSON structure for Reasoning requests (output_filename is null).
+/// Verify the request JSON structure for Reasoning requests (`output_filename` is null).
 #[test]
 fn request_json_shape_reasoning_mode() {
     let request_json = serde_json::json!({
@@ -109,7 +114,7 @@ fn request_json_shape_reasoning_mode() {
     assert!(request_json["output_filename"].is_null());
 }
 
-/// Test that ToolCallRecord can be serialized with expected fields.
+/// Test that `ToolCallRecord` can be serialized with expected fields.
 #[test]
 fn tool_call_record_serialization() {
     use agentic_logging::CallTimer;
@@ -151,7 +156,36 @@ fn tool_call_record_serialization() {
     assert!(!json.contains("\"summary\""));
 }
 
-/// Test that WriteDocumentOk path format matches expected structure.
+#[test]
+fn tool_call_record_serialization_includes_summary_when_present() {
+    use agentic_logging::CallTimer;
+    use agentic_logging::ToolCallRecord;
+
+    let timer = CallTimer::start();
+    let (completed_at, duration_ms) = timer.finish();
+
+    let record = ToolCallRecord {
+        call_id: "test-uuid".into(),
+        server: "gpt5_reasoner".into(),
+        tool: "reasoning".into(),
+        started_at: timer.started_at,
+        completed_at,
+        duration_ms,
+        request: serde_json::json!({"prompt": "test"}),
+        response_file: None,
+        success: true,
+        error: None,
+        model: Some("openai/gpt-5.2".into()),
+        token_usage: None,
+        summary: Some(serde_json::json!({"attempt_index": 0, "response_id": "resp_123"})),
+    };
+
+    let json = serde_json::to_string(&record).unwrap();
+    assert!(json.contains("\"summary\""));
+    assert!(json.contains("\"response_id\":\"resp_123\""));
+}
+
+/// Test that `WriteDocumentOk` path format matches expected structure.
 #[test]
 fn write_document_ok_path_format() {
     use thoughts_tool::WriteDocumentOk;
@@ -164,6 +198,10 @@ fn write_document_ok_path_format() {
 
     // Path should follow the expected format
     assert!(ok.path.starts_with("./thoughts/"));
-    assert!(ok.path.ends_with(".md"));
+    assert!(
+        std::path::Path::new(&ok.path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+    );
     assert!(ok.bytes_written > 0);
 }

@@ -1,6 +1,6 @@
 [package]
 name = "agentic-tools-registry"
-version = "0.3.18"
+version = "0.3.20"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Unified tool registry aggregating all agentic-tools domain registries"
@@ -31,3 +31,6 @@ web-retrieval = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

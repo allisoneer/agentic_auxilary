@@ -27,15 +27,12 @@ pub fn maybe_inject_plan_structure_meta(
 }
 
 pub fn ensure_xml_has_group_marker(xml: &str, group_name: &str) -> String {
-    let marker = format!("<!-- GROUP: {} -->", group_name);
+    let marker = format!("<!-- GROUP: {group_name} -->");
     if xml.contains(&marker) {
         return xml.to_string();
     }
     if let Some(pos) = xml.rfind("<!-- GROUP:") {
-        let insert_pos = xml[pos..]
-            .find('\n')
-            .map(|off| pos + off + 1)
-            .unwrap_or(xml.len());
+        let insert_pos = xml[pos..].find('\n').map_or(xml.len(), |off| pos + off + 1);
         let mut out = String::with_capacity(xml.len() + marker.len() + 2);
         out.push_str(&xml[..insert_pos]);
         out.push_str(&marker);
@@ -44,7 +41,7 @@ pub fn ensure_xml_has_group_marker(xml: &str, group_name: &str) -> String {
         return out;
     }
     if let Some(close_pos) = xml.rfind("</context>") {
-        let line_start = xml[..close_pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line_start = xml[..close_pos].rfind('\n').map_or(0, |i| i + 1);
         let indent: String = xml[line_start..close_pos]
             .chars()
             .take_while(|c| c.is_whitespace())
@@ -98,6 +95,12 @@ pub fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod plan_guards_tests {
     use super::*;
     use crate::optimizer::parser::FileGrouping;
@@ -163,6 +166,12 @@ mod plan_guards_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod integration_tests {
     use super::*;
     use crate::optimizer::parser::parse_optimizer_output;
@@ -170,7 +179,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_end_to_end_plan_template_injection() {
-        let raw_yaml = r#"
+        let raw_yaml = r"
 FILE_GROUPING
 ```yaml
 file_groups:
@@ -184,7 +193,7 @@ OPTIMIZED_TEMPLATE
   <!-- GROUP: implementation_targets -->
 </context>
 ```
-"#;
+";
 
         let mut parsed = parse_optimizer_output(raw_yaml).unwrap();
 

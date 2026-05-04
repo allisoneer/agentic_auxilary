@@ -9,18 +9,22 @@ pub fn count_tokens(text: &str) -> Result<usize> {
     Ok(bpe.encode_with_special_tokens(text).len())
 }
 
-pub fn enforce_limit(text: &str) -> Result<()> {
+pub fn enforce_limit(text: &str, max_input_tokens: Option<u32>) -> Result<()> {
+    let limit = max_input_tokens.map_or(TOKEN_LIMIT, |n| n as usize);
     let n = count_tokens(text)?;
-    if n > TOKEN_LIMIT {
-        return Err(ReasonerError::TokenLimit {
-            current: n,
-            limit: TOKEN_LIMIT,
-        });
+    if n > limit {
+        return Err(ReasonerError::TokenLimit { current: n, limit });
     }
     Ok(())
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -37,7 +41,7 @@ mod tests {
     #[test]
     fn test_enforce_limit_under() {
         let text = "This is a short text that should be well under the limit";
-        assert!(enforce_limit(text).is_ok());
+        assert!(enforce_limit(text, None).is_ok());
     }
 
     #[test]
@@ -45,13 +49,24 @@ mod tests {
         // Create a very long string that will exceed 250k tokens
         // Each "word " is roughly 1-2 tokens, so 300k words should exceed limit
         let long_text = "word ".repeat(300_000);
-        let result = enforce_limit(&long_text);
+        let result = enforce_limit(&long_text, None);
         assert!(result.is_err());
         match result.unwrap_err() {
             ReasonerError::TokenLimit { current, limit } => {
                 assert!(current > limit);
                 assert_eq!(limit, TOKEN_LIMIT);
             }
+            _ => panic!("Expected TokenLimit error"),
+        }
+    }
+
+    #[test]
+    fn test_enforce_limit_uses_configured_max_input_tokens() {
+        let text = "word ".repeat(32);
+        let result = enforce_limit(&text, Some(1));
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ReasonerError::TokenLimit { limit, .. } => assert_eq!(limit, 1),
             _ => panic!("Expected TokenLimit error"),
         }
     }

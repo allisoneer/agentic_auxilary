@@ -6,6 +6,6 @@ fn main() {
 
     println!("gpt5_reasoner Tools ({}):", registry.len());
     for name in registry.list_names() {
-        println!("  - {}", name);
+        println!("  - {name}");
     }
 }

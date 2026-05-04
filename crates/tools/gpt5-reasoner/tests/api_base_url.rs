@@ -1,3 +1,6 @@
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#![allow(clippy::unwrap_used)]
+
 use async_openai::types::chat::ChatCompletionRequestMessage;
 use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
 use async_openai::types::chat::CreateChatCompletionRequestArgs;
@@ -16,6 +19,7 @@ struct EnvVarGuard {
 impl EnvVarGuard {
     fn set(key: &'static str, value: &str) -> Self {
         let prev = std::env::var(key).ok();
+        // SAFETY: This guard is used only from `#[serial(env)]` tests.
         unsafe { std::env::set_var(key, value) };
         Self { key, prev }
     }
@@ -24,8 +28,14 @@ impl EnvVarGuard {
 impl Drop for EnvVarGuard {
     fn drop(&mut self) {
         match &self.prev {
-            Some(prev) => unsafe { std::env::set_var(self.key, prev) },
-            None => unsafe { std::env::remove_var(self.key) },
+            Some(prev) => {
+                // SAFETY: This guard is used only from `#[serial(env)]` tests.
+                unsafe { std::env::set_var(self.key, prev) }
+            }
+            None => {
+                // SAFETY: This guard is used only from `#[serial(env)]` tests.
+                unsafe { std::env::remove_var(self.key) }
+            }
         }
     }
 }

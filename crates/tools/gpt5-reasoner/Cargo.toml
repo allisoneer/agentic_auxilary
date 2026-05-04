@@ -1,6 +1,6 @@
 [package]
 name = "gpt5_reasoner"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 authors = ["Claude <claude@anthropic.com>"]
 description = "GPT-5 prompt optimization and execution tool with MCP and CLI interfaces"
@@ -52,3 +52,6 @@ readme_tier = "featured"
 mcp = false
 logging = true
 napi = false
+
+[lints]
+workspace = true

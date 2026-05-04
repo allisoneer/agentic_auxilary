@@ -84,6 +84,8 @@ const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
     "logging",
 ];
 
+const GPT5_2_COMPLETION_TOKENS_DOC_MAX: u32 = 128_000;
+
 /// Detect unknown top-level keys in raw TOML before deserialization.
 ///
 /// Unknown keys at the root are ignored by serde, so we emit an advisory warning
@@ -218,6 +220,35 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
                 "expected one of: low, medium, high, xhigh",
             ));
         }
+    }
+
+    if cfg
+        .reasoning
+        .executor_model
+        .to_lowercase()
+        .contains("gpt-5.2")
+        && let Some(n) = cfg.reasoning.max_completion_tokens
+        && n > GPT5_2_COMPLETION_TOKENS_DOC_MAX
+    {
+        warnings.push(AdvisoryWarning::new(
+            "reasoning.max_completion_tokens.exceeds_doc",
+            "reasoning.max_completion_tokens",
+            format!(
+                "max_completion_tokens={n} exceeds documented GPT-5.2 ceiling {GPT5_2_COMPLETION_TOKENS_DOC_MAX}; request may be rejected or truncate unexpectedly (warn-only; not clamped)."
+            ),
+        ));
+    }
+
+    if let Some(n) = cfg.reasoning.max_input_tokens
+        && n > 250_000
+    {
+        warnings.push(AdvisoryWarning::new(
+            "reasoning.max_input_tokens.suspicious",
+            "reasoning.max_input_tokens",
+            format!(
+                "max_input_tokens={n} exceeds the tool's default prompt cap (250000); ensure executor model supports this context size (warn-only)."
+            ),
+        ));
     }
 
     // Validate orchestrator.compaction_threshold is in (0,1]
@@ -425,6 +456,46 @@ mount_dirs = {}
             warnings
                 .iter()
                 .any(|w| w.code == "config.deprecated.thoughts")
+        );
+    }
+
+    #[test]
+    fn test_detect_deprecated_reasoning_token_limit_toml_is_silent() {
+        let toml_val: toml::Value = toml::from_str(
+            r"
+[reasoning]
+token_limit = 12345
+",
+        )
+        .unwrap();
+
+        let warnings = detect_deprecated_keys_toml(&toml_val);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_reasoning_max_completion_tokens_above_doc_max_warns() {
+        let mut config = AgenticConfig::default();
+        config.reasoning.max_completion_tokens = Some(128_001);
+
+        let warnings = validate(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "reasoning.max_completion_tokens.exceeds_doc")
+        );
+    }
+
+    #[test]
+    fn test_reasoning_max_input_tokens_above_default_cap_warns() {
+        let mut config = AgenticConfig::default();
+        config.reasoning.max_input_tokens = Some(250_001);
+
+        let warnings = validate(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "reasoning.max_input_tokens.suspicious")
         );
     }
 }

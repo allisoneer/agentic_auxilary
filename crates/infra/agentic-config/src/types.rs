@@ -112,9 +112,13 @@ pub struct ReasoningConfig {
     /// Optional API base URL override for reasoning service.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_base_url: Option<String>,
-    /// Optional token limit for reasoning requests.
+    /// Max tokens allowed in the final input prompt after file injection.
+    /// If None, `gpt5_reasoner` enforces its internal default (`250_000`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_limit: Option<u32>,
+    pub max_input_tokens: Option<u32>,
+    /// Upper bound for generated completion tokens (visible + reasoning).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_completion_tokens: Option<u32>,
     /// Executor timeout in seconds.
     pub executor_timeout_secs: u64,
     /// Suppress empty-response retry when attempt duration exceeds this threshold.
@@ -130,7 +134,8 @@ impl Default for ReasoningConfig {
             executor_model: "openai/gpt-5.2".into(),
             reasoning_effort: None,
             api_base_url: None,
-            token_limit: None,
+            max_input_tokens: None,
+            max_completion_tokens: Some(128_000),
             executor_timeout_secs: 2700,
             empty_response_no_retry_after_secs: 600,
             stream_heartbeat_secs: 30,

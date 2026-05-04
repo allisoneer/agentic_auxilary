@@ -4,7 +4,7 @@ agent: ReviewOpenAI
 ---
 
 <task>
-You are performing adversarial code review on LOCAL git changes, producing original judgments about security, correctness, maintainability, and testing quality.
+You are performing adversarial code review on LOCAL git changes, producing original judgments about security, correctness, maintainability, testing, simplification, and completeness.
 
 Constraints:
 - Sub-agents have NO git access and NO bash access.
@@ -98,15 +98,19 @@ If total_lines is very large (e.g., >1500), note in the final artifact that resu
 
 <step name="spawn_reviewers" id="3">
 
-## Run 4 Lens Reviews (Parallel)
+## Run 6 Lens Reviews (Parallel)
 
 Required lenses (must all succeed for a complete verdict):
 - security
 - correctness
 - maintainability
 - testing
+- completeness
 
-Call `review_run` 4 times IN PARALLEL, but RECORD outcome per lens:
+Advisory lenses (run and report, but do NOT gate approval):
+- simplification
+
+Call `review_run` 6 times IN PARALLEL, but RECORD outcome per lens:
 
 ### Lens A: Security
 
@@ -132,6 +136,18 @@ review_run(diff_handle=<handle>, lens="maintainability", focus="{focus}")
 review_run(diff_handle=<handle>, lens="testing", focus="{focus}")
 ```
 
+### Lens E: Simplification (ADVISORY)
+
+```text
+review_run(diff_handle=<handle>, lens="simplification", focus="{focus}")
+```
+
+### Lens F: Completeness
+
+```text
+review_run(diff_handle=<handle>, lens="completeness", focus="{focus}")
+```
+
 Each call:
 - Uses the cached diff snapshot (embedded in prompt; fileless)
 - Returns a validated `ReviewReport` with structured findings
@@ -146,24 +162,26 @@ For each lens, store one execution record:
 
 Proceed even if some lenses fail (best-effort); do NOT treat missing lenses as success.
 
-Collect all 4 execution records for consolidation in Step 4.
+Collect all 6 execution records for consolidation in Step 4.
 
 </step>
 
 <step name="consolidate_results" id="4">
 
-## Consolidate + Deduplicate Findings (file:line)
+## Findings Consolidation + Deduplicate Findings (file:line)
 
-### Completeness Check (REQUIRED FIRST)
+### Lens Execution Gate (REQUIRED FIRST)
 
-Compute completeness from execution records:
+Compute execution completeness from execution records:
 - `succeeded_lenses` = lenses where `ok=true`
-- `failed_lenses` = lenses where `ok=false` OR missing from execution records
+- `failed_required_lenses` = required lenses where `ok=false` OR missing from execution records
+- `failed_advisory_lenses` = advisory lenses where `ok=false` OR missing from execution records
 
-If `failed_lenses` is non-empty:
+If `failed_required_lenses` is non-empty:
 - Final status MUST be `incomplete`
 - DO NOT output `approved` under any circumstances
-- Still consolidate findings from succeeded lenses (partial signal), but clearly label results as incomplete
+- Still consolidate findings from succeeded lenses (including advisory signal), but clearly label results as incomplete
+- Advisory lens failures should be reported, but do NOT force `incomplete`
 
 ### Consolidation (only from succeeded lenses)
 
@@ -188,13 +206,15 @@ If `failed_lenses` is non-empty:
 - If include_nits=true: include Low too.
 - Always compute `hidden_low_count`.
 
-### Verdict Computation (with completeness gating)
+### Verdict Computation (with required-lens gating)
 
-If `failed_lenses` is non-empty:
+If `failed_required_lenses` is non-empty:
 - status = `incomplete`
 
-Else (all 4 lenses succeeded):
-- status = `needs_changes` if any Critical severity OR (High severity count >= 3)
+Else (all 5 required lenses succeeded):
+- Compute gating findings using required lenses only: security, correctness, maintainability, testing, completeness
+- Simplification findings remain visible in the artifact, but do NOT affect `needs_changes` or `approved`
+- status = `needs_changes` if any Critical severity OR (High severity count >= 3) among required-lens findings
 - otherwise status = `approved`
 
 Sort final findings by severity desc, then file, then line.
@@ -213,10 +233,11 @@ Artifact must include:
 - Diff summary: files_changed, insertions, deletions, total_pages
 - Verdict + counts by severity + hidden_low_count
 - **Lens Execution Summary (REQUIRED)**:
-  - For each lens (security, correctness, maintainability, testing):
+  - For each lens (security, correctness, maintainability, testing, simplification, completeness):
     - If success: findings count + lens verdict + any large_diff_warning
     - If failure: include error message (verbatim, truncate if extremely long >500 chars)
   - If status=`incomplete`: include a note explaining that approval is impossible until all required lenses succeed (recommend rerun)
+  - If the simplification lens fails: note that it is advisory-only and does not block the final verdict
 - Findings list (deduped), each with:
   - category, severity, confidence, file:line, title
   - evidence (quote/snippet from diff)
@@ -238,7 +259,7 @@ After writing, call `tools_cli_just_execute` with recipe `thoughts_sync`.
 ## Present Overview in Chat
 
 If status=`incomplete`:
-- Explicitly say: "Verdict: incomplete (failed lenses: <list of failed lens names>)."
+- Explicitly say: "Verdict: incomplete (failed required lenses: <list of failed lens names>)."
 - Provide top findings from succeeded lenses, but caveat that review is partial
 - Recommend rerunning `/review` to attempt the failed lenses again
 
@@ -249,6 +270,7 @@ If status=`approved` or `needs_changes`:
     - if you made assumptions in Step 1, disclose them here
   - counts by severity (and note hidden Low count if applicable)
   - top 3 most severe findings with `file:line - title`
+  - if simplification failed, mention that the advisory lens failed but did not gate the verdict
 
 Include the artifact filename so the user can reference it.
 

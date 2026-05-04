@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.20] - 2026-05-04
+
+### 🐛 Bug Fixes
+- *(gpt5_reasoner)* Raise completion headroom and log executor diagnostics
+## [0.3.19] - 2026-05-04
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: review_tools
 ## [0.3.18] - 2026-05-04
 
 ### ⚙️  Miscellaneous

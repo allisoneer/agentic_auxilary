@@ -12,8 +12,7 @@ pub fn to_abs_string(p: &str) -> String {
     } else {
         std::env::current_dir()
             .and_then(|cwd| std::fs::canonicalize(&cwd).or(Ok(cwd)))
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf())
+            .map_or_else(|_| path.to_path_buf(), |cwd| cwd.join(path))
             .to_string_lossy()
             .to_string()
     }
@@ -78,6 +77,12 @@ pub fn walk_up_to_boundary(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod pre_validation_tests {
     use super::*;
     use crate::test_support::DirGuard;
@@ -134,7 +139,7 @@ mod pre_validation_tests {
                 description: "rel".into(),
             },
             FileMeta {
-                filename: abs.clone(),
+                filename: abs,
                 description: "abs".into(),
             },
         ];

@@ -5,10 +5,9 @@ use crate::types::FileMeta;
 use std::collections::HashSet;
 use walkdir::WalkDir;
 
-fn ext_matches(filter: &Option<Vec<String>>, path: &std::path::Path) -> bool {
+fn ext_matches(filter: Option<&[String]>, path: &std::path::Path) -> bool {
     match filter {
-        None => true,
-        Some(exts) if exts.is_empty() => true,
+        None | Some([]) => true,
         Some(exts) => {
             let file_ext = match path.extension() {
                 Some(e) => e.to_string_lossy().to_string(),
@@ -71,18 +70,15 @@ pub fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<V
             }
 
             let path = entry.path();
-            if !ext_matches(&dir.extensions, path) {
+            if !ext_matches(dir.extensions.as_deref(), path) {
                 skipped_other += 1;
                 continue;
             }
 
-            match std::fs::read_to_string(path) {
-                Ok(_) => {}
-                Err(_) => {
-                    skipped_binary += 1;
-                    tracing::debug!("Skipping binary/non-UTF-8 file: {}", path.display());
-                    continue;
-                }
+            if std::fs::read_to_string(path).is_err() {
+                skipped_binary += 1;
+                tracing::debug!("Skipping binary/non-UTF-8 file: {}", path.display());
+                continue;
             }
 
             let path_str = if path.is_absolute() {
@@ -90,8 +86,7 @@ pub fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<V
             } else {
                 std::env::current_dir()
                     .and_then(|cwd| std::fs::canonicalize(&cwd).or(Ok(cwd)))
-                    .map(|cwd| cwd.join(path))
-                    .unwrap_or_else(|_| path.to_path_buf())
+                    .map_or_else(|_| path.to_path_buf(), |cwd| cwd.join(path))
                     .to_string_lossy()
                     .to_string()
             };
@@ -119,6 +114,12 @@ pub fn expand_directories_to_filemeta(directories: &[DirectoryMeta]) -> Result<V
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod directory_expansion_tests {
     use super::*;
     use std::fs;
@@ -294,6 +295,12 @@ mod directory_expansion_tests {
         );
     }
 
+    #[expect(
+        clippy::allow_attributes,
+        reason = "incremental legacy lint mitigation for pre-existing tests"
+    )]
+    // TODO(3): clean up uninlined_format_args as part of broader gpt5_reasoner lint conformance pass.
+    #[allow(clippy::uninlined_format_args)]
     #[test]
     fn test_max_files_cap() {
         let td = TempDir::new().unwrap();

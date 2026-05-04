@@ -45,6 +45,7 @@ impl EnvGuard {
     /// this is safe when used with `#[serial(env)]` which ensures no concurrent execution.
     pub(crate) fn set(key: &'static str, val: &str) -> Self {
         let prev = std::env::var(key).ok();
+        // SAFETY: These guards are only used from `#[serial(env)]` tests.
         unsafe { std::env::set_var(key, val) };
         Self { key, prev }
     }
@@ -60,6 +61,7 @@ impl EnvGuard {
     /// this is safe when used with `#[serial(env)]` which ensures no concurrent execution.
     pub(crate) fn remove(key: &'static str) -> Self {
         let prev = std::env::var(key).ok();
+        // SAFETY: These guards are only used from `#[serial(env)]` tests.
         unsafe { std::env::remove_var(key) };
         Self { key, prev }
     }
@@ -68,8 +70,14 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match &self.prev {
-            Some(v) => unsafe { std::env::set_var(self.key, v) },
-            None => unsafe { std::env::remove_var(self.key) },
+            Some(v) => {
+                // SAFETY: These guards are only used from `#[serial(env)]` tests.
+                unsafe { std::env::set_var(self.key, v) }
+            }
+            None => {
+                // SAFETY: These guards are only used from `#[serial(env)]` tests.
+                unsafe { std::env::remove_var(self.key) }
+            }
         }
     }
 }
@@ -87,11 +95,11 @@ impl DirGuard {
     /// The previous working directory is captured and will be restored when dropped.
     /// The input path is canonicalized if possible; otherwise the input path is used as-is.
     pub(crate) fn set(to: &Path) -> Self {
-        let prev = std::env::current_dir().expect("cwd");
+        let prev = std::env::current_dir().unwrap_or_else(|e| panic!("current_dir failed: {e}"));
         // Canonicalize if possible; fall back to input path
         let to_canonical = std::fs::canonicalize(to).unwrap_or_else(|_| to.to_path_buf());
         std::env::set_current_dir(&to_canonical)
-            .unwrap_or_else(|e| panic!("set_current_dir({:?}) failed: {e}", to_canonical));
+            .unwrap_or_else(|e| panic!("set_current_dir({to_canonical:?}) failed: {e}"));
         Self { prev }
     }
 }
@@ -103,6 +111,12 @@ impl Drop for DirGuard {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use serial_test::serial;
