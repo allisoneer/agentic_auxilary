@@ -93,21 +93,16 @@ fn executor_stream_summary(
         .and_then(|usage| usage.completion_tokens_details.clone());
 
     serde_json::json!({
-        "attempt": attempt + 1,
-        "duration_ms": duration.as_millis(),
-        "chunks": state.chunks,
+        "attempt_index": attempt,
+        "attempt_duration_ms": duration.as_millis(),
+        "chunks_received": state.chunks,
         "chars": state.content.len(),
-        "first_content_ms": state.first_content_ms,
-        "usage_present": state.usage.is_some(),
+        "time_to_first_content_ms": state.first_content_ms,
+        "usage_chunk_observed": state.usage.is_some(),
         "partial": outcome.partial,
         "timeout": outcome.timeout,
         "empty": outcome.empty,
         "stream_error": outcome.stream_error,
-        "attempt_index": attempt,
-        "attempt_duration_ms": duration.as_millis(),
-        "chunks_received": state.chunks,
-        "time_to_first_content_ms": state.first_content_ms,
-        "usage_chunk_observed": state.usage.is_some(),
         "response_id": state.response_id.clone(),
         "finish_reason": state.finish_reason.clone(),
         "completion_tokens_details": completion_tokens_details,
@@ -864,7 +859,7 @@ mod retry_tests {
     }
 
     #[test]
-    fn executor_stream_summary_includes_requested_diagnostics_additively() {
+    fn executor_stream_summary_emits_descriptive_diagnostics_only() {
         let usage: CompletionUsage = serde_json::from_value(serde_json::json!({
             "prompt_tokens": 11,
             "completion_tokens": 21,
@@ -895,10 +890,6 @@ mod retry_tests {
             },
         );
 
-        assert_eq!(summary["attempt"], 1);
-        assert_eq!(summary["duration_ms"], 100);
-        assert_eq!(summary["chunks"], 3);
-        assert_eq!(summary["first_content_ms"], 15);
         assert_eq!(summary["attempt_index"], 0);
         assert_eq!(summary["attempt_duration_ms"], 100);
         assert_eq!(summary["chunks_received"], 3);
@@ -908,6 +899,11 @@ mod retry_tests {
         assert_eq!(summary["finish_reason"], "stop");
         assert_eq!(summary["completion_tokens_details"]["reasoning_tokens"], 8);
         assert!(summary.get("stream_error_class").is_some());
+        assert!(summary.get("attempt").is_none());
+        assert!(summary.get("duration_ms").is_none());
+        assert!(summary.get("chunks").is_none());
+        assert!(summary.get("first_content_ms").is_none());
+        assert!(summary.get("usage_present").is_none());
     }
 
     #[tokio::test]

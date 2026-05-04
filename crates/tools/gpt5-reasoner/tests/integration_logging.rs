@@ -177,7 +177,7 @@ fn tool_call_record_serialization_includes_summary_when_present() {
         error: None,
         model: Some("openai/gpt-5.2".into()),
         token_usage: None,
-        summary: Some(serde_json::json!({"attempt": 1, "response_id": "resp_123"})),
+        summary: Some(serde_json::json!({"attempt_index": 0, "response_id": "resp_123"})),
     };
 
     let json = serde_json::to_string(&record).unwrap();

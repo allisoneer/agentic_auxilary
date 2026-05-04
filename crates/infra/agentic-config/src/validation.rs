@@ -60,15 +60,6 @@ pub fn detect_deprecated_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarning> {
                 "The 'models' section has been replaced by 'subagents' and 'reasoning'.",
             ));
         }
-        if let Some(reasoning) = tbl.get("reasoning").and_then(toml::Value::as_table)
-            && reasoning.contains_key("token_limit")
-        {
-            warnings.push(AdvisoryWarning::new(
-                "config.deprecated.reasoning.token_limit",
-                "reasoning.token_limit",
-                "reasoning.token_limit is deprecated; use reasoning.max_input_tokens. It aliases to input tokens only.",
-            ));
-        }
     }
 
     warnings
@@ -469,7 +460,7 @@ mount_dirs = {}
     }
 
     #[test]
-    fn test_detect_deprecated_reasoning_token_limit_toml() {
+    fn test_detect_deprecated_reasoning_token_limit_toml_is_silent() {
         let toml_val: toml::Value = toml::from_str(
             r"
 [reasoning]
@@ -479,11 +470,7 @@ token_limit = 12345
         .unwrap();
 
         let warnings = detect_deprecated_keys_toml(&toml_val);
-        assert!(
-            warnings
-                .iter()
-                .any(|w| w.code == "config.deprecated.reasoning.token_limit")
-        );
+        assert!(warnings.is_empty());
     }
 
     #[test]

@@ -7,7 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### 🐛 Bug Fixes
+
 - *(gpt5_reasoner)* Add explicit completion token caps and richer executor diagnostics
+- *(gpt5_reasoner)* [**breaking**] JSONL `summary` no longer includes legacy short executor keys (`attempt`, `duration_ms`, `chunks`, `first_content_ms`, `usage_present`). Use descriptive keys only; `attempt_index` (0-based) is now the only attempt counter.
 
 ## [0.10.0] - 2026-05-03
 
