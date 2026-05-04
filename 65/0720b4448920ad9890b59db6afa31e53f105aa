@@ -1,0 +1,23 @@
+apps/opencode-orchestrator-mcp/src/server.rs
+  d6f32b59df32b81c 121-123,125-153,156-162,609,613-616,618,688-786,953-1060
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "650720b4448920ad9890b59db6afa31e53f105aa",
+  "prompts": {
+    "d6f32b59df32b81c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_20b1b8dc8ffeUJ1aRSivzOL16W",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham",
+      "messages": [],
+      "total_additions": 283,
+      "total_deletions": 42,
+      "accepted_lines": 255,
+      "overriden_lines": 0
+    }
+  }
+}
