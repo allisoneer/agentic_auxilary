@@ -4,13 +4,17 @@ pub mod prompts;
 use crate::FileMeta;
 use crate::PromptType;
 use crate::client::OrClient;
-use crate::errors::*;
+use crate::errors::ReasonerError;
+use crate::errors::Result;
 use async_openai::types::chat::ChatCompletionRequestMessage;
 use async_openai::types::chat::ChatCompletionRequestSystemMessageArgs;
 use async_openai::types::chat::ChatCompletionRequestUserMessageArgs;
 use async_openai::types::chat::CreateChatCompletionRequestArgs;
 use async_openai::types::chat::ReasoningEffort;
 use serde::Serialize;
+
+const RETRIES: usize = 2;
+const DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
 #[derive(Debug, Serialize)]
 struct FileMetaSerializable<'a> {
@@ -29,7 +33,7 @@ pub fn build_user_prompt(pt: &PromptType, prompt: &str, files: &[FileMeta]) -> S
             })
             .collect::<Vec<_>>(),
     )
-    .unwrap_or("[]".into());
+    .unwrap_or_else(|_| "[]".into());
 
     let template = match pt {
         PromptType::Reasoning => prompts::USER_OPTIMIZE_REASONING,
@@ -50,10 +54,6 @@ pub async fn call_optimizer(
 ) -> Result<String> {
     // Prepare the user prompt once; clone per attempt when building request
     let user_prompt = build_user_prompt(pt, prompt, files);
-
-    // Application-level retry policy: 2 retries (3 attempts total), 500ms fixed delay
-    const RETRIES: usize = 2;
-    const DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
     for attempt in 0..=RETRIES {
         if attempt > 0 {

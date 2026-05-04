@@ -52,3 +52,6 @@ readme_tier = "featured"
 mcp = false
 logging = true
 napi = false
+
+[lints]
+workspace = true

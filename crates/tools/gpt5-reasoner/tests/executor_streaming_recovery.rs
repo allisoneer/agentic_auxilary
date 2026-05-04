@@ -1,3 +1,6 @@
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#![allow(clippy::unwrap_used)]
+
 use agentic_config::types::ReasoningConfig;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
@@ -51,6 +54,7 @@ struct EnvVarGuard {
 impl EnvVarGuard {
     fn set(key: &str, value: &str) -> Self {
         let prev = std::env::var(key).ok();
+        // SAFETY: This guard is used only from `#[serial(env)]` tests.
         unsafe { std::env::set_var(key, value) };
         Self {
             key: key.to_string(),
@@ -62,8 +66,14 @@ impl EnvVarGuard {
 impl Drop for EnvVarGuard {
     fn drop(&mut self) {
         match &self.prev {
-            Some(prev) => unsafe { std::env::set_var(&self.key, prev) },
-            None => unsafe { std::env::remove_var(&self.key) },
+            Some(prev) => {
+                // SAFETY: This guard is used only from `#[serial(env)]` tests.
+                unsafe { std::env::set_var(&self.key, prev) }
+            }
+            None => {
+                // SAFETY: This guard is used only from `#[serial(env)]` tests.
+                unsafe { std::env::remove_var(&self.key) }
+            }
         }
     }
 }
@@ -87,7 +97,7 @@ impl Drop for CwdGuard {
 }
 
 fn optimizer_response_body() -> String {
-    let content = r#"
+    let content = r"
 FILE_GROUPING
 ```yaml
 file_groups:
@@ -101,7 +111,7 @@ OPTIMIZED_TEMPLATE
   <!-- GROUP: implementation_targets -->
 </context>
 ```
-"#;
+";
 
     format!(
         r#"{{
@@ -199,7 +209,7 @@ fn setup_plan_write_env(filename: &str) -> (TempDir, EnvVarGuard, CwdGuard, Path
             "version": "1.0",
             "mappings": {
                 "https://github.com/example/thoughts.git": {
-                    "path": thoughts_repo.clone(),
+                    "path": thoughts_repo,
                     "auto_managed": false
                 }
             }
@@ -416,7 +426,8 @@ async fn executor_stream_success_accumulates_and_uses_usage() {
         .mount(&server)
         .await;
 
-    let cfg = base_cfg(&server);
+    let mut cfg = base_cfg(&server);
+    cfg.max_completion_tokens = Some(42_000);
     let out = gpt5_reasoner_impl(
         "ignored".into(),
         vec![],
@@ -437,6 +448,11 @@ async fn executor_stream_success_accumulates_and_uses_usage() {
         exec_requests[0]["stream_options"]["include_usage"].as_bool(),
         Some(true)
     );
+    assert_eq!(
+        exec_requests[0]["max_completion_tokens"].as_u64(),
+        Some(42_000)
+    );
+    assert!(exec_requests[0].get("max_tokens").is_none());
 }
 
 #[tokio::test]

@@ -138,16 +138,16 @@ pub fn auto_inject_claude_memories(
     let count_before = files.len();
 
     for mf in discovered {
-        let dir = mf
-            .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| "<unknown>".to_string());
+        let dir = mf.parent().map_or_else(
+            || "<unknown>".to_string(),
+            |p| p.to_string_lossy().to_string(),
+        );
 
         tracing::debug!("Discovered memory file: {}", mf.display());
 
         files.push(FileMeta {
             filename: mf.to_string_lossy().to_string(),
-            description: format!("Project memory from {}, auto-injected for context", dir),
+            description: format!("Project memory from {dir}, auto-injected for context"),
         });
     }
 
@@ -157,6 +157,12 @@ pub fn auto_inject_claude_memories(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod claude_injection_tests {
     use super::*;
     use crate::test_support::DirGuard;
@@ -195,6 +201,12 @@ mod claude_injection_tests {
         assert!(result.is_none());
     }
 
+    #[expect(
+        clippy::allow_attributes,
+        reason = "incremental legacy lint mitigation for pre-existing tests"
+    )]
+    // TODO(3): clean up create_dir as part of broader gpt5_reasoner lint conformance pass.
+    #[allow(clippy::create_dir)]
     #[test]
     fn test_memory_files_in_dir_variants() {
         let td = TempDir::new().unwrap();
@@ -321,6 +333,12 @@ mod claude_injection_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod claude_injection_integration_tests {
     use super::*;
     use crate::template::inject_files;
@@ -330,6 +348,15 @@ mod claude_injection_integration_tests {
     use std::fs;
     use tempfile::TempDir;
 
+    use crate::optimizer::parser::FileGroup;
+    use crate::optimizer::parser::FileGrouping;
+
+    #[expect(
+        clippy::allow_attributes,
+        reason = "incremental legacy lint mitigation for pre-existing tests"
+    )]
+    // TODO(3): clean up items_after_statements as part of broader gpt5_reasoner lint conformance pass.
+    #[allow(clippy::items_after_statements)]
     #[tokio::test]
     #[serial(env)]
     async fn test_e2e_template_injection_with_discovered_claude() {
@@ -350,12 +377,10 @@ mod claude_injection_integration_tests {
         let count = auto_inject_claude_memories(&mut files, None);
         assert_eq!(count, 1, "should inject root CLAUDE.md");
 
-        let xml = r#"<context>
+        let xml = r"<context>
 <!-- GROUP: implementation -->
-</context>"#;
+</context>";
 
-        use crate::optimizer::parser::FileGroup;
-        use crate::optimizer::parser::FileGrouping;
         let groups = FileGrouping {
             file_groups: vec![FileGroup {
                 name: "implementation".to_string(),
@@ -403,6 +428,12 @@ mod claude_injection_integration_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod claude_injection_edge_tests {
     use super::*;
     use crate::test_support::DirGuard;
@@ -531,6 +562,12 @@ mod claude_injection_edge_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod claude_directory_seeding_tests {
     use super::*;
     use crate::test_support::DirGuard;

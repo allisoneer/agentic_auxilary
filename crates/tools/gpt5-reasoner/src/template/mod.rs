@@ -1,8 +1,10 @@
-use crate::errors::*;
+use crate::errors::ReasonerError;
+use crate::errors::Result;
 use crate::optimizer::parser::FileGroup;
 use crate::optimizer::parser::FileGrouping;
 use futures::stream::StreamExt;
 use futures::stream::{self};
+use std::fmt::Write;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -18,9 +20,9 @@ async fn read_file_utf8(path: &str) -> Result<String> {
 
 fn build_group_injection(group: &FileGroup, file_contents: &[(String, String)]) -> String {
     let mut out = String::new();
-    out.push_str(&format!("<group name=\"{}\">\n", group.name));
+    let _ = writeln!(out, "<group name=\"{}\">", group.name);
     for (path, content) in file_contents {
-        out.push_str(&format!("  <file path=\"{}\">\n", path));
+        let _ = writeln!(out, "  <file path=\"{path}\">");
         out.push_str(content);
         out.push_str("\n  </file>\n");
     }
@@ -30,18 +32,14 @@ fn build_group_injection(group: &FileGroup, file_contents: &[(String, String)]) 
 
 pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<String> {
     // Preload all file contents, dedup by path, excluding embedded files
-    let all_paths: Vec<String> = groups
-        .file_groups
-        .iter()
-        .flat_map(|g| g.files.iter().cloned())
-        .filter(|p| p != "plan_structure.md") // Exclude embedded template
-        .collect();
-
     let unique_paths: Vec<String> = {
         use std::collections::HashSet;
         let mut seen = HashSet::new();
-        all_paths
-            .into_iter()
+        groups
+            .file_groups
+            .iter()
+            .flat_map(|g| g.files.iter().cloned())
+            .filter(|p| p != "plan_structure.md")
             .filter(|p| seen.insert(p.clone()))
             .collect()
     };
@@ -97,6 +95,12 @@ pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<S
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::allow_attributes,
+    reason = "incremental legacy lint mitigation for pre-existing tests"
+)]
+// TODO(3): clean up unwrap_used as part of broader gpt5_reasoner lint conformance pass.
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::optimizer::parser::FileGroup;
@@ -198,10 +202,10 @@ fn main() { hello(); }
             ],
         };
 
-        let xml_template = r#"<context>
+        let xml_template = r"<context>
   <!-- GROUP: group1 -->
   <!-- GROUP: group2 -->
-</context>"#;
+</context>";
 
         let result = inject_files(xml_template, &groups).await.unwrap();
 
@@ -237,8 +241,8 @@ fn main() { hello(); }
             ],
         };
 
-        let xml_template = r#"<!-- GROUP: group1 -->
-<!-- GROUP: group2 -->"#;
+        let xml_template = r"<!-- GROUP: group1 -->
+<!-- GROUP: group2 -->";
 
         let result = inject_files(xml_template, &groups).await.unwrap();
 
@@ -279,9 +283,9 @@ fn main() { hello(); }
             }],
         };
 
-        let xml_template = r#"<context>
+        let xml_template = r"<context>
   <!-- GROUP: plan_template -->
-</context>"#;
+</context>";
 
         let result = inject_files(xml_template, &groups).await.unwrap();
         // Should contain the embedded plan structure content header

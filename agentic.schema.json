@@ -47,6 +47,7 @@
         "empty_response_no_retry_after_secs": 600,
         "executor_model": "openai/gpt-5.2",
         "executor_timeout_secs": 2700,
+        "max_completion_tokens": 128000,
         "optimizer_model": "anthropic/claude-sonnet-4.6",
         "stream_heartbeat_secs": 30
       }
@@ -231,6 +232,25 @@
           "default": 2700,
           "minimum": 0
         },
+        "max_completion_tokens": {
+          "description": "Upper bound for generated completion tokens (visible + reasoning).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": 128000,
+          "minimum": 0
+        },
+        "max_input_tokens": {
+          "description": "Max tokens allowed in the final input prompt after file injection.\nIf None, `gpt5_reasoner` enforces its internal default (`250_000`).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "optimizer_model": {
           "description": "`OpenRouter` model ID for optimizer step.",
           "type": "string",
@@ -252,15 +272,6 @@
           "type": "integer",
           "format": "uint64",
           "default": 30,
-          "minimum": 0
-        },
-        "token_limit": {
-          "description": "Optional token limit for reasoning requests.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
           "minimum": 0
         }
       }

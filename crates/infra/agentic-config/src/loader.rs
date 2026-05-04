@@ -151,10 +151,15 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     if let Some(v) = env_trimmed("AGENTIC_REASONING_API_BASE_URL") {
         cfg.reasoning.api_base_url = Some(v);
     }
-    if let Some(v) = env_trimmed("AGENTIC_REASONING_TOKEN_LIMIT")
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_MAX_INPUT_TOKENS")
         && let Ok(n) = v.parse()
     {
-        cfg.reasoning.token_limit = Some(n);
+        cfg.reasoning.max_input_tokens = Some(n);
+    }
+    if let Some(v) = env_trimmed("AGENTIC_REASONING_MAX_COMPLETION_TOKENS")
+        && let Ok(n) = v.parse()
+    {
+        cfg.reasoning.max_completion_tokens = Some(n);
     }
     if let Some(v) = env_trimmed("AGENTIC_REASONING_EXECUTOR_TIMEOUT_SECS")
         && let Ok(n) = v.parse()
@@ -351,6 +356,70 @@ optimizer_model = "file-model"
             45
         );
         assert_eq!(loaded.config.reasoning.stream_heartbeat_secs, 9);
+    }
+
+    #[test]
+    #[serial]
+    fn test_reasoning_token_limit_toml_is_ignored_without_warnings() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        std::fs::write(
+            temp.path().join(LOCAL_FILE),
+            r"
+[reasoning]
+token_limit = 12345
+",
+        )
+        .unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert_eq!(loaded.config.reasoning.max_input_tokens, None);
+        assert_eq!(loaded.config.reasoning.max_completion_tokens, Some(128_000));
+        assert!(loaded.warnings.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn test_reasoning_max_input_tokens_wins_over_token_limit_in_same_toml_layer() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        std::fs::write(
+            temp.path().join(LOCAL_FILE),
+            r"
+[reasoning]
+max_input_tokens = 111
+token_limit = 222
+",
+        )
+        .unwrap();
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert_eq!(loaded.config.reasoning.max_input_tokens, Some(111));
+        assert!(loaded.warnings.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn test_deprecated_env_token_limit_is_ignored_and_new_env_still_wins() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+
+        {
+            let _g_old = EnvGuard::set("AGENTIC_REASONING_TOKEN_LIMIT", "222");
+
+            let loaded = load_merged(temp.path()).unwrap();
+            assert_eq!(loaded.config.reasoning.max_input_tokens, None);
+            assert!(loaded.warnings.is_empty());
+        }
+
+        let _g_old = EnvGuard::set("AGENTIC_REASONING_TOKEN_LIMIT", "222");
+        let _g_new = EnvGuard::set("AGENTIC_REASONING_MAX_INPUT_TOKENS", "111");
+
+        let loaded = load_merged(temp.path()).unwrap();
+        assert_eq!(loaded.config.reasoning.max_input_tokens, Some(111));
+        assert!(loaded.warnings.is_empty());
     }
 
     #[test]

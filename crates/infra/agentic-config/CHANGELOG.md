@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+- *(agentic-config)* [**breaking**] Removed support for deprecated `reasoning.token_limit` (TOML) and `AGENTIC_REASONING_TOKEN_LIMIT` (env). Use `reasoning.max_input_tokens` / `AGENTIC_REASONING_MAX_INPUT_TOKENS` only (no aliasing or deprecation warnings).
 ## [0.2.0] - 2026-05-03
 
 ### ⛰️  Features
