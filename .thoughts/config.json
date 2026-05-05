@@ -306,6 +306,49 @@
       "remote": "https://github.com/anomalyco/opencode",
       "description": "OpenCode v1.14.33 release for SDK upgrade research from v1.14.19 → v1.14.33. Release notes: https://github.com/anomalyco/opencode/releases/tag/v1.14.33",
       "ref": "refs/tags/v1.14.33"
+    },
+    {
+      "remote": "https://github.com/Glass-HQ/gpui",
+      "description": "Standalone GPUI fork with Windows, web, and iOS targets."
+    },
+    {
+      "remote": "https://github.com/ghostty-org/ghostty",
+      "description": "Main Ghostty repository and source of libghostty."
+    },
+    {
+      "remote": "https://github.com/ghostty-org/ghostling",
+      "description": "Minimal reference terminal emulator built on libghostty."
+    },
+    {
+      "remote": "https://github.com/Uzaaft/libghostty-rs",
+      "description": "Rust FFI bindings and safe wrappers for libghostty."
+    },
+    {
+      "remote": "https://github.com/Uzaaft/awesome-libghostty",
+      "description": "Curated list of projects and resources built on libghostty."
+    },
+    {
+      "remote": "https://github.com/zed-industries/zed",
+      "description": "Zed monorepo containing the upstream GPUI source."
+    },
+    {
+      "remote": "https://github.com/Xuanwo/gpui-ghostty",
+      "description": "Working GPUI plus libghostty integration proof of concept for embedding a Ghostty-powered terminal inside a GPUI application."
+    },
+    {
+      "remote": "https://github.com/fukayatti/gpux",
+      "description": "Experimental React JSX and hooks syntax for GPUI.",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/itsbalamurali/gpui-mobile.git",
+      "description": "Platform trait implementation work for running GPUI on iOS and Android.",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/longbridge/gpui-component.git",
+      "description": "Production-oriented GPUI component library with virtualized lists, markdown, charts, and editor support.",
+      "ref": "refs/heads/main"
     }
   ]
 }
