@@ -15,6 +15,7 @@ use agentic_tools_mcp::stdio;
 use std::sync::Arc;
 
 mod config;
+mod error;
 mod logging;
 mod server;
 mod token_tracker;

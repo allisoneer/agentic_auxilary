@@ -43,7 +43,9 @@ async fn test_orchestrator_server_with_long_timeout(
 
     Arc::new(OrchestratorServerHandle::from_server_unshared(
         opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
-            client, &base_url,
+            client,
+            &base_url,
+            opencode_orchestrator_mcp::server::RecoveryMode::External,
         ),
     ))
 }

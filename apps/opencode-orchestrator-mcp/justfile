@@ -74,3 +74,18 @@ integration-test-bunx-stable-verbose:
     OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.33" \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
     cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
+
+# Run the forced-stop recovery acceptance test against bunx launcher mode
+[no-exit-message]
+integration-test-one-bunx-stable TEST="managed_server_rebuilds_after_forced_stop":
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    : "${OPENCODE_ORCHESTRATOR_INTEGRATION:=1}"
+    : "${OPENCODE_BINARY:=bunx}"
+    : "${OPENCODE_BINARY_ARGS:=--yes opencode-ai@1.14.33}"
+    bunx --yes opencode-ai@1.14.33 --version
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
+    OPENCODE_BINARY="$OPENCODE_BINARY" \
+    OPENCODE_BINARY_ARGS="$OPENCODE_BINARY_ARGS" \
+    OPENCODE_ORCHESTRATOR_INTEGRATION="$OPENCODE_ORCHESTRATOR_INTEGRATION" \
+    cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture --test-threads=1

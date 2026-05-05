@@ -6,6 +6,7 @@ compile_error!(
 );
 
 pub mod config;
+pub mod error;
 pub mod logging;
 pub mod server;
 pub mod token_tracker;

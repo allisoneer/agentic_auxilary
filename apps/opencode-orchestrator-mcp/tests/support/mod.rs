@@ -8,6 +8,7 @@
 
 use opencode_orchestrator_mcp::server::OrchestratorServer;
 use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
+use opencode_orchestrator_mcp::server::RecoveryMode;
 use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -42,7 +43,7 @@ pub async fn test_orchestrator_server(mock: &MockServer) -> Arc<OrchestratorServ
         .unwrap();
 
     Arc::new(OrchestratorServerHandle::from_server_unshared(
-        OrchestratorServer::from_client_unshared(client, base_url),
+        OrchestratorServer::from_client_unshared(client, base_url, RecoveryMode::External),
     ))
 }
 

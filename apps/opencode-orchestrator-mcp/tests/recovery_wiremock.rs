@@ -6,9 +6,12 @@ use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
 use opencode_orchestrator_mcp::server::OrchestratorServer;
 use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
+use opencode_orchestrator_mcp::server::RecoveryMode;
 use opencode_orchestrator_mcp::tools::ListCommandsTool;
 use opencode_orchestrator_mcp::types::ListCommandsInput;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
@@ -46,9 +49,8 @@ async fn external_client_seam_still_supports_end_to_end_tool_calls() {
 }
 
 #[tokio::test]
-async fn later_recovery_keeps_held_snapshot_stable() {
+async fn external_failure_is_sticky_and_keeps_held_snapshot_stable() {
     let old_mock = MockServer::start().await;
-    let new_mock = MockServer::start().await;
 
     Mock::given(method("GET"))
         .and(path("/global/health"))
@@ -69,41 +71,49 @@ async fn later_recovery_keeps_held_snapshot_stable() {
         .mount(&old_mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/command"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            {"name": "new-command", "description": "from snapshot 2"}
-        ])))
-        .mount(&new_mock)
-        .await;
-
-    let handle = OrchestratorServerHandle::from_server_unshared(
-        OrchestratorServer::from_client_unshared(test_client(&old_mock.uri()), old_mock.uri()),
-    );
+    let handle =
+        OrchestratorServerHandle::from_server_unshared(OrchestratorServer::from_client_unshared(
+            test_client(&old_mock.uri()),
+            old_mock.uri(),
+            RecoveryMode::External,
+        ));
 
     let snapshot_a = handle
         .acquire()
         .await
         .expect("first caller should receive the original snapshot");
-    let snapshot_b = handle
+    let rebuilds = AtomicUsize::new(0);
+    let first_err = handle
         .acquire_or_recover_with(|| {
-            let base_url = new_mock.uri();
-            async move {
-                Ok(OrchestratorServer::from_client_unshared(
-                    test_client(&base_url),
-                    base_url,
-                ))
-            }
+            rebuilds.fetch_add(1, Ordering::SeqCst);
+            async move { anyhow::bail!("external snapshots should not rebuild") }
         })
-        .await
-        .expect("second caller should recover to a rebuilt snapshot");
+        .await;
+    let second_err = handle
+        .acquire_or_recover_with(|| {
+            rebuilds.fetch_add(1, Ordering::SeqCst);
+            async move { anyhow::bail!("external snapshots should not rebuild") }
+        })
+        .await;
+
+    let first_err = match first_err {
+        Ok(_snapshot) => panic!("external failures should become sticky typed errors"),
+        Err(error) => error,
+    };
+    let second_err = match second_err {
+        Ok(_snapshot) => panic!("external failures should remain sticky"),
+        Err(error) => error,
+    };
 
     let commands_a = snapshot_a.client().tools().commands().await.unwrap();
-    let commands_b = snapshot_b.client().tools().commands().await.unwrap();
 
-    assert!(!Arc::ptr_eq(&snapshot_a, &snapshot_b));
+    assert_eq!(rebuilds.load(Ordering::SeqCst), 0);
+    assert!(
+        first_err
+            .to_string()
+            .contains("External OpenCode server unavailable")
+    );
+    assert_eq!(first_err.to_string(), second_err.to_string());
     assert_eq!(commands_a[0].name, "old-command");
-    assert_eq!(commands_b[0].name, "new-command");
     assert_eq!(snapshot_a.base_url(), old_mock.uri().trim_end_matches('/'));
-    assert_eq!(snapshot_b.base_url(), new_mock.uri().trim_end_matches('/'));
 }

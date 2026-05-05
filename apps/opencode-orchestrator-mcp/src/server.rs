@@ -18,6 +18,7 @@ use std::time::Duration;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::RwLock;
 
+use crate::error::OrchestratorError;
 use crate::version;
 
 /// Environment variable name for the orchestrator-managed recursion guard.
@@ -80,11 +81,44 @@ enum ServerEntryState {
     NeedsRecovery { reason: String },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryMode {
+    Managed,
+    External,
+}
+
+impl RecoveryMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Managed => "managed",
+            Self::External => "external",
+        }
+    }
+}
+
+enum HandleState {
+    Empty,
+    Ready {
+        snapshot: Arc<OrchestratorServer>,
+        mode: RecoveryMode,
+    },
+    Stale {
+        snapshot: Arc<OrchestratorServer>,
+        mode: RecoveryMode,
+        reason: String,
+    },
+    Failed {
+        mode: RecoveryMode,
+        base_url: Option<String>,
+        error: String,
+    },
+}
+
 const TOOL_ENTRY_HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Shared recoverable handle for the process-global orchestrator server snapshot.
 pub struct OrchestratorServerHandle {
-    cached: AsyncMutex<Option<Arc<OrchestratorServer>>>,
+    state: AsyncMutex<HandleState>,
 }
 
 impl Default for OrchestratorServerHandle {
@@ -97,7 +131,7 @@ impl OrchestratorServerHandle {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            cached: AsyncMutex::new(None),
+            state: AsyncMutex::new(HandleState::Empty),
         }
     }
 
@@ -119,47 +153,254 @@ impl OrchestratorServerHandle {
         Fut: std::future::Future<Output = anyhow::Result<OrchestratorServer>>,
     {
         loop {
-            let snapshot = {
-                let mut cached = self.cached.lock().await;
+            let ready_snapshot = {
+                let mut state = self.state.lock().await;
 
-                if let Some(snapshot) = cached.as_ref() {
-                    Arc::clone(snapshot)
-                } else {
-                    tracing::info!(
-                        "orchestrator server missing cached snapshot; starting embedded server"
-                    );
+                match &mut *state {
+                    HandleState::Empty => {
+                        tracing::info!(
+                            "orchestrator server missing cached snapshot; starting embedded server"
+                        );
 
-                    let rebuilt = Arc::new(start().await?);
-                    // Full rebuild intentionally replaces the entire cached snapshot, which
-                    // also resets `spawned_sessions` so `launched_by_you` only describes
-                    // sessions owned by the current cached server instance.
-                    *cached = Some(Arc::clone(&rebuilt));
-                    return Ok(rebuilt);
+                        match start().await {
+                            Ok(server) => {
+                                let rebuilt_mode = if server.is_managed() {
+                                    RecoveryMode::Managed
+                                } else {
+                                    RecoveryMode::External
+                                };
+                                let rebuilt = Arc::new(server);
+                                trace_state_transition(
+                                    "Empty",
+                                    "Ready",
+                                    "initialization",
+                                    rebuilt_mode,
+                                    Some(rebuilt.base_url()),
+                                );
+                                *state = HandleState::Ready {
+                                    snapshot: Arc::clone(&rebuilt),
+                                    mode: rebuilt_mode,
+                                };
+                                return Ok(rebuilt);
+                            }
+                            Err(error) => {
+                                let reason = error.to_string();
+                                trace_state_transition(
+                                    "Empty",
+                                    "Failed",
+                                    &reason,
+                                    RecoveryMode::Managed,
+                                    None,
+                                );
+                                *state = HandleState::Failed {
+                                    mode: RecoveryMode::Managed,
+                                    base_url: None,
+                                    error: reason,
+                                };
+                                return Err(error);
+                            }
+                        }
+                    }
+                    HandleState::Ready { snapshot, mode } => Some((Arc::clone(snapshot), *mode)),
+                    HandleState::Stale {
+                        snapshot,
+                        mode,
+                        reason,
+                    } => match mode {
+                        RecoveryMode::Managed => {
+                            let stale_reason = reason.clone();
+                            match start().await {
+                                Ok(server) => {
+                                    let rebuilt_mode = if server.is_managed() {
+                                        RecoveryMode::Managed
+                                    } else {
+                                        RecoveryMode::External
+                                    };
+                                    let rebuilt = Arc::new(server);
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Ready",
+                                        &stale_reason,
+                                        rebuilt_mode,
+                                        Some(rebuilt.base_url()),
+                                    );
+                                    *state = HandleState::Ready {
+                                        snapshot: Arc::clone(&rebuilt),
+                                        mode: rebuilt_mode,
+                                    };
+                                    return Ok(rebuilt);
+                                }
+                                Err(error) => {
+                                    let failure = error.to_string();
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Failed",
+                                        &failure,
+                                        *mode,
+                                        Some(snapshot.base_url()),
+                                    );
+                                    *state = HandleState::Failed {
+                                        mode: *mode,
+                                        base_url: Some(snapshot.base_url().to_string()),
+                                        error: failure,
+                                    };
+                                    return Err(error);
+                                }
+                            }
+                        }
+                        RecoveryMode::External => {
+                            let base_url = snapshot.base_url().to_string();
+                            let stale_reason = reason.clone();
+                            trace_state_transition(
+                                "Stale",
+                                "Failed",
+                                &stale_reason,
+                                *mode,
+                                Some(&base_url),
+                            );
+                            *state = HandleState::Failed {
+                                mode: *mode,
+                                base_url: Some(base_url.clone()),
+                                error: stale_reason.clone(),
+                            };
+                            return Err(external_unavailable(Some(base_url), stale_reason));
+                        }
+                    },
+                    HandleState::Failed {
+                        mode,
+                        base_url,
+                        error,
+                    } => match mode {
+                        RecoveryMode::Managed => match start().await {
+                            Ok(server) => {
+                                let rebuilt_mode = if server.is_managed() {
+                                    RecoveryMode::Managed
+                                } else {
+                                    RecoveryMode::External
+                                };
+                                let rebuilt = Arc::new(server);
+                                trace_state_transition(
+                                    "Failed",
+                                    "Ready",
+                                    error,
+                                    rebuilt_mode,
+                                    Some(rebuilt.base_url()),
+                                );
+                                *state = HandleState::Ready {
+                                    snapshot: Arc::clone(&rebuilt),
+                                    mode: rebuilt_mode,
+                                };
+                                return Ok(rebuilt);
+                            }
+                            Err(start_error) => {
+                                let failure = start_error.to_string();
+                                error.clone_from(&failure);
+                                return Err(start_error);
+                            }
+                        },
+                        RecoveryMode::External => {
+                            return Err(external_unavailable(base_url.clone(), error.clone()));
+                        }
+                    },
                 }
             };
 
-            let state = snapshot.validate_for_tool_entry().await?;
-
-            let mut cached = self.cached.lock().await;
-            let Some(current) = cached.as_ref() else {
+            let Some((snapshot, mode)) = ready_snapshot else {
                 continue;
             };
 
-            if !Arc::ptr_eq(current, &snapshot) {
+            let validation = snapshot.validate_for_tool_entry().await?;
+
+            let mut state = self.state.lock().await;
+            let HandleState::Ready {
+                snapshot: current,
+                mode: current_mode,
+            } = &*state
+            else {
+                continue;
+            };
+
+            if !Arc::ptr_eq(current, &snapshot) || *current_mode != mode {
                 continue;
             }
 
-            match state {
+            match validation {
                 ServerEntryState::Healthy => return Ok(snapshot),
                 ServerEntryState::NeedsRecovery { reason } => {
-                    tracing::warn!(reason = %reason, "cached orchestrator server failed liveness check; rebuilding");
+                    trace_cache_invalidated(&reason, mode, Some(snapshot.base_url()));
 
-                    let rebuilt = Arc::new(start().await?);
-                    // Full rebuild intentionally replaces the entire cached snapshot, which
-                    // also resets `spawned_sessions` so `launched_by_you` only describes
-                    // sessions owned by the current cached server instance.
-                    *cached = Some(Arc::clone(&rebuilt));
-                    return Ok(rebuilt);
+                    match mode {
+                        RecoveryMode::Managed => {
+                            tracing::warn!(reason = %reason, "cached orchestrator server failed liveness check; rebuilding");
+                            trace_state_transition(
+                                "Ready",
+                                "Stale",
+                                &reason,
+                                mode,
+                                Some(snapshot.base_url()),
+                            );
+                            *state = HandleState::Stale {
+                                snapshot: Arc::clone(&snapshot),
+                                mode,
+                                reason: reason.clone(),
+                            };
+
+                            match start().await {
+                                Ok(server) => {
+                                    let rebuilt_mode = if server.is_managed() {
+                                        RecoveryMode::Managed
+                                    } else {
+                                        RecoveryMode::External
+                                    };
+                                    let rebuilt = Arc::new(server);
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Ready",
+                                        &reason,
+                                        rebuilt_mode,
+                                        Some(rebuilt.base_url()),
+                                    );
+                                    *state = HandleState::Ready {
+                                        snapshot: Arc::clone(&rebuilt),
+                                        mode: rebuilt_mode,
+                                    };
+                                    return Ok(rebuilt);
+                                }
+                                Err(error) => {
+                                    let failure = error.to_string();
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Failed",
+                                        &failure,
+                                        mode,
+                                        Some(snapshot.base_url()),
+                                    );
+                                    *state = HandleState::Failed {
+                                        mode,
+                                        base_url: Some(snapshot.base_url().to_string()),
+                                        error: failure,
+                                    };
+                                    return Err(error);
+                                }
+                            }
+                        }
+                        RecoveryMode::External => {
+                            let base_url = snapshot.base_url().to_string();
+                            trace_state_transition(
+                                "Ready",
+                                "Failed",
+                                &reason,
+                                mode,
+                                Some(&base_url),
+                            );
+                            *state = HandleState::Failed {
+                                mode,
+                                base_url: Some(base_url.clone()),
+                                error: reason.clone(),
+                            };
+                            return Err(external_unavailable(Some(base_url), reason));
+                        }
+                    }
                 }
             }
         }
@@ -168,8 +409,17 @@ impl OrchestratorServerHandle {
     #[cfg(any(test, feature = "test-support"))]
     #[must_use]
     pub fn from_server_unshared(server: OrchestratorServer) -> Self {
+        let mode = if server.is_managed() {
+            RecoveryMode::Managed
+        } else {
+            RecoveryMode::External
+        };
+
         Self {
-            cached: AsyncMutex::new(Some(Arc::new(server))),
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::new(server),
+                mode,
+            }),
         }
     }
 
@@ -184,6 +434,58 @@ impl OrchestratorServerHandle {
     {
         self.get_or_recover_with(start).await
     }
+}
+
+fn trace_cache_invalidated(reason: &str, mode: RecoveryMode, base_url: Option<&str>) {
+    if let Some(base_url) = base_url {
+        tracing::info!(
+            event = "cache_invalidated",
+            reason = %reason,
+            mode = mode.as_str(),
+            base_url = %base_url,
+        );
+    } else {
+        tracing::info!(
+            event = "cache_invalidated",
+            reason = %reason,
+            mode = mode.as_str(),
+        );
+    }
+}
+
+fn trace_state_transition(
+    from: &'static str,
+    to: &'static str,
+    reason: &str,
+    mode: RecoveryMode,
+    base_url: Option<&str>,
+) {
+    if let Some(base_url) = base_url {
+        tracing::info!(
+            event = "state_transition",
+            from,
+            to,
+            reason = %reason,
+            mode = mode.as_str(),
+            base_url = %base_url,
+        );
+    } else {
+        tracing::info!(
+            event = "state_transition",
+            from,
+            to,
+            reason = %reason,
+            mode = mode.as_str(),
+        );
+    }
+}
+
+fn external_unavailable(base_url: Option<String>, reason: String) -> anyhow::Error {
+    OrchestratorError::ExternalServerUnavailable {
+        base_url: base_url.unwrap_or_else(|| "<unknown>".to_string()),
+        reason,
+    }
+    .into()
 }
 
 /// Shared state wrapping the managed `OpenCode` server and HTTP client.
@@ -555,14 +857,22 @@ impl OrchestratorServer {
     ///
     /// Does NOT manage an opencode process (intended for wiremock tests).
     /// Model context limits are not loaded and will return `None` for all lookups.
-    pub fn from_client(client: Client, base_url: impl Into<String>) -> Arc<Self> {
-        Arc::new(Self::from_client_unshared(client, base_url))
+    pub fn from_client(
+        client: Client,
+        base_url: impl Into<String>,
+        mode: RecoveryMode,
+    ) -> Arc<Self> {
+        Arc::new(Self::from_client_unshared(client, base_url, mode))
     }
 
     /// Build an `OrchestratorServer` wrapper returning `Self` (not `Arc<Self>`).
     ///
     /// Useful for tests that need to preseed an `OrchestratorServerHandle` directly.
-    pub fn from_client_unshared(client: Client, base_url: impl Into<String>) -> Self {
+    pub fn from_client_unshared(
+        client: Client,
+        base_url: impl Into<String>,
+        _mode: RecoveryMode,
+    ) -> Self {
         Self {
             managed_server: StdMutex::new(None),
             client,
@@ -671,7 +981,11 @@ mod tests {
     }
 
     fn external_server(base_url: &str) -> OrchestratorServer {
-        OrchestratorServer::from_client_unshared(test_client(base_url), base_url)
+        OrchestratorServer::from_client_unshared(
+            test_client(base_url),
+            base_url,
+            RecoveryMode::External,
+        )
     }
 
     async fn exited_child() -> tokio::process::Child {
@@ -990,7 +1304,10 @@ mod tests {
     async fn handle_single_flights_concurrent_stale_acquires() {
         let stale = Arc::new(managed_server_with_exited_child("http://127.0.0.1:9").await);
         let handle = Arc::new(OrchestratorServerHandle {
-            cached: AsyncMutex::new(Some(Arc::clone(&stale))),
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::clone(&stale),
+                mode: RecoveryMode::Managed,
+            }),
         });
         let mock = health_mock_server().await;
         let base_url = mock.uri();
@@ -1033,7 +1350,10 @@ mod tests {
         let old_health = BlockingHealthServer::start(1).await;
         let original = Arc::new(external_server(&old_health.base_url));
         let handle = Arc::new(OrchestratorServerHandle {
-            cached: AsyncMutex::new(Some(Arc::clone(&original))),
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::clone(&original),
+                mode: RecoveryMode::External,
+            }),
         });
         let replacement_mock = health_mock_server().await;
         let replacement = Arc::new(external_server(&replacement_mock.uri()));
@@ -1050,10 +1370,13 @@ mod tests {
         old_health.wait_for_requests(1).await;
 
         {
-            let mut cached = tokio::time::timeout(Duration::from_millis(100), handle.cached.lock())
+            let mut state = tokio::time::timeout(Duration::from_millis(100), handle.state.lock())
                 .await
                 .expect("validation should not hold the handle mutex");
-            *cached = Some(Arc::clone(&replacement));
+            *state = HandleState::Ready {
+                snapshot: Arc::clone(&replacement),
+                mode: RecoveryMode::External,
+            };
         }
 
         old_health.release();
@@ -1068,7 +1391,10 @@ mod tests {
     async fn handle_rebuilds_without_invalidating_held_snapshot() {
         let stale = Arc::new(managed_server_with_exited_child("http://127.0.0.1:9").await);
         let handle = OrchestratorServerHandle {
-            cached: AsyncMutex::new(Some(Arc::clone(&stale))),
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::clone(&stale),
+                mode: RecoveryMode::Managed,
+            }),
         };
         let mock = health_mock_server().await;
         let base_url = mock.uri();
@@ -1168,5 +1494,48 @@ mod tests {
             Err(error) => error,
         };
         assert!(err.to_string().contains(ORCHESTRATOR_MANAGED_GUARD_MESSAGE));
+    }
+
+    #[tokio::test]
+    async fn external_failure_becomes_sticky_and_typed() {
+        let handle = OrchestratorServerHandle::from_server_unshared(
+            OrchestratorServer::from_client_unshared(
+                test_client("http://127.0.0.1:9"),
+                "http://127.0.0.1:9",
+                RecoveryMode::External,
+            ),
+        );
+        let starts = AtomicUsize::new(0);
+
+        let first = handle
+            .acquire_or_recover_with(|| {
+                starts.fetch_add(1, Ordering::SeqCst);
+                async { anyhow::bail!("should not rebuild external servers") }
+            })
+            .await;
+        let second = handle
+            .acquire_or_recover_with(|| {
+                starts.fetch_add(1, Ordering::SeqCst);
+                async { anyhow::bail!("should not rebuild external servers") }
+            })
+            .await;
+
+        let first = match first {
+            Ok(_snapshot) => panic!("expected typed external failure on first acquire"),
+            Err(error) => error,
+        };
+        let second = match second {
+            Ok(_snapshot) => panic!("expected sticky external failure on second acquire"),
+            Err(error) => error,
+        };
+
+        assert_eq!(starts.load(Ordering::SeqCst), 0);
+        assert!(
+            first
+                .to_string()
+                .contains("External OpenCode server unavailable"),
+            "expected typed external failure, got: {first}"
+        );
+        assert_eq!(first.to_string(), second.to_string());
     }
 }

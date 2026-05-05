@@ -507,7 +507,9 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .unwrap();
     let server = Arc::new(OrchestratorServerHandle::from_server_unshared(
         opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
-            client, &base_url,
+            client,
+            &base_url,
+            opencode_orchestrator_mcp::server::RecoveryMode::External,
         ),
     ));
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
