@@ -33,3 +33,18 @@ integration-test-bunx-verbose:
     OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.33" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration -- --ignored --nocapture --test-threads=1
+
+# Run the launcher orphan-cleanup regression against bunx launcher mode
+[no-exit-message]
+launcher-orphan-cleanup-regression:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    : "${OPENCODE_INTEGRATION:=1}"
+    : "${OPENCODE_BINARY:=bunx}"
+    : "${OPENCODE_BINARY_ARGS:=--yes opencode-ai@1.14.33}"
+    bunx --yes opencode-ai@1.14.33 --version
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
+    OPENCODE_INTEGRATION="$OPENCODE_INTEGRATION" \
+    OPENCODE_BINARY="$OPENCODE_BINARY" \
+    OPENCODE_BINARY_ARGS="$OPENCODE_BINARY_ARGS" \
+    cargo test -p opencode_rs --features server --test launcher_orphan_cleanup_regression -- --ignored --nocapture --test-threads=1
