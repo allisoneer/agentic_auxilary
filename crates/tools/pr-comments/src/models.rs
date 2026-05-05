@@ -125,7 +125,7 @@ impl FormatOptions {
 
     // Pure helper for testing
     pub fn from_csv(csv: &str) -> Self {
-        let mut opts = FormatOptions::default();
+        let mut opts = Self::default();
         for flag in csv
             .split(',')
             .map(|s| s.trim().to_lowercase())
@@ -145,7 +145,7 @@ impl FormatOptions {
         opts
     }
 
-    pub fn get() -> &'static FormatOptions {
+    pub fn get() -> &'static Self {
         FORMAT_OPTIONS.get_or_init(Self::from_env)
     }
 }
@@ -175,13 +175,11 @@ pub fn format_legend() -> &'static str {
 pub fn indent_multiline(s: &str, indent: &str) -> String {
     let mut out = String::new();
     for (i, line) in s.lines().enumerate() {
-        if i == 0 {
-            out.push_str(line);
-        } else {
+        if i != 0 {
             out.push('\n');
             out.push_str(indent);
-            out.push_str(line);
         }
+        out.push_str(line);
     }
     out
 }
@@ -215,15 +213,18 @@ impl ReviewCommentList {
             out,
             "{}",
             fmt_header(&format!(
-                "Review comments for {}/{}#{}:",
-                self.owner, self.repo, self.pr_number
+                "Review comments for {owner}/{repo}#{pr_number}:",
+                owner = self.owner,
+                repo = self.repo,
+                pr_number = self.pr_number
             ))
         );
-        let _ = writeln!(out, "PR: {}", self.pr_url);
+        let _ = writeln!(out, "PR: {pr_url}", pr_url = self.pr_url);
         let _ = writeln!(
             out,
-            "Threads shown: {} of {}",
-            self.shown_threads, self.total_threads
+            "Threads shown: {shown_threads} of {total_threads}",
+            shown_threads = self.shown_threads,
+            total_threads = self.total_threads
         );
 
         if self.comments.is_empty() {
@@ -237,7 +238,7 @@ impl ReviewCommentList {
         let grouped = group_by_path(&self.comments);
 
         for (path, comments) in grouped {
-            let _ = writeln!(out, "\n{}", path);
+            let _ = writeln!(out, "\n{path}");
 
             // Build replies map
             let mut replies_by_parent: std::collections::BTreeMap<u64, Vec<&ReviewComment>> =
@@ -256,48 +257,49 @@ impl ReviewCommentList {
 
                 // Format top-level comment
                 let side = compress_side(c.side.as_deref());
-                let line_disp = c.line.map(|n| n.to_string()).unwrap_or_else(|| "?".into());
-                let mut head = format!("  [{} {}] {}", line_disp, side, fmt_user(&c.user));
+                let line_disp = c.line.map_or_else(|| "?".into(), |n| n.to_string());
+                let user = fmt_user(&c.user);
+                let mut head = format!("  [{line_disp} {side}] {user}");
                 if opts.show_ids {
-                    head.push_str(&format!(" #{}", c.id));
+                    let _ = write!(head, " #{id}", id = c.id);
                 }
                 if opts.show_review_ids
                     && let Some(rid) = c.pull_request_review_id
                 {
-                    head.push_str(&format!(" (review:{})", rid));
+                    let _ = write!(head, " (review:{rid})");
                 }
                 if opts.show_dates {
-                    head.push_str(&format!(" @{}", fmt_ts(&c.created_at)));
+                    let _ = write!(head, " @{}", fmt_ts(&c.created_at));
                 }
-                let _ = writeln!(out, "{}", head);
+                let _ = writeln!(out, "{head}");
                 let body = indent_multiline(&c.body, "    ");
-                let _ = writeln!(out, "    {}", body);
-                let _ = writeln!(out, "    Thread: {}", c.html_url);
+                let _ = writeln!(out, "    {body}");
+                let _ = writeln!(out, "    Thread: {html_url}", html_url = c.html_url);
 
                 // Render replies indented under parent
                 if let Some(replies) = replies_by_parent.get(&c.id) {
                     for r in replies {
                         let side_r = compress_side(r.side.as_deref());
-                        let line_r = r.line.map(|n| n.to_string()).unwrap_or_else(|| "?".into());
-                        let mut head_r =
-                            format!("    ↳ [{} {}] {}", line_r, side_r, fmt_user(&r.user));
+                        let line_r = r.line.map_or_else(|| "?".into(), |n| n.to_string());
+                        let user = fmt_user(&r.user);
+                        let mut head_r = format!("    ↳ [{line_r} {side_r}] {user}");
                         if opts.show_ids {
-                            head_r.push_str(&format!(" #{}", r.id));
+                            let _ = write!(head_r, " #{id}", id = r.id);
                         }
                         if opts.show_review_ids
                             && let Some(rid) = r.pull_request_review_id
                         {
-                            head_r.push_str(&format!(" (review:{})", rid));
+                            let _ = write!(head_r, " (review:{rid})");
                         }
                         if opts.show_urls {
-                            head_r.push_str(&format!(" {}", r.html_url));
+                            let _ = write!(head_r, " {html_url}", html_url = r.html_url);
                         }
                         if opts.show_dates {
-                            head_r.push_str(&format!(" @{}", fmt_ts(&r.created_at)));
+                            let _ = write!(head_r, " @{}", fmt_ts(&r.created_at));
                         }
-                        let _ = writeln!(out, "{}", head_r);
+                        let _ = writeln!(out, "{head_r}");
                         let body_r = indent_multiline(&r.body, "      ");
-                        let _ = writeln!(out, "      {}", body_r);
+                        let _ = writeln!(out, "      {body_r}");
                     }
                 }
             }
@@ -310,13 +312,15 @@ impl ReviewCommentList {
     fn pagination_footer(&self) -> String {
         if self.has_more {
             format!(
-                "(more results — showing {} of {} threads; call gh_get_comments again with same params for next page)",
-                self.shown_threads, self.total_threads
+                "(more results — showing {shown_threads} of {total_threads} threads; call gh_get_comments again with same params for next page)",
+                shown_threads = self.shown_threads,
+                total_threads = self.total_threads
             )
         } else {
             format!(
-                "(complete — showing {} of {} threads; stop here; another identical gh_get_comments call restarts from page 1)",
-                self.shown_threads, self.total_threads
+                "(complete — showing {shown_threads} of {total_threads} threads; stop here; another identical gh_get_comments call restarts from page 1)",
+                shown_threads = self.shown_threads,
+                total_threads = self.total_threads
             )
         }
     }
@@ -335,11 +339,18 @@ impl PrSummaryList {
             out,
             "{}",
             fmt_header(&format!(
-                "Pull requests for {}/{} (state={}):",
-                self.owner, self.repo, self.state
+                "Pull requests for {owner}/{repo} (state={state}):",
+                owner = self.owner,
+                repo = self.repo,
+                state = self.state
             ))
         );
-        let _ = writeln!(out, "PRs shown: {} of {}", self.shown_prs, self.total_prs);
+        let _ = writeln!(
+            out,
+            "PRs shown: {shown_prs} of {total_prs}",
+            shown_prs = self.shown_prs,
+            total_prs = self.total_prs
+        );
 
         if self.prs.is_empty() {
             let _ = writeln!(out, "No matching pull requests.");
@@ -348,20 +359,27 @@ impl PrSummaryList {
         }
 
         for pr in &self.prs {
-            let mut line = format!("#{} {} — {}", pr.number, pr.state, pr.title);
+            let mut line = format!(
+                "#{number} {state} — {title}",
+                number = pr.number,
+                state = pr.state,
+                title = pr.title
+            );
             if opts.show_author {
-                line.push_str(&format!(" (by {})", pr.author));
+                let _ = write!(line, " (by {author})", author = pr.author);
             }
             if opts.show_counts {
-                line.push_str(&format!(
-                    " [comments={}, review_comments={}]",
-                    pr.comment_count, pr.review_comment_count
-                ));
+                let _ = write!(
+                    line,
+                    " [comments={comment_count}, review_comments={review_comment_count}]",
+                    comment_count = pr.comment_count,
+                    review_comment_count = pr.review_comment_count
+                );
             }
             if opts.show_dates {
-                line.push_str(&format!(" @{}", fmt_ts(&pr.updated_at)));
+                let _ = write!(line, " @{}", fmt_ts(&pr.updated_at));
             }
-            let _ = writeln!(out, "{}", line);
+            let _ = writeln!(out, "{line}");
         }
 
         let _ = writeln!(out, "\n{}", self.pagination_footer());
@@ -371,13 +389,15 @@ impl PrSummaryList {
     fn pagination_footer(&self) -> String {
         if self.has_more {
             format!(
-                "(more results — showing {} of {} pull requests; call gh_get_prs again with same params for next page)",
-                self.shown_prs, self.total_prs
+                "(more results — showing {shown_prs} of {total_prs} pull requests; call gh_get_prs again with same params for next page)",
+                shown_prs = self.shown_prs,
+                total_prs = self.total_prs
             )
         } else {
             format!(
-                "(complete — showing {} of {} pull requests; stop here; another identical gh_get_prs call restarts from page 1)",
-                self.shown_prs, self.total_prs
+                "(complete — showing {shown_prs} of {total_prs} pull requests; stop here; another identical gh_get_prs call restarts from page 1)",
+                shown_prs = self.shown_prs,
+                total_prs = self.total_prs
             )
         }
     }
@@ -392,34 +412,32 @@ impl TextFormat for ReviewComment {
 
         // Format similar to review comment list but for single comment
         let side = compress_side(self.side.as_deref());
-        let line_disp = self
-            .line
-            .map(|n| n.to_string())
-            .unwrap_or_else(|| "?".into());
+        let line_disp = self.line.map_or_else(|| "?".into(), |n| n.to_string());
+        let user = fmt_user(&self.user);
         let mut head = format!(
-            "{} [{} {}] {}",
-            self.path,
-            line_disp,
-            side,
-            fmt_user(&self.user)
+            "{path} [{line_disp} {side}] {user}",
+            path = self.path,
+            line_disp = line_disp,
+            side = side,
+            user = user,
         );
         if opts.show_ids {
-            head.push_str(&format!(" #{}", self.id));
+            let _ = write!(head, " #{id}", id = self.id);
         }
         if opts.show_review_ids
             && let Some(rid) = self.pull_request_review_id
         {
-            head.push_str(&format!(" (review:{})", rid));
+            let _ = write!(head, " (review:{rid})");
         }
         if opts.show_urls {
-            head.push_str(&format!(" {}", self.html_url));
+            let _ = write!(head, " {html_url}", html_url = self.html_url);
         }
         if opts.show_dates {
-            head.push_str(&format!(" @{}", fmt_ts(&self.created_at)));
+            let _ = write!(head, " @{}", fmt_ts(&self.created_at));
         }
-        let _ = writeln!(out, "{}", head);
+        let _ = writeln!(out, "{head}");
         let body = indent_multiline(&self.body, "  ");
-        let _ = writeln!(out, "  {}", body);
+        let _ = writeln!(out, "  {body}");
 
         out
     }
@@ -453,7 +471,7 @@ impl From<octocrab::models::pulls::Comment> for ReviewComment {
 }
 
 impl ReviewComment {
-    /// Convert from octocrab's ReviewComment type (returned by reply_to_comment).
+    /// Convert from octocrab's `ReviewComment` type (returned by `reply_to_comment`).
     pub fn from_review_comment(comment: octocrab::models::pulls::ReviewComment) -> Self {
         let (user, is_bot) = match comment.user {
             Some(u) => {
@@ -479,7 +497,7 @@ impl ReviewComment {
             side,
             created_at: comment.created_at.to_rfc3339(),
             updated_at: comment.updated_at.to_rfc3339(),
-            html_url: comment.html_url.to_string(),
+            html_url: comment.html_url.clone(),
             pull_request_review_id: comment.pull_request_review_id.map(|id| id.0),
             in_reply_to_id: comment.in_reply_to_id.map(|id| id.0),
         }
@@ -628,7 +646,7 @@ mod mcp_format_tests {
             body: body.into(),
             path: path.into(),
             line,
-            side: side.map(|s| s.into()),
+            side: side.map(std::convert::Into::into),
             created_at: "2025-01-01T00:00:00Z".into(),
             updated_at: "2025-01-01T00:00:00Z".into(),
             html_url: html_url.into(),
@@ -658,8 +676,7 @@ mod mcp_format_tests {
             has_more,
             message: has_more.then(|| {
                 format!(
-                    "Showing {} out of {} threads. Call gh_get_comments again for more.",
-                    shown_threads, total_threads
+                    "Showing {shown_threads} out of {total_threads} threads. Call gh_get_comments again for more."
                 )
             }),
         }
@@ -683,8 +700,7 @@ mod mcp_format_tests {
             has_more,
             message: has_more.then(|| {
                 format!(
-                    "Showing {} out of {} pull requests. Call gh_get_prs again for more.",
-                    shown_prs, total_prs
+                    "Showing {shown_prs} out of {total_prs} pull requests. Call gh_get_prs again for more."
                 )
             }),
         }
@@ -716,7 +732,7 @@ mod mcp_format_tests {
             sample_review(3, "a.rs", None, None, "u2", "z", "https://x/3", None),
         ];
         let g = group_by_path(&cs);
-        let keys: Vec<_> = g.keys().cloned().collect();
+        let keys: Vec<_> = g.keys().copied().collect();
         assert_eq!(keys, vec!["a.rs", "b.rs"]);
         assert_eq!(g["a.rs"].len(), 2);
         assert_eq!(g["b.rs"].len(), 1);
@@ -988,7 +1004,10 @@ mod mcp_format_tests {
             has_more: false,
             message: None,
         };
-        let s = serde_json::to_string(&w).unwrap();
+        let s = match serde_json::to_string(&w) {
+            Ok(json) => json,
+            Err(err) => panic!("ReviewCommentList should serialize: {err}"),
+        };
         assert!(s.contains("\"owner\""));
         assert!(s.contains("\"repo\""));
         assert!(s.contains("\"pr_number\""));
@@ -1031,7 +1050,9 @@ mod mcp_format_tests {
             message: Some(msg.clone()),
         };
         assert!(list_partial.message.is_some());
-        let m = list_partial.message.unwrap();
+        let Some(m) = list_partial.message else {
+            panic!("message should be present when has_more is true");
+        };
         assert!(m.contains("Showing 5 out of 15 threads"));
         assert!(m.contains("Call gh_get_comments again"));
 
@@ -1047,7 +1068,10 @@ mod mcp_format_tests {
             has_more: true,
             message: Some(msg),
         };
-        let s = serde_json::to_string(&list_with_msg).unwrap();
+        let s = match serde_json::to_string(&list_with_msg) {
+            Ok(json) => json,
+            Err(err) => panic!("ReviewCommentList with message should serialize: {err}"),
+        };
         assert!(s.contains("\"message\""));
     }
 }

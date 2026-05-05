@@ -1,5 +1,5 @@
 use pr_comments::git;
-use pr_comments::models::*;
+use pr_comments::models::ReviewComment;
 
 #[test]
 fn test_url_parsing() {
@@ -12,7 +12,10 @@ fn test_url_parsing() {
     ];
 
     for (url, (expected_owner, expected_repo)) in urls {
-        let result = git::parse_github_url(url).unwrap();
+        let result = match git::parse_github_url(url) {
+            Ok(parsed) => parsed,
+            Err(err) => panic!("parse_github_url should succeed for {url}: {err}"),
+        };
         assert_eq!(
             result,
             (expected_owner.to_string(), expected_repo.to_string())
@@ -37,8 +40,14 @@ async fn test_model_serialization() {
         in_reply_to_id: None,
     };
 
-    let json = serde_json::to_string(&comment).unwrap();
-    let parsed: ReviewComment = serde_json::from_str(&json).unwrap();
+    let json = match serde_json::to_string(&comment) {
+        Ok(json) => json,
+        Err(err) => panic!("ReviewComment should serialize: {err}"),
+    };
+    let parsed: ReviewComment = match serde_json::from_str(&json) {
+        Ok(parsed) => parsed,
+        Err(err) => panic!("ReviewComment should deserialize: {err}"),
+    };
     assert_eq!(parsed.id, comment.id);
     assert_eq!(parsed.is_bot, comment.is_bot);
 }
@@ -93,9 +102,14 @@ mod resolution_tests {
             }
         }"#;
 
-        let response: GraphQLResponse<PullRequestData> = serde_json::from_str(json).unwrap();
+        let response: GraphQLResponse<PullRequestData> = match serde_json::from_str(json) {
+            Ok(response) => response,
+            Err(err) => panic!("GraphQLResponse should deserialize: {err}"),
+        };
         assert!(response.data.is_some());
-        let data = response.data.unwrap();
+        let Some(data) = response.data else {
+            panic!("GraphQLResponse should contain data");
+        };
         assert_eq!(data.repository.pull_request.review_threads.nodes.len(), 1);
         assert!(data.repository.pull_request.review_threads.nodes[0].is_resolved);
     }
@@ -113,7 +127,7 @@ mod filter_pipeline_tests {
             id,
             user: user.into(),
             is_bot: false,
-            body: format!("P{}", id),
+            body: format!("P{id}"),
             path: "a.rs".into(),
             line: Some(1),
             side: Some("RIGHT".into()),
@@ -130,7 +144,7 @@ mod filter_pipeline_tests {
             id,
             user: user.into(),
             is_bot: false,
-            body: format!("R{}", id),
+            body: format!("R{id}"),
             path: "a.rs".into(),
             line: Some(1),
             side: Some("RIGHT".into()),
@@ -174,7 +188,7 @@ mod filter_pipeline_tests {
             rc_reply(11, "bob", 1),
             rc_top(2, "alice"),
         ];
-        let out = apply_filters(data, p(false, true, Some("alice"), 1, 100));
+        let out = apply_filters(data, &p(false, true, Some("alice"), 1, 100));
         assert_eq!(ids(&out), vec![2], "reply R11 should not appear without P1");
     }
 
@@ -190,7 +204,7 @@ mod filter_pipeline_tests {
             rc_top(2, "u"),
             rc_reply(22, "w", 2),
         ];
-        let out = apply_filters(data, p(true, true, None, 0, 2));
+        let out = apply_filters(data, &p(true, true, None, 0, 2));
         assert_eq!(ids(&out), vec![1, 11]);
     }
 
@@ -206,7 +220,7 @@ mod filter_pipeline_tests {
             rc_reply(12, "c", 1),
             rc_top(2, "d"),
         ];
-        let out = apply_filters(data, p(true, true, None, 0, 1));
+        let out = apply_filters(data, &p(true, true, None, 0, 1));
         assert_eq!(ids(&out), vec![1, 11, 12]);
     }
 
@@ -225,7 +239,7 @@ mod filter_pipeline_tests {
             rc_reply(33, "z", 3),
             rc_top(4, "d"),
         ];
-        let out = apply_filters(data, p(true, true, None, 3, 100));
+        let out = apply_filters(data, &p(true, true, None, 3, 100));
         assert_eq!(ids(&out), vec![4]);
     }
 
@@ -236,7 +250,7 @@ mod filter_pipeline_tests {
     #[test]
     fn include_replies_false_preserved() {
         let data = vec![rc_top(1, "u"), rc_reply(11, "v", 1), rc_top(2, "w")];
-        let out = apply_filters(data, p(true, false, None, 1, 100));
+        let out = apply_filters(data, &p(true, false, None, 1, 100));
         assert_eq!(ids(&out), vec![2]);
     }
 
@@ -248,7 +262,7 @@ mod filter_pipeline_tests {
     #[test]
     fn page_local_completion_does_not_fetch_next_page() {
         let page1 = vec![rc_top(1, "u"), rc_reply(11, "v", 1)];
-        let out = apply_filters(page1, p(true, true, None, 0, 1));
+        let out = apply_filters(page1, &p(true, true, None, 0, 1));
         assert_eq!(ids(&out), vec![1, 11]);
         // R2 on a later page would not be fetched/added.
     }
@@ -266,13 +280,13 @@ mod thread_tests {
             id,
             user: user.into(),
             is_bot,
-            body: format!("Comment {}", id),
+            body: format!("Comment {id}"),
             path: "src/lib.rs".into(),
             line: Some(10),
             side: Some("RIGHT".into()),
             created_at: "2025-01-01T00:00:00Z".into(),
             updated_at: "2025-01-01T00:00:00Z".into(),
-            html_url: format!("https://example.com/{}", id),
+            html_url: format!("https://example.com/{id}"),
             pull_request_review_id: None,
             in_reply_to_id: in_reply_to,
         }

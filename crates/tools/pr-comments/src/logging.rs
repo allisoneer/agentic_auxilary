@@ -1,7 +1,7 @@
-//! Logging utilities for pr_comments.
+//! Logging utilities for `pr_comments`.
 //!
 //! Provides a helper context that reduces duplication when logging tool calls
-//! to the thoughts logs directory using agentic_logging.
+//! to the thoughts logs directory using `agentic_logging`.
 
 use agentic_logging::CallTimer;
 use agentic_logging::LogWriter;
@@ -16,7 +16,7 @@ use thoughts_tool::active_logs_dir;
 /// Logging is best-effort: if the logs directory is unavailable (e.g., branch lockout),
 /// the tool call still succeeds without logging.
 pub struct ToolLogCtx {
-    /// Timer for this call (contains call_id and started_at)
+    /// Timer for this call (contains `call_id` and `started_at`)
     pub timer: CallTimer,
     /// Writer instance (if logs dir was resolved)
     writer: Option<LogWriter>,
@@ -49,7 +49,7 @@ impl ToolLogCtx {
     /// consistent day-bucket placement. Otherwise, a fresh timestamp is captured.
     ///
     /// This is best-effort: errors are logged via tracing but do not fail the call.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn finish(
         self,
         request: serde_json::Value,
@@ -86,7 +86,7 @@ impl ToolLogCtx {
         };
 
         if let Err(e) = writer.append_jsonl(&record) {
-            tracing::warn!("Failed to append JSONL log: {}", e);
+            tracing::warn!("Failed to append JSONL log: {e}");
         }
     }
 }

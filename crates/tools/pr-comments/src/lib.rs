@@ -27,7 +27,10 @@ pub use tools::build_registry;
 pub const AI_PREFIX: &str = "\u{1F916} AI response: ";
 
 fn guarded_post_fetch_reset<T>(query_lock: &Arc<QueryLock<T>>, entries: Vec<T>, page_size: usize) {
-    let mut state = query_lock.state.lock().unwrap();
+    let mut state = query_lock
+        .state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if state.is_empty() || state.is_expired() {
         state.reset(entries, (), page_size);
     }
@@ -39,7 +42,7 @@ pub fn with_ai_prefix(body: &str) -> String {
     if body.trim_start().starts_with(AI_PREFIX) {
         body.to_string()
     } else {
-        format!("{}{}", AI_PREFIX, body)
+        format!("{AI_PREFIX}{body}")
     }
 }
 
@@ -54,49 +57,51 @@ pub struct PrComments {
 }
 
 impl PrComments {
-    fn get_token() -> Result<Option<String>> {
+    fn get_token() -> Option<String> {
         // 1) Check environment variables first (explicit override)
         if let Ok(t) = std::env::var("GH_TOKEN").or_else(|_| std::env::var("GITHUB_TOKEN")) {
             tracing::debug!("Using GitHub token from environment");
-            return Ok(Some(t));
+            return Some(t);
         }
 
         // 2) Try gh-config (hosts.yml → keyring)
-        match gh_config::Hosts::load() {
-            Ok(hosts) => match hosts.retrieve_token(gh_config::GITHUB_COM) {
-                Ok(Some(t)) => {
-                    tracing::debug!("Using GitHub token from gh-config");
-                    Ok(Some(t))
-                }
-                Ok(None) => {
-                    tracing::debug!("No token found in gh-config");
-                    Ok(None)
-                }
-                Err(e) => {
-                    tracing::debug!("gh-config token retrieval failed: {}", e);
-                    Ok(None)
-                }
-            },
+        let hosts = match gh_config::Hosts::load() {
+            Ok(hosts) => hosts,
             Err(e) => {
-                tracing::debug!("gh-config unavailable: {}", e);
-                Ok(None)
+                tracing::debug!("gh-config unavailable: {e}");
+                return None;
+            }
+        };
+
+        match hosts.retrieve_token(gh_config::GITHUB_COM) {
+            Ok(Some(t)) => {
+                tracing::debug!("Using GitHub token from gh-config");
+                Some(t)
+            }
+            Ok(None) => {
+                tracing::debug!("No token found in gh-config");
+                None
+            }
+            Err(e) => {
+                tracing::debug!("gh-config token retrieval failed: {e}");
+                None
             }
         }
     }
 
-    /// Get page size from environment variable PR_COMMENTS_PAGE_SIZE.
+    /// Get page size from environment variable `PR_COMMENTS_PAGE_SIZE`.
     /// Defaults to 10, clamped to [1, 1000].
     fn page_size_from_env() -> usize {
         std::env::var("PR_COMMENTS_PAGE_SIZE")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
-            .filter(|n| *n >= 1 && *n <= 1000)
+            .filter(|n| (1..=1000).contains(n))
             .unwrap_or(10)
     }
 
     pub fn new() -> Result<Self> {
         let git_info = git::get_git_info().context("Failed to get git information")?;
-        let token = Self::get_token()?;
+        let token = Self::get_token();
 
         Ok(Self {
             owner: git_info.owner,
@@ -109,7 +114,7 @@ impl PrComments {
     }
 
     pub fn with_repo(owner: String, repo: String) -> Self {
-        let token = Self::get_token().ok().flatten();
+        let token = Self::get_token();
         Self {
             owner,
             repo,
@@ -123,7 +128,7 @@ impl PrComments {
     /// Create a disabled instance that will fail fast with a clear error message.
     /// Used when ambient repo detection fails.
     pub fn disabled(init_error: String) -> Self {
-        let token = Self::get_token().ok().flatten();
+        let token = Self::get_token();
         Self {
             owner: String::new(),
             repo: String::new(),
@@ -146,7 +151,8 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
             .to_string();
 
         if let Some(e) = &self.init_error {
-            msg.push_str(&format!("\n\nAmbient detection error: {}", e));
+            msg.push_str("\n\nAmbient detection error: ");
+            msg.push_str(e);
         }
 
         anyhow::bail!(msg);
@@ -169,23 +175,21 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
         match client.get_pr_from_branch(&branch).await {
             Ok(Some(pr)) => Ok(pr),
             Ok(None) => Err(anyhow::anyhow!(
-                "No open PR found for branch '{}' in {}/{}. \n\
+                "No open PR found for branch '{branch}' in {owner}/{repo}. \n\
                 Make sure you have an open PR for this branch.",
-                branch,
-                self.owner,
-                self.repo
+                owner = self.owner.as_str(),
+                repo = self.repo.as_str()
             )),
             Err(e) => {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") || msg.contains("Not Found") {
                     Err(anyhow::anyhow!(
-                        "Failed to access {}/{}: {}\n\n\
+                        "Failed to access {owner}/{repo}: {msg}\n\n\
                         Hint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.\n\
-                        Current token: {}",
-                        self.owner,
-                        self.repo,
-                        msg,
-                        if self.token.is_some() {
+                        Current token: {token_state}",
+                        owner = self.owner.as_str(),
+                        repo = self.repo.as_str(),
+                        token_state = if self.token.is_some() {
                             "Set"
                         } else {
                             "Not set (required for private repos)"
@@ -221,8 +225,9 @@ impl PrComments {
         let include_resolved = include_resolved.unwrap_or(false);
         let page_size = Self::page_size_from_env();
         let pr_url = format!(
-            "https://github.com/{}/{}/pull/{}",
-            self.owner, self.repo, pr
+            "https://github.com/{owner}/{repo}/pull/{pr}",
+            owner = self.owner,
+            repo = self.repo
         );
 
         // Sweep expired cache entries opportunistically
@@ -243,7 +248,10 @@ impl PrComments {
 
         // Check if we need to fetch data (quick check, release lock before await)
         let needs_fetch = {
-            let state = query_lock.state.lock().unwrap();
+            let state = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.is_empty() || state.is_expired()
         };
 
@@ -261,33 +269,35 @@ impl PrComments {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
                     anyhow::anyhow!(
-                        "{}\n\nHint: For private repositories, ensure your token has the 'repo' scope.",
-                        msg
+                        "{msg}\n\nHint: For private repositories, ensure your token has the 'repo' scope."
                     )
                 } else {
-                    anyhow::anyhow!("{}", msg)
+                    anyhow::anyhow!("{msg}")
                 }
             })?;
 
             // Get resolution map
-            let resolution_map = if !include_resolved {
+            let resolution_map = if include_resolved {
+                std::collections::HashMap::new()
+            } else {
                 client
                     .get_review_thread_resolution_status(pr)
                     .await
                     .unwrap_or_default()
-            } else {
-                std::collections::HashMap::new()
             };
 
             // Build and filter threads
-            let threads = client.build_threads(comments, &resolution_map);
-            let filtered = client.filter_threads(threads, src, include_resolved);
+            let threads = github::GitHubClient::build_threads(comments, &resolution_map);
+            let filtered = github::GitHubClient::filter_threads(threads, src, include_resolved);
 
             guarded_post_fetch_reset(&query_lock, filtered, page_size);
         }
 
         // Now paginate (re-acquire lock for pagination)
-        let mut state = query_lock.state.lock().unwrap();
+        let mut state = query_lock
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let (page_threads, has_more) =
             paginate_slice(&state.results, state.next_offset, state.page_size);
         state.next_offset += page_threads.len();
@@ -309,8 +319,7 @@ impl PrComments {
         // Build pagination message only when there are more pages
         let message = if has_more {
             Some(format!(
-                "Showing {} out of {} threads. Call gh_get_comments again for more.",
-                shown_threads, total_threads
+                "Showing {shown_threads} out of {total_threads} threads. Call gh_get_comments again for more."
             ))
         } else {
             None
@@ -352,7 +361,10 @@ impl PrComments {
         // total_prs from results.len(). Consider incremental remote pagination or relaxing exact totals
         // if cold-cache latency matters.
         let needs_fetch = {
-            let state = query_lock.state.lock().unwrap();
+            let state = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.is_empty() || state.is_expired()
         };
 
@@ -368,18 +380,20 @@ impl PrComments {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
                     anyhow::anyhow!(
-                        "{}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope.",
-                        msg
+                        "{msg}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope."
                     )
                 } else {
-                    anyhow::anyhow!("{}", msg)
+                    anyhow::anyhow!("{msg}")
                 }
             })?;
 
             guarded_post_fetch_reset(&query_lock, prs, page_size);
         }
 
-        let mut pager_state = query_lock.state.lock().unwrap();
+        let mut pager_state = query_lock
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let (prs, has_more) = paginate_slice(
             &pager_state.results,
             pager_state.next_offset,
@@ -391,8 +405,7 @@ impl PrComments {
         let shown_prs = pager_state.next_offset;
         let message = if has_more {
             Some(format!(
-                "Showing {} out of {} pull requests. Call gh_get_prs again for more.",
-                shown_prs, total_prs
+                "Showing {shown_prs} out of {total_prs} pull requests. Call gh_get_prs again for more."
             ))
         } else {
             None
@@ -450,13 +463,12 @@ impl PrComments {
                 let msg = e.to_string();
                 if msg.contains("401") || msg.contains("403") {
                     anyhow::anyhow!(
-                        "{}\n\nHint: For private repositories, ensure your token has the 'repo' scope.",
-                        msg
+                        "{msg}\n\nHint: For private repositories, ensure your token has the 'repo' scope."
                     )
                 } else if msg.contains("404") {
-                    anyhow::anyhow!("not found: Comment {} not found on PR #{}", comment_id, pr)
+                    anyhow::anyhow!("not found: Comment {comment_id} not found on PR #{pr}")
                 } else {
-                    anyhow::anyhow!("{}", msg)
+                    anyhow::anyhow!("{msg}")
                 }
             })?;
 
@@ -516,11 +528,17 @@ mod tests {
         let query_lock = cache.get_or_create(&key);
 
         let needs_fetch_a = {
-            let st = query_lock.state.lock().unwrap();
+            let st = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             st.is_empty() || st.is_expired()
         };
         let needs_fetch_b = {
-            let st = query_lock.state.lock().unwrap();
+            let st = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             st.is_empty() || st.is_expired()
         };
         assert!(needs_fetch_a);
@@ -533,7 +551,10 @@ mod tests {
         );
 
         {
-            let mut st = query_lock.state.lock().unwrap();
+            let mut st = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let (page, has_more) = paginate_slice(&st.results, st.next_offset, st.page_size);
             st.next_offset += page.len();
 
@@ -551,7 +572,10 @@ mod tests {
         );
 
         {
-            let st = query_lock.state.lock().unwrap();
+            let st = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             assert_eq!(st.next_offset, 2);
             assert_eq!(st.results[0].parent.id, 1);
             assert_eq!(st.results[1].parent.id, 2);
@@ -559,7 +583,10 @@ mod tests {
         }
 
         {
-            let mut st = query_lock.state.lock().unwrap();
+            let mut st = query_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let (page, has_more) = paginate_slice(&st.results, st.next_offset, st.page_size);
             st.next_offset += page.len();
 
@@ -574,12 +601,12 @@ mod tests {
         let body = "This is a reply";
         let prefixed = with_ai_prefix(body);
         assert!(prefixed.starts_with(AI_PREFIX));
-        assert_eq!(prefixed, format!("{}This is a reply", AI_PREFIX));
+        assert_eq!(prefixed, format!("{AI_PREFIX}This is a reply"));
     }
 
     #[test]
     fn with_ai_prefix_avoids_double_prefix() {
-        let already_prefixed = format!("{}Already prefixed", AI_PREFIX);
+        let already_prefixed = format!("{AI_PREFIX}Already prefixed");
         let result = with_ai_prefix(&already_prefixed);
         assert_eq!(result, already_prefixed);
         // Ensure no double prefix
@@ -596,7 +623,7 @@ mod tests {
     #[test]
     fn with_ai_prefix_handles_leading_whitespace() {
         // Body with leading whitespace before prefix should not double-prefix
-        let body_with_space = format!("  {}Already prefixed", AI_PREFIX);
+        let body_with_space = format!("  {AI_PREFIX}Already prefixed");
         let result = with_ai_prefix(&body_with_space);
         assert_eq!(result, body_with_space);
         // Ensure no double prefix
@@ -615,7 +642,10 @@ mod tests {
         let result = disabled.ensure_repo_configured();
 
         assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let err = match result {
+            Ok(()) => panic!("expected ensure_repo_configured to fail"),
+            Err(err) => err.to_string(),
+        };
         assert!(
             err.contains("repository context is not available"),
             "Error should mention missing repo context"
@@ -644,7 +674,10 @@ mod tests {
 
         let first_lock = cache.get_or_create(&key);
         {
-            let mut state = first_lock.state.lock().unwrap();
+            let mut state = first_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.reset(vec![sample_thread(1), sample_thread(2)], (), 10);
 
             let (page_threads, has_more) =
@@ -660,7 +693,10 @@ mod tests {
         let restarted_lock = cache.get_or_create(&key);
         assert!(!Arc::ptr_eq(&first_lock, &restarted_lock));
 
-        let restarted_state = restarted_lock.state.lock().unwrap();
+        let restarted_state = restarted_lock
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert!(restarted_state.is_empty());
         assert_eq!(restarted_state.next_offset, 0);
     }
@@ -672,7 +708,10 @@ mod tests {
 
         let first_lock = cache.get_or_create(&key);
         {
-            let mut state = first_lock.state.lock().unwrap();
+            let mut state = first_lock
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.reset(vec![sample_pr_summary(1), sample_pr_summary(2)], (), 10);
 
             let (page_prs, has_more) =
@@ -688,7 +727,10 @@ mod tests {
         let restarted_lock = cache.get_or_create(&key);
         assert!(!Arc::ptr_eq(&first_lock, &restarted_lock));
 
-        let restarted_state = restarted_lock.state.lock().unwrap();
+        let restarted_state = restarted_lock
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert!(restarted_state.is_empty());
         assert_eq!(restarted_state.next_offset, 0);
     }

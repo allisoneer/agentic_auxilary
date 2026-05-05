@@ -44,10 +44,10 @@ pub fn parse_github_url(url: &str) -> Result<(String, String)> {
             let path = parsed.path().trim_start_matches('/');
             parse_repo_path(path)
         } else {
-            anyhow::bail!("Not a GitHub URL: {}", url)
+            anyhow::bail!("Not a GitHub URL: {url}")
         }
     } else {
-        anyhow::bail!("Invalid git remote URL: {}", url)
+        anyhow::bail!("Invalid git remote URL: {url}")
     }
 }
 
@@ -58,7 +58,7 @@ fn parse_repo_path(path: &str) -> Result<(String, String)> {
     if parts.len() == 2 {
         Ok((parts[0].to_string(), parts[1].to_string()))
     } else {
-        anyhow::bail!("Invalid GitHub repository path: {}", path)
+        anyhow::bail!("Invalid GitHub repository path: {path}")
     }
 }
 
@@ -76,7 +76,11 @@ mod tests {
         ];
 
         for (url, (expected_owner, expected_repo)) in test_cases {
-            let (owner, repo) = parse_github_url(url).unwrap();
+            let result = parse_github_url(url);
+            let (owner, repo) = match result {
+                Ok(parts) => parts,
+                Err(err) => panic!("parse_github_url should succeed for {url}: {err}"),
+            };
             assert_eq!(owner, expected_owner);
             assert_eq!(repo, expected_repo);
         }
