@@ -33,7 +33,7 @@ pub enum MCPServer {
 impl MCPServer {
     /// Create a new stdio MCP server
     pub fn stdio(command: impl Into<String>, args: Vec<String>) -> Self {
-        MCPServer::Stdio {
+        Self::Stdio {
             command: command.into(),
             args,
             env: None,
@@ -46,7 +46,7 @@ impl MCPServer {
         args: Vec<String>,
         env: HashMap<String, String>,
     ) -> Self {
-        MCPServer::Stdio {
+        Self::Stdio {
             command: command.into(),
             args,
             env: Some(env),
@@ -55,7 +55,7 @@ impl MCPServer {
 
     /// Create a new HTTP MCP server
     pub fn http(url: impl Into<String>) -> Self {
-        MCPServer::Http {
+        Self::Http {
             url: url.into(),
             headers: None,
         }
@@ -63,7 +63,7 @@ impl MCPServer {
 
     /// Create a new HTTP MCP server with headers
     pub fn http_with_headers(url: impl Into<String>, headers: HashMap<String, String>) -> Self {
-        MCPServer::Http {
+        Self::Http {
             url: url.into(),
             headers: Some(headers),
         }
@@ -208,12 +208,13 @@ impl SessionConfig {
     }
 }
 
-/// Builder for SessionConfig with fluent API
+/// Builder for `SessionConfig` with fluent API
 pub struct SessionConfigBuilder {
     config: SessionConfig,
 }
 
 impl SessionConfigBuilder {
+    #[must_use]
     pub fn new(query: impl Into<String>) -> Self {
         Self {
             config: SessionConfig {
@@ -225,24 +226,28 @@ impl SessionConfigBuilder {
 
     // Session semantics
     /// Resume a specific session by ID (maps to --resume)
+    #[must_use]
     pub fn resume_session_id(mut self, id: impl Into<String>) -> Self {
         self.config.resume_session_id = Some(id.into());
         self
     }
 
     /// Use a specific session ID (maps to --session-id)
+    #[must_use]
     pub fn explicit_session_id(mut self, id: impl Into<String>) -> Self {
         self.config.explicit_session_id = Some(id.into());
         self
     }
 
     /// Continue the last session (maps to --continue)
+    #[must_use]
     pub fn continue_last_session(mut self, yes: bool) -> Self {
         self.config.continue_last_session = yes;
         self
     }
 
     /// Fork an existing session (maps to --fork-session)
+    #[must_use]
     pub fn fork_session(mut self, yes: bool) -> Self {
         self.config.fork_session = yes;
         self
@@ -250,12 +255,14 @@ impl SessionConfigBuilder {
 
     // Models
     /// Set the primary model
+    #[must_use]
     pub fn model(mut self, model: Model) -> Self {
         self.config.model = Some(model);
         self
     }
 
     /// Set the fallback model (maps to --fallback-model)
+    #[must_use]
     pub fn fallback_model(mut self, model: Model) -> Self {
         self.config.fallback_model = Some(model);
         self
@@ -263,12 +270,14 @@ impl SessionConfigBuilder {
 
     // Formats
     /// Set the output format
+    #[must_use]
     pub fn output_format(mut self, format: OutputFormat) -> Self {
         self.config.output_format = format;
         self
     }
 
     /// Set the input format (maps to --input-format)
+    #[must_use]
     pub fn input_format(mut self, format: InputFormat) -> Self {
         self.config.input_format = Some(format);
         self
@@ -276,12 +285,14 @@ impl SessionConfigBuilder {
 
     // MCP
     /// Set MCP server configuration
+    #[must_use]
     pub fn mcp_config(mut self, config: MCPConfig) -> Self {
         self.config.mcp_config = Some(config);
         self
     }
 
     /// Enable strict MCP config validation (maps to --strict-mcp-config)
+    #[must_use]
     pub fn strict_mcp_config(mut self, yes: bool) -> Self {
         self.config.strict_mcp_config = yes;
         self
@@ -289,6 +300,7 @@ impl SessionConfigBuilder {
 
     // Permissions
     /// Set permission mode (maps to --permission-mode)
+    #[must_use]
     pub fn permission_mode(mut self, mode: PermissionMode) -> Self {
         self.config.permission_mode = Some(mode);
         self
@@ -297,6 +309,7 @@ impl SessionConfigBuilder {
     /// Enable dangerous permission skipping.
     /// This sets both --allow-dangerously-skip-permissions and --dangerously-skip-permissions.
     /// Use with extreme caution.
+    #[must_use]
     pub fn enable_dangerous_permissions(mut self) -> Self {
         self.config.allow_dangerously_skip_permissions = true;
         self.config.dangerously_skip_permissions = true;
@@ -305,12 +318,14 @@ impl SessionConfigBuilder {
 
     // Prompts
     /// Set system prompt override (maps to --system-prompt)
+    #[must_use]
     pub fn system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.config.system_prompt = Some(prompt.into());
         self
     }
 
     /// Append to system prompt (maps to --append-system-prompt)
+    #[must_use]
     pub fn append_system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.config.append_system_prompt = Some(prompt.into());
         self
@@ -318,24 +333,28 @@ impl SessionConfigBuilder {
 
     // Tools
     /// Set specific tools to enable (maps to --tools)
+    #[must_use]
     pub fn tools(mut self, tools: Vec<String>) -> Self {
         self.config.tools = Some(tools);
         self
     }
 
     /// Set allowed tools (maps to --allowedTools)
+    #[must_use]
     pub fn allowed_tools(mut self, tools: Vec<String>) -> Self {
         self.config.allowed_tools = Some(tools);
         self
     }
 
     /// Set disallowed tools (maps to --disallowedTools)
+    #[must_use]
     pub fn disallowed_tools(mut self, tools: Vec<String>) -> Self {
         self.config.disallowed_tools = Some(tools);
         self
     }
 
     /// Add a single tool to allowed list
+    #[must_use]
     pub fn allow_tool(mut self, tool: impl Into<String>) -> Self {
         self.config
             .allowed_tools
@@ -345,6 +364,7 @@ impl SessionConfigBuilder {
     }
 
     /// Add a single tool to disallowed list
+    #[must_use]
     pub fn disallow_tool(mut self, tool: impl Into<String>) -> Self {
         self.config
             .disallowed_tools
@@ -355,18 +375,21 @@ impl SessionConfigBuilder {
 
     // Output shaping
     /// Set JSON schema for structured output (maps to --json-schema)
+    #[must_use]
     pub fn json_schema(mut self, schema: impl Into<String>) -> Self {
         self.config.json_schema = Some(schema.into());
         self
     }
 
     /// Include partial messages in stream (maps to --include-partial-messages)
+    #[must_use]
     pub fn include_partial_messages(mut self, yes: bool) -> Self {
         self.config.include_partial_messages = yes;
         self
     }
 
     /// Replay user messages (maps to --replay-user-messages)
+    #[must_use]
     pub fn replay_user_messages(mut self, yes: bool) -> Self {
         self.config.replay_user_messages = yes;
         self
@@ -374,12 +397,14 @@ impl SessionConfigBuilder {
 
     // Configuration
     /// Set settings JSON (maps to --settings)
+    #[must_use]
     pub fn settings(mut self, s: impl Into<String>) -> Self {
         self.config.settings = Some(s.into());
         self
     }
 
     /// Set setting sources (maps to --setting-sources)
+    #[must_use]
     pub fn setting_sources(mut self, sources: Vec<String>) -> Self {
         self.config.setting_sources = Some(sources);
         self
@@ -387,18 +412,21 @@ impl SessionConfigBuilder {
 
     // Directories and plugins
     /// Add a directory to context (maps to --add-dir, repeatable)
+    #[must_use]
     pub fn add_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.config.additional_dirs.push(dir.into());
         self
     }
 
     /// Add a plugin directory (maps to --plugin-dir, repeatable)
+    #[must_use]
     pub fn plugin_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.config.plugin_dirs.push(dir.into());
         self
     }
 
     /// Enable IDE mode (maps to --ide)
+    #[must_use]
     pub fn ide(mut self, yes: bool) -> Self {
         self.config.ide = yes;
         self
@@ -406,18 +434,21 @@ impl SessionConfigBuilder {
 
     // Advanced
     /// Set agents configuration JSON (maps to --agents)
+    #[must_use]
     pub fn agents(mut self, json: impl Into<String>) -> Self {
         self.config.agents = Some(json.into());
         self
     }
 
     /// Enable debug mode (maps to --debug)
+    #[must_use]
     pub fn debug(mut self, yes: bool) -> Self {
         self.config.debug = yes;
         self
     }
 
     /// Set debug filter pattern
+    #[must_use]
     pub fn debug_filter(mut self, filter: impl Into<String>) -> Self {
         self.config.debug_filter = Some(filter.into());
         self
@@ -425,18 +456,21 @@ impl SessionConfigBuilder {
 
     // Process control
     /// Set working directory for the Claude process
+    #[must_use]
     pub fn working_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.config.working_dir = Some(dir.into());
         self
     }
 
     /// Set environment variables to inject into the Claude process
+    #[must_use]
     pub fn env(mut self, env: HashMap<String, String>) -> Self {
         self.config.env = Some(env);
         self
     }
 
     /// Add a single environment variable
+    #[must_use]
     pub fn env_var(mut self, key: impl Into<String>, val: impl Into<String>) -> Self {
         self.config
             .env
@@ -447,12 +481,13 @@ impl SessionConfigBuilder {
 
     // Misc
     /// Enable verbose output
+    #[must_use]
     pub fn verbose(mut self, verbose: bool) -> Self {
         self.config.verbose = verbose;
         self
     }
 
-    /// Build the SessionConfig, validating all settings
+    /// Build the `SessionConfig`, validating all settings
     pub fn build(self) -> Result<SessionConfig> {
         self.config.validate()?;
         Ok(self.config)
@@ -653,7 +688,7 @@ mod tests {
                 assert_eq!(args, &vec!["arg1".to_string(), "arg2".to_string()]);
                 assert!(env.is_none());
             }
-            _ => panic!("Expected Stdio server"),
+            MCPServer::Http { .. } => panic!("Expected Stdio server"),
         }
     }
 
@@ -686,7 +721,7 @@ mod tests {
                 assert!(headers.is_some());
                 assert_eq!(headers.as_ref().unwrap()["Authorization"], "Bearer token");
             }
-            _ => panic!("Expected Http server"),
+            MCPServer::Stdio { .. } => panic!("Expected Http server"),
         }
     }
 

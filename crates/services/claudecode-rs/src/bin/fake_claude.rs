@@ -26,10 +26,10 @@ impl HelperChild {
     }
 
     fn id(&self) -> u32 {
-        self.child
-            .as_ref()
-            .expect("helper child must exist while pid is queried")
-            .id()
+        match self.child.as_ref() {
+            Some(child) => child.id(),
+            None => panic!("helper child must exist while pid is queried"),
+        }
     }
 
     fn cleanup(&mut self) {
@@ -93,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
+            () = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
         }
     }
 

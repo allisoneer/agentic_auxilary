@@ -48,7 +48,7 @@ pub enum ClaudeError {
 
 impl From<serde_json::Error> for ClaudeError {
     fn from(err: serde_json::Error) -> Self {
-        ClaudeError::JsonParseError {
+        Self::JsonParseError {
             source: err,
             line: None,
         }

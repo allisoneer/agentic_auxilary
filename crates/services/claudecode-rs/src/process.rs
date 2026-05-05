@@ -45,6 +45,10 @@ impl ProcessHandle {
     /// * `args` - Command line arguments
     /// * `working_dir` - Optional working directory
     /// * `env_overlay` - Optional environment variables to add/override
+    #[expect(
+        clippy::unused_async,
+        reason = "async for API consistency with wait and kill"
+    )]
     pub async fn spawn(
         claude_path: &Path,
         args: Vec<String>,
@@ -98,7 +102,7 @@ impl ProcessHandle {
                 message: "Failed to capture stderr".to_string(),
             })?;
 
-        Ok(ProcessHandle {
+        Ok(Self {
             child: Arc::new(Mutex::new(child)),
             stdout_reader: Some(BufReader::new(stdout)),
             stderr_reader: Some(BufReader::new(stderr)),
@@ -135,7 +139,11 @@ impl ProcessHandle {
             message: "Process not found or already terminated".to_string(),
         })?;
 
-        Ok(KillHandle { pid: pid as i32 })
+        let pid = i32::try_from(pid).map_err(|_| ClaudeError::SessionError {
+            message: format!("PID {pid} out of i32 range"),
+        })?;
+
+        Ok(KillHandle { pid })
     }
 
     pub(crate) fn take_stdout(&mut self) -> Option<BufReader<tokio::process::ChildStdout>> {
@@ -184,7 +192,7 @@ fn signal_process_group(pid: i32, sig: Signal) -> nix::Result<()> {
 
 /// Find the Claude executable.
 ///
-/// First checks the CLAUDE_PATH environment variable. If set, uses that path
+/// First checks the `CLAUDE_PATH` environment variable. If set, uses that path
 /// (with tilde expansion). Otherwise, searches PATH for 'claude'.
 pub async fn find_claude_in_path() -> Result<PathBuf> {
     // Check CLAUDE_PATH environment variable first
@@ -192,9 +200,8 @@ pub async fn find_claude_in_path() -> Result<PathBuf> {
         let path = expand_tilde(&path_str);
         if path.exists() {
             return Ok(path);
-        } else {
-            return Err(ClaudeError::ClaudeNotFoundAtPath { path });
         }
+        return Err(ClaudeError::ClaudeNotFoundAtPath { path });
     }
 
     // Fall back to searching PATH
@@ -223,7 +230,7 @@ mod tests {
     fn test_expand_tilde() {
         // Test tilde expansion
         let expanded = expand_tilde("~/test");
-        assert!(!expanded.to_string_lossy().starts_with("~"));
+        assert!(!expanded.to_string_lossy().starts_with('~'));
 
         // Test path without tilde
         let path = "/absolute/path";
@@ -268,7 +275,7 @@ mod tests {
         unsafe {
             std::env::remove_var("CLAUDE_PATH");
         }
-        std::fs::remove_file(&fake_claude).ok();
+        let _ = std::fs::remove_file(&fake_claude);
     }
 
     #[tokio::test]
