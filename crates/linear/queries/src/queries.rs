@@ -1,5 +1,18 @@
-use crate::filters::*;
-use crate::types::*;
+use crate::filters::IssueFilter;
+use crate::filters::IssueLabelFilter;
+use crate::filters::ProjectFilter;
+use crate::filters::TeamFilter;
+use crate::filters::UserFilter;
+use crate::filters::WorkflowStateFilter;
+use crate::types::Issue;
+use crate::types::IssueCommentConnection;
+use crate::types::IssueConnection;
+use crate::types::IssueLabelConnection;
+use crate::types::IssueSearchPayload;
+use crate::types::ProjectConnection;
+use crate::types::TeamConnection;
+use crate::types::UserConnection;
+use crate::types::WorkflowStateConnection;
 use linear_schema::linear as schema;
 
 #[derive(cynic::QueryVariables, Debug, Clone)]

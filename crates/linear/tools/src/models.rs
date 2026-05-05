@@ -228,12 +228,12 @@ impl TextFormat for SearchResult {
             if o.show_dates {
                 line.push_str(&format!(" @{}", i.updated_at));
             }
-            let _ = writeln!(out, "  {}", line);
+            let _ = writeln!(out, "  {line}");
         }
         if self.has_next_page
             && let Some(cursor) = &self.end_cursor
         {
-            let _ = writeln!(out, "\n[More results available, cursor: {}]", cursor);
+            let _ = writeln!(out, "\n[More results available, cursor: {cursor}]");
         }
         out
     }
@@ -328,7 +328,7 @@ impl TextFormat for CommentResult {
                 } else {
                     body.clone()
                 };
-                format!("Comment added ({}): {}", id, preview)
+                format!("Comment added ({id}): {preview}")
             }
             _ => "Comment added".into(),
         }
@@ -364,10 +364,10 @@ impl TextFormat for CommentsResult {
                 "  "
             };
 
-            let _ = writeln!(out, "{}[{}] {}:", prefix, timestamp, author);
+            let _ = writeln!(out, "{prefix}[{timestamp}] {author}:");
             // Indent body lines
             for line in c.body.lines() {
-                let _ = writeln!(out, "{}  {}", prefix, line);
+                let _ = writeln!(out, "{prefix}  {line}");
             }
             let _ = writeln!(out);
         }
@@ -394,11 +394,11 @@ pub struct ArchiveIssueResult {
     pub success: bool,
 }
 
-/// Result of a set_relation operation
+/// Result of a `set_relation` operation
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SetRelationResult {
     pub success: bool,
-    /// Action taken: "created", "removed", or "no_change"
+    /// Action taken: "created", "removed", or "`no_change`"
     pub action: String,
 }
 
@@ -468,17 +468,17 @@ impl TextFormat for GetMetadataResult {
                 line = format!("{} [{}] ({})", item.name, key, item.id);
             }
             if let Some(ref email) = item.email {
-                line.push_str(&format!(" <{}>", email));
+                line.push_str(&format!(" <{email}>"));
             }
             if let Some(ref st) = item.state_type {
-                line.push_str(&format!(" [{}]", st));
+                line.push_str(&format!(" [{st}]"));
             }
-            let _ = writeln!(out, "  {}", line);
+            let _ = writeln!(out, "  {line}");
         }
         if self.has_next_page
             && let Some(ref cursor) = self.end_cursor
         {
-            let _ = writeln!(out, "  (more results: after={})", cursor);
+            let _ = writeln!(out, "  (more results: after={cursor})");
         }
         out
     }

@@ -573,8 +573,7 @@ async fn graphql_errors_fail_fast() {
     let err_msg = err.to_string();
     assert!(
         err_msg.contains("GraphQL errors"),
-        "Error message should contain 'GraphQL errors': {}",
-        err_msg
+        "Error message should contain 'GraphQL errors': {err_msg}"
     );
 }
 

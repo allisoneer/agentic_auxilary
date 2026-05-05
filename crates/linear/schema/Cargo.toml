@@ -12,6 +12,9 @@ cynic = { version = "3.13.1", features = ["rkyv"] }
 [build-dependencies]
 cynic-codegen = { version = "3.13.1", features = ["rkyv"] }
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "lib"
 family = "linear"

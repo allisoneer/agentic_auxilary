@@ -123,7 +123,7 @@ pub struct ProjectFilter {
     pub name: Option<StringComparator>,
 }
 
-/// Nullable team filter (for IssueLabelFilter.team which uses NullableTeamFilter in schema)
+/// Nullable team filter (for IssueLabelFilter.team which uses `NullableTeamFilter` in schema)
 #[derive(cynic::InputObject, Clone, Debug, Default)]
 #[cynic(schema = "linear")]
 pub struct NullableTeamFilter {

@@ -1,9 +1,9 @@
 //! Live API tests for Linear integration.
 //!
 //! These tests are ignored by default and require:
-//! - LINEAR_LIVE_TESTS=1
-//! - LINEAR_API_KEY (valid Linear API key)
-//! - LINEAR_TEST_TEAM_ID (UUID of a test team to create issues in)
+//! - `LINEAR_LIVE_TESTS=1`
+//! - `LINEAR_API_KEY` (valid Linear API key)
+//! - `LINEAR_TEST_TEAM_ID` (UUID of a test team to create issues in)
 //!
 //! Run with: just test-live
 
@@ -47,7 +47,7 @@ async fn live_create_search_read_comment_archive() {
     let created = tools
         .create_issue(
             team_id.clone(),
-            format!("Live Test {}", marker),
+            format!("Live Test {marker}"),
             Some("Created by live test".into()),
             Some(3),
             None,
