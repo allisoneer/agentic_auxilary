@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.10.0] - 2026-05-06
+
+### ⛰️  Features
+- *(opencode-orchestrator-mcp)* Add Option A* recovery for ENG-653 and ENG-775
+
+### 🐛 Bug Fixes
+- *(opencode_rs)* Terminate managed server process groups
+- *(opencode_rs)* Preserve transport error sources and generate fresh message ids
+
+### 🧪 Testing
+- *(opencode_rs)* Drive session init interactively in live integration test
+- *(opencode_rs)* Tighten session.init driver polling and surface error chains
+- *(opencode_rs)* Raise test client timeout for interactive workflows
 ## [0.9.0] - 2026-05-04
 
 ### ⛰️  Features
