@@ -1,6 +1,6 @@
 ---
 description: Adversarial review of local git changes
-agent: ReviewClaude
+agent: ReviewOpenAI
 ---
 
 <task>

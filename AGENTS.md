@@ -17,6 +17,7 @@ Repository-specific facts for OpenAI-oriented tooling live here. Behavioral rule
 
 ### infra
 
+- `agentic-config` (lib) - `crates/infra/agentic-config/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
@@ -45,10 +46,14 @@ Repository-specific facts for OpenAI-oriented tooling live here. Behavioral rule
 
 ### tools
 
+- `agentic-bin` (app) - `apps/agentic/`
 - `thoughts-bin` (app) - `apps/thoughts/`
+- `message-optimizer-bin` (app) - `apps/message-optimizer/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
+- `review_tools` (tool-lib) - `crates/tools/review-tools/`
+- `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
 
@@ -60,13 +65,16 @@ Repository-specific facts for OpenAI-oriented tooling live here. Behavioral rule
 just crate-check <crate>    # Run formatting and clippy checks for a crate
 just crate-test <crate>     # Run tests for a crate
 just crate-build <crate>    # Build a crate
+just crate-run <crate>      # Run a crate
 ```
 
 ### Workspace commands
 
 ```bash
-just check          # Check entire workspace (fmt + clippy)
-just test           # Test entire workspace
+just check          # Check entire workspace (fmt-check + clippy)
+just fix            # Auto-fix clippy warnings across workspace
+just test           # Run tests for entire workspace
+just test-integration  # Run tests including #[ignore] integration tests (sets THOUGHTS_INTEGRATION_TESTS=1)
 just build          # Build entire workspace
 just fmt            # Format entire workspace
 just fmt-check      # Check formatting across entire workspace
@@ -82,6 +90,47 @@ just xtask-verify-check # Full verification including generated files
 ```
 
 `xtask-sync` updates generated repo metadata such as `CLAUDE.md`, `release-plz.toml`, `README.md`, and `justfile`. `AGENTS.md` is not currently auto-synced, so refresh it manually when repo facts change.
+
+### Endpoint coverage (opencode-rs SDK)
+
+```bash
+just endpoint-coverage          # Print opencode-rs API endpoint coverage report
+just endpoint-coverage-check    # Fail if coverage regresses
+just endpoint-coverage-json     # JSON output for tooling
+```
+
+### Schema generation
+
+```bash
+just schema-generate    # Regenerate agentic.schema.json from Rust types
+```
+
+### Vendored Codex
+
+`vendor/codex/` is a foreign vendored subtree excluded from the root workspace. Do not edit it as a first-class workspace member.
+
+```bash
+just codex-check    # Check vendored Codex workspace
+just codex-build    # Build vendored Codex CLI
+just codex-test     # Run vendored Codex tests (best-effort)
+just codex-run -- <args>  # Run the vendored codex binary
+```
+
+## Toolchain and Formatter Quirks
+
+- Stable toolchain pinned to `1.93.0` (`rust-toolchain.toml`).
+- **Formatting requires nightly**: `just fmt` and `just fmt-check` run `cargo +nightly fmt`. Running `cargo fmt` without `+nightly` will use the wrong edition settings and fail.
+- `rustfmt.toml` uses `edition = "2024"` and `imports_granularity = "Item"` — don't change these.
+- `just test` runs `mcp-test` (MCP schema validation via `npx @modelcontextprotocol/inspector`) before nextest. Node.js / `npx` must be available.
+
+## Lint Policy
+
+- `.unwrap()` and `.expect()` are banned workspace-wide (clippy `warn`). Use `?` or explicit error handling.
+- `clippy.toml` allows `.unwrap()` / `.expect()` inside `#[cfg(test)]` test code only.
+- Every `unsafe` block requires a `// SAFETY:` comment (`undocumented_unsafe_blocks = "warn"`).
+- `#[allow(...)]` is banned; use `#[expect(...)]` instead (`allow_attributes = "warn"`).
+- `Arc::clone(&x)` is required over `x.clone()` for ref-counted types (`clone_on_ref_ptr = "warn"`).
+- Workspace lint inheritance: add `[lints]\nworkspace = true` when creating or modifying crate `Cargo.toml` files.
 
 ## Output Modes
 
@@ -99,6 +148,15 @@ OUTPUT_MODE=normal just test
 OUTPUT_MODE=verbose just test
 RUST_LOG=gpt5_reasoner=debug just test
 ```
+
+## Git Write Recipes
+
+For agents without shell access, these just recipes provide git-aware move/remove operations:
+
+| Recipe | Parameters | Description |
+| --- | --- | --- |
+| `git-mv` | `src` `dst` `mkdir_parents="true"` | Move/rename a tracked path with git mv |
+| `git-rm` | `path` `force="false"` `recursive="auto"` | Remove a tracked path with git rm |
 
 ## Read-Only Git Inspection Recipes
 

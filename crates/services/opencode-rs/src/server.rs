@@ -13,6 +13,36 @@ use tokio::process::Child;
 use tokio::process::Command;
 use url::Url;
 
+const KILL_GRACE: Duration = Duration::from_millis(250);
+
+#[cfg(unix)]
+const SIGTERM: i32 = 15;
+
+#[cfg(unix)]
+const SIGKILL: i32 = 9;
+
+#[cfg(unix)]
+fn signal_process_group(pgid: i32, sig: i32) -> std::io::Result<()> {
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+
+    // SAFETY: `kill` is invoked with a negative PGID specifically to target
+    // the process group created by `process_group(0)`. Inputs are plain integers
+    // and no borrowed memory crosses the FFI boundary.
+    let rc = unsafe { kill(-pgid, sig) };
+    if rc == 0 {
+        return Ok(());
+    }
+
+    let err = std::io::Error::last_os_error();
+    if err.kind() == std::io::ErrorKind::NotFound || err.raw_os_error() == Some(3) {
+        return Ok(());
+    }
+
+    Err(err)
+}
+
 /// Options for starting a managed server.
 #[derive(Debug, Clone)]
 pub struct ServerOptions {
@@ -121,6 +151,8 @@ pub struct ManagedServer {
     child: Child,
     /// Port the server is running on.
     port: u16,
+    /// Process group leader PID for whole-tree termination on Unix.
+    pgid: Option<i32>,
 }
 
 impl ManagedServer {
@@ -154,6 +186,11 @@ impl ManagedServer {
             .stderr(Stdio::inherit()) // Inherit to avoid deadlock; server errors visible to user
             .kill_on_drop(true);
 
+        #[cfg(unix)]
+        {
+            cmd.process_group(0);
+        }
+
         if let Some(dir) = &opts.directory {
             cmd.current_dir(dir);
         }
@@ -169,6 +206,7 @@ impl ManagedServer {
         let mut child = cmd.spawn().map_err(|e| OpencodeError::SpawnServer {
             message: e.to_string(),
         })?;
+        let pgid = child.id().map(u32::cast_signed);
 
         let stdout = child
             .stdout
@@ -227,6 +265,7 @@ impl ManagedServer {
             base_url,
             child,
             port,
+            pgid,
         })
     }
 
@@ -246,6 +285,13 @@ impl ManagedServer {
     ///
     /// Returns an error if the server cannot be stopped.
     pub async fn stop(mut self) -> Result<()> {
+        #[cfg(unix)]
+        if let Some(pgid) = self.pgid.take() {
+            let _ = signal_process_group(pgid, SIGTERM);
+            tokio::time::sleep(KILL_GRACE).await;
+            let _ = signal_process_group(pgid, SIGKILL);
+        }
+
         // Errors ignored: process may already be terminated
         let _ = self.child.kill().await;
         let _ = self.child.wait().await;
@@ -256,10 +302,37 @@ impl ManagedServer {
     pub fn is_running(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(None))
     }
+
+    /// Build a managed server wrapper from an existing child process.
+    ///
+    /// This is intended for higher-level recovery tests that need to simulate
+    /// a managed child without starting a real `opencode serve` instance.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn from_child_for_testing(child: Child, base_url: impl AsRef<str>, port: u16) -> Self {
+        Self {
+            base_url: match Url::parse(base_url.as_ref()) {
+                Ok(url) => url,
+                Err(error) => panic!("managed server test helper requires a valid URL: {error}"),
+            },
+            pgid: child.id().map(u32::cast_signed),
+            child,
+            port,
+        }
+    }
 }
 
 impl Drop for ManagedServer {
     fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(pgid) = self.pgid.take() {
+            let _ = signal_process_group(pgid, SIGTERM);
+            std::thread::spawn(move || {
+                std::thread::sleep(KILL_GRACE);
+                let _ = signal_process_group(pgid, SIGKILL);
+            });
+        }
+
         let _ = self.child.start_kill();
     }
 }

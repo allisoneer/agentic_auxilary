@@ -15,6 +15,7 @@ mod support;
 
 use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
+use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::tools::RespondPermissionTool;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
@@ -48,7 +49,7 @@ use support::test_orchestrator_server;
 #[tokio::test]
 async fn it_bug1_completion_retries_messages_until_visible() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "s1";
 
@@ -162,7 +163,7 @@ async fn it_bug1_completion_retries_messages_until_visible() {
 #[tokio::test]
 async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
     let sid = "s2";
     let perm_id = "perm-123";
@@ -267,7 +268,7 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
 #[tokio::test]
 async fn it_bug3_respond_permission_returns_response_without_resumption() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
     let sid = "s3";
     let perm_id = "perm-456";
@@ -376,7 +377,7 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
 #[tokio::test]
 async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permission_text() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
     let sid = "s5";
     let perm_id = "perm-999";
@@ -504,16 +505,24 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .timeout_secs(1) // 1 second timeout
         .build()
         .unwrap();
-    let server_cell = Arc::new(tokio::sync::OnceCell::new());
-    server_cell
-        .set(
-            opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
-                client, &base_url,
-            ),
-        )
-        .unwrap_or_else(|_| panic!("cell should be empty"));
-    let tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
+    let server = Arc::new(OrchestratorServerHandle::from_server_unshared(
+        opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
+            client,
+            &base_url,
+            opencode_orchestrator_mcp::server::RecoveryMode::External,
+        ),
+    ));
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "s4";
+
+    Mock::given(method("GET"))
+        .and(path("/global/health"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "healthy": true,
+            "version": "test",
+        })))
+        .mount(&mock)
+        .await;
 
     // GET /session/s4
     Mock::given(method("GET"))

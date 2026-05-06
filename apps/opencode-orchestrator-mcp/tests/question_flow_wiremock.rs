@@ -47,7 +47,7 @@ fn question_payload(question: &str) -> serde_json::Value {
 #[tokio::test]
 async fn pending_question_preflight_returns_question_required() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "question-preflight";
     let question_id = "question-1";
@@ -100,7 +100,7 @@ async fn pending_question_preflight_returns_question_required() {
 #[tokio::test]
 async fn poll_detected_question_returns_question_required() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "question-poll";
     let question_id = "question-2";
@@ -177,7 +177,7 @@ async fn poll_detected_question_returns_question_required() {
 #[tokio::test]
 async fn respond_question_reply_resumes_to_completed() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondQuestionTool::new(Arc::clone(&server));
     let sid = "question-reply";
     let question_id = "question-3";
@@ -268,7 +268,7 @@ async fn respond_question_reply_resumes_to_completed() {
 #[tokio::test]
 async fn respond_question_reject_completes_cleanly() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondQuestionTool::new(Arc::clone(&server));
     let sid = "question-reject";
     let question_id = "question-4";
@@ -340,7 +340,7 @@ async fn respond_question_reject_completes_cleanly() {
 #[tokio::test]
 async fn permission_priority_wins_over_question() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "question-priority";
 
@@ -395,7 +395,7 @@ async fn permission_priority_wins_over_question() {
 #[tokio::test]
 async fn respond_question_by_id_lookup() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondQuestionTool::new(Arc::clone(&server));
     let sid = "question-by-id";
     let question_id = "question-specific";
@@ -492,7 +492,7 @@ async fn respond_question_by_id_lookup() {
 #[tokio::test]
 async fn multiple_pending_questions_returns_ambiguity_error() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondQuestionTool::new(Arc::clone(&server));
     let sid = "question-ambiguous";
 
@@ -537,7 +537,7 @@ async fn multiple_pending_questions_returns_ambiguity_error() {
 #[tokio::test]
 async fn reply_with_empty_answers_returns_validation_error() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondQuestionTool::new(Arc::clone(&server));
     let sid = "question-empty-answers";
 

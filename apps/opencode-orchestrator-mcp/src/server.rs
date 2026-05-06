@@ -13,9 +13,12 @@ use opencode_rs::types::provider::ProviderListResponse;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::time::Duration;
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::RwLock;
 
+use crate::error::OrchestratorError;
 use crate::version;
 
 /// Environment variable name for the orchestrator-managed recursion guard.
@@ -72,11 +75,424 @@ where
 /// Key for looking up model context limits: (`provider_id`, `model_id`)
 pub type ModelKey = (String, String);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ServerEntryState {
+    Healthy,
+    NeedsRecovery { reason: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryMode {
+    Managed,
+    External,
+}
+
+impl RecoveryMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Managed => "managed",
+            Self::External => "external",
+        }
+    }
+}
+
+enum HandleState {
+    Empty,
+    Ready {
+        snapshot: Arc<OrchestratorServer>,
+        mode: RecoveryMode,
+    },
+    Stale {
+        snapshot: Arc<OrchestratorServer>,
+        mode: RecoveryMode,
+        reason: String,
+    },
+    Failed {
+        mode: RecoveryMode,
+        base_url: Option<String>,
+        error: String,
+    },
+}
+
+const TOOL_ENTRY_HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Shared recoverable handle for the process-global orchestrator server snapshot.
+pub struct OrchestratorServerHandle {
+    state: AsyncMutex<HandleState>,
+}
+
+impl Default for OrchestratorServerHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OrchestratorServerHandle {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            state: AsyncMutex::new(HandleState::Empty),
+        }
+    }
+
+    /// Acquire a live orchestrator server snapshot for a tool entry.
+    ///
+    /// Existing callers keep their previously acquired `Arc<OrchestratorServer>`
+    /// even if this handle later replaces the cached snapshot during recovery.
+    pub async fn acquire(&self) -> anyhow::Result<Arc<OrchestratorServer>> {
+        self.get_or_recover_with(OrchestratorServer::start_lazy)
+            .await
+    }
+
+    async fn get_or_recover_with<F, Fut>(
+        &self,
+        mut start: F,
+    ) -> anyhow::Result<Arc<OrchestratorServer>>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<OrchestratorServer>>,
+    {
+        loop {
+            let ready_snapshot = {
+                let mut state = self.state.lock().await;
+
+                match &mut *state {
+                    HandleState::Empty => {
+                        tracing::info!(
+                            "orchestrator server missing cached snapshot; starting embedded server"
+                        );
+
+                        match start().await {
+                            Ok(server) => {
+                                let rebuilt_mode = if server.is_managed() {
+                                    RecoveryMode::Managed
+                                } else {
+                                    RecoveryMode::External
+                                };
+                                let rebuilt = Arc::new(server);
+                                trace_state_transition(
+                                    "Empty",
+                                    "Ready",
+                                    "initialization",
+                                    rebuilt_mode,
+                                    Some(rebuilt.base_url()),
+                                );
+                                *state = HandleState::Ready {
+                                    snapshot: Arc::clone(&rebuilt),
+                                    mode: rebuilt_mode,
+                                };
+                                return Ok(rebuilt);
+                            }
+                            Err(error) => {
+                                let reason = error.to_string();
+                                trace_state_transition(
+                                    "Empty",
+                                    "Failed",
+                                    &reason,
+                                    RecoveryMode::Managed,
+                                    None,
+                                );
+                                *state = HandleState::Failed {
+                                    mode: RecoveryMode::Managed,
+                                    base_url: None,
+                                    error: reason,
+                                };
+                                return Err(error);
+                            }
+                        }
+                    }
+                    HandleState::Ready { snapshot, mode } => Some((Arc::clone(snapshot), *mode)),
+                    HandleState::Stale {
+                        snapshot,
+                        mode,
+                        reason,
+                    } => match mode {
+                        RecoveryMode::Managed => {
+                            let stale_reason = reason.clone();
+                            match start().await {
+                                Ok(server) => {
+                                    let rebuilt_mode = if server.is_managed() {
+                                        RecoveryMode::Managed
+                                    } else {
+                                        RecoveryMode::External
+                                    };
+                                    let rebuilt = Arc::new(server);
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Ready",
+                                        &stale_reason,
+                                        rebuilt_mode,
+                                        Some(rebuilt.base_url()),
+                                    );
+                                    *state = HandleState::Ready {
+                                        snapshot: Arc::clone(&rebuilt),
+                                        mode: rebuilt_mode,
+                                    };
+                                    return Ok(rebuilt);
+                                }
+                                Err(error) => {
+                                    let failure = error.to_string();
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Failed",
+                                        &failure,
+                                        *mode,
+                                        Some(snapshot.base_url()),
+                                    );
+                                    *state = HandleState::Failed {
+                                        mode: *mode,
+                                        base_url: Some(snapshot.base_url().to_string()),
+                                        error: failure,
+                                    };
+                                    return Err(error);
+                                }
+                            }
+                        }
+                        RecoveryMode::External => {
+                            let base_url = snapshot.base_url().to_string();
+                            let stale_reason = reason.clone();
+                            trace_state_transition(
+                                "Stale",
+                                "Failed",
+                                &stale_reason,
+                                *mode,
+                                Some(&base_url),
+                            );
+                            *state = HandleState::Failed {
+                                mode: *mode,
+                                base_url: Some(base_url.clone()),
+                                error: stale_reason.clone(),
+                            };
+                            return Err(external_unavailable(Some(base_url), stale_reason));
+                        }
+                    },
+                    HandleState::Failed {
+                        mode,
+                        base_url,
+                        error,
+                    } => match mode {
+                        RecoveryMode::Managed => match start().await {
+                            Ok(server) => {
+                                let rebuilt_mode = if server.is_managed() {
+                                    RecoveryMode::Managed
+                                } else {
+                                    RecoveryMode::External
+                                };
+                                let rebuilt = Arc::new(server);
+                                trace_state_transition(
+                                    "Failed",
+                                    "Ready",
+                                    error,
+                                    rebuilt_mode,
+                                    Some(rebuilt.base_url()),
+                                );
+                                *state = HandleState::Ready {
+                                    snapshot: Arc::clone(&rebuilt),
+                                    mode: rebuilt_mode,
+                                };
+                                return Ok(rebuilt);
+                            }
+                            Err(start_error) => {
+                                let failure = start_error.to_string();
+                                error.clone_from(&failure);
+                                return Err(start_error);
+                            }
+                        },
+                        RecoveryMode::External => {
+                            return Err(external_unavailable(base_url.clone(), error.clone()));
+                        }
+                    },
+                }
+            };
+
+            let Some((snapshot, mode)) = ready_snapshot else {
+                continue;
+            };
+
+            let validation = snapshot.validate_for_tool_entry().await?;
+
+            let mut state = self.state.lock().await;
+            let HandleState::Ready {
+                snapshot: current,
+                mode: current_mode,
+            } = &*state
+            else {
+                continue;
+            };
+
+            if !Arc::ptr_eq(current, &snapshot) || *current_mode != mode {
+                continue;
+            }
+
+            match validation {
+                ServerEntryState::Healthy => return Ok(snapshot),
+                ServerEntryState::NeedsRecovery { reason } => {
+                    trace_cache_invalidated(&reason, mode, Some(snapshot.base_url()));
+
+                    match mode {
+                        RecoveryMode::Managed => {
+                            tracing::warn!(reason = %reason, "cached orchestrator server failed liveness check; rebuilding");
+                            trace_state_transition(
+                                "Ready",
+                                "Stale",
+                                &reason,
+                                mode,
+                                Some(snapshot.base_url()),
+                            );
+                            *state = HandleState::Stale {
+                                snapshot: Arc::clone(&snapshot),
+                                mode,
+                                reason: reason.clone(),
+                            };
+
+                            match start().await {
+                                Ok(server) => {
+                                    let rebuilt_mode = if server.is_managed() {
+                                        RecoveryMode::Managed
+                                    } else {
+                                        RecoveryMode::External
+                                    };
+                                    let rebuilt = Arc::new(server);
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Ready",
+                                        &reason,
+                                        rebuilt_mode,
+                                        Some(rebuilt.base_url()),
+                                    );
+                                    *state = HandleState::Ready {
+                                        snapshot: Arc::clone(&rebuilt),
+                                        mode: rebuilt_mode,
+                                    };
+                                    return Ok(rebuilt);
+                                }
+                                Err(error) => {
+                                    let failure = error.to_string();
+                                    trace_state_transition(
+                                        "Stale",
+                                        "Failed",
+                                        &failure,
+                                        mode,
+                                        Some(snapshot.base_url()),
+                                    );
+                                    *state = HandleState::Failed {
+                                        mode,
+                                        base_url: Some(snapshot.base_url().to_string()),
+                                        error: failure,
+                                    };
+                                    return Err(error);
+                                }
+                            }
+                        }
+                        RecoveryMode::External => {
+                            let base_url = snapshot.base_url().to_string();
+                            trace_state_transition(
+                                "Ready",
+                                "Failed",
+                                &reason,
+                                mode,
+                                Some(&base_url),
+                            );
+                            *state = HandleState::Failed {
+                                mode,
+                                base_url: Some(base_url.clone()),
+                                error: reason.clone(),
+                            };
+                            return Err(external_unavailable(Some(base_url), reason));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn from_server_unshared(server: OrchestratorServer) -> Self {
+        let mode = if server.is_managed() {
+            RecoveryMode::Managed
+        } else {
+            RecoveryMode::External
+        };
+
+        Self {
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::new(server),
+                mode,
+            }),
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn acquire_or_recover_with<F, Fut>(
+        &self,
+        start: F,
+    ) -> anyhow::Result<Arc<OrchestratorServer>>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<OrchestratorServer>>,
+    {
+        self.get_or_recover_with(start).await
+    }
+}
+
+fn trace_cache_invalidated(reason: &str, mode: RecoveryMode, base_url: Option<&str>) {
+    if let Some(base_url) = base_url {
+        tracing::info!(
+            event = "cache_invalidated",
+            reason = %reason,
+            mode = mode.as_str(),
+            base_url = %base_url,
+        );
+    } else {
+        tracing::info!(
+            event = "cache_invalidated",
+            reason = %reason,
+            mode = mode.as_str(),
+        );
+    }
+}
+
+fn trace_state_transition(
+    from: &'static str,
+    to: &'static str,
+    reason: &str,
+    mode: RecoveryMode,
+    base_url: Option<&str>,
+) {
+    if let Some(base_url) = base_url {
+        tracing::info!(
+            event = "state_transition",
+            from,
+            to,
+            reason = %reason,
+            mode = mode.as_str(),
+            base_url = %base_url,
+        );
+    } else {
+        tracing::info!(
+            event = "state_transition",
+            from,
+            to,
+            reason = %reason,
+            mode = mode.as_str(),
+        );
+    }
+}
+
+fn external_unavailable(base_url: Option<String>, reason: String) -> anyhow::Error {
+    OrchestratorError::ExternalServerUnavailable {
+        base_url: base_url.unwrap_or_else(|| "<unknown>".to_string()),
+        reason,
+    }
+    .into()
+}
+
 /// Shared state wrapping the managed `OpenCode` server and HTTP client.
 pub struct OrchestratorServer {
     /// Keep alive for lifecycle; Drop kills the opencode serve process.
     /// `None` when using an external client (e.g., wiremock tests).
-    _managed: Option<ManagedServer>,
+    managed_server: StdMutex<Option<ManagedServer>>,
     /// HTTP client for `OpenCode` API
     client: Client,
     /// Cached model context limits from GET /provider
@@ -207,7 +623,7 @@ impl OrchestratorServer {
         tracing::info!("Loaded {} model context limits", model_context_limits.len());
 
         Ok(Self {
-            _managed: Some(managed),
+            managed_server: StdMutex::new(Some(managed)),
             client,
             model_context_limits,
             base_url,
@@ -291,7 +707,7 @@ impl OrchestratorServer {
         tracing::info!("Loaded {} model context limits", model_context_limits.len());
 
         Ok(Self {
-            _managed: Some(managed),
+            managed_server: StdMutex::new(Some(managed)),
             client,
             model_context_limits,
             base_url,
@@ -336,6 +752,54 @@ impl OrchestratorServer {
     /// Returns session IDs created by this orchestrator instance.
     pub fn spawned_sessions(&self) -> &Arc<RwLock<HashSet<String>>> {
         &self.spawned_sessions
+    }
+
+    fn managed_server_lock(&self) -> std::sync::MutexGuard<'_, Option<ManagedServer>> {
+        self.managed_server
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn is_managed(&self) -> bool {
+        self.managed_server_lock().is_some()
+    }
+
+    async fn validate_for_tool_entry(&self) -> anyhow::Result<ServerEntryState> {
+        self.validate_for_tool_entry_with_timeout(TOOL_ENTRY_HEALTH_PROBE_TIMEOUT)
+            .await
+    }
+
+    async fn validate_for_tool_entry_with_timeout(
+        &self,
+        health_probe_timeout: Duration,
+    ) -> anyhow::Result<ServerEntryState> {
+        if self.is_managed() {
+            let is_running = {
+                let mut managed = self.managed_server_lock();
+                managed
+                    .as_mut()
+                    .is_some_and(opencode_rs::server::ManagedServer::is_running)
+            };
+
+            if !is_running {
+                return Ok(ServerEntryState::NeedsRecovery {
+                    reason: "managed child is no longer running".to_string(),
+                });
+            }
+        }
+
+        match tokio::time::timeout(health_probe_timeout, self.client.misc().health()).await {
+            Ok(Ok(health)) if health.healthy => Ok(ServerEntryState::Healthy),
+            Ok(Ok(_health)) => Ok(ServerEntryState::NeedsRecovery {
+                reason: "/global/health reported unhealthy".to_string(),
+            }),
+            Ok(Err(error)) => Ok(ServerEntryState::NeedsRecovery {
+                reason: format!("/global/health probe failed: {error}"),
+            }),
+            Err(_elapsed) => Ok(ServerEntryState::NeedsRecovery {
+                reason: format!("/global/health probe timed out after {health_probe_timeout:?}"),
+            }),
+        }
     }
 
     /// Load model context limits from GET /provider.
@@ -386,28 +850,63 @@ impl OrchestratorServer {
 /// These functions may appear unused when compiling non-test targets because
 /// cargo's feature unification enables the feature for all targets when tests
 /// are compiled. The `dead_code` warning is expected and suppressed.
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[allow(dead_code, clippy::allow_attributes)]
 impl OrchestratorServer {
     /// Build an `OrchestratorServer` wrapper around an existing client.
     ///
     /// Does NOT manage an opencode process (intended for wiremock tests).
     /// Model context limits are not loaded and will return `None` for all lookups.
-    pub fn from_client(client: Client, base_url: impl Into<String>) -> Arc<Self> {
-        Arc::new(Self::from_client_unshared(client, base_url))
+    pub fn from_client(
+        client: Client,
+        base_url: impl Into<String>,
+        mode: RecoveryMode,
+    ) -> Arc<Self> {
+        Arc::new(Self::from_client_unshared(client, base_url, mode))
     }
 
     /// Build an `OrchestratorServer` wrapper returning `Self` (not `Arc<Self>`).
     ///
-    /// Useful for tests that need to populate an `OnceCell` directly.
-    pub fn from_client_unshared(client: Client, base_url: impl Into<String>) -> Self {
+    /// Useful for tests that need to preseed an `OrchestratorServerHandle` directly.
+    pub fn from_client_unshared(
+        client: Client,
+        base_url: impl Into<String>,
+        _mode: RecoveryMode,
+    ) -> Self {
         Self {
-            _managed: None,
+            managed_server: StdMutex::new(None),
             client,
             model_context_limits: HashMap::new(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
             config: OrchestratorConfig::default(),
             spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    pub fn from_managed_for_testing(
+        managed: ManagedServer,
+        client: Client,
+        base_url: impl Into<String>,
+    ) -> Self {
+        Self {
+            managed_server: StdMutex::new(Some(managed)),
+            client,
+            model_context_limits: HashMap::new(),
+            base_url: base_url.into().trim_end_matches('/').to_string(),
+            config: OrchestratorConfig::default(),
+            spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    pub async fn stop_managed_for_testing(&self) -> anyhow::Result<()> {
+        let managed = {
+            let mut guard = self.managed_server_lock();
+            guard.take()
+        };
+
+        match managed {
+            Some(managed) => managed.stop().await.map_err(Into::into),
+            None => anyhow::bail!("no managed server is attached to this snapshot"),
         }
     }
 }
@@ -416,8 +915,192 @@ impl OrchestratorServer {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
+    use std::time::Duration;
+    use std::time::Instant;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
+    use tokio::process::Command;
+    use tokio::sync::Notify;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    struct ManagedEnvGuard {
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl ManagedEnvGuard {
+        fn new() -> Self {
+            Self {
+                previous: std::env::var_os(OPENCODE_ORCHESTRATOR_MANAGED_ENV),
+            }
+        }
+    }
+
+    impl Drop for ManagedEnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+                Some(value) => unsafe {
+                    std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, value);
+                },
+                // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+                None => unsafe {
+                    std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV);
+                },
+            }
+        }
+    }
+
+    async fn health_mock_server() -> MockServer {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "healthy": true,
+                "version": version::PINNED_OPENCODE_VERSION,
+            })))
+            .mount(&mock)
+            .await;
+        mock
+    }
+
+    fn test_client(base_url: &str) -> Client {
+        opencode_rs::ClientBuilder::new()
+            .base_url(base_url)
+            .timeout_secs(5)
+            .build()
+            .unwrap()
+    }
+
+    fn external_server(base_url: &str) -> OrchestratorServer {
+        OrchestratorServer::from_client_unshared(
+            test_client(base_url),
+            base_url,
+            RecoveryMode::External,
+        )
+    }
+
+    async fn exited_child() -> tokio::process::Child {
+        let mut child = Command::new("sh").arg("-c").arg("exit 0").spawn().unwrap();
+        let _status = child.wait().await.unwrap();
+        child
+    }
+
+    async fn managed_server_with_exited_child(base_url: &str) -> OrchestratorServer {
+        let managed = ManagedServer::from_child_for_testing(exited_child().await, base_url, 9);
+        OrchestratorServer::from_managed_for_testing(managed, test_client(base_url), base_url)
+    }
+
+    struct BlockingHealthServer {
+        base_url: String,
+        started_requests: Arc<AtomicUsize>,
+        started_notify: Arc<Notify>,
+        released: Arc<AtomicBool>,
+        release_notify: Arc<Notify>,
+        task: tokio::task::JoinHandle<()>,
+    }
+
+    impl BlockingHealthServer {
+        async fn start(expected_requests: usize) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let started_requests = Arc::new(AtomicUsize::new(0));
+            let started_notify = Arc::new(Notify::new());
+            let released = Arc::new(AtomicBool::new(false));
+            let release_notify = Arc::new(Notify::new());
+            let body = format!(
+                r#"{{"healthy":true,"version":"{}"}}"#,
+                version::PINNED_OPENCODE_VERSION
+            );
+            let response = Arc::new(format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            ));
+
+            let task = tokio::spawn({
+                let started_requests = Arc::clone(&started_requests);
+                let started_notify = Arc::clone(&started_notify);
+                let released = Arc::clone(&released);
+                let release_notify = Arc::clone(&release_notify);
+                let response = Arc::clone(&response);
+
+                async move {
+                    let mut connections = Vec::with_capacity(expected_requests);
+
+                    for _ in 0..expected_requests {
+                        let (mut stream, _addr) = listener.accept().await.unwrap();
+                        let started_requests = Arc::clone(&started_requests);
+                        let started_notify = Arc::clone(&started_notify);
+                        let released = Arc::clone(&released);
+                        let release_notify = Arc::clone(&release_notify);
+                        let response = Arc::clone(&response);
+
+                        connections.push(tokio::spawn(async move {
+                            let mut request = [0_u8; 1024];
+                            let _read = stream.read(&mut request).await.unwrap();
+                            started_requests.fetch_add(1, Ordering::SeqCst);
+                            started_notify.notify_waiters();
+
+                            loop {
+                                let notified = release_notify.notified();
+                                if released.load(Ordering::SeqCst) {
+                                    break;
+                                }
+                                notified.await;
+                            }
+
+                            stream.write_all(response.as_bytes()).await.unwrap();
+                            stream.shutdown().await.unwrap();
+                        }));
+                    }
+
+                    for connection in connections {
+                        connection.await.unwrap();
+                    }
+                }
+            });
+
+            Self {
+                base_url: format!("http://{addr}"),
+                started_requests,
+                started_notify,
+                released,
+                release_notify,
+                task,
+            }
+        }
+
+        async fn wait_for_requests(&self, expected_requests: usize) {
+            tokio::time::timeout(Duration::from_secs(1), async {
+                while self.started_requests.load(Ordering::SeqCst) < expected_requests {
+                    self.started_notify.notified().await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        fn release(&self) {
+            self.released.store(true, Ordering::SeqCst);
+            self.release_notify.notify_waiters();
+        }
+    }
+
+    impl Drop for BlockingHealthServer {
+        fn drop(&mut self) {
+            self.release();
+            self.task.abort();
+        }
+    }
 
     #[tokio::test]
     async fn init_with_retry_succeeds_on_first_attempt() {
@@ -473,9 +1156,272 @@ mod tests {
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
+    #[tokio::test]
+    async fn handle_serializes_initialization_and_reuses_snapshot() {
+        let mock = health_mock_server().await;
+        let base_url = mock.uri();
+        let handle = Arc::new(OrchestratorServerHandle::new());
+        let starts = Arc::new(AtomicUsize::new(0));
+
+        let first = {
+            let handle = Arc::clone(&handle);
+            let starts = Arc::clone(&starts);
+            let base_url = base_url.clone();
+            tokio::spawn(async move {
+                handle
+                    .get_or_recover_with(|| {
+                        let starts = Arc::clone(&starts);
+                        let base_url = base_url.clone();
+                        async move {
+                            starts.fetch_add(1, Ordering::SeqCst);
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+                            Ok(external_server(&base_url))
+                        }
+                    })
+                    .await
+            })
+        };
+
+        let second = {
+            let handle = Arc::clone(&handle);
+            let starts = Arc::clone(&starts);
+            let base_url = base_url.clone();
+            tokio::spawn(async move {
+                handle
+                    .get_or_recover_with(|| {
+                        let starts = Arc::clone(&starts);
+                        let base_url = base_url.clone();
+                        async move {
+                            starts.fetch_add(1, Ordering::SeqCst);
+                            Ok(external_server(&base_url))
+                        }
+                    })
+                    .await
+            })
+        };
+
+        let first = first.await.unwrap().unwrap();
+        let second = second.await.unwrap().unwrap();
+
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[tokio::test]
+    async fn validate_for_tool_entry_uses_health_for_external_server() {
+        let mock = health_mock_server().await;
+        let server = external_server(&mock.uri());
+
+        let state = server.validate_for_tool_entry().await.unwrap();
+
+        assert_eq!(state, ServerEntryState::Healthy);
+        let requests = mock.received_requests().await.unwrap();
+        assert!(
+            requests
+                .iter()
+                .any(|request| request.url.path() == "/global/health"),
+            "expected /global/health request"
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_for_tool_entry_times_out_health_probe() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/health"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(30))
+                    .set_body_json(serde_json::json!({
+                        "healthy": true,
+                        "version": version::PINNED_OPENCODE_VERSION,
+                    })),
+            )
+            .mount(&mock)
+            .await;
+        let server = external_server(&mock.uri());
+
+        let state = server
+            .validate_for_tool_entry_with_timeout(Duration::from_millis(25))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            state,
+            ServerEntryState::NeedsRecovery {
+                reason: "/global/health probe timed out after 25ms".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_for_tool_entry_short_circuits_dead_managed_server() {
+        let server = managed_server_with_exited_child("http://127.0.0.1:9").await;
+
+        let state = server.validate_for_tool_entry().await.unwrap();
+
+        assert_eq!(
+            state,
+            ServerEntryState::NeedsRecovery {
+                reason: "managed child is no longer running".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn handle_allows_concurrent_healthy_acquires_without_serializing_validation() {
+        let health = BlockingHealthServer::start(3).await;
+        let handle = Arc::new(OrchestratorServerHandle::from_server_unshared(
+            external_server(&health.base_url),
+        ));
+
+        let started_at = Instant::now();
+        let tasks = (0..3)
+            .map(|_| {
+                let handle = Arc::clone(&handle);
+                tokio::spawn(async move { handle.acquire().await })
+            })
+            .collect::<Vec<_>>();
+
+        health.wait_for_requests(3).await;
+        tokio::time::sleep(Duration::from_millis(75)).await;
+        health.release();
+
+        let mut snapshots = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            snapshots.push(task.await.unwrap().unwrap());
+        }
+
+        assert!(
+            started_at.elapsed() < Duration::from_millis(250),
+            "healthy acquires should overlap rather than serialize"
+        );
+        assert!(Arc::ptr_eq(&snapshots[0], &snapshots[1]));
+        assert!(Arc::ptr_eq(&snapshots[1], &snapshots[2]));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn handle_single_flights_concurrent_stale_acquires() {
+        let stale = Arc::new(managed_server_with_exited_child("http://127.0.0.1:9").await);
+        let handle = Arc::new(OrchestratorServerHandle {
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::clone(&stale),
+                mode: RecoveryMode::Managed,
+            }),
+        });
+        let mock = health_mock_server().await;
+        let base_url = mock.uri();
+        let starts = Arc::new(AtomicUsize::new(0));
+
+        let tasks = (0..3)
+            .map(|_| {
+                let handle = Arc::clone(&handle);
+                let starts = Arc::clone(&starts);
+                let base_url = base_url.clone();
+                tokio::spawn(async move {
+                    handle
+                        .get_or_recover_with(|| {
+                            let starts = Arc::clone(&starts);
+                            let base_url = base_url.clone();
+                            async move {
+                                starts.fetch_add(1, Ordering::SeqCst);
+                                tokio::time::sleep(Duration::from_millis(50)).await;
+                                Ok(external_server(&base_url))
+                            }
+                        })
+                        .await
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut snapshots = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            snapshots.push(task.await.unwrap().unwrap());
+        }
+
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert!(!Arc::ptr_eq(&stale, &snapshots[0]));
+        assert!(Arc::ptr_eq(&snapshots[0], &snapshots[1]));
+        assert!(Arc::ptr_eq(&snapshots[1], &snapshots[2]));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn handle_retries_if_cache_changes_while_validating() {
+        let old_health = BlockingHealthServer::start(1).await;
+        let original = Arc::new(external_server(&old_health.base_url));
+        let handle = Arc::new(OrchestratorServerHandle {
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::clone(&original),
+                mode: RecoveryMode::External,
+            }),
+        });
+        let replacement_mock = health_mock_server().await;
+        let replacement = Arc::new(external_server(&replacement_mock.uri()));
+
+        let acquire = {
+            let handle = Arc::clone(&handle);
+            tokio::spawn(async move {
+                handle
+                    .acquire_or_recover_with(|| async { anyhow::bail!("should not rebuild") })
+                    .await
+            })
+        };
+
+        old_health.wait_for_requests(1).await;
+
+        {
+            let mut state = tokio::time::timeout(Duration::from_millis(100), handle.state.lock())
+                .await
+                .expect("validation should not hold the handle mutex");
+            *state = HandleState::Ready {
+                snapshot: Arc::clone(&replacement),
+                mode: RecoveryMode::External,
+            };
+        }
+
+        old_health.release();
+
+        let snapshot = acquire.await.unwrap().unwrap();
+
+        assert!(!Arc::ptr_eq(&snapshot, &original));
+        assert!(Arc::ptr_eq(&snapshot, &replacement));
+    }
+
+    #[tokio::test]
+    async fn handle_rebuilds_without_invalidating_held_snapshot() {
+        let stale = Arc::new(managed_server_with_exited_child("http://127.0.0.1:9").await);
+        let handle = OrchestratorServerHandle {
+            state: AsyncMutex::new(HandleState::Ready {
+                snapshot: Arc::clone(&stale),
+                mode: RecoveryMode::Managed,
+            }),
+        };
+        let mock = health_mock_server().await;
+        let base_url = mock.uri();
+        let starts = Arc::new(AtomicUsize::new(0));
+
+        let rebuilt = handle
+            .get_or_recover_with(|| {
+                let starts = Arc::clone(&starts);
+                let base_url = base_url.clone();
+                async move {
+                    starts.fetch_add(1, Ordering::SeqCst);
+                    Ok(external_server(&base_url))
+                }
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert!(!Arc::ptr_eq(&stale, &rebuilt));
+        assert_eq!(stale.base_url(), "http://127.0.0.1:9");
+        assert_eq!(rebuilt.base_url(), base_url.trim_end_matches('/'));
+    }
+
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_not_set() {
+        let _env = ManagedEnvGuard::new();
         // Ensure the env var is not set
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
@@ -485,50 +1431,111 @@ mod tests {
     #[test]
     #[serial(env)]
     fn managed_guard_enabled_when_env_is_1() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
         assert!(managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_is_0() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "0") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_is_empty() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_disabled_when_env_is_whitespace() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "   ") };
         assert!(!managed_guard_enabled());
-        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
     }
 
     #[test]
     #[serial(env)]
     fn managed_guard_enabled_when_env_is_truthy() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
         unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "true") };
         assert!(managed_guard_enabled());
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn recursion_guard_only_blocks_real_startup_paths() {
+        let _env = ManagedEnvGuard::new();
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
-        unsafe { std::env::remove_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV) };
+        unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_MANAGED_ENV, "1") };
+
+        let mock = health_mock_server().await;
+        let handle = OrchestratorServerHandle::from_server_unshared(external_server(&mock.uri()));
+        let reused = handle
+            .get_or_recover_with(|| async { anyhow::bail!("should not start") })
+            .await
+            .unwrap();
+        assert_eq!(reused.base_url(), mock.uri().trim_end_matches('/'));
+
+        let fresh_handle = OrchestratorServerHandle::new();
+        let err = match fresh_handle.acquire().await {
+            Ok(_server) => panic!("expected recursion guard to block fresh startup"),
+            Err(error) => error,
+        };
+        assert!(err.to_string().contains(ORCHESTRATOR_MANAGED_GUARD_MESSAGE));
+    }
+
+    #[tokio::test]
+    async fn external_failure_becomes_sticky_and_typed() {
+        let handle = OrchestratorServerHandle::from_server_unshared(
+            OrchestratorServer::from_client_unshared(
+                test_client("http://127.0.0.1:9"),
+                "http://127.0.0.1:9",
+                RecoveryMode::External,
+            ),
+        );
+        let starts = AtomicUsize::new(0);
+
+        let first = handle
+            .acquire_or_recover_with(|| {
+                starts.fetch_add(1, Ordering::SeqCst);
+                async { anyhow::bail!("should not rebuild external servers") }
+            })
+            .await;
+        let second = handle
+            .acquire_or_recover_with(|| {
+                starts.fetch_add(1, Ordering::SeqCst);
+                async { anyhow::bail!("should not rebuild external servers") }
+            })
+            .await;
+
+        let first = match first {
+            Ok(_snapshot) => panic!("expected typed external failure on first acquire"),
+            Err(error) => error,
+        };
+        let second = match second {
+            Ok(_snapshot) => panic!("expected sticky external failure on second acquire"),
+            Err(error) => error,
+        };
+
+        assert_eq!(starts.load(Ordering::SeqCst), 0);
+        assert!(
+            first
+                .to_string()
+                .contains("External OpenCode server unavailable"),
+            "expected typed external failure, got: {first}"
+        );
+        assert_eq!(first.to_string(), second.to_string());
     }
 }
