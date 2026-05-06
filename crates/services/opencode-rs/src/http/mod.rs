@@ -74,7 +74,7 @@ impl HttpClient {
         let inner = ReqClient::builder()
             .timeout(cfg.timeout)
             .build()
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         // Normalize base_url to not have trailing slash (paths start with /)
         let cfg = HttpConfig {
             base_url: cfg.base_url.trim_end_matches('/').to_string(),
@@ -99,7 +99,7 @@ impl HttpClient {
             None => ReqClient::builder()
                 .timeout(timeout)
                 .build()
-                .map_err(|e| OpencodeError::Network(e.to_string()))?,
+                .map_err(OpencodeError::from)?,
         };
 
         Ok(Self {
@@ -157,7 +157,7 @@ impl HttpClient {
             .build_request(Method::GET, path)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -171,7 +171,7 @@ impl HttpClient {
             .build_request(Method::DELETE, path)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -185,7 +185,7 @@ impl HttpClient {
             .build_request(Method::DELETE, path)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::check_status(resp).await
     }
 
@@ -204,7 +204,7 @@ impl HttpClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -223,7 +223,7 @@ impl HttpClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::check_status(resp).await
     }
 
@@ -242,7 +242,7 @@ impl HttpClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -261,7 +261,7 @@ impl HttpClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+            .map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -284,10 +284,7 @@ impl HttpClient {
             req = req.json(&b);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        let resp = req.send().await.map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -317,10 +314,7 @@ impl HttpClient {
             req = req.json(&b);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        let resp = req.send().await.map_err(OpencodeError::from)?;
         Self::map_json_response(resp).await
     }
 
@@ -341,10 +335,7 @@ impl HttpClient {
             req = req.json(&b);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        let resp = req.send().await.map_err(OpencodeError::from)?;
         Self::check_status(resp).await
     }
 
@@ -353,10 +344,7 @@ impl HttpClient {
     /// Map response to JSON, handling errors with `NamedError` parsing.
     async fn map_json_response<T: DeserializeOwned>(resp: Response) -> Result<T> {
         let status = resp.status();
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| OpencodeError::Network(e.to_string()))?;
+        let bytes = resp.bytes().await.map_err(OpencodeError::from)?;
 
         if !status.is_success() {
             let body_text = String::from_utf8_lossy(&bytes);
@@ -414,7 +402,7 @@ impl HttpClient {
                         tokio::time::sleep(Duration::from_millis(BACKOFF_MS)).await;
                         continue;
                     }
-                    return Err(OpencodeError::Network(e.to_string()));
+                    return Err(e.into());
                 }
             }
         }
@@ -449,6 +437,7 @@ impl HttpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
@@ -650,5 +639,50 @@ mod tests {
             }
             _ => panic!("Expected validation error"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_transport_error_preserves_reqwest_source() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/slow"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(100))
+                    .set_body_json(serde_json::json!({"ok": true})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_millis(10),
+        })
+        .unwrap();
+
+        let err = client.get::<serde_json::Value>("/slow").await.unwrap_err();
+
+        let source = err
+            .source()
+            .and_then(|source| source.downcast_ref::<reqwest::Error>());
+
+        match &err {
+            OpencodeError::Transport(inner) => {
+                assert!(
+                    inner.is_timeout(),
+                    "inner error should be a timeout: {inner}"
+                );
+            }
+            other => panic!("expected transport error, got {other:?}"),
+        }
+
+        let reqwest_err = source.expect("reqwest source should be preserved");
+        assert!(
+            reqwest_err.is_timeout(),
+            "source error should remain a timeout: {reqwest_err}"
+        );
     }
 }

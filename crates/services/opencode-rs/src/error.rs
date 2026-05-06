@@ -21,9 +21,9 @@ pub enum OpencodeError {
         data: Option<serde_json::Value>,
     },
 
-    /// Network/connection error.
-    #[error("Network error: {0}")]
-    Network(String),
+    /// Transport/network error.
+    #[error("Transport error: {0}")]
+    Transport(#[from] reqwest::Error),
 
     /// SSE streaming error.
     #[error("SSE error: {0}")]
