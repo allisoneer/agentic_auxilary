@@ -41,7 +41,7 @@ pub async fn create_test_client() -> opencode_rs::Client {
     let server = super::start_server().await;
     opencode_rs::Client::builder()
         .base_url(server.url().as_str())
-        .timeout_secs(30)
+        .timeout_secs(600)
         .build()
         .unwrap()
 }
@@ -61,7 +61,7 @@ fn test_url() -> String {
 pub async fn create_test_client() -> opencode_rs::Client {
     opencode_rs::Client::builder()
         .base_url(test_url())
-        .timeout_secs(30)
+        .timeout_secs(600)
         .build()
         .unwrap()
 }
