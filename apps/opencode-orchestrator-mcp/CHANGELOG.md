@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.6.0] - 2026-05-06
+
+### 🐛 Bug Fixes
+- *(opencode-orchestrator-mcp)* Avoid lost release notification in test helper
+- *(opencode-orchestrator-mcp)* Recover managed handles after server loss
 ## [0.5.1] - 2026-05-04
 
 ### ⚙️  Miscellaneous

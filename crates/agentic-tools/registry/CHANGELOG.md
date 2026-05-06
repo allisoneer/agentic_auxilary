@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.21] - 2026-05-06
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: web-retrieval
 ## [0.3.20] - 2026-05-04
 
 ### 🐛 Bug Fixes
