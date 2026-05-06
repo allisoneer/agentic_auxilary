@@ -32,6 +32,18 @@ fn answer_for_question(question: &QuestionInfo) -> Vec<String> {
     vec!["yes".to_string()]
 }
 
+fn format_error_chain(err: &dyn std::error::Error) -> String {
+    use std::fmt::Write;
+
+    let mut output = format!("{err}");
+    let mut source = err.source();
+    while let Some(s) = source {
+        let _ = write!(output, "\n  caused by: {s}");
+        source = s.source();
+    }
+    output
+}
+
 async fn drain_questions(
     client: &opencode_rs::Client,
     session_id: &str,
@@ -539,6 +551,12 @@ async fn test_session_init_required_body() {
     let mut init_task = std::pin::pin!(init_task);
     let mut last_step = String::from("spawned session.init task");
     let driver = async {
+        // Initial drain in case the server has already raised pending requests by the time we start polling.
+        last_step = "initial drain of questions".to_string();
+        let _ = drain_questions(&client, &session_id).await;
+        last_step = "initial drain of permissions".to_string();
+        let _ = drain_permissions(&client, &session_id).await;
+
         loop {
             tokio::select! {
                 join_result = &mut init_task => {
@@ -553,7 +571,7 @@ async fn test_session_init_required_body() {
                     };
                     return Ok::<bool, opencode_rs::error::OpencodeError>(ok);
                 }
-                () = tokio::time::sleep(Duration::from_millis(250)) => {
+                () = tokio::time::sleep(Duration::from_millis(50)) => {
                     // This heuristic is intentionally minimal; the test validates init workflow completion, not question semantics.
                     last_step = "polling questions".to_string();
                     drain_questions(&client, &session_id).await?;
@@ -570,7 +588,10 @@ async fn test_session_init_required_body() {
         Ok(Err(error)) => {
             init_task.as_mut().abort();
             let _ = client.sessions().delete(&session_id).await;
-            panic!("session.init driver should succeed: {error}");
+            panic!(
+                "session.init driver should succeed: {}",
+                format_error_chain(&error)
+            );
         }
         Err(_) => {
             init_task.as_mut().abort();
