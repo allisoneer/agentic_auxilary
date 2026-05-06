@@ -10,7 +10,73 @@ use super::should_run;
 use opencode_rs::types::message::PromptPart;
 use opencode_rs::types::message::PromptRequest;
 use opencode_rs::types::message::ShellRequest;
+use opencode_rs::types::new_message_id;
+use opencode_rs::types::permission::PermissionReply;
+use opencode_rs::types::permission::PermissionReplyRequest;
+use opencode_rs::types::question::QuestionInfo;
+use opencode_rs::types::question::QuestionReply;
 use opencode_rs::types::session::SessionInitRequest;
+use tokio::time::Duration;
+
+fn answer_for_question(question: &QuestionInfo) -> Vec<String> {
+    let text = question.question.to_ascii_lowercase();
+
+    if text.contains("yes") && text.contains("no") {
+        return vec!["yes".to_string()];
+    }
+
+    if let Some(first_option) = question.options.first() {
+        return vec![first_option.label.clone()];
+    }
+
+    vec!["yes".to_string()]
+}
+
+async fn drain_questions(
+    client: &opencode_rs::Client,
+    session_id: &str,
+) -> opencode_rs::error::Result<()> {
+    let pending = client.question().list().await?;
+
+    for request in pending
+        .into_iter()
+        .filter(|request| request.session_id == session_id)
+    {
+        let answers = request.questions.iter().map(answer_for_question).collect();
+
+        client
+            .question()
+            .reply(&request.id, &QuestionReply { answers })
+            .await?;
+    }
+
+    Ok(())
+}
+
+async fn drain_permissions(
+    client: &opencode_rs::Client,
+    session_id: &str,
+) -> opencode_rs::error::Result<()> {
+    let pending = client.permissions().list().await?;
+
+    for request in pending
+        .into_iter()
+        .filter(|request| request.session_id == session_id)
+    {
+        client
+            .permissions()
+            .reply(
+                &request.id,
+                &PermissionReplyRequest {
+                    reply: PermissionReply::Always,
+                    message: None,
+                },
+            )
+            .await?;
+    }
+
+    Ok(())
+}
 
 /// Test session CRUD with typed responses.
 #[tokio::test]
@@ -447,31 +513,80 @@ async fn test_session_init_required_body() {
         .await
         .expect("Failed to create a message for session.init preconditions");
 
-    let messages = client
-        .messages()
-        .list(&session.id)
-        .await
-        .expect("messages list");
-    let message = messages
-        .first()
-        .expect("session.init test requires the prompt to create a message");
+    let session_id = session.id.clone();
+    let init_message_id = new_message_id();
+    let init_task = tokio::spawn({
+        let client = client.clone();
+        let session_id = session_id.clone();
+        let provider_id = provider_id.clone();
+        let model_id = model_id.clone();
 
-    let ok = client
-        .sessions()
-        .init(
-            &session.id,
-            &SessionInitRequest {
-                model_id,
-                provider_id,
-                message_id: message.id().to_string(),
-            },
-        )
-        .await
-        .expect("session.init should succeed");
+        async move {
+            client
+                .sessions()
+                .init(
+                    &session_id,
+                    &SessionInitRequest {
+                        model_id,
+                        provider_id,
+                        message_id: init_message_id,
+                    },
+                )
+                .await
+        }
+    });
+
+    let mut init_task = std::pin::pin!(init_task);
+    let mut last_step = String::from("spawned session.init task");
+    let driver = async {
+        loop {
+            tokio::select! {
+                join_result = &mut init_task => {
+                    last_step = "session.init task completed".to_string();
+                    let ok = match join_result {
+                        Ok(result) => result?,
+                        Err(error) => {
+                            return Err(opencode_rs::error::OpencodeError::State(format!(
+                                "session.init task join error: {error}"
+                            )));
+                        }
+                    };
+                    return Ok::<bool, opencode_rs::error::OpencodeError>(ok);
+                }
+                () = tokio::time::sleep(Duration::from_millis(250)) => {
+                    // This heuristic is intentionally minimal; the test validates init workflow completion, not question semantics.
+                    last_step = "polling questions".to_string();
+                    drain_questions(&client, &session_id).await?;
+
+                    last_step = "polling permissions".to_string();
+                    drain_permissions(&client, &session_id).await?;
+                }
+            }
+        }
+    };
+
+    let ok = match tokio::time::timeout(Duration::from_secs(300), driver).await {
+        Ok(Ok(ok)) => ok,
+        Ok(Err(error)) => {
+            init_task.as_mut().abort();
+            let _ = client.sessions().delete(&session_id).await;
+            panic!("session.init driver should succeed: {error}");
+        }
+        Err(_) => {
+            init_task.as_mut().abort();
+            let _ = client.sessions().delete(&session_id).await;
+            panic!("session.init timed out after 5 minutes; last observed step: {last_step}");
+        }
+    };
 
     assert!(ok, "session.init should return true");
 
-    let _ = client.sessions().delete(&session.id).await;
+    let deleted = client
+        .sessions()
+        .delete(&session_id)
+        .await
+        .expect("session.init test cleanup should delete the session");
+    assert!(deleted, "session.init cleanup should delete the session");
 }
 
 /// Test session diff patch schema.
