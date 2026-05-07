@@ -1,4 +1,4 @@
-//! Agentic-tools integration for thoughts_tool.
+//! Agentic-tools integration for `thoughts_tool`.
 //!
 //! This module provides Tool wrappers for the 6 thoughts MCP tools using the
 //! agentic-tools-core framework, enabling registration in the unified registry.
@@ -14,7 +14,7 @@ pub use tools::WriteDocumentTool;
 
 use agentic_tools_core::ToolRegistry;
 
-/// Build a ToolRegistry registering all thoughts tools.
+/// Build a `ToolRegistry` registering all thoughts tools.
 ///
 /// This registry can be merged with other domain registries in Plan 4
 /// to create a unified agentic-mcp binary.

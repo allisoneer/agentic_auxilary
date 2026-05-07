@@ -27,3 +27,6 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 tokio = { workspace = true }
 futures = "0.3"
+
+[lints]
+workspace = true

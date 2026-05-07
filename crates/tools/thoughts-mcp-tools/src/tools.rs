@@ -1,6 +1,6 @@
-//! Tool wrappers for thoughts_tool using agentic-tools-core.
+//! Tool wrappers for `thoughts_tool` using agentic-tools-core.
 //!
-//! Each tool wraps the corresponding functionality from the thoughts_tool
+//! Each tool wraps the corresponding functionality from the `thoughts_tool`
 //! library with logging identical to the MCP implementation.
 
 use agentic_logging::CallTimer;
@@ -31,10 +31,10 @@ use thoughts_tool::mcp::get_repo_refs_impl_adapter;
 use thoughts_tool::mount::MountSpace;
 use thoughts_tool::utils::logging::log_tool_call;
 
-/// Map anyhow::Error to agentic_tools_core::ToolError.
+/// Map `anyhow::Error` to `agentic_tools_core::ToolError`.
 ///
 /// Uses string pattern matching to categorize errors appropriately.
-fn map_anyhow_to_tool_error(e: anyhow::Error) -> ToolError {
+fn map_anyhow_to_tool_error(e: &anyhow::Error) -> ToolError {
     let msg = e.to_string();
     let lc = msg.to_lowercase();
     if lc.contains("permission") || lc.contains("401") || lc.contains("403") {
@@ -54,7 +54,7 @@ fn map_anyhow_to_tool_error(e: anyhow::Error) -> ToolError {
 // WriteDocument Tool
 // ============================================================================
 
-/// Input for the write_document tool.
+/// Input for the `write_document` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct WriteDocumentInput {
     pub doc_type: DocumentType,
@@ -124,7 +124,7 @@ impl Tool for WriteDocumentTool {
 // ListActiveDocuments Tool
 // ============================================================================
 
-/// Input for the list_active_documents tool.
+/// Input for the `list_active_documents` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct ListActiveDocumentsInput {
     /// Optional subdirectory filter by document type.
@@ -150,7 +150,7 @@ impl Tool for ListActiveDocumentsTool {
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
-                "subdir": input.subdir.as_ref().map(|d| format!("{:?}", d).to_lowercase()),
+                "subdir": input.subdir.as_ref().map(|d| format!("{d:?}").to_lowercase()),
             });
 
             let result = list_documents(input.subdir.as_ref());
@@ -191,7 +191,7 @@ impl Tool for ListActiveDocumentsTool {
 // ListReferences Tool
 // ============================================================================
 
-/// Input for the list_references tool.
+/// Input for the `list_references` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema, Default)]
 pub struct ListReferencesInput {}
 
@@ -291,10 +291,10 @@ impl Tool for ListReferencesTool {
 // GetRepoRefs Tool
 // ============================================================================
 
-/// Input for the get_repo_refs tool.
+/// Input for the `get_repo_refs` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct GetRepoRefsInput {
-    /// HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL
+    /// HTTPS GitHub URL (<https://github.com/org/repo>) or generic https://*.git clone URL
     pub url: String,
     /// Maximum refs to return (1-200, default 100)
     #[serde(default)]
@@ -326,7 +326,7 @@ impl Tool for GetRepoRefsTool {
 
             let result = get_repo_refs_impl_adapter(input.url, input.limit)
                 .await
-                .map_err(map_anyhow_to_tool_error);
+                .map_err(|e| map_anyhow_to_tool_error(&e));
 
             match &result {
                 Ok(ok) => {
@@ -365,10 +365,10 @@ impl Tool for GetRepoRefsTool {
 // AddReference Tool
 // ============================================================================
 
-/// Input for the add_reference tool.
+/// Input for the `add_reference` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct AddReferenceInput {
-    /// HTTPS GitHub URL (https://github.com/org/repo) or generic https://*.git clone URL
+    /// HTTPS GitHub URL (<https://github.com/org/repo>) or generic https://*.git clone URL
     pub url: String,
     /// Optional full git ref name to clone, which must start with refs/heads/
     /// or refs/tags/ (for example refs/heads/main).
@@ -407,7 +407,7 @@ impl Tool for AddReferenceTool {
             // Delegate to the shared adapter function
             let result = add_reference_impl_adapter(input.url, input.description, input.ref_name)
                 .await
-                .map_err(map_anyhow_to_tool_error);
+                .map_err(|e| map_anyhow_to_tool_error(&e));
 
             match &result {
                 Ok(ok) => {
@@ -450,10 +450,10 @@ impl Tool for AddReferenceTool {
 // GetTemplate Tool
 // ============================================================================
 
-/// Input for the get_template tool.
+/// Input for the `get_template` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct GetTemplateInput {
-    /// Which template to fetch (research, plan, requirements, pr_description)
+    /// Which template to fetch (research, plan, requirements, `pr_description`)
     pub template: TemplateType,
 }
 
