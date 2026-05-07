@@ -2,7 +2,7 @@
 //!
 //! This crate provides:
 //! - `#[tool]` attribute macro for defining tools
-//! - `#[derive(TextFormat)]` for implementing the TextFormat trait
+//! - `#[derive(TextFormat)]` for implementing the `TextFormat` trait
 
 mod text_format;
 mod tool;
@@ -36,9 +36,9 @@ pub fn tool(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derive macro for implementing the TextFormat trait.
+/// Derive macro for implementing the `TextFormat` trait.
 ///
-/// By default, produces pretty-printed JSON. When `markdown = true` in TextOptions,
+/// By default, produces pretty-printed JSON. When `markdown = true` in `TextOptions`,
 /// wraps the JSON in a fenced code block.
 ///
 /// # Usage
