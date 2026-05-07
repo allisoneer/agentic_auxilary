@@ -19,6 +19,7 @@ impl EnvGuard {
     #[must_use]
     pub fn set(key: &'static str, val: &str) -> Self {
         let prev = std::env::var(key).ok();
+        // SAFETY: Callers use #[serial(env)] to ensure no concurrent environment access.
         unsafe { std::env::set_var(key, val) };
         Self { key, prev }
     }
@@ -32,6 +33,7 @@ impl EnvGuard {
     #[must_use]
     pub fn remove(key: &'static str) -> Self {
         let prev = std::env::var(key).ok();
+        // SAFETY: Callers use #[serial(env)] to ensure no concurrent environment access.
         unsafe { std::env::remove_var(key) };
         Self { key, prev }
     }
@@ -40,8 +42,14 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         match &self.prev {
-            Some(v) => unsafe { std::env::set_var(self.key, v) },
-            None => unsafe { std::env::remove_var(self.key) },
+            Some(v) => {
+                // SAFETY: Callers use #[serial(env)] to ensure no concurrent environment access.
+                unsafe { std::env::set_var(self.key, v) }
+            }
+            None => {
+                // SAFETY: Callers use #[serial(env)] to ensure no concurrent environment access.
+                unsafe { std::env::remove_var(self.key) }
+            }
         }
     }
 }

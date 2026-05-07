@@ -46,13 +46,8 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serial_test = "3"
 serde_json = { workspace = true }
 
-[lints.rust]
-warnings = "deny"
-
-[lints.clippy]
-all = "deny"
-pedantic = "warn"
-nursery = "warn"
+[lints]
+workspace = true
 
 [package.metadata.repo]
 role = "lib"
