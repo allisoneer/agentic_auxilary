@@ -1,7 +1,7 @@
-//! Tests for native (zero-JSON) tool calls via ToolHandle.
+//! Tests for native (zero-JSON) tool calls via `ToolHandle`.
 //!
 //! These tests verify that tools can be called without JSON serialization
-//! when using the ToolHandle API for cross-crate composition.
+//! when using the `ToolHandle` API for cross-crate composition.
 
 use agentic_tools_core::TextFormat;
 use agentic_tools_core::Tool;
@@ -64,7 +64,7 @@ struct ComputeInput {
     values: Vec<i32>,
 }
 
-/// Native output type - now needs Serialize for TextFormat.
+/// Native output type - now needs Serialize for `TextFormat`.
 #[derive(Debug, Serialize)]
 struct ComputeOutput {
     sum: i32,
@@ -93,7 +93,7 @@ impl Tool for ComputeTool {
     }
 }
 
-/// Wire types for ComputeTool (serde-compatible)
+/// Wire types for `ComputeTool` (serde-compatible)
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ComputeWireIn {
     values: Vec<i32>,

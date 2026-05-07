@@ -30,7 +30,7 @@
 //! }
 //! ```
 //!
-//! # Default TextFormat Fallback
+//! # Default `TextFormat` Fallback
 //!
 //! The [`TextFormat`] trait requires `Serialize` and provides a default `fmt_text`
 //! implementation that produces pretty-printed JSON. This means:
@@ -72,24 +72,28 @@ impl TextOptions {
     }
 
     /// Set the text style.
+    #[must_use]
     pub fn with_style(mut self, style: TextStyle) -> Self {
         self.style = style;
         self
     }
 
     /// Enable or disable markdown formatting.
+    #[must_use]
     pub fn with_markdown(mut self, markdown: bool) -> Self {
         self.markdown = markdown;
         self
     }
 
     /// Set the maximum number of items to display.
+    #[must_use]
     pub fn with_max_items(mut self, max_items: Option<usize>) -> Self {
         self.max_items = max_items;
         self
     }
 
     /// Enable or disable search reminder suppression for grep/glob text output.
+    #[must_use]
     pub fn with_suppress_search_reminder(mut self, suppress_search_reminder: bool) -> Self {
         self.suppress_search_reminder = suppress_search_reminder;
         self
@@ -239,9 +243,9 @@ mod tests {
     fn test_fallback_text_from_json_array() {
         let v = serde_json::json!([1, 2, 3]);
         let text = fallback_text_from_json(&v);
-        assert!(text.contains("1"));
-        assert!(text.contains("2"));
-        assert!(text.contains("3"));
+        assert!(text.contains('1'));
+        assert!(text.contains('2'));
+        assert!(text.contains('3'));
     }
 
     #[test]

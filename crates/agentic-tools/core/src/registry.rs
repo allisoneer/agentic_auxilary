@@ -16,12 +16,12 @@ use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-/// Result from dispatch_json_formatted containing both JSON data and optional text.
+/// Result from `dispatch_json_formatted` containing both JSON data and optional text.
 #[derive(Debug, Clone)]
 pub struct FormattedResult {
     /// The JSON-serialized output data.
     pub data: Value,
-    /// Human-readable text representation. None if no TextFormat implementation exists
+    /// Human-readable text representation. None if no `TextFormat` implementation exists
     /// and fallback wasn't requested.
     pub text: Option<String>,
 }
@@ -50,7 +50,7 @@ pub trait ErasedTool: Send + Sync {
     /// Call the tool with JSON arguments, returning both JSON data and formatted text.
     ///
     /// This method enables dual output for MCP and NAPI servers. The text is derived
-    /// from the tool's TextFormat implementation if available, otherwise it falls back
+    /// from the tool's `TextFormat` implementation if available, otherwise it falls back
     /// to pretty-printed JSON.
     fn call_json_formatted(
         &self,
@@ -59,7 +59,7 @@ pub trait ErasedTool: Send + Sync {
         text_opts: &TextOptions,
     ) -> BoxFuture<'static, Result<FormattedResult, ToolError>>;
 
-    /// Get the TypeId for type-safe handle retrieval.
+    /// Get the `TypeId` for type-safe handle retrieval.
     fn type_id(&self) -> TypeId;
 }
 
@@ -88,14 +88,15 @@ impl ToolRegistry {
     /// Create a subset registry containing only the specified tools.
     ///
     /// Tools not found in the registry are silently ignored.
-    pub fn subset<'a>(&self, names: impl IntoIterator<Item = &'a str>) -> ToolRegistry {
+    #[must_use]
+    pub fn subset<'a>(&self, names: impl IntoIterator<Item = &'a str>) -> Self {
         let allowed: HashSet<&str> = names.into_iter().collect();
 
         // Copy the allowed entries into the new map
         let mut map = HashMap::new();
         for (k, v) in &self.map {
             if allowed.contains(k.as_str()) {
-                map.insert(k.clone(), v.clone());
+                map.insert(k.clone(), Arc::clone(v));
             }
         }
 
@@ -108,7 +109,7 @@ impl ToolRegistry {
             }
         }
 
-        ToolRegistry { map, by_type }
+        Self { map, by_type }
     }
 
     /// Dispatch a tool call using JSON arguments.
@@ -121,14 +122,14 @@ impl ToolRegistry {
         let entry = self
             .map
             .get(name)
-            .ok_or_else(|| ToolError::invalid_input(format!("Unknown tool: {}", name)))?;
+            .ok_or_else(|| ToolError::invalid_input(format!("Unknown tool: {name}")))?;
         entry.call_json(args, ctx).await
     }
 
     /// Dispatch a tool call using JSON arguments, returning both JSON data and formatted text.
     ///
     /// This method enables dual output for MCP and NAPI servers. The text is derived
-    /// from the tool's TextFormat implementation if available, otherwise it falls back
+    /// from the tool's `TextFormat` implementation if available, otherwise it falls back
     /// to pretty-printed JSON.
     pub async fn dispatch_json_formatted(
         &self,
@@ -140,7 +141,7 @@ impl ToolRegistry {
         let entry = self
             .map
             .get(name)
-            .ok_or_else(|| ToolError::invalid_input(format!("Unknown tool: {}", name)))?;
+            .ok_or_else(|| ToolError::invalid_input(format!("Unknown tool: {name}")))?;
         entry.call_json_formatted(args, ctx, text_opts).await
     }
 
@@ -188,8 +189,8 @@ impl ToolRegistry {
     /// Later entries with duplicate names overwrite earlier ones.
     /// This is useful for composing domain-specific registries into
     /// a unified registry.
-    pub fn merge_all(regs: impl IntoIterator<Item = ToolRegistry>) -> ToolRegistry {
-        let mut builder = ToolRegistry::builder();
+    pub fn merge_all(regs: impl IntoIterator<Item = Self>) -> Self {
+        let mut builder = Self::builder();
         for reg in regs {
             for erased in reg.iter_erased() {
                 builder = builder.register_erased(erased);
@@ -214,6 +215,7 @@ impl ToolRegistryBuilder {
     /// The tool's output type must implement [`TextFormat`] for human-readable
     /// formatting. Types can override `fmt_text()` for custom formatting, or
     /// use the default which produces pretty-printed JSON.
+    #[must_use]
     pub fn register<T, C>(mut self, tool: T) -> Self
     where
         T: Tool + Clone + 'static,
@@ -329,6 +331,7 @@ impl ToolRegistryBuilder {
     ///
     /// This enables merging registries by iterating over their erased tools
     /// and re-registering them without needing the concrete tool types.
+    #[must_use]
     pub fn register_erased(mut self, erased: Arc<dyn ErasedTool>) -> Self {
         let name = erased.name().to_string();
         let type_id = erased.type_id();
@@ -385,7 +388,7 @@ mod tests {
             input: Self::Input,
             _ctx: &ToolContext,
         ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-            Box::pin(async move { Ok(format!("Hello, {}!", input)) })
+            Box::pin(async move { Ok(format!("Hello, {input}!")) })
         }
     }
 

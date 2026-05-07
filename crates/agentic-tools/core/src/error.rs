@@ -40,32 +40,32 @@ pub enum ToolError {
 
 impl ToolError {
     /// Create an invalid input error.
-    pub fn invalid_input<S: ToString>(s: S) -> Self {
-        ToolError::InvalidInput(s.to_string())
+    pub fn invalid_input(s: impl Into<String>) -> Self {
+        Self::InvalidInput(s.into())
     }
 
     /// Create an internal error.
-    pub fn internal<S: ToString>(s: S) -> Self {
-        ToolError::Internal(s.to_string())
+    pub fn internal(s: impl Into<String>) -> Self {
+        Self::Internal(s.into())
     }
 
     /// Create an external service error.
-    pub fn external<S: ToString>(s: S) -> Self {
-        ToolError::External(s.to_string())
+    pub fn external(s: impl Into<String>) -> Self {
+        Self::External(s.into())
     }
 
     /// Create a not found error.
-    pub fn not_found<S: ToString>(s: S) -> Self {
-        ToolError::NotFound(s.to_string())
+    pub fn not_found(s: impl Into<String>) -> Self {
+        Self::NotFound(s.into())
     }
 
     /// Create a permission denied error.
-    pub fn permission<S: ToString>(s: S) -> Self {
-        ToolError::Permission(s.to_string())
+    pub fn permission(s: impl Into<String>) -> Self {
+        Self::Permission(s.into())
     }
 
     /// Create a cancelled error.
     pub fn cancelled(reason: Option<String>) -> Self {
-        ToolError::Cancelled { reason }
+        Self::Cancelled { reason }
     }
 }

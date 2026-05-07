@@ -16,7 +16,10 @@ use serde_json::json;
 /// }
 /// ```
 pub fn render_tool(name: &str, description: &str, input_schema: &Schema, strict: bool) -> Value {
-    let schema = serde_json::to_value(input_schema).expect("Schema serialization must succeed");
+    let schema = match serde_json::to_value(input_schema) {
+        Ok(value) => value,
+        Err(error) => panic!("Schema serialization must succeed: {error}"),
+    };
     json!({
         "name": name,
         "description": description,
@@ -30,7 +33,7 @@ mod tests {
     use super::*;
 
     #[derive(schemars::JsonSchema)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct TestInput {
         query: String,
     }

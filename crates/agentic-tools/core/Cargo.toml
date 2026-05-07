@@ -29,6 +29,9 @@ optional = true
 
 [dev-dependencies]
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "lib"
 family = "agentic-tools"

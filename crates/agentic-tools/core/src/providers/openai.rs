@@ -1,10 +1,10 @@
-//! OpenAI function calling schema renderer.
+//! `OpenAI` function calling schema renderer.
 
 use schemars::Schema;
 use serde_json::Value;
 use serde_json::json;
 
-/// Render a tool as an OpenAI function definition.
+/// Render a tool as an `OpenAI` function definition.
 ///
 /// Output format:
 /// ```json
@@ -19,7 +19,10 @@ use serde_json::json;
 /// }
 /// ```
 pub fn render_function(name: &str, description: &str, parameters: &Schema, strict: bool) -> Value {
-    let params = serde_json::to_value(parameters).expect("Schema serialization must succeed");
+    let params = match serde_json::to_value(parameters) {
+        Ok(value) => value,
+        Err(error) => panic!("Schema serialization must succeed: {error}"),
+    };
     json!({
         "type": "function",
         "function": {
@@ -36,7 +39,7 @@ mod tests {
     use super::*;
 
     #[derive(schemars::JsonSchema)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct TestInput {
         message: String,
     }
