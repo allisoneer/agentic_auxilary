@@ -1,0 +1,46 @@
+crates/linear/tools/src/models.rs
+  s_333574ec928424::t_42d2b58f3934f6 209
+  s_333574ec928424::t_329ed3902eb31a 214,217,220,223,226,229
+  s_333574ec928424::t_adce2f80546355 282-283,462-466,468,471
+crates/linear/tools/src/tools.rs
+  s_333574ec928424::t_329ed3902eb31a 117,162,239,288,332,377,467,516,578,607
+  s_333574ec928424::t_4c5509fae4b67a 97,157,224,283,327,372,449,511,567,590-597
+crates/linear/tools/src/lib.rs
+  s_333574ec928424::t_4a9a9bab303486 64-65,93,105,403,978,1065
+  s_333574ec928424::t_e7e2afca980232 342-349
+  s_333574ec928424::t_7a471310a54a46 747-752,754-763,766-770,773-774,805-810,812-821,824-828,831-832
+  ai_agent 350
+  s_333574ec928424::t_0fafcefadc54d1 764-765,822-823
+crates/linear/tools/tests/live.rs
+  s_333574ec928424::t_f028ad36bd75f3 10-13,30
+crates/linear/tools/src/test_support.rs
+  s_333574ec928424::t_c3476178e141bf 85-92
+  s_333574ec928424::t_e7e2afca980232 318,327-328
+  s_333574ec928424::t_d381f768a39977 196,228,255,266,277,289,304
+  s_333574ec928424::t_329ed3902eb31a 162,173,184,190
+  s_333574ec928424::t_5c994169bb5344 163,174,185,191,197,203
+  s_333574ec928424::t_0bff6e38855ecc 72
+  s_333574ec928424::t_b957a95d741612 232,250,256,267,278,293,308
+  s_333574ec928424::t_53c57b19c56211 330,356,366
+crates/linear/tools/tests/integration.rs
+  s_333574ec928424::t_d381f768a39977 662,719,877,914,951,1030
+  s_333574ec928424::t_2df29036e15d42 1091,1105
+  s_333574ec928424::t_05537d60ff09a4 41,81,115,140,216,265,314,357,405,447,473,503,617,705,988
+  s_333574ec928424::t_e7e2afca980232 795-796,839,942,944
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "74be918e7790ec6399a151df5a3c6198dc674a61",
+  "prompts": {},
+  "sessions": {
+    "s_333574ec928424": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
