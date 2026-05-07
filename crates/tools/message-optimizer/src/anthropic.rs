@@ -18,12 +18,15 @@ pub const OPTIMIZER_MODEL: &str = "claude-sonnet-4-6";
 pub const TOOL_NAME: &str = "emit_optimized_prompt";
 const MAX_TOKENS: u32 = 4_096;
 
-pub(crate) trait OptimizerBackend {
-    async fn optimize(&self, user_prompt: String) -> Result<ModelOutput, MessageOptimizerError>;
+pub trait OptimizerBackend: Send + Sync {
+    fn optimize(
+        &self,
+        user_prompt: String,
+    ) -> impl Future<Output = Result<ModelOutput, MessageOptimizerError>> + Send;
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct AnthropicOptimizer {
+pub struct AnthropicOptimizer {
     client: Client<AnthropicConfig>,
 }
 
@@ -68,7 +71,7 @@ impl OptimizerBackend for AnthropicOptimizer {
 }
 
 #[must_use]
-pub(crate) fn optimizer_tool() -> Tool {
+pub fn optimizer_tool() -> Tool {
     Tool {
         name: TOOL_NAME.to_string(),
         description: Some("Return the optimized prompts as strict JSON".to_string()),
@@ -86,7 +89,7 @@ pub(crate) fn optimizer_tool() -> Tool {
     }
 }
 
-pub(crate) fn extract_model_output(
+pub fn extract_model_output(
     response: &MessagesCreateResponse,
 ) -> Result<ModelOutput, MessageOptimizerError> {
     let mut tool_uses = response.content.iter().filter_map(|block| match block {
@@ -113,9 +116,7 @@ pub(crate) fn extract_model_output(
     parse_model_output(input)
 }
 
-pub(crate) fn parse_model_output(
-    input: &serde_json::Value,
-) -> Result<ModelOutput, MessageOptimizerError> {
+pub fn parse_model_output(input: &serde_json::Value) -> Result<ModelOutput, MessageOptimizerError> {
     let output: ModelOutput = serde_json::from_value(input.clone()).map_err(|error| {
         MessageOptimizerError::OutputContract(format!("invalid tool payload: {error}"))
     })?;
