@@ -98,7 +98,7 @@ pub struct IssueConnection {
     pub page_info: PageInfo,
 }
 
-/// IssueSearchResult from searchIssues query - has issue fields directly.
+/// `IssueSearchResult` from searchIssues query - has issue fields directly.
 /// NOTE: Duplicates subset of Issue fields; keep in sync.
 /// Nullability differs (e.g., state is non-null here).
 #[derive(cynic::QueryFragment, Debug, Clone)]

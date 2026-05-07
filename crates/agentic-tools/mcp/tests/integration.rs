@@ -1,6 +1,6 @@
 //! Integration tests for MCP server functionality.
 //!
-//! These tests verify the RegistryServer logic without requiring
+//! These tests verify the `RegistryServer` logic without requiring
 //! a full MCP transport layer.
 
 use agentic_tools_core::TextFormat;
@@ -186,7 +186,7 @@ fn test_server_output_modes() {
     let registry = create_test_registry();
 
     // Text mode (default)
-    let server_text = RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Text);
+    let server_text = RegistryServer::new(Arc::clone(&registry)).with_output_mode(OutputMode::Text);
     assert!(matches!(server_text.output_mode(), OutputMode::Text));
 
     // Structured mode
@@ -323,7 +323,7 @@ async fn test_registry_subset_dispatch() {
 #[test]
 fn test_empty_registry() {
     let registry = Arc::new(ToolRegistry::builder().finish());
-    let server = RegistryServer::new(registry.clone());
+    let server = RegistryServer::new(Arc::clone(&registry));
 
     assert!(registry.is_empty());
     assert_eq!(server.name(), "agentic-tools");
@@ -433,8 +433,7 @@ async fn test_rmcp_cancellation_flips_tool_context_mid_call() -> Result<(), Stri
     let (server_transport, client_transport) = tokio::io::duplex(4096);
     let (running, client) = tokio::try_join!(
         async {
-            server
-                .clone()
+            Arc::clone(&server)
                 .serve(server_transport)
                 .await
                 .map_err(|err| err.to_string())

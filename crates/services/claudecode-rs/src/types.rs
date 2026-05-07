@@ -17,9 +17,9 @@ pub enum Model {
 impl fmt::Display for Model {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Model::Sonnet => write!(f, "sonnet"),
-            Model::Opus => write!(f, "opus"),
-            Model::Haiku => write!(f, "haiku"),
+            Self::Sonnet => write!(f, "sonnet"),
+            Self::Opus => write!(f, "opus"),
+            Self::Haiku => write!(f, "haiku"),
         }
     }
 }
@@ -35,9 +35,9 @@ pub enum OutputFormat {
 impl fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OutputFormat::Text => write!(f, "text"),
-            OutputFormat::Json => write!(f, "json"),
-            OutputFormat::StreamingJson => write!(f, "stream-json"),
+            Self::Text => write!(f, "text"),
+            Self::Json => write!(f, "json"),
+            Self::StreamingJson => write!(f, "stream-json"),
         }
     }
 }
@@ -55,13 +55,13 @@ pub enum PermissionMode {
 impl fmt::Display for PermissionMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            PermissionMode::Default => "default",
-            PermissionMode::AcceptEdits => "acceptEdits",
-            PermissionMode::DontAsk => "dontAsk",
-            PermissionMode::Plan => "plan",
-            PermissionMode::BypassPermissions => "bypassPermissions",
+            Self::Default => "default",
+            Self::AcceptEdits => "acceptEdits",
+            Self::DontAsk => "dontAsk",
+            Self::Plan => "plan",
+            Self::BypassPermissions => "bypassPermissions",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -75,8 +75,8 @@ pub enum InputFormat {
 impl fmt::Display for InputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InputFormat::Text => write!(f, "text"),
-            InputFormat::StreamJson => write!(f, "stream-json"),
+            Self::Text => write!(f, "text"),
+            Self::StreamJson => write!(f, "stream-json"),
         }
     }
 }
@@ -280,18 +280,18 @@ pub struct ErrorEvent {
 // Helper methods for Content
 impl Content {
     pub fn text(text: impl Into<String>) -> Self {
-        Content::Text { text: text.into() }
+        Self::Text { text: text.into() }
     }
 
     pub fn get_text(&self) -> Option<&str> {
         match self {
-            Content::Text { text } => Some(text.as_str()),
+            Self::Text { text } => Some(text.as_str()),
             _ => None,
         }
     }
 
     pub fn is_text(&self) -> bool {
-        matches!(self, Content::Text { .. })
+        matches!(self, Self::Text { .. })
     }
 }
 

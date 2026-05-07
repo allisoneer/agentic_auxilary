@@ -1,8 +1,8 @@
 //! MCP tool schema renderer.
 
 use schemars::Schema;
+use serde_json::Map;
 use serde_json::Value;
-use serde_json::json;
 
 /// Render a tool as an MCP tool definition.
 ///
@@ -21,21 +21,25 @@ pub fn render_tool(
     input_schema: &Schema,
     output_schema: Option<&Schema>,
 ) -> Value {
-    let inp = serde_json::to_value(input_schema).expect("Schema serialization must succeed");
-    let mut obj = json!({
-        "name": name,
-        "description": description,
-        "inputSchema": inp,
-    });
+    let inp = match serde_json::to_value(input_schema) {
+        Ok(value) => value,
+        Err(error) => panic!("Schema serialization must succeed: {error}"),
+    };
+    let mut obj = Map::from_iter([
+        ("name".into(), Value::String(name.to_string())),
+        ("description".into(), Value::String(description.to_string())),
+        ("inputSchema".into(), inp),
+    ]);
 
     if let Some(out) = output_schema {
-        let out_val = serde_json::to_value(out).expect("Schema serialization must succeed");
-        obj.as_object_mut()
-            .unwrap()
-            .insert("outputSchema".into(), out_val);
+        let out_val = match serde_json::to_value(out) {
+            Ok(value) => value,
+            Err(error) => panic!("Schema serialization must succeed: {error}"),
+        };
+        obj.insert("outputSchema".into(), out_val);
     }
 
-    obj
+    Value::Object(obj)
 }
 
 #[cfg(test)]
@@ -43,13 +47,13 @@ mod tests {
     use super::*;
 
     #[derive(schemars::JsonSchema)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct TestInput {
         path: String,
     }
 
     #[derive(schemars::JsonSchema)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct TestOutput {
         content: String,
     }

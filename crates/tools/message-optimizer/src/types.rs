@@ -17,7 +17,7 @@ pub struct OptimizedPrompt {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ModelOutput {
+pub struct ModelOutput {
     pub system_prompt: String,
     pub user_prompt: String,
 }

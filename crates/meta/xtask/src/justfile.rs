@@ -24,11 +24,11 @@ fn get_integration(pkg: &Package, key: &str) -> bool {
         .get("repo")
         .and_then(|r| r.get("integrations"))
         .and_then(|i| i.get(key))
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false)
 }
 
-/// Render MCP_SERVERS justfile variable from workspace packages that are MCP server apps.
+/// Render `MCP_SERVERS` justfile variable from workspace packages that are MCP server apps.
 ///
 /// Filters for packages with:
 /// - `metadata.repo.role = "app"` (binary applications)
@@ -50,7 +50,7 @@ fn render_mcp_servers(metadata: &Metadata) -> String {
     let joined = servers.join(" ");
 
     // Include blank lines around the variable for justfile formatter compatibility
-    format!("\nMCP_SERVERS := \"{}\"\n", joined)
+    format!("\nMCP_SERVERS := \"{joined}\"\n")
 }
 
 /// Sync root justfile autogen blocks.
@@ -66,11 +66,11 @@ pub fn sync_justfile(path: &str, metadata: &Metadata, dry_run: bool, check: bool
         if check {
             anyhow::bail!("justfile MCP_SERVERS is out of date; run `cargo run -p xtask -- sync`");
         }
-        if !dry_run {
+        if dry_run {
+            eprintln!("[sync] Would update {path} (dry-run)");
+        } else {
             fs::write(path, &updated).with_context(|| format!("Failed to write {path}"))?;
             eprintln!("[sync] Updated {path}");
-        } else {
-            eprintln!("[sync] Would update {path} (dry-run)");
         }
     }
 

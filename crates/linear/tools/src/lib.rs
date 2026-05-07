@@ -13,8 +13,44 @@ use anyhow::Result;
 use cynic::MutationBuilder;
 use cynic::QueryBuilder;
 use http::LinearClient;
+use linear_queries::CommentCreateArguments;
+use linear_queries::CommentCreateInput;
+use linear_queries::CommentCreateMutation;
+use linear_queries::DateComparator;
+use linear_queries::IdComparator;
+use linear_queries::IssueArchiveArguments;
+use linear_queries::IssueArchiveMutation;
+use linear_queries::IssueByIdArguments;
+use linear_queries::IssueByIdQuery;
+use linear_queries::IssueCommentsArguments;
+use linear_queries::IssueCommentsQuery;
+use linear_queries::IssueCreateArguments;
+use linear_queries::IssueCreateInput;
+use linear_queries::IssueCreateMutation;
+use linear_queries::IssueFilter;
+use linear_queries::IssueRelationCreateArguments;
+use linear_queries::IssueRelationCreateInput;
+use linear_queries::IssueRelationCreateMutation;
+use linear_queries::IssueRelationDeleteArguments;
+use linear_queries::IssueRelationDeleteMutation;
+use linear_queries::IssueRelationType;
+use linear_queries::IssueRelationsArguments;
+use linear_queries::IssueRelationsQuery;
+use linear_queries::IssueUpdateArguments;
+use linear_queries::IssueUpdateInput;
+use linear_queries::IssueUpdateMutation;
+use linear_queries::IssuesArguments;
+use linear_queries::IssuesQuery;
+use linear_queries::NullableNumberComparator;
+use linear_queries::NullableProjectFilter;
+use linear_queries::NullableUserFilter;
+use linear_queries::NumberComparator;
+use linear_queries::SearchIssuesArguments;
+use linear_queries::SearchIssuesQuery;
+use linear_queries::StringComparator;
+use linear_queries::TeamFilter;
+use linear_queries::WorkflowStateFilter;
 use linear_queries::scalars::DateTimeOrDuration;
-use linear_queries::*;
 use regex::Regex;
 use std::sync::Arc;
 
@@ -22,10 +58,11 @@ use std::sync::Arc;
 pub use tools::build_registry;
 
 /// Parse identifier "ENG-245" from plain text or URL; normalize to uppercase.
-/// Returns (team_key, number) if a valid identifier is found.
+/// Returns (`team_key`, number) if a valid identifier is found.
 fn parse_identifier(input: &str) -> Option<(String, i32)> {
     let upper = input.to_uppercase();
-    let re = Regex::new(r"([A-Z]{2,10})-(\d{1,10})").unwrap();
+    #[expect(clippy::expect_used, reason = "regex literal is valid by construction")]
+    let re = Regex::new(r"([A-Z]{2,10})-(\d{1,10})").expect("valid issue identifier regex");
     if let Some(caps) = re.captures(&upper) {
         let key = caps.get(1)?.as_str().to_string();
         let num_str = caps.get(2)?.as_str();
@@ -53,10 +90,10 @@ impl LinearTools {
         }
     }
 
-    fn resolve_issue_id(&self, input: &str) -> IssueIdentifier {
+    fn resolve_issue_id(input: &str) -> IssueIdentifier {
         // Try to parse as identifier (handles lowercase and URLs)
         if let Some((key, number)) = parse_identifier(input) {
-            return IssueIdentifier::Identifier(format!("{}-{}", key, number));
+            return IssueIdentifier::Identifier(format!("{key}-{number}"));
         }
         // Fallback: treat as ID/UUID
         IssueIdentifier::Id(input.to_string())
@@ -65,11 +102,11 @@ impl LinearTools {
     /// Resolve an issue identifier (UUID, ENG-245, or URL) to a UUID.
     /// For identifiers, queries Linear to find the matching issue.
     async fn resolve_to_issue_id(&self, client: &LinearClient, input: &str) -> Result<String> {
-        match self.resolve_issue_id(input) {
+        match Self::resolve_issue_id(input) {
             IssueIdentifier::Id(id) => Ok(id),
             IssueIdentifier::Identifier(ident) => {
                 let (team_key, number) = parse_identifier(&ident)
-                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {} not found", ident))?;
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
                 let filter = IssueFilter {
                     team: Some(TeamFilter {
                         key: Some(StringComparator {
@@ -79,7 +116,7 @@ impl LinearTools {
                         ..Default::default()
                     }),
                     number: Some(NumberComparator {
-                        eq: Some(number as f64),
+                        eq: Some(f64::from(number)),
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -96,7 +133,7 @@ impl LinearTools {
                     .nodes
                     .into_iter()
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {} not found", ident))?;
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
                 Ok(issue.id.inner().to_string())
             }
         }
@@ -221,7 +258,7 @@ impl From<linear_queries::IssueSearchResult> for models::IssueSummary {
 // Removed universal-tool-core macros; Tool impls live in tools.rs
 impl LinearTools {
     /// Search Linear issues with full-text search or filters
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn search_issues(
         &self,
         query: Option<String>,
@@ -244,14 +281,11 @@ impl LinearTools {
 
         // Build filters (no title filter - full-text search handles query)
         let mut filter = IssueFilter::default();
-        let mut has_filter = false;
-
         if let Some(p) = priority {
             filter.priority = Some(NullableNumberComparator {
-                eq: Some(p as f64),
+                eq: Some(f64::from(p)),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if let Some(id) = state_id {
             filter.state = Some(WorkflowStateFilter {
@@ -260,7 +294,6 @@ impl LinearTools {
                 }),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if let Some(id) = assignee_id {
             filter.assignee = Some(NullableUserFilter {
@@ -268,7 +301,6 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
-            has_filter = true;
         }
         if let Some(id) = creator_id {
             filter.creator = Some(NullableUserFilter {
@@ -276,7 +308,6 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
-            has_filter = true;
         }
         if let Some(id) = team_id {
             filter.team = Some(TeamFilter {
@@ -285,7 +316,6 @@ impl LinearTools {
                 }),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if let Some(id) = project_id {
             filter.project = Some(NullableProjectFilter {
@@ -293,7 +323,6 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
-            has_filter = true;
         }
         if created_after.is_some() || created_before.is_some() {
             filter.created_at = Some(DateComparator {
@@ -301,7 +330,6 @@ impl LinearTools {
                 lte: created_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if updated_after.is_some() || updated_before.is_some() {
             filter.updated_at = Some(DateComparator {
@@ -309,14 +337,39 @@ impl LinearTools {
                 lte: updated_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
-            has_filter = true;
         }
 
-        let filter_opt = if has_filter { Some(filter) } else { None };
+        let filter_opt = (filter.priority.is_some()
+            || filter.state.is_some()
+            || filter.assignee.is_some()
+            || filter.creator.is_some()
+            || filter.team.is_some()
+            || filter.project.is_some()
+            || filter.created_at.is_some()
+            || filter.updated_at.is_some())
+        .then_some(filter);
         let page_size = Some(first.unwrap_or(50).clamp(1, 100));
-        let q_trimmed = query.as_ref().map(|s| s.trim()).unwrap_or("");
+        let q_trimmed = query.as_ref().map_or("", |s| s.trim());
 
-        if !q_trimmed.is_empty() {
+        if q_trimmed.is_empty() {
+            // Filters-only path: issues query
+            let op = IssuesQuery::build(IssuesArguments {
+                first: page_size,
+                after,
+                filter: filter_opt,
+            });
+
+            let resp = client.run(op).await?;
+            let data = http::extract_data(resp)?;
+
+            let issues = data.issues.nodes.into_iter().map(Into::into).collect();
+
+            Ok(models::SearchResult {
+                issues,
+                has_next_page: data.issues.page_info.has_next_page,
+                end_cursor: data.issues.page_info.end_cursor,
+            })
+        } else {
             // Full-text search path: searchIssues
             let op = SearchIssuesQuery::build(SearchIssuesArguments {
                 term: q_trimmed.to_string(),
@@ -340,24 +393,6 @@ impl LinearTools {
                 has_next_page: data.search_issues.page_info.has_next_page,
                 end_cursor: data.search_issues.page_info.end_cursor,
             })
-        } else {
-            // Filters-only path: issues query
-            let op = IssuesQuery::build(IssuesArguments {
-                first: page_size,
-                after,
-                filter: filter_opt,
-            });
-
-            let resp = client.run(op).await?;
-            let data = http::extract_data(resp)?;
-
-            let issues = data.issues.nodes.into_iter().map(Into::into).collect();
-
-            Ok(models::SearchResult {
-                issues,
-                has_next_page: data.issues.page_info.has_next_page,
-                end_cursor: data.issues.page_info.end_cursor,
-            })
         }
     }
 
@@ -365,7 +400,7 @@ impl LinearTools {
     pub async fn read_issue(&self, issue: String) -> Result<models::IssueDetails> {
         let client = LinearClient::new(self.api_key.clone())
             .context("internal: failed to create Linear client")?;
-        let resolved = self.resolve_issue_id(&issue);
+        let resolved = Self::resolve_issue_id(&issue);
 
         let issue_data = match resolved {
             IssueIdentifier::Id(id) => {
@@ -378,7 +413,7 @@ impl LinearTools {
             IssueIdentifier::Identifier(ident) => {
                 // Use server-side filtering by team.key + number
                 let (team_key, number) = parse_identifier(&ident)
-                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {} not found", ident))?;
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
                 let filter = IssueFilter {
                     team: Some(TeamFilter {
                         key: Some(StringComparator {
@@ -388,7 +423,7 @@ impl LinearTools {
                         ..Default::default()
                     }),
                     number: Some(NumberComparator {
-                        eq: Some(number as f64),
+                        eq: Some(f64::from(number)),
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -404,7 +439,7 @@ impl LinearTools {
                     .nodes
                     .into_iter()
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {} not found", ident))?
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?
             }
         };
 
@@ -432,7 +467,7 @@ impl LinearTools {
     }
 
     /// Create a new Linear issue
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn create_issue(
         &self,
         team_id: String,
@@ -481,7 +516,7 @@ impl LinearTools {
     }
 
     /// Update an existing Linear issue
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn update_issue(
         &self,
         issue: String,
@@ -709,25 +744,34 @@ impl LinearTools {
                 })
             }
             models::MetadataKind::WorkflowStates => {
-                let mut filter = linear_queries::WorkflowStateFilter::default();
-                let mut has_filter = false;
-                if let Some(s) = search {
-                    filter.name = Some(StringComparator {
-                        contains_ignore_case: Some(s),
-                        ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                if let Some(tid) = team_id {
-                    filter.team = Some(linear_queries::TeamFilter {
-                        id: Some(linear_queries::IdComparator {
-                            eq: Some(cynic::Id::new(tid)),
+                let filter_opt = if let Some(s) = search {
+                    let mut filter = linear_queries::WorkflowStateFilter {
+                        name: Some(StringComparator {
+                            contains_ignore_case: Some(s),
+                            ..Default::default()
                         }),
                         ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                let filter_opt = if has_filter { Some(filter) } else { None };
+                    };
+                    if let Some(tid) = team_id {
+                        filter.team = Some(linear_queries::TeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        });
+                    }
+                    Some(filter)
+                } else {
+                    team_id.map(|tid| linear_queries::WorkflowStateFilter {
+                        team: Some(linear_queries::TeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                };
                 let op = linear_queries::WorkflowStatesQuery::build(
                     linear_queries::WorkflowStatesArguments {
                         first,
@@ -758,25 +802,34 @@ impl LinearTools {
                 })
             }
             models::MetadataKind::Labels => {
-                let mut filter = linear_queries::IssueLabelFilter::default();
-                let mut has_filter = false;
-                if let Some(s) = search {
-                    filter.name = Some(StringComparator {
-                        contains_ignore_case: Some(s),
-                        ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                if let Some(tid) = team_id {
-                    filter.team = Some(linear_queries::NullableTeamFilter {
-                        id: Some(linear_queries::IdComparator {
-                            eq: Some(cynic::Id::new(tid)),
+                let filter_opt = if let Some(s) = search {
+                    let mut filter = linear_queries::IssueLabelFilter {
+                        name: Some(StringComparator {
+                            contains_ignore_case: Some(s),
+                            ..Default::default()
                         }),
                         ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                let filter_opt = if has_filter { Some(filter) } else { None };
+                    };
+                    if let Some(tid) = team_id {
+                        filter.team = Some(linear_queries::NullableTeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        });
+                    }
+                    Some(filter)
+                } else {
+                    team_id.map(|tid| linear_queries::IssueLabelFilter {
+                        team: Some(linear_queries::NullableTeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                };
                 let op =
                     linear_queries::IssueLabelsQuery::build(linear_queries::IssueLabelsArguments {
                         first,
@@ -820,79 +873,75 @@ impl LinearTools {
         let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
         let related_issue_id = self.resolve_to_issue_id(&client, &related_issue).await?;
 
-        match relation_type {
-            Some(rel_type) => {
-                // Create relation
-                let relation_type = match rel_type.to_lowercase().as_str() {
-                    "blocks" => IssueRelationType::Blocks,
-                    "duplicate" => IssueRelationType::Duplicate,
-                    "related" => IssueRelationType::Related,
-                    other => anyhow::bail!(
-                        "Invalid relation type: {}. Must be one of: blocks, duplicate, related",
-                        other
-                    ),
-                };
+        if let Some(rel_type) = relation_type {
+            // Create relation
+            let relation_type = match rel_type.to_lowercase().as_str() {
+                "blocks" => IssueRelationType::Blocks,
+                "duplicate" => IssueRelationType::Duplicate,
+                "related" => IssueRelationType::Related,
+                other => anyhow::bail!(
+                    "Invalid relation type: {other}. Must be one of: blocks, duplicate, related"
+                ),
+            };
 
-                let input = IssueRelationCreateInput {
-                    issue_id,
-                    related_issue_id,
-                    relation_type,
-                };
+            let input = IssueRelationCreateInput {
+                issue_id,
+                related_issue_id,
+                relation_type,
+            };
 
-                let op = IssueRelationCreateMutation::build(IssueRelationCreateArguments { input });
-                let resp = client.run(op).await?;
-                let data = http::extract_data(resp)?;
+            let op = IssueRelationCreateMutation::build(IssueRelationCreateArguments { input });
+            let resp = client.run(op).await?;
+            let data = http::extract_data(resp)?;
 
-                Ok(models::SetRelationResult {
-                    success: data.issue_relation_create.success,
-                    action: "created".to_string(),
-                })
-            }
-            None => {
-                // Remove relation - need to find it first
-                let op = IssueRelationsQuery::build(IssueRelationsArguments { id: issue_id });
-                let resp = client.run(op).await?;
-                let data = http::extract_data(resp)?;
+            Ok(models::SetRelationResult {
+                success: data.issue_relation_create.success,
+                action: "created".to_string(),
+            })
+        } else {
+            // Remove relation - need to find it first
+            let op = IssueRelationsQuery::build(IssueRelationsArguments { id: issue_id });
+            let resp = client.run(op).await?;
+            let data = http::extract_data(resp)?;
 
-                let issue_with_relations = data
-                    .issue
-                    .ok_or_else(|| anyhow::anyhow!("not found: Issue not found"))?;
+            let issue_with_relations = data
+                .issue
+                .ok_or_else(|| anyhow::anyhow!("not found: Issue not found"))?;
 
-                // Search in both relations and inverse_relations
-                let relation_id = issue_with_relations
-                    .relations
-                    .nodes
-                    .iter()
-                    .find(|r| r.related_issue.id.inner() == related_issue_id)
-                    .map(|r| r.id.inner().to_string())
-                    .or_else(|| {
-                        issue_with_relations
-                            .inverse_relations
-                            .nodes
-                            .iter()
-                            .find(|r| r.related_issue.id.inner() == related_issue_id)
-                            .map(|r| r.id.inner().to_string())
-                    });
+            // Search in both relations and inverse_relations
+            let relation_id = issue_with_relations
+                .relations
+                .nodes
+                .iter()
+                .find(|r| r.related_issue.id.inner() == related_issue_id)
+                .map(|r| r.id.inner().to_string())
+                .or_else(|| {
+                    issue_with_relations
+                        .inverse_relations
+                        .nodes
+                        .iter()
+                        .find(|r| r.related_issue.id.inner() == related_issue_id)
+                        .map(|r| r.id.inner().to_string())
+                });
 
-                match relation_id {
-                    Some(id) => {
-                        let op =
-                            IssueRelationDeleteMutation::build(IssueRelationDeleteArguments { id });
-                        let resp = client.run(op).await?;
-                        let data = http::extract_data(resp)?;
+            match relation_id {
+                Some(id) => {
+                    let op =
+                        IssueRelationDeleteMutation::build(IssueRelationDeleteArguments { id });
+                    let resp = client.run(op).await?;
+                    let data = http::extract_data(resp)?;
 
-                        Ok(models::SetRelationResult {
-                            success: data.issue_relation_delete.success,
-                            action: "removed".to_string(),
-                        })
-                    }
-                    None => {
-                        // No relation found - idempotent success
-                        Ok(models::SetRelationResult {
-                            success: true,
-                            action: "no_change".to_string(),
-                        })
-                    }
+                    Ok(models::SetRelationResult {
+                        success: data.issue_relation_delete.success,
+                        action: "removed".to_string(),
+                    })
+                }
+                None => {
+                    // No relation found - idempotent success
+                    Ok(models::SetRelationResult {
+                        success: true,
+                        action: "no_change".to_string(),
+                    })
                 }
             }
         }
@@ -907,7 +956,7 @@ impl LinearTools {
         let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
 
         // Cache key includes page size for correctness
-        let cache_key = format!("{}|{}", issue_id, COMMENTS_PAGE_SIZE);
+        let cache_key = format!("{issue_id}|{COMMENTS_PAGE_SIZE}");
 
         // Sweep expired entries
         self.comments_cache.sweep_expired();
@@ -926,7 +975,7 @@ impl LinearTools {
 
         if needs_fetch {
             // Fetch all comments from Linear API
-            let (identifier, all_comments) = self.fetch_all_comments(&client, &issue_id).await?;
+            let (identifier, all_comments) = Self::fetch_all_comments(&client, &issue_id).await?;
             issue_identifier = identifier.clone();
 
             // Reset cache with fresh data (stores canonical identifier)
@@ -966,7 +1015,6 @@ impl LinearTools {
     }
 
     async fn fetch_all_comments(
-        &self,
         client: &LinearClient,
         issue_id: &str,
     ) -> Result<(String, Vec<models::CommentSummary>)> {
@@ -986,7 +1034,7 @@ impl LinearTools {
 
             let issue = data
                 .issue
-                .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", issue_id))?;
+                .ok_or_else(|| anyhow::anyhow!("Issue not found: {issue_id}"))?;
 
             if identifier.is_none() {
                 identifier = Some(issue.identifier.clone());
@@ -1014,19 +1062,16 @@ impl LinearTools {
                 return Ok((identifier.unwrap_or_default(), all_comments));
             }
 
-            cursor = issue.comments.page_info.end_cursor.clone();
+            cursor.clone_from(&issue.comments.page_info.end_cursor);
             if cursor.is_none() {
                 return Err(anyhow::anyhow!(
-                    "Issue comments pagination for {} reported has_next_page=true without end_cursor",
-                    issue_id
+                    "Issue comments pagination for {issue_id} reported has_next_page=true without end_cursor"
                 ));
             }
 
             if page + 1 == ISSUE_COMMENTS_MAX_PAGES {
                 return Err(anyhow::anyhow!(
-                    "Issue comments pagination for {} exceeded {} pages",
-                    issue_id,
-                    ISSUE_COMMENTS_MAX_PAGES
+                    "Issue comments pagination for {issue_id} exceeded {ISSUE_COMMENTS_MAX_PAGES} pages"
                 ));
             }
         }

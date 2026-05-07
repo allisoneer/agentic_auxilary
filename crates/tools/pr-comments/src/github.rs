@@ -7,6 +7,7 @@ use crate::models::Thread;
 use anyhow::Result;
 use octocrab::Octocrab;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 pub struct GitHubClient {
@@ -30,7 +31,7 @@ impl GitHubClient {
 
         let client = builder
             .build()
-            .map_err(|e| anyhow::anyhow!("Failed to create GitHub client: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to create GitHub client: {e:?}"))?;
 
         Ok(Self {
             client,
@@ -49,12 +50,9 @@ impl GitHubClient {
             .send()
             .await
             .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to list open pull requests for {}/{}: {:?}",
-                    self.owner,
-                    self.repo,
-                    e
-                )
+                let owner = self.owner.as_str();
+                let repo = self.repo.as_str();
+                anyhow::anyhow!("Failed to list open pull requests for {owner}/{repo}: {e:?}")
             })?;
 
         for pr in pulls {
@@ -84,13 +82,11 @@ impl GitHubClient {
         let include_replies = include_replies.unwrap_or(true);
 
         // Preload resolution map only if filtering resolved
-        let resolution_map = if !include_resolved {
-            Some(self.get_review_thread_resolution_status(pr_number).await?)
-        } else {
+        let resolution_map = if include_resolved {
             None
+        } else {
+            Some(self.get_review_thread_resolution_status(pr_number).await?)
         };
-
-        use std::collections::HashSet;
 
         let mut results: Vec<ReviewComment> = Vec::new();
         let mut passing_parents: HashSet<u64> = HashSet::new(); // author-filter passing top-levels
@@ -118,11 +114,7 @@ impl GitHubClient {
                 .send()
                 .await
                 .map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to fetch review comments for PR #{}: {:?}",
-                        pr_number,
-                        e
-                    )
+                    anyhow::anyhow!("Failed to fetch review comments for PR #{pr_number}: {e:?}")
                 })?;
 
             if response.items.is_empty() {
@@ -151,18 +143,16 @@ impl GitHubClient {
                 // Filter 3: Author (thread-scoped) - unchanged semantics
                 let mut keep = true;
                 if let Some(author_login) = author {
-                    if !is_reply {
+                    if is_reply {
+                        // Replies pass author filter iff their parent passed.
+                        keep = parent_id.is_some_and(|pid| passing_parents.contains(&pid));
+                    } else {
                         keep = c.user == author_login;
                         if keep {
                             // NOTE: This records that the parent passed author filter.
                             // It does NOT mean it was included in results.
                             passing_parents.insert(c.id);
                         }
-                    } else {
-                        // Replies pass author filter iff their parent passed.
-                        keep = parent_id
-                            .map(|pid| passing_parents.contains(&pid))
-                            .unwrap_or(false);
                     }
                 }
                 if !keep {
@@ -240,14 +230,10 @@ impl GitHubClient {
 
     pub async fn list_prs(&self, state: Option<String>) -> Result<Vec<PrSummary>> {
         let state = match state.as_deref() {
-            Some("open") => octocrab::params::State::Open,
             Some("closed") => octocrab::params::State::Closed,
             Some("all") => octocrab::params::State::All,
-            None => octocrab::params::State::Open,
-            _ => anyhow::bail!(
-                "Invalid state: {}. Use 'open', 'closed', or 'all'",
-                state.unwrap()
-            ),
+            Some("open") | None => octocrab::params::State::Open,
+            Some(other) => anyhow::bail!("Invalid state: {other}. Use 'open', 'closed', or 'all'"),
         };
 
         let mut prs = Vec::new();
@@ -264,12 +250,9 @@ impl GitHubClient {
                 .send()
                 .await
                 .map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to list pull requests for {}/{}: {:?}",
-                        self.owner,
-                        self.repo,
-                        e
-                    )
+                    let owner = self.owner.as_str();
+                    let repo = self.repo.as_str();
+                    anyhow::anyhow!("Failed to list pull requests for {owner}/{repo}: {e:?}")
                 })?;
 
             if pulls.items.is_empty() {
@@ -279,14 +262,14 @@ impl GitHubClient {
             prs.extend(pulls.items.into_iter().map(|pr| PrSummary {
                 number: pr.number,
                 title: pr.title.unwrap_or_default(),
-                author: pr.user.map(|u| u.login).unwrap_or_default(),
+                author: pr.user.map_or_else(String::new, |u| u.login),
                 state: if pr.state == Some(octocrab::models::IssueState::Open) {
                     "open".to_string()
                 } else {
                     "closed".to_string()
                 },
-                created_at: pr.created_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
-                updated_at: pr.updated_at.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
+                created_at: pr.created_at.map_or_else(String::new, |dt| dt.to_rfc3339()),
+                updated_at: pr.updated_at.map_or_else(String::new, |dt| dt.to_rfc3339()),
                 comment_count: pr.comments.unwrap_or(0) as u32,
                 review_comment_count: pr.review_comments.unwrap_or(0) as u32,
             }));
@@ -301,7 +284,7 @@ impl GitHubClient {
         &self,
         pr_number: u64,
     ) -> Result<HashMap<u64, bool>> {
-        let query = r#"
+        let query = r"
             query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
                 repository(owner: $owner, name: $repo) {
                     pullRequest(number: $number) {
@@ -324,7 +307,7 @@ impl GitHubClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let mut comment_resolution_map = HashMap::new();
         let mut cursor: Option<String> = None;
@@ -344,19 +327,17 @@ impl GitHubClient {
                     "variables": variables,
                 }))
                 .await
-                .map_err(|e| anyhow::anyhow!("GraphQL query failed: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("GraphQL query failed: {e}"))?;
 
             if let Some(errors) = response.errors
                 && !errors.is_empty()
             {
-                return Err(anyhow::anyhow!(
-                    "GraphQL errors: {}",
-                    errors
-                        .iter()
-                        .map(|e| e.message.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ));
+                let messages = errors
+                    .iter()
+                    .map(|e| e.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(anyhow::anyhow!("GraphQL errors: {messages}"));
             }
 
             let data = response
@@ -377,7 +358,7 @@ impl GitHubClient {
                 break;
             }
 
-            cursor = threads.page_info.end_cursor.clone();
+            cursor.clone_from(&threads.page_info.end_cursor);
         }
 
         Ok(comment_resolution_map)
@@ -399,11 +380,7 @@ impl GitHubClient {
                 .send()
                 .await
                 .map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to fetch review comments for PR #{}: {:?}",
-                        pr_number,
-                        e
-                    )
+                    anyhow::anyhow!("Failed to fetch review comments for PR #{pr_number}: {e:?}")
                 })?;
 
             if response.items.is_empty() {
@@ -423,7 +400,6 @@ impl GitHubClient {
     /// Build threads from a flat list of comments.
     /// Groups comments by parent ID; top-level comments become thread parents.
     pub fn build_threads(
-        &self,
         comments: Vec<ReviewComment>,
         resolution_map: &HashMap<u64, bool>,
     ) -> Vec<Thread> {
@@ -456,7 +432,6 @@ impl GitHubClient {
 
     /// Filter threads by resolution status and comment source type.
     pub fn filter_threads(
-        &self,
         threads: Vec<Thread>,
         src: CommentSourceType,
         include_resolved: bool,
@@ -493,12 +468,7 @@ impl GitHubClient {
             .reply_to_comment(pr_number, octocrab::models::CommentId(comment_id), body)
             .await
             .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to reply to comment {} on PR #{}: {:?}",
-                    comment_id,
-                    pr_number,
-                    e
-                )
+                anyhow::anyhow!("Failed to reply to comment {comment_id} on PR #{pr_number}: {e:?}")
             })?;
 
         Ok(ReviewComment::from_review_comment(comment))
@@ -507,7 +477,7 @@ impl GitHubClient {
 
 // Test helper module - public for integration tests
 pub mod test_helpers {
-    use super::*;
+    use super::ReviewComment;
     use std::collections::HashMap;
     use std::collections::HashSet;
 
@@ -523,7 +493,7 @@ pub mod test_helpers {
     }
 
     // Pure in-memory pipeline that mirrors get_review_comments logic.
-    pub fn apply_filters(mut comments: Vec<ReviewComment>, p: FilterParams) -> Vec<ReviewComment> {
+    pub fn apply_filters(comments: Vec<ReviewComment>, p: &FilterParams) -> Vec<ReviewComment> {
         let mut results: Vec<ReviewComment> = Vec::new();
         let mut passing_parents: HashSet<u64> = HashSet::new();
         let mut skipped_parents: HashSet<u64> = HashSet::new();
@@ -533,7 +503,7 @@ pub mod test_helpers {
         let mut skip_remaining = p.offset.unwrap_or(0);
         let take_limit = p.limit.unwrap_or(usize::MAX);
 
-        for c in comments.drain(..) {
+        for c in comments {
             // Filter 1: Resolution
             if !p.include_resolved
                 && let Some(&is_resolved) = p.resolved_ids.get(&c.id)
@@ -553,15 +523,13 @@ pub mod test_helpers {
             // Filter 3: Author (thread-scoped)
             let mut keep = true;
             if let Some(login) = p.author {
-                if !is_reply {
+                if is_reply {
+                    keep = parent_id.is_some_and(|pid| passing_parents.contains(&pid));
+                } else {
                     keep = c.user == login;
                     if keep {
                         passing_parents.insert(c.id);
                     }
-                } else {
-                    keep = parent_id
-                        .map(|pid| passing_parents.contains(&pid))
-                        .unwrap_or(false);
                 }
             }
             if !keep {

@@ -1,3 +1,5 @@
+#![expect(clippy::unwrap_used, reason = "Tests should panic on failure")]
+
 use claudecode::Client;
 use claudecode::OutputFormat;
 use claudecode::SessionConfig;
@@ -63,10 +65,9 @@ async fn wait_for_pid_info(pid_file: &PathBuf) -> PidInfo {
 
 async fn wait_for_process_exit(pid: u32) {
     for _ in 0..200 {
-        let exists = match nix::sys::signal::kill(Pid::from_raw(pid as i32), None) {
-            Ok(()) | Err(nix::errno::Errno::EPERM) => true,
+        let exists = match nix::sys::signal::kill(Pid::from_raw(pid.cast_signed()), None) {
             Err(nix::errno::Errno::ESRCH) => false,
-            Err(_) => true,
+            Ok(()) | Err(_) => true,
         };
         if !exists {
             return;
@@ -120,7 +121,7 @@ async fn fake_claude_reaps_helper_child_after_normal_exit() {
     let pids = wait_for_pid_info(&pid_path).await;
 
     nix::sys::signal::kill(
-        Pid::from_raw(pids.parent_pid as i32),
+        Pid::from_raw(pids.parent_pid.cast_signed()),
         Some(nix::sys::signal::Signal::SIGTERM),
     )
     .unwrap();
@@ -168,7 +169,8 @@ async fn fake_claude_runs_in_separate_process_group() {
     let pids = wait_for_pid_info(&pid_path).await;
 
     let test_pgid = nix::unistd::getpgid(None).unwrap();
-    let fake_pgid = nix::unistd::getpgid(Some(Pid::from_raw(pids.parent_pid as i32))).unwrap();
+    let fake_pgid =
+        nix::unistd::getpgid(Some(Pid::from_raw(pids.parent_pid.cast_signed()))).unwrap();
     assert_ne!(fake_pgid, test_pgid);
 
     session.cancel().await.unwrap();
@@ -187,8 +189,10 @@ async fn fake_claude_child_shares_parent_process_group() {
     let session = client.launch(cfg).await.unwrap();
     let pids = wait_for_pid_info(&pid_path).await;
 
-    let parent_pgid = nix::unistd::getpgid(Some(Pid::from_raw(pids.parent_pid as i32))).unwrap();
-    let child_pgid = nix::unistd::getpgid(Some(Pid::from_raw(pids.child_pid as i32))).unwrap();
+    let parent_pgid =
+        nix::unistd::getpgid(Some(Pid::from_raw(pids.parent_pid.cast_signed()))).unwrap();
+    let child_pgid =
+        nix::unistd::getpgid(Some(Pid::from_raw(pids.child_pid.cast_signed()))).unwrap();
     assert_eq!(parent_pgid, child_pgid);
 
     session.cancel().await.unwrap();

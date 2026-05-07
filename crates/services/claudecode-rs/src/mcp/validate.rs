@@ -124,11 +124,11 @@ pub enum McpServerResult {
 
 impl McpServerResult {
     pub fn is_ok(&self) -> bool {
-        matches!(self, McpServerResult::Ok(_))
+        matches!(self, Self::Ok(_))
     }
 
     pub fn is_err(&self) -> bool {
-        matches!(self, McpServerResult::Err(_))
+        matches!(self, Self::Err(_))
     }
 }
 
@@ -142,7 +142,7 @@ pub struct McpValidationReport {
 impl McpValidationReport {
     /// Returns true if all servers validated successfully.
     pub fn all_ok(&self) -> bool {
-        self.servers.values().all(|r| r.is_ok())
+        self.servers.values().all(McpServerResult::is_ok)
     }
 
     /// Returns list of failed servers with their errors.
@@ -174,7 +174,7 @@ impl McpValidationReport {
 pub struct McpValidationAggregateError {
     /// Number of failed servers
     pub count: usize,
-    /// List of (server_name, error) pairs
+    /// List of (`server_name`, error) pairs
     pub errors: Vec<(String, McpServerValidationError)>,
     /// Full report including successful servers
     pub report: McpValidationReport,
@@ -198,7 +198,7 @@ pub async fn validate_mcp_config(
         let name_inner = name.clone();
         let server = server.clone();
         let opts = opts.clone();
-        let sem = semaphore.clone();
+        let sem = Arc::clone(&semaphore);
 
         let handle = tokio::spawn(async move {
             let _permit = sem.acquire().await;
@@ -254,7 +254,7 @@ pub async fn ensure_valid_mcp_config(
 /// Known built-in tools in Claude Code.
 ///
 /// This list should be updated as Claude Code adds new tools.
-/// Last updated: Claude Code version compatible with claudecode_rs 0.1.x
+/// Last updated: Claude Code version compatible with `claudecode_rs` 0.1.x
 pub const KNOWN_BUILTIN_TOOLS: &[&str] = &[
     "Task",
     "TaskOutput",
@@ -292,7 +292,7 @@ pub struct ToolWhitelistReport {
     pub ok_mcp: Vec<String>,
     /// MCP tools that are missing (server not configured or tool not found)
     pub missing_mcp: Vec<String>,
-    /// Suggestions for unknown tools: tool_name -> [suggested_names]
+    /// Suggestions for unknown tools: `tool_name` -> [`suggested_names`]
     pub suggestions: HashMap<String, Vec<String>>,
 }
 
@@ -365,7 +365,7 @@ pub async fn validate_tool_whitelist(
                 tools_by_server.entry(server).or_default().push(tool_name);
             } else {
                 // Malformed MCP tool ID
-                missing_mcp.push(tool.to_string());
+                missing_mcp.push((*tool).clone());
             }
         }
 
@@ -420,7 +420,7 @@ pub async fn validate_tool_whitelist(
         } else {
             // No MCP config - all MCP tools are missing
             for tool in mcp_tools {
-                missing_mcp.push(tool.to_string());
+                missing_mcp.push(tool.clone());
             }
         }
     }
@@ -451,7 +451,7 @@ pub async fn validate_tool_whitelist(
 
 // === Internal Helpers ===
 
-/// Parse an MCP tool ID like "mcp__server__tool" into (server, tool).
+/// Parse an MCP tool ID like "`mcp__server__tool`" into (server, tool).
 pub fn parse_mcp_tool_id(id: &str) -> Option<(String, String)> {
     if !id.starts_with("mcp__") {
         return None;
@@ -501,11 +501,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
     for i in 1..=m {
         curr[0] = i;
         for j in 1..=n {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] {
-                0
-            } else {
-                1
-            };
+            let cost = usize::from(a_chars[i - 1] != b_chars[j - 1]);
             curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
@@ -537,6 +533,19 @@ async fn validate_single_server(
 }
 
 /// Validate a stdio MCP server.
+async fn snapshot_tail(buf: Option<&Arc<Mutex<Vec<u8>>>>) -> Option<String> {
+    if let Some(b) = buf {
+        let data = b.lock().await.clone();
+        if data.is_empty() {
+            None
+        } else {
+            Some(String::from_utf8_lossy(&data).to_string())
+        }
+    } else {
+        None
+    }
+}
+
 async fn validate_stdio_server(
     command: &str,
     args: &[String],
@@ -545,23 +554,10 @@ async fn validate_stdio_server(
 ) -> Result<McpServerValidationSuccess, McpServerValidationError> {
     // Test-only panic injection to validate panic-safe aggregation
     #[cfg(test)]
-    if command == "__panic__" {
-        panic!("intentional test panic for aggregator");
-    }
-
-    // Helper to snapshot stderr tail from shared buffer
-    async fn snapshot_tail(buf: &Option<Arc<Mutex<Vec<u8>>>>) -> Option<String> {
-        if let Some(b) = buf {
-            let data = b.lock().await.clone();
-            if data.is_empty() {
-                None
-            } else {
-                Some(String::from_utf8_lossy(&data).to_string())
-            }
-        } else {
-            None
-        }
-    }
+    assert!(
+        command != "__panic__",
+        "intentional test panic for aggregator"
+    );
 
     // Build the command
     let mut cmd = Command::new(command);
@@ -594,13 +590,13 @@ async fn validate_stdio_server(
                 1024,
                 opts.max_stderr_bytes,
             ))));
-            let buf_clone = buf.clone();
+            let buf_clone = Arc::clone(&buf);
             let cap = opts.max_stderr_bytes;
             tokio::spawn(async move {
                 let mut chunk = vec![0u8; 1024];
                 loop {
                     match stderr.read(&mut chunk).await {
-                        Ok(0) => break, // EOF
+                        Ok(0) | Err(_) => break, // EOF
                         Ok(n) => {
                             let mut guard = buf_clone.lock().await;
                             guard.extend_from_slice(&chunk[..n]);
@@ -610,7 +606,6 @@ async fn validate_stdio_server(
                                 guard.drain(..start);
                             }
                         }
-                        Err(_) => break,
                     }
                 }
             });
@@ -638,7 +633,7 @@ async fn validate_stdio_server(
                     }
                     Ok(Ok(svc)) => svc,
                     Ok(Err(e)) => {
-                        let tail = snapshot_tail(&stderr_buf).await;
+                        let tail = snapshot_tail(stderr_buf.as_ref()).await;
                         return Err(McpServerValidationError::HandshakeProtocol {
                             message: format!("{e}"),
                             stderr_tail: tail,
@@ -648,15 +643,12 @@ async fn validate_stdio_server(
             let handshake_ms = start.elapsed().as_millis() as u64;
 
             // Get server info
-            let server_info = match handshake_result.peer_info().cloned() {
-                Some(info) => info,
-                None => {
-                    let tail = snapshot_tail(&stderr_buf).await;
-                    return Err(McpServerValidationError::HandshakeProtocol {
-                        message: "Server info not available after handshake".to_string(),
-                        stderr_tail: tail,
-                    });
-                }
+            let Some(server_info) = handshake_result.peer_info().cloned() else {
+                let tail = snapshot_tail(stderr_buf.as_ref()).await;
+                return Err(McpServerValidationError::HandshakeProtocol {
+                    message: "Server info not available after handshake".to_string(),
+                    stderr_tail: tail,
+                });
             };
 
             // List tools with timeout (no stderr_tail here by design)
@@ -688,19 +680,22 @@ async fn validate_stdio_server(
     };
 
     // Overall timeout wrapper captures stderr on timeout
-    match timeout(opts.overall_timeout, inner).await {
-        Ok(result) => result,
-        Err(_) => {
-            let tail = snapshot_tail(&stderr_tail_buf).await;
-            Err(McpServerValidationError::OverallTimeout {
-                after: opts.overall_timeout,
-                stderr_tail: tail,
-            })
-        }
+    if let Ok(result) = timeout(opts.overall_timeout, inner).await {
+        result
+    } else {
+        let tail = snapshot_tail(stderr_tail_buf.as_ref()).await;
+        Err(McpServerValidationError::OverallTimeout {
+            after: opts.overall_timeout,
+            stderr_tail: tail,
+        })
     }
 }
 
 /// Validate an HTTP MCP server.
+#[expect(
+    clippy::unused_async,
+    reason = "async for API consistency with validate_stdio_server"
+)]
 async fn validate_http_server(
     _url: &str,
     _headers: Option<&HashMap<String, String>>,
@@ -894,7 +889,7 @@ mod tests {
                     "message={message}"
                 );
             }
-            other => panic!("expected TaskPanicked, got: {:?}", other),
+            other => panic!("expected TaskPanicked, got: {other:?}"),
         }
     }
 
@@ -931,7 +926,7 @@ mod tests {
         let report = validate_mcp_config(&cfg, &opts).await;
         let err = match report.servers.get("bad").unwrap() {
             McpServerResult::Err(e) => e.clone(),
-            other => panic!("expected error, got {other:?}"),
+            other @ McpServerResult::Ok(_) => panic!("expected error, got {other:?}"),
         };
 
         match err {
@@ -973,7 +968,7 @@ mod tests {
         let report = validate_mcp_config(&cfg, &opts).await;
         let err = match report.servers.get("slow").unwrap() {
             McpServerResult::Err(e) => e.clone(),
-            other => panic!("expected error, got {other:?}"),
+            other @ McpServerResult::Ok(_) => panic!("expected error, got {other:?}"),
         };
 
         match err {

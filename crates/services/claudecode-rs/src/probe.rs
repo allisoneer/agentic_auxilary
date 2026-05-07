@@ -79,11 +79,16 @@ pub async fn probe_cli(claude_path: &Path) -> Result<CliCapabilities> {
 
     let mut stdout_content = String::new();
     if let Some(mut stdout) = child.stdout.take() {
-        stdout.read_to_string(&mut stdout_content).await.ok();
+        stdout
+            .read_to_string(&mut stdout_content)
+            .await
+            .map_err(|e| ClaudeError::ProbeError {
+                message: format!("Failed to read --help stdout: {e}"),
+            })?;
     }
 
     let status = child.wait().await.map_err(|e| ClaudeError::ProbeError {
-        message: format!("Failed to wait for --help: {}", e),
+        message: format!("Failed to wait for --help: {e}"),
     })?;
 
     if !status.success() {
@@ -127,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_parse_flags_from_help() {
-        let help_text = r#"
+        let help_text = r"
 Usage: claude [options] [query]
 
 Options:
@@ -157,7 +162,7 @@ Options:
   --agents <json>          Agents configuration
   --debug [filter]         Debug mode
   --verbose                Verbose output
-        "#;
+        ";
 
         let flags = parse_flags_from_help(help_text);
 

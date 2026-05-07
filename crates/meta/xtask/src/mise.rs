@@ -4,6 +4,7 @@ use crate::autogen::replace_named_block_toml;
 use anyhow::Context;
 use anyhow::Result;
 use cargo_metadata::Metadata;
+use std::fmt::Write as _;
 use std::fs;
 
 pub(crate) const MISE_PATH: &str = "mise.toml";
@@ -73,17 +74,21 @@ fn render_agentic_binaries_from_specs(specs: &[ResolvedBinarySpec]) -> String {
     let mut out = String::new();
 
     for (index, spec) in specs.iter().enumerate() {
-        out.push_str(&format!("[tools.{}]\n", spec.tool_name));
-        out.push_str(&format!("version = \"{}\"\n", spec.version));
-        out.push_str(&format!("version_prefix = \"{}\"\n", spec.version_prefix));
+        let tool_name = spec.tool_name;
+        let version = &spec.version;
+        let version_prefix = spec.version_prefix;
+
+        let _ = writeln!(out, "[tools.{tool_name}]");
+        let _ = writeln!(out, "version = \"{version}\"");
+        let _ = writeln!(out, "version_prefix = \"{version_prefix}\"");
         out.push('\n');
 
-        out.push_str(&format!("[tools.{}.platforms]\n", spec.tool_name));
+        let _ = writeln!(out, "[tools.{tool_name}.platforms]");
         for (platform, target) in PLATFORM_TARGETS {
-            out.push_str(&format!(
-                "{} = {{ asset_pattern = \"{}-{}.tar.xz\" }}\n",
-                platform, spec.tool_name, target
-            ));
+            let _ = writeln!(
+                out,
+                "{platform} = {{ asset_pattern = \"{tool_name}-{target}.tar.xz\" }}"
+            );
         }
 
         if index + 1 != specs.len() {
@@ -120,11 +125,11 @@ pub fn sync_mise(path: &str, metadata: &Metadata, dry_run: bool, check: bool) ->
             );
         }
 
-        if !dry_run {
+        if dry_run {
+            eprintln!("[sync] Would update {path} (dry-run)");
+        } else {
             fs::write(path, &updated).with_context(|| format!("Failed to write {path}"))?;
             eprintln!("[sync] Updated {path}");
-        } else {
-            eprintln!("[sync] Would update {path} (dry-run)");
         }
     }
 

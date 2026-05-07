@@ -7,6 +7,7 @@ use crate::autogen::replace_named_block;
 use cargo_metadata::Metadata;
 use cargo_metadata::Package;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::Path;
 
 /// README tier determines how a crate appears in the README.
@@ -52,7 +53,7 @@ fn get_family(pkg: &Package) -> &str {
         .unwrap_or("unknown")
 }
 
-/// Extract metadata.repo.readme_tier from a package, if present.
+/// Extract `metadata.repo.readme_tier` from a package, if present.
 fn get_readme_tier_override(pkg: &Package) -> Option<&str> {
     pkg.metadata
         .get("repo")
@@ -65,14 +66,13 @@ pub fn default_tier_for_role(role: &str) -> ReadmeTier {
     match role {
         "app" => ReadmeTier::Featured,
         "tool-lib" => ReadmeTier::Brief,
-        "lib" | "binding" => ReadmeTier::OneLiner,
         "legacy" => ReadmeTier::Legacy,
         "xtask" => ReadmeTier::Omit,
         _ => ReadmeTier::OneLiner,
     }
 }
 
-/// Parse a tier string into a ReadmeTier.
+/// Parse a tier string into a `ReadmeTier`.
 fn parse_tier(s: &str) -> Option<ReadmeTier> {
     match s {
         "featured" => Some(ReadmeTier::Featured),
@@ -119,8 +119,7 @@ pub fn collect_crates(metadata: &Metadata) -> Vec<CrateInfo> {
         let manifest_path = pkg.manifest_path.as_std_path();
         let dir = manifest_path
             .parent()
-            .map(|p| workspace_relative_dir(p, ws_root))
-            .unwrap_or_default();
+            .map_or_else(String::new, |p| workspace_relative_dir(p, ws_root));
 
         crates.push(CrateInfo {
             name: pkg.name.clone(),
@@ -136,7 +135,7 @@ pub fn collect_crates(metadata: &Metadata) -> Vec<CrateInfo> {
 
 /// Render a grouped list of crates for a specific tier.
 ///
-/// Groups by family (BTreeMap for stable ordering), sorts by name within groups.
+/// Groups by family (`BTreeMap` for stable ordering), sorts by name within groups.
 pub fn render_grouped_list(crates: &[CrateInfo], tier: ReadmeTier) -> String {
     // Filter to the requested tier
     let mut filtered: Vec<&CrateInfo> = crates.iter().filter(|c| c.tier == tier).collect();
@@ -153,12 +152,12 @@ pub fn render_grouped_list(crates: &[CrateInfo], tier: ReadmeTier) -> String {
     // Render
     let mut out = String::new();
     for (family, items) in &groups {
-        out.push_str(&format!("### {family}\n\n"));
+        let _ = writeln!(out, "### {family}\n");
         for c in items {
-            out.push_str(&format!(
-                "- [`{}`]({}) - {}\n",
-                c.name, c.dir, c.description
-            ));
+            let name = &c.name;
+            let dir = &c.dir;
+            let description = &c.description;
+            let _ = writeln!(out, "- [`{name}`]({dir}) - {description}");
         }
         out.push('\n');
     }
@@ -170,7 +169,7 @@ pub fn render_grouped_list(crates: &[CrateInfo], tier: ReadmeTier) -> String {
 ///
 /// Block keys:
 /// - `readme-additional-tools` (Brief tier)
-/// - `readme-supporting-libraries` (OneLiner tier)
+/// - `readme-supporting-libraries` (`OneLiner` tier)
 /// - `readme-legacy` (Legacy tier)
 pub fn apply_readme_blocks(input: &str, crates: &[CrateInfo]) -> anyhow::Result<(String, bool)> {
     let additional = render_grouped_list(crates, ReadmeTier::Brief);
@@ -235,11 +234,11 @@ pub fn sync_root_readme(
         anyhow::bail!("README.md is out of date; run `cargo run -p xtask -- sync`");
     }
 
-    if !dry_run {
+    if dry_run {
+        eprintln!("[sync] Would update {path} (dry-run)");
+    } else {
         std::fs::write(path, &output).with_context(|| format!("Failed to write {path}"))?;
         eprintln!("[sync] Updated {path}");
-    } else {
-        eprintln!("[sync] Would update {path} (dry-run)");
     }
 
     Ok(true)
@@ -365,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_apply_readme_blocks_idempotent() {
-        let input = r#"# README
+        let input = r"# README
 
 ## Additional Tools
 <!-- BEGIN:xtask:autogen readme-additional-tools -->
@@ -381,7 +380,7 @@ old supporting
 <!-- BEGIN:xtask:autogen readme-legacy -->
 old legacy
 <!-- END:xtask:autogen -->
-"#;
+";
 
         let crates = vec![CrateInfo {
             name: "test-tool".to_string(),

@@ -85,8 +85,8 @@ impl Session {
             worker_task: std::sync::Mutex::new(None),
             stderr_task: std::sync::Mutex::new(None),
             process_group_owned,
-            result: result.clone(),
-            error: error.clone(),
+            result: Arc::clone(&result),
+            error: Arc::clone(&error),
             _mcp_temp_file: None,
         };
 
@@ -96,10 +96,14 @@ impl Session {
         Ok(session)
     }
 
+    #[expect(
+        clippy::unused_async,
+        reason = "async preserved so Session::new can await a fallible task-setup step"
+    )]
     async fn start_tasks(&mut self, mut process: ProcessHandle) -> Result<()> {
-        let result = self.result.clone();
-        let error = self.error.clone();
-        let process_group_owned = self.process_group_owned.clone();
+        let result = Arc::clone(&self.result);
+        let error = Arc::clone(&self.error);
+        let process_group_owned = Arc::clone(&self.process_group_owned);
 
         match self.config.output_format {
             OutputFormat::StreamingJson => {
@@ -111,21 +115,22 @@ impl Session {
                 let events_tx = self
                     .events_tx
                     .take()
-                    .expect("events_tx must exist for StreamingJson output format");
-                let result_clone = result.clone();
-                let error_clone = error.clone();
+                    .ok_or_else(|| ClaudeError::SessionError {
+                        message: "events_tx must exist for StreamingJson output format".to_string(),
+                    })?;
+                let result_clone = result;
+                let error_clone = Arc::clone(&error);
                 let stderr_task = tokio::spawn(async move {
                     Self::capture_stderr(stderr, error_clone).await;
                 });
                 Self::store_task(&self.stderr_task, stderr_task)?;
 
-                let process_group_owned = process_group_owned.clone();
                 let worker_task = tokio::spawn(async move {
                     if let Err(e) = Self::handle_streaming_json(
                         process,
                         events_tx,
                         result_clone,
-                        error.clone(),
+                        Arc::clone(&error),
                         process_group_owned,
                     )
                     .await
@@ -136,9 +141,9 @@ impl Session {
                 Self::store_task(&self.worker_task, worker_task)?;
             }
             OutputFormat::Json => {
-                let process_group_owned = process_group_owned.clone();
                 let worker_task = tokio::spawn(async move {
-                    match Self::handle_json(process, error.clone(), process_group_owned).await {
+                    match Self::handle_json(process, Arc::clone(&error), process_group_owned).await
+                    {
                         Ok(r) => {
                             result.write().await.replace(r);
                         }
@@ -150,9 +155,9 @@ impl Session {
                 Self::store_task(&self.worker_task, worker_task)?;
             }
             OutputFormat::Text => {
-                let process_group_owned = process_group_owned.clone();
                 let worker_task = tokio::spawn(async move {
-                    match Self::handle_text(process, error.clone(), process_group_owned).await {
+                    match Self::handle_text(process, Arc::clone(&error), process_group_owned).await
+                    {
                         Ok(r) => {
                             result.write().await.replace(r);
                         }
@@ -376,7 +381,8 @@ impl Session {
         Self::await_task(stderr_task, "stderr").await?;
 
         // Check for errors first - preserve original error variant (e.g., ProcessFailed{stderr})
-        if let Some(error) = self.error.write().await.take() {
+        let error = self.error.write().await.take();
+        if let Some(error) = error {
             return Err(error);
         }
 
@@ -412,6 +418,10 @@ impl Session {
     /// Send interrupt signal to the Claude process
     ///
     /// On Unix systems, this sends SIGINT which allows graceful shutdown.
+    #[expect(
+        clippy::unused_async,
+        reason = "async for API consistency with cancel and kill"
+    )]
     pub async fn interrupt(&mut self) -> Result<()> {
         self.kill
             .signal(Signal::SIGINT)
@@ -431,7 +441,7 @@ impl Session {
     }
 
     /// Check if session is still running
-    pub async fn is_running(&self) -> bool {
+    pub fn is_running(&self) -> bool {
         self.worker_task
             .lock()
             .ok()
@@ -445,6 +455,10 @@ impl Session {
     }
 
     /// Set the MCP temp file to keep it alive for the session duration
+    #[expect(
+        clippy::used_underscore_binding,
+        reason = "field exists solely to keep NamedTempFile alive until Session is dropped"
+    )]
     pub fn set_mcp_temp_file(&mut self, temp_file: NamedTempFile) {
         self._mcp_temp_file = Some(temp_file);
     }

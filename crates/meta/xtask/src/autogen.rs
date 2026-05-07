@@ -14,7 +14,7 @@ use regex::Regex;
 ///
 /// If the block doesn't exist in the input, it will be appended at the end.
 ///
-/// Returns (updated_content, changed) where changed indicates if content was modified.
+/// Returns (`updated_content`, changed) where changed indicates if content was modified.
 pub fn replace_named_block(input: &str, key: &str, body: &str) -> Result<(String, bool)> {
     let pattern = format!(
         r"(?s)<!--\s*BEGIN:xtask:autogen\s+{}\s*-->.*?<!--\s*END:xtask:autogen\s*-->",
@@ -22,10 +22,8 @@ pub fn replace_named_block(input: &str, key: &str, body: &str) -> Result<(String
     );
     let re = Regex::new(&pattern).context("Failed to compile autogen regex")?;
 
-    let replacement = format!(
-        "<!-- BEGIN:xtask:autogen {} -->\n{}\n<!-- END:xtask:autogen -->",
-        key, body
-    );
+    let replacement =
+        format!("<!-- BEGIN:xtask:autogen {key} -->\n{body}\n<!-- END:xtask:autogen -->");
 
     if let Some(m) = re.find(input) {
         let original_block = m.as_str();
@@ -57,7 +55,7 @@ pub fn replace_named_block(input: &str, key: &str, body: &str) -> Result<(String
 /// - `# BEGIN:xtask:autogen <key>`
 /// - `# END:xtask:autogen`
 ///
-/// Returns (updated_content, changed) where changed indicates if content was modified.
+/// Returns (`updated_content`, changed) where changed indicates if content was modified.
 pub fn replace_named_block_toml(input: &str, key: &str, body: &str) -> Result<(String, bool)> {
     let pattern = format!(
         r"(?s)#\s*BEGIN:xtask:autogen\s+{}\s*\n.*?#\s*END:xtask:autogen",
@@ -65,10 +63,7 @@ pub fn replace_named_block_toml(input: &str, key: &str, body: &str) -> Result<(S
     );
     let re = Regex::new(&pattern).context("Failed to compile autogen regex for TOML")?;
 
-    let replacement = format!(
-        "# BEGIN:xtask:autogen {}\n{}\n# END:xtask:autogen",
-        key, body
-    );
+    let replacement = format!("# BEGIN:xtask:autogen {key}\n{body}\n# END:xtask:autogen");
 
     if let Some(m) = re.find(input) {
         let original_block = m.as_str();
@@ -100,11 +95,11 @@ mod tests {
 
     #[test]
     fn test_replace_existing_block() {
-        let input = r#"Some header
+        let input = r"Some header
 <!-- BEGIN:xtask:autogen test-key -->
 old content
 <!-- END:xtask:autogen -->
-Some footer"#;
+Some footer";
 
         let (output, changed) = replace_named_block(input, "test-key", "new content").unwrap();
         assert!(changed);
@@ -125,9 +120,9 @@ Some footer"#;
 
     #[test]
     fn test_idempotent() {
-        let input = r#"<!-- BEGIN:xtask:autogen key -->
+        let input = r"<!-- BEGIN:xtask:autogen key -->
 same content
-<!-- END:xtask:autogen -->"#;
+<!-- END:xtask:autogen -->";
 
         let (output, changed) = replace_named_block(input, "key", "same content").unwrap();
         assert!(!changed);

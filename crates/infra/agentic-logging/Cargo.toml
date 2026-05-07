@@ -23,6 +23,9 @@ thiserror = "2"
 tempfile = "3"
 serial_test = "3"
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "lib"
 family = "infra"

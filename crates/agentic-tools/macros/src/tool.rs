@@ -22,7 +22,7 @@ struct ToolAttr {
 }
 
 /// Expand the #[tool] attribute macro.
-pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
+pub fn expand(mut attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
     let func: ItemFn = parse2(item)?;
 
     // Validate function is async (C1)
@@ -37,9 +37,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
     let tool_attr = if attr.is_empty() {
         ToolAttr::default()
     } else {
-        let nested = NestedMeta::parse_meta_list(attr.clone())
-            .map_err(|e| syn::Error::new_spanned(&attr, e))?;
-        ToolAttr::from_list(&nested).map_err(|e| syn::Error::new_spanned(&attr, e))?
+        let attr_tokens = std::mem::take(&mut attr);
+        let nested = NestedMeta::parse_meta_list(attr_tokens.clone())
+            .map_err(|e| syn::Error::new_spanned(&attr_tokens, e))?;
+        ToolAttr::from_list(&nested).map_err(|e| syn::Error::new_spanned(&attr_tokens, e))?
     };
 
     let fn_ident = &func.sig.ident;
@@ -67,19 +68,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
         .iter()
         .filter_map(|arg| match arg {
             FnArg::Typed(pat_type) => Some(pat_type),
-            _ => None,
+            FnArg::Receiver(_) => None,
         })
         .collect();
 
     // Validate arity and ctx type
     let (input_type, forwards_ctx) = match typed_params.as_slice() {
-        [] => {
-            return Err(syn::Error::new_spanned(
-                inputs,
-                "#[tool] functions must take (input: T) or (input: T, ctx: &ToolContext). \
-                 If you need multiple inputs, wrap them in a single input struct.",
-            ));
-        }
         [input] => ((*input.ty).clone(), false),
         [input, ctx] => {
             if !is_tool_context_ref(&ctx.ty) {
@@ -92,7 +86,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
             }
             ((*input.ty).clone(), true)
         }
-        _ => {
+        [] | [_, _, ..] => {
             return Err(syn::Error::new_spanned(
                 inputs,
                 "#[tool] functions must take (input: T) or (input: T, ctx: &ToolContext). \
@@ -132,7 +126,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
         }
     };
 
-    let doc_comment = format!("Auto-generated tool struct for [`{}`].", fn_ident);
+    let doc_comment = format!("Auto-generated tool struct for [`{fn_ident}`].");
 
     let expanded = quote! {
         #func
@@ -161,7 +155,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> 
     Ok(expanded)
 }
 
-/// Convert snake_case to PascalCase.
+/// Convert `snake_case` to `PascalCase`.
 fn to_pascal_case(s: &str) -> String {
     s.split('_')
         .map(|word| {

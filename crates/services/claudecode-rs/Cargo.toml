@@ -67,6 +67,8 @@ path = "examples/basic.rs"
 name = "claudecode_streaming"
 path = "examples/streaming.rs"
 
+[lints]
+workspace = true
 
 [package.metadata.repo]
 role = "lib"

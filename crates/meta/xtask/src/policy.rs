@@ -126,7 +126,7 @@ impl Policy {
     pub fn load_from(path: &str) -> Result<Self> {
         let contents =
             fs::read_to_string(path).with_context(|| format!("Failed to read policy at {path}"))?;
-        let policy: Policy =
+        let policy: Self =
             toml::from_str(&contents).with_context(|| format!("Failed to parse {path}"))?;
         Ok(policy)
     }
@@ -141,7 +141,7 @@ impl Policy {
         self.enums.family.iter().any(|f| f == family)
     }
 
-    /// Check if a readme_tier is valid according to policy.
+    /// Check if a `readme_tier` is valid according to policy.
     pub fn is_valid_readme_tier(&self, tier: &str) -> bool {
         self.enums.readme_tier.iter().any(|t| t == tier)
     }

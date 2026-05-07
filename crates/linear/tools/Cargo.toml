@@ -41,6 +41,9 @@ url = "2"
 mockito = "1"
 serial_test = "3"
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "tool-lib"
 family = "linear"

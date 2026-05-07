@@ -71,7 +71,7 @@ impl ToolContext {
         E: Into<ToolError>,
     {
         tokio::select! {
-            _ = self.cancelled() => {
+            () = self.cancelled() => {
                 tracing::info!("tool request cancelled during run_cancellable");
                 Err(ToolError::cancelled(None))
             }

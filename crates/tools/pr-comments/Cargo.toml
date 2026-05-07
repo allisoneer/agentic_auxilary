@@ -64,6 +64,9 @@ url = "2"
 mockito = "1"
 tempfile = "3"
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "tool-lib"
 family = "tools"

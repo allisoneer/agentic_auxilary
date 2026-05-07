@@ -1,4 +1,4 @@
-//! Pagination state helpers specific to pr_comments.
+//! Pagination state helpers specific to `pr_comments`.
 //!
 //! Generic pagination infrastructure is in `agentic_tools_utils::pagination`.
 //! This module contains pr_comments-specific helpers.
@@ -22,15 +22,12 @@ pub fn make_key(
         CommentSourceType::Human => "human",
         CommentSourceType::All => "all",
     };
-    format!(
-        "{}|{}|{}|{}|{}|{}",
-        owner, repo, pr, src_str, include_resolved, page_size
-    )
+    format!("{owner}|{repo}|{pr}|{src_str}|{include_resolved}|{page_size}")
 }
 
 /// Generate a cache key for PR list pagination from query parameters.
 pub fn make_pr_list_key(owner: &str, repo: &str, state: &str, page_size: usize) -> String {
-    format!("{}|{}|{}|{}", owner, repo, state, page_size)
+    format!("{owner}|{repo}|{state}|{page_size}")
 }
 
 // Re-export pagination types from utils for convenience
@@ -73,23 +70,38 @@ mod tests {
         let all = CommentSourceType::All;
 
         // Serialize
-        assert_eq!(serde_json::to_string(&robot).unwrap(), "\"robot\"");
-        assert_eq!(serde_json::to_string(&human).unwrap(), "\"human\"");
-        assert_eq!(serde_json::to_string(&all).unwrap(), "\"all\"");
+        let robot_json = match serde_json::to_string(&robot) {
+            Ok(json) => json,
+            Err(err) => panic!("robot should serialize: {err}"),
+        };
+        let human_json = match serde_json::to_string(&human) {
+            Ok(json) => json,
+            Err(err) => panic!("human should serialize: {err}"),
+        };
+        let all_json = match serde_json::to_string(&all) {
+            Ok(json) => json,
+            Err(err) => panic!("all should serialize: {err}"),
+        };
+        assert_eq!(robot_json, "\"robot\"");
+        assert_eq!(human_json, "\"human\"");
+        assert_eq!(all_json, "\"all\"");
 
         // Deserialize
-        assert_eq!(
-            serde_json::from_str::<CommentSourceType>("\"robot\"").unwrap(),
-            CommentSourceType::Robot
-        );
-        assert_eq!(
-            serde_json::from_str::<CommentSourceType>("\"human\"").unwrap(),
-            CommentSourceType::Human
-        );
-        assert_eq!(
-            serde_json::from_str::<CommentSourceType>("\"all\"").unwrap(),
-            CommentSourceType::All
-        );
+        let robot_roundtrip = match serde_json::from_str::<CommentSourceType>("\"robot\"") {
+            Ok(value) => value,
+            Err(err) => panic!("robot should deserialize: {err}"),
+        };
+        let human_roundtrip = match serde_json::from_str::<CommentSourceType>("\"human\"") {
+            Ok(value) => value,
+            Err(err) => panic!("human should deserialize: {err}"),
+        };
+        let all_roundtrip = match serde_json::from_str::<CommentSourceType>("\"all\"") {
+            Ok(value) => value,
+            Err(err) => panic!("all should deserialize: {err}"),
+        };
+        assert_eq!(robot_roundtrip, CommentSourceType::Robot,);
+        assert_eq!(human_roundtrip, CommentSourceType::Human,);
+        assert_eq!(all_roundtrip, CommentSourceType::All);
     }
 
     #[test]

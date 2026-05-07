@@ -33,7 +33,7 @@ pub trait SchemaTransform: Send + Sync {
 /// Engine for applying runtime transforms to tool schemas.
 ///
 /// Schemars derive generates base schemas at compile time.
-/// SchemaEngine applies transforms at runtime for provider flexibility.
+/// `SchemaEngine` applies transforms at runtime for provider flexibility.
 ///
 /// # Clone behavior
 /// When cloned, `custom_transforms` are **not** carried over (they are not `Clone`).
@@ -76,6 +76,7 @@ impl SchemaEngine {
     }
 
     /// Enable strict mode (additionalProperties=false) globally.
+    #[must_use]
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.global_strict = strict;
         self
@@ -103,8 +104,15 @@ impl SchemaEngine {
     }
 
     /// Transform a tool's schema applying all constraints and transforms.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "this public API intentionally consumes and returns Schema at the transformation boundary"
+    )]
     pub fn transform(&self, tool: &str, schema: Schema) -> Schema {
-        let mut v = serde_json::to_value(&schema).expect("serialize schema");
+        let mut v = match serde_json::to_value(&schema) {
+            Ok(value) => value,
+            Err(error) => panic!("serialize schema: {error}"),
+        };
 
         // Apply global strict mode
         if self.global_strict
@@ -129,7 +137,10 @@ impl SchemaEngine {
         // from a valid Schema (always an object) and built-in transforms only mutate
         // sub-nodes, failure here means a custom SchemaTransform replaced the root
         // type — a programming error that must surface immediately.
-        Schema::try_from(v).expect("schema transform must produce a valid schema")
+        match Schema::try_from(v) {
+            Ok(schema) => schema,
+            Err(error) => panic!("schema transform must produce a valid schema: {error}"),
+        }
     }
 
     fn apply_constraint(root: &mut Json, path: &[String], constraint: &FieldConstraint) {
@@ -154,8 +165,8 @@ impl SchemaEngine {
             FieldConstraint::Pattern(p) => {
                 obj.insert("pattern".into(), Json::String(p.clone()));
             }
-            FieldConstraint::MergePatch(patch) => {
-                json_patch::merge(node, patch);
+            FieldConstraint::MergePatch(merge_patch) => {
+                json_patch::merge(node, merge_patch);
             }
         }
     }
@@ -176,9 +187,15 @@ struct NullFirstOptional;
 
 impl schemars::transform::Transform for NullFirstOptional {
     fn transform(&mut self, schema: &mut Schema) {
-        let mut value = serde_json::to_value(&*schema).expect("serialize schema");
+        let mut value = match serde_json::to_value(&*schema) {
+            Ok(value) => value,
+            Err(error) => panic!("serialize schema: {error}"),
+        };
         normalize_optional_properties(&mut value);
-        *schema = Schema::try_from(value).expect("NullFirstOptional must preserve schema validity");
+        *schema = match Schema::try_from(value) {
+            Ok(schema) => schema,
+            Err(error) => panic!("NullFirstOptional must preserve schema validity: {error}"),
+        };
     }
 }
 
@@ -397,7 +414,7 @@ fn is_explicit_null_branch(node: &Json) -> bool {
 /// - JSON Schema Draft 2020-12 (MCP protocol requirement)
 /// - `Option<T>` object properties remain nullable and are normalized to place
 ///   `null` first while preserving inner item/value nullability
-/// - Thread-local caching keyed by TypeId for performance
+/// - Thread-local caching keyed by `TypeId` for performance
 pub mod mcp_schema {
     use super::NullFirstOptional;
     use schemars::JsonSchema;
@@ -425,12 +442,12 @@ pub mod mcp_schema {
         CACHE_FOR_TYPE.with(|cache| {
             let mut cache = cache.borrow_mut();
             if let Some(x) = cache.get(&TypeId::of::<T>()) {
-                return x.clone();
+                return Arc::clone(x);
             }
             let generator = settings().into_generator();
             let root = generator.into_root_schema_for::<T>();
             let arc = Arc::new(root);
-            cache.insert(TypeId::of::<T>(), arc.clone());
+            cache.insert(TypeId::of::<T>(), Arc::clone(&arc));
             arc
         })
     }
@@ -444,18 +461,20 @@ pub mod mcp_schema {
                 return r.clone();
             }
             let root = cached_schema_for::<T>();
-            let json = serde_json::to_value(root.as_ref()).expect("serialize output schema");
+            let json = match serde_json::to_value(root.as_ref()) {
+                Ok(value) => value,
+                Err(error) => panic!("serialize output schema: {error}"),
+            };
             let result = match json.get("type") {
-                Some(serde_json::Value::String(t)) if t == "object" => Ok(root.clone()),
+                Some(serde_json::Value::String(t)) if t == "object" => Ok(root),
                 Some(serde_json::Value::String(t)) => Err(format!(
-                    "MCP requires output_schema root type 'object', found '{}'",
-                    t
+                    "MCP requires output_schema root type 'object', found '{t}'"
                 )),
                 None => {
                     // Schema might use $ref or other patterns without explicit type
                     // Accept if it has properties (likely an object schema)
                     if json.get("properties").is_some() {
-                        Ok(root.clone())
+                        Ok(root)
                     } else {
                         Err(
                             "Schema missing 'type' — output_schema must have root type 'object'"
@@ -464,8 +483,7 @@ pub mod mcp_schema {
                     }
                 }
                 Some(other) => Err(format!(
-                    "Unexpected 'type' format: {:?} — expected string 'object'",
-                    other
+                    "Unexpected 'type' format: {other:?} — expected string 'object'"
                 )),
             };
             cache.insert(TypeId::of::<T>(), result.clone());
@@ -523,7 +541,7 @@ mod tests {
             FieldConstraint::Enum(vec![Json::String("a".into()), Json::String("b".into())]),
         );
 
-        let schema: Schema = Schema::try_from(test_schema.clone()).unwrap();
+        let schema: Schema = Schema::try_from(test_schema).unwrap();
         let transformed = engine.transform("test", schema);
 
         let json = serde_json::to_value(&transformed).unwrap();
@@ -555,8 +573,12 @@ mod tests {
         let count_schema = &json["properties"]["count"];
 
         // Verify range was applied (compare as f64 since schemars may use floats)
-        let min = count_schema.get("minimum").and_then(|v| v.as_f64());
-        let max = count_schema.get("maximum").and_then(|v| v.as_f64());
+        let min = count_schema
+            .get("minimum")
+            .and_then(serde_json::Value::as_f64);
+        let max = count_schema
+            .get("maximum")
+            .and_then(serde_json::Value::as_f64);
 
         assert_eq!(min, Some(0.0), "minimum constraint should be applied");
         assert_eq!(max, Some(100.0), "maximum constraint should be applied");
@@ -666,7 +688,7 @@ mod tests {
         // RestrictFormats transform and Option<Enum> tests
         // ====================================================================
 
-        #[allow(dead_code)]
+        #[expect(dead_code)]
         #[derive(schemars::JsonSchema, Serialize)]
         enum TestEnum {
             A,
@@ -713,12 +735,12 @@ mod tests {
                 "u64 should not include non-standard 'format'"
             );
             assert_eq!(
-                pa.get("minimum").and_then(|x| x.as_u64()),
+                pa.get("minimum").and_then(serde_json::Value::as_u64),
                 Some(0),
                 "u32 minimum must be preserved"
             );
             assert_eq!(
-                pb.get("minimum").and_then(|x| x.as_u64()),
+                pb.get("minimum").and_then(serde_json::Value::as_u64),
                 Some(0),
                 "u64 minimum must be preserved"
             );

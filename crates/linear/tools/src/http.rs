@@ -28,7 +28,7 @@ pub fn extract_data<Q>(resp: cynic::GraphQlResponse<Q>) -> Result<Q> {
                     })
                     .collect::<Vec<_>>()
                     .join(".");
-                format!(" (path: {})", p)
+                format!(" (path: {p})")
             };
             parts.push(format!("{}{}", e.message, path_str));
         }

@@ -69,6 +69,7 @@ impl Drop for EnvGuard {
         match &self.prev {
             // SAFETY: Safe in drop because test serialization is still active
             Some(v) => unsafe { std::env::set_var(self.key, v) },
+            // SAFETY: Safe in drop because test serialization is still active
             None => unsafe { std::env::remove_var(self.key) },
         }
     }
@@ -80,6 +81,14 @@ impl Drop for EnvGuard {
 
 use serde_json::Value;
 use serde_json::json;
+
+#[expect(
+    clippy::expect_used,
+    reason = "JSON fixture serialization is infallible for these static test values"
+)]
+fn fixture_json(value: &Value) -> String {
+    serde_json::to_string(value).expect("JSON test fixtures should serialize")
+}
 
 pub fn user_node(id: &str, name: &str, display_name: &str, email: &str) -> Value {
     json!({ "id": id, "name": name, "displayName": display_name, "email": email })
@@ -150,8 +159,8 @@ pub fn search_issue_node(id: &str, identifier: &str, title: &str) -> Value {
     })
 }
 
-pub fn issues_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
-    serde_json::to_string(&json!({
+pub fn issues_response(nodes: &[Value], has_next_page: bool, end_cursor: Option<&str>) -> String {
+    fixture_json(&json!({
         "data": {
             "issues": {
                 "nodes": nodes,
@@ -159,11 +168,10 @@ pub fn issues_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Optio
             }
         }
     }))
-    .unwrap()
 }
 
-pub fn search_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
-    serde_json::to_string(&json!({
+pub fn search_response(nodes: &[Value], has_next_page: bool, end_cursor: Option<&str>) -> String {
+    fixture_json(&json!({
         "data": {
             "searchIssues": {
                 "nodes": nodes,
@@ -171,32 +179,28 @@ pub fn search_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Optio
             }
         }
     }))
-    .unwrap()
 }
 
-pub fn issue_by_id_response(issue: Value) -> String {
-    serde_json::to_string(&json!({
+pub fn issue_by_id_response(issue: &Value) -> String {
+    fixture_json(&json!({
         "data": { "issue": issue }
     }))
-    .unwrap()
 }
 
-pub fn issue_create_response(issue: Value) -> String {
-    serde_json::to_string(&json!({
+pub fn issue_create_response(issue: &Value) -> String {
+    fixture_json(&json!({
         "data": { "issueCreate": { "success": true, "issue": issue } }
     }))
-    .unwrap()
 }
 
-pub fn issue_update_response(issue: Value) -> String {
-    serde_json::to_string(&json!({
+pub fn issue_update_response(issue: &Value) -> String {
+    fixture_json(&json!({
         "data": { "issueUpdate": { "success": true, "issue": issue } }
     }))
-    .unwrap()
 }
 
 pub fn comment_create_response(id: &str, body: &str) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "commentCreate": {
                 "success": true,
@@ -204,7 +208,6 @@ pub fn comment_create_response(id: &str, body: &str) -> String {
             }
         }
     }))
-    .unwrap()
 }
 
 pub fn comment_node(id: &str, body: &str, url: &str, created_at: &str, updated_at: &str) -> Value {
@@ -222,11 +225,11 @@ pub fn comment_node(id: &str, body: &str, url: &str, created_at: &str, updated_a
 pub fn issue_comments_response(
     issue_id: &str,
     identifier: &str,
-    nodes: Vec<Value>,
+    nodes: &[Value],
     has_next_page: bool,
     end_cursor: Option<&str>,
 ) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "issue": {
                 "id": issue_id,
@@ -241,18 +244,16 @@ pub fn issue_comments_response(
             }
         }
     }))
-    .unwrap()
 }
 
 pub fn archive_response(success: bool) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": { "issueArchive": { "success": success } }
     }))
-    .unwrap()
 }
 
-pub fn users_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
-    serde_json::to_string(&json!({
+pub fn users_response(nodes: &[Value], has_next_page: bool, end_cursor: Option<&str>) -> String {
+    fixture_json(&json!({
         "data": {
             "users": {
                 "nodes": nodes,
@@ -260,11 +261,10 @@ pub fn users_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option
             }
         }
     }))
-    .unwrap()
 }
 
-pub fn teams_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option<&str>) -> String {
-    serde_json::to_string(&json!({
+pub fn teams_response(nodes: &[Value], has_next_page: bool, end_cursor: Option<&str>) -> String {
+    fixture_json(&json!({
         "data": {
             "teams": {
                 "nodes": nodes,
@@ -272,15 +272,10 @@ pub fn teams_response(nodes: Vec<Value>, has_next_page: bool, end_cursor: Option
             }
         }
     }))
-    .unwrap()
 }
 
-pub fn projects_response(
-    nodes: Vec<Value>,
-    has_next_page: bool,
-    end_cursor: Option<&str>,
-) -> String {
-    serde_json::to_string(&json!({
+pub fn projects_response(nodes: &[Value], has_next_page: bool, end_cursor: Option<&str>) -> String {
+    fixture_json(&json!({
         "data": {
             "projects": {
                 "nodes": nodes,
@@ -288,15 +283,14 @@ pub fn projects_response(
             }
         }
     }))
-    .unwrap()
 }
 
 pub fn workflow_states_response(
-    nodes: Vec<Value>,
+    nodes: &[Value],
     has_next_page: bool,
     end_cursor: Option<&str>,
 ) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "workflowStates": {
                 "nodes": nodes,
@@ -304,15 +298,14 @@ pub fn workflow_states_response(
             }
         }
     }))
-    .unwrap()
 }
 
 pub fn issue_labels_response(
-    nodes: Vec<Value>,
+    nodes: &[Value],
     has_next_page: bool,
     end_cursor: Option<&str>,
 ) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "issueLabels": {
                 "nodes": nodes,
@@ -320,10 +313,9 @@ pub fn issue_labels_response(
             }
         }
     }))
-    .unwrap()
 }
 
-pub fn issue_label_node(id: &str, name: &str, team: Option<Value>) -> Value {
+pub fn issue_label_node(id: &str, name: &str, team: Option<&Value>) -> Value {
     json!({ "id": id, "name": name, "team": team })
 }
 
@@ -332,10 +324,10 @@ pub fn issue_label_node(id: &str, name: &str, team: Option<Value>) -> Value {
 // ============================================================================
 
 pub fn issue_relations_response(
-    relations: Vec<(&str, &str)>, // (relation_id, related_issue_id)
-    inverse_relations: Vec<(&str, &str)>,
+    relations: &[(&str, &str)], // (relation_id, related_issue_id)
+    inverse_relations: &[(&str, &str)],
 ) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "issue": {
                 "id": "source-issue-id",
@@ -358,29 +350,26 @@ pub fn issue_relations_response(
             }
         }
     }))
-    .unwrap()
 }
 
 pub fn issue_relation_create_response(success: bool) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "issueRelationCreate": {
                 "success": success
             }
         }
     }))
-    .unwrap()
 }
 
 pub fn issue_relation_delete_response(success: bool) -> String {
-    serde_json::to_string(&json!({
+    fixture_json(&json!({
         "data": {
             "issueRelationDelete": {
                 "success": success
             }
         }
     }))
-    .unwrap()
 }
 
 #[cfg(test)]

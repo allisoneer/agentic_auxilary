@@ -1,6 +1,6 @@
 //! Endpoint coverage verification for opencode-rs SDK.
 //!
-//! Shells out to the SDK's endpoint_coverage example to perform the analysis.
+//! Shells out to the SDK's `endpoint_coverage` example to perform the analysis.
 
 use anyhow::Context;
 use anyhow::Result;

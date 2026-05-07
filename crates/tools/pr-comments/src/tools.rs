@@ -1,4 +1,4 @@
-//! Tool wrappers for pr_comments using agentic-tools-core.
+//! Tool wrappers for `pr_comments` using agentic-tools-core.
 //!
 //! Each tool delegates to the corresponding method on [`PrComments`].
 
@@ -21,7 +21,7 @@ use std::sync::Arc;
 // GetComments Tool
 // ============================================================================
 
-/// Input for get_comments tool.
+/// Input for `get_comments` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct GetCommentsInput {
     /// PR number (auto-detected if not provided)
@@ -58,7 +58,7 @@ impl Tool for GetCommentsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let pr_comments = self.pr_comments.clone();
+        let pr_comments = Arc::clone(&self.pr_comments);
         Box::pin(async move {
             let log = ToolLogCtx::start(Self::NAME);
 
@@ -95,8 +95,8 @@ impl Tool for GetCommentsTool {
                 }
                 Err(e) => {
                     let msg = e.to_string();
-                    log.finish(request, None, false, Some(msg.clone()), None, None, None);
-                    Err(map_anyhow_to_tool_error(e))
+                    log.finish(request, None, false, Some(msg), None, None, None);
+                    Err(map_anyhow_to_tool_error(&e))
                 }
             }
         })
@@ -107,7 +107,7 @@ impl Tool for GetCommentsTool {
 // ListPrs Tool
 // ============================================================================
 
-/// Input for list_prs tool.
+/// Input for `list_prs` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct ListPrsInput {
     /// PR state filter: open, closed, or all
@@ -138,7 +138,7 @@ impl Tool for ListPrsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let pr_comments = self.pr_comments.clone();
+        let pr_comments = Arc::clone(&self.pr_comments);
         Box::pin(async move {
             let log = ToolLogCtx::start(Self::NAME);
 
@@ -161,8 +161,8 @@ impl Tool for ListPrsTool {
                 }
                 Err(e) => {
                     let msg = e.to_string();
-                    log.finish(request, None, false, Some(msg.clone()), None, None, None);
-                    Err(map_anyhow_to_tool_error(e))
+                    log.finish(request, None, false, Some(msg), None, None, None);
+                    Err(map_anyhow_to_tool_error(&e))
                 }
             }
         })
@@ -173,7 +173,7 @@ impl Tool for ListPrsTool {
 // AddCommentReply Tool
 // ============================================================================
 
-/// Input for add_comment_reply tool.
+/// Input for `add_comment_reply` tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct AddCommentReplyInput {
     /// PR number (auto-detected if not provided)
@@ -208,7 +208,7 @@ impl Tool for AddCommentReplyTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let pr_comments = self.pr_comments.clone();
+        let pr_comments = Arc::clone(&self.pr_comments);
         Box::pin(async move {
             let log = ToolLogCtx::start(Self::NAME);
 
@@ -236,8 +236,8 @@ impl Tool for AddCommentReplyTool {
                 }
                 Err(e) => {
                     let msg = e.to_string();
-                    log.finish(request, None, false, Some(msg.clone()), None, None, None);
-                    Err(map_anyhow_to_tool_error(e))
+                    log.finish(request, None, false, Some(msg), None, None, None);
+                    Err(map_anyhow_to_tool_error(&e))
                 }
             }
         })
@@ -248,11 +248,11 @@ impl Tool for AddCommentReplyTool {
 // Registry Builder
 // ============================================================================
 
-/// Build a ToolRegistry containing all pr_comments tools.
+/// Build a `ToolRegistry` containing all `pr_comments` tools.
 pub fn build_registry(pr_comments: Arc<PrComments>) -> ToolRegistry {
     ToolRegistry::builder()
-        .register::<GetCommentsTool, ()>(GetCommentsTool::new(pr_comments.clone()))
-        .register::<ListPrsTool, ()>(ListPrsTool::new(pr_comments.clone()))
+        .register::<GetCommentsTool, ()>(GetCommentsTool::new(Arc::clone(&pr_comments)))
+        .register::<ListPrsTool, ()>(ListPrsTool::new(Arc::clone(&pr_comments)))
         .register::<AddCommentReplyTool, ()>(AddCommentReplyTool::new(pr_comments))
         .finish()
 }
@@ -261,8 +261,8 @@ pub fn build_registry(pr_comments: Arc<PrComments>) -> ToolRegistry {
 // Error Conversion
 // ============================================================================
 
-/// Map anyhow::Error to agentic_tools_core::ToolError based on error message patterns.
-fn map_anyhow_to_tool_error(e: anyhow::Error) -> ToolError {
+/// Map `anyhow::Error` to `agentic_tools_core::ToolError` based on error message patterns.
+fn map_anyhow_to_tool_error(e: &anyhow::Error) -> ToolError {
     let msg = e.to_string();
     let lc = msg.to_lowercase();
     if lc.contains("permission") || lc.contains("401") || lc.contains("403") {

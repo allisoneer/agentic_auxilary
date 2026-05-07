@@ -19,6 +19,9 @@ darling = "0.20"
 [features]
 default = []
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "lib"
 family = "agentic-tools"

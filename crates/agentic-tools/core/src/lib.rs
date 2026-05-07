@@ -6,7 +6,7 @@
 //! - [`ToolRegistry`]: Type-safe tool storage with native and JSON dispatch
 //! - [`SchemaEngine`]: Runtime schema transforms for provider flexibility
 //! - [`TextFormat`] trait: Transport-agnostic text formatting for tool outputs
-//! - Provider renderers: OpenAI, Anthropic, and MCP schema generation
+//! - Provider renderers: `OpenAI`, Anthropic, and MCP schema generation
 
 pub mod context;
 pub mod error;

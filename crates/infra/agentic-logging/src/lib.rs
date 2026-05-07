@@ -46,7 +46,7 @@ pub enum LogError {
 
 impl<E: std::fmt::Display> From<atomicwrites::Error<E>> for LogError {
     fn from(e: atomicwrites::Error<E>) -> Self {
-        LogError::AtomicWrite(e.to_string())
+        Self::AtomicWrite(e.to_string())
     }
 }
 
@@ -65,9 +65,9 @@ pub struct TokenUsage {
 pub struct ToolCallRecord {
     /// Unique identifier for this call
     pub call_id: String,
-    /// Server name (e.g., "gpt5_reasoner", "coding_agent_tools", "thoughts_tool")
+    /// Server name (e.g., "`gpt5_reasoner`", "`coding_agent_tools`", "`thoughts_tool`")
     pub server: String,
-    /// Tool name (e.g., "plan", "reasoning", "ask_agent", "ls")
+    /// Tool name (e.g., "plan", "reasoning", "`ask_agent`", "ls")
     pub tool: String,
     /// When the call started
     pub started_at: DateTime<Utc>,
@@ -91,7 +91,7 @@ pub struct ToolCallRecord {
     /// Token usage if available
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token_usage: Option<TokenUsage>,
-    /// Summary data for compact tools (e.g., {"entries": 10, "has_more": true})
+    /// Summary data for compact tools (e.g., {"entries": 10, "`has_more"`: true})
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<serde_json::Value>,
 }
@@ -155,7 +155,7 @@ impl LogWriter {
 
     /// Generate the day bucket name from a timestamp.
     ///
-    /// Format: `tool_logs_YYYY-MM-DD_{session_id}` where session_id is the first
+    /// Format: `tool_logs_YYYY-MM-DD_{session_id}` where `session_id` is the first
     /// 8 characters of a UUID v4 unique to this process. This prevents file
     /// conflicts between concurrent processes writing to the same logs directory.
     fn day_bucket_name(date: DateTime<Utc>) -> String {

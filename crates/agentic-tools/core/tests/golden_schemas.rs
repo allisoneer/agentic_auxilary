@@ -1,7 +1,7 @@
 //! Golden tests for provider schema rendering.
 //!
 //! These tests verify that schema rendering produces consistent output
-//! across all supported providers (OpenAI, Anthropic, MCP).
+//! across all supported providers (`OpenAI`, Anthropic, MCP).
 
 use agentic_tools_core::providers::anthropic;
 use agentic_tools_core::providers::mcp;
@@ -17,7 +17,7 @@ use serde::Serialize;
 
 /// Simple tool input for testing.
 #[derive(Debug, Deserialize, JsonSchema)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct SimpleInput {
     /// A required string message
     message: String,
@@ -28,7 +28,7 @@ struct SimpleInput {
 
 /// Complex tool input with nested types.
 #[derive(Debug, Deserialize, JsonSchema)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct ComplexInput {
     /// The query to execute
     query: String,
@@ -40,7 +40,7 @@ struct ComplexInput {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct Options {
     /// Enable verbose output
     verbose: bool,
@@ -50,7 +50,6 @@ struct Options {
 
 /// Output type for testing
 #[derive(Debug, Serialize, JsonSchema)]
-#[allow(dead_code)]
 struct SimpleOutput {
     result: String,
     success: bool,
@@ -288,8 +287,12 @@ fn golden_schema_with_range_constraint() {
     let count_schema = &transformed_json["properties"]["count"];
 
     // Verify range was applied (compare as f64 since schemars may use floats)
-    let min = count_schema.get("minimum").and_then(|v| v.as_f64());
-    let max = count_schema.get("maximum").and_then(|v| v.as_f64());
+    let min = count_schema
+        .get("minimum")
+        .and_then(serde_json::Value::as_f64);
+    let max = count_schema
+        .get("maximum")
+        .and_then(serde_json::Value::as_f64);
 
     assert_eq!(min, Some(0.0));
     assert_eq!(max, Some(100.0));

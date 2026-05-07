@@ -170,7 +170,7 @@ mod text_parser_tests {
     const LARGE_STDERR_LEN: usize = 128 * 1024;
     const PARSE_TIMEOUT: Duration = Duration::from_secs(2);
 
-    /// Minimal AsyncRead adapter over in-memory bytes for tests
+    /// Minimal `AsyncRead` adapter over in-memory bytes for tests
     struct AsyncCursor {
         inner: std::io::Cursor<Vec<u8>>,
     }

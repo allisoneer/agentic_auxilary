@@ -8,6 +8,7 @@ use anyhow::Result;
 use cargo_metadata::Metadata;
 use cargo_metadata::Package;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
@@ -35,7 +36,7 @@ fn get_integration(pkg: &Package, key: &str) -> bool {
         .get("repo")
         .and_then(|r| r.get("integrations"))
         .and_then(|i| i.get(key))
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false)
 }
 
@@ -65,10 +66,9 @@ pub fn render_root_index(metadata: &Metadata) -> String {
 
         // Get relative path from manifest
         let manifest_path = pkg.manifest_path.as_std_path();
-        let dir = manifest_path
-            .parent()
-            .map(|p| workspace_relative_dir(p, metadata.workspace_root.as_std_path()))
-            .unwrap_or_default();
+        let dir = manifest_path.parent().map_or_else(String::new, |p| {
+            workspace_relative_dir(p, metadata.workspace_root.as_std_path())
+        });
 
         groups
             .entry(family)
@@ -79,9 +79,9 @@ pub fn render_root_index(metadata: &Metadata) -> String {
     // Render as markdown list
     let mut out = String::new();
     for (family, items) in &groups {
-        out.push_str(&format!("### {family}\n\n"));
+        let _ = writeln!(out, "### {family}\n");
         for (name, role, dir) in items {
-            out.push_str(&format!("- `{name}` ({role}) - `{dir}/`\n"));
+            let _ = writeln!(out, "- `{name}` ({role}) - `{dir}/`");
         }
         out.push('\n');
     }
@@ -108,11 +108,11 @@ pub fn sync_root_claude(
                 "Root CLAUDE.md crate-index is out of date; run `cargo run -p xtask -- sync`"
             );
         }
-        if !dry_run {
+        if dry_run {
+            eprintln!("[sync] Would update {path} (dry-run)");
+        } else {
             fs::write(path, &updated).with_context(|| format!("Failed to write {path}"))?;
             eprintln!("[sync] Updated {path}");
-        } else {
-            eprintln!("[sync] Would update {path} (dry-run)");
         }
     }
 
@@ -172,8 +172,7 @@ fn sync_single_crate_claude(
     let manifest_path = pkg.manifest_path.as_std_path();
     let crate_dir = manifest_path
         .parent()
-        .map(|p| workspace_relative_dir(p, ws_root))
-        .unwrap_or_default();
+        .map_or_else(String::new, |p| workspace_relative_dir(p, ws_root));
 
     // Build header content
     let header = format!(
@@ -183,7 +182,7 @@ fn sync_single_crate_claude(
 
     // Build commands content
     let commands = format!(
-        r#"```bash
+        r"```bash
 # Lint & Clippy
 cargo fmt -p {} -- --check
 cargo clippy -p {} --all-targets -- -D warnings
@@ -193,7 +192,7 @@ cargo test -p {}
 
 # Build
 cargo build -p {}
-```"#,
+```",
         pkg.name, pkg.name, pkg.name, pkg.name
     );
 
@@ -220,12 +219,12 @@ cargo build -p {}
                 pkg.name
             );
         }
-        if !dry_run {
+        if dry_run {
+            eprintln!("[sync] Would update {} (dry-run)", path.display());
+        } else {
             fs::write(path, &after_cmds)
                 .with_context(|| format!("Failed to write {}", path.display()))?;
             eprintln!("[sync] Updated {}", path.display());
-        } else {
-            eprintln!("[sync] Would update {} (dry-run)", path.display());
         }
     }
 

@@ -53,11 +53,11 @@ pub fn sync_schema(path: &str, dry_run: bool, check: bool) -> Result<bool> {
             bail!("{path} is out of date; run `cargo run -p xtask -- sync`");
         }
 
-        if !dry_run {
+        if dry_run {
+            eprintln!("[sync] Would update {path} (dry-run)");
+        } else {
             fs::write(path, desired).with_context(|| format!("Failed to write {path}"))?;
             eprintln!("[sync] Updated {path}");
-        } else {
-            eprintln!("[sync] Would update {path} (dry-run)");
         }
     }
 

@@ -7,6 +7,7 @@ use crate::policy::Policy;
 use anyhow::Context;
 use anyhow::Result;
 use cargo_metadata::Metadata;
+use std::fmt::Write as _;
 use std::fs;
 
 /// Get the changelog path for a package based on its manifest directory.
@@ -16,12 +17,17 @@ fn get_changelog_path(pkg: &cargo_metadata::Package, metadata: &Metadata) -> Str
 
     // Make path relative to workspace root
     let ws_root = metadata.workspace_root.as_std_path();
-    let relative = dir
-        .strip_prefix(ws_root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| dir.to_string_lossy().to_string());
+    let relative = dir.strip_prefix(ws_root).map_or_else(
+        |_| dir.to_string_lossy().to_string(),
+        |p| p.to_string_lossy().to_string(),
+    );
 
-    format!("{}/CHANGELOG.md", relative.trim_start_matches('/'))
+    let relative = relative.trim_start_matches('/');
+    if relative.is_empty() {
+        "CHANGELOG.md".to_string()
+    } else {
+        format!("{relative}/CHANGELOG.md")
+    }
 }
 
 /// Render [[package]] entries for all workspace crates.
@@ -55,18 +61,15 @@ pub fn render_packages(metadata: &Metadata, policy: &Policy) -> String {
             .git_tag_format
             .replace("{{ name }}", name);
 
+        let git_tag_enable_text = if git_tag_enable { "true" } else { "false" };
+        let release_text = if publish { "true" } else { "false" };
+
         out.push_str("[[package]]\n");
-        out.push_str(&format!("name = \"{}\"\n", name));
-        out.push_str(&format!("changelog_path = \"{}\"\n", changelog_path));
-        out.push_str(&format!("git_tag_name = \"{}\"\n", tag_name));
-        out.push_str(&format!(
-            "git_tag_enable = {}\n",
-            if git_tag_enable { "true" } else { "false" }
-        ));
-        out.push_str(&format!(
-            "release = {}\n",
-            if publish { "true" } else { "false" }
-        ));
+        let _ = writeln!(out, "name = \"{name}\"");
+        let _ = writeln!(out, "changelog_path = \"{changelog_path}\"");
+        let _ = writeln!(out, "git_tag_name = \"{tag_name}\"");
+        let _ = writeln!(out, "git_tag_enable = {git_tag_enable_text}");
+        let _ = writeln!(out, "release = {release_text}");
         // Emit publish = false to override workspace default for non-publishable packages
         if !publish {
             out.push_str("publish = false\n");
@@ -98,11 +101,11 @@ pub fn sync_release_plz(
                 "release-plz.toml packages block is out of date; run `cargo run -p xtask -- sync`"
             );
         }
-        if !dry_run {
+        if dry_run {
+            eprintln!("[sync] Would update {path} (dry-run)");
+        } else {
             fs::write(path, &updated).with_context(|| format!("Failed to write {path}"))?;
             eprintln!("[sync] Updated {path}");
-        } else {
-            eprintln!("[sync] Would update {path} (dry-run)");
         }
     }
 

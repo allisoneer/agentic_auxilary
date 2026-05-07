@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match content {
                             claudecode::Content::Text { text } => print!("{text}"),
                             claudecode::Content::ToolUse { name, .. } => {
-                                println!("[Tool use: {name}]")
+                                println!("[Tool use: {name}]");
                             }
                             claudecode::Content::ToolResult { .. } => {}
                         }
