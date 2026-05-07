@@ -1,0 +1,53 @@
+crates/agentic-tools/core/src/providers/openai.rs
+  s_359d242bd0b612::t_dcdcd063f7ee91 22-25
+crates/agentic-tools/core/src/providers/mcp.rs
+  s_359d242bd0b612::t_4ccc4ae8259972 4,24-29,31-32,35-39,42
+  s_359d242bd0b612::t_ffe3da14d6644f 30
+crates/agentic-tools/core/src/error.rs
+  s_359d242bd0b612::t_1b28b675f6caf1 58-59,63-64
+  s_359d242bd0b612::t_33acd7ed86053d 43-44,48-49,53-54
+crates/agentic-tools/core/src/registry.rs
+  s_359d242bd0b612::t_a2738a616abd6a 91
+  s_359d242bd0b612::t_c684f77a703637 99,112,125,132,144,192-193,218,334
+crates/agentic-tools/core/src/schema.rs
+  s_359d242bd0b612::t_2a386465e70dfa 112-115,140-143,190-193,195-198,417,445,450,464-467
+  s_359d242bd0b612::t_5b35134c6fe92f 79,107-110,168-169
+crates/agentic-tools/core/Cargo.toml
+  s_333574ec928424::t_fb950b99e6e972 32-34
+crates/agentic-tools/core/src/providers/mod.rs
+  ai_agent 4
+crates/agentic-tools/core/tests/native_calls.rs
+  ai_agent 1,4,67,96
+crates/agentic-tools/core/src/providers/anthropic.rs
+  s_359d242bd0b612::t_54a14bb9682871 19-22
+crates/agentic-tools/core/src/context.rs
+  ai_agent 74
+crates/agentic-tools/core/src/lib.rs
+  ai_agent 9
+crates/agentic-tools/core/src/fmt.rs
+  s_359d242bd0b612::t_97c5e5b3689dd1 75,82,89,96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7a7ce077795a235ba193e2f7fdccc9e7c64db2c4",
+  "prompts": {},
+  "sessions": {
+    "s_333574ec928424": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_359d242bd0b612": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fcbdc1b9ffeFxyskuh9ysef5T",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
