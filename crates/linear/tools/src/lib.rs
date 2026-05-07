@@ -61,7 +61,8 @@ pub use tools::build_registry;
 /// Returns (`team_key`, number) if a valid identifier is found.
 fn parse_identifier(input: &str) -> Option<(String, i32)> {
     let upper = input.to_uppercase();
-    let re = Regex::new(r"([A-Z]{2,10})-(\d{1,10})").unwrap();
+    #[expect(clippy::expect_used, reason = "regex literal is valid by construction")]
+    let re = Regex::new(r"([A-Z]{2,10})-(\d{1,10})").expect("valid issue identifier regex");
     if let Some(caps) = re.captures(&upper) {
         let key = caps.get(1)?.as_str().to_string();
         let num_str = caps.get(2)?.as_str();
@@ -89,7 +90,7 @@ impl LinearTools {
         }
     }
 
-    fn resolve_issue_id(&self, input: &str) -> IssueIdentifier {
+    fn resolve_issue_id(input: &str) -> IssueIdentifier {
         // Try to parse as identifier (handles lowercase and URLs)
         if let Some((key, number)) = parse_identifier(input) {
             return IssueIdentifier::Identifier(format!("{key}-{number}"));
@@ -101,7 +102,7 @@ impl LinearTools {
     /// Resolve an issue identifier (UUID, ENG-245, or URL) to a UUID.
     /// For identifiers, queries Linear to find the matching issue.
     async fn resolve_to_issue_id(&self, client: &LinearClient, input: &str) -> Result<String> {
-        match self.resolve_issue_id(input) {
+        match Self::resolve_issue_id(input) {
             IssueIdentifier::Id(id) => Ok(id),
             IssueIdentifier::Identifier(ident) => {
                 let (team_key, number) = parse_identifier(&ident)
@@ -280,14 +281,11 @@ impl LinearTools {
 
         // Build filters (no title filter - full-text search handles query)
         let mut filter = IssueFilter::default();
-        let mut has_filter = false;
-
         if let Some(p) = priority {
             filter.priority = Some(NullableNumberComparator {
                 eq: Some(f64::from(p)),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if let Some(id) = state_id {
             filter.state = Some(WorkflowStateFilter {
@@ -296,7 +294,6 @@ impl LinearTools {
                 }),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if let Some(id) = assignee_id {
             filter.assignee = Some(NullableUserFilter {
@@ -304,7 +301,6 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
-            has_filter = true;
         }
         if let Some(id) = creator_id {
             filter.creator = Some(NullableUserFilter {
@@ -312,7 +308,6 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
-            has_filter = true;
         }
         if let Some(id) = team_id {
             filter.team = Some(TeamFilter {
@@ -321,7 +316,6 @@ impl LinearTools {
                 }),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if let Some(id) = project_id {
             filter.project = Some(NullableProjectFilter {
@@ -329,7 +323,6 @@ impl LinearTools {
                     eq: Some(cynic::Id::new(id)),
                 }),
             });
-            has_filter = true;
         }
         if created_after.is_some() || created_before.is_some() {
             filter.created_at = Some(DateComparator {
@@ -337,7 +330,6 @@ impl LinearTools {
                 lte: created_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
-            has_filter = true;
         }
         if updated_after.is_some() || updated_before.is_some() {
             filter.updated_at = Some(DateComparator {
@@ -345,10 +337,17 @@ impl LinearTools {
                 lte: updated_before.map(DateTimeOrDuration),
                 ..Default::default()
             });
-            has_filter = true;
         }
 
-        let filter_opt = if has_filter { Some(filter) } else { None };
+        let filter_opt = (filter.priority.is_some()
+            || filter.state.is_some()
+            || filter.assignee.is_some()
+            || filter.creator.is_some()
+            || filter.team.is_some()
+            || filter.project.is_some()
+            || filter.created_at.is_some()
+            || filter.updated_at.is_some())
+        .then_some(filter);
         let page_size = Some(first.unwrap_or(50).clamp(1, 100));
         let q_trimmed = query.as_ref().map_or("", |s| s.trim());
 
@@ -401,7 +400,7 @@ impl LinearTools {
     pub async fn read_issue(&self, issue: String) -> Result<models::IssueDetails> {
         let client = LinearClient::new(self.api_key.clone())
             .context("internal: failed to create Linear client")?;
-        let resolved = self.resolve_issue_id(&issue);
+        let resolved = Self::resolve_issue_id(&issue);
 
         let issue_data = match resolved {
             IssueIdentifier::Id(id) => {
@@ -745,25 +744,34 @@ impl LinearTools {
                 })
             }
             models::MetadataKind::WorkflowStates => {
-                let mut filter = linear_queries::WorkflowStateFilter::default();
-                let mut has_filter = false;
-                if let Some(s) = search {
-                    filter.name = Some(StringComparator {
-                        contains_ignore_case: Some(s),
-                        ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                if let Some(tid) = team_id {
-                    filter.team = Some(linear_queries::TeamFilter {
-                        id: Some(linear_queries::IdComparator {
-                            eq: Some(cynic::Id::new(tid)),
+                let filter_opt = if let Some(s) = search {
+                    let mut filter = linear_queries::WorkflowStateFilter {
+                        name: Some(StringComparator {
+                            contains_ignore_case: Some(s),
+                            ..Default::default()
                         }),
                         ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                let filter_opt = if has_filter { Some(filter) } else { None };
+                    };
+                    if let Some(tid) = team_id {
+                        filter.team = Some(linear_queries::TeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        });
+                    }
+                    Some(filter)
+                } else {
+                    team_id.map(|tid| linear_queries::WorkflowStateFilter {
+                        team: Some(linear_queries::TeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                };
                 let op = linear_queries::WorkflowStatesQuery::build(
                     linear_queries::WorkflowStatesArguments {
                         first,
@@ -794,25 +802,34 @@ impl LinearTools {
                 })
             }
             models::MetadataKind::Labels => {
-                let mut filter = linear_queries::IssueLabelFilter::default();
-                let mut has_filter = false;
-                if let Some(s) = search {
-                    filter.name = Some(StringComparator {
-                        contains_ignore_case: Some(s),
-                        ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                if let Some(tid) = team_id {
-                    filter.team = Some(linear_queries::NullableTeamFilter {
-                        id: Some(linear_queries::IdComparator {
-                            eq: Some(cynic::Id::new(tid)),
+                let filter_opt = if let Some(s) = search {
+                    let mut filter = linear_queries::IssueLabelFilter {
+                        name: Some(StringComparator {
+                            contains_ignore_case: Some(s),
+                            ..Default::default()
                         }),
                         ..Default::default()
-                    });
-                    has_filter = true;
-                }
-                let filter_opt = if has_filter { Some(filter) } else { None };
+                    };
+                    if let Some(tid) = team_id {
+                        filter.team = Some(linear_queries::NullableTeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        });
+                    }
+                    Some(filter)
+                } else {
+                    team_id.map(|tid| linear_queries::IssueLabelFilter {
+                        team: Some(linear_queries::NullableTeamFilter {
+                            id: Some(linear_queries::IdComparator {
+                                eq: Some(cynic::Id::new(tid)),
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                };
                 let op =
                     linear_queries::IssueLabelsQuery::build(linear_queries::IssueLabelsArguments {
                         first,
@@ -958,7 +975,7 @@ impl LinearTools {
 
         if needs_fetch {
             // Fetch all comments from Linear API
-            let (identifier, all_comments) = self.fetch_all_comments(&client, &issue_id).await?;
+            let (identifier, all_comments) = Self::fetch_all_comments(&client, &issue_id).await?;
             issue_identifier = identifier.clone();
 
             // Reset cache with fresh data (stores canonical identifier)
@@ -998,7 +1015,6 @@ impl LinearTools {
     }
 
     async fn fetch_all_comments(
-        &self,
         client: &LinearClient,
         issue_id: &str,
     ) -> Result<(String, Vec<models::CommentSummary>)> {
@@ -1046,7 +1062,7 @@ impl LinearTools {
                 return Ok((identifier.unwrap_or_default(), all_comments));
             }
 
-            cursor = issue.comments.page_info.end_cursor.clone();
+            cursor.clone_from(&issue.comments.page_info.end_cursor);
             if cursor.is_none() {
                 return Err(anyhow::anyhow!(
                     "Issue comments pagination for {issue_id} reported has_next_page=true without end_cursor"

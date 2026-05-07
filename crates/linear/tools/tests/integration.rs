@@ -38,7 +38,7 @@ async fn read_issue_by_identifier_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![node], false, None))
+        .with_body(issues_response(&[node], false, None))
         .create_async()
         .await;
 
@@ -78,7 +78,7 @@ async fn search_issues_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![node1, node2], true, Some("cursor123")))
+        .with_body(issues_response(&[node1, node2], true, Some("cursor123")))
         .create_async()
         .await;
 
@@ -112,7 +112,7 @@ async fn read_issue_not_found() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json; charset=utf-8")
-        .with_body(issues_response(vec![], false, None))
+        .with_body(issues_response(&[], false, None))
         .create_async()
         .await;
 
@@ -137,7 +137,7 @@ async fn create_issue_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issue_create_response(node))
+        .with_body(issue_create_response(&node))
         .create_async()
         .await;
 
@@ -213,7 +213,7 @@ async fn add_comment_by_identifier_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![resolve_node], false, None))
+        .with_body(issues_response(&[resolve_node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -262,7 +262,7 @@ async fn add_comment_by_url_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![resolve_node], false, None))
+        .with_body(issues_response(&[resolve_node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -311,7 +311,7 @@ async fn create_issue_with_state_label_parent_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issue_create_response(node))
+        .with_body(issue_create_response(&node))
         .create_async()
         .await;
 
@@ -354,7 +354,7 @@ async fn search_issues_with_state_filter() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![node], false, None))
+        .with_body(issues_response(&[node], false, None))
         .create_async()
         .await;
 
@@ -402,7 +402,7 @@ async fn search_issues_with_date_ranges() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![node], false, None))
+        .with_body(issues_response(&[node], false, None))
         .create_async()
         .await;
 
@@ -444,7 +444,7 @@ async fn auth_header_personal_key() {
         .match_header("authorization", "lin_api_abc123")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![], false, None))
+        .with_body(issues_response(&[], false, None))
         .create_async()
         .await;
 
@@ -470,7 +470,7 @@ async fn auth_header_oauth_token() {
         .match_header("authorization", "Bearer oauth_token_123")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![], false, None))
+        .with_body(issues_response(&[], false, None))
         .create_async()
         .await;
 
@@ -500,7 +500,7 @@ async fn search_issues_full_text_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(search_response(vec![node], false, None))
+        .with_body(search_response(&[node], false, None))
         .create_async()
         .await;
 
@@ -614,7 +614,7 @@ async fn archive_issue_success_by_identifier() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![resolve_node], false, None))
+        .with_body(issues_response(&[resolve_node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -659,7 +659,7 @@ async fn update_issue_by_uuid_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issue_update_response(node))
+        .with_body(issue_update_response(&node))
         .expect(1)
         .create_async()
         .await;
@@ -702,7 +702,7 @@ async fn update_issue_by_identifier_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![resolve_node], false, None))
+        .with_body(issues_response(&[resolve_node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -716,7 +716,7 @@ async fn update_issue_by_identifier_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issue_update_response(updated_node))
+        .with_body(issue_update_response(&updated_node))
         .expect(1)
         .create_async()
         .await;
@@ -792,8 +792,8 @@ async fn set_relation_remove_existing() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(issue_relations_response(
-            vec![("rel-123", "550e8400-e29b-41d4-a716-446655440002")],
-            vec![],
+            &[("rel-123", "550e8400-e29b-41d4-a716-446655440002")],
+            &[],
         ))
         .expect(1)
         .create_async()
@@ -836,7 +836,7 @@ async fn set_relation_remove_not_found_idempotent() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issue_relations_response(vec![], vec![]))
+        .with_body(issue_relations_response(&[], &[]))
         .expect(1)
         .create_async()
         .await;
@@ -874,7 +874,7 @@ async fn get_metadata_users_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(users_response(nodes, false, None))
+        .with_body(users_response(&nodes, false, None))
         .create_async()
         .await;
 
@@ -911,7 +911,7 @@ async fn get_metadata_teams_success() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(teams_response(nodes, false, None))
+        .with_body(teams_response(&nodes, false, None))
         .create_async()
         .await;
 
@@ -939,15 +939,16 @@ async fn get_metadata_teams_success() {
 #[serial(env)]
 async fn get_metadata_labels_success() {
     let mut server = Server::new_async().await;
+    let team = team_node("t1", "ENG", "Engineering");
     let nodes = vec![
-        issue_label_node("l1", "Bug", Some(team_node("t1", "ENG", "Engineering"))),
+        issue_label_node("l1", "Bug", Some(&team)),
         issue_label_node("l2", "Feature", None),
     ];
     let _m = server
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issue_labels_response(nodes, false, None))
+        .with_body(issue_labels_response(&nodes, false, None))
         .create_async()
         .await;
 
@@ -984,7 +985,7 @@ async fn search_issues_with_creator_id_filter() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(issues_response(vec![node], false, None))
+        .with_body(issues_response(&[node], false, None))
         .expect(1)
         .create_async()
         .await;
@@ -1026,7 +1027,7 @@ async fn get_metadata_pagination() {
         .mock("POST", "/")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(teams_response(nodes, true, Some("cursor-abc")))
+        .with_body(teams_response(&nodes, true, Some("cursor-abc")))
         .create_async()
         .await;
 
@@ -1087,7 +1088,7 @@ async fn get_issue_comments_fetches_multiple_upstream_pages_then_paginates_local
         .with_body(issue_comments_response(
             issue_uuid,
             identifier,
-            first_page_nodes,
+            &first_page_nodes,
             true,
             Some("cursor-1"),
         ))
@@ -1101,7 +1102,7 @@ async fn get_issue_comments_fetches_multiple_upstream_pages_then_paginates_local
         .with_body(issue_comments_response(
             issue_uuid,
             identifier,
-            second_page_nodes,
+            &second_page_nodes,
             false,
             None,
         ))

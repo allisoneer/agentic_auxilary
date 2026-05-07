@@ -7,6 +7,10 @@
 //!
 //! Run with: just test-live
 
+use cynic::MutationBuilder;
+use linear_queries::IssueArchiveArguments;
+use linear_queries::IssueArchiveMutation;
+use linear_tools::http::LinearClient;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -23,7 +27,7 @@ fn live_env_ready() -> bool {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires live Linear credentials and explicit opt-in"]
 async fn live_create_search_read_comment_archive() {
     if !live_env_ready() {
         eprintln!(
@@ -108,10 +112,6 @@ async fn live_create_search_read_comment_archive() {
     assert!(comment.success);
 
     // 6) Archive for cleanup
-    use cynic::MutationBuilder;
-    use linear_queries::mutations::*;
-    use linear_tools::http::LinearClient;
-
     let client = LinearClient::new(None).expect("LinearClient should initialize");
     let op = IssueArchiveMutation::build(IssueArchiveArguments { id: issue_id });
     let resp = client.run(op).await.expect("issueArchive should execute");

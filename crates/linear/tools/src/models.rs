@@ -206,27 +206,27 @@ impl TextFormat for SearchResult {
             if o.show_state
                 && let Some(s) = &i.state
             {
-                line.push_str(&format!(" [{}]", s.name));
+                let _ = write!(line, " [{}]", s.name);
             }
             if o.show_assignee
                 && let Some(u) = &i.assignee
             {
-                line.push_str(&format!(" (by {})", u.name));
+                let _ = write!(line, " (by {})", u.name);
             }
             if o.show_priority {
-                line.push_str(&format!(" P{} ({})", i.priority, i.priority_label));
+                let _ = write!(line, " P{} ({})", i.priority, i.priority_label);
             }
             if o.show_team {
-                line.push_str(&format!(" [{}]", i.team.key));
+                let _ = write!(line, " [{}]", i.team.key);
             }
             if o.show_urls {
-                line.push_str(&format!(" {}", i.url));
+                let _ = write!(line, " {}", i.url);
             }
             if o.show_ids {
-                line.push_str(&format!(" #{}", i.id));
+                let _ = write!(line, " #{}", i.id);
             }
             if o.show_dates {
-                line.push_str(&format!(" @{}", i.updated_at));
+                let _ = write!(line, " @{}", i.updated_at);
             }
             let _ = writeln!(out, "  {line}");
         }
@@ -279,12 +279,8 @@ impl TextFormat for IssueDetails {
         }
 
         // Description
-        if self
-            .description
-            .as_ref()
-            .is_some_and(|d| !d.trim().is_empty())
-        {
-            let _ = writeln!(out, "\n{}", self.description.as_ref().unwrap());
+        if let Some(description) = self.description.as_ref().filter(|d| !d.trim().is_empty()) {
+            let _ = writeln!(out, "\n{description}");
         }
 
         out
@@ -463,15 +459,16 @@ impl TextFormat for GetMetadataResult {
         }
         let mut out = String::new();
         for item in &self.items {
-            let mut line = format!("{} ({})", item.name, item.id);
-            if let Some(ref key) = item.key {
-                line = format!("{} [{}] ({})", item.name, key, item.id);
-            }
+            let mut line = if let Some(ref key) = item.key {
+                format!("{} [{}] ({})", item.name, key, item.id)
+            } else {
+                format!("{} ({})", item.name, item.id)
+            };
             if let Some(ref email) = item.email {
-                line.push_str(&format!(" <{email}>"));
+                let _ = write!(line, " <{email}>");
             }
             if let Some(ref st) = item.state_type {
-                line.push_str(&format!(" [{st}]"));
+                let _ = write!(line, " [{st}]");
             }
             let _ = writeln!(out, "  {line}");
         }

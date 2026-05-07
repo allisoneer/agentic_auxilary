@@ -94,7 +94,7 @@ impl Tool for SearchIssuesTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .search_issues(
@@ -114,7 +114,7 @@ impl Tool for SearchIssuesTool {
                     input.after,
                 )
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -154,12 +154,12 @@ impl Tool for ReadIssueTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .read_issue(input.issue)
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -221,7 +221,7 @@ impl Tool for CreateIssueTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .create_issue(
@@ -236,7 +236,7 @@ impl Tool for CreateIssueTool {
                     input.label_ids,
                 )
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -280,12 +280,12 @@ impl Tool for AddCommentTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .add_comment(input.issue, input.body, input.parent_id)
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -324,12 +324,12 @@ impl Tool for GetIssueCommentsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .get_issue_comments(input.issue)
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -369,12 +369,12 @@ impl Tool for ArchiveIssueTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .archive_issue(input.issue)
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -446,7 +446,7 @@ impl Tool for UpdateIssueTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .update_issue(
@@ -464,7 +464,7 @@ impl Tool for UpdateIssueTool {
                     input.due_date,
                 )
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -508,12 +508,12 @@ impl Tool for SetRelationTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .set_relation(input.issue, input.related_issue, input.relation_type)
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -564,7 +564,7 @@ impl Tool for GetMetadataTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let linear = self.linear.clone();
+        let linear = Arc::clone(&self.linear);
         Box::pin(async move {
             linear
                 .get_metadata(
@@ -575,7 +575,7 @@ impl Tool for GetMetadataTool {
                     input.after,
                 )
                 .await
-                .map_err(map_anyhow_to_tool_error)
+                .map_err(|e| map_anyhow_to_tool_error(&e))
         })
     }
 }
@@ -587,14 +587,14 @@ impl Tool for GetMetadataTool {
 /// Build a `ToolRegistry` containing all `linear_tools` tools.
 pub fn build_registry(linear: Arc<LinearTools>) -> ToolRegistry {
     ToolRegistry::builder()
-        .register::<SearchIssuesTool, ()>(SearchIssuesTool::new(linear.clone()))
-        .register::<ReadIssueTool, ()>(ReadIssueTool::new(linear.clone()))
-        .register::<CreateIssueTool, ()>(CreateIssueTool::new(linear.clone()))
-        .register::<AddCommentTool, ()>(AddCommentTool::new(linear.clone()))
-        .register::<GetIssueCommentsTool, ()>(GetIssueCommentsTool::new(linear.clone()))
-        .register::<ArchiveIssueTool, ()>(ArchiveIssueTool::new(linear.clone()))
-        .register::<UpdateIssueTool, ()>(UpdateIssueTool::new(linear.clone()))
-        .register::<SetRelationTool, ()>(SetRelationTool::new(linear.clone()))
+        .register::<SearchIssuesTool, ()>(SearchIssuesTool::new(Arc::clone(&linear)))
+        .register::<ReadIssueTool, ()>(ReadIssueTool::new(Arc::clone(&linear)))
+        .register::<CreateIssueTool, ()>(CreateIssueTool::new(Arc::clone(&linear)))
+        .register::<AddCommentTool, ()>(AddCommentTool::new(Arc::clone(&linear)))
+        .register::<GetIssueCommentsTool, ()>(GetIssueCommentsTool::new(Arc::clone(&linear)))
+        .register::<ArchiveIssueTool, ()>(ArchiveIssueTool::new(Arc::clone(&linear)))
+        .register::<UpdateIssueTool, ()>(UpdateIssueTool::new(Arc::clone(&linear)))
+        .register::<SetRelationTool, ()>(SetRelationTool::new(Arc::clone(&linear)))
         .register::<GetMetadataTool, ()>(GetMetadataTool::new(linear))
         .finish()
 }
@@ -604,7 +604,7 @@ pub fn build_registry(linear: Arc<LinearTools>) -> ToolRegistry {
 // ============================================================================
 
 /// Map `anyhow::Error` to `agentic_tools_core::ToolError` based on error message patterns.
-fn map_anyhow_to_tool_error(e: anyhow::Error) -> ToolError {
+fn map_anyhow_to_tool_error(e: &anyhow::Error) -> ToolError {
     let msg = e.to_string();
     let lc = msg.to_lowercase();
     if lc.contains("permission") || lc.contains("401") || lc.contains("403") {
