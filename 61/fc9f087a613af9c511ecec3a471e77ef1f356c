@@ -1,0 +1,22 @@
+bindings/node/agentic-tools-napi/src/lib.rs
+  s_da9f41eae8f2f6::t_5d8b7718db63fe 26-29
+  s_da9f41eae8f2f6::t_f4023ddc228714 25,30-32
+bindings/node/agentic-tools-napi/Cargo.toml
+  s_da9f41eae8f2f6::t_872806fc81ffdc 31-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "61fc9f087a613af9c511ecec3a471e77ef1f356c",
+  "prompts": {},
+  "sessions": {
+    "s_da9f41eae8f2f6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fc9a1430ffevGkRioHjkXwR01",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
