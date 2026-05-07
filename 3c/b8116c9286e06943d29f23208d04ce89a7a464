@@ -1,0 +1,35 @@
+crates/agentic-tools/core/src/fmt.rs
+  s_359d242bd0b612::t_97c5e5b3689dd1 75,82,89,96
+crates/agentic-tools/core/src/providers/openai.rs
+  s_359d242bd0b612::t_dcdcd063f7ee91 22-25
+crates/agentic-tools/core/src/error.rs
+  s_359d242bd0b612::t_1b28b675f6caf1 58-59,63-64
+  s_359d242bd0b612::t_33acd7ed86053d 43-44,48-49,53-54
+crates/agentic-tools/core/src/registry.rs
+  s_359d242bd0b612::t_a2738a616abd6a 91
+  s_359d242bd0b612::t_c684f77a703637 99,112,125,132,144,192-193,218,334
+crates/agentic-tools/core/src/providers/mcp.rs
+  s_359d242bd0b612::t_ffe3da14d6644f 30
+  s_359d242bd0b612::t_4ccc4ae8259972 4,24-29,31-32,35-39,42
+crates/agentic-tools/core/src/providers/anthropic.rs
+  s_359d242bd0b612::t_54a14bb9682871 19-22
+crates/agentic-tools/core/src/schema.rs
+  s_359d242bd0b612::t_5b35134c6fe92f 79,107-110,168-169
+  s_359d242bd0b612::t_2a386465e70dfa 112-115,140-143,190-193,195-198,417,445,450,464-467
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "3cb8116c9286e06943d29f23208d04ce89a7a464",
+  "prompts": {},
+  "sessions": {
+    "s_359d242bd0b612": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fcbdc1b9ffeFxyskuh9ysef5T",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
