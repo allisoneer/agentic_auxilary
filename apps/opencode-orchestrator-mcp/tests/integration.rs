@@ -6,8 +6,11 @@
 
 use agentic_tools_core::Tool;
 use opencode_orchestrator_mcp::server::OrchestratorServer;
+use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
+use opencode_orchestrator_mcp::tools::ListCommandsTool;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::tools::RespondPermissionTool;
+use opencode_orchestrator_mcp::types::ListCommandsInput;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use opencode_orchestrator_mcp::types::PermissionReply;
 use opencode_orchestrator_mcp::types::RespondPermissionInput;
@@ -18,7 +21,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use tokio::sync::OnceCell;
 use tokio::time::timeout;
 
 fn should_run() -> bool {
@@ -35,21 +37,18 @@ fn init_tracing() {
         .try_init();
 }
 
-async fn start_server() -> Arc<OnceCell<OrchestratorServer>> {
-    // Use the lazy init path and pre-initialize for integration tests
-    let cell = Arc::new(OnceCell::new());
+async fn start_server() -> Arc<OrchestratorServerHandle> {
     let server = timeout(Duration::from_secs(30), OrchestratorServer::start_lazy())
         .await
         .expect("timeout starting embedded opencode server")
         .expect("failed to start embedded opencode server");
-    cell.set(server)
-        .unwrap_or_else(|_| panic!("cell should be empty"));
-    cell
+    Arc::new(OrchestratorServerHandle::from_server_unshared(server))
 }
 
-async fn create_session(server: &OnceCell<OrchestratorServer>) -> String {
+async fn create_session(server: &OrchestratorServerHandle) -> String {
     server
-        .get()
+        .acquire()
+        .await
         .expect("server should be initialized")
         .client()
         .sessions()
@@ -59,8 +58,8 @@ async fn create_session(server: &OnceCell<OrchestratorServer>) -> String {
         .id
 }
 
-async fn cleanup_session(server: &OnceCell<OrchestratorServer>, session_id: &str) {
-    if let Some(s) = server.get() {
+async fn cleanup_session(server: &OrchestratorServerHandle, session_id: &str) {
+    if let Ok(s) = server.acquire().await {
         let _ = s.client().sessions().delete(session_id).await;
     }
 }
@@ -216,7 +215,7 @@ async fn live_managed_server_reports_exact_pinned_version() {
     init_tracing();
 
     let server = start_server().await;
-    let s = server.get().expect("server initialized");
+    let s = server.acquire().await.expect("server initialized");
     let health = s.client().misc().health().await.expect("health ok");
 
     version::validate_exact_version(health.version.as_deref())
@@ -587,8 +586,7 @@ async fn permission_reject_returns_none_with_warning() {
 }
 
 /// Start a server with custom config injection.
-async fn start_server_with_config(config_json: String) -> Arc<OnceCell<OrchestratorServer>> {
-    let cell = Arc::new(OnceCell::new());
+async fn start_server_with_config(config_json: String) -> Arc<OrchestratorServerHandle> {
     let server = timeout(
         Duration::from_secs(30),
         OrchestratorServer::start_lazy_with_config(Some(config_json)),
@@ -596,9 +594,7 @@ async fn start_server_with_config(config_json: String) -> Arc<OnceCell<Orchestra
     .await
     .expect("timeout starting embedded opencode server with config")
     .expect("failed to start embedded opencode server with config");
-    cell.set(server)
-        .unwrap_or_else(|_| panic!("cell should be empty"));
-    cell
+    Arc::new(OrchestratorServerHandle::from_server_unshared(server))
 }
 
 /// Live integration test for question tool flow.
@@ -660,4 +656,54 @@ async fn live_question_tool_infrastructure() {
 
     // Cleanup
     cleanup_session(&server, &session_id).await;
+}
+
+#[tokio::test]
+#[ignore = "requires opencode binary (set OPENCODE_ORCHESTRATOR_INTEGRATION=1)"]
+async fn managed_server_rebuilds_after_forced_stop() {
+    if !should_run() {
+        return;
+    }
+    init_tracing();
+
+    let server = start_server().await;
+    let initial = server.acquire().await.expect("initial server should start");
+    let initial_base_url = initial.base_url().to_string();
+
+    initial
+        .stop_managed_for_testing()
+        .await
+        .expect("managed child should stop cleanly for the test");
+
+    let recovered = timeout(Duration::from_secs(30), server.acquire())
+        .await
+        .expect("timed out waiting for recovered server")
+        .expect("recovery acquire should succeed");
+
+    assert!(
+        !Arc::ptr_eq(&initial, &recovered),
+        "expected a rebuilt snapshot after forced stop"
+    );
+
+    let commands = timeout(
+        Duration::from_secs(30),
+        ListCommandsTool::new(Arc::clone(&server)).call(
+            ListCommandsInput {},
+            &agentic_tools_core::ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("timed out waiting for post-rebuild tool call")
+    .expect("post-rebuild tool call should succeed");
+
+    assert!(
+        !commands.commands.is_empty(),
+        "expected commands to load after recovery"
+    );
+    tracing::info!(
+        initial_base_url = %initial_base_url,
+        recovered_base_url = %recovered.base_url(),
+        command_count = commands.commands.len(),
+        "managed server rebuilt after forced stop"
+    );
 }

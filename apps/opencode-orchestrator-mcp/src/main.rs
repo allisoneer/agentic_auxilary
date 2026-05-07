@@ -13,9 +13,9 @@ use agentic_tools_mcp::RegistryServer;
 use agentic_tools_mcp::ServiceExt;
 use agentic_tools_mcp::stdio;
 use std::sync::Arc;
-use tokio::sync::OnceCell;
 
 mod config;
+mod error;
 mod logging;
 mod server;
 mod token_tracker;
@@ -23,10 +23,20 @@ mod tools;
 mod types;
 mod version;
 
-use server::OrchestratorServer;
+use server::OrchestratorServerHandle;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "test-support")]
+    {
+        let _ = OrchestratorServerHandle::from_server_unshared;
+        std::mem::drop(
+            OrchestratorServerHandle::new().acquire_or_recover_with(|| async {
+                anyhow::bail!("test-support lint reference only")
+            }),
+        );
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -43,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Lazy initialization: server is spawned on first tool call, not at startup.
     // This saves resources when orchestrator tools are never invoked (~90% of cases).
-    let orchestrator: Arc<OnceCell<OrchestratorServer>> = Arc::new(OnceCell::new());
+    let orchestrator = Arc::new(OrchestratorServerHandle::new());
     let registry = tools::build_registry(&orchestrator);
 
     eprintln!(

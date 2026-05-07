@@ -55,7 +55,7 @@ async fn fast_idle_prompt_completes_without_hanging() {
     unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
 
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "fast-idle-prompt";
 
@@ -135,7 +135,7 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
     unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
 
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
     let tool = RespondPermissionTool::new(Arc::clone(&server));
     let sid = "fast-idle-resume";
     let perm_id = "perm-fast-idle";

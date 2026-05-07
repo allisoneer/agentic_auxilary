@@ -39,7 +39,7 @@ use support::tool_part_fixture;
 #[tokio::test]
 async fn list_sessions_returns_session_ids() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session"))
@@ -66,7 +66,7 @@ async fn list_sessions_returns_session_ids() {
 #[tokio::test]
 async fn list_sessions_returns_empty_list() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session"))
@@ -87,7 +87,7 @@ async fn list_sessions_returns_empty_list() {
 #[tokio::test]
 async fn list_sessions_returns_enriched_fields() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session"))
@@ -163,7 +163,7 @@ async fn list_sessions_returns_enriched_fields() {
 #[tokio::test]
 async fn list_sessions_marks_launched_by_you() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     seed_spawned_sessions(&server, &["ses-1"]).await;
 
@@ -202,7 +202,7 @@ async fn list_sessions_marks_launched_by_you() {
 #[tokio::test]
 async fn get_session_state_returns_idle_status() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -244,7 +244,7 @@ async fn get_session_state_returns_idle_status() {
 #[tokio::test]
 async fn get_session_state_returns_busy_status() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -288,7 +288,7 @@ async fn get_session_state_returns_busy_status() {
 #[tokio::test]
 async fn get_session_state_returns_retry_status() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -341,7 +341,7 @@ async fn get_session_state_returns_retry_status() {
 #[tokio::test]
 async fn get_session_state_summarizes_messages_and_launched_by_you() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     seed_spawned_sessions(&server, &["ses-1"]).await;
 
@@ -471,7 +471,7 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
 #[tokio::test]
 async fn get_session_state_orders_tool_parts_recent_first_within_message() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -549,7 +549,7 @@ async fn get_session_state_orders_tool_parts_recent_first_within_message() {
 #[tokio::test]
 async fn get_session_state_returns_error_when_status_lookup_fails() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -584,7 +584,7 @@ async fn get_session_state_returns_error_when_status_lookup_fails() {
 #[tokio::test]
 async fn get_session_state_returns_error_when_message_lookup_fails() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -628,7 +628,7 @@ async fn get_session_state_returns_error_when_message_lookup_fails() {
 #[tokio::test]
 async fn get_session_state_counts_each_trailing_user_message() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/ses-1"))
@@ -671,7 +671,7 @@ async fn get_session_state_counts_each_trailing_user_message() {
 #[tokio::test]
 async fn get_session_state_unknown_session_returns_error() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/session/missing"))
@@ -700,7 +700,7 @@ async fn get_session_state_unknown_session_returns_error() {
 #[tokio::test]
 async fn list_commands_returns_available_commands() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/command"))
@@ -724,7 +724,7 @@ async fn list_commands_returns_available_commands() {
 #[tokio::test]
 async fn list_commands_returns_empty_list() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock);
+    let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
         .and(path("/command"))

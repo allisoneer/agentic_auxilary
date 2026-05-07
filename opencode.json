@@ -1,11 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "tui": {
-    "disabled_animations": [
-      "spinner",
-      "status_background"
-    ]
-  },
   "autoupdate": false,
   "default_agent": "NormalOpenAI",
   "permission": {

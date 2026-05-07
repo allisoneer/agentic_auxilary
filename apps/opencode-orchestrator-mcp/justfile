@@ -8,18 +8,22 @@ default:
 
 # Integration tests must run single-threaded to avoid server contention
 integration-test:
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
 
 integration-test-verbose:
     RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
     cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
 
 integration-test-one TEST:
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture --test-threads=1
 
 # Run permission-specific integration tests (requires opencode binary)
 integration-test-permissions:
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
         --test integration -- --ignored --nocapture --test-threads=1 \
         permission
@@ -27,6 +31,7 @@ integration-test-permissions:
 # Run permission tests with debug logging
 integration-test-permissions-debug:
     RUST_LOG=debug,opencode_orchestrator_mcp=trace,opencode_rs=debug \
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 cargo test -p opencode-orchestrator-mcp \
         --test integration -- --ignored --nocapture --test-threads=1 \
         permission
@@ -69,3 +74,18 @@ integration-test-bunx-stable-verbose:
     OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.33" \
     OPENCODE_ORCHESTRATOR_INTEGRATION=1 \
     cargo test -p opencode-orchestrator-mcp --test integration -- --ignored --nocapture --test-threads=1
+
+# Run the forced-stop recovery acceptance test against bunx launcher mode
+[no-exit-message]
+integration-test-one-bunx-stable TEST="managed_server_rebuilds_after_forced_stop":
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    : "${OPENCODE_ORCHESTRATOR_INTEGRATION:=1}"
+    : "${OPENCODE_BINARY:=bunx}"
+    : "${OPENCODE_BINARY_ARGS:=--yes opencode-ai@1.14.33}"
+    bunx --yes opencode-ai@1.14.33 --version
+    OPENCODE_ORCHESTRATOR_MANAGED=0 \
+    OPENCODE_BINARY="$OPENCODE_BINARY" \
+    OPENCODE_BINARY_ARGS="$OPENCODE_BINARY_ARGS" \
+    OPENCODE_ORCHESTRATOR_INTEGRATION="$OPENCODE_ORCHESTRATOR_INTEGRATION" \
+    cargo test -p opencode-orchestrator-mcp --test integration {{TEST}} -- --ignored --nocapture --test-threads=1

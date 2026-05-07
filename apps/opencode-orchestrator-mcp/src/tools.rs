@@ -3,6 +3,7 @@
 use crate::config;
 use crate::logging;
 use crate::server::OrchestratorServer;
+use crate::server::OrchestratorServerHandle;
 use crate::token_tracker::TokenTracker;
 use crate::types::ChangeStats;
 use crate::types::CommandInfo;
@@ -53,7 +54,6 @@ use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 
 const SERVER_NAME: &str = "opencode-orchestrator-mcp";
@@ -173,12 +173,12 @@ fn log_tool_error<TReq: Serialize>(
 /// when a permission is requested.
 #[derive(Clone)]
 pub struct OrchestratorRunTool {
-    server: Arc<OnceCell<OrchestratorServer>>,
+    server: Arc<OrchestratorServerHandle>,
 }
 
 impl OrchestratorRunTool {
-    /// Create a new `OrchestratorRunTool` with the given server cell.
-    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+    /// Create a new `OrchestratorRunTool` with the shared server handle.
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
         Self { server }
     }
 
@@ -348,7 +348,7 @@ impl OrchestratorRunTool {
         // Lazy initialization: spawn server on first tool call
         let server = self
             .server
-            .get_or_try_init(OrchestratorServer::start_lazy)
+            .acquire()
             .await
             .map_err(|e| ToolError::Internal(e.to_string()))?;
 
@@ -974,12 +974,12 @@ Examples:
 /// Tool for listing available `OpenCode` sessions in the current directory.
 #[derive(Clone)]
 pub struct ListSessionsTool {
-    server: Arc<OnceCell<OrchestratorServer>>,
+    server: Arc<OrchestratorServerHandle>,
 }
 
 impl ListSessionsTool {
-    /// Create a new `ListSessionsTool` with the given server cell.
-    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+    /// Create a new `ListSessionsTool` with the shared server handle.
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
         Self { server }
     }
 }
@@ -996,12 +996,12 @@ impl Tool for ListSessionsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server_cell = Arc::clone(&self.server);
+        let server_handle = Arc::clone(&self.server);
         Box::pin(async move {
             let timer = CallTimer::start();
             let result: Result<ListSessionsOutput, ToolError> = async {
-                let server = server_cell
-                    .get_or_try_init(OrchestratorServer::start_lazy)
+                let server = server_handle
+                    .acquire()
                     .await
                     .map_err(|e| ToolError::Internal(e.to_string()))?;
 
@@ -1162,11 +1162,11 @@ fn extract_recent_tool_calls(messages: &[Message], limit: usize) -> Vec<ToolCall
 /// Tool for getting detailed state of a specific `OpenCode` session.
 #[derive(Clone)]
 pub struct GetSessionStateTool {
-    server: Arc<OnceCell<OrchestratorServer>>,
+    server: Arc<OrchestratorServerHandle>,
 }
 
 impl GetSessionStateTool {
-    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
         Self { server }
     }
 }
@@ -1182,12 +1182,12 @@ impl Tool for GetSessionStateTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server_cell = Arc::clone(&self.server);
+        let server_handle = Arc::clone(&self.server);
         Box::pin(async move {
             let timer = CallTimer::start();
             let result: Result<GetSessionStateOutput, ToolError> = async {
-                let server = server_cell
-                    .get_or_try_init(OrchestratorServer::start_lazy)
+                let server = server_handle
+                    .acquire()
                     .await
                     .map_err(|e| ToolError::Internal(e.to_string()))?;
 
@@ -1275,12 +1275,12 @@ impl Tool for GetSessionStateTool {
 /// Tool for listing available `OpenCode` commands that can be executed.
 #[derive(Clone)]
 pub struct ListCommandsTool {
-    server: Arc<OnceCell<OrchestratorServer>>,
+    server: Arc<OrchestratorServerHandle>,
 }
 
 impl ListCommandsTool {
-    /// Create a new `ListCommandsTool` with the given server cell.
-    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+    /// Create a new `ListCommandsTool` with the shared server handle.
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
         Self { server }
     }
 }
@@ -1296,12 +1296,12 @@ impl Tool for ListCommandsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server_cell = Arc::clone(&self.server);
+        let server_handle = Arc::clone(&self.server);
         Box::pin(async move {
             let timer = CallTimer::start();
             let result: Result<ListCommandsOutput, ToolError> = async {
-                let server = server_cell
-                    .get_or_try_init(OrchestratorServer::start_lazy)
+                let server = server_handle
+                    .acquire()
                     .await
                     .map_err(|e| ToolError::Internal(e.to_string()))?;
 
@@ -1355,12 +1355,12 @@ impl Tool for ListCommandsTool {
 /// when the session completes or another permission is requested.
 #[derive(Clone)]
 pub struct RespondPermissionTool {
-    server: Arc<OnceCell<OrchestratorServer>>,
+    server: Arc<OrchestratorServerHandle>,
 }
 
 impl RespondPermissionTool {
-    /// Create a new `RespondPermissionTool` with the given server cell.
-    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+    /// Create a new `RespondPermissionTool` with the shared server handle.
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
         Self { server }
     }
 }
@@ -1383,14 +1383,14 @@ Parameters:
         input: Self::Input,
         ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server_cell = Arc::clone(&self.server);
+        let server_handle = Arc::clone(&self.server);
         let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let request = input.clone();
             let result: Result<(RespondPermissionOutput, ToolLogMeta), ToolError> = async {
-                let server = server_cell
-                    .get_or_try_init(OrchestratorServer::start_lazy)
+                let server = server_handle
+                    .acquire()
                     .await
                     .map_err(|e| ToolError::Internal(e.to_string()))?;
 
@@ -1496,7 +1496,7 @@ Parameters:
                     })?;
 
                 // Now continue monitoring the session using run logic
-                let run_tool = OrchestratorRunTool::new(Arc::clone(&server_cell));
+                let run_tool = OrchestratorRunTool::new(Arc::clone(&server_handle));
                 let wait_for_activity = (!is_reject).then_some(true);
                 let outcome = run_tool
                     .run_impl_outcome(
@@ -1562,11 +1562,11 @@ Parameters:
 
 #[derive(Clone)]
 pub struct RespondQuestionTool {
-    server: Arc<OnceCell<OrchestratorServer>>,
+    server: Arc<OrchestratorServerHandle>,
 }
 
 impl RespondQuestionTool {
-    pub fn new(server: Arc<OnceCell<OrchestratorServer>>) -> Self {
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
         Self { server }
     }
 }
@@ -1589,14 +1589,14 @@ Parameters:
         input: Self::Input,
         ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
-        let server_cell = Arc::clone(&self.server);
+        let server_handle = Arc::clone(&self.server);
         let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let request = input.clone();
             let result: Result<(RespondQuestionOutput, ToolLogMeta), ToolError> = async {
-            let server = server_cell
-                .get_or_try_init(OrchestratorServer::start_lazy)
+            let server = server_handle
+                .acquire()
                 .await
                 .map_err(|e| ToolError::Internal(e.to_string()))?;
 
@@ -1676,7 +1676,7 @@ Parameters:
                             ToolError::Internal(format!("Failed to reply to question: {e}"))
                         })?;
 
-                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_cell))
+                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_handle))
                         .run_impl_outcome(OrchestratorRunInput {
                             session_id: Some(input.session_id),
                             command: None,
@@ -1691,7 +1691,7 @@ Parameters:
                         ToolError::Internal(format!("Failed to reject question: {e}"))
                     })?;
 
-                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_cell))
+                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_handle))
                         .run_impl_outcome(OrchestratorRunInput {
                             session_id: Some(input.session_id),
                             command: None,
@@ -1725,8 +1725,8 @@ Parameters:
 
 /// Build the tool registry with all orchestrator tools.
 ///
-/// The server cell is lazily initialized on first tool call.
-pub fn build_registry(server: &Arc<OnceCell<OrchestratorServer>>) -> ToolRegistry {
+/// The shared handle lazily starts or recovers the server on tool entry.
+pub fn build_registry(server: &Arc<OrchestratorServerHandle>) -> ToolRegistry {
     ToolRegistry::builder()
         .register::<OrchestratorRunTool, ()>(OrchestratorRunTool::new(Arc::clone(server)))
         .register::<ListSessionsTool, ()>(ListSessionsTool::new(Arc::clone(server)))

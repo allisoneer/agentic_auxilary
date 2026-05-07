@@ -6,11 +6,11 @@ mod support;
 
 use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
+use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::OnceCell;
 use tokio::time::advance;
 use wiremock::Mock;
 use wiremock::MockServer;
@@ -22,9 +22,18 @@ use support::session_fixture;
 use support::status_v2_busy;
 use support::status_v2_idle;
 
-fn test_orchestrator_server_with_long_timeout(
+async fn test_orchestrator_server_with_long_timeout(
     mock: &MockServer,
-) -> Arc<OnceCell<opencode_orchestrator_mcp::server::OrchestratorServer>> {
+) -> Arc<OrchestratorServerHandle> {
+    Mock::given(method("GET"))
+        .and(path("/global/health"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "healthy": true,
+            "version": "test",
+        })))
+        .mount(mock)
+        .await;
+
     let base_url = mock.uri().trim_end_matches('/').to_string();
     let client = opencode_rs::ClientBuilder::new()
         .base_url(&base_url)
@@ -32,14 +41,13 @@ fn test_orchestrator_server_with_long_timeout(
         .build()
         .unwrap();
 
-    let cell = Arc::new(OnceCell::new());
-    cell.set(
+    Arc::new(OrchestratorServerHandle::from_server_unshared(
         opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
-            client, &base_url,
+            client,
+            &base_url,
+            opencode_orchestrator_mcp::server::RecoveryMode::External,
         ),
-    )
-    .unwrap_or_else(|_| panic!("cell should be empty"));
-    cell
+    ))
 }
 
 async fn wait_for_request_path(mock: &MockServer, expected_path: &str) {
@@ -59,7 +67,7 @@ async fn wait_for_request_path(mock: &MockServer, expected_path: &str) {
 #[ignore = "tokio paused time + reqwest/wiremock interactions are flaky in this harness"]
 async fn it_times_out_after_5_min_inactivity() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server_with_long_timeout(&mock);
+    let server = test_orchestrator_server_with_long_timeout(&mock).await;
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
     // Session exists
@@ -138,7 +146,7 @@ async fn it_times_out_after_5_min_inactivity() {
 #[ignore = "tokio paused time + reqwest/wiremock interactions are flaky in this harness"]
 async fn it_does_not_timeout_while_busy() {
     let mock = MockServer::start().await;
-    let server = test_orchestrator_server_with_long_timeout(&mock);
+    let server = test_orchestrator_server_with_long_timeout(&mock).await;
     let run_tool = OrchestratorRunTool::new(Arc::clone(&server));
 
     // Session exists
