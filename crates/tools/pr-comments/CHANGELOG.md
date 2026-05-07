@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.8.0] - 2026-05-07
+
+### 🐛 Bug Fixes
+- *(pr_comments)* Satisfy workspace lint checks
 ## [0.7.7] - 2026-05-03
 
 ### ⚙️  Miscellaneous
