@@ -20,6 +20,9 @@ futures = "0.3"
 [dev-dependencies]
 rmcp = { workspace = true, features = ["client", "server", "transport-io"] }
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "lib"
 family = "agentic-tools"

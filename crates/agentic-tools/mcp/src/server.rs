@@ -1,4 +1,4 @@
-//! MCP server handler backed by ToolRegistry.
+//! MCP server handler backed by `ToolRegistry`.
 
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
@@ -19,8 +19,8 @@ pub enum OutputMode {
     #[default]
     Text,
     /// Return structured results alongside text.
-    /// - list_tools publishes output_schema (if available)
-    /// - call_tool populates structured_content
+    /// - `list_tools` publishes `output_schema` (if available)
+    /// - `call_tool` populates `structured_content`
     Structured,
 }
 
@@ -82,24 +82,28 @@ impl RegistryServer {
     /// Set an allowlist of tool names.
     ///
     /// Only tools in this list will be visible and callable.
+    #[must_use]
     pub fn with_allowlist(mut self, allowlist: impl IntoIterator<Item = String>) -> Self {
         self.allowlist = Some(allowlist.into_iter().collect());
         self
     }
 
     /// Set the output mode for tool results.
+    #[must_use]
     pub fn with_output_mode(mut self, mode: OutputMode) -> Self {
         self.output_mode = mode;
         self
     }
 
     /// Set text formatting options for tool results.
+    #[must_use]
     pub fn with_text_options(mut self, text_options: TextOptions) -> Self {
         self.text_options = text_options;
         self
     }
 
     /// Set the server name and version.
+    #[must_use]
     pub fn with_info(mut self, name: &str, version: &str) -> Self {
         self.name = name.to_string();
         self.version = version.to_string();
@@ -136,7 +140,7 @@ impl RegistryServer {
 }
 
 // Allow manual_async_fn because the trait signature uses `impl Future` return types
-#[allow(clippy::manual_async_fn)]
+#[expect(clippy::manual_async_fn)]
 impl ServerHandler for RegistryServer {
     fn initialize(
         &self,
@@ -169,7 +173,7 @@ impl ServerHandler for RegistryServer {
                 if let Some(erased) = self.registry.get(&name) {
                     let input_schema = erased.input_schema();
                     let schema_json = serde_json::to_value(&input_schema)
-                        .unwrap_or(serde_json::json!({"type": "object"}));
+                        .unwrap_or_else(|_| serde_json::json!({"type": "object"}));
 
                     // Include output_schema only in Structured mode (MCP compliance)
                     let output_schema = if matches!(self.output_mode, OutputMode::Structured) {
@@ -402,7 +406,7 @@ mod tests {
     #[test]
     fn test_registry_server_allowlist() {
         let registry = Arc::new(ToolRegistry::builder().finish());
-        let server = RegistryServer::new(registry.clone())
+        let server = RegistryServer::new(registry)
             .with_allowlist(["tool_a".to_string(), "tool_b".to_string()]);
 
         assert!(server.is_allowed("tool_a"));
@@ -413,7 +417,7 @@ mod tests {
     #[test]
     fn test_registry_server_no_allowlist() {
         let registry = Arc::new(ToolRegistry::builder().finish());
-        let server = RegistryServer::new(registry.clone());
+        let server = RegistryServer::new(registry);
 
         // Without allowlist, everything is allowed
         assert!(server.is_allowed("any_tool"));
@@ -422,7 +426,7 @@ mod tests {
     #[test]
     fn test_registry_server_info() {
         let registry = Arc::new(ToolRegistry::builder().finish());
-        let server = RegistryServer::new(registry.clone()).with_info("my-server", "1.0.0");
+        let server = RegistryServer::new(registry).with_info("my-server", "1.0.0");
 
         assert_eq!(server.name(), "my-server");
         assert_eq!(server.version(), "1.0.0");
@@ -508,14 +512,15 @@ mod tests {
 
         // In Structured mode, we should publish output_schema
         let structured_server =
-            RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Structured);
+            RegistryServer::new(Arc::clone(&registry)).with_output_mode(OutputMode::Structured);
         assert!(matches!(
             structured_server.output_mode(),
             OutputMode::Structured
         ));
 
         // In Text mode, we should NOT publish output_schema
-        let text_server = RegistryServer::new(registry.clone()).with_output_mode(OutputMode::Text);
+        let text_server =
+            RegistryServer::new(Arc::clone(&registry)).with_output_mode(OutputMode::Text);
         assert!(matches!(text_server.output_mode(), OutputMode::Text));
 
         // Verify the tool has an output schema in the registry
@@ -568,7 +573,7 @@ mod tests {
                 .finish(),
         );
 
-        let default_server = RegistryServer::new(registry.clone());
+        let default_server = RegistryServer::new(Arc::clone(&registry));
         let suppressed_server = RegistryServer::new(registry)
             .with_text_options(TextOptions::default().with_suppress_search_reminder(true));
 
