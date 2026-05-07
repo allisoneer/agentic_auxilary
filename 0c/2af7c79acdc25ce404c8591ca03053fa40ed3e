@@ -1,0 +1,25 @@
+crates/agentic-tools/macros/src/tool.rs
+  s_5884244d68cb22::t_8f41777dfb75b7 40-43
+crates/services/claudecode-rs/src/probe.rs
+  s_5884244d68cb22::t_8f41777dfb75b7 82-87
+crates/meta/xtask/src/release_plz.rs
+  s_5884244d68cb22::t_8f41777dfb75b7 25-30
+crates/linear/tools/src/models.rs
+  s_5884244d68cb22::t_8f41777dfb75b7 397
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "0c2af7c79acdc25ce404c8591ca03053fa40ed3e",
+  "prompts": {},
+  "sessions": {
+    "s_5884244d68cb22": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fc6de2a3ffe2tJ7rWwFxye3jS",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
