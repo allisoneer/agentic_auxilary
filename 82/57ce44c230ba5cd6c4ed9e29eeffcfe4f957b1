@@ -1,0 +1,48 @@
+crates/meta/xtask/src/verify.rs
+  333574ec92842416 16,37,60,65-68,86-87,89-90,98,101,107-109,117-119,128-130,183-186,207,219-222,224-227,240-243,266-270,286-287,299-300,305-306,316,325,337-344,350-351,354-358,360
+crates/meta/xtask/Cargo.toml
+  90cd50efaea6d8bc 29-31
+crates/meta/xtask/src/release_plz.rs
+  333574ec92842416 10,20-23,59-61,63-67
+crates/meta/xtask/src/marker.rs
+  333574ec92842416 7,35,46-52,98-99,106
+crates/meta/xtask/src/main.rs
+  333574ec92842416 6,58,80,87,94
+crates/meta/xtask/src/claude.rs
+  333574ec92842416 11,39,69-71,82,84,111-113,175
+crates/meta/xtask/src/readme.rs
+  333574ec92842416 10,56,75,122,138,155,157-160
+crates/meta/xtask/src/mise.rs
+  333574ec92842416 7,77-83,86,88-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "8257ce44c230ba5cd6c4ed9e29eeffcfe4f957b1",
+  "prompts": {
+    "333574ec92842416": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 121,
+      "overriden_lines": 0
+    },
+    "90cd50efaea6d8bc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2072e44f4ffeF8fEpQRZo4bkzM",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
