@@ -1,0 +1,21 @@
+crates/infra/agentic-logging/Cargo.toml
+  s_333574ec928424::t_fb950b99e6e972 26-28
+crates/infra/agentic-logging/src/lib.rs
+  ai_agent 49,68,70,94,158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "82c78518b67258188873a01808cc4b13fc6b0015",
+  "prompts": {},
+  "sessions": {
+    "s_333574ec928424": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
