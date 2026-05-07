@@ -1,0 +1,31 @@
+crates/agentic-tools/macros/Cargo.toml
+  s_333574ec928424::t_fb950b99e6e972 22-24
+crates/agentic-tools/macros/src/tool.rs
+  s_385868ff7a73b4::t_b7a847d753287e 25,40,70,88
+crates/agentic-tools/macros/src/lib.rs
+  ai_agent 5,39,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "545c71dea1c53c2b1a1008fd4679d6e194574552",
+  "prompts": {},
+  "sessions": {
+    "s_333574ec928424": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_385868ff7a73b4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fca9ef8affeYs3VlkRfAzem4U",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
