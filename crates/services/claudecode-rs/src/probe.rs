@@ -79,7 +79,12 @@ pub async fn probe_cli(claude_path: &Path) -> Result<CliCapabilities> {
 
     let mut stdout_content = String::new();
     if let Some(mut stdout) = child.stdout.take() {
-        let _ = stdout.read_to_string(&mut stdout_content).await;
+        stdout
+            .read_to_string(&mut stdout_content)
+            .await
+            .map_err(|e| ClaudeError::ProbeError {
+                message: format!("Failed to read --help stdout: {e}"),
+            })?;
     }
 
     let status = child.wait().await.map_err(|e| ClaudeError::ProbeError {

@@ -22,7 +22,12 @@ fn get_changelog_path(pkg: &cargo_metadata::Package, metadata: &Metadata) -> Str
         |p| p.to_string_lossy().to_string(),
     );
 
-    format!("{}/CHANGELOG.md", relative.trim_start_matches('/'))
+    let relative = relative.trim_start_matches('/');
+    if relative.is_empty() {
+        "CHANGELOG.md".to_string()
+    } else {
+        format!("{relative}/CHANGELOG.md")
+    }
 }
 
 /// Render [[package]] entries for all workspace crates.

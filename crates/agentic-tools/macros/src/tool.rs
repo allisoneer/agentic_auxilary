@@ -37,9 +37,10 @@ pub fn expand(mut attr: TokenStream, item: TokenStream) -> syn::Result<TokenStre
     let tool_attr = if attr.is_empty() {
         ToolAttr::default()
     } else {
-        let nested = NestedMeta::parse_meta_list(std::mem::take(&mut attr))
-            .map_err(|e| syn::Error::new_spanned(&attr, e))?;
-        ToolAttr::from_list(&nested).map_err(|e| syn::Error::new_spanned(&attr, e))?
+        let attr_tokens = std::mem::take(&mut attr);
+        let nested = NestedMeta::parse_meta_list(attr_tokens.clone())
+            .map_err(|e| syn::Error::new_spanned(&attr_tokens, e))?;
+        ToolAttr::from_list(&nested).map_err(|e| syn::Error::new_spanned(&attr_tokens, e))?
     };
 
     let fn_ident = &func.sig.ident;

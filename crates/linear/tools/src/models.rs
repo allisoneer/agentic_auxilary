@@ -394,7 +394,7 @@ pub struct ArchiveIssueResult {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SetRelationResult {
     pub success: bool,
-    /// Action taken: "created", "removed", or "`no_change`"
+    /// Action taken: `"created"`, `"removed"`, or `"no_change"`
     pub action: String,
 }
 
