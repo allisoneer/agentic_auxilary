@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.5] - 2026-05-07
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: agentic-tools-core, exa-async
 ## [0.3.4] - 2026-05-06
 
 ### ⚙️  Miscellaneous
