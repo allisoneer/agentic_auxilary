@@ -1,0 +1,38 @@
+crates/tools/message-optimizer/Cargo.toml
+  90cd50efaea6d8bc 18-20
+apps/message-optimizer/Cargo.toml
+  90cd50efaea6d8bc 32-34
+crates/tools/message-optimizer/src/anthropic.rs
+  333574ec92842416 21-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "90b04e756fe01873bf9ec0c5d1a3ee9cd8f2fed0",
+  "prompts": {
+    "333574ec92842416": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "total_additions": 140,
+      "total_deletions": 115,
+      "accepted_lines": 124,
+      "overriden_lines": 2
+    },
+    "90cd50efaea6d8bc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2072e44f4ffeF8fEpQRZo4bkzM",
+        "model": "opencode/gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>",
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 19,
+      "overriden_lines": 0
+    }
+  }
+}
