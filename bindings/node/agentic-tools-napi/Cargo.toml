@@ -28,6 +28,9 @@ parking_lot = "0.12"
 [build-dependencies]
 napi-build = "2"
 
+[lints]
+workspace = true
+
 [package.metadata.repo]
 role = "binding"
 family = "agentic-tools"

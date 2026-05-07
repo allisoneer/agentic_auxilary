@@ -22,6 +22,14 @@
 //! - `callReasoningRequest(args)`: GPT-5 reasoning model request
 
 #![deny(clippy::all)]
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "N-API exported functions accept owned JS strings at the JavaScript ABI boundary"
+)]
+#![expect(
+    clippy::trailing_empty_array,
+    reason = "`#[napi]` macro expansion generates internal metadata types with trailing empty arrays"
+)]
 
 use agentic_tools_core::FieldConstraint;
 use agentic_tools_core::SchemaEngine;
@@ -75,12 +83,12 @@ static SCHEMA_ENGINE: OnceCell<RwLock<SchemaEngine>> = OnceCell::new();
 pub fn init(config_json: String) -> Result<()> {
     // Parse configuration
     let config: JsonValue = serde_json::from_str(&config_json)
-        .map_err(|e| Error::from_reason(format!("Invalid config JSON: {}", e)))?;
+        .map_err(|e| Error::from_reason(format!("Invalid config JSON: {e}")))?;
 
     // Initialize schema engine
     let strict = config
         .get("strict")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     let engine = SchemaEngine::new().with_strict(strict);
     SCHEMA_ENGINE
@@ -93,7 +101,7 @@ pub fn init(config_json: String) -> Result<()> {
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                 .collect()
         });
 
@@ -149,7 +157,7 @@ pub fn list_tools(provider: String) -> Result<String> {
         .ok_or_else(|| Error::from_reason("Registry not initialized. Call init() first."))?;
 
     let engine = SCHEMA_ENGINE.get().map(|e| e.read());
-    let strict = engine.as_ref().map(|e| e.is_strict()).unwrap_or(false);
+    let strict = engine.as_ref().is_some_and(|e| e.is_strict());
     let names = reg.list_names();
 
     let tools: Vec<JsonValue> = names
@@ -193,7 +201,7 @@ pub fn list_tools(provider: String) -> Result<String> {
         .collect();
 
     serde_json::to_string_pretty(&tools)
-        .map_err(|e| Error::from_reason(format!("JSON serialization failed: {}", e)))
+        .map_err(|e| Error::from_reason(format!("JSON serialization failed: {e}")))
 }
 
 /// Execute a tool with JSON arguments.
@@ -213,7 +221,7 @@ pub async fn call_tool(name: String, args_json: String) -> Result<ToolCallResult
         .ok_or_else(|| Error::from_reason("Registry not initialized. Call init() first."))?;
 
     let args: JsonValue = serde_json::from_str(&args_json)
-        .map_err(|e| Error::from_reason(format!("Invalid args JSON: {}", e)))?;
+        .map_err(|e| Error::from_reason(format!("Invalid args JSON: {e}")))?;
 
     let ctx = ToolContext::default();
     let text_opts = TextOptions::default();
@@ -221,10 +229,10 @@ pub async fn call_tool(name: String, args_json: String) -> Result<ToolCallResult
     let result = reg
         .dispatch_json_formatted(&name, args, &ctx, &text_opts)
         .await
-        .map_err(|e| Error::from_reason(format!("Tool execution failed: {}", e)))?;
+        .map_err(|e| Error::from_reason(format!("Tool execution failed: {e}")))?;
 
     let data = serde_json::to_string(&result.data)
-        .map_err(|e| Error::from_reason(format!("Result serialization failed: {}", e)))?;
+        .map_err(|e| Error::from_reason(format!("Result serialization failed: {e}")))?;
     let text = result
         .text
         .unwrap_or_else(|| fallback_text_from_json(&result.data));
@@ -266,7 +274,7 @@ pub fn set_schema_patches(patches_json: String) -> Result<()> {
         .ok_or_else(|| Error::from_reason("Schema engine not initialized. Call init() first."))?;
 
     let patches: JsonValue = serde_json::from_str(&patches_json)
-        .map_err(|e| Error::from_reason(format!("Invalid patches JSON: {}", e)))?;
+        .map_err(|e| Error::from_reason(format!("Invalid patches JSON: {e}")))?;
 
     let patches_obj = patches
         .as_object()
@@ -331,7 +339,7 @@ pub fn is_initialized() -> bool {
 /// Get the number of registered tools.
 #[napi]
 pub fn tool_count() -> u32 {
-    REGISTRY.get().map(|r| r.len() as u32).unwrap_or(0)
+    REGISTRY.get().map_or(0, |r| r.len() as u32)
 }
 
 /// Get names of all registered tools.
@@ -355,7 +363,7 @@ pub fn get_tool_names() -> Result<Vec<String>> {
 ///
 /// # Returns
 ///
-/// `ToolCallResult` with `text` and `data` (JSON string for LsOutput)
+/// `ToolCallResult` with `text` and `data` (JSON string for `LsOutput`)
 #[napi]
 pub async fn call_ls(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_ls".to_string(), args_json).await
@@ -365,11 +373,11 @@ pub async fn call_ls(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Arguments
 ///
-/// * `args_json` - JSON string with: agent_type?, location?, query
+/// * `args_json` - JSON string with: `agent_type`?, location?, query
 ///
 /// # Returns
 ///
-/// `ToolCallResult` with `text` and `data` (JSON string for AgentOutput)
+/// `ToolCallResult` with `text` and `data` (JSON string for `AgentOutput`)
 #[napi]
 pub async fn call_ask_agent(args_json: String) -> Result<ToolCallResult> {
     call_tool("ask_agent".to_string(), args_json).await
@@ -383,7 +391,7 @@ pub async fn call_ask_agent(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Returns
 ///
-/// `ToolCallResult` with `text` and `data` (JSON string for GrepOutput)
+/// `ToolCallResult` with `text` and `data` (JSON string for `GrepOutput`)
 #[napi]
 pub async fn call_grep(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_grep".to_string(), args_json).await
@@ -393,11 +401,11 @@ pub async fn call_grep(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Arguments
 ///
-/// * `args_json` - JSON string with: pattern, path?, ignore?, include_hidden?, sort?, head_limit?, offset?
+/// * `args_json` - JSON string with: pattern, path?, ignore?, `include_hidden`?, sort?, `head_limit`?, offset?
 ///
 /// # Returns
 ///
-/// `ToolCallResult` with `text` and `data` (JSON string for GlobOutput)
+/// `ToolCallResult` with `text` and `data` (JSON string for `GlobOutput`)
 #[napi]
 pub async fn call_glob(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_glob".to_string(), args_json).await
@@ -411,7 +419,7 @@ pub async fn call_glob(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Returns
 ///
-/// `ToolCallResult` with `text` and `data` (JSON string for SearchOutput)
+/// `ToolCallResult` with `text` and `data` (JSON string for `SearchOutput`)
 #[napi]
 pub async fn call_just_search(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_just_search".to_string(), args_json).await
@@ -425,7 +433,7 @@ pub async fn call_just_search(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Returns
 ///
-/// `ToolCallResult` with `text` and `data` (JSON string for ExecuteOutput)
+/// `ToolCallResult` with `text` and `data` (JSON string for `ExecuteOutput`)
 #[napi]
 pub async fn call_just_execute(args_json: String) -> Result<ToolCallResult> {
     call_tool("cli_just_execute".to_string(), args_json).await
@@ -439,7 +447,7 @@ pub async fn call_just_execute(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Arguments
 ///
-/// * `args_json` - JSON string with: prompt, files, prompt_type, directories?, output_filename?
+/// * `args_json` - JSON string with: prompt, files, `prompt_type`, directories?, `output_filename`?
 ///
 /// # Returns
 ///
