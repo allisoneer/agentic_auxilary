@@ -3,6 +3,7 @@ use anyhow::Result;
 use cargo_metadata::MetadataCommand;
 use clap::Parser;
 use clap::Subcommand;
+use std::path::Path;
 use std::path::PathBuf;
 
 pub mod autogen;
@@ -54,7 +55,7 @@ enum Cmd {
         #[arg(long)]
         check: bool,
     },
-    /// Check SDK endpoint coverage against server OpenAPI spec
+    /// Check SDK endpoint coverage against server `OpenAPI` spec
     EndpointCoverage {
         /// Output results as JSON
         #[arg(long, default_value_t = false)]
@@ -76,19 +77,19 @@ fn main() -> Result<()> {
             path,
             dry_run,
             check,
-        } => readme_sync(path, dry_run, check),
+        } => readme_sync(&path, dry_run, check),
         Cmd::Sync { dry_run, check } => sync::run(dry_run, check),
         Cmd::Verify { check } => verify::run(check),
         Cmd::EndpointCoverage { json, check } => endpoint_coverage::run(json, check),
     }
 }
 
-fn readme_sync(path: PathBuf, dry_run: bool, check: bool) -> Result<()> {
+fn readme_sync(path: &Path, dry_run: bool, check: bool) -> Result<()> {
     let metadata = MetadataCommand::new()
         .no_deps()
         .exec()
         .context("Failed to run `cargo metadata`")?;
     let strict = strict_mode();
 
-    readme::sync_root_readme_cli(&path, &metadata, dry_run, check, strict)
+    readme::sync_root_readme_cli(path, &metadata, dry_run, check, strict)
 }

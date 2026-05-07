@@ -5,7 +5,7 @@ use xtask::marker::apply_autodeps_markers;
 #[test]
 fn malformed_json_is_warning_by_default() {
     let md = MetadataCommand::new().no_deps().exec().unwrap();
-    let input = r#"<!-- BEGIN:autodeps {invalid} -->x<!-- END:autodeps -->"#;
+    let input = r"<!-- BEGIN:autodeps {invalid} -->x<!-- END:autodeps -->";
     let (_out, _changed) = apply_autodeps_markers(
         input,
         &RenderContext {
@@ -19,7 +19,7 @@ fn malformed_json_is_warning_by_default() {
 #[test]
 fn malformed_json_is_error_in_strict() {
     let md = MetadataCommand::new().no_deps().exec().unwrap();
-    let input = r#"<!-- BEGIN:autodeps {invalid} -->x<!-- END:autodeps -->"#;
+    let input = r"<!-- BEGIN:autodeps {invalid} -->x<!-- END:autodeps -->";
     let err = apply_autodeps_markers(
         input,
         &RenderContext {

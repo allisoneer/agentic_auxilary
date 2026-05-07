@@ -13,6 +13,7 @@ use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use cargo_metadata::Package;
 use regex::Regex;
+use std::fmt::Write as _;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -33,7 +34,7 @@ fn get_integration(pkg: &Package, key: &str) -> bool {
         .get("repo")
         .and_then(|r| r.get("integrations"))
         .and_then(|i| i.get(key))
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false)
 }
 
@@ -56,19 +57,15 @@ fn validate_integration(
     }
     let rule = rule?;
 
-    let has_any = if rule.any_of.is_empty() {
-        true
-    } else {
-        rule.any_of.iter().any(|n| has_dep(pkg, n))
-    };
+    let has_any = rule.any_of.is_empty() || rule.any_of.iter().any(|n| has_dep(pkg, n));
     let has_all = rule.all_of.iter().all(|n| has_dep(pkg, n));
 
     if !has_any || !has_all {
         Some(format!(
-            "{}: {} integration enabled but missing required dependencies.\n  {}",
-            pkg.name,
-            label,
-            rule.message
+            "{pkg_name}: {label} integration enabled but missing required dependencies.\n  {requirement_message}",
+            pkg_name = &pkg.name,
+            requirement_message = rule
+                .message
                 .as_deref()
                 .unwrap_or("Check policy.toml for requirements.")
         ))
@@ -86,11 +83,11 @@ fn check_metadata(metadata: &Metadata, policy: &Policy) -> Result<()> {
             continue;
         }
 
-        let repo = pkg.metadata.get("repo");
-        if repo.is_none() {
+        let Some(repo) = pkg.metadata.get("repo") else {
+            let manifest_path = &pkg.manifest_path;
             errors.push(format!(
-                "{}: missing [package.metadata.repo]\n\
-                 Add the following to {}:\n\n\
+                "{pkg_name}: missing [package.metadata.repo]\n\
+                 Add the following to {manifest_path}:\n\n\
                  [package.metadata.repo]\n\
                  role = \"lib\"\n\
                  family = \"tools\"\n\n\
@@ -98,19 +95,18 @@ fn check_metadata(metadata: &Metadata, policy: &Policy) -> Result<()> {
                  mcp = false\n\
                  logging = false\n\
                  napi = false\n",
-                pkg.name, pkg.manifest_path
+                pkg_name = &pkg.name,
             ));
             continue;
-        }
-
-        let repo = repo.unwrap();
+        };
 
         // Validate role
         let role = repo.get("role").and_then(|v| v.as_str()).unwrap_or("");
         if !policy.is_valid_role(role) {
             errors.push(format!(
-                "{}: invalid role '{}'. Allowed: {:?}",
-                pkg.name, role, policy.enums.role
+                "{pkg_name}: invalid role '{role}'. Allowed: {allowed_roles:?}",
+                pkg_name = &pkg.name,
+                allowed_roles = &policy.enums.role
             ));
         }
 
@@ -118,8 +114,9 @@ fn check_metadata(metadata: &Metadata, policy: &Policy) -> Result<()> {
         let family = repo.get("family").and_then(|v| v.as_str()).unwrap_or("");
         if !policy.is_valid_family(family) {
             errors.push(format!(
-                "{}: invalid family '{}'. Allowed: {:?}",
-                pkg.name, family, policy.enums.family
+                "{pkg_name}: invalid family '{family}'. Allowed: {allowed_families:?}",
+                pkg_name = &pkg.name,
+                allowed_families = &policy.enums.family
             ));
         }
 
@@ -128,8 +125,9 @@ fn check_metadata(metadata: &Metadata, policy: &Policy) -> Result<()> {
             && !policy.is_valid_readme_tier(tier)
         {
             errors.push(format!(
-                "{}: invalid readme_tier '{}'. Allowed: {:?}",
-                pkg.name, tier, policy.enums.readme_tier
+                "{pkg_name}: invalid readme_tier '{tier}'. Allowed: {allowed_tiers:?}",
+                pkg_name = &pkg.name,
+                allowed_tiers = &policy.enums.readme_tier
             ));
         }
     }
@@ -182,6 +180,10 @@ fn check_integrations(metadata: &Metadata, policy: &Policy) -> Result<()> {
 }
 
 /// Check path constraints (when enforced).
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Result return is forward-looking; path enforcement will return errors once implemented"
+)]
 fn check_paths(policy: &Policy) -> Result<()> {
     if !policy.paths.enforce {
         // TODO(2): Implement path enforcement logic using policy.paths.allow patterns
@@ -202,10 +204,7 @@ fn check_generated_not_gitignored(paths: &[&str]) -> Result<()> {
         if let Ok(s) = status
             && s.success()
         {
-            bail!(
-                "Generated file {} is gitignored; remove ignore rule to comply with policy.",
-                p
-            );
+            bail!("Generated file {p} is gitignored; remove ignore rule to comply with policy.");
         }
     }
     Ok(())
@@ -217,7 +216,15 @@ fn check_generated_not_gitignored(paths: &[&str]) -> Result<()> {
 /// 1. **Blocked severity**: any `TODO(N)` where N is in `blocked_severities` fails.
 /// 2. **Format enforcement**: any uppercase `TODO` not in `TODO(0-3)` form fails.
 fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
+    #[expect(
+        clippy::expect_used,
+        reason = "regex literals are valid by construction"
+    )]
     let tagged_re = Regex::new(r"TODO\s*\(\s*([0-3])\s*\)").expect("valid regex");
+    #[expect(
+        clippy::expect_used,
+        reason = "regex literals are valid by construction"
+    )]
     let any_todo_re = Regex::new(r"\bTODO\b").expect("valid regex");
 
     // Enumerate git-tracked files via `git ls-files -z`.
@@ -230,7 +237,10 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("`git ls-files -z` failed with {}: {stderr}", output.status);
+        bail!(
+            "`git ls-files -z` failed with {status}: {stderr}",
+            status = output.status
+        );
     }
 
     let raw = output.stdout;
@@ -253,9 +263,11 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
         }
 
         // Check ignore_suffixes (e.g., "CHANGELOG.md" matches "foo/CHANGELOG.md").
-        if todos.ignore_suffixes.iter().any(|suffix| {
-            rel_path.as_ref() == suffix || rel_path.ends_with(&format!("/{}", suffix))
-        }) {
+        if todos
+            .ignore_suffixes
+            .iter()
+            .any(|suffix| rel_path.as_ref() == suffix || rel_path.ends_with(&format!("/{suffix}")))
+        {
             continue;
         }
 
@@ -271,9 +283,8 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
             _ => {}
         }
 
-        let file = match File::open(&abs_path) {
-            Ok(f) => f,
-            Err(_) => continue, // file may have been deleted since ls-files
+        let Ok(file) = File::open(&abs_path) else {
+            continue; // file may have been deleted since ls-files
         };
 
         // Binary detection: check first 512 bytes for NUL.
@@ -285,16 +296,14 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
         }
 
         // Seek back to start by re-opening (BufReader consumed bytes).
-        let file = match File::open(&abs_path) {
-            Ok(f) => f,
-            Err(_) => continue,
+        let Ok(file) = File::open(&abs_path) else {
+            continue;
         };
         let reader = BufReader::new(file);
 
         for (line_idx, line_result) in reader.lines().enumerate() {
-            let line = match line_result {
-                Ok(l) => l,
-                Err(_) => continue, // skip decode errors
+            let Ok(line) = line_result else {
+                continue; // skip decode errors
             };
             let line_num = line_idx + 1;
 
@@ -304,7 +313,7 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
                     && let Ok(severity) = m.as_str().parse::<u8>()
                     && todos.blocked_severities.contains(&severity)
                 {
-                    blocked.push(format!("{}:{}: {}", rel_path, line_num, line.trim()));
+                    blocked.push(format!("{rel_path}:{line_num}: {}", line.trim()));
                 }
             }
 
@@ -313,7 +322,7 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
                 let start = m.start();
                 let has_tag = tagged_re.find_iter(&line).any(|tm| tm.start() == start);
                 if !has_tag {
-                    format_violations.push(format!("{}:{}: {}", rel_path, line_num, line.trim()));
+                    format_violations.push(format!("{rel_path}:{line_num}: {}", line.trim()));
                 }
             }
         }
@@ -325,24 +334,30 @@ fn check_todo_annotations(ws_root: &Path, todos: &TodoPolicy) -> Result<()> {
 
     let mut msg = String::new();
     if !blocked.is_empty() {
-        msg.push_str(&format!(
-            "Blocked TODO severities {:?} found ({} occurrence{}):\n  {}",
-            todos.blocked_severities,
-            blocked.len(),
-            if blocked.len() == 1 { "" } else { "s" },
-            blocked.join("\n  ")
-        ));
+        let _ = write!(
+            msg,
+            "Blocked TODO severities {blocked_severities:?} found ({blocked_len} occurrence{blocked_suffix}):\n  {blocked_lines}",
+            blocked_severities = &todos.blocked_severities,
+            blocked_len = blocked.len(),
+            blocked_suffix = if blocked.len() == 1 { "" } else { "s" },
+            blocked_lines = blocked.join("\n  ")
+        );
     }
     if !format_violations.is_empty() {
         if !msg.is_empty() {
             msg.push_str("\n\n");
         }
-        msg.push_str(&format!(
+        let _ = write!(
+            msg,
             "TODO format violations ({} occurrence{}): TODO must be tagged as TODO(0), TODO(1), TODO(2), or TODO(3).\n  {}",
             format_violations.len(),
-            if format_violations.len() == 1 { "" } else { "s" },
+            if format_violations.len() == 1 {
+                ""
+            } else {
+                "s"
+            },
             format_violations.join("\n  ")
-        ));
+        );
     }
 
     bail!("{msg}");
@@ -415,7 +430,7 @@ pub fn run(check: bool) -> Result<()> {
     // 6) Generated files not gitignored
     eprintln!("[verify] Checking generated files are not gitignored...");
     let gen_paths = collect_generated_paths(&metadata);
-    let gen_path_refs: Vec<&str> = gen_paths.iter().map(|s| s.as_str()).collect();
+    let gen_path_refs: Vec<&str> = gen_paths.iter().map(std::string::String::as_str).collect();
     check_generated_not_gitignored(&gen_path_refs)?;
 
     eprintln!("[verify] All checks passed!");

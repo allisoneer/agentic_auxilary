@@ -67,19 +67,19 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     let schema_changed = schema::sync_schema("agentic.schema.json", dry_run, check)?;
 
     // Summary
-    let total_changes = (root_changed as usize)
+    let total_changes = usize::from(root_changed)
         + crate_count
-        + (release_changed as usize)
-        + (mise_changed as usize)
-        + (readme_changed as usize)
-        + (justfile_changed as usize)
-        + (schema_changed as usize);
+        + usize::from(release_changed)
+        + usize::from(mise_changed)
+        + usize::from(readme_changed)
+        + usize::from(justfile_changed)
+        + usize::from(schema_changed);
     if total_changes == 0 {
         eprintln!("[sync] No changes needed.");
     } else if dry_run {
-        eprintln!("[sync] Would make {} change(s) (dry-run).", total_changes);
+        eprintln!("[sync] Would make {total_changes} change(s) (dry-run).");
     } else {
-        eprintln!("[sync] Made {} change(s).", total_changes);
+        eprintln!("[sync] Made {total_changes} change(s).");
     }
 
     Ok(())

@@ -4,6 +4,7 @@ use cargo_metadata::Metadata;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 #[derive(Debug, Deserialize)]
 pub struct BlockConfig {
@@ -31,7 +32,7 @@ fn version_map(metadata: &Metadata) -> BTreeMap<String, String> {
 
 pub fn apply_autodeps_markers(input: &str, ctx: &RenderContext) -> Result<(String, bool)> {
     let re = Regex::new(
-        r#"(?s)<!--\s*BEGIN:autodeps\s*(\{.*?\})\s*-->\s*(.*?)\s*<!--\s*END:autodeps\s*-->"#,
+        r"(?s)<!--\s*BEGIN:autodeps\s*(\{.*?\})\s*-->\s*(.*?)\s*<!--\s*END:autodeps\s*-->",
     )
     .context("compile autodeps regex")?;
 
@@ -42,8 +43,13 @@ pub fn apply_autodeps_markers(input: &str, ctx: &RenderContext) -> Result<(Strin
     let mut last = 0usize;
 
     for caps in re.captures_iter(input) {
-        let m = caps.get(0).unwrap();
-        let cfg_json = caps.get(1).unwrap().as_str();
+        let Some(m) = caps.get(0) else {
+            continue;
+        };
+        let Some(cfg_json_match) = caps.get(1) else {
+            continue;
+        };
+        let cfg_json = cfg_json_match.as_str();
 
         // Copy content before this block
         out.push_str(&input[last..m.start()]);
@@ -89,16 +95,15 @@ pub fn apply_autodeps_markers(input: &str, ctx: &RenderContext) -> Result<(Strin
         // Render replacement block
         let fence = cfg.fence.as_deref().unwrap_or("toml");
         let mut rendered = String::new();
-        rendered.push_str(&format!("<!-- BEGIN:autodeps {cfg_json} -->\n"));
-        rendered.push_str(&format!("```{fence}\n"));
+        let _ = writeln!(rendered, "<!-- BEGIN:autodeps {cfg_json} -->");
+        let _ = writeln!(rendered, "```{fence}");
         if let Some(header) = cfg.header.as_deref() {
             rendered.push_str(header);
             rendered.push('\n');
         }
         for name in &cfg.crates {
             let ver = &vmap[name];
-            rendered.push_str(&format!(r#"{name} = "{ver}""#));
-            rendered.push('\n');
+            let _ = writeln!(rendered, r#"{name} = "{ver}""#);
         }
         rendered.push_str("```\n");
         rendered.push_str("<!-- END:autodeps -->");
