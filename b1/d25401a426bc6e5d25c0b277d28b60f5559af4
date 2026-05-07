@@ -1,0 +1,32 @@
+crates/agentic-tools/mcp/Cargo.toml
+  s_333574ec928424::t_fb950b99e6e972 23-25
+crates/agentic-tools/mcp/src/server.rs
+  s_81ca71ec35989c::t_09a7020e01c04f 85,92,99,106,143,176,409,420,429,515,522-523,576
+crates/agentic-tools/mcp/tests/integration.rs
+  s_81ca71ec35989c::t_03386d174d4b34 189
+  s_81ca71ec35989c::t_f1ff875f03d301 326,436
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "b1d25401a426bc6e5d25c0b277d28b60f5559af4",
+  "prompts": {},
+  "sessions": {
+    "s_333574ec928424": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2015c27b0ffeTHU0xwgkmBVj9l",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_81ca71ec35989c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1fca7e61affeBEFfnAq55XxaUX",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
