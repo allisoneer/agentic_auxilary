@@ -43,6 +43,17 @@ inactivity_timeout_secs = 300
 # Context compaction threshold as fraction 0.0-1.0 (default: 0.80)
 compaction_threshold = 0.80
 
+[orchestrator.commands]
+# Exact, case-sensitive command names that remain visible/executable.
+# Empty allowlist means "do not restrict by allowlist".
+allow = []
+# Exact, case-sensitive command names that are always blocked.
+# Entries are trimmed before comparison, and deny wins over allow.
+deny = []
+# Example:
+# allow = ["research", "implement_plan"]
+# deny = ["commit"]
+
 # =============================================================================
 # Web Retrieval - Configuration for web_fetch and web_search tools
 # =============================================================================

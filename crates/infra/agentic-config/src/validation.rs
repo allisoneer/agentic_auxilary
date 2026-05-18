@@ -5,6 +5,7 @@
 //! configs while still surfacing potential issues.
 
 use crate::types::AgenticConfig;
+use std::collections::BTreeSet;
 
 /// An advisory warning about a configuration issue.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -260,6 +261,18 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         ));
     }
 
+    validate_command_entries(
+        &cfg.orchestrator.commands.allow,
+        "orchestrator.commands.allow",
+        &mut warnings,
+    );
+    validate_command_entries(
+        &cfg.orchestrator.commands.deny,
+        "orchestrator.commands.deny",
+        &mut warnings,
+    );
+    validate_command_overlap(cfg, &mut warnings);
+
     // Validate web_retrieval: default_search_results <= max_search_results
     if cfg.web_retrieval.default_search_results > cfg.web_retrieval.max_search_results {
         warnings.push(AdvisoryWarning::new(
@@ -288,6 +301,98 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
     }
 
     warnings
+}
+
+fn validate_command_entries(
+    entries: &[String],
+    path: &'static str,
+    warnings: &mut Vec<AdvisoryWarning>,
+) {
+    let mut seen = BTreeSet::new();
+    let mut duplicates = BTreeSet::new();
+
+    for entry in entries {
+        let trimmed = entry.trim();
+
+        if trimmed.is_empty() {
+            warnings.push(AdvisoryWarning::new(
+                if path.ends_with("allow") {
+                    "orchestrator.commands.allow.empty_entry"
+                } else {
+                    "orchestrator.commands.deny.empty_entry"
+                },
+                path,
+                format!("entry {entry:?} becomes empty after trimming"),
+            ));
+            continue;
+        }
+
+        if trimmed != entry {
+            warnings.push(AdvisoryWarning::new(
+                if path.ends_with("allow") {
+                    "orchestrator.commands.allow.trimmed_entry"
+                } else {
+                    "orchestrator.commands.deny.trimmed_entry"
+                },
+                path,
+                format!(
+                    "entry {entry:?} has surrounding whitespace; effective value is {trimmed:?}"
+                ),
+            ));
+        }
+
+        if !seen.insert(trimmed.to_string()) {
+            duplicates.insert(trimmed.to_string());
+        }
+    }
+
+    if !duplicates.is_empty() {
+        let duplicates = duplicates.into_iter().collect::<Vec<_>>().join(", ");
+        warnings.push(AdvisoryWarning::new(
+            if path.ends_with("allow") {
+                "orchestrator.commands.allow.duplicate"
+            } else {
+                "orchestrator.commands.deny.duplicate"
+            },
+            path,
+            format!("duplicate command entries after trimming: {duplicates}"),
+        ));
+    }
+}
+
+fn validate_command_overlap(cfg: &AgenticConfig, warnings: &mut Vec<AdvisoryWarning>) {
+    let allow = cfg
+        .orchestrator
+        .commands
+        .allow
+        .iter()
+        .map(|entry| entry.trim())
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+    let deny = cfg
+        .orchestrator
+        .commands
+        .deny
+        .iter()
+        .map(|entry| entry.trim())
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+
+    let overlap = allow.intersection(&deny).cloned().collect::<Vec<_>>();
+    if overlap.is_empty() {
+        return;
+    }
+
+    warnings.push(AdvisoryWarning::new(
+        "orchestrator.commands.overlap",
+        "orchestrator.commands",
+        format!(
+            "commands appear in both allow and deny: {}. deny wins at runtime",
+            overlap.join(", ")
+        ),
+    ));
 }
 
 fn validate_url(
@@ -425,6 +530,68 @@ mod tests {
                 .iter()
                 .any(|w| w.code == "orchestrator.compaction_threshold.out_of_range")
         );
+    }
+
+    #[test]
+    fn test_orchestrator_allow_empty_entry_warns() {
+        let mut config = AgenticConfig::default();
+        config.orchestrator.commands.allow = vec!["   ".into()];
+
+        let warnings = validate(&config);
+        let warning = warnings
+            .iter()
+            .find(|w| w.code == "orchestrator.commands.allow.empty_entry")
+            .expect("empty allow warning expected");
+
+        assert_eq!(warning.path, "orchestrator.commands.allow");
+        assert!(warning.message.contains("becomes empty after trimming"));
+    }
+
+    #[test]
+    fn test_orchestrator_deny_trimmed_entry_warns() {
+        let mut config = AgenticConfig::default();
+        config.orchestrator.commands.deny = vec!["  plan  ".into()];
+
+        let warnings = validate(&config);
+        let warning = warnings
+            .iter()
+            .find(|w| w.code == "orchestrator.commands.deny.trimmed_entry")
+            .expect("trimmed deny warning expected");
+
+        assert_eq!(warning.path, "orchestrator.commands.deny");
+        assert!(warning.message.contains("effective value is \"plan\""));
+    }
+
+    #[test]
+    fn test_orchestrator_allow_duplicate_warns() {
+        let mut config = AgenticConfig::default();
+        config.orchestrator.commands.allow = vec!["plan".into(), " plan ".into()];
+
+        let warnings = validate(&config);
+        let warning = warnings
+            .iter()
+            .find(|w| w.code == "orchestrator.commands.allow.duplicate")
+            .expect("duplicate allow warning expected");
+
+        assert_eq!(warning.path, "orchestrator.commands.allow");
+        assert!(warning.message.contains("plan"));
+    }
+
+    #[test]
+    fn test_orchestrator_command_overlap_warns_with_deny_wins_message() {
+        let mut config = AgenticConfig::default();
+        config.orchestrator.commands.allow = vec!["plan".into()];
+        config.orchestrator.commands.deny = vec![" plan ".into()];
+
+        let warnings = validate(&config);
+        let warning = warnings
+            .iter()
+            .find(|w| w.code == "orchestrator.commands.overlap")
+            .expect("overlap warning expected");
+
+        assert_eq!(warning.path, "orchestrator.commands");
+        assert!(warning.message.contains("plan"));
+        assert!(warning.message.contains("deny wins at runtime"));
     }
 
     #[test]

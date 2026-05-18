@@ -35,6 +35,10 @@
       "description": "Orchestrator session and timing configuration.",
       "$ref": "#/$defs/OrchestratorConfig",
       "default": {
+        "commands": {
+          "allow": [],
+          "deny": []
+        },
         "compaction_threshold": 0.8,
         "inactivity_timeout_secs": 300,
         "session_deadline_secs": 3600
@@ -176,10 +180,40 @@
         }
       }
     },
+    "OrchestratorCommandsConfig": {
+      "description": "Command filtering policy for orchestrator-exposed `OpenCode` commands.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Exact case-sensitive command names to allow. Empty means no allowlist restriction.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "description": "Exact case-sensitive command names to deny. Deny wins over allow.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "OrchestratorConfig": {
       "description": "Configuration for opencode-orchestrator-mcp.",
       "type": "object",
       "properties": {
+        "commands": {
+          "description": "Command filtering policy for orchestrator-exposed `OpenCode` commands.",
+          "$ref": "#/$defs/OrchestratorCommandsConfig",
+          "default": {
+            "allow": [],
+            "deny": []
+          }
+        },
         "compaction_threshold": {
           "description": "Context compaction threshold as fraction 0.0-1.0 (default: 0.80).",
           "type": "number",
