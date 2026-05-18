@@ -1,0 +1,47 @@
+crates/infra/agentic-config/src/schema.rs
+  s_6a37e15c3ba708::t_a9b60e2030853d 39-45
+crates/infra/agentic-config/src/validation.rs
+  s_6a37e15c3ba708::t_1c779fbca74c8a 8,264-275,306-324,326-337,341-395
+  s_6a37e15c3ba708::t_be11e586222158 338,340
+  s_6a37e15c3ba708::t_d275b5a99913e1 536-596
+  s_6a37e15c3ba708::t_cc3a2f0430f353 325,339
+agentic.toml.example
+  s_6a37e15c3ba708::t_96b5ce60d7670a 46-56
+apps/opencode-orchestrator-mcp/tests/support/mod.rs
+  s_6a37e15c3ba708::t_f7f35447fd4b0a 9,30-38,56-61
+apps/opencode-orchestrator-mcp/src/server.rs
+  s_6a37e15c3ba708::t_b1fa0a5cf15c55 1080-1083
+  s_6a37e15c3ba708::t_27325bcca107db 90-103,523-557
+  s_6a37e15c3ba708::t_82b9493892e9ed 917-927,932-944,948,955,964-977,984
+  s_6a37e15c3ba708::t_ef4bf6689de5f5 1005,1084-1091,1103-1167
+docs/config.md
+  s_6a37e15c3ba708::t_ac8fb1b95f355a 37-56
+agentic.schema.json
+  ai_agent 38-41,183-204,209-216
+apps/opencode-orchestrator-mcp/tests/command_filtering_wiremock.rs
+  s_6a37e15c3ba708::t_b0f411bf798301 99-100,110-112,126,138-139,173-175
+  s_6a37e15c3ba708::t_373a8b24c653cd 1-42,44-61,63-77,79-93,95-98,101-109,113-125,127-137,140-172,176-178
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_6a37e15c3ba708::t_aa8446b8527403 75-77,81,84-86
+  s_6a37e15c3ba708::t_b941dda3f8f189 5,73-74,78-80,82-83,87-88,372-378,1339
+crates/infra/agentic-config/src/types.rs
+  s_6a37e15c3ba708::t_3cabb09eab6527 162,166
+  s_6a37e15c3ba708::t_7539583f3a9f20 369,403-418,458-459
+  s_6a37e15c3ba708::t_edcccabb96fe29 163,167-173,182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "6bd18374707e56ebf5491d7d2f2ec0cfe588e70f",
+  "prompts": {},
+  "sessions": {
+    "s_6a37e15c3ba708": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1c29abeb5ffepOTnRpSBr8yYo1",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
