@@ -36,6 +36,13 @@ mod tests {
 
         // Check that the schema has definitions for our types
         assert!(json.get("$defs").is_some() || json.get("definitions").is_some());
+
+        let orchestrator_properties = &json["$defs"]["OrchestratorConfig"]["properties"];
+        assert!(orchestrator_properties.get("commands").is_some());
+
+        let command_properties = &json["$defs"]["OrchestratorCommandsConfig"]["properties"];
+        assert!(command_properties.get("allow").is_some());
+        assert!(command_properties.get("deny").is_some());
     }
 
     #[test]

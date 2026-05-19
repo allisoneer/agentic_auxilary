@@ -2,6 +2,7 @@
 
 use crate::config;
 use crate::logging;
+use crate::server::CommandPolicyDecision;
 use crate::server::OrchestratorServer;
 use crate::server::OrchestratorServerHandle;
 use crate::token_tracker::TokenTracker;
@@ -67,6 +68,22 @@ struct ToolLogMeta {
 struct RunOutcome {
     output: OrchestratorRunOutput,
     log_meta: ToolLogMeta,
+}
+
+fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
+    let reason = match decision {
+        CommandPolicyDecision::Allowed => {
+            return ToolError::Internal("command unexpectedly allowed".into());
+        }
+        CommandPolicyDecision::DeniedByAllowlist => {
+            "it is not present in orchestrator.commands.allow"
+        }
+        CommandPolicyDecision::DeniedByDenylist => "it is blocked by orchestrator.commands.deny",
+    };
+
+    ToolError::InvalidInput(format!(
+        "Command '{command}' cannot be run because {reason}."
+    ))
 }
 
 impl RunOutcome {
@@ -351,6 +368,13 @@ impl OrchestratorRunTool {
             .acquire()
             .await
             .map_err(|e| ToolError::Internal(e.to_string()))?;
+
+        if let Some(command) = input.command.as_deref() {
+            let decision = server.command_policy_decision(command);
+            if !decision.is_allowed() {
+                return Err(blocked_command_error(command, decision));
+            }
+        }
 
         let client = server.client();
 
@@ -1312,6 +1336,7 @@ impl Tool for ListCommandsTool {
 
                 let command_infos: Vec<CommandInfo> = commands
                     .into_iter()
+                    .filter(|command| server.is_command_allowed(&command.name))
                     .map(|c| CommandInfo {
                         name: c.name,
                         description: c.description,

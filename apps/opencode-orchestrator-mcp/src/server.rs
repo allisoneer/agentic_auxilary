@@ -87,6 +87,20 @@ pub enum RecoveryMode {
     External,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandPolicyDecision {
+    Allowed,
+    DeniedByAllowlist,
+    DeniedByDenylist,
+}
+
+impl CommandPolicyDecision {
+    #[must_use]
+    pub fn is_allowed(self) -> bool {
+        matches!(self, Self::Allowed)
+    }
+}
+
 impl RecoveryMode {
     fn as_str(self) -> &'static str {
         match self {
@@ -506,6 +520,41 @@ pub struct OrchestratorServer {
 }
 
 impl OrchestratorServer {
+    pub fn command_policy_decision(&self, command: &str) -> CommandPolicyDecision {
+        let deny_matches = self
+            .config
+            .commands
+            .deny
+            .iter()
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+            .any(|entry| entry == command);
+        if deny_matches {
+            return CommandPolicyDecision::DeniedByDenylist;
+        }
+
+        let mut allow_entries = self
+            .config
+            .commands
+            .allow
+            .iter()
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+            .peekable();
+
+        if allow_entries.peek().is_some() && !allow_entries.any(|entry| entry == command) {
+            return CommandPolicyDecision::DeniedByAllowlist;
+        }
+
+        CommandPolicyDecision::Allowed
+    }
+
+    pub fn is_command_allowed(&self, command: &str) -> bool {
+        self.command_policy_decision(command).is_allowed()
+    }
+
     /// Start a new managed `OpenCode` server and build the client.
     ///
     /// This is the eager initialization path that spawns the server immediately.
@@ -865,20 +914,45 @@ impl OrchestratorServer {
         Arc::new(Self::from_client_unshared(client, base_url, mode))
     }
 
+    pub fn from_client_with_config(
+        client: Client,
+        base_url: impl Into<String>,
+        mode: RecoveryMode,
+        config: OrchestratorConfig,
+    ) -> Arc<Self> {
+        Arc::new(Self::from_client_unshared_with_config(
+            client, base_url, mode, config,
+        ))
+    }
+
     /// Build an `OrchestratorServer` wrapper returning `Self` (not `Arc<Self>`).
     ///
     /// Useful for tests that need to preseed an `OrchestratorServerHandle` directly.
     pub fn from_client_unshared(
         client: Client,
         base_url: impl Into<String>,
+        mode: RecoveryMode,
+    ) -> Self {
+        Self::from_client_unshared_with_config(
+            client,
+            base_url,
+            mode,
+            OrchestratorConfig::default(),
+        )
+    }
+
+    pub fn from_client_unshared_with_config(
+        client: Client,
+        base_url: impl Into<String>,
         _mode: RecoveryMode,
+        config: OrchestratorConfig,
     ) -> Self {
         Self {
             managed_server: StdMutex::new(None),
             client,
             model_context_limits: HashMap::new(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
-            config: OrchestratorConfig::default(),
+            config,
             spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
         }
     }
@@ -888,12 +962,26 @@ impl OrchestratorServer {
         client: Client,
         base_url: impl Into<String>,
     ) -> Self {
+        Self::from_managed_for_testing_with_config(
+            managed,
+            client,
+            base_url,
+            OrchestratorConfig::default(),
+        )
+    }
+
+    pub fn from_managed_for_testing_with_config(
+        managed: ManagedServer,
+        client: Client,
+        base_url: impl Into<String>,
+        config: OrchestratorConfig,
+    ) -> Self {
         Self {
             managed_server: StdMutex::new(Some(managed)),
             client,
             model_context_limits: HashMap::new(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
-            config: OrchestratorConfig::default(),
+            config,
             spawned_sessions: Arc::new(RwLock::new(HashSet::new())),
         }
     }
@@ -914,6 +1002,7 @@ impl OrchestratorServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agentic_config::types::OrchestratorCommandsConfig;
     use serial_test::serial;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
@@ -988,6 +1077,18 @@ mod tests {
         )
     }
 
+    fn external_server_with_config(
+        base_url: &str,
+        config: OrchestratorConfig,
+    ) -> OrchestratorServer {
+        OrchestratorServer::from_client_unshared_with_config(
+            test_client(base_url),
+            base_url,
+            RecoveryMode::External,
+            config,
+        )
+    }
+
     async fn exited_child() -> tokio::process::Child {
         let mut child = Command::new("sh").arg("-c").arg("exit 0").spawn().unwrap();
         let _status = child.wait().await.unwrap();
@@ -997,6 +1098,73 @@ mod tests {
     async fn managed_server_with_exited_child(base_url: &str) -> OrchestratorServer {
         let managed = ManagedServer::from_child_for_testing(exited_child().await, base_url, 9);
         OrchestratorServer::from_managed_for_testing(managed, test_client(base_url), base_url)
+    }
+
+    #[test]
+    fn command_policy_allows_all_when_allowlist_is_empty() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                commands: OrchestratorCommandsConfig {
+                    allow: vec![],
+                    deny: vec!["blocked".into()],
+                },
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(
+            server.command_policy_decision("plan"),
+            CommandPolicyDecision::Allowed
+        );
+        assert_eq!(
+            server.command_policy_decision("blocked"),
+            CommandPolicyDecision::DeniedByDenylist
+        );
+    }
+
+    #[test]
+    fn command_policy_trims_entries_and_deny_wins() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                commands: OrchestratorCommandsConfig {
+                    allow: vec!["  plan  ".into()],
+                    deny: vec!["plan".into()],
+                },
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(
+            server.command_policy_decision("plan"),
+            CommandPolicyDecision::DeniedByDenylist
+        );
+    }
+
+    #[test]
+    fn command_policy_matching_is_case_sensitive() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                commands: OrchestratorCommandsConfig {
+                    allow: vec!["Plan".into()],
+                    deny: vec!["blocked".into()],
+                },
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(
+            server.command_policy_decision("Plan"),
+            CommandPolicyDecision::Allowed
+        );
+        assert_eq!(
+            server.command_policy_decision("plan"),
+            CommandPolicyDecision::DeniedByAllowlist
+        );
+        assert!(server.is_command_allowed("Plan"));
+        assert!(!server.is_command_allowed("plan"));
     }
 
     struct BlockingHealthServer {

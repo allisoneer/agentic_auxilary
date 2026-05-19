@@ -34,6 +34,26 @@ level = "info"
 
 Think of this as orientation and defaults, not secret storage. Models, base URLs, timeouts, and logging belong here; API keys do not.
 
+### `orchestrator.commands`
+
+`opencode-orchestrator-mcp` can filter which upstream `OpenCode` commands are shown by `list_commands` and which named commands may be executed through `run(command=...)`:
+
+```toml
+[orchestrator.commands]
+allow = ["research", "implement_plan"]
+deny = ["commit"]
+```
+
+Runtime semantics:
+
+- `deny` wins over `allow`
+- `allow = []` means there is no allowlist restriction
+- matching is exact and case-sensitive
+- configured entries are trimmed before comparison, so `" build "` matches `build`
+- this policy applies to `list_commands` and `run(command=...)`, but not raw `run(message=...)`
+
+One merge caveat matters here: TOML tables merge, but arrays replace rather than append. If a local `agentic.toml` sets `allow = []`, that clears any inherited allowlist instead of extending it.
+
 ## `.thoughts/config.json` (per repo, v2 only)
 
 This file lives at `<repo>/.thoughts/config.json` and tells `thoughts` what the repo wants to mount. Current runtime expects `version: "2.0"`; older v1 configs are not supported anymore.

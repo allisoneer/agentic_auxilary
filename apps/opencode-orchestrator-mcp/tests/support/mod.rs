@@ -6,6 +6,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(dead_code)]
 
+use agentic_config::types::OrchestratorConfig;
 use opencode_orchestrator_mcp::server::OrchestratorServer;
 use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
 use opencode_orchestrator_mcp::server::RecoveryMode;
@@ -26,6 +27,15 @@ use wiremock::matchers::path;
 /// The handle is pre-initialized with a server backed by the mock.
 /// Uses a short 5-second timeout suitable for tests.
 pub async fn test_orchestrator_server(mock: &MockServer) -> Arc<OrchestratorServerHandle> {
+    test_orchestrator_server_with_config(mock, OrchestratorConfig::default()).await
+}
+
+/// Build an `OrchestratorServerHandle` connected to a wiremock `MockServer`
+/// with explicit orchestrator config.
+pub async fn test_orchestrator_server_with_config(
+    mock: &MockServer,
+    config: OrchestratorConfig,
+) -> Arc<OrchestratorServerHandle> {
     Mock::given(method("GET"))
         .and(path("/global/health"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -43,7 +53,12 @@ pub async fn test_orchestrator_server(mock: &MockServer) -> Arc<OrchestratorServ
         .unwrap();
 
     Arc::new(OrchestratorServerHandle::from_server_unshared(
-        OrchestratorServer::from_client_unshared(client, base_url, RecoveryMode::External),
+        OrchestratorServer::from_client_unshared_with_config(
+            client,
+            base_url,
+            RecoveryMode::External,
+            config,
+        ),
     ))
 }
 

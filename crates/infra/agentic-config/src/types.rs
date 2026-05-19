@@ -159,6 +159,18 @@ pub struct OrchestratorConfig {
     pub inactivity_timeout_secs: u64,
     /// Context compaction threshold as fraction 0.0-1.0 (default: 0.80).
     pub compaction_threshold: f64,
+    /// Command filtering policy for orchestrator-exposed `OpenCode` commands.
+    pub commands: OrchestratorCommandsConfig,
+}
+
+/// Command filtering policy for orchestrator-exposed `OpenCode` commands.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct OrchestratorCommandsConfig {
+    /// Exact case-sensitive command names to allow. Empty means no allowlist restriction.
+    pub allow: Vec<String>,
+    /// Exact case-sensitive command names to deny. Deny wins over allow.
+    pub deny: Vec<String>,
 }
 
 impl Default for OrchestratorConfig {
@@ -167,6 +179,7 @@ impl Default for OrchestratorConfig {
             session_deadline_secs: 3600,
             inactivity_timeout_secs: 300,
             compaction_threshold: 0.80,
+            commands: OrchestratorCommandsConfig::default(),
         }
     }
 }
@@ -353,6 +366,7 @@ mod tests {
         assert!(toml_str.contains("[services.anthropic]"));
         assert!(toml_str.contains("[services.exa]"));
         assert!(toml_str.contains("[orchestrator]"));
+        assert!(toml_str.contains("[orchestrator.commands]"));
         assert!(toml_str.contains("[web_retrieval]"));
         assert!(toml_str.contains("[cli_tools]"));
         assert!(toml_str.contains("[logging]"));
@@ -386,6 +400,22 @@ locator_model = "custom-model"
             config.services.anthropic.base_url,
             "https://api.anthropic.com"
         );
+        assert!(config.orchestrator.commands.allow.is_empty());
+        assert!(config.orchestrator.commands.deny.is_empty());
+    }
+
+    #[test]
+    fn test_orchestrator_commands_deserialize() {
+        let toml_str = r#"
+[orchestrator.commands]
+allow = ["plan", "research"]
+deny = ["commit"]
+"#;
+
+        let config: AgenticConfig = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(config.orchestrator.commands.allow, ["plan", "research"]);
+        assert_eq!(config.orchestrator.commands.deny, ["commit"]);
     }
 
     #[test]
@@ -425,6 +455,8 @@ locator_model = "custom-model"
         assert_eq!(cfg.session_deadline_secs, 3600);
         assert_eq!(cfg.inactivity_timeout_secs, 300);
         assert!((cfg.compaction_threshold - 0.80).abs() < f64::EPSILON);
+        assert!(cfg.commands.allow.is_empty());
+        assert!(cfg.commands.deny.is_empty());
     }
 
     #[test]
