@@ -157,14 +157,14 @@
           "minimum": 0
         },
         "just_execute_timeout_secs": {
-          "description": "Wall-clock timeout for cli_just_execute in seconds. `0` disables the timeout.",
+          "description": "Wall-clock timeout for `cli_just_execute` in seconds. `0` disables the timeout.",
           "type": "integer",
           "format": "uint64",
           "default": 1800,
           "minimum": 0
         },
         "just_search_timeout_secs": {
-          "description": "Wall-clock timeout for cli_just_search in seconds. `0` disables the timeout.",
+          "description": "Wall-clock timeout for `cli_just_search` in seconds. `0` disables the timeout.",
           "type": "integer",
           "format": "uint64",
           "default": 30,
@@ -408,7 +408,7 @@
       "type": "object",
       "properties": {
         "run_timeout_secs": {
-          "description": "Wall-clock timeout for review_run sessions in seconds. `0` disables the timeout.",
+          "description": "Wall-clock timeout for `review_run` sessions in seconds. `0` disables the timeout.",
           "type": "integer",
           "format": "uint64",
           "default": 1800,
@@ -468,7 +468,7 @@
           "default": "claude-haiku-4-5"
         },
         "runtime_timeout_secs": {
-          "description": "Wall-clock timeout for ask_agent runtime in seconds. `0` disables the timeout.",
+          "description": "Wall-clock timeout for `ask_agent` runtime in seconds. `0` disables the timeout.",
           "type": "integer",
           "format": "uint64",
           "default": 3600,
@@ -481,7 +481,7 @@
       "type": "object",
       "properties": {
         "add_reference_timeout_secs": {
-          "description": "Wall-clock timeout for thoughts_add_reference in seconds. `0` disables the timeout.",
+          "description": "Wall-clock timeout for `thoughts_add_reference` in seconds. `0` disables the timeout.",
           "type": "integer",
           "format": "uint64",
           "default": 600,
