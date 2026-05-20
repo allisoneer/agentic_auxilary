@@ -161,6 +161,7 @@ fn log_tool_error<TReq: Serialize>(
     error: &ToolError,
 ) {
     let (completed_at, duration_ms) = timer.finish();
+    let error = error.to_string();
     let record = ToolCallRecord {
         call_id: timer.call_id.clone(),
         server: SERVER_NAME.into(),
@@ -171,8 +172,8 @@ fn log_tool_error<TReq: Serialize>(
         request: request_json(request),
         response_file: None,
         success: false,
-        error: Some(error.to_string()),
-        failure_kind: None,
+        error: Some(error.clone()),
+        failure_kind: agentic_logging::classify_failure_kind(false, Some(&error)),
         model: None,
         token_usage: None,
         summary: None,

@@ -49,6 +49,8 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
         })
 }
 
+const ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS: u64 = 5;
+
 async fn wait_for_claude_result<F, C, CFn>(
     ctx: &agentic_tools_core::ToolContext,
     wait_fut: F,
@@ -95,8 +97,26 @@ where
     {
         result
     } else {
-        if let Err(e) = cancel_fn().await {
-            tracing::warn!(error = %e, "Failed to cancel Claude session cleanly after timeout");
+        match tokio::time::timeout(
+            Duration::from_secs(ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS),
+            cancel_fn(),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    error = %e,
+                    cleanup_timeout_secs = ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS,
+                    "Failed to cancel Claude session cleanly after timeout"
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    cleanup_timeout_secs = ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS,
+                    "Claude cancellation cleanup exceeded timeout after ask_agent deadline"
+                );
+            }
         }
         Err(ToolError::Internal(format!(
             "ask_agent timed out after {timeout_secs}s"
@@ -108,23 +128,23 @@ async fn wait_for_just_result_with_timeout<T, F>(
     ctx: &agentic_tools_core::ToolContext,
     fut: F,
     timeout_secs: u64,
-) -> Result<T, String>
+) -> Result<T, ToolError>
 where
     F: Future<Output = Result<T, String>>,
 {
     if timeout_secs == 0 {
         return tokio::select! {
-            () = ctx.cancelled() => Err("Just search cancelled".to_string()),
-            result = fut => result,
+            () = ctx.cancelled() => Err(ToolError::cancelled(None)),
+            result = fut => result.map_err(ToolError::Internal),
         };
     }
 
     tokio::select! {
-        () = ctx.cancelled() => Err("Just search cancelled".to_string()),
+        () = ctx.cancelled() => Err(ToolError::cancelled(None)),
         result = tokio::time::timeout(Duration::from_secs(timeout_secs), fut) => {
             match result {
-                Ok(result) => result,
-                Err(_) => Err(format!("Just search timed out after {timeout_secs}s")),
+                Ok(result) => result.map_err(ToolError::Internal),
+                Err(_) => Err(ToolError::Internal(format!("Just search timed out after {timeout_secs}s"))),
             }
         }
     }
@@ -740,17 +760,8 @@ impl CodingAgentTools {
         )
         .await
         {
-            let error_msg = e;
-            log_ctx.finish(
-                req_json,
-                None,
-                false,
-                Some(error_msg.clone()),
-                None,
-                None,
-                None,
-            );
-            return Err(ToolError::Internal(error_msg));
+            log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+            return Err(e);
         }
 
         let repo_root = match paths::to_abs_string(".") {
@@ -790,17 +801,8 @@ impl CodingAgentTools {
             {
                 Ok(r) => r,
                 Err(e) => {
-                    let error_msg = e;
-                    log_ctx.finish(
-                        req_json,
-                        None,
-                        false,
-                        Some(error_msg.clone()),
-                        None,
-                        None,
-                        None,
-                    );
-                    return Err(ToolError::Internal(error_msg));
+                    log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+                    return Err(e);
                 }
             };
 
@@ -1140,6 +1142,40 @@ mod ask_agent_filter_tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn wait_for_claude_result_with_timeout_bounds_cleanup_duration() {
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let handle = tokio::spawn(async move {
+            wait_for_claude_result_with_timeout(
+                &ctx,
+                std::future::pending::<claudecode::Result<ClaudeResult>>(),
+                || async { std::future::pending::<claudecode::Result<()>>().await },
+                1,
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+        tokio::task::yield_now().await;
+        assert!(
+            !handle.is_finished(),
+            "cleanup timeout should not resolve before cleanup budget elapses"
+        );
+
+        tokio::time::advance(Duration::from_secs(ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS)).await;
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        let Err(err) = result else {
+            panic!("timeout expected");
+        };
+        assert!(err.to_string().contains("ask_agent timed out after 1s"));
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn wait_for_claude_result_with_timeout_zero_disables_deadline() {
         let ctx = agentic_tools_core::ToolContext::default();
 
@@ -1192,7 +1228,29 @@ mod ask_agent_filter_tests {
         let Err(err) = result else {
             panic!("timeout expected");
         };
-        assert_eq!(err, "Just search timed out after 1s");
+        assert!(
+            matches!(err, ToolError::Internal(message) if message == "Just search timed out after 1s")
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_just_result_with_timeout_returns_structured_cancelled() {
+        let ctx = agentic_tools_core::ToolContext::default();
+        let cancel = ctx.cancellation_token();
+
+        let handle = tokio::spawn(async move {
+            wait_for_just_result_with_timeout(&ctx, std::future::pending::<Result<(), String>>(), 1)
+                .await
+        });
+
+        tokio::task::yield_now().await;
+        cancel.cancel();
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
     }
 
     #[tokio::test(start_paused = true)]

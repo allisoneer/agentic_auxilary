@@ -56,9 +56,11 @@ Model selection for `ask_reasoning_model` tool:
 Base URLs and timeout knobs for Anthropic, Exa, Linear, and GitHub integrations. API keys are loaded from environment only (never serialized).
 
 ### `review`
+
 - `run_timeout_secs`: review_run wall-clock timeout in seconds (default: `1800`, `0 = disabled`)
 
 ### `thoughts`
+
 - `add_reference_timeout_secs`: thoughts_add_reference wall-clock timeout in seconds (default: `600`, `0 = disabled`)
 
 ### `logging` - Diagnostics

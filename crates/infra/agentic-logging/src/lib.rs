@@ -99,6 +99,22 @@ pub struct ToolCallRecord {
     pub summary: Option<serde_json::Value>,
 }
 
+/// Classify a failed tool call into a structured failure kind.
+pub fn classify_failure_kind(success: bool, error: Option<&str>) -> Option<String> {
+    if success {
+        return None;
+    }
+
+    let error = error.unwrap_or_default().to_ascii_lowercase();
+    if error.contains("timed out") || error.contains("timeout") {
+        Some("timeout".to_string())
+    } else if error.contains("cancelled") || error.contains("canceled") {
+        Some("cancelled".to_string())
+    } else {
+        Some("error".to_string())
+    }
+}
+
 /// Check if logging is disabled via environment variable.
 pub fn logging_disabled() -> bool {
     match std::env::var("AGENTIC_LOGGING_DISABLED") {
@@ -541,5 +557,34 @@ mod tests {
 
         let json = serde_json::to_string(&record).unwrap();
         assert!(json.contains("\"failure_kind\":\"timeout\""));
+    }
+
+    #[test]
+    fn test_classify_failure_kind_success_is_none() {
+        assert_eq!(classify_failure_kind(true, Some("timed out")), None);
+    }
+
+    #[test]
+    fn test_classify_failure_kind_timeout() {
+        assert_eq!(
+            classify_failure_kind(false, Some("Operation timed out after 10s")),
+            Some("timeout".to_string())
+        );
+    }
+
+    #[test]
+    fn test_classify_failure_kind_cancelled() {
+        assert_eq!(
+            classify_failure_kind(false, Some("Request canceled by caller")),
+            Some("cancelled".to_string())
+        );
+    }
+
+    #[test]
+    fn test_classify_failure_kind_generic_error() {
+        assert_eq!(
+            classify_failure_kind(false, Some("Something else failed")),
+            Some("error".to_string())
+        );
     }
 }

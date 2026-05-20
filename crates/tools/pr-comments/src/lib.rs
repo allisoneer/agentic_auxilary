@@ -215,7 +215,13 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
         let client =
             github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())?;
 
-        match client.get_pr_from_branch(&branch).await {
+        match self
+            .with_github_total_timeout(
+                &format!("looking up pull request for branch '{branch}'"),
+                async { client.get_pr_from_branch(&branch).await },
+            )
+            .await
+        {
             Ok(Some(pr)) => Ok(pr),
             Ok(None) => Err(anyhow::anyhow!(
                 "No open PR found for branch '{branch}' in {owner}/{repo}. \n\
@@ -510,21 +516,28 @@ impl PrComments {
         // Apply AI prefix to clearly identify automated responses
         let prefixed_body = with_ai_prefix(&body);
 
-        let comment = client
-            .reply_to_comment(pr, comment_id, &prefixed_body)
-            .await
-            .map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("401") || msg.contains("403") {
-                    anyhow::anyhow!(
-                        "{msg}\n\nHint: For private repositories, ensure your token has the 'repo' scope."
-                    )
-                } else if msg.contains("404") {
-                    anyhow::anyhow!("not found: Comment {comment_id} not found on PR #{pr}")
-                } else {
-                    anyhow::anyhow!("{msg}")
-                }
-            })?;
+        let comment = self
+            .with_github_total_timeout(
+                &format!("posting reply to review comment {comment_id} on PR #{pr}"),
+                async {
+                    client
+                        .reply_to_comment(pr, comment_id, &prefixed_body)
+                        .await
+                        .map_err(|e| {
+                            let msg = e.to_string();
+                            if msg.contains("401") || msg.contains("403") {
+                                anyhow::anyhow!(
+                                    "{msg}\n\nHint: For private repositories, ensure your token has the 'repo' scope."
+                                )
+                            } else if msg.contains("404") {
+                                anyhow::anyhow!("not found: Comment {comment_id} not found on PR #{pr}")
+                            } else {
+                                anyhow::anyhow!("{msg}")
+                            }
+                        })
+                },
+            )
+            .await?;
 
         Ok(comment)
     }

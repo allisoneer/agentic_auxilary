@@ -8,22 +8,8 @@ use agentic_logging::LogWriter;
 use agentic_logging::ToolCallRecord;
 use agentic_logging::chrono::DateTime;
 use agentic_logging::chrono::Utc;
+use agentic_logging::classify_failure_kind;
 use thoughts_tool::active_logs_dir;
-
-fn classify_failure_kind(success: bool, error: Option<&str>) -> Option<String> {
-    if success {
-        return None;
-    }
-
-    let error = error.unwrap_or_default().to_ascii_lowercase();
-    if error.contains("timed out") || error.contains("timeout") {
-        Some("timeout".to_string())
-    } else if error.contains("cancelled") || error.contains("canceled") {
-        Some("cancelled".to_string())
-    } else {
-        Some("error".to_string())
-    }
-}
 
 /// Context for logging a single tool call.
 ///
