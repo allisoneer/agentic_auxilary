@@ -8,6 +8,21 @@ use agentic_logging::CallTimer;
 use agentic_logging::LogWriter;
 use agentic_logging::ToolCallRecord;
 
+fn classify_failure_kind(success: bool, error: Option<&str>) -> Option<String> {
+    if success {
+        return None;
+    }
+
+    let error = error.unwrap_or_default().to_ascii_lowercase();
+    if error.contains("timed out") || error.contains("timeout") {
+        Some("timeout".to_string())
+    } else if error.contains("cancelled") || error.contains("canceled") {
+        Some("cancelled".to_string())
+    } else {
+        Some("error".to_string())
+    }
+}
+
 /// Log a tool call. Behavior identical to MCP.
 ///
 /// If logging is unavailable (e.g., no active branch), this function
@@ -36,6 +51,7 @@ pub fn log_tool_call(
         request,
         response_file: None,
         success,
+        failure_kind: classify_failure_kind(success, error.as_deref()),
         error,
         model: None,
         token_usage: None,

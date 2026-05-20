@@ -6,6 +6,7 @@ pub mod tools;
 #[doc(hidden)]
 pub mod test_support;
 
+use agentic_config::types::LinearServiceConfig;
 use agentic_tools_utils::pagination::PaginationCache;
 use agentic_tools_utils::pagination::paginate_slice;
 use anyhow::Context;
@@ -79,15 +80,30 @@ const ISSUE_COMMENTS_MAX_PAGES: usize = 100;
 #[derive(Clone)]
 pub struct LinearTools {
     api_key: Option<String>,
+    config: LinearServiceConfig,
     comments_cache: Arc<PaginationCache<models::CommentSummary, String>>,
 }
 
 impl LinearTools {
     pub fn new() -> Self {
+        Self::with_config(LinearServiceConfig::default())
+    }
+
+    pub fn with_config(config: LinearServiceConfig) -> Self {
         Self {
             api_key: std::env::var("LINEAR_API_KEY").ok(),
+            config,
             comments_cache: Arc::new(PaginationCache::new()),
         }
+    }
+
+    pub fn config(&self) -> &LinearServiceConfig {
+        &self.config
+    }
+
+    fn client(&self) -> Result<LinearClient> {
+        LinearClient::new(self.api_key.clone(), &self.config)
+            .context("internal: failed to create Linear client")
     }
 
     fn resolve_issue_id(input: &str) -> IssueIdentifier {
@@ -276,8 +292,7 @@ impl LinearTools {
         first: Option<i32>,
         after: Option<String>,
     ) -> Result<models::SearchResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
 
         // Build filters (no title filter - full-text search handles query)
         let mut filter = IssueFilter::default();
@@ -398,8 +413,7 @@ impl LinearTools {
 
     /// Read a single Linear issue
     pub async fn read_issue(&self, issue: String) -> Result<models::IssueDetails> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
         let resolved = Self::resolve_issue_id(&issue);
 
         let issue_data = match resolved {
@@ -480,8 +494,7 @@ impl LinearTools {
         parent_id: Option<String>,
         label_ids: Vec<String>,
     ) -> Result<models::CreateIssueResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
 
         // Convert empty Vec to None for the API
         let label_ids_opt = if label_ids.is_empty() {
@@ -532,8 +545,7 @@ impl LinearTools {
         removed_label_ids: Option<Vec<String>>,
         due_date: Option<String>,
     ) -> Result<models::IssueResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
         let id = self.resolve_to_issue_id(&client, &issue).await?;
 
         let input = IssueUpdateInput {
@@ -574,8 +586,7 @@ impl LinearTools {
         body: String,
         parent_id: Option<String>,
     ) -> Result<models::CommentResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
         let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
 
         let input = CommentCreateInput {
@@ -608,8 +619,7 @@ impl LinearTools {
 
     /// Archive a Linear issue
     pub async fn archive_issue(&self, issue: String) -> Result<models::ArchiveIssueResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
         let id = self.resolve_to_issue_id(&client, &issue).await?;
         let op = IssueArchiveMutation::build(IssueArchiveArguments { id });
         let resp = client.run(op).await?;
@@ -628,8 +638,7 @@ impl LinearTools {
         first: Option<i32>,
         after: Option<String>,
     ) -> Result<models::GetMetadataResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
         let first = first.or(Some(50));
 
         match kind {
@@ -868,8 +877,7 @@ impl LinearTools {
         related_issue: String,
         relation_type: Option<String>,
     ) -> Result<models::SetRelationResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
         let issue_id = self.resolve_to_issue_id(&client, &issue).await?;
         let related_issue_id = self.resolve_to_issue_id(&client, &related_issue).await?;
 
@@ -949,8 +957,7 @@ impl LinearTools {
 
     /// Get comments on a Linear issue with implicit pagination
     pub async fn get_issue_comments(&self, issue: String) -> Result<models::CommentsResult> {
-        let client = LinearClient::new(self.api_key.clone())
-            .context("internal: failed to create Linear client")?;
+        let client = self.client()?;
 
         // Resolve issue identifier to UUID
         let issue_id = self.resolve_to_issue_id(&client, &issue).await?;

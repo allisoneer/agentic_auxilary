@@ -32,6 +32,9 @@ fn generate_schema_json() -> Result<String> {
 
 /// Sync a full file at `path` to the canonical agentic config schema.
 ///
+/// This keeps `agentic.schema.json` fresh, but it does not update
+/// `agentic.toml.example`; that example file remains manually maintained.
+///
 /// Returns true if the file was/would be changed.
 pub fn sync_schema(path: &str, dry_run: bool, check: bool) -> Result<bool> {
     let desired = generate_schema_json()?;

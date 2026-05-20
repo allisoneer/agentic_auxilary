@@ -83,6 +83,7 @@ mod tests {
             response_file: None,
             success: true,
             error: None,
+            failure_kind: None,
             model: None,
             token_usage: None,
             summary: None,

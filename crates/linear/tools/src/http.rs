@@ -1,7 +1,9 @@
+use agentic_config::types::LinearServiceConfig;
 use anyhow::Result;
 use anyhow::anyhow;
 use cynic::http::ReqwestExt;
 use reqwest::Client;
+use std::time::Duration;
 
 pub struct LinearClient {
     client: Client,
@@ -45,7 +47,7 @@ pub fn extract_data<Q>(resp: cynic::GraphQlResponse<Q>) -> Result<Q> {
 }
 
 impl LinearClient {
-    pub fn new(api_key: Option<String>) -> Result<Self> {
+    pub fn new(api_key: Option<String>, config: &LinearServiceConfig) -> Result<Self> {
         let api_key = match api_key.or_else(|| std::env::var("LINEAR_API_KEY").ok()) {
             Some(k) if !k.is_empty() => k,
             _ => return Err(anyhow!("LINEAR_API_KEY environment variable is not set")),
@@ -54,9 +56,16 @@ impl LinearClient {
         let url = std::env::var("LINEAR_GRAPHQL_URL")
             .ok()
             .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| "https://api.linear.app/graphql".to_string());
+            .unwrap_or_else(|| config.base_url.clone());
 
-        let client = Client::builder().user_agent("linear-tools/0.1.0").build()?;
+        let mut builder = Client::builder().user_agent("linear-tools/0.1.0");
+        if config.connect_timeout_secs != 0 {
+            builder = builder.connect_timeout(Duration::from_secs(config.connect_timeout_secs));
+        }
+        if config.request_timeout_secs != 0 {
+            builder = builder.timeout(Duration::from_secs(config.request_timeout_secs));
+        }
+        let client = builder.build()?;
 
         Ok(Self {
             client,
@@ -86,5 +95,57 @@ impl LinearClient {
 
         let result = req.run_graphql(op).await;
         result.map_err(|e| anyhow!(e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    struct EnvGuard(&'static str);
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: These tests run under #[serial], so no concurrent env access occurs.
+            unsafe {
+                std::env::remove_var(self.0);
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn new_uses_configured_base_url_and_zero_timeouts() {
+        // SAFETY: This test runs under #[serial], so no concurrent env access occurs.
+        unsafe {
+            std::env::remove_var("LINEAR_API_KEY");
+            std::env::remove_var("LINEAR_GRAPHQL_URL");
+        }
+        let _g1 = EnvGuard("LINEAR_API_KEY");
+        let _g2 = EnvGuard("LINEAR_GRAPHQL_URL");
+
+        let config = LinearServiceConfig {
+            base_url: "https://linear.example/graphql".into(),
+            connect_timeout_secs: 0,
+            request_timeout_secs: 0,
+        };
+
+        let client = LinearClient::new(Some("token".into()), &config).unwrap();
+        assert_eq!(client.url, "https://linear.example/graphql");
+    }
+
+    #[test]
+    #[serial]
+    fn new_preserves_legacy_env_override_for_url() {
+        // SAFETY: This test runs under #[serial], so no concurrent env access occurs.
+        unsafe {
+            std::env::set_var("LINEAR_GRAPHQL_URL", "https://env.example/graphql");
+        }
+        let _guard = EnvGuard("LINEAR_GRAPHQL_URL");
+
+        let config = LinearServiceConfig::default();
+        let client = LinearClient::new(Some("token".into()), &config).unwrap();
+        assert_eq!(client.url, "https://env.example/graphql");
     }
 }

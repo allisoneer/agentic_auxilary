@@ -22,6 +22,7 @@ use agentic_tools_core::ToolError;
 use claudecode::types::Result as ClaudeResult;
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 use types::AgentOutput;
 use types::Depth;
 use types::GlobOutput;
@@ -48,15 +49,17 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
         })
 }
 
+const ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS: u64 = 5;
+
 async fn wait_for_claude_result<F, C, CFn>(
     ctx: &agentic_tools_core::ToolContext,
     wait_fut: F,
     cancel_fn: CFn,
 ) -> Result<ClaudeResult, ToolError>
 where
-    F: Future<Output = claudecode::Result<ClaudeResult>>,
-    C: Future<Output = claudecode::Result<()>>,
-    CFn: FnOnce() -> C,
+    F: Future<Output = claudecode::Result<ClaudeResult>> + Send,
+    C: Future<Output = claudecode::Result<()>> + Send,
+    CFn: Fn() -> C + Send + Sync,
 {
     tokio::select! {
         () = ctx.cancelled() => {
@@ -67,6 +70,82 @@ where
         }
         result = wait_fut => {
             result.map_err(|e| ToolError::Internal(format!("Failed to run Claude session: {e}")))
+        }
+    }
+}
+
+async fn wait_for_claude_result_with_timeout<F, C, CFn>(
+    ctx: &agentic_tools_core::ToolContext,
+    wait_fut: F,
+    cancel_fn: CFn,
+    timeout_secs: u64,
+) -> Result<ClaudeResult, ToolError>
+where
+    F: Future<Output = claudecode::Result<ClaudeResult>> + Send,
+    C: Future<Output = claudecode::Result<()>> + Send,
+    CFn: Fn() -> C + Send + Sync,
+{
+    if timeout_secs == 0 {
+        return wait_for_claude_result(ctx, wait_fut, &cancel_fn).await;
+    }
+
+    if let Ok(result) = tokio::time::timeout(
+        Duration::from_secs(timeout_secs),
+        wait_for_claude_result(ctx, wait_fut, &cancel_fn),
+    )
+    .await
+    {
+        result
+    } else {
+        match tokio::time::timeout(
+            Duration::from_secs(ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS),
+            cancel_fn(),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    error = %e,
+                    cleanup_timeout_secs = ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS,
+                    "Failed to cancel Claude session cleanly after timeout"
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    cleanup_timeout_secs = ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS,
+                    "Claude cancellation cleanup exceeded timeout after ask_agent deadline"
+                );
+            }
+        }
+        Err(ToolError::Internal(format!(
+            "ask_agent timed out after {timeout_secs}s"
+        )))
+    }
+}
+
+async fn wait_for_just_result_with_timeout<T, F>(
+    ctx: &agentic_tools_core::ToolContext,
+    fut: F,
+    timeout_secs: u64,
+) -> Result<T, ToolError>
+where
+    F: Future<Output = Result<T, String>>,
+{
+    if timeout_secs == 0 {
+        return tokio::select! {
+            () = ctx.cancelled() => Err(ToolError::cancelled(None)),
+            result = fut => result.map_err(ToolError::Internal),
+        };
+    }
+
+    tokio::select! {
+        () = ctx.cancelled() => Err(ToolError::cancelled(None)),
+        result = tokio::time::timeout(Duration::from_secs(timeout_secs), fut) => {
+            match result {
+                Ok(result) => result.map_err(ToolError::Internal),
+                Err(_) => Err(ToolError::Internal(format!("Just search timed out after {timeout_secs}s"))),
+            }
         }
     }
 }
@@ -305,6 +384,7 @@ impl CodingAgentTools {
             "agent_type": format!("{agent_type:?}").to_lowercase(),
             "location": format!("{location:?}").to_lowercase(),
             "query": &query,
+            "runtime_timeout_secs": self.subagents.runtime_timeout_secs,
         });
 
         if query.trim().is_empty() {
@@ -421,7 +501,14 @@ impl CodingAgentTools {
             }
         };
 
-        let result = match wait_for_claude_result(ctx, session.wait(), || session.cancel()).await {
+        let result = match wait_for_claude_result_with_timeout(
+            ctx,
+            session.wait(),
+            || session.cancel(),
+            self.subagents.runtime_timeout_secs,
+        )
+        .await
+        {
             Ok(result) => result,
             Err(ToolError::Cancelled { .. }) => {
                 log_ctx.finish(
@@ -656,26 +743,25 @@ impl CodingAgentTools {
         &self,
         query: Option<String>,
         dir: Option<String>,
+        ctx: &agentic_tools_core::ToolContext,
     ) -> Result<just::SearchOutput, ToolError> {
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("cli_just_search");
         let req_json = serde_json::json!({
             "query": &query,
             "dir": &dir,
+            "timeout_secs": self.cli_tools.just_search_timeout_secs,
         });
 
-        if let Err(e) = just::ensure_just_available().await {
-            let error_msg = e;
-            log_ctx.finish(
-                req_json,
-                None,
-                false,
-                Some(error_msg.clone()),
-                None,
-                None,
-                None,
-            );
-            return Err(ToolError::Internal(error_msg));
+        if let Err(e) = wait_for_just_result_with_timeout(
+            ctx,
+            just::ensure_just_available(),
+            self.cli_tools.just_search_timeout_secs,
+        )
+        .await
+        {
+            log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+            return Err(e);
         }
 
         let repo_root = match paths::to_abs_string(".") {
@@ -706,20 +792,17 @@ impl CodingAgentTools {
 
         // Fetch recipes if needed (outside lock)
         if needs_refresh {
-            let all = match self.just_registry.get_all_recipes(&repo_root).await {
+            let all = match wait_for_just_result_with_timeout(
+                ctx,
+                self.just_registry.get_all_recipes(&repo_root),
+                self.cli_tools.just_search_timeout_secs,
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(e) => {
-                    let error_msg = e;
-                    log_ctx.finish(
-                        req_json,
-                        None,
-                        false,
-                        Some(error_msg.clone()),
-                        None,
-                        None,
-                        None,
-                    );
-                    return Err(ToolError::Internal(error_msg));
+                    log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+                    return Err(e);
                 }
             };
 
@@ -808,6 +891,7 @@ impl CodingAgentTools {
             "recipe": &recipe,
             "dir": &dir,
             "args": &args,
+            "timeout_secs": self.cli_tools.just_execute_timeout_secs,
         });
 
         if let Err(e) = just::ensure_just_available().await {
@@ -832,8 +916,16 @@ impl CodingAgentTools {
             }
         };
 
-        match just::exec::execute_recipe(&self.just_registry, &recipe, dir, args, &repo_root, ctx)
-            .await
+        match just::exec::execute_recipe(
+            &self.just_registry,
+            &recipe,
+            dir,
+            args,
+            &repo_root,
+            self.cli_tools.just_execute_timeout_secs,
+            ctx,
+        )
+        .await
         {
             Ok(output) => {
                 let summary = serde_json::json!({
@@ -963,9 +1055,12 @@ mod ask_agent_filter_tests {
             wait_for_claude_result(
                 &ctx,
                 std::future::pending::<claudecode::Result<ClaudeResult>>(),
-                move || async move {
-                    cancelled_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                    Ok(())
+                move || {
+                    let cancelled_flag = Arc::clone(&cancelled_flag);
+                    async move {
+                        cancelled_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        Ok(())
+                    }
                 },
             )
             .await
@@ -1008,6 +1103,184 @@ mod ask_agent_filter_tests {
             Err(err) => panic!("task join failed: {err}"),
         };
         assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wait_for_claude_result_with_timeout_cancels_after_deadline() {
+        let ctx = agentic_tools_core::ToolContext::default();
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cancelled_flag = Arc::clone(&cancelled);
+
+        let handle = tokio::spawn(async move {
+            wait_for_claude_result_with_timeout(
+                &ctx,
+                std::future::pending::<claudecode::Result<ClaudeResult>>(),
+                move || {
+                    let cancelled_flag = Arc::clone(&cancelled_flag);
+                    async move {
+                        cancelled_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        Ok(())
+                    }
+                },
+                1,
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        let Err(err) = result else {
+            panic!("timeout expected");
+        };
+        assert!(err.to_string().contains("ask_agent timed out after 1s"));
+        assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wait_for_claude_result_with_timeout_bounds_cleanup_duration() {
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let handle = tokio::spawn(async move {
+            wait_for_claude_result_with_timeout(
+                &ctx,
+                std::future::pending::<claudecode::Result<ClaudeResult>>(),
+                || async { std::future::pending::<claudecode::Result<()>>().await },
+                1,
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+        tokio::task::yield_now().await;
+        assert!(
+            !handle.is_finished(),
+            "cleanup timeout should not resolve before cleanup budget elapses"
+        );
+
+        tokio::time::advance(Duration::from_secs(ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS)).await;
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        let Err(err) = result else {
+            panic!("timeout expected");
+        };
+        assert!(err.to_string().contains("ask_agent timed out after 1s"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wait_for_claude_result_with_timeout_zero_disables_deadline() {
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let handle = tokio::spawn(async move {
+            wait_for_claude_result_with_timeout(
+                &ctx,
+                async {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    Ok(ClaudeResult {
+                        result: Some("ok".into()),
+                        ..Default::default()
+                    })
+                },
+                || async { Ok(()) },
+                0,
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        assert!(
+            !handle.is_finished(),
+            "timeout=0 should not time out immediately"
+        );
+
+        tokio::time::advance(Duration::from_secs(5)).await;
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wait_for_just_result_with_timeout_returns_timeout() {
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let handle = tokio::spawn(async move {
+            wait_for_just_result_with_timeout(&ctx, std::future::pending::<Result<(), String>>(), 1)
+                .await
+        });
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        let Err(err) = result else {
+            panic!("timeout expected");
+        };
+        assert!(
+            matches!(err, ToolError::Internal(message) if message == "Just search timed out after 1s")
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_just_result_with_timeout_returns_structured_cancelled() {
+        let ctx = agentic_tools_core::ToolContext::default();
+        let cancel = ctx.cancellation_token();
+
+        let handle = tokio::spawn(async move {
+            wait_for_just_result_with_timeout(&ctx, std::future::pending::<Result<(), String>>(), 1)
+                .await
+        });
+
+        tokio::task::yield_now().await;
+        cancel.cancel();
+
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wait_for_just_result_with_timeout_zero_disables_deadline() {
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let handle = tokio::spawn(async move {
+            wait_for_just_result_with_timeout(
+                &ctx,
+                async {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    Ok(())
+                },
+                0,
+            )
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        assert!(
+            !handle.is_finished(),
+            "timeout=0 should not time out immediately"
+        );
+
+        tokio::time::advance(Duration::from_secs(5)).await;
+        let result = match handle.await {
+            Ok(result) => result,
+            Err(err) => panic!("task join failed: {err}"),
+        };
+        assert!(result.is_ok());
     }
 
     #[tokio::test]

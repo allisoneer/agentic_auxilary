@@ -1,5 +1,6 @@
 //! Reviewer runner infrastructure for spawning Claude sessions.
 
+use agentic_config::types::ReviewConfig;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use claudecode::client::Client;
@@ -53,9 +54,6 @@ pub const REVIEWER_MCP_TOOL_NAMES_COMPLETENESS: [&str; 4] = [
 
 /// Maximum concurrent Claude reviewer sessions.
 pub const MAX_CONCURRENT_SESSIONS: usize = 3;
-
-/// Wall-clock timeout for a single reviewer session (30 minutes).
-pub const SESSION_TIMEOUT: Duration = Duration::from_secs(1800);
 
 /// Fixed retry delays for session attempts: 3 total attempts with [0ms, 500ms, 1000ms].
 pub const RETRY_DELAYS: [Duration; 3] = [
@@ -111,18 +109,41 @@ where
     }
 }
 
+async fn run_with_optional_timeout<T, F>(timeout_secs: u64, fut: F) -> Result<T, ToolError>
+where
+    F: Future<Output = Result<T, ToolError>>,
+{
+    if timeout_secs == 0 {
+        return fut.await;
+    }
+
+    tokio::time::timeout(Duration::from_secs(timeout_secs), fut)
+        .await
+        .map_err(|_| ToolError::Internal(format!("Timed out after {timeout_secs}s")))?
+}
+
 /// Production implementation using Claude CLI.
 #[derive(Clone)]
 pub struct ClaudeCliRunner {
+    config: ReviewConfig,
     semaphore: Arc<Semaphore>,
 }
 
 impl ClaudeCliRunner {
     /// Create a new Claude CLI runner with the shared semaphore.
     pub fn new() -> Self {
+        Self::with_config(ReviewConfig::default())
+    }
+
+    pub fn with_config(config: ReviewConfig) -> Self {
         Self {
+            config,
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_SESSIONS)),
         }
+    }
+
+    pub fn config(&self) -> &ReviewConfig {
+        &self.config
     }
 
     /// Build the list of builtin tool names for reviewer sessions.
@@ -190,6 +211,7 @@ impl ReviewerRunner for ClaudeCliRunner {
         ctx: ToolContext,
     ) -> BoxFuture<'static, Result<String, ToolError>> {
         let semaphore = Arc::clone(&self.semaphore);
+        let run_timeout_secs = self.config.run_timeout_secs;
         let builtin_tools = Self::builtin_tools();
         let all_tools = Self::all_tools(profile);
         let mcp_config = Self::mcp_config(profile);
@@ -214,8 +236,7 @@ impl ReviewerRunner for ClaudeCliRunner {
                 .build()
                 .map_err(|e| ToolError::Internal(format!("Failed to build session config: {e}")))?;
 
-            // Run with timeout
-            let result = tokio::time::timeout(SESSION_TIMEOUT, async {
+            let result = run_with_optional_timeout(run_timeout_secs, async {
                 let client = Client::new()
                     .await
                     .map_err(|e| ToolError::Internal(format!("Claude CLI not runnable: {e}")))?;
@@ -226,10 +247,7 @@ impl ReviewerRunner for ClaudeCliRunner {
 
                 wait_for_review_result(&ctx, session.wait(), || session.cancel()).await
             })
-            .await
-            .map_err(|_| {
-                ToolError::Internal(format!("Timed out after {}s", SESSION_TIMEOUT.as_secs()))
-            })??;
+            .await?;
 
             claude_result_to_text(result)
         })
@@ -368,8 +386,9 @@ mod tests {
     }
 
     #[test]
-    fn session_timeout_is_30_minutes() {
-        assert_eq!(SESSION_TIMEOUT, Duration::from_secs(1800));
+    fn review_timeout_default_is_30_minutes() {
+        assert_eq!(ReviewConfig::default().run_timeout_secs, 1800);
+        assert_eq!(ClaudeCliRunner::new().config().run_timeout_secs, 1800);
     }
 
     #[test]
@@ -423,9 +442,12 @@ mod tests {
             wait_for_review_result(
                 &ctx,
                 std::future::pending::<claudecode::Result<ClaudeResult>>(),
-                move || async move {
-                    cancelled_flag.store(true, Ordering::SeqCst);
-                    Ok(())
+                move || {
+                    let cancelled_flag = Arc::clone(&cancelled_flag);
+                    async move {
+                        cancelled_flag.store(true, Ordering::SeqCst);
+                        Ok(())
+                    }
                 },
             )
             .await
@@ -440,5 +462,42 @@ mod tests {
         };
         assert!(matches!(result, Err(ToolError::Cancelled { .. })));
         assert!(cancelled.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn optional_timeout_expires_when_enabled() {
+        let handle = tokio::spawn(async {
+            run_with_optional_timeout(1, async {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok::<_, ToolError>(())
+            })
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+
+        let err = handle.await.expect("task join failed").unwrap_err();
+        assert!(err.to_string().contains("Timed out after 1s"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn zero_timeout_disables_optional_wrapper() {
+        let handle = tokio::spawn(async {
+            run_with_optional_timeout(0, async {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok::<_, ToolError>(())
+            })
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        assert!(
+            !handle.is_finished(),
+            "timeout=0 should not time out immediately"
+        );
+
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert!(handle.await.expect("task join failed").is_ok());
     }
 }

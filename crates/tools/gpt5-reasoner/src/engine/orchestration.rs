@@ -182,6 +182,7 @@ pub async fn gpt5_reasoner_impl(
                 "files_count": files_count,
                 "output_filename": output_filename,
             });
+            let failure_kind = agentic_logging::classify_failure_kind(success, error.as_deref());
             let record = ToolCallRecord {
                 call_id: timer.call_id.clone(),
                 server: server.clone(),
@@ -193,6 +194,7 @@ pub async fn gpt5_reasoner_impl(
                 response_file,
                 success,
                 error,
+                failure_kind,
                 model,
                 token_usage,
                 summary,

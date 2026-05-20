@@ -8,6 +8,7 @@ use agentic_logging::LogWriter;
 use agentic_logging::ToolCallRecord;
 use agentic_logging::chrono::DateTime;
 use agentic_logging::chrono::Utc;
+use agentic_logging::classify_failure_kind;
 use thoughts_tool::active_logs_dir;
 
 /// Context for logging a single tool call.
@@ -79,6 +80,7 @@ impl ToolLogCtx {
             request,
             response_file,
             success,
+            failure_kind: classify_failure_kind(success, error.as_deref()),
             error,
             model,
             token_usage: None,

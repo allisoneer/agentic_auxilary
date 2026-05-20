@@ -3,6 +3,7 @@
 //! Each tool wraps the corresponding functionality from the `thoughts_tool`
 //! library with logging identical to the MCP implementation.
 
+use agentic_config::types::ThoughtsConfig;
 use agentic_logging::CallTimer;
 use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
@@ -383,7 +384,9 @@ pub struct AddReferenceInput {
 
 /// Tool for adding a GitHub repository as a reference.
 #[derive(Clone)]
-pub struct AddReferenceTool;
+pub struct AddReferenceTool {
+    pub thoughts: ThoughtsConfig,
+}
 
 impl Tool for AddReferenceTool {
     type Input = AddReferenceInput;
@@ -396,18 +399,25 @@ impl Tool for AddReferenceTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let thoughts = self.thoughts.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
                 "url": &input.url,
                 "ref": &input.ref_name,
                 "description": &input.description,
+                "configured_timeout_secs": thoughts.add_reference_timeout_secs,
             });
 
             // Delegate to the shared adapter function
-            let result = add_reference_impl_adapter(input.url, input.description, input.ref_name)
-                .await
-                .map_err(|e| map_anyhow_to_tool_error(&e));
+            let result = add_reference_impl_adapter(
+                input.url,
+                input.description,
+                input.ref_name,
+                thoughts.add_reference_timeout_secs,
+            )
+            .await
+            .map_err(|e| map_anyhow_to_tool_error(&e));
 
             match &result {
                 Ok(ok) => {

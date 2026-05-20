@@ -45,13 +45,14 @@ impl std::fmt::Display for AdvisoryWarning {
 pub fn detect_deprecated_keys_toml(v: &toml::Value) -> Vec<AdvisoryWarning> {
     let mut warnings = Vec::new();
 
-    // Warn if old "thoughts" section exists (removed in this version)
     if let Some(tbl) = v.as_table() {
-        if tbl.contains_key("thoughts") {
+        if let Some(thoughts) = tbl.get("thoughts").and_then(toml::Value::as_table)
+            && thoughts.contains_key("mount_dirs")
+        {
             warnings.push(AdvisoryWarning::new(
-                "config.deprecated.thoughts",
-                "thoughts",
-                "The 'thoughts' section has been removed. thoughts-core now has its own config.",
+                "config.deprecated.thoughts.mount_dirs",
+                "thoughts.mount_dirs",
+                "The legacy thoughts.mount_dirs key is no longer supported. The agentic [thoughts] section now only models add_reference_timeout_secs.",
             ));
         }
         if tbl.contains_key("models") {
@@ -82,6 +83,8 @@ const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
     "orchestrator",
     "web_retrieval",
     "cli_tools",
+    "review",
+    "thoughts",
     "logging",
 ];
 
@@ -131,6 +134,18 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         "services.exa.base_url.invalid",
         &mut warnings,
     );
+    validate_url(
+        &cfg.services.linear.base_url,
+        "services.linear.base_url",
+        "services.linear.base_url.invalid",
+        &mut warnings,
+    );
+    validate_url(
+        &cfg.services.github.base_url,
+        "services.github.base_url",
+        "services.github.base_url.invalid",
+        &mut warnings,
+    );
 
     // Validate log level
     let valid_levels = ["trace", "debug", "info", "warn", "error"];
@@ -161,6 +176,13 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
             "value is empty",
         ));
     }
+    validate_low_nonzero_timeout(
+        cfg.subagents.runtime_timeout_secs,
+        30,
+        "subagents.runtime_timeout_secs",
+        "subagents.runtime_timeout_secs.suspicious",
+        &mut warnings,
+    );
 
     // Validate reasoning model values are not empty
     if cfg.reasoning.optimizer_model.trim().is_empty() {
@@ -300,7 +322,75 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         ));
     }
 
+    validate_low_nonzero_timeout(
+        cfg.cli_tools.just_execute_timeout_secs,
+        5,
+        "cli_tools.just_execute_timeout_secs",
+        "cli_tools.just_execute_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.cli_tools.just_search_timeout_secs,
+        2,
+        "cli_tools.just_search_timeout_secs",
+        "cli_tools.just_search_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.services.linear.connect_timeout_secs,
+        1,
+        "services.linear.connect_timeout_secs",
+        "services.linear.connect_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.services.linear.request_timeout_secs,
+        5,
+        "services.linear.request_timeout_secs",
+        "services.linear.request_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.services.github.total_timeout_secs,
+        5,
+        "services.github.total_timeout_secs",
+        "services.github.total_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.review.run_timeout_secs,
+        30,
+        "review.run_timeout_secs",
+        "review.run_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.thoughts.add_reference_timeout_secs,
+        5,
+        "thoughts.add_reference_timeout_secs",
+        "thoughts.add_reference_timeout_secs.suspicious",
+        &mut warnings,
+    );
+
     warnings
+}
+
+fn validate_low_nonzero_timeout(
+    value: u64,
+    minimum_recommended: u64,
+    path: &'static str,
+    code: &'static str,
+    warnings: &mut Vec<AdvisoryWarning>,
+) {
+    if value != 0 && value < minimum_recommended {
+        warnings.push(AdvisoryWarning::new(
+            code,
+            path,
+            format!(
+                "value {value}s is very low; {minimum_recommended}s or higher is usually safer, or use 0 to disable"
+            ),
+        ));
+    }
 }
 
 fn validate_command_entries(
@@ -432,6 +522,25 @@ mod tests {
         let warnings = validate(&config);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].code, "services.anthropic.base_url.invalid");
+    }
+
+    #[test]
+    fn test_invalid_linear_and_github_urls_warn() {
+        let mut config = AgenticConfig::default();
+        config.services.linear.base_url = "linear".into();
+        config.services.github.base_url = "github".into();
+
+        let warnings = validate(&config);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "services.linear.base_url.invalid")
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "services.github.base_url.invalid")
+        );
     }
 
     #[test]
@@ -622,8 +731,22 @@ mount_dirs = {}
         assert!(
             warnings
                 .iter()
-                .any(|w| w.code == "config.deprecated.thoughts")
+                .any(|w| w.code == "config.deprecated.thoughts.mount_dirs")
         );
+    }
+
+    #[test]
+    fn test_supported_thoughts_section_is_not_deprecated() {
+        let toml_val: toml::Value = toml::from_str(
+            r"
+[thoughts]
+add_reference_timeout_secs = 600
+",
+        )
+        .unwrap();
+
+        let warnings = detect_deprecated_keys_toml(&toml_val);
+        assert!(warnings.is_empty());
     }
 
     #[test]
@@ -664,5 +787,30 @@ token_limit = 12345
                 .iter()
                 .any(|w| w.code == "reasoning.max_input_tokens.suspicious")
         );
+    }
+
+    #[test]
+    fn test_low_nonzero_timeout_values_warn() {
+        let mut config = AgenticConfig::default();
+        config.subagents.runtime_timeout_secs = 1;
+        config.cli_tools.just_execute_timeout_secs = 1;
+        config.cli_tools.just_search_timeout_secs = 1;
+        config.services.linear.request_timeout_secs = 1;
+        config.services.github.total_timeout_secs = 1;
+        config.review.run_timeout_secs = 1;
+        config.thoughts.add_reference_timeout_secs = 1;
+
+        let warnings = validate(&config);
+        for code in [
+            "subagents.runtime_timeout_secs.suspicious",
+            "cli_tools.just_execute_timeout_secs.suspicious",
+            "cli_tools.just_search_timeout_secs.suspicious",
+            "services.linear.request_timeout_secs.suspicious",
+            "services.github.total_timeout_secs.suspicious",
+            "review.run_timeout_secs.suspicious",
+            "thoughts.add_reference_timeout_secs.suspicious",
+        ] {
+            assert!(warnings.iter().any(|w| w.code == code), "missing {code}");
+        }
     }
 }

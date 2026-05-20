@@ -16,6 +16,7 @@ logging = false
 napi = false
 
 [dependencies]
+agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-utils = { workspace = true }
 claudecode = { workspace = true }

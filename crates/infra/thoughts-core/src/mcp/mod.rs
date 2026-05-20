@@ -262,6 +262,29 @@ pub async fn add_reference_impl_adapter(
     url: String,
     description: Option<String>,
     ref_name: Option<String>,
+    timeout_secs: u64,
+) -> Result<AddReferenceOk> {
+    if timeout_secs == 0 {
+        return add_reference_impl_adapter_inner(url, description, ref_name).await;
+    }
+
+    match tokio::time::timeout(
+        Duration::from_secs(timeout_secs),
+        add_reference_impl_adapter_inner(url, description, ref_name),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!(
+            "thoughts_add_reference timed out after {timeout_secs}s; config or mount changes may have partially applied"
+        ),
+    }
+}
+
+async fn add_reference_impl_adapter_inner(
+    url: String,
+    description: Option<String>,
+    ref_name: Option<String>,
 ) -> Result<AddReferenceOk> {
     let input_url = url.trim().to_string();
     let requested_ref_name = match ref_name {
@@ -809,6 +832,7 @@ mod tests {
             "https://github.com/org/repo".into(),
             None,
             Some("main".into()),
+            0,
         )
         .await
         .unwrap_err();
@@ -825,6 +849,7 @@ mod tests {
             "https://github.com/org/repo".into(),
             None,
             Some("refs/remotes/origin/main".into()),
+            0,
         )
         .await
         .unwrap_err();
@@ -846,6 +871,7 @@ mod tests {
             "https://github.com/org/repo".into(),
             None,
             Some("refs/heads/".into()),
+            0,
         )
         .await
         .unwrap_err();
@@ -862,6 +888,7 @@ mod tests {
             "https://github.com/org/repo".into(),
             None,
             Some("refs/tags/".into()),
+            0,
         )
         .await
         .unwrap_err();

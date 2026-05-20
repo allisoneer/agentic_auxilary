@@ -12,19 +12,20 @@ pub use tools::ListActiveDocumentsTool;
 pub use tools::ListReferencesTool;
 pub use tools::WriteDocumentTool;
 
+use agentic_config::types::ThoughtsConfig;
 use agentic_tools_core::ToolRegistry;
 
 /// Build a `ToolRegistry` registering all thoughts tools.
 ///
 /// This registry can be merged with other domain registries in Plan 4
 /// to create a unified agentic-mcp binary.
-pub fn build_registry() -> ToolRegistry {
+pub fn build_registry(thoughts: ThoughtsConfig) -> ToolRegistry {
     ToolRegistry::builder()
         .register::<WriteDocumentTool, ()>(WriteDocumentTool)
         .register::<ListActiveDocumentsTool, ()>(ListActiveDocumentsTool)
         .register::<ListReferencesTool, ()>(ListReferencesTool)
         .register::<GetRepoRefsTool, ()>(GetRepoRefsTool)
-        .register::<AddReferenceTool, ()>(AddReferenceTool)
+        .register::<AddReferenceTool, ()>(AddReferenceTool { thoughts })
         .register::<GetTemplateTool, ()>(GetTemplateTool)
         .finish()
 }

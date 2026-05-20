@@ -85,6 +85,9 @@ pub struct ToolCallRecord {
     /// Error message if the call failed
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Structured failure category when success=false: timeout, cancelled, or error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_kind: Option<String>,
     /// Model used for the call (e.g., "openai/gpt-5")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
@@ -94,6 +97,22 @@ pub struct ToolCallRecord {
     /// Summary data for compact tools (e.g., {"entries": 10, "`has_more"`: true})
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<serde_json::Value>,
+}
+
+/// Classify a failed tool call into a structured failure kind.
+pub fn classify_failure_kind(success: bool, error: Option<&str>) -> Option<String> {
+    if success {
+        return None;
+    }
+
+    let error = error.unwrap_or_default().to_ascii_lowercase();
+    if error.contains("timed out") || error.contains("timeout") {
+        Some("timeout".to_string())
+    } else if error.contains("cancelled") || error.contains("canceled") {
+        Some("cancelled".to_string())
+    } else {
+        Some("error".to_string())
+    }
 }
 
 /// Check if logging is disabled via environment variable.
@@ -326,6 +345,7 @@ mod tests {
             response_file: None,
             success: true,
             error: None,
+            failure_kind: None,
             model: None,
             token_usage: None,
             summary: None,
@@ -370,6 +390,7 @@ mod tests {
                 response_file: None,
                 success: true,
                 error: None,
+                failure_kind: None,
                 model: None,
                 token_usage: None,
                 summary: None,
@@ -437,6 +458,7 @@ mod tests {
             response_file: None,
             success: true,
             error: None,
+            failure_kind: None,
             model: None,
             token_usage: None,
             summary: None,
@@ -495,6 +517,7 @@ mod tests {
             response_file: None,
             success: true,
             error: None,
+            failure_kind: None,
             model: None,
             token_usage: None,
             summary: None,
@@ -504,8 +527,64 @@ mod tests {
         // Optional None fields should not appear
         assert!(!json.contains("response_file"));
         assert!(!json.contains("error"));
+        assert!(!json.contains("failure_kind"));
         assert!(!json.contains("model"));
         assert!(!json.contains("token_usage"));
         assert!(!json.contains("summary"));
+    }
+
+    #[test]
+    fn test_tool_call_record_serializes_failure_kind() {
+        let timer = CallTimer::start();
+        let (completed_at, duration_ms) = timer.finish();
+
+        let record = ToolCallRecord {
+            call_id: timer.call_id,
+            server: "test".into(),
+            tool: "test".into(),
+            started_at: timer.started_at,
+            completed_at,
+            duration_ms,
+            request: serde_json::json!({}),
+            response_file: None,
+            success: false,
+            error: Some("Timed out after 1s".into()),
+            failure_kind: Some("timeout".into()),
+            model: None,
+            token_usage: None,
+            summary: None,
+        };
+
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("\"failure_kind\":\"timeout\""));
+    }
+
+    #[test]
+    fn test_classify_failure_kind_success_is_none() {
+        assert_eq!(classify_failure_kind(true, Some("timed out")), None);
+    }
+
+    #[test]
+    fn test_classify_failure_kind_timeout() {
+        assert_eq!(
+            classify_failure_kind(false, Some("Operation timed out after 10s")),
+            Some("timeout".to_string())
+        );
+    }
+
+    #[test]
+    fn test_classify_failure_kind_cancelled() {
+        assert_eq!(
+            classify_failure_kind(false, Some("Request canceled by caller")),
+            Some("cancelled".to_string())
+        );
+    }
+
+    #[test]
+    fn test_classify_failure_kind_generic_error() {
+        assert_eq!(
+            classify_failure_kind(false, Some("Something else failed")),
+            Some("error".to_string())
+        );
     }
 }

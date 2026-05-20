@@ -63,6 +63,8 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     let justfile_changed = justfile::sync_justfile("justfile", &metadata, dry_run, check)?;
 
     // agentic.schema.json (6th target)
+    // Note: agentic.toml.example is intentionally not auto-synced here and must
+    // be updated manually when the modeled config surface changes.
     eprintln!("[sync] Syncing agentic.schema.json...");
     let schema_changed = schema::sync_schema("agentic.schema.json", dry_run, check)?;
 

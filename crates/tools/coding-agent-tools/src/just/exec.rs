@@ -10,6 +10,7 @@ use crate::paths;
 use agentic_tools_core::ToolContext;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
@@ -31,6 +32,7 @@ pub async fn execute_recipe(
     dir_opt: Option<String>,
     args_opt: Option<HashMap<String, Value>>,
     repo_root: &str,
+    timeout_secs: u64,
     ctx: &ToolContext,
 ) -> Result<ExecuteOutput, String> {
     // Canonicalize to resolve symlinks (e.g., /var -> /private/var on macOS)
@@ -158,15 +160,38 @@ pub async fn execute_recipe(
         stderr.read_to_end(&mut bytes).await.map(|_| bytes)
     });
 
-    let status = tokio::select! {
-        () = ctx.cancelled() => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            stdout_task.abort();
-            stderr_task.abort();
-            return Err("Just execution cancelled".to_string());
+    let status = if timeout_secs == 0 {
+        tokio::select! {
+            () = ctx.cancelled() => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                stdout_task.abort();
+                stderr_task.abort();
+                return Err("Just execution cancelled".to_string());
+            }
+            status = child.wait() => status.map_err(|e| format!("Failed to execute just: {e}"))?,
         }
-        status = child.wait() => status.map_err(|e| format!("Failed to execute just: {e}"))?,
+    } else {
+        let deadline = tokio::time::sleep(Duration::from_secs(timeout_secs));
+        tokio::pin!(deadline);
+
+        tokio::select! {
+            () = ctx.cancelled() => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                stdout_task.abort();
+                stderr_task.abort();
+                return Err("Just execution cancelled".to_string());
+            }
+            () = &mut deadline => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                stdout_task.abort();
+                stderr_task.abort();
+                return Err(format!("Just execution timed out after {timeout_secs}s"));
+            }
+            status = child.wait() => status.map_err(|e| format!("Failed to execute just: {e}"))?,
+        }
     };
 
     let stdout = stdout_task
@@ -267,6 +292,7 @@ mod tests {
             None,
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -297,6 +323,7 @@ mod tests {
             None,
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -329,6 +356,7 @@ mod tests {
             None,
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -360,6 +388,7 @@ mod tests {
             None,
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -385,6 +414,7 @@ mod tests {
             None,
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -411,6 +441,7 @@ mod tests {
             None,
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -444,6 +475,7 @@ mod tests {
             Some(sub_dir),
             None,
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -478,6 +510,7 @@ mod tests {
             None,
             Some(wrong_args),
             root.to_str().unwrap(),
+            0,
             &ToolContext::default(),
         )
         .await;
@@ -507,7 +540,7 @@ mod tests {
 
         let handle = tokio::spawn({
             let repo_root = root.to_str().unwrap().to_string();
-            async move { execute_recipe(&registry, "hang", None, None, &repo_root, &ctx).await }
+            async move { execute_recipe(&registry, "hang", None, None, &repo_root, 0, &ctx).await }
         });
 
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -515,5 +548,53 @@ mod tests {
 
         let result = handle.await.unwrap();
         assert_eq!(result.unwrap_err(), "Just execution cancelled");
+    }
+
+    #[tokio::test]
+    async fn timeout_stops_recipe_execution() {
+        skip_if_just_unavailable!();
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("justfile"), "hang:\n    sleep 30").unwrap();
+
+        let registry = JustRegistry::new();
+        let result = execute_recipe(
+            &registry,
+            "hang",
+            None,
+            None,
+            root.to_str().unwrap(),
+            1,
+            &ToolContext::default(),
+        )
+        .await;
+
+        assert_eq!(result.unwrap_err(), "Just execution timed out after 1s");
+    }
+
+    #[tokio::test]
+    async fn zero_timeout_disables_deadline() {
+        skip_if_just_unavailable!();
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("justfile"), "slow:\n    sleep 1\n    echo done").unwrap();
+
+        let registry = JustRegistry::new();
+        let result = execute_recipe(
+            &registry,
+            "slow",
+            None,
+            None,
+            root.to_str().unwrap(),
+            0,
+            &ToolContext::default(),
+        )
+        .await
+        .unwrap();
+
+        assert!(result.success);
+        assert!(result.stdout.contains("done"));
     }
 }

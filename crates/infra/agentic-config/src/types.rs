@@ -29,6 +29,12 @@ pub struct AgenticConfig {
     /// External service configurations (Anthropic, Exa).
     pub services: ServicesConfig,
 
+    /// Review tools configuration.
+    pub review: ReviewConfig,
+
+    /// Thoughts tool configuration.
+    pub thoughts: ThoughtsConfig,
+
     /// Orchestrator session and timing configuration.
     pub orchestrator: OrchestratorConfig,
 
@@ -60,6 +66,8 @@ pub struct SubagentsConfig {
     pub locator_model: String,
     /// Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
     pub analyzer_model: String,
+    /// Wall-clock timeout for `ask_agent` runtime in seconds. `0` disables the timeout.
+    pub runtime_timeout_secs: u64,
 }
 
 impl Default for SubagentsConfig {
@@ -67,6 +75,7 @@ impl Default for SubagentsConfig {
         Self {
             locator_model: "claude-haiku-4-5".into(),
             analyzer_model: "claude-sonnet-4-6".into(),
+            runtime_timeout_secs: 3600,
         }
     }
 }
@@ -260,6 +269,10 @@ pub struct CliToolsConfig {
     pub max_depth: u32,
     /// Pagination cache TTL in seconds (default: 300 = 5 minutes).
     pub pagination_cache_ttl_secs: u64,
+    /// Wall-clock timeout for `cli_just_execute` in seconds. `0` disables the timeout.
+    pub just_execute_timeout_secs: u64,
+    /// Wall-clock timeout for `cli_just_search` in seconds. `0` disables the timeout.
+    pub just_search_timeout_secs: u64,
     /// Additional ignore patterns to append to builtin ignores.
     #[serde(default)]
     pub extra_ignore_patterns: Vec<String>,
@@ -273,6 +286,8 @@ impl Default for CliToolsConfig {
             glob_default_limit: 500,
             max_depth: 10,
             pagination_cache_ttl_secs: 300,
+            just_execute_timeout_secs: 1800,
+            just_search_timeout_secs: 30,
             extra_ignore_patterns: vec![],
         }
     }
@@ -292,6 +307,10 @@ pub struct ServicesConfig {
     pub anthropic: AnthropicServiceConfig,
     /// Exa search API configuration.
     pub exa: ExaServiceConfig,
+    /// Linear API configuration.
+    pub linear: LinearServiceConfig,
+    /// GitHub API configuration.
+    pub github: GitHubServiceConfig,
 }
 
 /// Anthropic API service configuration.
@@ -322,6 +341,91 @@ impl Default for ExaServiceConfig {
     fn default() -> Self {
         Self {
             base_url: "https://api.exa.ai".into(),
+        }
+    }
+}
+
+/// Linear API service configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct LinearServiceConfig {
+    /// Base URL for the Linear GraphQL API.
+    pub base_url: String,
+    /// Connection establishment timeout in seconds. `0` disables the timeout.
+    pub connect_timeout_secs: u64,
+    /// Per-request timeout in seconds. `0` disables the timeout.
+    pub request_timeout_secs: u64,
+}
+
+impl Default for LinearServiceConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "https://api.linear.app/graphql".into(),
+            connect_timeout_secs: 10,
+            request_timeout_secs: 60,
+        }
+    }
+}
+
+/// GitHub API service configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct GitHubServiceConfig {
+    /// Base URL for the GitHub API.
+    pub base_url: String,
+    /// Total timeout for multi-request operations in seconds. `0` disables the timeout.
+    pub total_timeout_secs: u64,
+}
+
+impl Default for GitHubServiceConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "https://api.github.com".into(),
+            total_timeout_secs: 120,
+        }
+    }
+}
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// REVIEW CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
+
+/// Configuration for review tools.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ReviewConfig {
+    /// Wall-clock timeout for `review_run` sessions in seconds. `0` disables the timeout.
+    pub run_timeout_secs: u64,
+}
+
+impl Default for ReviewConfig {
+    fn default() -> Self {
+        Self {
+            run_timeout_secs: 1800,
+        }
+    }
+}
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// THOUGHTS CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
+
+/// Configuration for thoughts MCP-adjacent operations.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ThoughtsConfig {
+    /// Wall-clock timeout for `thoughts_add_reference` in seconds. `0` disables the timeout.
+    pub add_reference_timeout_secs: u64,
+}
+
+impl Default for ThoughtsConfig {
+    fn default() -> Self {
+        Self {
+            add_reference_timeout_secs: 600,
         }
     }
 }
@@ -365,13 +469,16 @@ mod tests {
         // Services sections serialize as [services.anthropic], [services.exa], etc.
         assert!(toml_str.contains("[services.anthropic]"));
         assert!(toml_str.contains("[services.exa]"));
+        assert!(toml_str.contains("[services.linear]"));
+        assert!(toml_str.contains("[services.github]"));
+        assert!(toml_str.contains("[review]"));
+        assert!(toml_str.contains("[thoughts]"));
         assert!(toml_str.contains("[orchestrator]"));
         assert!(toml_str.contains("[orchestrator.commands]"));
         assert!(toml_str.contains("[web_retrieval]"));
         assert!(toml_str.contains("[cli_tools]"));
         assert!(toml_str.contains("[logging]"));
         // Ensure old sections are NOT present
-        assert!(!toml_str.contains("[thoughts]"));
         assert!(!toml_str.contains("[models]"));
     }
 
@@ -396,9 +503,14 @@ locator_model = "custom-model"
         assert_eq!(config.subagents.locator_model, "custom-model");
         // Other fields get defaults
         assert_eq!(config.subagents.analyzer_model, "claude-sonnet-4-6");
+        assert_eq!(config.subagents.runtime_timeout_secs, 3600);
         assert_eq!(
             config.services.anthropic.base_url,
             "https://api.anthropic.com"
+        );
+        assert_eq!(
+            config.services.linear.base_url,
+            "https://api.linear.app/graphql"
         );
         assert!(config.orchestrator.commands.allow.is_empty());
         assert!(config.orchestrator.commands.deny.is_empty());
@@ -446,6 +558,8 @@ deny = ["commit"]
         assert_eq!(cfg.glob_default_limit, 500);
         assert_eq!(cfg.max_depth, 10);
         assert_eq!(cfg.pagination_cache_ttl_secs, 300);
+        assert_eq!(cfg.just_execute_timeout_secs, 1800);
+        assert_eq!(cfg.just_search_timeout_secs, 30);
         assert!(cfg.extra_ignore_patterns.is_empty());
     }
 
@@ -468,5 +582,23 @@ deny = ["commit"]
 
         // Exa
         assert_eq!(cfg.exa.base_url, "https://api.exa.ai");
+
+        // Linear
+        assert_eq!(cfg.linear.base_url, "https://api.linear.app/graphql");
+        assert_eq!(cfg.linear.connect_timeout_secs, 10);
+        assert_eq!(cfg.linear.request_timeout_secs, 60);
+
+        // GitHub
+        assert_eq!(cfg.github.base_url, "https://api.github.com");
+        assert_eq!(cfg.github.total_timeout_secs, 120);
+    }
+
+    #[test]
+    fn test_new_timeout_defaults_match_plan() {
+        let cfg = AgenticConfig::default();
+
+        assert_eq!(cfg.subagents.runtime_timeout_secs, 3600);
+        assert_eq!(cfg.review.run_timeout_secs, 1800);
+        assert_eq!(cfg.thoughts.add_reference_timeout_secs, 600);
     }
 }

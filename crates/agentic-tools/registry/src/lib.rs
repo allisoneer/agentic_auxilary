@@ -30,8 +30,12 @@ compile_error!(
 use agentic_config::types::AnthropicServiceConfig;
 use agentic_config::types::CliToolsConfig;
 use agentic_config::types::ExaServiceConfig;
+use agentic_config::types::GitHubServiceConfig;
+use agentic_config::types::LinearServiceConfig;
 use agentic_config::types::ReasoningConfig;
+use agentic_config::types::ReviewConfig;
 use agentic_config::types::SubagentsConfig;
+use agentic_config::types::ThoughtsConfig;
 use agentic_config::types::WebRetrievalConfig;
 use agentic_tools_core::ToolRegistry;
 use serde::Deserialize;
@@ -71,6 +75,22 @@ pub struct AgenticToolsConfig {
     /// Exa service configuration for web search.
     #[serde(default)]
     pub exa: ExaServiceConfig,
+
+    /// Linear service configuration for linear tools.
+    #[serde(default)]
+    pub linear: LinearServiceConfig,
+
+    /// GitHub service configuration for `pr_comments`.
+    #[serde(default)]
+    pub github: GitHubServiceConfig,
+
+    /// Review tools configuration.
+    #[serde(default)]
+    pub review: ReviewConfig,
+
+    /// Thoughts tools configuration.
+    #[serde(default)]
+    pub thoughts: ThoughtsConfig,
 
     /// Reserved for future use (e.g., schema strictness, patches).
     #[serde(default)]
@@ -154,14 +174,17 @@ impl AgenticTools {
         if domain_wanted(PR_COMMENTS_NAMES) {
             // TODO(2): Centralize ambient git repo detection + overrides across tool registries
             // (avoid per-domain fallbacks like this).
-            let tool = match pr_comments::PrComments::new() {
+            let tool = match pr_comments::PrComments::with_config(config.github.clone()) {
                 Ok(t) => t,
                 Err(e) => {
                     warn!(
                         "pr_comments: ambient repo detection failed ({}); tools will return a clear error until repo context is available",
                         e
                     );
-                    pr_comments::PrComments::disabled(format!("{e:#}"))
+                    pr_comments::PrComments::disabled_with_config(
+                        format!("{e:#}"),
+                        config.github.clone(),
+                    )
                 }
             };
             regs.push(pr_comments::build_registry(Arc::new(tool)));
@@ -169,7 +192,9 @@ impl AgenticTools {
 
         // linear_tools (9 tools)
         if domain_wanted(LINEAR_NAMES) {
-            let linear = Arc::new(linear_tools::LinearTools::new());
+            let linear = Arc::new(linear_tools::LinearTools::with_config(
+                config.linear.clone(),
+            ));
             regs.push(linear_tools::build_registry(linear));
         }
 
@@ -180,7 +205,7 @@ impl AgenticTools {
 
         // thoughts-mcp-tools (6 tools)
         if domain_wanted(THOUGHTS_NAMES) {
-            regs.push(thoughts_mcp_tools::build_registry());
+            regs.push(thoughts_mcp_tools::build_registry(config.thoughts.clone()));
         }
 
         // web-retrieval (2 tools)
@@ -195,7 +220,7 @@ impl AgenticTools {
 
         // review_tools (3 tools)
         if domain_wanted(REVIEW_NAMES) {
-            let svc = Arc::new(review_tools::ReviewTools::new());
+            let svc = Arc::new(review_tools::ReviewTools::with_config(config.review));
             regs.push(review_tools::build_registry(svc));
         }
 
@@ -443,6 +468,7 @@ mod tests {
             subagents: SubagentsConfig {
                 locator_model: "custom-haiku".into(),
                 analyzer_model: "custom-sonnet".into(),
+                runtime_timeout_secs: 3600,
             },
             reasoning: ReasoningConfig {
                 optimizer_model: "anthropic/custom-optimizer".into(),
