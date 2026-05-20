@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.8.1] - 2026-05-20
+
+### ⛰️  Features
+- Add configurable runtime timeouts across agentic tools
+
+### 🐛 Bug Fixes
+- *(logging)* Address PR #220 timeout and failure handling review fixes
 ## [0.8.0] - 2026-05-07
 
 ### 🐛 Bug Fixes
