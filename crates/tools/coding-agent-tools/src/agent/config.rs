@@ -187,6 +187,7 @@ mod tests {
         let cfg = SubagentsConfig {
             locator_model: "sonnet".into(),
             analyzer_model: "opus".into(),
+            runtime_timeout_secs: 3600,
         };
         assert_eq!(model_for(AgentType::Locator, &cfg), Model::Sonnet);
         assert_eq!(model_for(AgentType::Analyzer, &cfg), Model::Opus);
@@ -197,6 +198,7 @@ mod tests {
         let cfg = SubagentsConfig {
             locator_model: "unknown-model".into(),
             analyzer_model: "another-unknown".into(),
+            runtime_timeout_secs: 3600,
         };
         // Falls back based on agent type
         assert_eq!(model_for(AgentType::Locator, &cfg), Model::Haiku);

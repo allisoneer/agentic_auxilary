@@ -143,6 +143,7 @@ fn log_tool_success<TReq: Serialize, TOut: TextFormat>(
         response_file,
         success: true,
         error: None,
+        failure_kind: None,
         model: None,
         token_usage: log_meta.token_usage,
         summary: log_meta
@@ -171,6 +172,7 @@ fn log_tool_error<TReq: Serialize>(
         response_file: None,
         success: false,
         error: Some(error.to_string()),
+        failure_kind: None,
         model: None,
         token_usage: None,
         summary: None,

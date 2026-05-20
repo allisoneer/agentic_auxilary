@@ -43,6 +43,35 @@ mod tests {
         let command_properties = &json["$defs"]["OrchestratorCommandsConfig"]["properties"];
         assert!(command_properties.get("allow").is_some());
         assert!(command_properties.get("deny").is_some());
+
+        let subagents_properties = &json["$defs"]["SubagentsConfig"]["properties"];
+        assert!(subagents_properties.get("runtime_timeout_secs").is_some());
+
+        let cli_tools_properties = &json["$defs"]["CliToolsConfig"]["properties"];
+        assert!(
+            cli_tools_properties
+                .get("just_execute_timeout_secs")
+                .is_some()
+        );
+        assert!(
+            cli_tools_properties
+                .get("just_search_timeout_secs")
+                .is_some()
+        );
+
+        let services_properties = &json["$defs"]["ServicesConfig"]["properties"];
+        assert!(services_properties.get("linear").is_some());
+        assert!(services_properties.get("github").is_some());
+
+        let review_properties = &json["$defs"]["ReviewConfig"]["properties"];
+        assert!(review_properties.get("run_timeout_secs").is_some());
+
+        let thoughts_properties = &json["$defs"]["ThoughtsConfig"]["properties"];
+        assert!(
+            thoughts_properties
+                .get("add_reference_timeout_secs")
+                .is_some()
+        );
     }
 
     #[test]

@@ -18,6 +18,8 @@
         "extra_ignore_patterns": [],
         "glob_default_limit": 500,
         "grep_default_limit": 200,
+        "just_execute_timeout_secs": 1800,
+        "just_search_timeout_secs": 30,
         "ls_page_size": 100,
         "max_depth": 10,
         "pagination_cache_ttl_secs": 300
@@ -56,6 +58,13 @@
         "stream_heartbeat_secs": 30
       }
     },
+    "review": {
+      "description": "Review tools configuration.",
+      "$ref": "#/$defs/ReviewConfig",
+      "default": {
+        "run_timeout_secs": 1800
+      }
+    },
     "services": {
       "description": "External service configurations (Anthropic, Exa).",
       "$ref": "#/$defs/ServicesConfig",
@@ -65,6 +74,15 @@
         },
         "exa": {
           "base_url": "https://api.exa.ai"
+        },
+        "github": {
+          "base_url": "https://api.github.com",
+          "total_timeout_secs": 120
+        },
+        "linear": {
+          "base_url": "https://api.linear.app/graphql",
+          "connect_timeout_secs": 10,
+          "request_timeout_secs": 60
         }
       }
     },
@@ -73,7 +91,15 @@
       "$ref": "#/$defs/SubagentsConfig",
       "default": {
         "analyzer_model": "claude-sonnet-4-6",
-        "locator_model": "claude-haiku-4-5"
+        "locator_model": "claude-haiku-4-5",
+        "runtime_timeout_secs": 3600
+      }
+    },
+    "thoughts": {
+      "description": "Thoughts tool configuration.",
+      "$ref": "#/$defs/ThoughtsConfig",
+      "default": {
+        "add_reference_timeout_secs": 600
       }
     },
     "web_retrieval": {
@@ -130,6 +156,20 @@
           "default": 200,
           "minimum": 0
         },
+        "just_execute_timeout_secs": {
+          "description": "Wall-clock timeout for cli_just_execute in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 1800,
+          "minimum": 0
+        },
+        "just_search_timeout_secs": {
+          "description": "Wall-clock timeout for cli_just_search in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 30,
+          "minimum": 0
+        },
         "ls_page_size": {
           "description": "Default page size for ls results (default: 100).",
           "type": "integer",
@@ -161,6 +201,49 @@
           "description": "Base URL for the Exa API.",
           "type": "string",
           "default": "https://api.exa.ai"
+        }
+      }
+    },
+    "GitHubServiceConfig": {
+      "description": "GitHub API service configuration.",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Base URL for the GitHub API.",
+          "type": "string",
+          "default": "https://api.github.com"
+        },
+        "total_timeout_secs": {
+          "description": "Total timeout for multi-request operations in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 120,
+          "minimum": 0
+        }
+      }
+    },
+    "LinearServiceConfig": {
+      "description": "Linear API service configuration.",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Base URL for the Linear GraphQL API.",
+          "type": "string",
+          "default": "https://api.linear.app/graphql"
+        },
+        "connect_timeout_secs": {
+          "description": "Connection establishment timeout in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 10,
+          "minimum": 0
+        },
+        "request_timeout_secs": {
+          "description": "Per-request timeout in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 60,
+          "minimum": 0
         }
       }
     },
@@ -320,6 +403,19 @@
         "xhigh"
       ]
     },
+    "ReviewConfig": {
+      "description": "Configuration for review tools.",
+      "type": "object",
+      "properties": {
+        "run_timeout_secs": {
+          "description": "Wall-clock timeout for review_run sessions in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 1800,
+          "minimum": 0
+        }
+      }
+    },
     "ServicesConfig": {
       "description": "External service configurations.",
       "type": "object",
@@ -337,6 +433,23 @@
           "default": {
             "base_url": "https://api.exa.ai"
           }
+        },
+        "github": {
+          "description": "GitHub API configuration.",
+          "$ref": "#/$defs/GitHubServiceConfig",
+          "default": {
+            "base_url": "https://api.github.com",
+            "total_timeout_secs": 120
+          }
+        },
+        "linear": {
+          "description": "Linear API configuration.",
+          "$ref": "#/$defs/LinearServiceConfig",
+          "default": {
+            "base_url": "https://api.linear.app/graphql",
+            "connect_timeout_secs": 10,
+            "request_timeout_secs": 60
+          }
         }
       }
     },
@@ -353,6 +466,26 @@
           "description": "Model for Locator subagent (fast discovery). Uses Claude CLI format.",
           "type": "string",
           "default": "claude-haiku-4-5"
+        },
+        "runtime_timeout_secs": {
+          "description": "Wall-clock timeout for ask_agent runtime in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 3600,
+          "minimum": 0
+        }
+      }
+    },
+    "ThoughtsConfig": {
+      "description": "Configuration for thoughts MCP-adjacent operations.",
+      "type": "object",
+      "properties": {
+        "add_reference_timeout_secs": {
+          "description": "Wall-clock timeout for thoughts_add_reference in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 600,
+          "minimum": 0
         }
       }
     },

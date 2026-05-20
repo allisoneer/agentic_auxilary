@@ -371,10 +371,11 @@ impl Tool for JustSearchTool {
     fn call(
         &self,
         input: Self::Input,
-        _ctx: &ToolContext,
+        ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let tools = Arc::clone(&self.tools);
-        Box::pin(async move { tools.just_search(input.query, input.dir).await })
+        let ctx = ctx.clone();
+        Box::pin(async move { tools.just_search(input.query, input.dir, &ctx).await })
     }
 }
 

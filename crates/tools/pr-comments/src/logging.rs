@@ -10,6 +10,21 @@ use agentic_logging::chrono::DateTime;
 use agentic_logging::chrono::Utc;
 use thoughts_tool::active_logs_dir;
 
+fn classify_failure_kind(success: bool, error: Option<&str>) -> Option<String> {
+    if success {
+        return None;
+    }
+
+    let error = error.unwrap_or_default().to_ascii_lowercase();
+    if error.contains("timed out") || error.contains("timeout") {
+        Some("timeout".to_string())
+    } else if error.contains("cancelled") || error.contains("canceled") {
+        Some("cancelled".to_string())
+    } else {
+        Some("error".to_string())
+    }
+}
+
 /// Context for logging a single tool call.
 ///
 /// Captures timing, builds the log record, and writes it to the logs directory.
@@ -79,6 +94,7 @@ impl ToolLogCtx {
             request,
             response_file,
             success,
+            failure_kind: classify_failure_kind(success, error.as_deref()),
             error,
             model,
             token_usage: None,

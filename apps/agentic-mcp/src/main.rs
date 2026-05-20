@@ -178,6 +178,10 @@ async fn main() -> anyhow::Result<()> {
     reg_cfg.cli_tools = loaded.config.cli_tools.clone();
     reg_cfg.exa = loaded.config.services.exa.clone();
     reg_cfg.anthropic = loaded.config.services.anthropic.clone();
+    reg_cfg.linear = loaded.config.services.linear.clone();
+    reg_cfg.github = loaded.config.services.github.clone();
+    reg_cfg.review = loaded.config.review.clone();
+    reg_cfg.thoughts = loaded.config.thoughts.clone();
 
     let reg = AgenticTools::new(reg_cfg);
 

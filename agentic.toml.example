@@ -20,6 +20,8 @@
 locator_model = "claude-haiku-4-5"
 # Model for Analyzer subagent (deep analysis). Uses Claude CLI format.
 analyzer_model = "claude-sonnet-4-6"
+# Wall-clock timeout for ask_agent runtime in seconds (0 disables the timeout).
+runtime_timeout_secs = 3600
 
 # =============================================================================
 # Reasoning - Models for ask_reasoning_model tool
@@ -89,6 +91,10 @@ glob_default_limit = 500
 max_depth = 10
 # Pagination cache TTL in seconds
 pagination_cache_ttl_secs = 300
+# Wall-clock timeout for cli_just_execute in seconds (0 disables the timeout)
+just_execute_timeout_secs = 1800
+# Wall-clock timeout for cli_just_search in seconds (0 disables the timeout)
+just_search_timeout_secs = 30
 # Additional ignore patterns (appended to builtin ignores)
 extra_ignore_patterns = []
 
@@ -97,33 +103,41 @@ extra_ignore_patterns = []
 # =============================================================================
 [services.anthropic]
 base_url = "https://api.anthropic.com"
-connect_timeout_secs = 5
-request_timeout_secs = 600
 # api_key is set via ANTHROPIC_API_KEY environment variable (never in config)
 
 [services.exa]
 base_url = "https://api.exa.ai"
 # api_key is set via EXA_API_KEY environment variable (never in config)
 
-[services.opencode]
-base_url = "http://127.0.0.1:4096"
-request_timeout_secs = 1800
-# api_key is set via OPENCODE_API_KEY environment variable (never in config)
-
 [services.linear]
+# Base URL for the Linear GraphQL API
 base_url = "https://api.linear.app/graphql"
+# Connection establishment timeout in seconds (0 disables the timeout)
 connect_timeout_secs = 10
-request_timeout_secs = 30
-default_page_size = 50
+# Per-request timeout in seconds (0 disables the timeout)
+request_timeout_secs = 60
 # api_key is set via LINEAR_API_KEY environment variable (never in config)
 
 [services.github]
+# Base URL for the GitHub API
 base_url = "https://api.github.com"
-connect_timeout_secs = 10
-request_timeout_secs = 30
-cache_ttl_secs = 300
-ai_reply_prefix = "[AI] "
+# Total timeout for multi-request operations in seconds (0 disables the timeout)
+total_timeout_secs = 120
 # token is set via GITHUB_TOKEN environment variable (never in config)
+
+# =============================================================================
+# Review - Reviewer session configuration
+# =============================================================================
+[review]
+# Wall-clock timeout for review_run in seconds (0 disables the timeout)
+run_timeout_secs = 1800
+
+# =============================================================================
+# Thoughts - Reference operations configuration
+# =============================================================================
+[thoughts]
+# Wall-clock timeout for thoughts_add_reference in seconds (0 disables the timeout)
+add_reference_timeout_secs = 600
 
 # =============================================================================
 # Logging - Diagnostics configuration

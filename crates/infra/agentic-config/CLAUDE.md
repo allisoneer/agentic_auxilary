@@ -44,6 +44,7 @@ The loader (`loader::load_merged()`) performs a TOML deep-merge of global into l
 Model selection for `ask_agent` tool subagents:
 - `locator_model`: Fast discovery agent (default: `claude-haiku-4-5`)
 - `analyzer_model`: Deep analysis agent (default: `claude-sonnet-4-6`)
+- `runtime_timeout_secs`: ask_agent wall-clock timeout in seconds (default: `3600`, `0 = disabled`)
 
 ### `reasoning` - GPT-5 Reasoner
 Model selection for `ask_reasoning_model` tool:
@@ -52,7 +53,13 @@ Model selection for `ask_reasoning_model` tool:
 - `reasoning_effort`: Optional effort level (`low`, `medium`, `high`, `xhigh`)
 
 ### `services` - External APIs
-Base URLs for Anthropic and Exa APIs. API keys are loaded from environment only (never serialized).
+Base URLs and timeout knobs for Anthropic, Exa, Linear, and GitHub integrations. API keys are loaded from environment only (never serialized).
+
+### `review`
+- `run_timeout_secs`: review_run wall-clock timeout in seconds (default: `1800`, `0 = disabled`)
+
+### `thoughts`
+- `add_reference_timeout_secs`: thoughts_add_reference wall-clock timeout in seconds (default: `600`, `0 = disabled`)
 
 ### `logging` - Diagnostics
 Log level and JSON formatting preferences.
@@ -63,9 +70,19 @@ Log level and JSON formatting preferences.
 |----------|-------------|
 | `AGENTIC_SUBAGENTS_LOCATOR_MODEL` | `subagents.locator_model` |
 | `AGENTIC_SUBAGENTS_ANALYZER_MODEL` | `subagents.analyzer_model` |
+| `AGENTIC_SUBAGENTS_RUNTIME_TIMEOUT_SECS` | `subagents.runtime_timeout_secs` |
 | `AGENTIC_REASONING_OPTIMIZER_MODEL` | `reasoning.optimizer_model` |
 | `AGENTIC_REASONING_EXECUTOR_MODEL` | `reasoning.executor_model` |
 | `AGENTIC_REASONING_EFFORT` | `reasoning.reasoning_effort` |
+| `AGENTIC_CLI_TOOLS_JUST_EXECUTE_TIMEOUT_SECS` | `cli_tools.just_execute_timeout_secs` |
+| `AGENTIC_CLI_TOOLS_JUST_SEARCH_TIMEOUT_SECS` | `cli_tools.just_search_timeout_secs` |
+| `AGENTIC_SERVICES_LINEAR_BASE_URL` | `services.linear.base_url` |
+| `AGENTIC_SERVICES_LINEAR_CONNECT_TIMEOUT_SECS` | `services.linear.connect_timeout_secs` |
+| `AGENTIC_SERVICES_LINEAR_REQUEST_TIMEOUT_SECS` | `services.linear.request_timeout_secs` |
+| `AGENTIC_SERVICES_GITHUB_BASE_URL` | `services.github.base_url` |
+| `AGENTIC_SERVICES_GITHUB_TOTAL_TIMEOUT_SECS` | `services.github.total_timeout_secs` |
+| `AGENTIC_REVIEW_RUN_TIMEOUT_SECS` | `review.run_timeout_secs` |
+| `AGENTIC_THOUGHTS_ADD_REFERENCE_TIMEOUT_SECS` | `thoughts.add_reference_timeout_secs` |
 
 ## Deprecations and Warnings
 
@@ -103,6 +120,7 @@ Follow the pattern of `subagents` and `reasoning`:
 [subagents]
 locator_model = "claude-haiku-4-5"
 analyzer_model = "claude-sonnet-4-6"
+runtime_timeout_secs = 3600
 
 [reasoning]
 optimizer_model = "anthropic/claude-sonnet-4.6"
@@ -111,6 +129,21 @@ reasoning_effort = "high"
 
 [services.anthropic]
 base_url = "https://api.anthropic.com"
+
+[services.linear]
+base_url = "https://api.linear.app/graphql"
+connect_timeout_secs = 10
+request_timeout_secs = 60
+
+[services.github]
+base_url = "https://api.github.com"
+total_timeout_secs = 120
+
+[review]
+run_timeout_secs = 1800
+
+[thoughts]
+add_reference_timeout_secs = 600
 
 [logging]
 level = "info"

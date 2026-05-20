@@ -3774,6 +3774,7 @@ dependencies = [
 name = "linear-tools"
 version = "0.5.4"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "agentic-tools-utils",
@@ -4753,6 +4754,7 @@ dependencies = [
 name = "pr_comments"
 version = "0.8.0"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-mcp",
  "agentic-tools-utils",
@@ -5336,6 +5338,7 @@ dependencies = [
 name = "review_tools"
 version = "0.3.1"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic-tools-utils",
  "claudecode",
@@ -6352,6 +6355,7 @@ dependencies = [
 name = "thoughts-mcp-tools"
 version = "0.2.9"
 dependencies = [
+ "agentic-config",
  "agentic-tools-core",
  "agentic_logging",
  "anyhow",

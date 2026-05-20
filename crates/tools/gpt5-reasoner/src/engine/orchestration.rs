@@ -193,6 +193,7 @@ pub async fn gpt5_reasoner_impl(
                 response_file,
                 success,
                 error,
+                failure_kind: None,
                 model,
                 token_usage,
                 summary,

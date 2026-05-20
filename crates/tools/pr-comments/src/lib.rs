@@ -5,6 +5,7 @@ pub mod models;
 pub mod pagination;
 pub mod tools;
 
+use agentic_config::types::GitHubServiceConfig;
 use anyhow::Context;
 use anyhow::Result;
 use models::CommentSourceType;
@@ -19,6 +20,7 @@ use pagination::make_key;
 use pagination::make_pr_list_key;
 use pagination::paginate_slice;
 use std::sync::Arc;
+use std::time::Duration;
 
 // Re-export agentic-tools types for MCP server usage
 pub use tools::build_registry;
@@ -51,6 +53,7 @@ pub struct PrComments {
     owner: String,
     repo: String,
     token: Option<String>,
+    github_config: GitHubServiceConfig,
     pager: Arc<PaginationCache<Thread>>,
     pr_list_pager: Arc<PaginationCache<PrSummary>>,
     init_error: Option<String>,
@@ -99,7 +102,15 @@ impl PrComments {
             .unwrap_or(10)
     }
 
+    pub fn github_config(&self) -> &GitHubServiceConfig {
+        &self.github_config
+    }
+
     pub fn new() -> Result<Self> {
+        Self::with_config(GitHubServiceConfig::default())
+    }
+
+    pub fn with_config(github_config: GitHubServiceConfig) -> Result<Self> {
         let git_info = git::get_git_info().context("Failed to get git information")?;
         let token = Self::get_token();
 
@@ -107,6 +118,7 @@ impl PrComments {
             owner: git_info.owner,
             repo: git_info.repo,
             token,
+            github_config,
             pager: Arc::new(PaginationCache::new()),
             pr_list_pager: Arc::new(PaginationCache::new()),
             init_error: None,
@@ -114,11 +126,20 @@ impl PrComments {
     }
 
     pub fn with_repo(owner: String, repo: String) -> Self {
+        Self::with_repo_and_config(owner, repo, GitHubServiceConfig::default())
+    }
+
+    pub fn with_repo_and_config(
+        owner: String,
+        repo: String,
+        github_config: GitHubServiceConfig,
+    ) -> Self {
         let token = Self::get_token();
         Self {
             owner,
             repo,
             token,
+            github_config,
             pager: Arc::new(PaginationCache::new()),
             pr_list_pager: Arc::new(PaginationCache::new()),
             init_error: None,
@@ -128,14 +149,36 @@ impl PrComments {
     /// Create a disabled instance that will fail fast with a clear error message.
     /// Used when ambient repo detection fails.
     pub fn disabled(init_error: String) -> Self {
+        Self::disabled_with_config(init_error, GitHubServiceConfig::default())
+    }
+
+    pub fn disabled_with_config(init_error: String, github_config: GitHubServiceConfig) -> Self {
         let token = Self::get_token();
         Self {
             owner: String::new(),
             repo: String::new(),
             token,
+            github_config,
             pager: Arc::new(PaginationCache::new()),
             pr_list_pager: Arc::new(PaginationCache::new()),
             init_error: Some(init_error),
+        }
+    }
+
+    async fn with_github_total_timeout<T, F>(&self, label: &str, fut: F) -> Result<T>
+    where
+        F: std::future::Future<Output = Result<T>>,
+    {
+        let timeout_secs = self.github_config.total_timeout_secs;
+        if timeout_secs == 0 {
+            return fut.await;
+        }
+
+        match tokio::time::timeout(Duration::from_secs(timeout_secs), fut).await {
+            Ok(result) => result,
+            Err(_) => Err(anyhow::anyhow!(
+                "GitHub operation timed out after {timeout_secs}s while {label}"
+            )),
         }
     }
 
@@ -264,27 +307,34 @@ impl PrComments {
             )
             .context("internal: failed to create GitHub client")?;
 
-            // Fetch all comments
-            let comments = client.fetch_review_comments(pr).await.map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("401") || msg.contains("403") {
-                    anyhow::anyhow!(
-                        "{msg}\n\nHint: For private repositories, ensure your token has the 'repo' scope."
-                    )
-                } else {
-                    anyhow::anyhow!("{msg}")
-                }
-            })?;
+            let (comments, resolution_map) = self
+                .with_github_total_timeout(
+                    &format!("fetching review comments for PR #{pr}"),
+                    async {
+                        let comments = client.fetch_review_comments(pr).await.map_err(|e| {
+                            let msg = e.to_string();
+                            if msg.contains("401") || msg.contains("403") {
+                                anyhow::anyhow!(
+                                    "{msg}\n\nHint: For private repositories, ensure your token has the 'repo' scope."
+                                )
+                            } else {
+                                anyhow::anyhow!("{msg}")
+                            }
+                        })?;
 
-            // Get resolution map
-            let resolution_map = if include_resolved {
-                std::collections::HashMap::new()
-            } else {
-                client
-                    .get_review_thread_resolution_status(pr)
-                    .await
-                    .unwrap_or_default()
-            };
+                        let resolution_map = if include_resolved {
+                            std::collections::HashMap::new()
+                        } else {
+                            client
+                                .get_review_thread_resolution_status(pr)
+                                .await
+                                .unwrap_or_default()
+                        };
+
+                        Ok((comments, resolution_map))
+                    },
+                )
+                .await?;
 
             // Build and filter threads
             let threads = github::GitHubClient::build_threads(comments, &resolution_map);
@@ -376,16 +426,20 @@ impl PrComments {
             )
             .context("internal: failed to create GitHub client")?;
 
-            let prs = client.list_prs(Some(state.clone())).await.map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("401") || msg.contains("403") {
-                    anyhow::anyhow!(
-                        "{msg}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope."
-                    )
-                } else {
-                    anyhow::anyhow!("{msg}")
-                }
-            })?;
+            let prs = self
+                .with_github_total_timeout(&format!("listing pull requests for state={state}"), async {
+                    client.list_prs(Some(state.clone())).await.map_err(|e| {
+                        let msg = e.to_string();
+                        if msg.contains("401") || msg.contains("403") {
+                            anyhow::anyhow!(
+                                "{msg}\n\nHint: For private repositories, ensure your GITHUB_TOKEN has the 'repo' scope."
+                            )
+                        } else {
+                            anyhow::anyhow!("{msg}")
+                        }
+                    })
+                })
+                .await?;
 
             guarded_post_fetch_reset(&query_lock, prs, page_size);
         }
@@ -665,6 +719,61 @@ mod tests {
         let valid = PrComments::with_repo("owner".into(), "repo".into());
         let result = valid.ensure_repo_configured();
         assert!(result.is_ok());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn github_total_timeout_expires_when_enabled() {
+        let svc = PrComments::with_repo_and_config(
+            "owner".into(),
+            "repo".into(),
+            GitHubServiceConfig {
+                total_timeout_secs: 1,
+                ..Default::default()
+            },
+        );
+
+        let handle = tokio::spawn(async move {
+            svc.with_github_total_timeout("testing timeout", async {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok(())
+            })
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+
+        let err = handle.await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("timed out after 1s"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn github_total_timeout_zero_disables_wrapper() {
+        let svc = PrComments::with_repo_and_config(
+            "owner".into(),
+            "repo".into(),
+            GitHubServiceConfig {
+                total_timeout_secs: 0,
+                ..Default::default()
+            },
+        );
+
+        let handle = tokio::spawn(async move {
+            svc.with_github_total_timeout("testing disabled timeout", async {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok(())
+            })
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        assert!(
+            !handle.is_finished(),
+            "timeout=0 should not time out immediately"
+        );
+
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert!(handle.await.unwrap().is_ok());
     }
 
     #[test]

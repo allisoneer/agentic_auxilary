@@ -112,7 +112,8 @@ async fn live_create_search_read_comment_archive() {
     assert!(comment.success);
 
     // 6) Archive for cleanup
-    let client = LinearClient::new(None).expect("LinearClient should initialize");
+    let client = LinearClient::new(None, &agentic_config::types::LinearServiceConfig::default())
+        .expect("LinearClient should initialize");
     let op = IssueArchiveMutation::build(IssueArchiveArguments { id: issue_id });
     let resp = client.run(op).await.expect("issueArchive should execute");
     let data = linear_tools::http::extract_data(resp).expect("extract_data should succeed");

@@ -13,6 +13,7 @@ pub mod tools;
 pub mod types;
 pub mod validation;
 
+use agentic_config::types::ReviewConfig;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -63,9 +64,13 @@ pub struct ReviewTools {
 impl ReviewTools {
     /// Create a new `ReviewTools` instance with an empty cache.
     pub fn new() -> Self {
+        Self::with_config(ReviewConfig::default())
+    }
+
+    pub fn with_config(config: ReviewConfig) -> Self {
         Self {
             cache: Arc::new(SnapshotCache::new()),
-            runner: Arc::new(ClaudeCliRunner::new()),
+            runner: Arc::new(ClaudeCliRunner::with_config(config)),
         }
     }
 

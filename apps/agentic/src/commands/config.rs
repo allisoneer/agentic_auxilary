@@ -340,4 +340,21 @@ mod tests {
         cmd_init(false, false).unwrap();
         assert!(temp.path.join("agentic.toml").exists());
     }
+
+    #[test]
+    fn test_default_config_toml_pretty_includes_new_timeout_sections() {
+        let toml = default_config_toml_pretty().unwrap();
+
+        assert!(toml.contains("runtime_timeout_secs = 3600"));
+        assert!(toml.contains("just_execute_timeout_secs = 1800"));
+        assert!(toml.contains("just_search_timeout_secs = 30"));
+        assert!(toml.contains("[services.linear]"));
+        assert!(toml.contains("connect_timeout_secs = 10"));
+        assert!(toml.contains("[services.github]"));
+        assert!(toml.contains("total_timeout_secs = 120"));
+        assert!(toml.contains("[review]"));
+        assert!(toml.contains("run_timeout_secs = 1800"));
+        assert!(toml.contains("[thoughts]"));
+        assert!(toml.contains("add_reference_timeout_secs = 600"));
+    }
 }
