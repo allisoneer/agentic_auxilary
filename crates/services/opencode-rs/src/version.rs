@@ -7,7 +7,7 @@ use crate::error::OpencodeError;
 use crate::error::Result;
 
 /// Pinned opencode server version for SDK compatibility testing.
-pub const PINNED_OPENCODE_VERSION: &str = "1.14.33";
+pub const PINNED_OPENCODE_VERSION: &str = "1.15.7";
 
 /// Environment variable for the opencode binary path.
 pub const OPENCODE_BINARY_ENV: &str = "OPENCODE_BINARY";
@@ -15,9 +15,9 @@ pub const OPENCODE_BINARY_ENV: &str = "OPENCODE_BINARY";
 /// Environment variable for extra arguments between binary and `serve` command.
 ///
 /// Useful for launchers like `bunx` where the full command is:
-/// `bunx --yes opencode-ai@1.14.33 serve --hostname ... --port ...`
+/// `bunx --yes opencode-ai@1.15.7 serve --hostname ... --port ...`
 ///
-/// Example: `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.14.33"`
+/// Example: `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.15.7"`
 pub const OPENCODE_BINARY_ARGS_ENV: &str = "OPENCODE_BINARY_ARGS";
 
 /// Normalize a version string by stripping the `v` prefix if present.
@@ -56,9 +56,9 @@ mod tests {
 
     #[test]
     fn test_normalize_version_strips_v_prefix() {
-        assert_eq!(normalize_version("v1.14.33"), "1.14.33");
-        assert_eq!(normalize_version("1.14.33"), "1.14.33");
-        assert_eq!(normalize_version("  v1.14.33  "), "1.14.33");
+        assert_eq!(normalize_version("v1.15.7"), "1.15.7");
+        assert_eq!(normalize_version("1.15.7"), "1.15.7");
+        assert_eq!(normalize_version("  v1.15.7  "), "1.15.7");
     }
 
     #[test]

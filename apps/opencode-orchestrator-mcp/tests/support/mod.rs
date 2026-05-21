@@ -167,7 +167,7 @@ impl Respond for SequenceResponder {
 }
 
 // ============================================================================
-// JSON Fixtures matching upstream v1.14.33 `...ID` wire casing.
+// JSON Fixtures matching upstream v1.15.7 `...ID` wire casing.
 // ============================================================================
 
 /// Create a session fixture with the given session ID.

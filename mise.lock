@@ -665,7 +665,7 @@ checksum = "sha256:657338772efd17a31d67285bb5ed691da87741e44311c0366273c6cb7d913
 url = "https://github.com/casey/just/releases/download/1.49.0/just-1.49.0-x86_64-pc-windows-msvc.zip"
 
 [[tools."npm:opencode-ai"]]
-version = "1.14.33"
+version = "1.15.7"
 backend = "npm:opencode-ai"
 
 [[tools.opencode-orchestrator-mcp]]

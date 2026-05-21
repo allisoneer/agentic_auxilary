@@ -641,7 +641,7 @@ async fn test_shell_returns_info_and_parts() {
 
     let client = create_test_client().await;
 
-    // Pick a real agent name from the live server. v1.14.33 strictly validates
+    // Pick a real agent name from the live server. Current OpenCode versions strictly validate
     // `agent` against the configured agent list; hardcoding upstream defaults
     // (e.g. "build") fails in environments with custom agent definitions.
     let mut agents = client
