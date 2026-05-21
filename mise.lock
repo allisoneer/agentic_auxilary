@@ -49,128 +49,73 @@ checksum = "sha256:7c8b10a93723838bc3533f6e1886d868fdbb109b81606ebe6d1a533d11d8e
 url = "https://github.com/rhysd/actionlint/releases/download/v1.7.9/actionlint_1.7.9_windows_amd64.zip"
 
 [[tools.agentic-bin]]
-version = "0.1.7"
+version = "0.1.8"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-bin.options]
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin."platforms.linux-arm64"]
-checksum = "sha256:8fbb0b59e6eee597f1cb199a61db7a0b7a9204d17802a40bc2c579ed90f1d444"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376409"
+checksum = "sha256:f0682001c231ab73b969ce0ac413df2e33551d9a095c8d898e577f1a5d0179b2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336223"
 
 [tools.agentic-bin."platforms.linux-arm64-musl"]
-checksum = "sha256:8fbb0b59e6eee597f1cb199a61db7a0b7a9204d17802a40bc2c579ed90f1d444"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376409"
+checksum = "sha256:f0682001c231ab73b969ce0ac413df2e33551d9a095c8d898e577f1a5d0179b2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336223"
 
 [tools.agentic-bin."platforms.linux-x64"]
-checksum = "sha256:76b4edd5ba647abcd5c7378c6887707b52545cbc035ec54a3092b943b5dfa0ae"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376418"
+checksum = "sha256:0c32dd5902ab683ea608ddb347c0e4ba4fee349c496cfa1cf94b8660feaf99a1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336232"
 
 [tools.agentic-bin."platforms.linux-x64-baseline"]
-checksum = "sha256:76b4edd5ba647abcd5c7378c6887707b52545cbc035ec54a3092b943b5dfa0ae"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376418"
+checksum = "sha256:0c32dd5902ab683ea608ddb347c0e4ba4fee349c496cfa1cf94b8660feaf99a1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336232"
 
 [tools.agentic-bin."platforms.linux-x64-musl"]
-checksum = "sha256:76b4edd5ba647abcd5c7378c6887707b52545cbc035ec54a3092b943b5dfa0ae"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376418"
+checksum = "sha256:0c32dd5902ab683ea608ddb347c0e4ba4fee349c496cfa1cf94b8660feaf99a1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336232"
 
 [tools.agentic-bin."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:76b4edd5ba647abcd5c7378c6887707b52545cbc035ec54a3092b943b5dfa0ae"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376418"
+checksum = "sha256:0c32dd5902ab683ea608ddb347c0e4ba4fee349c496cfa1cf94b8660feaf99a1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336232"
 
 [tools.agentic-bin."platforms.macos-arm64"]
-checksum = "sha256:1d6f552ba4932b0b78bd515e44253a0e555e348f0abbc371f7356155ab03f2c7"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376412"
+checksum = "sha256:2238309fa108710f7ffba47302ab485579b17ccd767fdad34ad75cf98b373b9e"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336222"
 
 [tools.agentic-bin."platforms.macos-x64"]
-checksum = "sha256:58b1408818568c89bc7330b01783bde1f1c6534582e2544c8b9e7b37512a7788"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376416"
+checksum = "sha256:169b09a1a015da017b5ac9aad997951d3de77834d5c4eee324d463011b548f2d"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336230"
 
 [tools.agentic-bin."platforms.macos-x64-baseline"]
-checksum = "sha256:58b1408818568c89bc7330b01783bde1f1c6534582e2544c8b9e7b37512a7788"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/agentic-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376416"
+checksum = "sha256:169b09a1a015da017b5ac9aad997951d3de77834d5c4eee324d463011b548f2d"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/agentic-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336230"
 
 [tools.agentic-bin."platforms.windows-x64"]
-checksum = "sha256:9b9206517786f7083178effdb19a0b46d0d1c92362ebcc51530d9103d6f5b28b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376424"
+checksum = "sha256:89e2ab3a8c00528cf90e8eb174397a8b895cc9078bb16af41b24d045efcd0446"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336237"
 
 [tools.agentic-bin."platforms.windows-x64-baseline"]
-checksum = "sha256:9b9206517786f7083178effdb19a0b46d0d1c92362ebcc51530d9103d6f5b28b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.7/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424376424"
+checksum = "sha256:89e2ab3a8c00528cf90e8eb174397a8b895cc9078bb16af41b24d045efcd0446"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.8/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426336237"
 
 [[tools.agentic-mcp]]
-version = "0.2.26"
+version = "0.2.27"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-mcp.options]
 version_prefix = "agentic-mcp-v"
-
-[tools.agentic-mcp."platforms.linux-arm64"]
-checksum = "sha256:7fe472aaab9e1fd42e051c573667385597c2506fc4ca07d71a646c7e0fef8970"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383083"
-
-[tools.agentic-mcp."platforms.linux-arm64-musl"]
-checksum = "sha256:7fe472aaab9e1fd42e051c573667385597c2506fc4ca07d71a646c7e0fef8970"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383083"
-
-[tools.agentic-mcp."platforms.linux-x64"]
-checksum = "sha256:d307d633375a02cc9442ddb0994f578c0c0c0819935180940ed23a278d04b39b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383094"
-
-[tools.agentic-mcp."platforms.linux-x64-baseline"]
-checksum = "sha256:d307d633375a02cc9442ddb0994f578c0c0c0819935180940ed23a278d04b39b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383094"
-
-[tools.agentic-mcp."platforms.linux-x64-musl"]
-checksum = "sha256:d307d633375a02cc9442ddb0994f578c0c0c0819935180940ed23a278d04b39b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383094"
-
-[tools.agentic-mcp."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:d307d633375a02cc9442ddb0994f578c0c0c0819935180940ed23a278d04b39b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383094"
-
-[tools.agentic-mcp."platforms.macos-arm64"]
-checksum = "sha256:f74f62c198e99686a3fb66dc6a499fc92338482fcc0c4e8604c12f2143c1b6ea"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383084"
-
-[tools.agentic-mcp."platforms.macos-x64"]
-checksum = "sha256:1d970012160c914e4fe2c87a5b17bdd50964ee123d41230b3b2089cf847eded6"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383092"
-
-[tools.agentic-mcp."platforms.macos-x64-baseline"]
-checksum = "sha256:1d970012160c914e4fe2c87a5b17bdd50964ee123d41230b3b2089cf847eded6"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/agentic-mcp-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383092"
-
-[tools.agentic-mcp."platforms.windows-x64"]
-checksum = "sha256:a15b62f25eab6c11a3be70613cfda2a5d2fa028ab5334be29d5af945c72be2e2"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383108"
-
-[tools.agentic-mcp."platforms.windows-x64-baseline"]
-checksum = "sha256:a15b62f25eab6c11a3be70613cfda2a5d2fa028ab5334be29d5af945c72be2e2"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.26/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424383108"
 
 [[tools."aqua:taiki-e/cargo-llvm-cov"]]
 version = "0.6.14"
@@ -669,66 +614,46 @@ version = "1.14.33"
 backend = "npm:opencode-ai"
 
 [[tools.opencode-orchestrator-mcp]]
-version = "0.6.2"
+version = "0.6.3"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.opencode-orchestrator-mcp.options]
 version_prefix = "opencode-orchestrator-mcp-v"
 
-[tools.opencode-orchestrator-mcp."platforms.linux-arm64"]
-checksum = "sha256:036a61bebe1c0d5d7bb589c1aaa044586076adb6f00b97d2019008193c224977"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381673"
-
-[tools.opencode-orchestrator-mcp."platforms.linux-arm64-musl"]
-checksum = "sha256:036a61bebe1c0d5d7bb589c1aaa044586076adb6f00b97d2019008193c224977"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381673"
-
-[tools.opencode-orchestrator-mcp."platforms.linux-x64"]
-checksum = "sha256:8bf2ce8abbdfb7d40225158f74ab62bb3d87a46d4696170eb10f907769fea482"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381699"
-
-[tools.opencode-orchestrator-mcp."platforms.linux-x64-baseline"]
-checksum = "sha256:8bf2ce8abbdfb7d40225158f74ab62bb3d87a46d4696170eb10f907769fea482"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381699"
-
 [tools.opencode-orchestrator-mcp."platforms.linux-x64-musl"]
-checksum = "sha256:8bf2ce8abbdfb7d40225158f74ab62bb3d87a46d4696170eb10f907769fea482"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381699"
+checksum = "sha256:c10599d7f6044c584aa3455611fb14ee76f7c58f4f81b2395fed7756fa829bd4"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342689"
 
 [tools.opencode-orchestrator-mcp."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:8bf2ce8abbdfb7d40225158f74ab62bb3d87a46d4696170eb10f907769fea482"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381699"
+checksum = "sha256:c10599d7f6044c584aa3455611fb14ee76f7c58f4f81b2395fed7756fa829bd4"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/opencode-orchestrator-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342689"
 
 [tools.opencode-orchestrator-mcp."platforms.macos-arm64"]
-checksum = "sha256:db4da0b07914b263be0b35685b1f720def0c181b53e6b3a9637836c2a6006f82"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381676"
+checksum = "sha256:18d5e5d75a2a8f1b84e532454454580098f3154e5a7076285255fffddfd90e48"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/opencode-orchestrator-mcp-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342665"
 
 [tools.opencode-orchestrator-mcp."platforms.macos-x64"]
-checksum = "sha256:be6abc2df180f329ff635174ad9bb2291350733b63900f2385c57421de603719"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381691"
+checksum = "sha256:9ba3fe8abe1300ba59f2aad3b3134a4e75a70b938ecbcb823f79fa2cd3a7de82"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342677"
 
 [tools.opencode-orchestrator-mcp."platforms.macos-x64-baseline"]
-checksum = "sha256:be6abc2df180f329ff635174ad9bb2291350733b63900f2385c57421de603719"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381691"
+checksum = "sha256:9ba3fe8abe1300ba59f2aad3b3134a4e75a70b938ecbcb823f79fa2cd3a7de82"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/opencode-orchestrator-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342677"
 
 [tools.opencode-orchestrator-mcp."platforms.windows-x64"]
-checksum = "sha256:a9a0d431983b7ed7b16d1f22c3666eb541763dc8a5b3c563f1c0baaf23e131a9"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381704"
+checksum = "sha256:cbb76757535c77faa8978b6e5aa8ba0da7f96087483cbc64391144aaf6e16606"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342697"
 
 [tools.opencode-orchestrator-mcp."platforms.windows-x64-baseline"]
-checksum = "sha256:a9a0d431983b7ed7b16d1f22c3666eb541763dc8a5b3c563f1c0baaf23e131a9"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.2/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/424381704"
+checksum = "sha256:cbb76757535c77faa8978b6e5aa8ba0da7f96087483cbc64391144aaf6e16606"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/opencode-orchestrator-mcp-v0.6.3/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426342697"
 
 [[tools.opentofu]]
 version = "1.11.5"
@@ -875,66 +800,66 @@ checksum = "sha256:91230a6d2d4dbb52e9c0bb134acba526f7880bfd3dfd1ffdde66e9f393d7a
 url = "https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_windows_amd64.exe"
 
 [[tools.thoughts-bin]]
-version = "0.1.18"
+version = "0.1.19"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.thoughts-bin.options]
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin."platforms.linux-arm64"]
-checksum = "sha256:e8870db9c48ffcffb0a8e8988a9f225af0372abe3b754842d44974b43709eba4"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706288"
+checksum = "sha256:4527ac39e4ba7fa1ec73404cfe50bd5f58a61d6b6c773b2610eca9b5054f08e5"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340397"
 
 [tools.thoughts-bin."platforms.linux-arm64-musl"]
-checksum = "sha256:e8870db9c48ffcffb0a8e8988a9f225af0372abe3b754842d44974b43709eba4"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706288"
+checksum = "sha256:4527ac39e4ba7fa1ec73404cfe50bd5f58a61d6b6c773b2610eca9b5054f08e5"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340397"
 
 [tools.thoughts-bin."platforms.linux-x64"]
-checksum = "sha256:01bdfda545801b868d1d756c56d70b0ee95a8ae1211d3955d9cc82ab63bf5a21"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706297"
+checksum = "sha256:a5b5323024d8876798b737e167267e14e0b888e6227bec63f458f28d6d6ca0c2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340409"
 
 [tools.thoughts-bin."platforms.linux-x64-baseline"]
-checksum = "sha256:01bdfda545801b868d1d756c56d70b0ee95a8ae1211d3955d9cc82ab63bf5a21"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706297"
+checksum = "sha256:a5b5323024d8876798b737e167267e14e0b888e6227bec63f458f28d6d6ca0c2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340409"
 
 [tools.thoughts-bin."platforms.linux-x64-musl"]
-checksum = "sha256:01bdfda545801b868d1d756c56d70b0ee95a8ae1211d3955d9cc82ab63bf5a21"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706297"
+checksum = "sha256:a5b5323024d8876798b737e167267e14e0b888e6227bec63f458f28d6d6ca0c2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340409"
 
 [tools.thoughts-bin."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:01bdfda545801b868d1d756c56d70b0ee95a8ae1211d3955d9cc82ab63bf5a21"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706297"
+checksum = "sha256:a5b5323024d8876798b737e167267e14e0b888e6227bec63f458f28d6d6ca0c2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340409"
 
 [tools.thoughts-bin."platforms.macos-arm64"]
-checksum = "sha256:23e9286c20c66b45bbcca7c11a06a972bc52fb72d5273ee7c5ced81b866e3552"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706272"
+checksum = "sha256:dca891c61b6b29b745b2bb799ac9aaae10c3396d38b2c3e93dab8f237ff59ce1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340391"
 
 [tools.thoughts-bin."platforms.macos-x64"]
-checksum = "sha256:73cd52f0d34e533d864882ea69d7b878dfb4a015aa236bf08e1bd966ebc2a0e2"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706294"
+checksum = "sha256:3ecfdc26cb715119e0bb37dd2dd35c396a76672a09fe92232d791101898c81d1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340407"
 
 [tools.thoughts-bin."platforms.macos-x64-baseline"]
-checksum = "sha256:73cd52f0d34e533d864882ea69d7b878dfb4a015aa236bf08e1bd966ebc2a0e2"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/thoughts-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706294"
+checksum = "sha256:3ecfdc26cb715119e0bb37dd2dd35c396a76672a09fe92232d791101898c81d1"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/thoughts-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340407"
 
 [tools.thoughts-bin."platforms.windows-x64"]
-checksum = "sha256:34663d5dffcd90af86dbbc0315d31a3a65bf557abc76ce2eb0df7b00cf9d84ff"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706276"
+checksum = "sha256:c3ae3b175c3f855202b837bb19276977ebf5f96d1bcf1491155c14f668f5ebd0"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340387"
 
 [tools.thoughts-bin."platforms.windows-x64-baseline"]
-checksum = "sha256:34663d5dffcd90af86dbbc0315d31a3a65bf557abc76ce2eb0df7b00cf9d84ff"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.18/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/414706276"
+checksum = "sha256:c3ae3b175c3f855202b837bb19276977ebf5f96d1bcf1491155c14f668f5ebd0"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.19/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/426340387"
 
 [[tools.trivy]]
 version = "0.69.3"
