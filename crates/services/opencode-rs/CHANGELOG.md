@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.11.0] - 2026-05-22
+
+### ⛰️  Features
+- Add support for environment variables in RunOptions and ServerOptions
+
+### 🐛 Bug Fixes
+- *(server)* Prioritize user-supplied environment variables in ManagedServer
+
+### 🧪 Testing
+- Simplify env_vars initialization in RunOptions and ServerOptions tests
 ## [0.10.0] - 2026-05-06
 
 ### ⛰️  Features
