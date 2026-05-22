@@ -365,10 +365,8 @@ mod tests {
 
     #[test]
     fn test_run_options_env_vars() {
-        let opts = RunOptions::new().env_vars([
-            ("MY_KEY", "my_value"),
-            ("ANOTHER_KEY", "another_value"),
-        ]);
+        let opts =
+            RunOptions::new().env_vars([("MY_KEY", "my_value"), ("ANOTHER_KEY", "another_value")]);
 
         assert_eq!(opts.env_vars.get("MY_KEY"), Some(&"my_value".to_string()));
         assert_eq!(

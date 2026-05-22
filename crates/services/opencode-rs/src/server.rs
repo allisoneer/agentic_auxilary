@@ -423,10 +423,8 @@ mod tests {
 
     #[test]
     fn test_server_options_env_vars() {
-        let opts = ServerOptions::new().env_vars([
-            ("MY_KEY", "my_value"),
-            ("ANOTHER_KEY", "another_value"),
-        ]);
+        let opts = ServerOptions::new()
+            .env_vars([("MY_KEY", "my_value"), ("ANOTHER_KEY", "another_value")]);
 
         let expected: HashMap<String, String> = [
             ("MY_KEY".to_string(), "my_value".to_string()),
