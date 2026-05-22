@@ -349,6 +349,16 @@
       "remote": "https://github.com/longbridge/gpui-component.git",
       "description": "Production-oriented GPUI component library with virtualized lists, markdown, charts, and editor support.",
       "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "OpenCode upstream exact release for 1.15.7 upgrade-diff research",
+      "ref": "refs/tags/v1.15.7"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "Retry exact OpenCode 1.15.6 release reference for upgrade-diff research",
+      "ref": "refs/tags/v1.15.6"
     }
   ]
 }
