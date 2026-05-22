@@ -54,8 +54,8 @@ pub struct Agent {
     pub tools: Vec<String>,
 
     /// Whether this is a built-in agent.
-    #[serde(default)]
-    pub builtin: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub builtin: Option<bool>,
 
     // ==================== Upstream parity fields ====================
     /// Agent mode (subagent, primary, all).
@@ -63,12 +63,12 @@ pub struct Agent {
     pub mode: Option<AgentMode>,
 
     /// Whether this is a native agent.
-    #[serde(default)]
-    pub native: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native: Option<bool>,
 
     /// Whether this agent is hidden from UI.
-    #[serde(default)]
-    pub hidden: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
 
     /// Top-p sampling parameter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -205,9 +205,9 @@ mod tests {
         let agent: Agent = serde_json::from_str(json).unwrap();
         assert_eq!(agent.name, "coder");
         assert!(agent.tools.is_empty());
-        assert!(!agent.builtin);
-        assert!(!agent.native);
-        assert!(!agent.hidden);
+        assert_eq!(agent.builtin, None);
+        assert_eq!(agent.native, None);
+        assert_eq!(agent.hidden, None);
         assert!(agent.mode.is_none());
     }
 
@@ -216,6 +216,7 @@ mod tests {
         let json = r##"{
             "name": "custom-agent",
             "description": "A custom agent",
+            "builtin": false,
             "mode": "subagent",
             "native": true,
             "hidden": false,
@@ -230,9 +231,10 @@ mod tests {
         let agent: Agent = serde_json::from_str(json).unwrap();
         assert_eq!(agent.name, "custom-agent");
         assert_eq!(agent.description, Some("A custom agent".to_string()));
+        assert_eq!(agent.builtin, Some(false));
         assert_eq!(agent.mode, Some(AgentMode::Subagent));
-        assert!(agent.native);
-        assert!(!agent.hidden);
+        assert_eq!(agent.native, Some(true));
+        assert_eq!(agent.hidden, Some(false));
         assert_eq!(agent.top_p, Some(0.9));
         assert_eq!(agent.temperature, Some(0.7));
         assert_eq!(agent.color, Some("#ff0000".to_string()));
@@ -304,16 +306,31 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_null_boolean_fields_deserialize_as_none() {
+        let json = r#"{
+            "name": "opencode-1-15-7-agent",
+            "builtin": null,
+            "native": null,
+            "hidden": null
+        }"#;
+        let agent: Agent = serde_json::from_str(json).unwrap();
+        assert_eq!(agent.name, "opencode-1-15-7-agent");
+        assert_eq!(agent.builtin, None);
+        assert_eq!(agent.native, None);
+        assert_eq!(agent.hidden, None);
+    }
+
+    #[test]
     fn test_agent_round_trip() {
         let agent = Agent {
             name: "test-agent".to_string(),
             description: Some("Test agent".to_string()),
             system: Some("You are a test agent".to_string()),
             tools: vec!["read".to_string(), "write".to_string()],
-            builtin: true,
+            builtin: Some(true),
             mode: Some(AgentMode::Primary),
-            native: false,
-            hidden: false,
+            native: Some(false),
+            hidden: Some(false),
             top_p: Some(0.95),
             temperature: Some(0.5),
             color: Some("#00ff00".to_string()),
@@ -333,7 +350,10 @@ mod tests {
         let json = serde_json::to_string(&agent).unwrap();
         let parsed: Agent = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.name, agent.name);
+        assert_eq!(parsed.builtin, agent.builtin);
         assert_eq!(parsed.mode, agent.mode);
+        assert_eq!(parsed.native, agent.native);
+        assert_eq!(parsed.hidden, agent.hidden);
         assert_eq!(parsed.top_p, agent.top_p);
     }
 

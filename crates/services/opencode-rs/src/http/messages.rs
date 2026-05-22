@@ -88,12 +88,12 @@ impl MessagesApi {
     ///
     /// Uses transport-level retry for transient network failures (connect/timeout).
     ///
-    /// Upstream opencode 1.14.33 does not dedupe command dispatch by `messageID`,
-    /// so supplying `CommandRequest::message_id` does not provide an idempotency
-    /// guarantee. If the server has already started executing the command before a
+    /// Live verification against `OpenCode` 1.15.7 must confirm whether command
+    /// dispatch dedupes by `messageID`. Until that contract is revalidated,
+    /// callers should treat this endpoint as at-least-once, not exactly-once:
+    /// if the server has already started executing the command before a
     /// retryable network failure occurs (for example, a connection drop
-    /// mid-response), a retry can trigger duplicate command execution. Callers
-    /// should therefore treat this endpoint as at-least-once, not exactly-once.
+    /// mid-response), a retry can trigger duplicate command execution.
     ///
     /// # Errors
     ///

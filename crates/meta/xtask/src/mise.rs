@@ -9,7 +9,7 @@ use std::fs;
 
 pub(crate) const MISE_PATH: &str = "mise.toml";
 
-const TOOL_PINS_BLOCK: &str = "claude = \"2.1.116\"\n\"npm:opencode-ai\" = \"1.14.33\"";
+const TOOL_PINS_BLOCK: &str = "claude = \"2.1.116\"\n\"npm:opencode-ai\" = \"1.15.7\"";
 
 const PLATFORM_TARGETS: [(&str, &str); 4] = [
     ("linux-x64", "x86_64-unknown-linux-gnu"),
