@@ -4,6 +4,7 @@
 
 use crate::error::OpencodeError;
 use crate::error::Result;
+use std::collections::HashMap;
 use std::process::Stdio;
 use std::time::Duration;
 use std::time::Instant;
@@ -66,6 +67,12 @@ pub struct ServerOptions {
     /// In this case, set `binary = "bunx"` and `launcher_args = vec!["--yes", "opencode-ai@1.3.3"]`.
     /// The `--yes` flag makes bunx non-interactive (skips confirmation prompts).
     pub launcher_args: Vec<String>,
+    /// Environment variables to inject into the server process.
+    ///
+    /// These variables are set on top of the parent process's environment.
+    /// Use this to pass custom configuration, secrets, or feature flags
+    /// without modifying the system environment.
+    pub env_vars: HashMap<String, String>,
 }
 
 impl Default for ServerOptions {
@@ -78,6 +85,7 @@ impl Default for ServerOptions {
             startup_timeout_ms: 5000,
             binary: "opencode".to_string(),
             launcher_args: Vec::new(),
+            env_vars: HashMap::new(),
         }
     }
 }
@@ -139,6 +147,21 @@ impl ServerOptions {
         self.launcher_args = args.into_iter().map(Into::into).collect();
         self
     }
+
+    /// Set environment variables to inject into the server process.
+    ///
+    /// These variables are set on top of the parent process's environment.
+    #[must_use]
+    pub fn env_vars(
+        mut self,
+        vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+    ) -> Self {
+        self.env_vars = vars
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+        self
+    }
 }
 
 /// A managed `OpenCode` server instance.
@@ -193,6 +216,11 @@ impl ManagedServer {
 
         if let Some(dir) = &opts.directory {
             cmd.current_dir(dir);
+        }
+
+        // Apply user-supplied env vars first so internal vars below take precedence.
+        for (key, value) in &opts.env_vars {
+            cmd.env(key, value);
         }
 
         // Recursion guard: any MCP servers spawned by this `opencode serve` should
@@ -349,6 +377,7 @@ mod tests {
         assert_eq!(opts.startup_timeout_ms, 5000);
         assert_eq!(opts.binary, "opencode");
         assert!(opts.launcher_args.is_empty());
+        assert!(opts.env_vars.is_empty());
     }
 
     #[test]
@@ -391,5 +420,31 @@ mod tests {
         let opts = ServerOptions::new().binary("bunx").launcher_args(args);
 
         assert_eq!(opts.launcher_args, vec!["opencode-ai@1.3.3"]);
+    }
+
+    #[test]
+    fn test_server_options_env_vars() {
+        let opts = ServerOptions::new()
+            .env_vars([("MY_KEY", "my_value"), ("ANOTHER_KEY", "another_value")]);
+
+        let expected: HashMap<String, String> = [
+            ("MY_KEY".to_string(), "my_value".to_string()),
+            ("ANOTHER_KEY".to_string(), "another_value".to_string()),
+        ]
+        .into();
+
+        assert_eq!(opts.env_vars, expected);
+    }
+
+    #[test]
+    fn test_server_options_env_vars_from_strings() {
+        let vars: Vec<(String, String)> = vec![
+            ("FOO".to_string(), "bar".to_string()),
+            ("BAZ".to_string(), "qux".to_string()),
+        ];
+        let opts = ServerOptions::new().env_vars(vars);
+
+        assert_eq!(opts.env_vars.get("FOO"), Some(&"bar".to_string()));
+        assert_eq!(opts.env_vars.get("BAZ"), Some(&"qux".to_string()));
     }
 }

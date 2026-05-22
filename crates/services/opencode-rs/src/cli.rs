@@ -5,6 +5,7 @@
 use crate::error::OpencodeError;
 use crate::error::Result;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
@@ -40,6 +41,10 @@ pub struct RunOptions {
     pub directory: Option<std::path::PathBuf>,
     /// Path to opencode binary.
     pub binary: String,
+    /// Environment variables to inject into the CLI process.
+    ///
+    /// These variables are set on top of the parent process's environment.
+    pub env_vars: HashMap<String, String>,
 }
 
 impl RunOptions {
@@ -127,6 +132,20 @@ impl RunOptions {
     /// Set binary path.
     pub fn binary(mut self, binary: impl Into<String>) -> Self {
         self.binary = binary.into();
+        self
+    }
+
+    /// Set environment variables to inject into the CLI process.
+    ///
+    /// These variables are set on top of the parent process's environment.
+    pub fn env_vars(
+        mut self,
+        vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+    ) -> Self {
+        self.env_vars = vars
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
         self
     }
 }
@@ -243,6 +262,10 @@ impl CliRunner {
             cmd.current_dir(dir);
         }
 
+        for (key, value) in &opts.env_vars {
+            cmd.env(key, value);
+        }
+
         let mut child = cmd
             .spawn()
             .map_err(|e| OpencodeError::Process(format!("Failed to spawn CLI: {}", e)))?;
@@ -306,6 +329,7 @@ mod tests {
         assert_eq!(opts.binary, "opencode");
         assert!(!opts.continue_session);
         assert!(!opts.share);
+        assert!(opts.env_vars.is_empty());
     }
 
     #[test]
@@ -337,5 +361,29 @@ mod tests {
         let event: CliEvent = serde_json::from_str(json).unwrap();
         assert!(event.is_step_start());
         assert!(!event.is_text());
+    }
+
+    #[test]
+    fn test_run_options_env_vars() {
+        let opts =
+            RunOptions::new().env_vars([("MY_KEY", "my_value"), ("ANOTHER_KEY", "another_value")]);
+
+        assert_eq!(opts.env_vars.get("MY_KEY"), Some(&"my_value".to_string()));
+        assert_eq!(
+            opts.env_vars.get("ANOTHER_KEY"),
+            Some(&"another_value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_run_options_env_vars_from_strings() {
+        let vars: Vec<(String, String)> = vec![
+            ("FOO".to_string(), "bar".to_string()),
+            ("BAZ".to_string(), "qux".to_string()),
+        ];
+        let opts = RunOptions::new().env_vars(vars);
+
+        assert_eq!(opts.env_vars.get("FOO"), Some(&"bar".to_string()));
+        assert_eq!(opts.env_vars.get("BAZ"), Some(&"qux".to_string()));
     }
 }
