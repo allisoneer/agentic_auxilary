@@ -218,16 +218,17 @@ impl ManagedServer {
             cmd.current_dir(dir);
         }
 
+        // Apply user-supplied env vars first so internal vars below take precedence.
+        for (key, value) in &opts.env_vars {
+            cmd.env(key, value);
+        }
+
         // Recursion guard: any MCP servers spawned by this `opencode serve` should
         // know they're in an orchestrator-managed context.
         cmd.env("OPENCODE_ORCHESTRATOR_MANAGED", "1");
 
         if let Some(cfg) = &opts.config_json {
             cmd.env("OPENCODE_CONFIG_CONTENT", cfg);
-        }
-
-        for (key, value) in &opts.env_vars {
-            cmd.env(key, value);
         }
 
         let mut child = cmd.spawn().map_err(|e| OpencodeError::SpawnServer {
