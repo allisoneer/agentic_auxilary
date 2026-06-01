@@ -28,7 +28,7 @@ _.path = ["tools/bin"]
 # instead of compiling from source. Using github backend for proper lockfile support.
 "github:cargo-bins/cargo-binstall" = "latest"
 # BEGIN:xtask:autogen mise:tool-pins
-claude = "2.1.116"
+claude = "2.1.154"
 "npm:opencode-ai" = "1.15.7"
 # END:xtask:autogen
 just = "latest"
