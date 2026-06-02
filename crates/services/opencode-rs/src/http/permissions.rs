@@ -53,6 +53,7 @@ impl PermissionsApi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::OpencodeError;
     use crate::http::HttpConfig;
     use crate::types::permission::PermissionReply;
     use std::time::Duration;
@@ -61,6 +62,16 @@ mod tests {
     use wiremock::ResponseTemplate;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
+    use wiremock::matchers::query_param;
+
+    fn patch_file_fixture() -> serde_json::Value {
+        serde_json::json!({
+            "filePath": "/tmp/src/lib.rs",
+            "relativePath": "src/lib.rs",
+            "type": "update",
+            "patch": "Index: src/lib.rs\n@@ -1 +1 @@\n-old\n+new\n",
+        })
+    }
 
     #[tokio::test]
     async fn test_list_permissions_success() {
@@ -183,5 +194,35 @@ mod tests {
             .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[tokio::test]
+    async fn test_list_permissions_surfaces_patch_file_array_bad_request() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/permission"))
+            .and(query_param("directory", "/tmp"))
+            .respond_with(
+                ResponseTemplate::new(400).set_body_json(serde_json::json!([patch_file_fixture()])),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: Some("/tmp".to_string()),
+            workspace: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let permissions = PermissionsApi::new(http);
+        let err = permissions.list().await.unwrap_err();
+
+        match err {
+            OpencodeError::Http { status, .. } => assert_eq!(status, 400),
+            other => panic!("expected HTTP error, got {other:?}"),
+        }
     }
 }
