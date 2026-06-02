@@ -48,6 +48,7 @@ pub async fn test_orchestrator_server_with_config(
     let base_url = mock.uri().trim_end_matches('/').to_string();
     let client = opencode_rs::ClientBuilder::new()
         .base_url(&base_url)
+        .directory("/tmp".to_string())
         .timeout_secs(5) // Short timeout for tests
         .build()
         .unwrap();
@@ -244,6 +245,30 @@ pub fn permission_fixture(
     permission: &str,
     patterns: &[&str],
 ) -> serde_json::Value {
+    permission_fixture_with_metadata(id, session_id, permission, patterns, &Value::Null)
+}
+
+/// Create a realistic patch-file metadata entry.
+pub fn patch_file_metadata_fixture() -> Value {
+    serde_json::json!({
+        "filePath": "/tmp/src/lib.rs",
+        "relativePath": "src/lib.rs",
+        "type": "update",
+        "patch": "Index: src/lib.rs\n@@ -1 +1 @@\n-old\n+new\n",
+        "additions": 1,
+        "deletions": 1,
+        "movePath": null,
+    })
+}
+
+/// Create a permission fixture with explicit metadata.
+pub fn permission_fixture_with_metadata(
+    id: &str,
+    session_id: &str,
+    permission: &str,
+    patterns: &[&str],
+    metadata: &Value,
+) -> serde_json::Value {
     serde_json::json!({
         "id": id,
         "sessionID": session_id,  // Note: sessionID not sessionId (matches opencode-rs types)
@@ -251,8 +276,13 @@ pub fn permission_fixture(
         "patterns": patterns,
         "always": [],
         "tool": null,
-        "metadata": null
+        "metadata": metadata
     })
+}
+
+/// Create the live-confirmed 400 response body array for patch-file metadata.
+pub fn permission_patch_file_array_bad_request_fixture() -> Value {
+    serde_json::json!([patch_file_metadata_fixture()])
 }
 
 /// Create a question fixture.

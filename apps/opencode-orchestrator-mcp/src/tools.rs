@@ -70,6 +70,12 @@ struct RunOutcome {
     log_meta: ToolLogMeta,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum PermissionPreflightMode {
+    Strict,
+    RespondPermissionContinuation,
+}
+
 fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
     let reason = match decision {
         CommandPolicyDecision::Allowed => {
@@ -333,10 +339,41 @@ impl OrchestratorRunTool {
         }
     }
 
+    async fn preflight_pending_permission(
+        client: &opencode_rs::Client,
+        session_id: &str,
+        mode: PermissionPreflightMode,
+        warnings: &mut Vec<String>,
+    ) -> Result<Option<opencode_rs::types::permission::PermissionRequest>, ToolError> {
+        match client.permissions().list().await {
+            Ok(pending_permissions) => Ok(pending_permissions
+                .into_iter()
+                .find(|permission| permission.session_id == session_id)),
+            Err(error)
+                if matches!(mode, PermissionPreflightMode::RespondPermissionContinuation)
+                    && error.is_validation_error() =>
+            {
+                tracing::warn!(
+                    session_id = %session_id,
+                    error = %error,
+                    "failed to list permissions during respond_permission continuation; falling back to polling"
+                );
+                warnings.push(format!(
+                    "Permission refresh failed after reply ({error}); continuing with polling fallback."
+                ));
+                Ok(None)
+            }
+            Err(error) => Err(ToolError::Internal(format!(
+                "Failed to list permissions: {error}"
+            ))),
+        }
+    }
+
     async fn run_impl_outcome(
         &self,
         input: OrchestratorRunInput,
         ctx: &ToolContext,
+        permission_preflight_mode: PermissionPreflightMode,
     ) -> Result<RunOutcome, ToolError> {
         // Input validation
         if input.session_id.is_none() && input.message.is_none() && input.command.is_none() {
@@ -421,6 +458,8 @@ impl OrchestratorRunTool {
 
         tracing::info!(session_id = %session_id, "run: session resolved");
 
+        let mut warnings = Vec::new();
+
         // 2. Check if session is already idle (for resume-only case)
         let status = client
             .sessions()
@@ -431,17 +470,14 @@ impl OrchestratorRunTool {
         let is_idle = matches!(status, SessionStatusInfo::Idle);
 
         // 3. Check for pending permissions before doing anything else
-        let pending_permissions = client
-            .permissions()
-            .list()
-            .await
-            .map_err(|e| ToolError::Internal(format!("Failed to list permissions: {e}")))?;
-
-        let my_permission = pending_permissions
-            .into_iter()
-            .find(|p| p.session_id == session_id);
-
-        if let Some(perm) = my_permission {
+        if let Some(perm) = Self::preflight_pending_permission(
+            client,
+            &session_id,
+            permission_preflight_mode,
+            &mut warnings,
+        )
+        .await?
+        {
             tracing::info!(
                 session_id = %session_id,
                 permission_type = %perm.permission,
@@ -457,7 +493,7 @@ impl OrchestratorRunTool {
                 permission_patterns: perm.patterns,
                 question_request_id: None,
                 questions: vec![],
-                warnings: vec![],
+                warnings,
             }));
         }
 
@@ -473,10 +509,7 @@ impl OrchestratorRunTool {
         {
             tracing::info!(session_id = %session_id, question_id = %question.id, "run: pending question found");
             return Ok(RunOutcome::without_tokens(Self::question_required_output(
-                session_id,
-                None,
-                &question,
-                vec![],
+                session_id, None, &question, warnings,
             )));
         }
 
@@ -566,7 +599,6 @@ impl OrchestratorRunTool {
         tracing::debug!(session_id = %session_id, "run: entering event loop");
         let mut token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
         let mut partial_response = String::new();
-        let warnings = Vec::new();
 
         let mut poll_interval = tokio::time::interval(Duration::from_secs(1));
         poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -973,7 +1005,10 @@ Examples:
         let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
-            match this.run_impl_outcome(input.clone(), &ctx).await {
+            match this
+                .run_impl_outcome(input.clone(), &ctx, PermissionPreflightMode::Strict)
+                .await
+            {
                 Ok(outcome) => {
                     log_tool_success(
                         &timer,
@@ -1423,72 +1458,87 @@ Parameters:
                     .map_err(|e| ToolError::Internal(e.to_string()))?;
 
                 let client = server.client();
+                let mut pre_warnings: Vec<String> = Vec::new();
 
-                // Find the pending permission for this session
-                let mut pending =
-                    client.permissions().list().await.map_err(|e| {
-                        ToolError::Internal(format!("Failed to list permissions: {e}"))
-                    })?;
+                let (permission_request_id, permission_type, permission_patterns) =
+                    if let Some(req_id) = input.permission_request_id.as_deref() {
+                        match client.permissions().list().await {
+                            Ok(mut pending) => {
+                                let idx = pending.iter().position(|p| p.id == req_id).ok_or_else(|| {
+                                    ToolError::InvalidInput(format!(
+                                        "No pending permission found with id '{req_id}'. \
+                                     (session_id='{}')",
+                                        input.session_id
+                                    ))
+                                })?;
 
-                let perm = if let Some(req_id) = input.permission_request_id.as_deref() {
-                    let idx = pending.iter().position(|p| p.id == req_id).ok_or_else(|| {
-                        ToolError::InvalidInput(format!(
-                            "No pending permission found with id '{req_id}'. \
-                         (session_id='{}')",
-                            input.session_id
-                        ))
-                    })?;
+                                let perm = pending.remove(idx);
 
-                    let perm = pending.remove(idx);
+                                if perm.session_id != input.session_id {
+                                    return Err(ToolError::InvalidInput(format!(
+                                        "Permission request '{req_id}' belongs to session '{}', not '{}'.",
+                                        perm.session_id, input.session_id
+                                    )));
+                                }
 
-                    if perm.session_id != input.session_id {
-                        return Err(ToolError::InvalidInput(format!(
-                            "Permission request '{req_id}' belongs to session '{}', not '{}'.",
-                            perm.session_id, input.session_id
-                        )));
-                    }
-
-                    perm
-                } else {
-                    let mut perms: Vec<_> = pending
-                        .into_iter()
-                        .filter(|p| p.session_id == input.session_id)
-                        .collect();
-
-                    match perms.as_slice() {
-                        [] => {
-                            return Err(ToolError::InvalidInput(format!(
-                                "No pending permission found for session '{}'. \
-                             The permission may have already been responded to.",
-                                input.session_id
-                            )));
+                                (perm.id, perm.permission, perm.patterns)
+                            }
+                            Err(error) => {
+                                tracing::warn!(
+                                    session_id = %input.session_id,
+                                    permission_request_id = %req_id,
+                                    error = %error,
+                                    "permission validation failed for known request id; proceeding with provided id"
+                                );
+                                pre_warnings.push(format!(
+                                    "Permission validation failed for request '{req_id}' ({error}); submitting reply using the provided request id."
+                                ));
+                                (req_id.to_string(), "unknown".to_string(), Vec::new())
+                            }
                         }
-                        [_single] => perms.swap_remove(0),
-                        multiple => {
-                            let ids = multiple
-                                .iter()
-                                .map(|p| p.id.as_str())
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            return Err(ToolError::InvalidInput(format!(
-                                "Multiple pending permissions found for session '{}': {ids}. \
-                             Please retry with permission_request_id (returned by run).",
-                                input.session_id
-                            )));
+                    } else {
+                        // Find the pending permission for this session when discovery is required.
+                        let pending = client.permissions().list().await.map_err(|e| {
+                            ToolError::Internal(format!("Failed to list permissions: {e}"))
+                        })?;
+
+                        let mut perms: Vec<_> = pending
+                            .into_iter()
+                            .filter(|p| p.session_id == input.session_id)
+                            .collect();
+
+                        match perms.as_slice() {
+                            [] => {
+                                return Err(ToolError::InvalidInput(format!(
+                                    "No pending permission found for session '{}'. \
+                                 The permission may have already been responded to.",
+                                    input.session_id
+                                )));
+                            }
+                            [_single] => {
+                                let perm = perms.swap_remove(0);
+                                (perm.id, perm.permission, perm.patterns)
+                            }
+                            multiple => {
+                                let ids = multiple
+                                    .iter()
+                                    .map(|p| p.id.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                return Err(ToolError::InvalidInput(format!(
+                                    "Multiple pending permissions found for session '{}': {ids}. \
+                                 Please retry with permission_request_id (returned by run).",
+                                    input.session_id
+                                )));
+                            }
                         }
-                    }
-                };
+                    };
 
                 // Track if this is a rejection for post-processing
                 let is_reject = matches!(input.reply, PermissionReply::Reject);
 
-                // Capture permission details for warning message
-                let permission_type = perm.permission.clone();
-                let permission_patterns = perm.patterns.clone();
-
                 // Capture baseline assistant text BEFORE sending reject
                 // This lets us detect stale text after rejection
-                let mut pre_warnings: Vec<String> = Vec::new();
                 let baseline = if is_reject {
                     match client.messages().list(&input.session_id).await {
                         Ok(msgs) => OrchestratorServer::extract_assistant_text(&msgs),
@@ -1512,7 +1562,7 @@ Parameters:
                 client
                     .permissions()
                     .reply(
-                        &perm.id,
+                        &permission_request_id,
                         &PermissionReplyRequest {
                             reply: api_reply,
                             message: input.message,
@@ -1535,6 +1585,7 @@ Parameters:
                             wait_for_activity,
                         },
                         &ctx,
+                        PermissionPreflightMode::RespondPermissionContinuation,
                     )
                     .await?;
                 let mut out = outcome.output;
@@ -1710,7 +1761,7 @@ Parameters:
                             command: None,
                             message: None,
                             wait_for_activity: Some(true),
-                        }, &ctx)
+                        }, &ctx, PermissionPreflightMode::Strict)
                         .await?;
                     Ok((outcome.output, outcome.log_meta))
                 }
@@ -1725,7 +1776,7 @@ Parameters:
                             command: None,
                             message: None,
                             wait_for_activity: None,
-                        }, &ctx)
+                        }, &ctx, PermissionPreflightMode::Strict)
                         .await?;
                     Ok((outcome.output, outcome.log_meta))
                 }
