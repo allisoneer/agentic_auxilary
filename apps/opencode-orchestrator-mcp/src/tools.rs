@@ -1483,7 +1483,7 @@ Parameters:
 
                                 (perm.id, perm.permission, perm.patterns)
                             }
-                            Err(error) => {
+                            Err(error) if error.is_validation_error() => {
                                 tracing::warn!(
                                     session_id = %input.session_id,
                                     permission_request_id = %req_id,
@@ -1494,6 +1494,11 @@ Parameters:
                                     "Permission validation failed for request '{req_id}' ({error}); submitting reply using the provided request id."
                                 ));
                                 (req_id.to_string(), "unknown".to_string(), Vec::new())
+                            }
+                            Err(error) => {
+                                return Err(ToolError::Internal(format!(
+                                    "Failed to list permissions: {error}"
+                                )));
                             }
                         }
                     } else {

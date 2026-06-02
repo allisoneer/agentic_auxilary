@@ -225,6 +225,11 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
 
 #[tokio::test]
 async fn respond_permission_known_id_replies_even_when_permission_list_bad_requests() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
+
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -332,6 +337,11 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
 
 #[tokio::test]
 async fn respond_permission_continues_after_reply_when_follow_up_permission_list_bad_requests() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
+
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = RespondPermissionTool::new(Arc::clone(&server));
@@ -448,6 +458,11 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
 
 #[tokio::test]
 async fn run_still_errors_on_initial_permission_list_bad_request() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
+
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
