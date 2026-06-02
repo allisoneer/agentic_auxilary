@@ -491,6 +491,107 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     assert_eq!(result.response.as_deref(), Some("POST_PERMISSION_TEXT"));
 }
 
+/// IT-BUG6: `respond_permission` should work even if GET /permission is broken.
+///
+/// Pre-fix behavior: Fails before replying because both `respond_permission` and the
+/// follow-up `run(wait_for_activity=true)` hard-error on GET /permission.
+/// Post-fix behavior: If `permission_request_id` is provided, reply directly and treat
+/// permission-list failures as non-fatal while monitoring completion.
+#[tokio::test]
+async fn it_bug6_respond_permission_with_request_id_bypasses_broken_permission_listing() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
+    let sid = "s6";
+    let perm_id = "perm-badrequest";
+
+    Mock::given(method("GET"))
+        .and(path("/session/s6"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    let status_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "name": "BadRequest",
+            "data": {
+                "message": "Expected JSON value, got [{\"filePath\":\"/tmp/test.txt\",\"relativePath\":\"test.txt\",\"type\":\"update\",\"patch\":\"Index: /tmp/test.txt\"}]",
+                "kind": "Payload"
+            }
+        })))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path_regex(r"/permission/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/s6/message"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(messages_fixture(sid, Some("AFTER_PERMISSION_RESPONSE"))),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(10),
+        respond_tool.call(
+            RespondPermissionInput {
+                session_id: sid.into(),
+                permission_request_id: Some(perm_id.into()),
+                reply: PermissionReply::Once,
+                message: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("timed out")
+    .expect("tool error");
+
+    assert!(
+        matches!(result.status, RunStatus::Completed),
+        "expected Completed status, got {:?}",
+        result.status
+    );
+    assert_eq!(
+        result.response.as_deref(),
+        Some("AFTER_PERMISSION_RESPONSE")
+    );
+}
+
 /// IT-BUG4: Command dispatch should retry on transport-level timeout.
 ///
 /// Pre-fix behavior: First timeout error propagates immediately.

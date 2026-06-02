@@ -21,9 +21,7 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::matchers::path_regex;
 
-use support::SequenceResponder;
 use support::commands_list_fixture;
-use support::permission_fixture;
 use support::session_fixture;
 use support::status_v2_busy;
 use support::test_orchestrator_server;
@@ -117,18 +115,9 @@ async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
     let session_id = "cancel-perm";
     let permission_id = "perm-1";
 
-    let permission_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-            permission_id,
-            session_id,
-            "write",
-            &["src/**"]
-        ),])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-    ]);
     Mock::given(method("GET"))
         .and(path("/permission"))
-        .respond_with(permission_seq)
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
     Mock::given(method("POST"))
