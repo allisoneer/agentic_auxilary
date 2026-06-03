@@ -43,12 +43,15 @@ fn is_disconnected_mount_raw_error(error: &std::io::Error) -> bool {
 }
 
 #[cfg(target_os = "linux")]
+// Linux errno values: ENOTCONN = 107, ESTALE = 116.
 const DISCONNECTED_MOUNT_RAW_ERRORS: &[i32] = &[107, 116];
 
 #[cfg(target_os = "macos")]
+// Darwin errno values: ENOTCONN = 57, ESTALE = 70.
 const DISCONNECTED_MOUNT_RAW_ERRORS: &[i32] = &[57, 70];
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+// No disconnected-mount raw errno mappings are defined on unsupported targets.
 const DISCONNECTED_MOUNT_RAW_ERRORS: &[i32] = &[];
 
 #[cfg(test)]
@@ -66,6 +69,20 @@ mod tests {
         assert!(error.contains("thoughts mount update"));
         assert!(error.contains("thoughts sync"));
         assert!(error.contains("do not need to run `thoughts init` again"));
+    }
+
+    #[test]
+    fn test_add_mount_repair_context_is_actionable_for_disconnected_mount_raw_error() {
+        let Some(raw) = DISCONNECTED_MOUNT_RAW_ERRORS.first() else {
+            return;
+        };
+        let path = Path::new(".thoughts-data/thoughts");
+        let error = anyhow::anyhow!(std::io::Error::from_raw_os_error(*raw));
+        let error = add_mount_repair_context(path, error).to_string();
+
+        assert!(error.contains(".thoughts-data/thoughts"));
+        assert!(error.contains("stale/disconnected FUSE mount"));
+        assert!(error.contains("thoughts mount update"));
     }
 
     #[test]
