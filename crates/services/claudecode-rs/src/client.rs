@@ -13,9 +13,28 @@ use tempfile::NamedTempFile;
 use tokio::fs;
 use tracing::debug;
 
+const ALWAYS_DISALLOWED_TOOLS: &[&str] = &["LSP"];
+
 #[derive(Debug, Clone)]
 pub struct Client {
     claude_path: PathBuf,
+}
+
+fn merged_disallowed_tools(config: &SessionConfig) -> Vec<String> {
+    let mut tools: Vec<String> = ALWAYS_DISALLOWED_TOOLS
+        .iter()
+        .map(|tool| (*tool).to_string())
+        .collect();
+
+    if let Some(extra_tools) = &config.disallowed_tools {
+        for tool in extra_tools {
+            if !tools.contains(tool) {
+                tools.push(tool.clone());
+            }
+        }
+    }
+
+    tools
 }
 
 impl Client {
@@ -161,10 +180,9 @@ impl Client {
             args.push("--allowedTools".to_string());
             args.push(tools.join(","));
         }
-        if let Some(ref tools) = config.disallowed_tools {
-            args.push("--disallowedTools".to_string());
-            args.push(tools.join(","));
-        }
+        let disallowed_tools = merged_disallowed_tools(config);
+        args.push("--disallowedTools".to_string());
+        args.push(disallowed_tools.join(","));
 
         // Output shaping
         if let Some(ref schema) = config.json_schema {
@@ -297,6 +315,8 @@ mod tests {
         assert!(args.contains(&"--print".to_string()));
         assert!(args.contains(&"--output-format".to_string()));
         assert!(args.contains(&"text".to_string()));
+        let disallowed_pos = args.iter().position(|a| a == "--disallowedTools").unwrap();
+        assert_eq!(args[disallowed_pos + 1], "LSP");
         assert!(args.contains(&"--".to_string()));
         assert!(args.contains(&"test query".to_string()));
     }
@@ -358,7 +378,22 @@ mod tests {
         assert_eq!(args[allowed_pos + 1], "Bash");
 
         let disallowed_pos = args.iter().position(|a| a == "--disallowedTools").unwrap();
-        assert_eq!(args[disallowed_pos + 1], "WebSearch");
+        assert_eq!(args[disallowed_pos + 1], "LSP,WebSearch");
+    }
+
+    #[tokio::test]
+    async fn test_build_args_deduplicates_default_disallowed_tools() {
+        let client = create_test_client();
+        let config = SessionConfig::builder("test")
+            .disallowed_tools(vec!["LSP".to_string(), "WebSearch".to_string()])
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let (args, _) = client.build_args(&config).await.unwrap();
+
+        let disallowed_pos = args.iter().position(|a| a == "--disallowedTools").unwrap();
+        assert_eq!(args[disallowed_pos + 1], "LSP,WebSearch");
     }
 
     #[tokio::test]
