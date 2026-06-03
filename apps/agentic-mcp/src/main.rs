@@ -149,7 +149,9 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     // Install the rustls CryptoProvider before any HTTP clients are created.
     // Required because Cargo's additive features cause both ring and aws-lc-rs
