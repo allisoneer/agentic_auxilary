@@ -3,8 +3,8 @@ use crate::git::utils::get_control_repo_root;
 use crate::git::utils::get_current_repo;
 use crate::git::utils::get_main_repo_for_worktree;
 use crate::git::utils::is_worktree;
+use crate::mount::ensure_mount_dir;
 use crate::utils::git::ensure_gitignore_entry;
-use crate::utils::paths::ensure_dir;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
@@ -263,15 +263,15 @@ pub async fn execute(force: bool) -> Result<()> {
 
     // Create the actual thoughts directory structure
     let thoughts_dir = repo_root.join(".thoughts-data");
-    ensure_dir(&thoughts_dir)?;
+    ensure_mount_dir(&thoughts_dir)?;
 
     let thoughts_target_dir = thoughts_dir.join(&mount_dirs.thoughts);
     let context_target_dir = thoughts_dir.join(&mount_dirs.context);
     let references_target_dir = thoughts_dir.join(&mount_dirs.references);
 
-    ensure_dir(&thoughts_target_dir)?;
-    ensure_dir(&context_target_dir)?;
-    ensure_dir(&references_target_dir)?;
+    ensure_mount_dir(&thoughts_target_dir)?;
+    ensure_mount_dir(&context_target_dir)?;
+    ensure_mount_dir(&references_target_dir)?;
 
     // Resolve symlink targets and ensure idempotently
     let thoughts_link = repo_root.join(&mount_dirs.thoughts);
