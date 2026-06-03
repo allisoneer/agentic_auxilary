@@ -1,5 +1,7 @@
 use anyhow::Result;
+use anyhow::anyhow;
 use dirs;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -20,10 +22,35 @@ pub fn expand_path(path: &Path) -> Result<PathBuf> {
 
 /// Ensure a directory exists, creating it if necessary
 pub fn ensure_dir(path: &Path) -> Result<()> {
-    if !path.exists() {
-        std::fs::create_dir_all(path)?;
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        Ok(_) => Err(anyhow!(
+            "Path exists but is not a directory: {}",
+            path.display()
+        )),
+        Err(error) if error.kind() == ErrorKind::NotFound => match std::fs::create_dir_all(path) {
+            Ok(()) => Ok(()),
+            Err(create_error) if create_error.kind() == ErrorKind::AlreadyExists => {
+                match std::fs::metadata(path) {
+                    Ok(metadata) if metadata.is_dir() => Ok(()),
+                    Ok(_) => Err(anyhow!(
+                        "Path exists but is not a directory: {}",
+                        path.display()
+                    )),
+                    Err(_) => Err(anyhow!(create_error).context(format!(
+                        "Path already exists but could not be accessed as a directory: {}",
+                        path.display()
+                    ))),
+                }
+            }
+            Err(create_error) => Err(anyhow!(create_error)
+                .context(format!("Failed to create directory: {}", path.display()))),
+        },
+        Err(error) => Err(anyhow!(error).context(format!(
+            "Failed to access directory path: {}",
+            path.display()
+        ))),
     }
-    Ok(())
 }
 
 /// Sanitize a directory name for use in filesystem
@@ -131,5 +158,27 @@ mod tests {
             sanitize_dir_name("bad/name:with*chars?"),
             "bad_name_with_chars_"
         );
+    }
+
+    #[test]
+    fn test_ensure_dir_creates_missing_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("new-dir");
+
+        ensure_dir(&path).unwrap();
+
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn test_ensure_dir_rejects_existing_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("file");
+        std::fs::write(&path, "not a directory").unwrap();
+
+        let error = ensure_dir(&path).unwrap_err().to_string();
+
+        assert!(error.contains("Path exists but is not a directory"));
+        assert!(error.contains(&path.display().to_string()));
     }
 }

@@ -1,4 +1,5 @@
 pub mod auto_mount;
+mod diagnostics;
 mod manager;
 pub mod resolver;
 mod types;
@@ -13,6 +14,7 @@ mod fuse_t;
 #[cfg(test)]
 mod mock;
 
+pub use diagnostics::ensure_mount_dir;
 pub use manager::get_mount_manager;
 pub use resolver::MountResolver;
 pub use types::*;

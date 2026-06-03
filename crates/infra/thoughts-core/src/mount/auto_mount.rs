@@ -10,9 +10,9 @@ use crate::git::utils::get_control_repo_root;
 use crate::mount::MountOptions;
 use crate::mount::MountResolver;
 use crate::mount::MountSpace;
+use crate::mount::ensure_mount_dir;
 use crate::mount::get_mount_manager;
 use crate::platform::detect_platform;
-use crate::utils::paths::ensure_dir;
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ pub async fn update_active_mounts() -> Result<()> {
         );
     }
 
-    ensure_dir(&base)?;
+    ensure_mount_dir(&base)?;
 
     // Canonicalize base for mount comparison
     let base_canon = std::fs::canonicalize(&base).unwrap_or_else(|_| base.clone());
@@ -46,9 +46,9 @@ pub async fn update_active_mounts() -> Result<()> {
     let thoughts_dir = base.join(&desired.mount_dirs.thoughts);
     let context_dir = base.join(&desired.mount_dirs.context);
     let references_dir = base.join(&desired.mount_dirs.references);
-    ensure_dir(&thoughts_dir)?;
-    ensure_dir(&context_dir)?;
-    ensure_dir(&references_dir)?;
+    ensure_mount_dir(&thoughts_dir)?;
+    ensure_mount_dir(&context_dir)?;
+    ensure_mount_dir(&references_dir)?;
 
     println!("{} filesystem mounts...", "Synchronizing".cyan());
 
@@ -136,7 +136,7 @@ pub async fn update_active_mounts() -> Result<()> {
             let parent = target.parent().ok_or_else(|| {
                 anyhow::anyhow!("mount target has no parent directory: {}", target.display())
             })?;
-            ensure_dir(parent)?;
+            ensure_mount_dir(parent)?;
 
             // Resolve mount source
             let src = match (space, m) {
