@@ -1,0 +1,53 @@
+crates/infra/agentic-config/src/validation.rs
+  s_160cd1a92257d9::t_d938b00a28e6b9 297-307,499-590,809-867
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_160cd1a92257d9::t_2cc413307b1978 10,15-16,99-103,105-110,409-414,425-433,450-456,616,1029,1034,1373-1453,1710,1889,1905,1942
+apps/opencode-orchestrator-mcp/tests/question_flow_wiremock.rs
+  s_160cd1a92257d9::t_b844667cfbe4df 86,163,382
+agentic.toml.example
+  s_160cd1a92257d9::t_711631c56ea8f9 59-70
+apps/opencode-orchestrator-mcp/src/main.rs
+  s_160cd1a92257d9::t_a4ad06cc8e8306 3,7
+apps/opencode-orchestrator-mcp/tests/permission_flow_wiremock.rs
+  s_160cd1a92257d9::t_b844667cfbe4df 129,612
+apps/opencode-orchestrator-mcp/src/server.rs
+  s_160cd1a92257d9::t_7b588a03a0f521 104-117,572-606,1054,1220-1284
+crates/infra/agentic-config/src/types.rs
+  s_160cd1a92257d9::t_88aa32ebd778bb 173-174,187-196,204,491,531-532,549-550,552,554-575,624-625
+  s_160cd1a92257d9::t_de6bae84f0ab08 551,553,576-580
+apps/opencode-orchestrator-mcp/tests/cancellation_wiremock.rs
+  s_160cd1a92257d9::t_b844667cfbe4df 85
+crates/infra/agentic-config/src/schema.rs
+  s_160cd1a92257d9::t_ea5f684580f9be 42,48-50
+apps/opencode-orchestrator-mcp/src/types.rs
+  s_160cd1a92257d9::t_dc249a486ed474 27-31,459-506,730-746
+apps/opencode-orchestrator-mcp/tests/activity_timeout_wiremock.rs
+  s_160cd1a92257d9::t_b844667cfbe4df 124,204
+apps/opencode-orchestrator-mcp/tests/fast_idle_race_wiremock.rs
+  s_160cd1a92257d9::t_b844667cfbe4df 122,500
+apps/opencode-orchestrator-mcp/tests/list_tools_wiremock.rs
+  s_160cd1a92257d9::t_baa3172c72d0da 777-780
+  s_160cd1a92257d9::t_e5bcaefaf57e4e 11,15,746-776,781-814
+apps/opencode-orchestrator-mcp/tests/integration.rs
+  s_160cd1a92257d9::t_b844667cfbe4df 139,183,243,261,318,400,529,643
+apps/opencode-orchestrator-mcp/tests/command_filtering_wiremock.rs
+  s_160cd1a92257d9::t_57ec08c7e67e79 5,11,14,19,26-28,31-36,39-56,71-79,93-105,117-118,134-135,151-155,171-172,186-187,195-199,207,240-246,248-262,264-278,280-301,304-325,327-361,367-372,374-433,438-445,449-457,460-476,481-486
+  s_160cd1a92257d9::t_baa3172c72d0da 434-437,446-448,477-480
+  s_160cd1a92257d9::t_206e8f2bd36ae2 302-303,362-364,458-459
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "3537131872c5d23e3c87a581ec25d3323863f6b9",
+  "prompts": {},
+  "sessions": {
+    "s_160cd1a92257d9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_166582b69ffeXG0tJj3pG4LAMD",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
