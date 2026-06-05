@@ -121,6 +121,7 @@ async fn it_times_out_after_5_min_inactivity() {
                 OrchestratorRunInput {
                     session_id: Some("s1".into()),
                     command: None,
+                    agent: None,
                     message: Some("test prompt".into()),
                     wait_for_activity: None,
                 },
@@ -200,6 +201,7 @@ async fn it_does_not_timeout_while_busy() {
                 OrchestratorRunInput {
                     session_id: Some("s1".into()),
                     command: None,
+                    agent: None,
                     message: Some("test prompt".into()),
                     wait_for_activity: None,
                 },

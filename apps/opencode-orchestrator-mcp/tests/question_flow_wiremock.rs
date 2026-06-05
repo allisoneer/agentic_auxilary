@@ -83,6 +83,7 @@ async fn pending_question_preflight_returns_question_required() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: None,
+                agent: None,
                 message: None,
                 wait_for_activity: None,
             },
@@ -159,6 +160,7 @@ async fn poll_detected_question_returns_question_required() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: None,
+                agent: None,
                 message: Some("Do the work".into()),
                 wait_for_activity: None,
             },
@@ -377,6 +379,7 @@ async fn permission_priority_wins_over_question() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: None,
+                agent: None,
                 message: None,
                 wait_for_activity: None,
             },

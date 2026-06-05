@@ -119,6 +119,7 @@ async fn fast_idle_prompt_completes_without_hanging() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: None,
+                agent: None,
                 message: Some("say hello".into()),
                 wait_for_activity: None,
             },
@@ -496,6 +497,7 @@ async fn run_still_errors_on_initial_permission_list_bad_request() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: None,
+                agent: None,
                 message: None,
                 wait_for_activity: None,
             },

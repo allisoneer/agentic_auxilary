@@ -37,6 +37,10 @@
       "description": "Orchestrator session and timing configuration.",
       "$ref": "#/$defs/OrchestratorConfig",
       "default": {
+        "agents": {
+          "allow": [],
+          "deny": []
+        },
         "commands": {
           "allow": [],
           "deny": []
@@ -263,6 +267,28 @@
         }
       }
     },
+    "OrchestratorAgentsConfig": {
+      "description": "Agent filtering policy for explicit orchestrator agent listing/selection.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "description": "Exact case-sensitive agent names to allow. Empty means no allowlist restriction.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "description": "Exact case-sensitive agent names to deny. Deny wins over allow.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "OrchestratorCommandsConfig": {
       "description": "Command filtering policy for orchestrator-exposed `OpenCode` commands.",
       "type": "object",
@@ -289,6 +315,14 @@
       "description": "Configuration for opencode-orchestrator-mcp.",
       "type": "object",
       "properties": {
+        "agents": {
+          "description": "Agent filtering policy for explicit orchestrator agent listing/selection.",
+          "$ref": "#/$defs/OrchestratorAgentsConfig",
+          "default": {
+            "allow": [],
+            "deny": []
+          }
+        },
         "commands": {
           "description": "Command filtering policy for orchestrator-exposed `OpenCode` commands.",
           "$ref": "#/$defs/OrchestratorCommandsConfig",

@@ -1,9 +1,10 @@
 //! MCP server for orchestrator-style agents to spawn and manage `OpenCode` sessions.
 //!
-//! This binary exposes six tools for orchestrator agents:
+//! This binary exposes seven tools for orchestrator agents:
 //! - `run` - start or resume an `OpenCode` session
 //! - `list_sessions` - list existing sessions
 //! - `get_session_state` - inspect a session's status, tool calls, and pending work
+//! - `list_agents` - discover available visible `OpenCode` agents
 //! - `list_commands` - discover available `OpenCode` commands
 //! - `respond_permission` - reply to permission requests
 //! - `respond_question` - reply to question requests

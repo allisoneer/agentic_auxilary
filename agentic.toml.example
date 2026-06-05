@@ -56,6 +56,18 @@ deny = []
 # allow = ["research", "implement_plan"]
 # deny = ["commit"]
 
+[orchestrator.agents]
+# Exact, case-sensitive agent names that remain visible/selectable via orchestrator_list_agents
+# and orchestrator_run(message=..., agent=...).
+# Empty allowlist means "do not restrict by allowlist".
+allow = []
+# Exact, case-sensitive agent names that are always blocked.
+# Entries are trimmed before comparison, and deny wins over allow.
+deny = []
+# Example:
+# allow = ["Plan", "Research"]
+# deny = ["Bash"]
+
 # =============================================================================
 # Web Retrieval - Configuration for web_fetch and web_search tools
 # =============================================================================

@@ -136,6 +136,7 @@ async fn unknown_command_errors_fast() {
     let input = OrchestratorRunInput {
         session_id: Some(session_id.clone()),
         command: Some("___definitely_not_a_real_command___".into()),
+        agent: None,
         message: Some("test argument".into()),
         wait_for_activity: None,
     };
@@ -179,6 +180,7 @@ async fn prompt_completes_and_extracts_response() {
     let input = OrchestratorRunInput {
         session_id: Some(session_id.clone()),
         command: None,
+        agent: None,
         message: Some("Say exactly 'hello' and nothing else.".into()),
         wait_for_activity: None,
     };
@@ -238,6 +240,7 @@ async fn session_resumption_works() {
     let input1 = OrchestratorRunInput {
         session_id: Some(session_id.clone()),
         command: None,
+        agent: None,
         message: Some("Say 'first' and nothing else.".into()),
         wait_for_activity: None,
     };
@@ -255,6 +258,7 @@ async fn session_resumption_works() {
     let input2 = OrchestratorRunInput {
         session_id: Some(session_id.clone()),
         command: None,
+        agent: None,
         message: Some("Say 'second' and nothing else.".into()),
         wait_for_activity: None,
     };
@@ -311,6 +315,7 @@ async fn permission_request_returns_status() {
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
                 command: None,
+                agent: None,
                 message: Some(prompt),
                 wait_for_activity: None,
             },
@@ -392,6 +397,7 @@ async fn permission_response_resumes_and_completes() {
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
                 command: None,
+                agent: None,
                 message: Some(prompt),
                 wait_for_activity: None,
             },
@@ -520,6 +526,7 @@ async fn permission_reject_returns_none_with_warning() {
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
                 command: None,
+                agent: None,
                 message: Some(prompt),
                 wait_for_activity: None,
             },
@@ -633,6 +640,7 @@ async fn live_question_tool_infrastructure() {
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
                 command: None,
+                agent: None,
                 message: Some("Say 'config test passed' and nothing else.".into()),
                 wait_for_activity: None,
             },
