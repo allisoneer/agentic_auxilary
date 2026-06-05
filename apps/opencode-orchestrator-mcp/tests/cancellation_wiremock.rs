@@ -82,6 +82,7 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
             OrchestratorRunInput {
                 session_id: Some(session_id.into()),
                 command: Some("research".into()),
+                agent: None,
                 message: Some("test".into()),
                 wait_for_activity: None,
             },

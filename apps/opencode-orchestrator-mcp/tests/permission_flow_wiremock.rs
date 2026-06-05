@@ -126,6 +126,7 @@ async fn it_bug1_completion_retries_messages_until_visible() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: None,
+                agent: None,
                 message: Some("test prompt".into()),
                 wait_for_activity: None,
             },
@@ -608,6 +609,7 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
                 command: Some("test_cmd".into()),
+                agent: None,
                 message: Some("test args".into()),
                 wait_for_activity: None,
             },

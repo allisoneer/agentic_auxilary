@@ -39,10 +39,15 @@ mod tests {
 
         let orchestrator_properties = &json["$defs"]["OrchestratorConfig"]["properties"];
         assert!(orchestrator_properties.get("commands").is_some());
+        assert!(orchestrator_properties.get("agents").is_some());
 
         let command_properties = &json["$defs"]["OrchestratorCommandsConfig"]["properties"];
         assert!(command_properties.get("allow").is_some());
         assert!(command_properties.get("deny").is_some());
+
+        let agent_properties = &json["$defs"]["OrchestratorAgentsConfig"]["properties"];
+        assert!(agent_properties.get("allow").is_some());
+        assert!(agent_properties.get("deny").is_some());
 
         let subagents_properties = &json["$defs"]["SubagentsConfig"]["properties"];
         assert!(subagents_properties.get("runtime_timeout_secs").is_some());

@@ -8,9 +8,11 @@ use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use opencode_orchestrator_mcp::tools::GetSessionStateTool;
+use opencode_orchestrator_mcp::tools::ListAgentsTool;
 use opencode_orchestrator_mcp::tools::ListCommandsTool;
 use opencode_orchestrator_mcp::tools::ListSessionsTool;
 use opencode_orchestrator_mcp::types::GetSessionStateInput;
+use opencode_orchestrator_mcp::types::ListAgentsInput;
 use opencode_orchestrator_mcp::types::ListCommandsInput;
 use opencode_orchestrator_mcp::types::ListSessionsInput;
 use opencode_orchestrator_mcp::types::SessionStatusSummary;
@@ -740,4 +742,74 @@ async fn list_commands_returns_empty_list() {
         .expect("list_commands should succeed");
 
     assert!(result.commands.is_empty());
+}
+
+#[tokio::test]
+async fn list_agents_returns_visible_agents() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+
+    Mock::given(method("GET"))
+        .and(path("/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "name": "Plan",
+                "description": "Planning agent",
+                "hidden": false
+            },
+            {
+                "name": "Research",
+                "description": "Research agent"
+            }
+        ])))
+        .mount(&mock)
+        .await;
+
+    let tool = ListAgentsTool::new(Arc::clone(&server));
+
+    let result = tool
+        .call(ListAgentsInput {}, &ToolContext::default())
+        .await
+        .expect("list_agents should succeed");
+
+    assert_eq!(result.agents.len(), 2);
+    assert_eq!(result.agents[0].name, "Plan");
+    assert_eq!(
+        result.agents[0].description.as_deref(),
+        Some("Planning agent")
+    );
+    assert_eq!(result.agents[1].name, "Research");
+}
+
+#[tokio::test]
+async fn list_agents_omits_hidden_agents() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+
+    Mock::given(method("GET"))
+        .and(path("/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "name": "Plan",
+                "description": "Planning agent",
+                "hidden": false
+            },
+            {
+                "name": "HiddenAgent",
+                "description": "Internal agent",
+                "hidden": true
+            }
+        ])))
+        .mount(&mock)
+        .await;
+
+    let tool = ListAgentsTool::new(Arc::clone(&server));
+
+    let result = tool
+        .call(ListAgentsInput {}, &ToolContext::default())
+        .await
+        .expect("list_agents should succeed");
+
+    assert_eq!(result.agents.len(), 1);
+    assert_eq!(result.agents[0].name, "Plan");
 }

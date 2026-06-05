@@ -101,6 +101,20 @@ impl CommandPolicyDecision {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentPolicyDecision {
+    Allowed,
+    DeniedByAllowlist,
+    DeniedByDenylist,
+}
+
+impl AgentPolicyDecision {
+    #[must_use]
+    pub fn is_allowed(self) -> bool {
+        matches!(self, Self::Allowed)
+    }
+}
+
 impl RecoveryMode {
     fn as_str(self) -> &'static str {
         match self {
@@ -555,6 +569,41 @@ impl OrchestratorServer {
         self.command_policy_decision(command).is_allowed()
     }
 
+    pub fn agent_policy_decision(&self, agent: &str) -> AgentPolicyDecision {
+        let deny_matches = self
+            .config
+            .agents
+            .deny
+            .iter()
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+            .any(|entry| entry == agent);
+        if deny_matches {
+            return AgentPolicyDecision::DeniedByDenylist;
+        }
+
+        let mut allow_entries = self
+            .config
+            .agents
+            .allow
+            .iter()
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+            .peekable();
+
+        if allow_entries.peek().is_some() && !allow_entries.any(|entry| entry == agent) {
+            return AgentPolicyDecision::DeniedByAllowlist;
+        }
+
+        AgentPolicyDecision::Allowed
+    }
+
+    pub fn is_agent_allowed(&self, agent: &str) -> bool {
+        self.agent_policy_decision(agent).is_allowed()
+    }
+
     /// Start a new managed `OpenCode` server and build the client.
     ///
     /// This is the eager initialization path that spawns the server immediately.
@@ -1002,6 +1051,7 @@ impl OrchestratorServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agentic_config::types::OrchestratorAgentsConfig;
     use agentic_config::types::OrchestratorCommandsConfig;
     use serial_test::serial;
     use std::sync::Arc;
@@ -1165,6 +1215,73 @@ mod tests {
         );
         assert!(server.is_command_allowed("Plan"));
         assert!(!server.is_command_allowed("plan"));
+    }
+
+    #[test]
+    fn agent_policy_allows_all_when_allowlist_is_empty() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                agents: OrchestratorAgentsConfig {
+                    allow: vec![],
+                    deny: vec!["Bash".into()],
+                },
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(
+            server.agent_policy_decision("Plan"),
+            AgentPolicyDecision::Allowed
+        );
+        assert_eq!(
+            server.agent_policy_decision("Bash"),
+            AgentPolicyDecision::DeniedByDenylist
+        );
+    }
+
+    #[test]
+    fn agent_policy_trims_entries_and_deny_wins() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                agents: OrchestratorAgentsConfig {
+                    allow: vec!["  Plan  ".into()],
+                    deny: vec!["Plan".into()],
+                },
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(
+            server.agent_policy_decision("Plan"),
+            AgentPolicyDecision::DeniedByDenylist
+        );
+    }
+
+    #[test]
+    fn agent_policy_matching_is_case_sensitive() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                agents: OrchestratorAgentsConfig {
+                    allow: vec!["Plan".into()],
+                    deny: vec!["Bash".into()],
+                },
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(
+            server.agent_policy_decision("Plan"),
+            AgentPolicyDecision::Allowed
+        );
+        assert_eq!(
+            server.agent_policy_decision("plan"),
+            AgentPolicyDecision::DeniedByAllowlist
+        );
+        assert!(server.is_agent_allowed("Plan"));
+        assert!(!server.is_agent_allowed("plan"));
     }
 
     struct BlockingHealthServer {

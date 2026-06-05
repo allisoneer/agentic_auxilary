@@ -170,6 +170,8 @@ pub struct OrchestratorConfig {
     pub compaction_threshold: f64,
     /// Command filtering policy for orchestrator-exposed `OpenCode` commands.
     pub commands: OrchestratorCommandsConfig,
+    /// Agent filtering policy for explicit orchestrator agent listing/selection.
+    pub agents: OrchestratorAgentsConfig,
 }
 
 /// Command filtering policy for orchestrator-exposed `OpenCode` commands.
@@ -182,6 +184,16 @@ pub struct OrchestratorCommandsConfig {
     pub deny: Vec<String>,
 }
 
+/// Agent filtering policy for explicit orchestrator agent listing/selection.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct OrchestratorAgentsConfig {
+    /// Exact case-sensitive agent names to allow. Empty means no allowlist restriction.
+    pub allow: Vec<String>,
+    /// Exact case-sensitive agent names to deny. Deny wins over allow.
+    pub deny: Vec<String>,
+}
+
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
@@ -189,6 +201,7 @@ impl Default for OrchestratorConfig {
             inactivity_timeout_secs: 300,
             compaction_threshold: 0.80,
             commands: OrchestratorCommandsConfig::default(),
+            agents: OrchestratorAgentsConfig::default(),
         }
     }
 }
@@ -475,6 +488,7 @@ mod tests {
         assert!(toml_str.contains("[thoughts]"));
         assert!(toml_str.contains("[orchestrator]"));
         assert!(toml_str.contains("[orchestrator.commands]"));
+        assert!(toml_str.contains("[orchestrator.agents]"));
         assert!(toml_str.contains("[web_retrieval]"));
         assert!(toml_str.contains("[cli_tools]"));
         assert!(toml_str.contains("[logging]"));
@@ -514,6 +528,8 @@ locator_model = "custom-model"
         );
         assert!(config.orchestrator.commands.allow.is_empty());
         assert!(config.orchestrator.commands.deny.is_empty());
+        assert!(config.orchestrator.agents.allow.is_empty());
+        assert!(config.orchestrator.agents.deny.is_empty());
     }
 
     #[test]
@@ -528,6 +544,40 @@ deny = ["commit"]
 
         assert_eq!(config.orchestrator.commands.allow, ["plan", "research"]);
         assert_eq!(config.orchestrator.commands.deny, ["commit"]);
+    }
+
+    #[test]
+    fn test_orchestrator_agents_partial_deserializes_to_empty_lists() {
+        let toml_str = r"
+[orchestrator.agents]
+";
+
+        let config: AgenticConfig = toml::from_str(toml_str).unwrap();
+
+        assert!(config.orchestrator.agents.allow.is_empty());
+        assert!(config.orchestrator.agents.deny.is_empty());
+    }
+
+    #[test]
+    fn test_orchestrator_agents_round_trip() {
+        let toml_str = r#"
+[orchestrator.agents]
+allow = ["Plan", "Research"]
+deny = ["Bash"]
+"#;
+
+        let config: AgenticConfig = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(config.orchestrator.agents.allow, ["Plan", "Research"]);
+        assert_eq!(config.orchestrator.agents.deny, ["Bash"]);
+
+        let serialized = toml::to_string_pretty(&config).unwrap();
+        assert!(serialized.contains("[orchestrator.agents]"));
+        assert!(serialized.contains("allow = ["));
+        assert!(serialized.contains("\"Plan\""));
+        assert!(serialized.contains("\"Research\""));
+        assert!(serialized.contains("deny = ["));
+        assert!(serialized.contains("\"Bash\""));
     }
 
     #[test]
@@ -571,6 +621,8 @@ deny = ["commit"]
         assert!((cfg.compaction_threshold - 0.80).abs() < f64::EPSILON);
         assert!(cfg.commands.allow.is_empty());
         assert!(cfg.commands.deny.is_empty());
+        assert!(cfg.agents.allow.is_empty());
+        assert!(cfg.agents.deny.is_empty());
     }
 
     #[test]

@@ -24,6 +24,11 @@ pub struct OrchestratorRunInput {
     #[serde(default)]
     pub command: Option<String>,
 
+    /// Explicit agent name for raw-prompt execution.
+    /// Unsupported when `command` is provided.
+    #[serde(default)]
+    pub agent: Option<String>,
+
     /// The message/prompt to send. Required for new sessions or when sending new work.
     /// For resume-only calls (checking status), can be omitted.
     #[serde(default)]
@@ -452,6 +457,54 @@ impl TextFormat for ListCommandsOutput {
 }
 
 // ============================================================================
+// list_agents
+// ============================================================================
+
+/// Input for the `list_agents` tool.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+pub struct ListAgentsInput {}
+
+/// Information about an available agent.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AgentInfo {
+    /// Agent name.
+    pub name: String,
+    /// Agent description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Output from the `list_agents` tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListAgentsOutput {
+    /// List of available visible agents.
+    pub agents: Vec<AgentInfo>,
+}
+
+impl TextFormat for ListAgentsOutput {
+    fn fmt_text(&self, _opts: &TextOptions) -> String {
+        let mut out = String::from("Available agents:\n");
+
+        for agent in &self.agents {
+            let _ = write!(out, "  {}", agent.name);
+            if let Some(desc) = &agent.description
+                && let Some(first_line) = desc.lines().next()
+            {
+                let _ = write!(out, " - {first_line}");
+            }
+            out.push('\n');
+        }
+
+        if self.agents.is_empty() {
+            out.push_str("  (no agents available)\n");
+        }
+
+        out.push_str("\nUse orchestrator_run(message=<prompt>, agent=<name>) for raw prompts\n");
+        out
+    }
+}
+
+// ============================================================================
 // respond_permission
 // ============================================================================
 
@@ -673,5 +726,23 @@ mod tests {
         assert!(text.contains("research"));
         assert!(text.contains("Run research workflow"));
         assert!(text.contains("orchestrator_run"));
+    }
+
+    #[test]
+    fn list_agents_text_format() {
+        let out = ListAgentsOutput {
+            agents: vec![AgentInfo {
+                name: "Plan".into(),
+                description: Some("Use for planning tasks\nExtra detail".into()),
+            }],
+        };
+
+        let text = out.fmt_text(&TextOptions::default());
+        assert!(text.contains("Available agents"));
+        assert!(text.contains("Plan"));
+        assert!(text.contains("Use for planning tasks"));
+        assert!(!text.contains("Extra detail"));
+        assert!(text.contains("orchestrator_run"));
+        assert!(text.contains("agent=<name>"));
     }
 }

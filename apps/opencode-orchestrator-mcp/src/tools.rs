@@ -2,14 +2,18 @@
 
 use crate::config;
 use crate::logging;
+use crate::server::AgentPolicyDecision;
 use crate::server::CommandPolicyDecision;
 use crate::server::OrchestratorServer;
 use crate::server::OrchestratorServerHandle;
 use crate::token_tracker::TokenTracker;
+use crate::types::AgentInfo;
 use crate::types::ChangeStats;
 use crate::types::CommandInfo;
 use crate::types::GetSessionStateInput;
 use crate::types::GetSessionStateOutput;
+use crate::types::ListAgentsInput;
+use crate::types::ListAgentsOutput;
 use crate::types::ListCommandsInput;
 use crate::types::ListCommandsOutput;
 use crate::types::ListSessionsInput;
@@ -90,6 +94,18 @@ fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> Tool
     ToolError::InvalidInput(format!(
         "Command '{command}' cannot be run because {reason}."
     ))
+}
+
+fn blocked_agent_error(agent: &str, decision: AgentPolicyDecision) -> ToolError {
+    let reason = match decision {
+        AgentPolicyDecision::Allowed => {
+            return ToolError::Internal("agent unexpectedly allowed".into());
+        }
+        AgentPolicyDecision::DeniedByAllowlist => "it is not present in orchestrator.agents.allow",
+        AgentPolicyDecision::DeniedByDenylist => "it is blocked by orchestrator.agents.deny",
+    };
+
+    ToolError::InvalidInput(format!("Agent '{agent}' cannot be used because {reason}."))
 }
 
 impl RunOutcome {
@@ -390,6 +406,12 @@ impl OrchestratorRunTool {
             ));
         }
 
+        if input.command.is_some() && input.agent.is_some() {
+            return Err(ToolError::InvalidInput(
+                "agent cannot be provided when command is specified".into(),
+            ));
+        }
+
         // Trim and validate message content
         let message = input.message.map(|m| m.trim().to_string());
         if let Some(ref m) = message
@@ -397,6 +419,15 @@ impl OrchestratorRunTool {
         {
             return Err(ToolError::InvalidInput(
                 "message cannot be empty or whitespace-only".into(),
+            ));
+        }
+
+        let agent = input.agent.map(|value| value.trim().to_string());
+        if let Some(ref agent) = agent
+            && agent.is_empty()
+        {
+            return Err(ToolError::InvalidInput(
+                "agent cannot be empty or whitespace-only".into(),
             ));
         }
 
@@ -413,6 +444,13 @@ impl OrchestratorRunTool {
             let decision = server.command_policy_decision(command);
             if !decision.is_allowed() {
                 return Err(blocked_command_error(command, decision));
+            }
+        }
+
+        if let Some(agent) = agent.as_deref() {
+            let decision = server.agent_policy_decision(agent);
+            if !decision.is_allowed() {
+                return Err(blocked_agent_error(agent, decision));
             }
         }
 
@@ -575,7 +613,7 @@ impl OrchestratorRunTool {
                 }],
                 message_id: None,
                 model: None,
-                agent: None,
+                agent: agent.clone(),
                 no_reply: None,
                 system: None,
                 variant: None,
@@ -988,10 +1026,12 @@ Returns when:
 Parameters:
 - session_id: Existing session to resume (omit to create new)
 - command: OpenCode command name (e.g., "research", "implement_plan")
+- agent: Explicit agent for raw-prompt execution only. Invalid with command.
 - message: Prompt text or $ARGUMENTS for command template
 
 Examples:
 - New session with prompt: run(message="explain this code")
+- New session with prompt and agent: run(message="explain this code", agent="Plan")
 - New session with command: run(command="research", message="caching strategies")
 - Resume session: run(session_id="...", message="continue")
 - Check status: run(session_id="...")"#;
@@ -1331,6 +1371,87 @@ impl Tool for GetSessionStateTool {
 }
 
 // ============================================================================
+// list_agents
+// ============================================================================
+
+/// Tool for listing available visible `OpenCode` agents that can be selected explicitly.
+#[derive(Clone)]
+pub struct ListAgentsTool {
+    server: Arc<OrchestratorServerHandle>,
+}
+
+impl ListAgentsTool {
+    /// Create a new `ListAgentsTool` with the shared server handle.
+    pub fn new(server: Arc<OrchestratorServerHandle>) -> Self {
+        Self { server }
+    }
+}
+
+impl Tool for ListAgentsTool {
+    type Input = ListAgentsInput;
+    type Output = ListAgentsOutput;
+    const NAME: &'static str = "list_agents";
+    const DESCRIPTION: &'static str =
+        "List available visible OpenCode agents that can be used with run(message=..., agent=...).";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let server_handle = Arc::clone(&self.server);
+        Box::pin(async move {
+            let timer = CallTimer::start();
+            let result: Result<ListAgentsOutput, ToolError> =
+                async {
+                    let server = server_handle
+                        .acquire()
+                        .await
+                        .map_err(|e| ToolError::Internal(e.to_string()))?;
+
+                    let agents =
+                        server.client().tools().agents().await.map_err(|e| {
+                            ToolError::Internal(format!("Failed to list agents: {e}"))
+                        })?;
+
+                    let agent_infos: Vec<AgentInfo> = agents
+                        .into_iter()
+                        .filter(|agent| !agent.hidden.unwrap_or(false))
+                        .filter(|agent| server.is_agent_allowed(&agent.name))
+                        .map(|agent| AgentInfo {
+                            name: agent.name,
+                            description: agent.description,
+                        })
+                        .collect();
+
+                    Ok(ListAgentsOutput {
+                        agents: agent_infos,
+                    })
+                }
+                .await;
+
+            match result {
+                Ok(output) => {
+                    log_tool_success(
+                        &timer,
+                        Self::NAME,
+                        &input,
+                        &output,
+                        ToolLogMeta::default(),
+                        false,
+                    );
+                    Ok(output)
+                }
+                Err(error) => {
+                    log_tool_error(&timer, Self::NAME, &input, &error);
+                    Err(error)
+                }
+            }
+        })
+    }
+}
+
+// ============================================================================
 // list_commands
 // ============================================================================
 
@@ -1586,6 +1707,7 @@ Parameters:
                         OrchestratorRunInput {
                             session_id: Some(input.session_id),
                             command: None,
+                            agent: None,
                             message: None,
                             wait_for_activity,
                         },
@@ -1764,6 +1886,7 @@ Parameters:
                         .run_impl_outcome(OrchestratorRunInput {
                             session_id: Some(input.session_id),
                             command: None,
+                            agent: None,
                             message: None,
                             wait_for_activity: Some(true),
                         }, &ctx, PermissionPreflightMode::Strict)
@@ -1779,6 +1902,7 @@ Parameters:
                         .run_impl_outcome(OrchestratorRunInput {
                             session_id: Some(input.session_id),
                             command: None,
+                            agent: None,
                             message: None,
                             wait_for_activity: None,
                         }, &ctx, PermissionPreflightMode::Strict)
@@ -1815,6 +1939,7 @@ pub fn build_registry(server: &Arc<OrchestratorServerHandle>) -> ToolRegistry {
         .register::<OrchestratorRunTool, ()>(OrchestratorRunTool::new(Arc::clone(server)))
         .register::<ListSessionsTool, ()>(ListSessionsTool::new(Arc::clone(server)))
         .register::<GetSessionStateTool, ()>(GetSessionStateTool::new(Arc::clone(server)))
+        .register::<ListAgentsTool, ()>(ListAgentsTool::new(Arc::clone(server)))
         .register::<ListCommandsTool, ()>(ListCommandsTool::new(Arc::clone(server)))
         .register::<RespondPermissionTool, ()>(RespondPermissionTool::new(Arc::clone(server)))
         .register::<RespondQuestionTool, ()>(RespondQuestionTool::new(Arc::clone(server)))
