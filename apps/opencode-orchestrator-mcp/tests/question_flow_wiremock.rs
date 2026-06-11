@@ -139,11 +139,8 @@ async fn poll_detected_question_returns_question_required() {
         .await;
 
     Mock::given(method("POST"))
-        .and(path(format!("/api/session/{sid}/prompt")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
-        )
+        .and(path(format!("/session/{sid}/prompt_async")))
+        .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
 

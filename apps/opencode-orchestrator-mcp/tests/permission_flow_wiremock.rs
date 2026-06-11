@@ -102,11 +102,8 @@ async fn it_bug1_completion_retries_messages_until_visible() {
 
     // POST /session/s1/prompt_async - fire and forget
     Mock::given(method("POST"))
-        .and(path("/api/session/s1/prompt"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
-        )
+        .and(path("/session/s1/prompt_async"))
+        .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
 

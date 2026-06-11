@@ -221,7 +221,7 @@ async fn live_managed_server_reports_exact_pinned_version() {
     let health = s.client().misc().health().await.expect("health ok");
 
     version::validate_exact_version(health.version.as_deref())
-        .expect("version must match pinned 1.15.7 target");
+        .expect("version must match pinned 1.17.2 target");
 }
 
 #[tokio::test]

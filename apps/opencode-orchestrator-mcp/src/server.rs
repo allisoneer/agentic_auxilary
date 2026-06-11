@@ -7,6 +7,8 @@ use anyhow::Context;
 use opencode_rs::Client;
 use opencode_rs::server::ManagedServer;
 use opencode_rs::server::ServerOptions;
+use opencode_rs::types::message::Message as LegacyMessage;
+use opencode_rs::types::message::Part as LegacyPart;
 use opencode_rs::types::v2::envelope::LocationEnvelope;
 use opencode_rs::types::v2::message::Message as MessageV2;
 use opencode_rs::types::v2::model::ModelInfo;
@@ -683,6 +685,7 @@ impl OrchestratorServer {
         let opts = ServerOptions::default()
             .binary(&launcher_config.binary)
             .launcher_args(launcher_config.launcher_args)
+            .startup_timeout_ms(30_000)
             .directory(cwd.clone());
 
         let managed = ManagedServer::start(opts)
@@ -764,6 +767,7 @@ impl OrchestratorServer {
         let mut opts = ServerOptions::default()
             .binary(&launcher_config.binary)
             .launcher_args(launcher_config.launcher_args)
+            .startup_timeout_ms(30_000)
             .directory(cwd.clone());
 
         // Inject config if provided
@@ -916,6 +920,26 @@ impl OrchestratorServer {
         }
 
         Ok(limits)
+    }
+
+    /// Extract text content from the last assistant message in legacy message lists.
+    pub fn extract_assistant_text_legacy(messages: &[LegacyMessage]) -> Option<String> {
+        let message = messages
+            .iter()
+            .rev()
+            .find(|message| message.info.role == "assistant")?;
+
+        let text = message
+            .parts
+            .iter()
+            .filter_map(|part| match part {
+                LegacyPart::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("");
+
+        (!text.is_empty()).then_some(text)
     }
 
     /// Extract text content from the last assistant message in v1.17.2 context messages.

@@ -79,11 +79,8 @@ async fn it_times_out_after_5_min_inactivity() {
 
     // Prompt dispatch succeeds immediately
     Mock::given(method("POST"))
-        .and(path("/api/session/s1/prompt"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
-        )
+        .and(path("/session/s1/prompt_async"))
+        .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
 
@@ -162,11 +159,8 @@ async fn it_does_not_timeout_while_busy() {
 
     // Prompt dispatch succeeds immediately
     Mock::given(method("POST"))
-        .and(path("/api/session/s1/prompt"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
-        )
+        .and(path("/session/s1/prompt_async"))
+        .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
 

@@ -407,11 +407,8 @@ async fn run_prompt_forwards_agent_in_prompt_request() {
         .mount(&mock)
         .await;
     Mock::given(method("POST"))
-        .and(path("/api/session/s1/prompt"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
-        )
+        .and(path("/session/s1/prompt_async"))
+        .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
@@ -450,13 +447,13 @@ async fn run_prompt_forwards_agent_in_prompt_request() {
     let prompt_request = requests
         .iter()
         .find(|request| {
-            request.method.as_str() == "POST" && request.url.path() == "/api/session/s1/prompt"
+            request.method.as_str() == "POST" && request.url.path() == "/session/s1/prompt_async"
         })
         .expect("prompt request should be sent");
     let body: serde_json::Value = serde_json::from_slice(&prompt_request.body)
         .expect("prompt request body should be valid json");
-    assert_eq!(body["prompt"]["agents"], json!(["Plan"]));
-    assert_eq!(body["prompt"]["text"], json!("say ok"));
+    assert_eq!(body["agent"], json!("Plan"));
+    assert_eq!(body["parts"][0]["text"], json!("say ok"));
 }
 
 #[tokio::test]

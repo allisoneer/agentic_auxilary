@@ -43,8 +43,13 @@ use agentic_tools_core::fmt::TextFormat;
 use agentic_tools_core::fmt::TextOptions;
 use futures::future::BoxFuture;
 use opencode_rs::types::message::CommandRequest;
+use opencode_rs::types::message::PromptPart;
+use opencode_rs::types::message::PromptRequest;
+use opencode_rs::types::permission::PermissionReply as LegacyPermissionReply;
+use opencode_rs::types::permission::PermissionReplyRequest as LegacyPermissionReplyRequest;
+use opencode_rs::types::permission::PermissionRequest as LegacyPermissionRequest;
 use opencode_rs::types::session::CreateSessionRequest;
-use opencode_rs::types::v2::DataEnvelope;
+use opencode_rs::types::session::SessionStatusInfo;
 use opencode_rs::types::v2::LocationEnvelope;
 use opencode_rs::types::v2::LocationInfo;
 use opencode_rs::types::v2::message::ContentPart as ContentPartV2;
@@ -55,8 +60,6 @@ use opencode_rs::types::v2::permission::PermissionReplyRequest as PermissionRepl
 use opencode_rs::types::v2::permission::PermissionRequest as PermissionRequestV2;
 use opencode_rs::types::v2::question::QuestionReply as QuestionReplyV2;
 use opencode_rs::types::v2::question::QuestionRequest as QuestionRequestV2;
-use opencode_rs::types::v2::session::PromptInput as PromptInputV2;
-use opencode_rs::types::v2::session::PromptRequest as PromptRequestV2;
 use opencode_rs::types::v2::session::SessionInfo as SessionInfoV2;
 use opencode_rs::types::v2::session::SessionListQuery;
 use serde::Serialize;
@@ -81,6 +84,21 @@ struct RunOutcome {
 enum PermissionPreflightMode {
     Strict,
     RespondPermissionContinuation,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PermissionApiSource {
+    V2,
+    Legacy,
+}
+
+#[derive(Debug, Clone)]
+struct PendingPermissionInfo {
+    id: String,
+    session_id: String,
+    action: String,
+    resources: Vec<String>,
+    source: PermissionApiSource,
 }
 
 fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
@@ -145,11 +163,35 @@ async fn wait_probe_idle(
 ) -> Result<bool, ToolError> {
     match tokio::time::timeout(timeout, client.api().session().wait(session_id)).await {
         Ok(Ok(())) => Ok(true),
+        // LEGACY_EXCEPTION(OpenCode v1.17.2): `/api/session/:id/wait` is implemented
+        // upstream but currently returns a fixed 503 "Session wait is not available yet".
+        Ok(Err(error)) if matches!(&error, opencode_rs::OpencodeError::Http { status: 503, message, .. } if message == "Session wait is not available yet") => {
+            match tokio::time::timeout(timeout, client.sessions().status_for(session_id)).await {
+                Ok(Ok(SessionStatusInfo::Idle)) => Ok(true),
+                Ok(Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. })) => Ok(false),
+                Ok(Err(error)) => Err(ToolError::Internal(format!(
+                    "Failed to fetch session status after wait fallback: {error}"
+                ))),
+                Err(_elapsed) => Ok(false),
+            }
+        }
         Ok(Err(error)) => Err(ToolError::Internal(format!(
             "Failed to wait for session: {error}"
         ))),
         Err(_elapsed) => Ok(false),
     }
+}
+
+fn is_premature_idle_completion(
+    output: &OrchestratorRunOutput,
+    partial_response: &str,
+    dispatched_new_work: bool,
+    observed_busy: bool,
+) -> bool {
+    dispatched_new_work
+        && !observed_busy
+        && output.response.is_none()
+        && partial_response.is_empty()
 }
 
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
@@ -246,7 +288,7 @@ impl OrchestratorRunTool {
     /// This is called when we detect the session is idle, either via SSE `SessionIdle` event
     /// or via polling `sessions().status()`.
     ///
-    /// Uses bounded retry with backoff (0/50/100/200/400ms) if assistant text is not immediately
+    /// Can optionally use bounded retry with backoff when assistant text is not immediately
     /// available, handling the race condition where the session becomes idle before messages
     /// are fully persisted.
     async fn finalize_completed(
@@ -255,31 +297,50 @@ impl OrchestratorRunTool {
         token_tracker: &mut TokenTracker,
         server: &OrchestratorServer,
         mut warnings: Vec<String>,
+        retry_for_response: bool,
     ) -> Result<OrchestratorRunOutput, ToolError> {
-        // Bounded backoff delays for message extraction retry (~750ms total budget)
-        const BACKOFFS_MS: &[u64] = &[0, 50, 100, 200, 400];
+        // Bounded backoff delays for message extraction retry (~7.85s total budget)
+        const RESPONSE_BACKOFFS_MS: &[u64] = &[0, 100, 250, 500, 1000, 2000, 4000];
+        const SINGLE_ATTEMPT_MS: &[u64] = &[0];
+        let backoffs_ms = if retry_for_response {
+            RESPONSE_BACKOFFS_MS
+        } else {
+            SINGLE_ATTEMPT_MS
+        };
 
         let mut response: Option<String> = None;
 
-        for (attempt, &delay_ms) in BACKOFFS_MS.iter().enumerate() {
+        for (attempt, &delay_ms) in backoffs_ms.iter().enumerate() {
             if delay_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
 
-            let context = client
-                .api()
-                .session()
-                .context(&session_id)
-                .await
-                .map_err(|e| {
-                    ToolError::Internal(format!("Failed to fetch session context: {e}"))
-                })?;
+            match client.messages().list(&session_id).await {
+                Ok(messages) => {
+                    token_tracker.observe_legacy_messages(&messages, |provider_id, model_id| {
+                        server.context_limit(provider_id, model_id)
+                    });
 
-            token_tracker.observe_context(&context.data, |provider_id, model_id| {
-                server.context_limit(provider_id, model_id)
-            });
-
-            response = OrchestratorServer::extract_assistant_text_v2(&context.data);
+                    response = OrchestratorServer::extract_assistant_text_legacy(&messages);
+                }
+                Err(error) if error.is_not_found() => {
+                    let context =
+                        client
+                            .api()
+                            .session()
+                            .context(&session_id)
+                            .await
+                            .map_err(|e| {
+                                ToolError::Internal(format!("Failed to fetch session context: {e}"))
+                            })?;
+                    response = OrchestratorServer::extract_assistant_text_v2(&context.data);
+                }
+                Err(error) => {
+                    return Err(ToolError::Internal(format!(
+                        "Failed to fetch session messages: {error}"
+                    )));
+                }
+            }
 
             if response.is_some() {
                 if attempt > 0 {
@@ -368,14 +429,59 @@ impl OrchestratorRunTool {
         }
     }
 
+    fn map_v2_permission(permission: PermissionRequestV2) -> PendingPermissionInfo {
+        PendingPermissionInfo {
+            id: permission.id,
+            session_id: permission.session_id,
+            action: permission.action,
+            resources: permission.resources,
+            source: PermissionApiSource::V2,
+        }
+    }
+
+    fn map_legacy_permission(permission: LegacyPermissionRequest) -> PendingPermissionInfo {
+        PendingPermissionInfo {
+            id: permission.id,
+            session_id: permission.session_id,
+            action: permission.permission,
+            resources: permission.patterns,
+            source: PermissionApiSource::Legacy,
+        }
+    }
+
+    async fn list_pending_permissions_for_session(
+        client: &opencode_rs::Client,
+        session_id: &str,
+    ) -> Result<Vec<PendingPermissionInfo>, opencode_rs::OpencodeError> {
+        let pending_v2 = client.api().permission().list_session(session_id).await?;
+        if !pending_v2.data.is_empty() {
+            return Ok(pending_v2
+                .data
+                .into_iter()
+                .map(Self::map_v2_permission)
+                .collect());
+        }
+
+        let pending_legacy = match client.permissions().list().await {
+            Ok(pending_legacy) => pending_legacy,
+            Err(error) if error.is_not_found() => return Ok(Vec::new()),
+            Err(error) => return Err(error),
+        };
+        Ok(pending_legacy
+            .into_iter()
+            .filter(|permission| permission.session_id == session_id)
+            .map(Self::map_legacy_permission)
+            .collect())
+    }
+
     async fn preflight_pending_permission(
         client: &opencode_rs::Client,
         session_id: &str,
         mode: PermissionPreflightMode,
         warnings: &mut Vec<String>,
-    ) -> Result<Option<PermissionRequestV2>, ToolError> {
-        match client.api().permission().list_session(session_id).await {
-            Ok(pending_permissions) => Ok(pending_permissions.data.into_iter().next()),
+    ) -> Result<Option<PendingPermissionInfo>, ToolError> {
+        match Self::list_pending_permissions_for_session(client, session_id).await {
+            Ok(pending_permissions) => Ok(pending_permissions.into_iter().next()),
             Err(error)
                 if matches!(mode, PermissionPreflightMode::RespondPermissionContinuation)
                     && error.is_validation_error() =>
@@ -527,6 +633,7 @@ impl OrchestratorRunTool {
             tracing::info!(
                 session_id = %session_id,
                 permission_type = %perm.action,
+                permission_source = ?perm.source,
                 "run: pending permission found"
             );
             return Ok(RunOutcome::without_tokens(OrchestratorRunOutput {
@@ -566,9 +673,15 @@ impl OrchestratorRunTool {
         if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
             let token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
             let mut token_tracker = token_tracker;
-            let output =
-                Self::finalize_completed(client, session_id, &mut token_tracker, &server, vec![])
-                    .await?;
+            let output = Self::finalize_completed(
+                client,
+                session_id,
+                &mut token_tracker,
+                &server,
+                vec![],
+                false,
+            )
+            .await?;
             return Ok(RunOutcome::with_tracker(output, &token_tracker));
         }
 
@@ -618,21 +731,26 @@ impl OrchestratorRunTool {
                     .map_err(|e| e.to_string())
             }));
         } else if let Some(msg) = &message {
-            let req = PromptRequestV2 {
-                id: None,
-                prompt: PromptInputV2 {
+            let req = PromptRequest {
+                parts: vec![PromptPart::Text {
                     text: msg.clone(),
-                    files: Vec::new(),
-                    agents: agent.clone().into_iter().collect(),
-                },
-                delivery: None,
-                resume: None,
+                    synthetic: None,
+                    ignored: None,
+                    metadata: None,
+                }],
+                message_id: None,
+                model: None,
+                agent: agent.clone(),
+                no_reply: None,
+                system: None,
+                variant: None,
             };
 
+            // LEGACY_EXCEPTION(OpenCode v1.17.2): `/api/session/:id/prompt` admits input
+            // but legacy `/session/:id/prompt_async` is the proven executable prompt path.
             client
-                .api()
-                .session()
-                .prompt(&session_id, &req)
+                .messages()
+                .prompt_async(&session_id, &req)
                 .await
                 .map_err(|e| ToolError::Internal(format!("Failed to send prompt: {e}")))?;
 
@@ -674,9 +792,15 @@ impl OrchestratorRunTool {
                 session_id = %session_id,
                 "session already idle on post-subscribe check"
             );
-            let output =
-                Self::finalize_completed(client, session_id, &mut token_tracker, &server, warnings)
-                    .await?;
+            let output = Self::finalize_completed(
+                client,
+                session_id,
+                &mut token_tracker,
+                &server,
+                warnings,
+                false,
+            )
+            .await?;
             return Ok(RunOutcome::with_tracker(output, &token_tracker));
         }
         // If check fails or session is busy, continue to event loop
@@ -737,6 +861,7 @@ impl OrchestratorRunTool {
                             &mut token_tracker,
                             &server,
                             warnings,
+                            dispatched_new_work,
                         )
                         .await?;
                         return Ok(RunOutcome::with_tracker(output, &token_tracker));
@@ -749,8 +874,8 @@ impl OrchestratorRunTool {
 
                 _ = poll_interval.tick() => {
                     // === 1. Permission fallback (check first, permissions take priority) ===
-                    let pending = match client.api().permission().list_session(&session_id).await {
-                        Ok(p) => p,
+                    let pending = match Self::list_pending_permissions_for_session(client, &session_id).await {
+                        Ok(pending) => pending,
                         Err(e) => {
                             // Log but continue - permission list failure shouldn't block completion detection
                             tracing::warn!(
@@ -758,16 +883,15 @@ impl OrchestratorRunTool {
                                 error = %e,
                                 "failed to list permissions during poll fallback"
                             );
-                            DataEnvelope {
-                                data: vec![],
-                            }
+                            vec![]
                         }
                     };
 
-                    if let Some(perm) = pending.data.into_iter().find(|p| p.session_id == session_id) {
+                    if let Some(perm) = pending.into_iter().find(|p| p.session_id == session_id) {
                         tracing::debug!(
                             session_id = %session_id,
                             permission_id = %perm.id,
+                            permission_source = ?perm.source,
                             "detected pending permission via polling fallback"
                         );
                         return Ok(RunOutcome::with_tracker(OrchestratorRunOutput {
@@ -856,6 +980,7 @@ impl OrchestratorRunTool {
                                     &mut token_tracker,
                                     &server,
                                     warnings,
+                                    dispatched_new_work,
                                 )
                                 .await?;
                                 return Ok(RunOutcome::with_tracker(output, &token_tracker));
@@ -879,12 +1004,25 @@ impl OrchestratorRunTool {
                                 );
                                 let output = Self::finalize_completed(
                                     client,
-                                    session_id,
+                                    session_id.clone(),
                                     &mut token_tracker,
                                     &server,
-                                    warnings,
+                                    warnings.clone(),
+                                    true,
                                 )
                                 .await?;
+                                if is_premature_idle_completion(
+                                    &output,
+                                    &partial_response,
+                                    dispatched_new_work,
+                                    observed_busy,
+                                ) {
+                                    tracing::debug!(
+                                        session_id = %session_id,
+                                        "idle-grace finalization produced no response yet; continuing to poll"
+                                    );
+                                    continue;
+                                }
                                 return Ok(RunOutcome::with_tracker(output, &token_tracker));
                             }
 
@@ -919,12 +1057,25 @@ impl OrchestratorRunTool {
                             tracing::debug!(session_id = %session_id, "idle-grace deadline reached; finalizing");
                             let output = Self::finalize_completed(
                                 client,
-                                session_id,
+                                session_id.clone(),
                                 &mut token_tracker,
                                 &server,
-                                warnings,
+                                warnings.clone(),
+                                true,
                             )
                             .await?;
+                            if is_premature_idle_completion(
+                                &output,
+                                &partial_response,
+                                dispatched_new_work,
+                                observed_busy,
+                            ) {
+                                tracing::debug!(
+                                    session_id = %session_id,
+                                    "idle-grace deadline finalization produced no response yet; continuing to poll"
+                                );
+                                continue;
+                            }
                             return Ok(RunOutcome::with_tracker(output, &token_tracker));
                         }
                         Ok(false) => {
@@ -1539,20 +1690,32 @@ Parameters:
                 let client = server.client();
                 let mut pre_warnings: Vec<String> = Vec::new();
 
-                let (permission_request_id, permission_type, permission_patterns) =
+                let (
+                    permission_request_id,
+                    permission_type,
+                    permission_patterns,
+                    permission_source,
+                ) =
                     if let Some(req_id) = input.permission_request_id.as_deref() {
-                        match client.api().permission().list_session(&input.session_id).await {
+                        match OrchestratorRunTool::list_pending_permissions_for_session(
+                            client,
+                            &input.session_id,
+                        )
+                        .await
+                        {
                             Ok(pending) => {
-                                let idx = pending.data.iter().position(|p| p.id == req_id).ok_or_else(|| {
-                                    ToolError::InvalidInput(format!(
-                                        "No pending permission found with id '{req_id}'. \
+                                let idx = pending
+                                    .iter()
+                                    .position(|p| p.id == req_id)
+                                    .ok_or_else(|| {
+                                        ToolError::InvalidInput(format!(
+                                            "No pending permission found with id '{req_id}'. \
                                      (session_id='{}')",
-                                        input.session_id
-                                    ))
-                                })?;
+                                            input.session_id
+                                        ))
+                                    })?;
 
                                 let perm = pending
-                                    .data
                                     .into_iter()
                                     .nth(idx)
                                     .ok_or_else(|| {
@@ -1568,7 +1731,7 @@ Parameters:
                                     )));
                                 }
 
-                                (perm.id, perm.action, perm.resources)
+                                (perm.id, perm.action, perm.resources, perm.source)
                             }
                             Err(error) if error.is_validation_error() => {
                                 tracing::warn!(
@@ -1580,7 +1743,12 @@ Parameters:
                                 pre_warnings.push(format!(
                                     "Permission validation failed for request '{req_id}' ({error}); submitting reply using the provided request id."
                                 ));
-                                (req_id.to_string(), "unknown".to_string(), Vec::new())
+                                (
+                                    req_id.to_string(),
+                                    "unknown".to_string(),
+                                    Vec::new(),
+                                    PermissionApiSource::V2,
+                                )
                             }
                             Err(error) => {
                                 return Err(ToolError::Internal(format!(
@@ -1590,11 +1758,14 @@ Parameters:
                         }
                     } else {
                         // Find the pending permission for this session when discovery is required.
-                        let pending = client.api().permission().list_session(&input.session_id).await.map_err(|e| {
-                            ToolError::Internal(format!("Failed to list permissions: {e}"))
-                        })?;
+                        let pending = OrchestratorRunTool::list_pending_permissions_for_session(
+                            client,
+                            &input.session_id,
+                        )
+                        .await
+                        .map_err(|e| ToolError::Internal(format!("Failed to list permissions: {e}")))?;
 
-                        let mut perms = pending.data;
+                        let mut perms = pending;
 
                         match perms.as_slice() {
                             [] => {
@@ -1606,7 +1777,7 @@ Parameters:
                             }
                             [_single] => {
                                 let perm = perms.swap_remove(0);
-                                (perm.id, perm.action, perm.resources)
+                                (perm.id, perm.action, perm.resources, perm.source)
                             }
                             multiple => {
                                 let ids = multiple
@@ -1629,10 +1800,19 @@ Parameters:
                 // Capture baseline assistant text BEFORE sending reject
                 // This lets us detect stale text after rejection
                 let baseline = if is_reject {
-                    match client.api().session().context(&input.session_id).await {
-                        Ok(msgs) => OrchestratorServer::extract_assistant_text_v2(&msgs.data),
+                    match client.messages().list(&input.session_id).await {
+                        Ok(messages) => OrchestratorServer::extract_assistant_text_legacy(&messages),
+                        Err(error) if error.is_not_found() => {
+                            match client.api().session().context(&input.session_id).await {
+                                Ok(context) => OrchestratorServer::extract_assistant_text_v2(&context.data),
+                                Err(e) => {
+                                    pre_warnings.push(format!("Failed to fetch baseline context: {e}"));
+                                    None
+                                }
+                            }
+                        }
                         Err(e) => {
-                            pre_warnings.push(format!("Failed to fetch baseline context: {e}"));
+                            pre_warnings.push(format!("Failed to fetch baseline messages: {e}"));
                             None
                         }
                     }
@@ -1647,22 +1827,47 @@ Parameters:
                     PermissionReply::Reject => ApiPermissionReplyV2::Reject,
                 };
 
+                let legacy_reply = match input.reply {
+                    PermissionReply::Once => LegacyPermissionReply::Once,
+                    PermissionReply::Always => LegacyPermissionReply::Always,
+                    PermissionReply::Reject => LegacyPermissionReply::Reject,
+                };
+
                 // Send the reply
-                client
-                    .api()
-                    .permission()
-                    .reply(
-                        &input.session_id,
-                        &permission_request_id,
-                        &PermissionReplyRequestV2 {
-                            reply: api_reply,
-                            message: input.message,
-                        },
-                    )
-                    .await
-                    .map_err(|e| {
-                        ToolError::Internal(format!("Failed to reply to permission: {e}"))
-                    })?;
+                match permission_source {
+                    PermissionApiSource::V2 => {
+                        client
+                            .api()
+                            .permission()
+                            .reply(
+                                &input.session_id,
+                                &permission_request_id,
+                                &PermissionReplyRequestV2 {
+                                    reply: api_reply,
+                                    message: input.message.clone(),
+                                },
+                            )
+                            .await
+                            .map_err(|e| {
+                                ToolError::Internal(format!("Failed to reply to permission: {e}"))
+                            })?;
+                    }
+                    PermissionApiSource::Legacy => {
+                        client
+                            .permissions()
+                            .reply(
+                                &permission_request_id,
+                                &LegacyPermissionReplyRequest {
+                                    reply: legacy_reply,
+                                    message: input.message.clone(),
+                                },
+                            )
+                            .await
+                            .map_err(|e| {
+                                ToolError::Internal(format!("Failed to reply to permission: {e}"))
+                            })?;
+                    }
+                }
 
                 // Now continue monitoring the session using run logic
                 let run_tool = OrchestratorRunTool::new(Arc::clone(&server_handle));
