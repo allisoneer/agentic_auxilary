@@ -22,6 +22,7 @@ use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
+use wiremock::matchers::path_regex;
 
 use support::messages_fixture;
 use support::session_fixture;
@@ -60,21 +61,23 @@ fn orchestrator_config(
 }
 
 fn command_list(names: &[&str]) -> serde_json::Value {
-    json!(
-        names
+    json!({
+        "location": { "directory": "/tmp" },
+        "data": names
             .iter()
-            .map(|name| json!({"name": name, "description": format!("{name} description")}))
+            .map(|name| json!({"name": name, "template": name, "description": format!("{name} description")}))
             .collect::<Vec<_>>()
-    )
+    })
 }
 
 fn agent_list(names: &[&str]) -> serde_json::Value {
-    json!(
-        names
+    json!({
+        "location": { "directory": "/tmp" },
+        "data": names
             .iter()
-            .map(|name| json!({"name": name, "description": format!("{name} description")}))
+            .map(|name| json!({"id": name, "description": format!("{name} description"), "hidden": false}))
             .collect::<Vec<_>>()
-    )
+    })
 }
 
 async fn list_commands_with_config(mock: &MockServer, config: OrchestratorConfig) -> Vec<String> {
@@ -107,7 +110,7 @@ async fn list_agents_with_config(mock: &MockServer, config: OrchestratorConfig) 
 async fn list_commands_filters_deny_only_policy() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(command_list(&["test", "build", "lint"])),
         )
@@ -124,7 +127,7 @@ async fn list_commands_filters_deny_only_policy() {
 async fn list_commands_filters_allow_only_policy() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(command_list(&["test", "build", "lint"])),
         )
@@ -141,7 +144,7 @@ async fn list_commands_filters_allow_only_policy() {
 async fn list_commands_applies_deny_wins_overlap_policy() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(command_list(&["test", "build", "lint"])),
         )
@@ -161,7 +164,7 @@ async fn list_commands_applies_deny_wins_overlap_policy() {
 async fn list_commands_trims_configured_entries() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(command_list(&["test", "build", "lint"])),
         )
@@ -178,7 +181,7 @@ async fn list_commands_trims_configured_entries() {
 async fn list_commands_matching_is_case_sensitive() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(ResponseTemplate::new(200).set_body_json(command_list(&["Build", "build"])))
         .mount(&mock)
         .await;
@@ -242,7 +245,7 @@ async fn blocked_run_command_fails_before_session_resolution_or_dispatch() {
 async fn list_agents_filters_deny_only_policy() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/agent"))
+        .and(path("/api/agent"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(agent_list(&["Plan", "Bash", "Research"])),
         )
@@ -258,7 +261,7 @@ async fn list_agents_filters_deny_only_policy() {
 async fn list_agents_filters_allow_only_policy() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/agent"))
+        .and(path("/api/agent"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(agent_list(&["Plan", "Bash", "Research"])),
         )
@@ -274,7 +277,7 @@ async fn list_agents_filters_allow_only_policy() {
 async fn list_agents_applies_deny_wins_overlap_policy() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/agent"))
+        .and(path("/api/agent"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(agent_list(&["Plan", "Bash", "Research"])),
         )
@@ -294,7 +297,7 @@ async fn list_agents_applies_deny_wins_overlap_policy() {
 async fn list_agents_trims_configured_entries() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/agent"))
+        .and(path("/api/agent"))
         .respond_with(ResponseTemplate::new(200).set_body_json(agent_list(&["Plan", "Bash"])))
         .mount(&mock)
         .await;
@@ -309,7 +312,7 @@ async fn list_agents_trims_configured_entries() {
 async fn list_agents_matching_is_case_sensitive() {
     let mock = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/agent"))
+        .and(path("/api/agent"))
         .respond_with(ResponseTemplate::new(200).set_body_json(agent_list(&["Bash", "bash"])))
         .mount(&mock)
         .await;
@@ -379,23 +382,23 @@ async fn run_prompt_forwards_agent_in_prompt_request() {
         .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture("s1")))
         .mount(&mock)
         .await;
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -404,12 +407,15 @@ async fn run_prompt_forwards_agent_in_prompt_request() {
         .mount(&mock)
         .await;
     Mock::given(method("POST"))
-        .and(path("/session/s1/prompt_async"))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path("/api/session/s1/prompt"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
+        )
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/session/s1/message"))
+        .and(path("/api/session/s1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(messages_fixture("s1", Some("ok"))))
         .mount(&mock)
         .await;
@@ -444,12 +450,13 @@ async fn run_prompt_forwards_agent_in_prompt_request() {
     let prompt_request = requests
         .iter()
         .find(|request| {
-            request.method.as_str() == "POST" && request.url.path() == "/session/s1/prompt_async"
+            request.method.as_str() == "POST" && request.url.path() == "/api/session/s1/prompt"
         })
         .expect("prompt request should be sent");
     let body: serde_json::Value = serde_json::from_slice(&prompt_request.body)
         .expect("prompt request body should be valid json");
-    assert_eq!(body["agent"], json!("Plan"));
+    assert_eq!(body["prompt"]["agents"], json!(["Plan"]));
+    assert_eq!(body["prompt"]["text"], json!("say ok"));
 }
 
 #[tokio::test]

@@ -69,21 +69,21 @@ async fn it_bug1_completion_retries_messages_until_visible() {
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // poll: sets observed_busy=true
         ResponseTemplate::new(200).set_body_json(status_v2_idle()), // poll: idle, triggers completion
     ]);
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
 
     // GET /permission - no pending permissions
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -95,22 +95,25 @@ async fn it_bug1_completion_retries_messages_until_visible() {
     ]);
     let messages_call_counter = messages_seq.call_counter();
     Mock::given(method("GET"))
-        .and(path("/session/s1/message"))
+        .and(path("/api/session/s1/context"))
         .respond_with(messages_seq)
         .mount(&mock)
         .await;
 
     // POST /session/s1/prompt_async - fire and forget
     Mock::given(method("POST"))
-        .and(path("/session/s1/prompt_async"))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path("/api/session/s1/prompt"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
+        )
         .mount(&mock)
         .await;
 
     // GET /event - SSE endpoint: return empty response with delay to allow polling to complete
     // The SSE subscription will fail/hang, but polling will detect idle status
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -177,8 +180,8 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
         .await;
 
     // GET /session/status - idle after rejection
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
@@ -194,27 +197,27 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(perm_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     // POST /permission/{id}/reply - accept the rejection
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
 
     // GET /session/s2/message - returns STALE pre-rejection text (baseline and final same)
     Mock::given(method("GET"))
-        .and(path("/session/s2/message"))
+        .and(path("/api/session/s2/context"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(messages_fixture(sid, Some("I_WILL_CREATE_FILE"))),
@@ -288,8 +291,8 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         ResponseTemplate::new(200).set_body_json(status_v2_idle()), // later: idle -> completion
     ]);
     let status_calls = status_seq.call_counter();
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
@@ -305,20 +308,20 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(perm_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     // POST /permission/{id}/reply
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
@@ -329,7 +332,7 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
     let msg_after = ResponseTemplate::new(200)
         .set_body_json(messages_fixture(sid, Some("PERMISSION_GRANTED_RESPONSE")));
     Mock::given(method("GET"))
-        .and(path("/session/s3/message"))
+        .and(path("/api/session/s3/context"))
         .respond_with(SwitchAfterCallsResponder::new(
             status_calls.clone(),
             2,
@@ -401,20 +404,20 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(perm_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     // POST /permission/{id}/reply
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
@@ -431,8 +434,8 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
     let status_calls = status_seq.call_counter();
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
@@ -445,7 +448,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     let msg_post = ResponseTemplate::new(200)
         .set_body_json(messages_fixture(sid, Some("POST_PERMISSION_TEXT")));
     Mock::given(method("GET"))
-        .and(path("/session/s5/message"))
+        .and(path("/api/session/s5/context"))
         .respond_with(SwitchAfterCallsResponder::new(
             status_calls.clone(),
             3,
@@ -457,7 +460,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
 
     // GET /event - delay SSE so polling drives completion
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -517,10 +520,9 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
     let sid = "s4";
 
     Mock::given(method("GET"))
-        .and(path("/global/health"))
+        .and(path("/api/health"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "healthy": true,
-            "version": "test",
         })))
         .mount(&mock)
         .await;
@@ -539,28 +541,28 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // poll: sets observed_busy=true
         ResponseTemplate::new(200).set_body_json(status_v2_idle()), // poll: idle, triggers completion
     ]);
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
 
     // GET /permission
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     // GET /session/s4/message
     Mock::given(method("GET"))
-        .and(path("/session/s4/message"))
+        .and(path("/api/session/s4/context"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("COMMAND_RESULT"))),
         )
@@ -569,7 +571,7 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
 
     // GET /event - SSE endpoint: return empty response with delay to allow polling to complete
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")

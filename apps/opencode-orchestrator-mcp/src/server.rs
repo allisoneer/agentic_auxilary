@@ -7,9 +7,9 @@ use anyhow::Context;
 use opencode_rs::Client;
 use opencode_rs::server::ManagedServer;
 use opencode_rs::server::ServerOptions;
-use opencode_rs::types::message::Message;
-use opencode_rs::types::message::Part;
-use opencode_rs::types::provider::ProviderListResponse;
+use opencode_rs::types::v2::envelope::LocationEnvelope;
+use opencode_rs::types::v2::message::Message as MessageV2;
+use opencode_rs::types::v2::model::ModelInfo;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -523,7 +523,7 @@ pub struct OrchestratorServer {
     managed_server: StdMutex<Option<ManagedServer>>,
     /// HTTP client for `OpenCode` API
     client: Client,
-    /// Cached model context limits from GET /provider
+    /// Cached model context limits from `GET /api/model`
     model_context_limits: HashMap<ModelKey, u64>,
     /// Base URL of the managed server
     base_url: String,
@@ -698,9 +698,11 @@ impl OrchestratorServer {
             .build()
             .context("Failed to build opencode-rs HTTP client")?;
 
+        // LEGACY_EXCEPTION(OpenCode v1.17.2): startup-only `/global/health` is still required
+        // for exact version validation because `/api/health` does not expose version.
         let health = client
-            .misc()
-            .health()
+            .legacy()
+            .global_health()
             .await
             .context("Failed to fetch /global/health for version validation")?;
 
@@ -782,9 +784,11 @@ impl OrchestratorServer {
             .build()
             .context("Failed to build opencode-rs HTTP client")?;
 
+        // LEGACY_EXCEPTION(OpenCode v1.17.2): startup-only `/global/health` is still required
+        // for exact version validation because `/api/health` does not expose version.
         let health = client
-            .misc()
-            .health()
+            .legacy()
+            .global_health()
             .await
             .context("Failed to fetch /global/health for version validation")?;
 
@@ -886,60 +890,41 @@ impl OrchestratorServer {
             }
         }
 
-        match tokio::time::timeout(health_probe_timeout, self.client.misc().health()).await {
+        match tokio::time::timeout(health_probe_timeout, self.client.api().health().get()).await {
             Ok(Ok(health)) if health.healthy => Ok(ServerEntryState::Healthy),
             Ok(Ok(_health)) => Ok(ServerEntryState::NeedsRecovery {
-                reason: "/global/health reported unhealthy".to_string(),
+                reason: "/api/health reported unhealthy".to_string(),
             }),
             Ok(Err(error)) => Ok(ServerEntryState::NeedsRecovery {
-                reason: format!("/global/health probe failed: {error}"),
+                reason: format!("/api/health probe failed: {error}"),
             }),
             Err(_elapsed) => Ok(ServerEntryState::NeedsRecovery {
-                reason: format!("/global/health probe timed out after {health_probe_timeout:?}"),
+                reason: format!("/api/health probe timed out after {health_probe_timeout:?}"),
             }),
         }
     }
 
-    /// Load model context limits from GET /provider.
+    /// Load model context limits from `GET /api/model`.
     async fn load_model_limits(client: &Client) -> anyhow::Result<HashMap<ModelKey, u64>> {
-        let resp: ProviderListResponse = client.providers().list().await?;
+        let resp: LocationEnvelope<Vec<ModelInfo>> = client.api().model().list().await?;
         let mut limits = HashMap::new();
 
-        for provider in resp.all {
-            for (model_id, model) in provider.models {
-                if let Some(limit) = model.limit.as_ref().and_then(|l| l.context) {
-                    limits.insert((provider.id.clone(), model_id), limit);
-                }
+        for model in resp.data {
+            if let Some(limit) = model.limit.as_ref().and_then(|l| l.context) {
+                limits.insert((model.provider_id.clone(), model.id.clone()), limit);
             }
         }
 
         Ok(limits)
     }
 
-    /// Extract text content from the last assistant message.
-    pub fn extract_assistant_text(messages: &[Message]) -> Option<String> {
-        // Find the last assistant message
-        let assistant_msg = messages.iter().rev().find(|m| m.info.role == "assistant")?;
-
-        // Join all text parts
-        let text: String = assistant_msg
-            .parts
+    /// Extract text content from the last assistant message in v1.17.2 context messages.
+    pub fn extract_assistant_text_v2(messages: &[MessageV2]) -> Option<String> {
+        messages
             .iter()
-            .filter_map(|p| {
-                if let Part::Text { text, .. } = p {
-                    Some(text.as_str())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("");
-
-        if text.trim().is_empty() {
-            None
-        } else {
-            Some(text)
-        }
+            .rev()
+            .find(|message| message.role == "assistant")
+            .and_then(opencode_rs::types::v2::message::Message::assistant_text)
     }
 }
 
@@ -1101,10 +1086,9 @@ mod tests {
     async fn health_mock_server() -> MockServer {
         let mock = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/global/health"))
+            .and(path("/api/health"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "healthy": true,
-                "version": version::PINNED_OPENCODE_VERSION,
             })))
             .mount(&mock)
             .await;
@@ -1504,8 +1488,8 @@ mod tests {
         assert!(
             requests
                 .iter()
-                .any(|request| request.url.path() == "/global/health"),
-            "expected /global/health request"
+                .any(|request| request.url.path() == "/api/health"),
+            "expected /api/health request"
         );
     }
 
@@ -1513,13 +1497,12 @@ mod tests {
     async fn validate_for_tool_entry_times_out_health_probe() {
         let mock = MockServer::start().await;
         Mock::given(method("GET"))
-            .and(path("/global/health"))
+            .and(path("/api/health"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_delay(Duration::from_secs(30))
                     .set_body_json(serde_json::json!({
                         "healthy": true,
-                        "version": version::PINNED_OPENCODE_VERSION,
                     })),
             )
             .mount(&mock)
@@ -1534,9 +1517,51 @@ mod tests {
         assert_eq!(
             state,
             ServerEntryState::NeedsRecovery {
-                reason: "/global/health probe timed out after 25ms".to_string(),
+                reason: "/api/health probe timed out after 25ms".to_string(),
             }
         );
+    }
+
+    #[tokio::test]
+    async fn load_model_limits_uses_api_model() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/model"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "location": {"directory": "/tmp/project"},
+                "data": [
+                    {
+                        "id": "claude-sonnet-4",
+                        "providerID": "anthropic",
+                        "limit": {"context": 200_000}
+                    },
+                    {
+                        "id": "gpt-4.1",
+                        "providerID": "openai",
+                        "limit": {"context": 128_000}
+                    },
+                    {
+                        "id": "no-limit",
+                        "providerID": "test"
+                    }
+                ]
+            })))
+            .mount(&mock)
+            .await;
+
+        let limits = OrchestratorServer::load_model_limits(&test_client(&mock.uri()))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            limits.get(&("anthropic".to_string(), "claude-sonnet-4".to_string())),
+            Some(&200_000)
+        );
+        assert_eq!(
+            limits.get(&("openai".to_string(), "gpt-4.1".to_string())),
+            Some(&128_000)
+        );
+        assert!(!limits.contains_key(&("test".to_string(), "no-limit".to_string())));
     }
 
     #[tokio::test]

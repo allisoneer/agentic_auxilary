@@ -4366,6 +4366,7 @@ version = "0.11.2"
 dependencies = [
  "anyhow",
  "backon",
+ "base64",
  "chrono",
  "futures",
  "http",

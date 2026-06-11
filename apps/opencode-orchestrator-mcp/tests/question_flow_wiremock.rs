@@ -58,20 +58,20 @@ async fn pending_question_preflight_returns_question_required() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
             question_fixture(question_id, sid, &[question_payload("Continue?")])
         ])))
@@ -112,14 +112,14 @@ async fn poll_detected_question_returns_question_required() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -133,19 +133,22 @@ async fn poll_detected_question_returns_question_required() {
         )])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(question_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("POST"))
-        .and(path(format!("/session/{sid}/prompt_async")))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path(format!("/api/session/{sid}/prompt")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
+        )
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -194,13 +197,13 @@ async fn respond_question_reply_resumes_to_completed() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(question_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -210,8 +213,8 @@ async fn respond_question_reply_resumes_to_completed() {
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
         ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
@@ -223,13 +226,13 @@ async fn respond_question_reply_resumes_to_completed() {
         .await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"/question/.*/reply"))
+        .and(path_regex(r"/api/session/.*/question/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(messages_fixture(sid, Some("QUESTION_REPLY_DONE"))),
@@ -238,7 +241,7 @@ async fn respond_question_reply_resumes_to_completed() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -284,13 +287,13 @@ async fn respond_question_reject_completes_cleanly() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(question_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -301,20 +304,20 @@ async fn respond_question_reject_completes_cleanly() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"/question/.*/reject"))
+        .and(path_regex(r"/api/session/.*/question/.*/reject"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(ResponseTemplate::new(200).set_body_json(messages_fixture(sid, None)))
         .mount(&mock)
         .await;
@@ -352,14 +355,14 @@ async fn permission_priority_wins_over_question() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
             permission_fixture("perm-priority", sid, "file.write", &["/tmp/out.txt"])
         ])))
@@ -367,7 +370,7 @@ async fn permission_priority_wins_over_question() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
             question_fixture("question-priority", sid, &[question_payload("Continue?")])
         ])))
@@ -417,13 +420,13 @@ async fn respond_question_by_id_lookup() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(question_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -434,8 +437,8 @@ async fn respond_question_by_id_lookup() {
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
         ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
@@ -448,13 +451,15 @@ async fn respond_question_by_id_lookup() {
 
     // Mock the reply endpoint to accept the specific question ID
     Mock::given(method("POST"))
-        .and(path(format!("/question/{question_id}/reply")))
+        .and(path(format!(
+            "/api/session/{sid}/question/{question_id}/reply"
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("Reply done"))),
         )
@@ -462,7 +467,7 @@ async fn respond_question_by_id_lookup() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -501,7 +506,7 @@ async fn multiple_pending_questions_returns_ambiguity_error() {
 
     // Mount two questions for the same session
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
             question_fixture("q1", sid, &[question_payload("First question?")]),
             question_fixture("q2", sid, &[question_payload("Second question?")])
@@ -545,7 +550,7 @@ async fn reply_with_empty_answers_returns_validation_error() {
     let sid = "question-empty-answers";
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
             question_fixture("q-empty", sid, &[question_payload("Continue?")])
         ])))

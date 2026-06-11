@@ -74,6 +74,7 @@ pub struct SseSubscriber {
     base_url: String,
     directory: Option<String>,
     workspace: Option<String>,
+    auth_header: Option<String>,
     last_event_id: Arc<RwLock<Option<String>>>,
 }
 
@@ -85,6 +86,7 @@ impl SseSubscriber {
         base_url: String,
         directory: Option<String>,
         workspace: Option<String>,
+        auth_header: Option<String>,
         last_event_id: Arc<RwLock<Option<String>>>,
     ) -> Self {
         Self {
@@ -92,6 +94,7 @@ impl SseSubscriber {
             base_url,
             directory,
             workspace,
+            auth_header,
             last_event_id,
         }
     }
@@ -112,9 +115,12 @@ impl SseSubscriber {
     ) -> Result<SseSubscription<Event>> {
         let url = format!("{}/event", self.base_url);
         let session_id = session_id.to_string();
-        self.subscribe_filtered(url, opts, move |event: &Event| {
-            event.session_id() == Some(session_id.as_str())
-        })
+        self.subscribe_filtered(
+            url,
+            opts,
+            move |event: &Event| event.session_id() == Some(session_id.as_str()),
+            false,
+        )
     }
 
     /// Subscribe to all events for the configured directory.
@@ -127,7 +133,7 @@ impl SseSubscriber {
     /// Returns an error if the subscription cannot be created.
     pub fn subscribe(&self, opts: SseOptions) -> Result<SseSubscription<Event>> {
         let url = format!("{}/event", self.base_url);
-        self.subscribe_filtered(url, opts, |_| true)
+        self.subscribe_filtered(url, opts, |_| true, false)
     }
 
     /// Subscribe to global events (all directories).
@@ -141,7 +147,15 @@ impl SseSubscriber {
     /// Returns an error if the subscription cannot be created.
     pub fn subscribe_global(&self, opts: SseOptions) -> Result<SseSubscription<GlobalEvent>> {
         let url = format!("{}/global/event", self.base_url);
-        self.subscribe_filtered(url, opts, |_| true)
+        self.subscribe_filtered(url, opts, |_| true, false)
+    }
+
+    pub fn subscribe_api<T>(&self, path: &str, opts: SseOptions) -> Result<SseSubscription<T>>
+    where
+        T: serde::de::DeserializeOwned + Send + 'static,
+    {
+        let url = format!("{}{}", self.base_url, path);
+        self.subscribe_filtered(url, opts, |_| true, true)
     }
 
     #[expect(
@@ -153,6 +167,7 @@ impl SseSubscriber {
         url: String,
         opts: SseOptions,
         should_send: F,
+        use_api_headers: bool,
     ) -> Result<SseSubscription<T>>
     where
         T: serde::de::DeserializeOwned + Send + 'static,
@@ -165,6 +180,7 @@ impl SseSubscriber {
         let http = self.http.clone();
         let dir = self.directory.clone();
         let workspace = self.workspace.clone();
+        let auth_header = self.auth_header.clone();
         let lei = Arc::clone(&self.last_event_id);
         let initial = opts.initial_interval;
         let max = opts.max_interval;
@@ -188,13 +204,23 @@ impl SseSubscriber {
                 }
 
                 let mut req = http.get(&url);
-                if !url.ends_with("/global/event") {
+                if use_api_headers {
+                    if let Some(d) = &dir {
+                        req = req.header("x-opencode-directory", d);
+                    }
+                    if let Some(ws) = &workspace {
+                        req = req.header("x-opencode-workspace", ws);
+                    }
+                } else if !url.ends_with("/global/event") {
                     if let Some(d) = &dir {
                         req = req.query(&[("directory", d)]);
                     }
                     if let Some(ws) = &workspace {
                         req = req.query(&[("workspace", ws)]);
                     }
+                }
+                if let Some(auth_header) = &auth_header {
+                    req = req.header("Authorization", auth_header);
                 }
                 let last_id = lei.read().await.clone();
                 if let Some(id) = last_id {
@@ -294,6 +320,7 @@ mod tests {
     async fn test_subscription_cancel_on_close() {
         let subscriber = SseSubscriber::new(
             "http://localhost:9999".to_string(),
+            None,
             None,
             None,
             Arc::new(RwLock::new(None)),

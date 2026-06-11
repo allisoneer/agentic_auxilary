@@ -25,7 +25,6 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::matchers::path_regex;
-use wiremock::matchers::query_param;
 
 use support::SequenceResponder;
 use support::messages_fixture;
@@ -71,32 +70,35 @@ async fn fast_idle_prompt_completes_without_hanging() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("POST"))
-        .and(path(format!("/session/{sid}/prompt_async")))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path(format!("/api/session/{sid}/prompt")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
+        )
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("FAST_IDLE_DONE"))),
         )
@@ -104,7 +106,7 @@ async fn fast_idle_prompt_completes_without_hanging() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -157,19 +159,19 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(permission_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
@@ -180,14 +182,14 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("RESUME_DONE"))),
         )
@@ -195,7 +197,7 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -238,8 +240,7 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
     let perm_id = "perm-patch-pre";
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
-        .and(query_param("directory", "/tmp"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(
             ResponseTemplate::new(400)
                 .set_body_json(permission_patch_file_array_bad_request_fixture()),
@@ -248,7 +249,7 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
         .await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
@@ -263,20 +264,20 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
         ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(status_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("PRE_REPLY_DONE"))),
         )
@@ -284,7 +285,7 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -325,9 +326,8 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
         .await
         .expect("wiremock should capture requests");
     assert!(
-        requests
-            .iter()
-            .any(|request| request.url.path() == format!("/permission/{perm_id}/reply")),
+        requests.iter().any(|request| request.url.path()
+            == format!("/api/session/{sid}/permission/{perm_id}/reply")),
         "reply POST should be observed with a known request id: {:?}",
         requests
             .iter()
@@ -362,14 +362,13 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         ResponseTemplate::new(400).set_body_json(permission_patch_file_array_bad_request_fixture()),
     ]);
     Mock::given(method("GET"))
-        .and(path("/permission"))
-        .and(query_param("directory", "/tmp"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(permission_seq)
         .mount(&mock)
         .await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
@@ -380,8 +379,8 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(SequenceResponder::new(vec![
             ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
             ResponseTemplate::new(200).set_body_json(status_v2_idle()),
@@ -390,13 +389,13 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/session/{sid}/message")))
+        .and(path(format!("/api/session/{sid}/context")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(messages_fixture(sid, Some("POST_REPLY_DONE"))),
@@ -405,7 +404,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -446,9 +445,8 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         .await
         .expect("wiremock should capture requests");
     assert!(
-        requests
-            .iter()
-            .any(|request| request.url.path() == format!("/permission/{perm_id}/reply")),
+        requests.iter().any(|request| request.url.path()
+            == format!("/api/session/{sid}/permission/{perm_id}/reply")),
         "reply POST should be observed before the follow-up failure: {:?}",
         requests
             .iter()
@@ -475,15 +473,14 @@ async fn run_still_errors_on_initial_permission_list_bad_request() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/permission"))
-        .and(query_param("directory", "/tmp"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(
             ResponseTemplate::new(400)
                 .set_body_json(permission_patch_file_array_bad_request_fixture()),

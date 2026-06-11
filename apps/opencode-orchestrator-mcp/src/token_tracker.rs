@@ -3,9 +3,14 @@
 //! Monitors token usage during session runs and detects when the 80% threshold
 //! is reached to trigger server-side summarization.
 
+#[cfg(test)]
 use opencode_rs::types::event::Event;
+#[cfg(test)]
 use opencode_rs::types::message::Part;
 use opencode_rs::types::message::TokenUsage;
+use opencode_rs::types::v2::message::ContentPart as ContentPartV2;
+use opencode_rs::types::v2::message::Message as MessageV2;
+use opencode_rs::types::v2::message::TokenUsage as TokenUsageV2;
 
 fn sat_u32(value: u64) -> (u32, bool) {
     if value > u64::from(u32::MAX) {
@@ -66,6 +71,7 @@ impl TokenTracker {
     ///
     /// The `context_limit_lookup` function is called to look up the context limit
     /// for a given (`provider_id`, `model_id`) pair from the cached limits.
+    #[cfg(test)]
     pub fn observe_event<F>(&mut self, ev: &Event, context_limit_lookup: F)
     where
         F: Fn(&str, &str) -> Option<u64>,
@@ -106,9 +112,59 @@ impl TokenTracker {
     }
 
     /// Observe token usage and update threshold flag.
+    #[cfg(test)]
     pub fn observe_tokens(&mut self, tokens: &TokenUsage) {
         self.latest_input_tokens = Some(tokens.input);
         self.latest_tokens = Some(tokens.clone());
+        self.recompute_flag();
+    }
+
+    pub fn observe_context<F>(&mut self, messages: &[MessageV2], context_limit_lookup: F)
+    where
+        F: Fn(&str, &str) -> Option<u64>,
+    {
+        let Some(message) = messages
+            .iter()
+            .rev()
+            .find(|message| message.role == "assistant")
+        else {
+            return;
+        };
+
+        if let Some(model) = &message.model
+            && let (Some(provider_id), Some(model_id)) = (&model.provider_id, &model.model_id)
+        {
+            self.provider_id = Some(provider_id.clone());
+            self.model_id = Some(model_id.clone());
+            self.context_limit = context_limit_lookup(provider_id, model_id);
+        }
+
+        if let Some(tokens) = &message.tokens {
+            self.observe_tokens_v2(tokens);
+            return;
+        }
+
+        if let Some(tokens) = message.content.iter().rev().find_map(|part| match part {
+            ContentPartV2::StepFinish {
+                tokens: Some(tokens),
+                ..
+            } => Some(tokens),
+            _ => None,
+        }) {
+            self.observe_tokens_v2(tokens);
+        }
+    }
+
+    fn observe_tokens_v2(&mut self, tokens: &TokenUsageV2) {
+        self.latest_input_tokens = Some(tokens.input);
+        self.latest_tokens = Some(TokenUsage {
+            total: tokens.total,
+            input: tokens.input,
+            output: tokens.output,
+            reasoning: tokens.reasoning,
+            cache: None,
+            extra: tokens.extra.clone(),
+        });
         self.recompute_flag();
     }
 

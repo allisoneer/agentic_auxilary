@@ -17,6 +17,7 @@ use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
+use wiremock::matchers::path_regex;
 
 use support::session_fixture;
 use support::status_v2_busy;
@@ -26,10 +27,9 @@ async fn test_orchestrator_server_with_long_timeout(
     mock: &MockServer,
 ) -> Arc<OrchestratorServerHandle> {
     Mock::given(method("GET"))
-        .and(path("/global/health"))
+        .and(path("/api/health"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "healthy": true,
-            "version": "test",
         })))
         .mount(mock)
         .await;
@@ -79,34 +79,37 @@ async fn it_times_out_after_5_min_inactivity() {
 
     // Prompt dispatch succeeds immediately
     Mock::given(method("POST"))
-        .and(path("/session/s1/prompt_async"))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path("/api/session/s1/prompt"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
+        )
         .mount(&mock)
         .await;
 
     // Status always idle -> no activity
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
         .mount(&mock)
         .await;
 
     // No permissions
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     // SSE stream stalls, forcing polling fallback
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -159,34 +162,37 @@ async fn it_does_not_timeout_while_busy() {
 
     // Prompt dispatch succeeds immediately
     Mock::given(method("POST"))
-        .and(path("/session/s1/prompt_async"))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path("/api/session/s1/prompt"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data": {"id": "input-1"}})),
+        )
         .mount(&mock)
         .await;
 
     // Status always busy -> should keep resetting activity timer
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy("s1")))
         .mount(&mock)
         .await;
 
     // No permissions
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
 
     // SSE stream stalls, forcing polling fallback
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")

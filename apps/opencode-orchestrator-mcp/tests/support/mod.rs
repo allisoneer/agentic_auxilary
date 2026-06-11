@@ -37,10 +37,9 @@ pub async fn test_orchestrator_server_with_config(
     config: OrchestratorConfig,
 ) -> Arc<OrchestratorServerHandle> {
     Mock::given(method("GET"))
-        .and(path("/global/health"))
+        .and(path("/api/health"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "healthy": true,
-            "version": "test",
         })))
         .mount(mock)
         .await;
@@ -271,10 +270,9 @@ pub fn permission_fixture_with_metadata(
 ) -> serde_json::Value {
     serde_json::json!({
         "id": id,
-        "sessionID": session_id,  // Note: sessionID not sessionId (matches opencode-rs types)
-        "permission": permission,
-        "patterns": patterns,
-        "always": [],
+        "sessionID": session_id,
+        "action": permission,
+        "resources": patterns,
         "tool": null,
         "metadata": metadata
     })
@@ -305,18 +303,24 @@ pub fn question_fixture(
 /// If `None`, only includes a user message (simulating stale/not-yet-persisted state).
 pub fn messages_fixture(session_id: &str, assistant_text: Option<&str>) -> serde_json::Value {
     let mut msgs = vec![serde_json::json!({
-        "info": {"id": "u1", "sessionID": session_id, "role": "user", "time": {"created": 1}},
-        "parts": []
+        "id": "u1",
+        "sessionID": session_id,
+        "role": "user",
+        "content": [],
+        "time": { "created": 1 }
     })];
 
     if let Some(text) = assistant_text {
         msgs.push(serde_json::json!({
-            "info": {"id": "a1", "sessionID": session_id, "role": "assistant", "time": {"created": 2}},
-            "parts": [{"type": "text", "text": text}]
+            "id": "a1",
+            "sessionID": session_id,
+            "role": "assistant",
+            "content": [{"type": "text", "text": text}],
+            "time": { "created": 2, "completed": 3 }
         }));
     }
 
-    serde_json::Value::Array(msgs)
+    serde_json::json!({ "data": msgs })
 }
 
 /// Create a message fixture with explicit parts and timestamps.
@@ -332,16 +336,14 @@ pub fn message_fixture(
     if let Some(completed) = completed {
         time["completed"] = serde_json::json!(completed);
     }
-    let parts = Value::Array(parts);
+    let content = Value::Array(parts);
 
     serde_json::json!({
-        "info": {
-            "id": message_id,
-            "sessionID": session_id,
-            "role": role,
-            "time": time,
-        },
-        "parts": parts,
+        "id": message_id,
+        "sessionID": session_id,
+        "role": role,
+        "time": time,
+        "content": content,
     })
 }
 
@@ -362,27 +364,31 @@ pub fn tool_part_fixture(call_id: &str, tool: &str, state: Option<Value>) -> Val
 }
 
 /// Create a message history response fixture.
-pub fn message_history_fixture(messages: Vec<Value>) -> Value {
-    Value::Array(messages)
+pub fn message_history_fixture(messages: &[Value]) -> Value {
+    serde_json::json!({ "data": messages })
 }
 
 /// Create a sessions list response fixture.
 pub fn sessions_list_fixture(session_ids: &[&str]) -> serde_json::Value {
-    serde_json::json!(
-        session_ids
+    serde_json::json!({
+        "data": session_ids
             .iter()
             .map(|id| session_fixture(id))
-            .collect::<Vec<_>>()
-    )
+            .collect::<Vec<_>>(),
+        "cursor": {}
+    })
 }
 
 /// Create a commands list response fixture.
 pub fn commands_list_fixture() -> serde_json::Value {
-    serde_json::json!([
-        {"name": "test", "description": "Run tests"},
-        {"name": "build", "description": "Build project"},
-        {"name": "lint", "description": "Run linter"}
-    ])
+    serde_json::json!({
+        "location": { "directory": "/tmp" },
+        "data": [
+            {"name": "test", "template": "test", "description": "Run tests"},
+            {"name": "build", "template": "build", "description": "Build project"},
+            {"name": "lint", "template": "lint", "description": "Run linter"}
+        ]
+    })
 }
 
 /// Seed launched sessions on the in-memory test server.

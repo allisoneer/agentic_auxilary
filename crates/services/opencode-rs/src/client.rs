@@ -5,6 +5,7 @@
 #[cfg(not(feature = "http"))]
 use crate::error::OpencodeError;
 use crate::error::Result;
+use base64::Engine as _;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -30,6 +31,7 @@ pub struct ClientBuilder {
     directory: Option<String>,
     workspace: Option<String>,
     timeout: Duration,
+    auth_header: Option<String>,
 }
 
 impl Default for ClientBuilder {
@@ -39,6 +41,7 @@ impl Default for ClientBuilder {
             directory: None,
             workspace: None,
             timeout: Duration::from_secs(1800), // 30 min for long-running tool calls
+            auth_header: None,
         }
     }
 }
@@ -83,6 +86,24 @@ impl ClientBuilder {
         self
     }
 
+    #[must_use]
+    pub fn basic_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        let username = username.into();
+        let password = password.into();
+        let encoded =
+            base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"));
+        self.auth_header = Some(format!("Basic {encoded}"));
+        self
+    }
+
+    #[must_use]
+    pub fn authorization_header(mut self, header: impl Into<String>) -> Self {
+        let header = header.into();
+        let trimmed = header.trim();
+        self.auth_header = (!trimmed.is_empty()).then(|| trimmed.to_string());
+        self
+    }
+
     /// Build the client.
     ///
     /// # Errors
@@ -96,7 +117,8 @@ impl ClientBuilder {
             directory: self.directory,
             workspace: self.workspace,
             timeout: self.timeout,
-        })?;
+        })?
+        .with_auth_header(self.auth_header);
 
         Ok(Client {
             http,
@@ -127,6 +149,18 @@ impl Client {
     #[cfg(feature = "http")]
     pub fn sessions(&self) -> crate::http::sessions::SessionsApi {
         crate::http::sessions::SessionsApi::new(self.http.clone())
+    }
+
+    /// Get the v1.17.2-native `/api/*` API surface.
+    #[cfg(feature = "http")]
+    pub fn api(&self) -> crate::http::api::ApiClient {
+        crate::http::api::ApiClient::new(self.http.clone(), Arc::clone(&self.last_event_id))
+    }
+
+    /// Get the temporary legacy-exception API surface.
+    #[cfg(feature = "http")]
+    pub fn legacy(&self) -> crate::http::legacy::LegacyClient {
+        crate::http::legacy::LegacyClient::new(self.http.clone())
     }
 
     /// Get the messages API.
@@ -347,6 +381,9 @@ impl Client {
             self.http.base().to_string(),
             self.http.directory().map(std::string::ToString::to_string),
             self.http.workspace().map(std::string::ToString::to_string),
+            self.http
+                .auth_header()
+                .map(std::string::ToString::to_string),
             Arc::clone(&self.last_event_id),
         )
     }
@@ -405,6 +442,7 @@ mod tests {
         assert_eq!(builder.timeout, Duration::from_secs(1800));
         assert!(builder.directory.is_none());
         assert!(builder.workspace.is_none());
+        assert!(builder.auth_header.is_none());
     }
 
     #[test]
@@ -413,12 +451,23 @@ mod tests {
             .base_url("http://localhost:8080")
             .directory("/my/project")
             .workspace("workspace-1")
+            .authorization_header("Bearer token")
             .timeout_secs(60);
 
         assert_eq!(builder.base_url, "http://localhost:8080");
         assert_eq!(builder.directory, Some("/my/project".to_string()));
         assert_eq!(builder.workspace, Some("workspace-1".to_string()));
         assert_eq!(builder.timeout, Duration::from_secs(60));
+        assert_eq!(builder.auth_header, Some("Bearer token".to_string()));
+    }
+
+    #[test]
+    fn test_client_builder_basic_auth_encodes_header() {
+        let builder = ClientBuilder::new().basic_auth("opencode", "secret");
+        assert_eq!(
+            builder.auth_header,
+            Some("Basic b3BlbmNvZGU6c2VjcmV0".to_string())
+        );
     }
 
     #[cfg(feature = "http")]

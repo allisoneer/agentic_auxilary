@@ -18,6 +18,7 @@ pub mod question;
 pub mod session;
 pub mod skill;
 pub mod tool;
+pub mod v2;
 
 pub use api::*;
 pub use config::*;

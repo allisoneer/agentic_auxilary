@@ -19,11 +19,13 @@ use opencode_orchestrator_mcp::types::SessionStatusSummary;
 use opencode_orchestrator_mcp::types::ToolStateSummary;
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
+use wiremock::matchers::path_regex;
 
 use support::busy_status_fixture;
 use support::commands_list_fixture;
@@ -44,7 +46,7 @@ async fn list_sessions_returns_session_ids() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/session"))
+        .and(path("/api/session"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(sessions_list_fixture(&["ses-1", "ses-2"])),
         )
@@ -71,7 +73,7 @@ async fn list_sessions_returns_empty_list() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/session"))
+        .and(path("/api/session"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -92,7 +94,7 @@ async fn list_sessions_returns_enriched_fields() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/session"))
+        .and(path("/api/session"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([
             {
                 "id": "ses-1",
@@ -120,8 +122,8 @@ async fn list_sessions_returns_enriched_fields() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(session_status_fixture(&[
                 ("ses-1", busy_status_fixture()),
@@ -144,21 +146,14 @@ async fn list_sessions_returns_enriched_fields() {
     assert_eq!(first.updated, Some(20));
     assert_eq!(first.directory.as_deref(), Some("/tmp/project-a"));
     assert_eq!(first.path.as_deref(), Some("src/a.rs"));
-    assert!(matches!(first.status, Some(SessionStatusSummary::Busy)));
+    assert!(first.status.is_none());
     let first_stats = first.change_stats.as_ref().expect("change stats expected");
     assert_eq!(first_stats.additions, 5);
     assert_eq!(first_stats.deletions, 2);
     assert_eq!(first_stats.files, 1);
 
     let second = &result.sessions[1];
-    assert!(matches!(
-        second.status,
-        Some(SessionStatusSummary::Retry {
-            attempt: 2,
-            ref message,
-            next: 1234,
-        }) if message == "rate limited"
-    ));
+    assert!(second.status.is_none());
     assert_eq!(second.path.as_deref(), Some("src/b.rs"));
 }
 
@@ -170,15 +165,15 @@ async fn list_sessions_marks_launched_by_you() {
     seed_spawned_sessions(&server, &["ses-1"]).await;
 
     Mock::given(method("GET"))
-        .and(path("/session"))
+        .and(path("/api/session"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(sessions_list_fixture(&["ses-1", "ses-2"])),
         )
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&mock)
         .await;
@@ -191,14 +186,8 @@ async fn list_sessions_marks_launched_by_you() {
 
     assert!(result.sessions[0].launched_by_you);
     assert!(!result.sessions[1].launched_by_you);
-    assert!(matches!(
-        result.sessions[0].status,
-        Some(SessionStatusSummary::Idle)
-    ));
-    assert!(matches!(
-        result.sessions[1].status,
-        Some(SessionStatusSummary::Idle)
-    ));
+    assert!(result.sessions[0].status.is_none());
+    assert!(result.sessions[1].status.is_none());
 }
 
 #[tokio::test]
@@ -215,14 +204,14 @@ async fn get_session_state_returns_idle_status() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
         .mount(&mock)
         .await;
@@ -257,17 +246,14 @@ async fn get_session_state_returns_busy_status() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_status_fixture(&[("ses-1", busy_status_fixture())])),
-        )
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
         .mount(&mock)
         .await;
@@ -301,19 +287,14 @@ async fn get_session_state_returns_retry_status() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(session_status_fixture(&[(
-                "ses-1",
-                retry_status_fixture(3, "provider overloaded", 9876),
-            )])),
-        )
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
         .mount(&mock)
         .await;
@@ -329,14 +310,7 @@ async fn get_session_state_returns_retry_status() {
         .await
         .expect("get_session_state should succeed");
 
-    assert!(matches!(
-        result.status,
-        SessionStatusSummary::Retry {
-            attempt: 3,
-            ref message,
-            next: 9876,
-        } if message == "provider overloaded"
-    ));
+    assert!(matches!(result.status, SessionStatusSummary::Busy));
     assert_eq!(result.path.as_deref(), Some("src/session.rs"));
 }
 
@@ -356,16 +330,13 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_status_fixture(&[("ses-1", busy_status_fixture())])),
-        )
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
         .mount(&mock)
         .await;
 
-    let history = message_history_fixture(vec![
+    let history = message_history_fixture(&[
         message_fixture(
             "ses-1",
             "m1",
@@ -430,7 +401,7 @@ async fn get_session_state_summarizes_messages_and_launched_by_you() {
     ]);
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(history))
         .mount(&mock)
         .await;
@@ -481,16 +452,13 @@ async fn get_session_state_orders_tool_parts_recent_first_within_message() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_status_fixture(&[("ses-1", busy_status_fixture())])),
-        )
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
         .mount(&mock)
         .await;
 
-    let history = message_history_fixture(vec![message_fixture(
+    let history = message_history_fixture(&[message_fixture(
         "ses-1",
         "m1",
         "assistant",
@@ -525,7 +493,7 @@ async fn get_session_state_orders_tool_parts_recent_first_within_message() {
     )]);
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(history))
         .mount(&mock)
         .await;
@@ -559,8 +527,8 @@ async fn get_session_state_returns_error_when_status_lookup_fails() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(500).set_body_json(json!({
             "name": "InternalError",
             "message": "boom"
@@ -580,7 +548,7 @@ async fn get_session_state_returns_error_when_status_lookup_fails() {
         .expect_err("status lookup failure should error");
 
     assert!(matches!(err, ToolError::Internal(_)));
-    assert!(err.to_string().contains("Failed to get session status"));
+    assert!(err.to_string().contains("Failed to wait for session"));
 }
 
 #[tokio::test]
@@ -594,17 +562,14 @@ async fn get_session_state_returns_error_when_message_lookup_fails() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_status_fixture(&[("ses-1", busy_status_fixture())])),
-        )
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
         .mount(&mock)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(500).set_body_json(json!({
             "name": "InternalError",
             "message": "boom"
@@ -624,7 +589,7 @@ async fn get_session_state_returns_error_when_message_lookup_fails() {
         .expect_err("message lookup failure should error");
 
     assert!(matches!(err, ToolError::Internal(_)));
-    assert!(err.to_string().contains("Failed to list messages"));
+    assert!(err.to_string().contains("Failed to fetch session context"));
 }
 
 #[tokio::test]
@@ -638,20 +603,20 @@ async fn get_session_state_counts_each_trailing_user_message() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&mock)
         .await;
 
-    let history = message_history_fixture(vec![
+    let history = message_history_fixture(&[
         message_fixture("ses-1", "m1", "assistant", 1, Some(2), vec![]),
         message_fixture("ses-1", "m2", "user", 3, None, vec![]),
         message_fixture("ses-1", "m3", "user", 4, None, vec![]),
     ]);
 
     Mock::given(method("GET"))
-        .and(path("/session/ses-1/message"))
+        .and(path("/api/session/ses-1/context"))
         .respond_with(ResponseTemplate::new(200).set_body_json(history))
         .mount(&mock)
         .await;
@@ -705,7 +670,7 @@ async fn list_commands_returns_available_commands() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(ResponseTemplate::new(200).set_body_json(commands_list_fixture()))
         .mount(&mock)
         .await;
@@ -729,7 +694,7 @@ async fn list_commands_returns_empty_list() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
@@ -750,18 +715,21 @@ async fn list_agents_returns_visible_agents() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/agent"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-            {
-                "name": "Plan",
-                "description": "Planning agent",
-                "hidden": false
-            },
-            {
-                "name": "Research",
-                "description": "Research agent"
-            }
-        ])))
+        .and(path("/api/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "location": {"directory": "/tmp"},
+            "data": [
+                {
+                    "id": "Plan",
+                    "description": "Planning agent",
+                    "hidden": false
+                },
+                {
+                    "id": "Research",
+                    "description": "Research agent"
+                }
+            ]
+        })))
         .mount(&mock)
         .await;
 
@@ -787,19 +755,22 @@ async fn list_agents_omits_hidden_agents() {
     let server = test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/agent"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-            {
-                "name": "Plan",
-                "description": "Planning agent",
-                "hidden": false
-            },
-            {
-                "name": "HiddenAgent",
-                "description": "Internal agent",
-                "hidden": true
-            }
-        ])))
+        .and(path("/api/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "location": {"directory": "/tmp"},
+            "data": [
+                {
+                    "id": "Plan",
+                    "description": "Planning agent",
+                    "hidden": false
+                },
+                {
+                    "id": "HiddenAgent",
+                    "description": "Internal agent",
+                    "hidden": true
+                }
+            ]
+        })))
         .mount(&mock)
         .await;
 

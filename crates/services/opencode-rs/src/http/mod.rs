@@ -15,16 +15,19 @@ use crate::error::Result;
 use reqwest::Client as ReqClient;
 use reqwest::Method;
 use reqwest::Response;
+use reqwest::header::AUTHORIZATION;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 use std::time::Duration;
 
+pub mod api;
 pub mod config;
 pub mod console;
 pub mod experimental_session;
 pub mod files;
 pub mod find;
 pub mod global;
+pub mod legacy;
 pub mod mcp;
 pub mod messages;
 pub mod misc;
@@ -61,6 +64,13 @@ pub struct HttpConfig {
 pub struct HttpClient {
     inner: ReqClient,
     cfg: HttpConfig,
+    auth_header: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+enum RequestTransport {
+    Api,
+    Legacy,
 }
 
 impl HttpClient {
@@ -80,7 +90,11 @@ impl HttpClient {
             base_url: cfg.base_url.trim_end_matches('/').to_string(),
             ..cfg
         };
-        Ok(Self { inner, cfg })
+        Ok(Self {
+            inner,
+            cfg,
+            auth_header: None,
+        })
     }
 
     /// Create from base URL, directory, and optional existing client.
@@ -110,7 +124,17 @@ impl HttpClient {
                 workspace: None,
                 timeout,
             },
+            auth_header: None,
         })
+    }
+
+    #[must_use]
+    pub fn with_auth_header(mut self, auth_header: Option<String>) -> Self {
+        self.auth_header = auth_header.and_then(|value| {
+            let trimmed = value.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        });
+        self
     }
 
     /// Get the base URL.
@@ -128,17 +152,50 @@ impl HttpClient {
         self.cfg.workspace.as_deref()
     }
 
+    pub(crate) fn auth_header(&self) -> Option<&str> {
+        self.auth_header.as_deref()
+    }
+
     /// Build request with standard directory/workspace query context.
     fn build_request(&self, method: Method, path: &str) -> reqwest::RequestBuilder {
+        self.build_request_with_transport(method, path, RequestTransport::Legacy)
+    }
+
+    pub(crate) fn build_api_request(&self, method: Method, path: &str) -> reqwest::RequestBuilder {
+        self.build_request_with_transport(method, path, RequestTransport::Api)
+    }
+
+    fn build_request_with_transport(
+        &self,
+        method: Method,
+        path: &str,
+        transport: RequestTransport,
+    ) -> reqwest::RequestBuilder {
         let url = format!("{}{}", self.cfg.base_url, path);
         let mut req = self.inner.request(method, &url);
 
-        if !path.starts_with("/global/") {
-            if let Some(dir) = &self.cfg.directory {
-                req = req.query(&[("directory", dir)]);
+        if let Some(auth_header) = &self.auth_header {
+            req = req.header(AUTHORIZATION, auth_header);
+        }
+
+        match transport {
+            RequestTransport::Api => {
+                if let Some(dir) = &self.cfg.directory {
+                    req = req.header("x-opencode-directory", dir);
+                }
+                if let Some(workspace) = &self.cfg.workspace {
+                    req = req.header("x-opencode-workspace", workspace);
+                }
             }
-            if let Some(workspace) = &self.cfg.workspace {
-                req = req.query(&[("workspace", workspace)]);
+            RequestTransport::Legacy => {
+                if !path.starts_with("/global/") {
+                    if let Some(dir) = &self.cfg.directory {
+                        req = req.query(&[("directory", dir)]);
+                    }
+                    if let Some(workspace) = &self.cfg.workspace {
+                        req = req.query(&[("workspace", workspace)]);
+                    }
+                }
             }
         }
 
@@ -339,6 +396,84 @@ impl HttpClient {
         Self::check_status(resp).await
     }
 
+    pub async fn api_get<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let resp = self
+            .build_api_request(Method::GET, path)
+            .send()
+            .await
+            .map_err(OpencodeError::from)?;
+        Self::map_json_response(resp).await
+    }
+
+    pub async fn api_post<TReq: serde::Serialize + Sync, TRes: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &TReq,
+    ) -> Result<TRes> {
+        let resp = self
+            .build_api_request(Method::POST, path)
+            .json(body)
+            .send()
+            .await
+            .map_err(OpencodeError::from)?;
+        Self::map_json_response(resp).await
+    }
+
+    pub async fn api_post_empty<TReq: serde::Serialize + Sync>(
+        &self,
+        path: &str,
+        body: &TReq,
+    ) -> Result<()> {
+        let resp = self
+            .build_api_request(Method::POST, path)
+            .json(body)
+            .send()
+            .await
+            .map_err(OpencodeError::from)?;
+        Self::check_status(resp).await
+    }
+
+    pub async fn api_request_json_with_query<T: DeserializeOwned>(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, String)],
+        body: Option<serde_json::Value>,
+    ) -> Result<T> {
+        let mut req = self.build_api_request(method, path);
+
+        if !query.is_empty() {
+            let query_pairs: Vec<(&str, &str)> = query
+                .iter()
+                .map(|(key, value)| (*key, value.as_str()))
+                .collect();
+            req = req.query(&query_pairs);
+        }
+
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+
+        let resp = req.send().await.map_err(OpencodeError::from)?;
+        Self::map_json_response(resp).await
+    }
+
+    pub async fn api_request_empty(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let mut req = self.build_api_request(method, path);
+
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+
+        let resp = req.send().await.map_err(OpencodeError::from)?;
+        Self::check_status(resp).await
+    }
+
     // ==================== Response Handling ====================
 
     /// Map response to JSON, handling errors with `NamedError` parsing.
@@ -441,6 +576,7 @@ mod tests {
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
+    use wiremock::matchers::header;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
@@ -516,6 +652,56 @@ mod tests {
 
         let result: serde_json::Value = client.get("/test").await.unwrap();
         assert_eq!(result, serde_json::json!({}));
+    }
+
+    #[tokio::test]
+    async fn test_api_request_uses_opencode_location_headers() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/session"))
+            .and(header("x-opencode-directory", "/my/project"))
+            .and(header("x-opencode-workspace", "workspace-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock_server)
+            .await;
+
+        let client = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: Some("/my/project".to_string()),
+            workspace: Some("workspace-1".to_string()),
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let result: serde_json::Value = client.api_get("/api/session").await.unwrap();
+        assert_eq!(result, serde_json::json!({}));
+    }
+
+    #[tokio::test]
+    async fn test_api_request_includes_authorization_header() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/health"))
+            .and(header("authorization", "Basic dGVzdDpzZWNyZXQ="))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "healthy": true
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap()
+        .with_auth_header(Some("Basic dGVzdDpzZWNyZXQ=".to_string()));
+
+        let result: serde_json::Value = client.api_get("/api/health").await.unwrap();
+        assert_eq!(result["healthy"], true);
     }
 
     #[tokio::test]

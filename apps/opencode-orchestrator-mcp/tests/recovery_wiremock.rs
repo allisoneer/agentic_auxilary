@@ -35,7 +35,7 @@ async fn external_client_seam_still_supports_end_to_end_tool_calls() {
     let server = support::test_orchestrator_server(&mock).await;
 
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(ResponseTemplate::new(200).set_body_json(commands_list_fixture()))
         .mount(&mock)
         .await;
@@ -53,21 +53,23 @@ async fn external_failure_is_sticky_and_keeps_held_snapshot_stable() {
     let old_mock = MockServer::start().await;
 
     Mock::given(method("GET"))
-        .and(path("/global/health"))
+        .and(path("/api/health"))
         .respond_with(SequenceResponder::new(vec![
             ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "healthy": true,
-                "version": "old",
             })),
             ResponseTemplate::new(500),
         ]))
         .mount(&old_mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/command"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            {"name": "old-command", "description": "from snapshot 1"}
-        ])))
+        .and(path("/api/command"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "location": {"directory": "/tmp"},
+            "data": [
+                {"name": "old-command", "template": "old-command", "description": "from snapshot 1"}
+            ]
+        })))
         .mount(&old_mock)
         .await;
 
@@ -105,7 +107,7 @@ async fn external_failure_is_sticky_and_keeps_held_snapshot_stable() {
         Err(error) => error,
     };
 
-    let commands_a = snapshot_a.client().tools().commands().await.unwrap();
+    let commands_a = snapshot_a.client().api().command().list().await.unwrap();
 
     assert_eq!(rebuilds.load(Ordering::SeqCst), 0);
     assert!(
@@ -114,6 +116,6 @@ async fn external_failure_is_sticky_and_keeps_held_snapshot_stable() {
             .contains("External OpenCode server unavailable")
     );
     assert_eq!(first_err.to_string(), second_err.to_string());
-    assert_eq!(commands_a[0].name, "old-command");
+    assert_eq!(commands_a.data[0].name, "old-command");
     assert_eq!(snapshot_a.base_url(), old_mock.uri().trim_end_matches('/'));
 }

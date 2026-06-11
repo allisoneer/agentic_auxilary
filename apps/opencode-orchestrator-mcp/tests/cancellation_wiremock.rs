@@ -40,23 +40,23 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
         .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(session_id)))
         .mount(&mock)
         .await;
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy(session_id)))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -70,7 +70,7 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/command"))
+        .and(path("/api/command"))
         .respond_with(ResponseTemplate::new(200).set_body_json(commands_list_fixture()))
         .mount(&mock)
         .await;
@@ -128,12 +128,12 @@ async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
-        .and(path("/permission"))
+        .and(path_regex(r"/api/session/.*/permission"))
         .respond_with(permission_seq)
         .mount(&mock)
         .await;
     Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
+        .and(path_regex(r"/api/session/.*/permission/.*/reply"))
         .respond_with(ResponseTemplate::new(200).set_body_json(true))
         .mount(&mock)
         .await;
@@ -142,18 +142,18 @@ async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
         .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(session_id)))
         .mount(&mock)
         .await;
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
+    Mock::given(method("POST"))
+        .and(path_regex(r"/api/session/.*/wait"))
         .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy(session_id)))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/question"))
+        .and(path("/api/question/request"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
-        .and(path("/event"))
+        .and(path("/api/event"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
