@@ -193,6 +193,16 @@ See `workflow.md` -> "Code Review (/review)" for:
 - Tool isolation rules for `review_*`
 - End-to-end `/review` usage
 
+## Schema Compatibility Troubleshooting
+
+When a provider rejects a tool schema:
+
+1. Prove the emitted canonical schema first using the same registry/MCP path production uses.
+2. Check whether the failure is in canonical generation or only in a publication/rendering boundary.
+3. Keep canonical schema caching unchanged; prefer lowering cloned `serde_json::Value` output at the boundary.
+4. Default new publication behavior to canonical and require explicit opt-in for compatibility profiles.
+5. Verify nullable semantics and `outputSchema` gating separately from `inputSchema` publication changes.
+
 ## Code Style Guidelines
 
 ### Workspace Lint Conformance

@@ -1,8 +1,10 @@
 //! MCP server handler backed by `ToolRegistry`.
 
+use agentic_tools_core::SchemaPublicationProfile;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use agentic_tools_core::ToolRegistry;
+use agentic_tools_core::apply_schema_publication_profile;
 use agentic_tools_core::fmt::TextOptions;
 use agentic_tools_core::fmt::fallback_text_from_json;
 use rmcp::RoleServer;
@@ -61,6 +63,7 @@ pub struct RegistryServer {
     registry: Arc<ToolRegistry>,
     allowlist: Option<HashSet<String>>,
     output_mode: OutputMode,
+    schema_publication_profile: SchemaPublicationProfile,
     text_options: TextOptions,
     name: String,
     version: String,
@@ -73,6 +76,7 @@ impl RegistryServer {
             registry,
             allowlist: None,
             output_mode: OutputMode::default(),
+            schema_publication_profile: SchemaPublicationProfile::default(),
             text_options: TextOptions::default(),
             name: "agentic-tools".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -92,6 +96,13 @@ impl RegistryServer {
     #[must_use]
     pub fn with_output_mode(mut self, mode: OutputMode) -> Self {
         self.output_mode = mode;
+        self
+    }
+
+    /// Set the input schema publication profile for MCP `list_tools` output.
+    #[must_use]
+    pub fn with_schema_publication_profile(mut self, profile: SchemaPublicationProfile) -> Self {
+        self.schema_publication_profile = profile;
         self
     }
 
@@ -134,6 +145,47 @@ impl RegistryServer {
             .collect()
     }
 
+    fn listed_tools(&self) -> Vec<m::Tool> {
+        let mut tools = vec![];
+        for name in self.registry.list_names() {
+            if !self.is_allowed(&name) {
+                continue;
+            }
+
+            let Some(erased) = self.registry.get(&name) else {
+                continue;
+            };
+
+            let input_schema = erased.input_schema();
+            let mut schema_json = serde_json::to_value(&input_schema)
+                .unwrap_or_else(|_| serde_json::json!({"type": "object"}));
+            apply_schema_publication_profile(self.schema_publication_profile, &mut schema_json);
+
+            let output_schema = if matches!(self.output_mode, OutputMode::Structured) {
+                erased.output_schema().and_then(|s| {
+                    serde_json::to_value(&s)
+                        .ok()
+                        .and_then(|v| v.as_object().cloned())
+                        .map(Arc::new)
+                })
+            } else {
+                None
+            };
+
+            let input_schema = Arc::new(schema_json.as_object().cloned().unwrap_or_default());
+            let mut tool =
+                m::Tool::new(name.clone(), erased.description(), input_schema).with_title(name);
+
+            if let Some(schema) = output_schema {
+                tool = tool.with_raw_output_schema(schema);
+            }
+
+            tools.push(tool);
+        }
+
+        tools
+    }
+
     fn is_allowed(&self, name: &str) -> bool {
         self.allowlist.as_ref().is_none_or(|set| set.contains(name))
     }
@@ -164,44 +216,7 @@ impl ServerHandler for RegistryServer {
         _ctx: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<m::ListToolsResult, m::ErrorData>> + Send + '_
     {
-        async move {
-            let mut tools = vec![];
-            for name in self.registry.list_names() {
-                if !self.is_allowed(&name) {
-                    continue;
-                }
-                if let Some(erased) = self.registry.get(&name) {
-                    let input_schema = erased.input_schema();
-                    let schema_json = serde_json::to_value(&input_schema)
-                        .unwrap_or_else(|_| serde_json::json!({"type": "object"}));
-
-                    // Include output_schema only in Structured mode (MCP compliance)
-                    let output_schema = if matches!(self.output_mode, OutputMode::Structured) {
-                        erased.output_schema().and_then(|s| {
-                            serde_json::to_value(&s)
-                                .ok()
-                                .and_then(|v| v.as_object().cloned())
-                                .map(Arc::new)
-                        })
-                    } else {
-                        None
-                    };
-
-                    let input_schema =
-                        Arc::new(schema_json.as_object().cloned().unwrap_or_default());
-                    let mut tool = m::Tool::new(name.clone(), erased.description(), input_schema)
-                        .with_title(name);
-
-                    // Attach output_schema only in Structured mode
-                    if let Some(schema) = output_schema {
-                        tool = tool.with_raw_output_schema(schema);
-                    }
-
-                    tools.push(tool);
-                }
-            }
-            Ok(m::ListToolsResult::with_all_items(tools))
-        }
+        async move { Ok(m::ListToolsResult::with_all_items(self.listed_tools())) }
     }
 
     fn call_tool(
@@ -383,6 +398,7 @@ impl ServerHandler for RegistryServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agentic_tools_core::SchemaPublicationProfile;
     use agentic_tools_core::Tool;
     use agentic_tools_core::ToolError;
     use agentic_tools_core::fmt::TextFormat;
@@ -401,6 +417,41 @@ mod tests {
             .await
             .unwrap();
         result.text.unwrap()
+    }
+
+    fn collect_local_refs<'a>(node: &'a serde_json::Value, refs: &mut Vec<&'a str>) {
+        match node {
+            serde_json::Value::Object(object) => {
+                if let Some(ref_value) = object.get("$ref").and_then(serde_json::Value::as_str)
+                    && (ref_value.starts_with("#/$defs/")
+                        || ref_value.starts_with("#/definitions/"))
+                {
+                    refs.push(ref_value);
+                }
+
+                for value in object.values() {
+                    collect_local_refs(value, refs);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    collect_local_refs(value, refs);
+                }
+            }
+            serde_json::Value::Null
+            | serde_json::Value::Bool(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::String(_) => {}
+        }
+    }
+
+    fn listed_tool_json(server: &RegistryServer, tool_name: &str) -> serde_json::Value {
+        server
+            .listed_tools()
+            .into_iter()
+            .map(|tool| serde_json::to_value(&tool).unwrap())
+            .find(|tool| tool["name"] == serde_json::json!(tool_name))
+            .expect("tool should be published")
     }
 
     #[test]
@@ -501,6 +552,48 @@ mod tests {
         }
     }
 
+    #[derive(
+        serde::Serialize, serde::Deserialize, schemars::JsonSchema, Clone, Debug, PartialEq,
+    )]
+    struct SchemaProfileFileMeta {
+        filename: String,
+        description: String,
+    }
+
+    #[derive(
+        serde::Serialize, serde::Deserialize, schemars::JsonSchema, Clone, Debug, PartialEq,
+    )]
+    struct SchemaProfileInput {
+        files: Vec<SchemaProfileFileMeta>,
+    }
+
+    #[derive(
+        serde::Serialize, serde::Deserialize, schemars::JsonSchema, Clone, Debug, PartialEq,
+    )]
+    struct SchemaProfileOutput {
+        files: Vec<SchemaProfileFileMeta>,
+    }
+
+    impl TextFormat for SchemaProfileOutput {}
+
+    #[derive(Clone)]
+    struct SchemaProfileTool;
+
+    impl Tool for SchemaProfileTool {
+        type Input = SchemaProfileInput;
+        type Output = SchemaProfileOutput;
+        const NAME: &'static str = "schema_profile_tool";
+        const DESCRIPTION: &'static str = "publishes schemas with local refs";
+
+        fn call(
+            &self,
+            _input: Self::Input,
+            _ctx: &ToolContext,
+        ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+            Box::pin(async move { Ok(SchemaProfileOutput { files: Vec::new() }) })
+        }
+    }
+
     #[test]
     fn test_structured_mode_output_schema_gating() {
         // Build registry with TestObjTool
@@ -594,5 +687,70 @@ mod tests {
 
         // Default should be Text mode
         assert!(matches!(server.output_mode(), OutputMode::Text));
+    }
+
+    #[test]
+    fn test_canonical_schema_publication_preserves_local_refs_in_input_schema() {
+        let registry = Arc::new(
+            ToolRegistry::builder()
+                .register::<SchemaProfileTool, ()>(SchemaProfileTool)
+                .finish(),
+        );
+        let server = RegistryServer::new(registry);
+
+        let tool_json = listed_tool_json(&server, SchemaProfileTool::NAME);
+
+        assert_eq!(
+            tool_json["inputSchema"]["properties"]["files"]["items"]["$ref"],
+            serde_json::json!("#/$defs/SchemaProfileFileMeta")
+        );
+    }
+
+    #[test]
+    fn test_inline_local_refs_publication_removes_input_schema_local_refs() {
+        let registry = Arc::new(
+            ToolRegistry::builder()
+                .register::<SchemaProfileTool, ()>(SchemaProfileTool)
+                .finish(),
+        );
+        let server = RegistryServer::new(registry)
+            .with_schema_publication_profile(SchemaPublicationProfile::InlineLocalRefs);
+
+        let tool_json = listed_tool_json(&server, SchemaProfileTool::NAME);
+        let input_schema = &tool_json["inputSchema"];
+        let mut refs = Vec::new();
+        collect_local_refs(input_schema, &mut refs);
+
+        assert!(
+            refs.is_empty(),
+            "inline publication should remove input refs"
+        );
+        assert_eq!(
+            input_schema["properties"]["files"]["items"]["type"],
+            serde_json::json!("object")
+        );
+    }
+
+    #[test]
+    fn test_inline_local_refs_does_not_change_output_schema_publication() {
+        let registry = Arc::new(
+            ToolRegistry::builder()
+                .register::<SchemaProfileTool, ()>(SchemaProfileTool)
+                .finish(),
+        );
+        let canonical_server =
+            RegistryServer::new(Arc::clone(&registry)).with_output_mode(OutputMode::Structured);
+        let inline_server = RegistryServer::new(registry)
+            .with_output_mode(OutputMode::Structured)
+            .with_schema_publication_profile(SchemaPublicationProfile::InlineLocalRefs);
+
+        let canonical_tool = listed_tool_json(&canonical_server, SchemaProfileTool::NAME);
+        let inline_tool = listed_tool_json(&inline_server, SchemaProfileTool::NAME);
+
+        assert_eq!(
+            canonical_tool["outputSchema"]["properties"]["files"]["items"]["$ref"],
+            serde_json::json!("#/$defs/SchemaProfileFileMeta")
+        );
+        assert_eq!(inline_tool["outputSchema"], canonical_tool["outputSchema"]);
     }
 }
