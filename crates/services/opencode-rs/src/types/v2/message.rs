@@ -60,6 +60,7 @@ pub struct ToolTimeRange {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolStatePending {
+    #[serde(deserialize_with = "deserialize_pending_status")]
     pub status: String,
     #[serde(default)]
     pub input: serde_json::Value,
@@ -153,6 +154,20 @@ pub enum ContentPart {
     Unknown,
 }
 
+fn deserialize_pending_status<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let status = String::deserialize(deserializer)?;
+    if status == "pending" {
+        Ok(status)
+    } else {
+        Err(<D::Error as serde::de::Error>::custom(
+            "expected pending tool status",
+        ))
+    }
+}
+
 impl Message {
     pub fn assistant_text(&self) -> Option<String> {
         let text = self
@@ -165,5 +180,40 @@ impl Message {
             .collect::<Vec<_>>()
             .join("");
         (!text.trim().is_empty()).then_some(text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolState;
+    use super::ToolStatePending;
+    use serde_json::json;
+
+    #[test]
+    fn tool_state_pending_deserializes_with_defaults() {
+        let state: ToolState = serde_json::from_value(json!({ "status": "pending" })).unwrap();
+
+        assert!(matches!(state, ToolState::Pending(ToolStatePending { .. })));
+    }
+
+    #[test]
+    fn tool_state_pending_deserializes_with_payload() {
+        let state: ToolState = serde_json::from_value(json!({
+            "status": "pending",
+            "input": {"tool": "read"},
+            "raw": "read file.txt"
+        }))
+        .unwrap();
+
+        assert!(matches!(state, ToolState::Pending(ToolStatePending { .. })));
+    }
+
+    #[test]
+    fn tool_state_unknown_status_falls_through_to_unknown() {
+        let state: ToolState = serde_json::from_value(json!({ "status": "queued" })).unwrap();
+
+        assert!(
+            matches!(state, ToolState::Unknown(value) if value == json!({ "status": "queued" }))
+        );
     }
 }
