@@ -1,0 +1,59 @@
+apps/opencode-orchestrator-mcp/tests/activity_timeout_wiremock.rs
+  s_953a1ea7e5407b::t_f4bc4e815757dc 82-83,162-163
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_953a1ea7e5407b::t_f1f6cb55471df5 1693-1698,1700-1705,1707-1712,1714-1716,1734,1746-1751,1761-1766,1768,1780,1830-1835,1837-1870
+  s_953a1ea7e5407b::t_180f717833e1a1 169-172,175
+  s_953a1ea7e5407b::t_bfe988f0144367 302
+  s_953a1ea7e5407b::t_cbf86becd41c02 1803-1804,1815
+  s_953a1ea7e5407b::t_0d9dfd91ed36da 465-469
+  s_953a1ea7e5407b::t_fe436447783aa7 166-168,173-174,176-177
+  s_953a1ea7e5407b::t_21de1e2b9948f5 48-50,52,89-101
+  s_953a1ea7e5407b::t_f4bc4e815757dc 46-47,734-735,737-746,749-750,752-753
+  s_953a1ea7e5407b::t_2f1c975939b13e 318-322,324-343,1805-1813
+  s_953a1ea7e5407b::t_154e828ac26644 291,300,303-309,313,676-683,795-803,864,983,1011,1064
+  s_953a1ea7e5407b::t_ef2e1dcb8e453c 185-196,1007,1010,1014-1025,1060,1063,1067-1078
+  s_953a1ea7e5407b::t_acf73553a20d6a 432-464,470-476,482-484
+  s_953a1ea7e5407b::t_83bead23316071 636,877-878,886,890,894
+apps/opencode-orchestrator-mcp/tests/integration.rs
+  s_953a1ea7e5407b::t_c95b2183b370ff 224
+apps/opencode-orchestrator-mcp/tests/fast_idle_race_wiremock.rs
+  s_953a1ea7e5407b::t_f4bc4e815757dc 92-93
+apps/opencode-orchestrator-mcp/tests/command_filtering_wiremock.rs
+  s_953a1ea7e5407b::t_f4bc4e815757dc 410-411,450,455-456
+apps/opencode-orchestrator-mcp/src/server.rs
+  s_953a1ea7e5407b::t_2f1c975939b13e 943-944
+  s_953a1ea7e5407b::t_6d081a955379f9 688,770
+  s_953a1ea7e5407b::t_cbf86becd41c02 10-11,925-942
+crates/services/opencode-rs/tests/integration.rs
+  s_953a1ea7e5407b::t_c95b2183b370ff 9,19
+crates/services/opencode-rs/src/types/v2/location.rs
+  s_953a1ea7e5407b::t_fe436447783aa7 6-14,27,31-61
+apps/opencode-orchestrator-mcp/README.md
+  s_953a1ea7e5407b::t_c95b2183b370ff 19
+apps/opencode-orchestrator-mcp/src/token_tracker.rs
+  s_953a1ea7e5407b::t_cbf86becd41c02 8,118-120,122,128,133-134,141-142,146-147,153
+apps/opencode-orchestrator-mcp/tests/question_flow_wiremock.rs
+  s_953a1ea7e5407b::t_f4bc4e815757dc 142-143
+crates/services/opencode-rs/justfile
+  s_953a1ea7e5407b::t_c95b2183b370ff 12,22,33,44-45
+apps/opencode-orchestrator-mcp/justfile
+  s_953a1ea7e5407b::t_c95b2183b370ff 40,44,48,52,61,65,74,85-86
+apps/opencode-orchestrator-mcp/tests/permission_flow_wiremock.rs
+  s_953a1ea7e5407b::t_f4bc4e815757dc 105-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0ac13745bd88726a47a359539d1210907edcc197",
+  "prompts": {},
+  "sessions": {
+    "s_953a1ea7e5407b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1495428f0ffeE4v4nn5Y0b7CDa",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
