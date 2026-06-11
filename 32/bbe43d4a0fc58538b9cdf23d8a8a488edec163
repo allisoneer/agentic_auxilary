@@ -1,0 +1,22 @@
+crates/services/opencode-rs/src/types/v2/message.rs
+  s_f579a67831ef18::t_49bcd653cfeb6a 190,194-204,213
+  s_f579a67831ef18::t_71c2cd4fe3916c 165-167
+  s_f579a67831ef18::t_4e7081a8fdc299 188-189,215-217
+  s_f579a67831ef18::t_71205e4203d9f4 63,157-164,168-170,185-187,191-193,205-212,214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "32bbe43d4a0fc58538b9cdf23d8a8a488edec163",
+  "prompts": {},
+  "sessions": {
+    "s_f579a67831ef18": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14963b052ffe27wc7BTUco24No",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
