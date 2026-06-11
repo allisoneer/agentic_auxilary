@@ -1,0 +1,235 @@
+crates/services/opencode-rs/src/types/v2/model.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-27
+crates/services/opencode-rs/src/version.rs
+  s_a8e190e50ce663::t_af92d2758eb98a 10,18,20,59-61,73
+crates/services/opencode-rs/src/http/api/model.rs
+  s_a8e190e50ce663::t_98dcd27987f4f9 20-45,47-71,73-75
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-19
+  s_a8e190e50ce663::t_8a5d1c68bcdadd 46,72
+crates/services/opencode-rs/src/sse.rs
+  s_a8e190e50ce663::t_d9e99688c88f22 118-123,136,150-158,170,207-214
+  s_a8e190e50ce663::t_4e27927f5b05a3 77,89,97,183,222-224
+crates/services/opencode-rs/src/http/legacy/global.rs
+  s_a8e190e50ce663::t_98dcd27987f4f9 23-61
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-15,17-22
+  s_a8e190e50ce663::t_8a5d1c68bcdadd 16
+apps/opencode-orchestrator-mcp/src/version.rs
+  s_a8e190e50ce663::t_d9d8a76c439c75 14,68,133-135,169-170,173-174,197,204,219
+crates/services/opencode-rs/src/types/v2/event.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-27
+  s_a8e190e50ce663::t_98dcd27987f4f9 28-56
+apps/opencode-orchestrator-mcp/src/server.rs
+  s_a8e190e50ce663::t_ec63340ea0a734 921-923,925-927
+  s_8b6bd601871678::t_875e6913e54e74 11
+  s_a8e190e50ce663::t_1f7036edf81c45 1525-1564
+  s_a8e190e50ce663::t_5a10a5cb4a39db 10,12,526,701-702,704-705,787-788,790-791,893,896,899,902,907,909,912-914,1089,1491-1492,1500,1520
+crates/services/opencode-rs/Cargo.toml
+  s_a8e190e50ce663::t_4e27927f5b05a3 48
+crates/services/opencode-rs/src/http/api/event.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-40
+apps/opencode-orchestrator-mcp/tests/support/mod.rs
+  s_a8e190e50ce663::t_7bdbd0d9d2af52 40
+  s_0b765ceff85200::t_434a5dc9a0756f 273-275,306-310,315-319,323,339,342-346,368,373-374,377-379,384-391
+  s_dc39640c151edf::t_161f2dd7605e28 367
+crates/services/opencode-rs/src/types/v2/envelope.rs
+  s_43424f8469e311::t_bd5571a1169487 3,6,19,25,29-107
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-2,4-5,7-18,20-24,26-28,108
+crates/services/opencode-rs/src/types/mod.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 21
+apps/opencode-orchestrator-mcp/tests/permission_flow_wiremock.rs
+  s_1f4c83f66b14ac::t_e9c55c925c52f4 106-109
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 72-73,80,86,98,105,116,183-184,200,206,213,220,294-295,311,317,324,335,407,413,420,437-438,451,463,544-545,552,558,565,574
+  s_a8e190e50ce663::t_7bdbd0d9d2af52 523
+crates/services/opencode-rs/src/types/v2/question.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-62
+crates/services/opencode-rs/src/types/v2/provider.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-11
+apps/opencode-orchestrator-mcp/tests/recovery_wiremock.rs
+  s_a8e190e50ce663::t_7bdbd0d9d2af52 56
+  s_46291a01450408::t_80712ad4db71ef 38,66-72,110,119
+crates/services/opencode-rs/src/types/v2/mod.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 3-13,16-25
+  s_a8e190e50ce663::t_ec91562fd0ab7b 1-2,14-15
+crates/services/opencode-rs/src/types/v2/permission.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-45
+crates/services/opencode-rs/src/types/v2/command.rs
+  s_a8e190e50ce663::t_ec91562fd0ab7b 1-20
+crates/services/opencode-rs/src/http/api/question.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-50
+  s_a8e190e50ce663::t_98dcd27987f4f9 51-96
+crates/services/opencode-rs/src/http/api/mod.rs
+  s_a8e190e50ce663::t_ec91562fd0ab7b 5-6,31-38
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-4,7-30,39-64
+crates/services/opencode-rs/src/http/legacy/mod.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-49
+apps/opencode-orchestrator-mcp/tests/activity_timeout_wiremock.rs
+  s_a8e190e50ce663::t_7bdbd0d9d2af52 30
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 20,82,91-92,99,105,112,165,174-175,182,188,195
+  s_1f4c83f66b14ac::t_e9c55c925c52f4 83-86,166-169
+apps/opencode-orchestrator-mcp/src/token_tracker.rs
+  s_8b6bd601871678::t_875e6913e54e74 126-130
+  s_8b6bd601871678::t_3a74fa11741e9e 74
+  s_a8e190e50ce663::t_da5a1ea408ba2f 11-13,122-125,131-167
+  s_8b6bd601871678::t_6b48eea239e27e 115
+  s_8b6bd601871678::t_c3a7bec1a08e15 6,8
+apps/opencode-orchestrator-mcp/tests/cancellation_wiremock.rs
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 43,145
+  s_0b765ceff85200::t_434a5dc9a0756f 44,49,54,59,73,131,136,146,151,156
+crates/services/opencode-rs/src/http/mod.rs
+  s_a8e190e50ce663::t_4e27927f5b05a3 30,67-73,93-97,127,131-139,155-158,161-173,177-188,190-198,399-476,579,657-704
+crates/services/opencode-rs/src/http/legacy/session.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-19,21-27,29-35,37-39,41-48
+  s_a8e190e50ce663::t_98dcd27987f4f9 49-120
+  s_a8e190e50ce663::t_8a5d1c68bcdadd 20,28,36
+apps/opencode-orchestrator-mcp/tests/command_filtering_wiremock.rs
+  s_fcba1eb76128d8::t_82fe2623ca60d3 25
+  s_0b765ceff85200::t_434a5dc9a0756f 64-66,68,70,74-76,78,80,113,130,147,167,184,248,264,280,300,315,386,391,396,401,453,458-459
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 385,410,418
+  s_1f4c83f66b14ac::t_e9c55c925c52f4 411-414
+apps/opencode-orchestrator-mcp/tests/question_flow_wiremock.rs
+  s_fcba1eb76128d8::t_82fe2623ca60d3 454-456
+  s_1f4c83f66b14ac::t_e9c55c925c52f4 143-146
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 61-62,68,74,115-116,122,136,142,151,200,206,216-217,229,235,244,290,296,307-308,314,320,358-359,365,373,423,429,440-441,462,470,509,553
+crates/services/opencode-rs/src/types/v2/health.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-7
+crates/services/opencode-rs/src/legacy_exceptions.md
+  s_a8e190e50ce663::t_f6e3a8e073aa6e 1-57
+crates/services/opencode-rs/src/http/api/health.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-18
+  s_a8e190e50ce663::t_98dcd27987f4f9 19-55
+crates/services/opencode-rs/src/http/api/permission.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-23,25-47
+crates/services/opencode-rs/src/types/v2/agent.rs
+  s_a8e190e50ce663::t_ec91562fd0ab7b 1-29
+apps/opencode-orchestrator-mcp/tests/fast_idle_race_wiremock.rs
+  s_46291a01450408::t_511105d4de9ebc 329-330,448-449
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 73,185,267,382,476
+  s_0b765ceff85200::t_434a5dc9a0756f 74,80,86,92,101,109,162,168,174,186,192,200,243,252,268,274,280,288,365,371,383,392,398,407,477,483
+  s_1f4c83f66b14ac::t_e9c55c925c52f4 93-96
+apps/opencode-orchestrator-mcp/tests/list_tools_wiremock.rs
+  s_fcba1eb76128d8::t_82fe2623ca60d3 28
+  s_fcba1eb76128d8::t_bd4ff7d2a9573d 125,175,207,214,249,256,290,297,333,404,455,496,530,565,572,606,619
+  s_dc39640c151edf::t_e119c620e36986 339,461,612
+  s_1f4c83f66b14ac::t_31c5d8524d05f5 22,149,156,189-190,251,292,313,335,457,551,567,592,719-732,759-773
+  s_0b765ceff85200::t_434a5dc9a0756f 49,76,97,126,168,176,208,250,291,334,456,531,566,607,673,697,718,758
+crates/services/opencode-rs/src/http/api/provider.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-27
+crates/services/opencode-rs/src/types/v2/location.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-19
+crates/services/opencode-rs/src/types/v2/message.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-169
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_a8e190e50ce663::t_4e23d5f5302ea5 568,734-741,853-860,880-887,920-927
+  s_a8e190e50ce663::t_b3324767ad786e 1776,1778,1784,1794,1805,1841,1844,1846,1867
+  s_a8e190e50ce663::t_e584d44a3725ce 50,52-57,60-61
+  s_8b6bd601871678::t_46c1b1d513a7be 799-802
+  s_a8e190e50ce663::t_a5aa91af468a25 51,58-59,141-154,269-272,282,303-305,307-308,311-312,481-482,495,497-498,516,611,613-614,621-623,625-629,633-635,669-671,724-726,728-730,732-733,742,744-747,831-832,837,840,917-918,930
+  s_a8e190e50ce663::t_40ed1738e6010c 538-539,547,549,554,791,807
+  s_a8e190e50ce663::t_3c021e9abfa418 1936
+  s_a8e190e50ce663::t_3f7382171286a5 331,354,376-378
+  s_0d11d4654cee55::t_af0b89b1630f58 761
+  s_a8e190e50ce663::t_b8a94c32e1daa3 255-256,277-280
+  s_0d11d4654cee55::t_0a64dc868984e9 47
+  s_8b6bd601871678::t_1c852ce6ee124d 1554-1562
+  s_a8e190e50ce663::t_87969a3bf4ccf9 1544-1546,1571,1593,1597,1609,1632-1633,1635,1645-1647,1652-1653,1655,1657
+  s_8b6bd601871678::t_6c415573c6de5c 306
+  s_a8e190e50ce663::t_cb8116cb568b2e 1091-1100,1105,1108,1123,1156,1160,1162,1170,1172-1176,1180,1184-1185,1193,1196,1201,1264-1265,1275-1278,1281-1282,1284-1286,1289
+  s_8b6bd601871678::t_875e6913e54e74 48-49,274-276,570-571,576-579,678-679,1369,1449
+  s_8b6bd601871678::t_c5b69f1ecdb4d1 1117-1118
+  s_a8e190e50ce663::t_68ebf63f0b0861 1374,1376-1377,1379,1454
+  s_8b6bd601871678::t_5d5d838e32ff65 529
+  s_0b765ceff85200::t_434a5dc9a0756f 752,762-763,767,781-784,903,938
+crates/services/opencode-rs/src/http/api/command.rs
+  s_a8e190e50ce663::t_ec91562fd0ab7b 1-19
+crates/services/opencode-rs/src/client.rs
+  s_a8e190e50ce663::t_fac5f3eb780738 154-165
+  s_a8e190e50ce663::t_4e27927f5b05a3 8,34,44,89,91-106,120-121,445,454,461-470
+  s_a8e190e50ce663::t_9ac34fb1d89cb9 384-386
+crates/services/opencode-rs/src/types/v2/session.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-133
+crates/services/opencode-rs/src/http/api/session.rs
+  s_a8e190e50ce663::t_bfb6431e5cdb40 1-45,47-56,58-68
+  s_a8e190e50ce663::t_98dcd27987f4f9 69-147
+crates/services/opencode-rs/src/http/api/agent.rs
+  s_a8e190e50ce663::t_ec91562fd0ab7b 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0ffe7c145fb3bc0de6a057a3e8679ea8d4175070",
+  "prompts": {},
+  "sessions": {
+    "s_0b765ceff85200": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14beb67dbffeTvgeD94zHBXRgf",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_0d11d4654cee55": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14bea8ae3ffe2BPylJJOYFB1gx",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_1f4c83f66b14ac": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14be06fffffeGSPjADWIolrA4y",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_43424f8469e311": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14be3e0dfffe7ZLd3uBsyGnp4u",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_46291a01450408": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14bdf32aeffePfpLLfPWLcaU5h",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_8b6bd601871678": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14c019b5cffe003aOnL4kG2XMM",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_a8e190e50ce663": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14cb064afffeOGT5sDHNCVpCfn",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_dc39640c151edf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14bde5ed0ffezBJNiym6NM2hku",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_fcba1eb76128d8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_14be30f52ffejGHQYoWsXbYXjo",
+        "model": "deepseek/deepseek-v4-pro"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
