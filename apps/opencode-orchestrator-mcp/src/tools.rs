@@ -868,7 +868,11 @@ impl OrchestratorRunTool {
                     // This is the key fix for race conditions. If SSE missed SessionIdle,
                     // we detect completion via polling sessions().status_for(session_id).
                     match client.sessions().status_for(&session_id).await {
-                        Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }) => {
+                        Ok(
+                            SessionStatusInfo::Busy
+                            | SessionStatusInfo::Retry { .. }
+                            | SessionStatusInfo::Unknown,
+                        ) => {
                             last_activity_time = tokio::time::Instant::now();
                             observed_busy = true;
                             awaiting_idle_grace_check = false;
@@ -946,7 +950,11 @@ impl OrchestratorRunTool {
                             let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
                             return Ok(RunOutcome::with_tracker(output, &token_tracker));
                         }
-                        Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }) => {
+                        Ok(
+                            SessionStatusInfo::Busy
+                            | SessionStatusInfo::Retry { .. }
+                            | SessionStatusInfo::Unknown,
+                        ) => {
                             last_activity_time = tokio::time::Instant::now();
                             observed_busy = true;
                         }
@@ -1124,7 +1132,9 @@ impl Tool for ListSessionsTool {
                             status_map
                                 .as_ref()
                                 .map(|status_map| match status_map.get(&s.id) {
-                                    Some(SessionStatusInfo::Busy) => SessionStatusSummary::Busy,
+                                    Some(SessionStatusInfo::Busy | SessionStatusInfo::Unknown) => {
+                                        SessionStatusSummary::Busy
+                                    }
                                     Some(SessionStatusInfo::Retry {
                                         attempt,
                                         message,
@@ -1309,7 +1319,9 @@ impl Tool for GetSessionStateTool {
                 let status = match client.sessions().status_for(session_id).await.map_err(|e| {
                     ToolError::Internal(format!("Failed to get session status: {e}"))
                 })? {
-                    SessionStatusInfo::Busy => SessionStatusSummary::Busy,
+                    SessionStatusInfo::Busy | SessionStatusInfo::Unknown => {
+                        SessionStatusSummary::Busy
+                    }
                     SessionStatusInfo::Retry {
                         attempt,
                         message,

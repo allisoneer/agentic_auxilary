@@ -101,9 +101,9 @@ If `OPENCODE_ORCHESTRATOR_LOG_DIR` is unset, the orchestrator falls back to the 
 
 ## Orchestrator says OpenCode version is wrong
 
-`opencode-orchestrator-mcp` expects OpenCode `v1.3.17`.
+`opencode-orchestrator-mcp` expects OpenCode `v1.17.4`.
 
-If the binary on `PATH` is not the one you want, set `OPENCODE_BINARY`. If you are using launcher mode (for example `bunx --yes opencode-ai@1.3.17`), also set `OPENCODE_BINARY_ARGS`.
+If the binary on `PATH` is not the one you want, set `OPENCODE_BINARY`. If you are using launcher mode (for example `bunx --yes opencode-ai@1.17.4`), also set `OPENCODE_BINARY_ARGS`.
 
 ## One small gotcha worth knowing
 

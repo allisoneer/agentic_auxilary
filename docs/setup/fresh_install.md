@@ -28,7 +28,7 @@ Do these in this order. It saves a little backtracking later.
 5. Install **OpenCode** at the version this repo currently expects:
 
    ```bash
-   bun install -g opencode-ai@1.3.17
+    bun install -g opencode-ai@1.17.4
    ```
 
 6. Install **Claude Code** with whatever install method you already trust. The official docs are here: <https://code.claude.com/docs/en/authentication.md>.
@@ -71,7 +71,7 @@ Do this before you start blaming MCP wiring.
 
 ## OpenCode version pin (orchestrator)
 
-`opencode-orchestrator-mcp` validates against OpenCode **v1.3.17**. If you point it at another version, startup can fail.
+`opencode-orchestrator-mcp` validates against OpenCode **v1.17.4**. If you point it at another version, startup can fail.
 
 You usually do not need extra env vars here. `OPENCODE_BINARY` and `OPENCODE_BINARY_ARGS` are only for cases where the default pinned binary path or the plain `opencode` on `PATH` is not the one you want.
 

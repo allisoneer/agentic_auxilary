@@ -37,6 +37,7 @@ use support::session_status_fixture;
 use support::sessions_list_fixture;
 use support::test_orchestrator_server;
 use support::tool_part_fixture;
+use support::unknown_status_fixture;
 
 #[tokio::test]
 async fn list_sessions_returns_session_ids() {
@@ -202,6 +203,40 @@ async fn list_sessions_marks_launched_by_you() {
 }
 
 #[tokio::test]
+async fn list_sessions_treats_unknown_status_as_busy() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+
+    Mock::given(method("GET"))
+        .and(path("/session"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(sessions_list_fixture(&["ses-1"])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(session_status_fixture(&[(
+                "ses-1",
+                unknown_status_fixture(),
+            )])),
+        )
+        .mount(&mock)
+        .await;
+
+    let tool = ListSessionsTool::new(Arc::clone(&server));
+    let result = tool
+        .call(ListSessionsInput { limit: None }, &ToolContext::default())
+        .await
+        .expect("list_sessions should succeed");
+
+    assert!(matches!(
+        result.sessions[0].status,
+        Some(SessionStatusSummary::Busy)
+    ));
+}
+
+#[tokio::test]
 async fn get_session_state_returns_idle_status() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
@@ -337,6 +372,52 @@ async fn get_session_state_returns_retry_status() {
             next: 9876,
         } if message == "provider overloaded"
     ));
+    assert_eq!(result.path.as_deref(), Some("src/session.rs"));
+}
+
+#[tokio::test]
+async fn get_session_state_treats_unknown_status_as_busy() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_path("ses-1", Some("src/session.rs"))),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(session_status_fixture(&[(
+                "ses-1",
+                unknown_status_fixture(),
+            )])),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/ses-1/message"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&mock)
+        .await;
+
+    let tool = GetSessionStateTool::new(Arc::clone(&server));
+    let result = tool
+        .call(
+            GetSessionStateInput {
+                session_id: "ses-1".into(),
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect("get_session_state should succeed");
+
+    assert!(matches!(result.status, SessionStatusSummary::Busy));
     assert_eq!(result.path.as_deref(), Some("src/session.rs"));
 }
 

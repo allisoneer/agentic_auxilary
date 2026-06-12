@@ -282,6 +282,16 @@ pub enum SessionStatusInfo {
         /// Next retry timestamp.
         next: u64,
     },
+    /// Unknown upstream status variant.
+    #[serde(other)]
+    Unknown,
+}
+
+impl SessionStatusInfo {
+    /// Whether this status should be treated conservatively as busy.
+    pub fn is_busy_like(&self) -> bool {
+        matches!(self, Self::Busy | Self::Retry { .. } | Self::Unknown)
+    }
 }
 
 /// A file diff entry from the session diff endpoint.
@@ -425,6 +435,27 @@ mod tests {
         let resp: HashMap<String, SessionStatusInfo> = serde_json::from_str(json).unwrap();
 
         assert!(resp.is_empty());
+    }
+
+    #[test]
+    fn parse_unknown_status_as_unknown() {
+        let status: SessionStatusInfo = serde_json::from_str(r#"{"type":"paused"}"#).unwrap();
+        assert_eq!(status, SessionStatusInfo::Unknown);
+    }
+
+    #[test]
+    fn unknown_status_is_busy_like() {
+        assert!(SessionStatusInfo::Unknown.is_busy_like());
+        assert!(SessionStatusInfo::Busy.is_busy_like());
+        assert!(
+            SessionStatusInfo::Retry {
+                attempt: 1,
+                message: "retry".to_string(),
+                next: 123,
+            }
+            .is_busy_like()
+        );
+        assert!(!SessionStatusInfo::Idle.is_busy_like());
     }
 
     #[test]

@@ -9,7 +9,7 @@ integration-test-bunx-stable:
     #!/usr/bin/env bash
     set -euxo pipefail
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.15.7" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.17.4" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration -- --ignored --nocapture --test-threads=1
 
@@ -19,7 +19,7 @@ smoke-bunx-version:
     #!/usr/bin/env bash
     set -euxo pipefail
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.15.7" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.17.4" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration test_health_returns_pinned_version -- --ignored --nocapture
 
@@ -30,7 +30,7 @@ integration-test-bunx-verbose:
     set -euxo pipefail
     RUST_LOG=opencode_rs=debug \
     OPENCODE_BINARY=bunx \
-    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.15.7" \
+    OPENCODE_BINARY_ARGS="--yes opencode-ai@1.17.4" \
     OPENCODE_INTEGRATION=1 \
     cargo test -p opencode_rs --features server --test integration -- --ignored --nocapture --test-threads=1
 
@@ -41,8 +41,8 @@ launcher-orphan-cleanup-regression:
     set -euxo pipefail
     : "${OPENCODE_INTEGRATION:=1}"
     : "${OPENCODE_BINARY:=bunx}"
-    : "${OPENCODE_BINARY_ARGS:=--yes opencode-ai@1.15.7}"
-    bunx --yes opencode-ai@1.15.7 --version
+    : "${OPENCODE_BINARY_ARGS:=--yes opencode-ai@1.17.4}"
+    bunx --yes opencode-ai@1.17.4 --version
     OPENCODE_ORCHESTRATOR_MANAGED=0 \
     OPENCODE_INTEGRATION="$OPENCODE_INTEGRATION" \
     OPENCODE_BINARY="$OPENCODE_BINARY" \
