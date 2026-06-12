@@ -239,6 +239,12 @@ impl Client {
         crate::http::misc::MiscApi::new(self.http.clone())
     }
 
+    /// Get the parallel V2 API surface.
+    #[cfg(feature = "http")]
+    pub fn v2(&self) -> crate::http::v2::V2Client {
+        crate::http::v2::V2Client::new(self.http.clone())
+    }
+
     /// Get the question API.
     #[cfg(feature = "http")]
     pub fn question(&self) -> crate::http::question::QuestionApi {

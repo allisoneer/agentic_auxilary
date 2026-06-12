@@ -10,6 +10,10 @@ If you're trying to get running, start with setup and branch out from there. The
 - Troubleshooting: [`./troubleshooting.md`](./troubleshooting.md)
 - Why this stack: [`./why_this_stack.md`](./why_this_stack.md)
 
+## Upgrades
+
+- OpenCode upgrade (1.15.7 → 1.17.4): [`./opencode_1_17_4_upgrade.md`](./opencode_1_17_4_upgrade.md)
+
 ## Setup paths
 
 - Fresh install on a new machine: [`./setup/fresh_install.md`](./setup/fresh_install.md)

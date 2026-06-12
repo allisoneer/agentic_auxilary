@@ -77,7 +77,7 @@ fn unique_tmp_path(prefix: &str) -> std::path::PathBuf {
 const PERMISSION_CONFIG_FIXTURE: &str = "opencode.permission.config.json";
 
 // NOTE: This fixture pins a concrete model ID (currently anthropic/claude-sonnet-4-5).
-// OpenCode v1.15.7 resolves model availability dynamically at runtime. If this pin is invalid
+// OpenCode v1.17.4 resolves model availability dynamically at runtime. If this pin is invalid
 // or unavailable, the server should fail loudly (no silent fallback). If needed, update the
 // fixture model string to another concrete (non-*-latest) model ID.
 struct TempFileGuard {
@@ -221,7 +221,7 @@ async fn live_managed_server_reports_exact_pinned_version() {
     let health = s.client().misc().health().await.expect("health ok");
 
     version::validate_exact_version(health.version.as_deref())
-        .expect("version must match pinned 1.15.7 target");
+        .expect("version must match pinned 1.17.4 target");
 }
 
 #[tokio::test]

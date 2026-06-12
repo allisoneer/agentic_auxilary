@@ -6,7 +6,7 @@
 //!   `OPENCODE_INTEGRATION=1 cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
 //! For bunx-provisioned testing:
-//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.15.7" OPENCODE_INTEGRATION=1 \
+//!   `OPENCODE_BINARY=bunx OPENCODE_BINARY_ARGS="--yes opencode-ai@1.17.4" OPENCODE_INTEGRATION=1 \
 //!    cargo test -p opencode_rs --features server --test integration -- --ignored`
 //!
 //! Without `server` feature (requires pre-running server):
@@ -16,7 +16,7 @@
 //! Environment variables:
 //!   `OPENCODE_INTEGRATION` - Must be set to run integration tests
 //!   `OPENCODE_BINARY` - Path to opencode binary or launcher (default: "opencode")
-//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.15.7")
+//!   `OPENCODE_BINARY_ARGS` - Extra args for launcher (e.g., "--yes opencode-ai@1.17.4")
 //!   `OPENCODE_BASE_URL` - Base URL when not using managed server (default: <http://127.0.0.1:4096>)
 //!   `OPENCODE_DIRECTORY` - Directory context for requests (default: current directory)
 
@@ -533,7 +533,7 @@ async fn test_agents_list() {
 /// Test that command dispatch reaches command lookup instead of request validation.
 #[tokio::test]
 #[ignore = "requires: opencode serve"]
-async fn test_command_dispatch_passes_request_validation_v1_15_7() {
+async fn test_command_dispatch_passes_request_validation() {
     if !should_run() {
         return;
     }
@@ -567,7 +567,7 @@ async fn test_command_dispatch_passes_request_validation_v1_15_7() {
     let err_text = err.to_string();
     assert!(
         err_text.contains("HTTP error 500") || err_text.contains("UnknownError"),
-        "expected 1.15.7 unknown-command server error shape, got: {err_text}"
+        "expected 1.17.4 unknown-command server error shape, got: {err_text}"
     );
     assert!(
         !err_text.contains("messageID"),
