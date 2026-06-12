@@ -6,7 +6,8 @@
       "mcp__orchestrator__list_commands",
       "mcp__orchestrator__get_session_state",
       "mcp__orchestrator__respond_permission",
-      "mcp__orchestrator__respond_question"
+      "mcp__orchestrator__respond_question",
+      "mcp__orchestrator__list_agents"
     ],
     "deny": [
       "Bash",
@@ -38,7 +39,9 @@
       "TaskUpdate",
       "EnterPlanMode",
       "ExitPlanMode",
-      "AskUserQuestion"
+      "AskUserQuestion",
+      "Workflow",
+      "DesignSync"
     ]
   }
 }

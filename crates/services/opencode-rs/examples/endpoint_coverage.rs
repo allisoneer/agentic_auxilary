@@ -1,14 +1,8 @@
 //! Endpoint coverage tool for opencode-rs SDK.
 //!
-//! Compares SDK endpoints against the server's OpenAPI spec to identify
-//! missing, extra, and matched endpoints.
-//!
-//! Usage:
-//!   cargo run -p opencode_rs --example endpoint_coverage --features full
-//!
-//! Or with a running server:
-//!   cargo run -p opencode_rs --example endpoint_coverage --features full -- --base-url http://localhost:4096
+//! Reports the SDK endpoint inventory and any deterministic inventory issues.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::env;
 use std::process::ExitCode;
@@ -27,11 +21,13 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     ("POST", "/session/{id}/share"),
     ("DELETE", "/session/{id}/share"),
     ("POST", "/session/{id}/revert"),
+    ("POST", "/session/{id}/unrevert"),
     ("POST", "/session/{id}/init"),
     ("GET", "/session/{id}/diff"),
     ("GET", "/session/{id}/todo"),
     ("PATCH", "/session/{id}"),
     ("GET", "/session/status"),
+    ("GET", "/session/{id}/children"),
     // messages.rs
     ("POST", "/session/{id}/message"),
     ("GET", "/session/{id}/message"),
@@ -129,6 +125,38 @@ const SDK_ENDPOINTS: &[(&str, &str)] = &[
     ("GET", "/skill"),
     // resource.rs
     ("GET", "/experimental/resource"),
+    // v2 core groups
+    ("GET", "/api/health"),
+    ("GET", "/api/location"),
+    ("GET", "/api/session"),
+    ("POST", "/api/session"),
+    ("GET", "/api/session/{id}"),
+    ("POST", "/api/session/{id}/prompt"),
+    ("POST", "/api/session/{id}/compact"),
+    ("POST", "/api/session/{id}/wait"),
+    ("GET", "/api/session/{id}/context"),
+    ("GET", "/api/session/{id}/message"),
+    ("GET", "/api/model"),
+    ("GET", "/api/provider"),
+    ("GET", "/api/provider/{id}"),
+    ("GET", "/api/permission/request"),
+    ("GET", "/api/session/{id}/permission"),
+    ("POST", "/api/session/{id}/permission/{requestId}/reply"),
+    ("GET", "/api/question/request"),
+    ("GET", "/api/session/{id}/question"),
+    ("POST", "/api/session/{id}/question/{requestId}/reply"),
+    ("POST", "/api/session/{id}/question/{requestId}/reject"),
+    // v2 optional additive groups
+    ("GET", "/api/connector"),
+    ("GET", "/api/connector/{id}"),
+    ("POST", "/api/connector/{id}/connect/key"),
+    ("POST", "/api/connector/{id}/connect/oauth"),
+    ("GET", "/api/connector/oauth/{attemptId}"),
+    ("POST", "/api/connector/oauth/{attemptId}/complete"),
+    ("DELETE", "/api/connector/oauth/{attemptId}"),
+    ("GET", "/api/fs/list"),
+    ("GET", "/api/fs/find"),
+    ("GET", "/api/reference"),
 ];
 
 /// Endpoints intentionally not implemented in SDK.
@@ -149,13 +177,16 @@ const SKIP_ENDPOINTS: &[(&str, &str)] = &[
     ("POST", "/tui/picker"),
     ("POST", "/tui/prompt"),
     ("POST", "/tui/auth_complete"),
+    // Explicitly deferred optional V2 coverage
+    ("GET", "/api/fs/read/{path}"),
+    ("GET", "/api/event"),
+    ("GET", "/api/permission/saved"),
+    ("DELETE", "/api/permission/saved/{id}"),
 ];
 
 fn normalize_path(path: &str) -> String {
-    // Convert OpenAPI path params like {sessionID} to {id} for comparison
     let mut normalized = path.to_string();
 
-    // Common normalizations
     normalized = normalized.replace("{sessionID}", "{id}");
     normalized = normalized.replace("{sessionId}", "{id}");
     normalized = normalized.replace("{messageID}", "{messageId}");
@@ -168,28 +199,40 @@ fn normalize_path(path: &str) -> String {
     normalized = normalized.replace("{skillID}", "{id}");
     normalized = normalized.replace("{providerID}", "{id}");
     normalized = normalized.replace("{mcpID}", "{id}");
+    normalized = normalized.replace("{requestID}", "{requestId}");
+    normalized = normalized.replace("{connectorID}", "{id}");
+    normalized = normalized.replace("{attemptID}", "{attemptId}");
+    normalized = normalized.replace('*', "{path}");
 
     normalized
+}
+
+fn duplicate_entries(entries: &[(&str, &str)]) -> Vec<String> {
+    let mut counts = BTreeMap::new();
+    for (method, path) in entries {
+        let key = format!("{} {}", method, normalize_path(path));
+        *counts.entry(key).or_insert(0usize) += 1;
+    }
+
+    counts
+        .into_iter()
+        .filter_map(|(key, count)| (count > 1).then_some(key))
+        .collect()
 }
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
 
-    // Check for --help
     if args.iter().any(|a| a == "--help" || a == "-h") {
-        println!("Usage: endpoint_coverage [--base-url URL] [--json]");
+        println!("Usage: endpoint_coverage [--json]");
         println!();
         println!("Options:");
-        println!("  --base-url URL   Server base URL (default: starts managed server)");
         println!("  --json           Output results as JSON");
         println!("  --help, -h       Show this help message");
         return ExitCode::SUCCESS;
     }
 
     let json_output = args.iter().any(|a| a == "--json");
-
-    // For now, just output the SDK endpoints list
-    // Full implementation would fetch from server and compare
 
     let sdk_set: BTreeSet<(String, String)> = SDK_ENDPOINTS
         .iter()
@@ -201,31 +244,73 @@ fn main() -> ExitCode {
         .map(|(m, p)| (m.to_string(), normalize_path(p)))
         .collect();
 
+    let duplicate_sdk_endpoints = duplicate_entries(SDK_ENDPOINTS);
+    let duplicate_skip_endpoints = duplicate_entries(SKIP_ENDPOINTS);
+    let overlapping_endpoints: Vec<String> = sdk_set
+        .intersection(&skip_set)
+        .map(|(method, path)| format!("{method} {path}"))
+        .collect();
+
     if json_output {
         let output = serde_json::json!({
+            "comparison_mode": "inventory-only",
+            "live_diff_performed": false,
             "sdk_endpoints": sdk_set.iter().map(|(m, p)| format!("{m} {p}")).collect::<Vec<_>>(),
             "skipped_endpoints": skip_set.iter().map(|(m, p)| format!("{m} {p}")).collect::<Vec<_>>(),
             "sdk_count": sdk_set.len(),
             "skipped_count": skip_set.len(),
+            "duplicate_sdk_endpoints": duplicate_sdk_endpoints,
+            "duplicate_skip_endpoints": duplicate_skip_endpoints,
+            "overlapping_endpoints": overlapping_endpoints,
+            "missing_endpoints": Vec::<String>::new(),
+            "extra_endpoints": Vec::<String>::new(),
         });
-        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        match serde_json::to_string_pretty(&output) {
+            Ok(json) => println!("{json}"),
+            Err(error) => {
+                eprintln!("Failed to serialize JSON output: {error}");
+                return ExitCode::FAILURE;
+            }
+        }
     } else {
         println!("=== SDK Endpoint Coverage Report ===");
         println!();
-        println!("SDK Endpoints ({}):", sdk_set.len());
+        println!("Mode: inventory-only (no live OpenAPI diff performed)");
+        println!();
+        println!("SDK Endpoints ({})", sdk_set.len());
         for (method, path) in &sdk_set {
             println!("  {method} {path}");
         }
         println!();
-        println!("Intentionally Skipped ({}):", skip_set.len());
+        println!("Intentionally Skipped ({})", skip_set.len());
         for (method, path) in &skip_set {
             println!("  {method} {path}");
         }
         println!();
-        println!("Note: Run with a live server to compare against OpenAPI spec.");
-        println!(
-            "      cargo run -p opencode_rs --example endpoint_coverage --features full -- --base-url http://localhost:4096"
-        );
+
+        if !duplicate_sdk_endpoints.is_empty() {
+            println!("Duplicate SDK endpoints:");
+            for endpoint in &duplicate_sdk_endpoints {
+                println!("  {endpoint}");
+            }
+            println!();
+        }
+        if !duplicate_skip_endpoints.is_empty() {
+            println!("Duplicate skipped endpoints:");
+            for endpoint in &duplicate_skip_endpoints {
+                println!("  {endpoint}");
+            }
+            println!();
+        }
+        if !overlapping_endpoints.is_empty() {
+            println!("Overlapping SDK/skipped endpoints:");
+            for endpoint in &overlapping_endpoints {
+                println!("  {endpoint}");
+            }
+            println!();
+        }
+
+        println!("Live OpenAPI diff is not implemented in this upgrade slice.");
     }
 
     ExitCode::SUCCESS

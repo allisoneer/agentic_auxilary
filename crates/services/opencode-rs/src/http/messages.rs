@@ -88,7 +88,7 @@ impl MessagesApi {
     ///
     /// Uses transport-level retry for transient network failures (connect/timeout).
     ///
-    /// Live verification against `OpenCode` 1.15.7 must confirm whether command
+    /// Live verification against `OpenCode` 1.17.4 must confirm whether command
     /// dispatch dedupes by `messageID`. Until that contract is revalidated,
     /// callers should treat this endpoint as at-least-once, not exactly-once:
     /// if the server has already started executing the command before a

@@ -134,16 +134,7 @@ impl SessionsApi {
 
         let active: Vec<String> = map
             .into_iter()
-            .filter_map(|(sid, status)| {
-                if matches!(
-                    status,
-                    SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. }
-                ) {
-                    Some(sid)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(sid, status)| status.is_busy_like().then_some(sid))
             .collect();
 
         let busy = !active.is_empty();
@@ -543,6 +534,33 @@ mod tests {
 
         assert!(status.busy);
         assert!(status.active_session_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_status_treats_unknown_as_busy() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "s1": {"type": "paused"}
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+
+        let sessions = SessionsApi::new(http);
+        let status = sessions.status().await.unwrap();
+
+        assert!(status.busy);
+        assert_eq!(status.active_session_id.as_deref(), Some("s1"));
     }
 
     #[tokio::test]

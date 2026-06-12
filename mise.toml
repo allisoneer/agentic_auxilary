@@ -28,8 +28,8 @@ _.path = ["tools/bin"]
 # instead of compiling from source. Using github backend for proper lockfile support.
 "github:cargo-bins/cargo-binstall" = "latest"
 # BEGIN:xtask:autogen mise:tool-pins
-claude = "2.1.160"
-"github:anomalyco/opencode" = "1.15.7"
+claude = "2.1.175"
+"github:anomalyco/opencode" = "1.17.4"
 # END:xtask:autogen
 just = "latest"
 shellcheck = "0.11.0"

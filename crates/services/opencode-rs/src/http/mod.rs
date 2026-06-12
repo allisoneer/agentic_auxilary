@@ -40,6 +40,7 @@ pub mod skills;
 pub mod sync;
 pub mod tools;
 pub mod tui;
+pub mod v2;
 pub mod workspaces;
 pub mod worktree;
 

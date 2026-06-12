@@ -168,7 +168,7 @@ impl Respond for SequenceResponder {
 }
 
 // ============================================================================
-// JSON Fixtures matching upstream v1.15.7 `...ID` wire casing.
+// JSON Fixtures matching upstream v1.17.4 `...ID` wire casing.
 // ============================================================================
 
 /// Create a session fixture with the given session ID.
@@ -236,6 +236,11 @@ pub fn retry_status_fixture(attempt: u64, message: &str, next: u64) -> Value {
         "message": message,
         "next": next,
     })
+}
+
+/// Create an unknown status fixture entry.
+pub fn unknown_status_fixture() -> Value {
+    serde_json::json!({ "type": "paused" })
 }
 
 /// Create a permission fixture.
