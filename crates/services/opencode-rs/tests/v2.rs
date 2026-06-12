@@ -1,4 +1,11 @@
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![expect(
+    clippy::expect_used,
+    reason = "integration tests use concise failure handling"
+)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "integration tests use concise failure handling"
+)]
 
 use opencode_rs::ClientBuilder;
 use opencode_rs::types::permission::PermissionReply;
@@ -17,6 +24,14 @@ use wiremock::matchers::body_json;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::matchers::query_param;
+
+fn expect_ok<T, E: std::fmt::Debug>(result: Result<T, E>, context: &str) -> T {
+    result.expect(context)
+}
+
+fn unwrap_some<T>(value: Option<T>) -> T {
+    value.unwrap()
+}
 
 #[tokio::test]
 async fn v2_health_and_location_use_expected_shapes() {
@@ -42,12 +57,14 @@ async fn v2_health_and_location_use_expected_shapes() {
         .mount(&mock)
         .await;
 
-    let client = ClientBuilder::new()
-        .base_url(mock.uri())
-        .directory("/tmp/project")
-        .workspace("workspace-1")
-        .build()
-        .unwrap();
+    let client = expect_ok(
+        ClientBuilder::new()
+            .base_url(mock.uri())
+            .directory("/tmp/project")
+            .workspace("workspace-1")
+            .build(),
+        "wiremock test client should build",
+    );
 
     let health = client.v2().health().get().await.unwrap();
     assert!(health.healthy);
@@ -506,7 +523,7 @@ async fn v2_optional_connector_fs_and_reference_groups_cover_json_only_endpoints
     assert_eq!(connectors.data.len(), 1);
 
     let connector = client.v2().connector().get("con_1").await.unwrap();
-    assert_eq!(connector.data.unwrap()["id"], "con_1");
+    assert_eq!(unwrap_some(connector.data)["id"], "con_1");
 
     client
         .v2()

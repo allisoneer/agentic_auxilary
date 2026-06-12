@@ -265,7 +265,13 @@ fn main() -> ExitCode {
             "missing_endpoints": Vec::<String>::new(),
             "extra_endpoints": Vec::<String>::new(),
         });
-        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        match serde_json::to_string_pretty(&output) {
+            Ok(json) => println!("{json}"),
+            Err(error) => {
+                eprintln!("Failed to serialize JSON output: {error}");
+                return ExitCode::FAILURE;
+            }
+        }
     } else {
         println!("=== SDK Endpoint Coverage Report ===");
         println!();
