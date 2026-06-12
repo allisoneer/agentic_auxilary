@@ -359,6 +359,16 @@
       "remote": "https://github.com/anomalyco/opencode",
       "description": "Retry exact OpenCode 1.15.6 release reference for upgrade-diff research",
       "ref": "refs/tags/v1.15.6"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "Latest OpenCode release source for researching schema normalization and DeepSeek compatibility",
+      "ref": "refs/tags/v1.16.0"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "OpenCode upstream exact release for 1.17.4 upgrade-diff research",
+      "ref": "refs/tags/v1.17.4"
     }
   ]
 }

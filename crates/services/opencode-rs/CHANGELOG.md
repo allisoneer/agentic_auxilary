@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.12.0] - 2026-06-12
+
+### ⛰️  Features
+- *(opencode)* Upgrade OpenCode support to 1.17.4
+
+### 🐛 Bug Fixes
+- *(opencode-rs)* Address lint review comments
 ## [0.11.2] - 2026-06-02
 
 ### 🐛 Bug Fixes
