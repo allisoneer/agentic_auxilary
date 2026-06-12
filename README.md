@@ -123,6 +123,7 @@ opencode_rs = "0.11.2"
 
 - [`agentic-config`](crates/infra/agentic-config) - Unified configuration system for agentic tools ecosystem
 - [`agentic_logging`](crates/infra/agentic-logging) - Centralized JSONL logging infrastructure for agentic tools
+- [`gwt-worktree`](crates/infra/gwt-worktree) - Programmatic gwt-compatible git worktree management library
 - [`thoughts-tool`](crates/infra/thoughts-core) - Flexible thought management using filesystem mounts for git repositories
 
 ### linear

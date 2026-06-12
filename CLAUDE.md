@@ -21,6 +21,7 @@ Guidance for Claude Code when working with this repository.
 - `agentic-config` (lib) - `crates/infra/agentic-config/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
+- `gwt-worktree` (lib) - `crates/infra/gwt-worktree/`
 
 ### legacy
 

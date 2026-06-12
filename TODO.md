@@ -30,6 +30,11 @@ These items have dependencies and should be done in order.
 
 ## To plan/design:
 
+### `gwt-worktree` follow-up work
+
+- Consider a CLI/tooling layer on top of `crates/infra/gwt-worktree/` for direct user-facing worktree operations.
+- Consider a pure-gix backend alternative if we later want to reduce libgit2 coupling while preserving the current plan/execute API.
+
 ### Optional config escape hatch for project-wide orchestrator session listing
 
 - TODO(3): Consider an `agentic.toml` boolean to opt orchestrator session browsing into project-wide listing instead of launch-directory scope. Deferred for now because it feels like scope creep and probably not worth this migration PR.

@@ -249,6 +249,13 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "gwt-worktree"
+changelog_path = "crates/infra/gwt-worktree/CHANGELOG.md"
+git_tag_name = "gwt-worktree-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "universal-tool-core"
 changelog_path = "crates/legacy/universal-tool-core/CHANGELOG.md"
 git_tag_name = "universal-tool-core-v{{ version }}"
