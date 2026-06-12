@@ -105,6 +105,13 @@ just endpoint-coverage-json     # JSON output for tooling
 just schema-generate    # Regenerate agentic.schema.json from Rust types
 ```
 
+## Schema Publication Invariants
+
+- Canonical schemars generation lives in `crates/agentic-tools/core/src/schema.rs` and must stay the single source of truth for cached tool schemas.
+- Do not mutate cached canonical `Arc<Schema>` values for provider compatibility work; apply compatibility lowering only to cloned/serialized publication outputs.
+- Provider-specific or transport-specific schema fixes belong at publication/rendering boundaries such as MCP `list_tools`, not inside canonical schema generation.
+- `SchemaPublicationProfile::Canonical` must remain the default unless a caller explicitly opts into a lowered publication profile.
+
 ### Vendored Codex
 
 `vendor/codex/` is a foreign vendored subtree excluded from the root workspace. Do not edit it as a first-class workspace member.

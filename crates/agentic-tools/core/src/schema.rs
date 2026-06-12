@@ -5,6 +5,9 @@ use serde_json::Value as Json;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+#[path = "schema_publication.rs"]
+pub mod publication;
+
 /// Field-level constraint to apply to a schema.
 #[derive(Clone, Debug)]
 pub enum FieldConstraint {

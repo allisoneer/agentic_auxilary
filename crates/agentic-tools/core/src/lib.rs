@@ -30,6 +30,8 @@ pub use registry::ToolRegistryBuilder;
 pub use schema::FieldConstraint;
 pub use schema::SchemaEngine;
 pub use schema::SchemaTransform;
+pub use schema::publication::SchemaPublicationProfile;
+pub use schema::publication::apply_schema_publication_profile;
 pub use tool::Tool;
 pub use tool::ToolCodec;
 

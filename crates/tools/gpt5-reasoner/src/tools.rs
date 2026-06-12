@@ -102,3 +102,63 @@ pub fn build_registry(cfg: ReasoningConfig) -> ToolRegistry {
         .register::<RequestTool, ()>(RequestTool::new(cfg))
         .finish()
 }
+
+#[cfg(test)]
+mod schema_proof_tests {
+    use super::RequestInput;
+    use agentic_tools_core::Tool;
+    use agentic_tools_core::ToolContext;
+    use agentic_tools_core::ToolError;
+    use agentic_tools_core::ToolRegistry;
+    use futures::future::BoxFuture;
+
+    #[derive(Clone)]
+    struct SchemaProbeTool;
+
+    impl Tool for SchemaProbeTool {
+        type Input = RequestInput;
+        type Output = String;
+
+        const NAME: &'static str = "schema_probe_request_input";
+        const DESCRIPTION: &'static str = "Schema-only probe tool for RequestInput";
+
+        fn call(
+            &self,
+            _input: Self::Input,
+            _ctx: &ToolContext,
+        ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+    }
+
+    #[test]
+    fn proof_request_input_files_items_refers_to_defs_filemeta() {
+        let registry = ToolRegistry::builder()
+            .register::<SchemaProbeTool, ()>(SchemaProbeTool)
+            .finish();
+
+        let erased = registry
+            .get(SchemaProbeTool::NAME)
+            .expect("schema probe tool must be registered");
+
+        let schema = erased.input_schema();
+        let json = serde_json::to_value(&schema).expect("serialize RequestInput schema");
+
+        assert_eq!(
+            json["properties"]["files"]["items"]["$ref"],
+            serde_json::json!("#/$defs/FileMeta")
+        );
+        assert_eq!(
+            json["$defs"]["FileMeta"]["type"],
+            serde_json::json!("object")
+        );
+        assert_eq!(
+            json["$defs"]["FileMeta"]["properties"]["filename"]["type"],
+            serde_json::json!("string")
+        );
+        assert_eq!(
+            json["$defs"]["FileMeta"]["properties"]["description"]["type"],
+            serde_json::json!("string")
+        );
+    }
+}
