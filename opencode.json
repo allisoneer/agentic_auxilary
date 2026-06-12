@@ -28,7 +28,7 @@
     },
     "NormalOpenAI": {
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
-      "model": "opencode/gpt-5.4",
+      "model": "openai/gpt-5.4",
       "mode": "primary"
     },
     "OrchestratorClaude": {
