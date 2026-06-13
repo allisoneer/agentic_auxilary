@@ -236,7 +236,8 @@ mod tests {
     #[test]
     fn computes_base_for_normal_repo_git_dir() {
         let temp = TempDir::new().unwrap();
-        let repo_root = temp.path().join("repo");
+        let temp_root = canonical_temp_root(&temp);
+        let repo_root = temp_root.join("repo");
         std::fs::create_dir_all(&repo_root).unwrap();
         let git_dir = repo_root.join(".git");
         std::fs::create_dir_all(&git_dir).unwrap();
@@ -272,7 +273,8 @@ mod tests {
     #[test]
     fn creates_readme_only_on_first_base_creation() {
         let temp = TempDir::new().unwrap();
-        let base = temp.path().join("repo.gwt");
+        let temp_root = canonical_temp_root(&temp);
+        let base = temp_root.join("repo.gwt");
 
         ensure_worktree_base_dir(&base).unwrap();
         let readme = base.join("README.md");
@@ -293,19 +295,21 @@ mod tests {
     #[test]
     fn resolves_bare_repo_without_main_workdir() {
         let temp = TempDir::new().unwrap();
-        let bare_path = temp.path().join("example.git");
+        let temp_root = canonical_temp_root(&temp);
+        let bare_path = temp_root.join("example.git");
         Repository::init_bare(&bare_path).unwrap();
 
         let repo = ControlRepo::from_git_dir(bare_path.to_str().unwrap()).unwrap();
 
         assert_eq!(repo.main_workdir, None);
-        assert_eq!(repo.worktree_base, temp.path().join("example.gwt"));
+        assert_eq!(repo.worktree_base, temp_root.join("example.gwt"));
     }
 
     #[test]
     fn normalizes_repo_root_inputs_to_dot_git() {
         let temp = TempDir::new().unwrap();
-        let repo_root = temp.path().join("repo");
+        let temp_root = canonical_temp_root(&temp);
+        let repo_root = temp_root.join("repo");
         Repository::init(&repo_root).unwrap();
 
         let repo = ControlRepo::from_git_dir(repo_root.to_str().unwrap()).unwrap();
@@ -316,9 +320,10 @@ mod tests {
     #[test]
     fn resolves_from_explicit_path_before_env_and_config() {
         let temp = TempDir::new().unwrap();
-        let path_repo = temp.path().join("path-repo");
-        let env_repo = temp.path().join("env-repo");
-        let cfg_repo = temp.path().join("cfg-repo");
+        let temp_root = canonical_temp_root(&temp);
+        let path_repo = temp_root.join("path-repo");
+        let env_repo = temp_root.join("env-repo");
+        let cfg_repo = temp_root.join("cfg-repo");
         Repository::init(&path_repo).unwrap();
         Repository::init(&env_repo).unwrap();
         Repository::init(&cfg_repo).unwrap();
@@ -345,8 +350,9 @@ mod tests {
     #[test]
     fn resolves_from_env_before_config_when_discovery_missing() {
         let temp = TempDir::new().unwrap();
-        let env_repo = temp.path().join("env-repo");
-        let cfg_repo = temp.path().join("cfg-repo");
+        let temp_root = canonical_temp_root(&temp);
+        let env_repo = temp_root.join("env-repo");
+        let cfg_repo = temp_root.join("cfg-repo");
         Repository::init(&env_repo).unwrap();
         Repository::init(&cfg_repo).unwrap();
 
@@ -356,7 +362,7 @@ mod tests {
         };
 
         let resolved = ControlRepo::resolve(&ResolveControlRepoOptions {
-            path: Some(temp.path()),
+            path: Some(temp_root.as_path()),
             cwd: None,
             env_git_dir: Some(env_repo.join(".git").to_str().unwrap()),
             config: Some(&config),
@@ -372,8 +378,9 @@ mod tests {
     #[test]
     fn resolves_worktree_gitfile_inputs_to_private_gitdir() {
         let temp = TempDir::new().unwrap();
-        let main_repo = temp.path().join("main");
-        let worktree_path = temp.path().join("main.gwt").join("feature");
+        let temp_root = canonical_temp_root(&temp);
+        let main_repo = temp_root.join("main");
+        let worktree_path = temp_root.join("main.gwt").join("feature");
         let repo = Repository::init(&main_repo).unwrap();
         commit_initial(&repo);
         std::fs::create_dir_all(worktree_path.parent().unwrap()).unwrap();
@@ -388,13 +395,10 @@ mod tests {
     #[test]
     fn resolves_gitdir_pointer_to_normalized_path() {
         let temp = TempDir::new().unwrap();
-        let repo_root = temp.path().join("repo");
+        let temp_root = canonical_temp_root(&temp);
+        let repo_root = temp_root.join("repo");
         let dot_git = repo_root.join(".git");
-        let private_gitdir = temp
-            .path()
-            .join("private")
-            .join("worktrees")
-            .join("feature");
+        let private_gitdir = temp_root.join("private").join("worktrees").join("feature");
         std::fs::create_dir_all(&repo_root).unwrap();
         std::fs::create_dir_all(&private_gitdir).unwrap();
         std::fs::write(
@@ -409,6 +413,19 @@ mod tests {
             PathBuf::from(resolved),
             private_gitdir.canonicalize().unwrap()
         );
+    }
+
+    fn canonical_temp_root(temp: &TempDir) -> PathBuf {
+        #[cfg(target_os = "macos")]
+        {
+            temp.path()
+                .canonicalize()
+                .expect("canonicalize TempDir path on macOS")
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            temp.path().to_path_buf()
+        }
     }
 
     fn commit_initial(repo: &Repository) {

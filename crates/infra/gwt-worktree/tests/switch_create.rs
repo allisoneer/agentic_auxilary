@@ -11,14 +11,16 @@ use gwt_worktree::remote::RemoteBranchTarget;
 use gwt_worktree::remote::RemoteRefresher;
 use gwt_worktree::repo::ControlRepo;
 use gwt_worktree::types::BranchName;
+use gwt_worktree::worktree::list_worktrees;
 use std::error::Error;
 use tempfile::TempDir;
 
 #[test]
 fn reuses_existing_worktree() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
-    let linked_path = temp.path().join("main.gwt").join("feature");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let linked_path = temp_root.join("main.gwt").join("feature");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
@@ -46,7 +48,8 @@ fn reuses_existing_worktree() -> Result<(), Box<dyn Error>> {
 #[test]
 fn creates_new_branch_with_post_create_commands_as_data_only() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
@@ -80,7 +83,8 @@ fn creates_new_branch_with_post_create_commands_as_data_only() -> Result<(), Box
 #[test]
 fn force_create_requires_explicit_start_point() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
@@ -106,7 +110,8 @@ fn force_create_requires_explicit_start_point() -> Result<(), Box<dyn Error>> {
 #[test]
 fn remote_guess_requires_provider_and_sets_upstream() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
     let repo = Repository::init(&main_repo)?;
     let commit_oid = commit_initial(&repo)?;
     repo.remote("origin", "https://example.com/origin.git")?;
@@ -151,8 +156,9 @@ fn remote_guess_requires_provider_and_sets_upstream() -> Result<(), Box<dyn Erro
 #[test]
 fn existing_worktree_plan_uses_actual_path_outside_base() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
-    let outside_path = temp.path().join("elsewhere").join("feature");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let outside_path = temp_root.join("elsewhere").join("feature");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     repo.branch("feature", &repo.head()?.peel_to_commit()?, false)?;
@@ -184,8 +190,9 @@ fn existing_worktree_plan_uses_actual_path_outside_base() -> Result<(), Box<dyn 
 #[test]
 fn existing_worktree_execution_fails_when_target_path_is_missing() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
-    let linked_path = temp.path().join("main.gwt").join("feature");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let linked_path = temp_root.join("main.gwt").join("feature");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
@@ -217,8 +224,9 @@ fn existing_worktree_execution_fails_when_target_path_is_missing() -> Result<(),
 #[test]
 fn create_like_switch_execution_rejects_target_path_outside_base() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
-    let outside_path = temp.path().join("elsewhere").join("feature-outside");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let outside_path = temp_root.join("elsewhere").join("feature-outside");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     repo.branch("feature-outside", &repo.head()?.peel_to_commit()?, false)?;
@@ -247,10 +255,11 @@ fn create_like_switch_execution_rejects_target_path_outside_base() -> Result<(),
 #[test]
 fn main_switch_execution_fails_when_target_path_is_missing() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let control_git_dir = temp.path().join("control.git");
+    let temp_root = canonical_temp_root(&temp);
+    let control_git_dir = temp_root.join("control.git");
     Repository::init_bare(&control_git_dir)?;
     let control = ControlRepo::from_git_dir(control_git_dir.to_str().ok_or("non-utf8")?)?;
-    let missing_main_path = temp.path().join("missing-main");
+    let missing_main_path = temp_root.join("missing-main");
     let plan = SwitchPlan {
         branch: BranchName::new("main")?,
         admin_name: BranchName::new("main")?.encode_admin_name(),
@@ -266,6 +275,62 @@ fn main_switch_execution_fails_when_target_path_is_missing() -> Result<(), Box<d
     }
 
     Ok(())
+}
+
+#[test]
+fn stale_linked_entry_falls_through_to_existing_local_branch() -> Result<(), Box<dyn Error>> {
+    let temp = TempDir::new()?;
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let linked_path = temp_root.join("main.gwt").join("feature");
+    let repo = Repository::init(&main_repo)?;
+    commit_initial(&repo)?;
+    repo.branch("feature", &repo.head()?.peel_to_commit()?, false)?;
+    std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
+    let branch = repo.find_branch("feature", BranchType::Local)?;
+    let reference = branch.into_reference();
+    let mut options = git2::WorktreeAddOptions::new();
+    options.reference(Some(&reference));
+    repo.worktree("feature", &linked_path, Some(&options))?;
+    std::fs::remove_dir_all(&linked_path)?;
+    let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
+
+    let entries = list_worktrees(&control)?;
+    assert!(entries.iter().any(|entry| {
+        !entry.is_main
+            && entry.path == linked_path
+            && entry.branch.as_deref() == Some("feature")
+            && entry.prunable
+    }));
+
+    let plan = plan_switch(
+        &control,
+        &SwitchRequest {
+            branch: BranchName::new("feature")?,
+            create: false,
+            force_create: false,
+            start_point: None,
+            guess_remote: false,
+        },
+        None,
+    )?;
+
+    assert!(matches!(plan.kind, SwitchPlanKind::ExistingLocalBranch));
+    assert_eq!(plan.target_path, linked_path);
+    Ok(())
+}
+
+fn canonical_temp_root(temp: &TempDir) -> std::path::PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        temp.path()
+            .canonicalize()
+            .expect("canonicalize TempDir path on macOS")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temp.path().to_path_buf()
+    }
 }
 
 struct StubRemoteRefresher {

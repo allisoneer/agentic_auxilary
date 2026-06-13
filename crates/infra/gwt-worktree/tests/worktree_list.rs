@@ -8,8 +8,9 @@ use tempfile::TempDir;
 #[test]
 fn listing_includes_main_and_linked_entries() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
-    let linked_path = temp.path().join("main.gwt").join("feature");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let linked_path = temp_root.join("main.gwt").join("feature");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
@@ -48,8 +49,9 @@ fn dirty_helper_detects_untracked_files() -> Result<(), Box<dyn Error>> {
 #[test]
 fn listing_survives_missing_linked_worktree() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
-    let linked_path = temp.path().join("main.gwt").join("feature");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
+    let linked_path = temp_root.join("main.gwt").join("feature");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
     std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
@@ -66,6 +68,19 @@ fn listing_survives_missing_linked_worktree() -> Result<(), Box<dyn Error>> {
             && entry.prunable
     }));
     Ok(())
+}
+
+fn canonical_temp_root(temp: &TempDir) -> std::path::PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        temp.path()
+            .canonicalize()
+            .expect("canonicalize TempDir path on macOS")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temp.path().to_path_buf()
+    }
 }
 
 fn commit_initial(repo: &Repository) -> Result<(), Box<dyn Error>> {

@@ -200,7 +200,8 @@ struct GcFixture {
 
 fn make_gc_fixture() -> Result<GcFixture, Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let main_repo = temp.path().join("main");
+    let temp_root = canonical_temp_root(&temp);
+    let main_repo = temp_root.join("main");
     let repo = Repository::init(&main_repo)?;
     commit_initial(&repo)?;
 
@@ -242,6 +243,19 @@ fn make_gc_fixture() -> Result<GcFixture, Box<dyn Error>> {
         prunable_path,
         broken_open_path,
     })
+}
+
+fn canonical_temp_root(temp: &TempDir) -> std::path::PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        temp.path()
+            .canonicalize()
+            .expect("canonicalize TempDir path on macOS")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temp.path().to_path_buf()
+    }
 }
 
 fn set_age_days(path: &std::path::Path, age_days: u64) -> Result<(), Box<dyn Error>> {

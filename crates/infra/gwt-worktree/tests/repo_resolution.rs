@@ -12,7 +12,8 @@ const EXPECTED_README_SENTINEL: &str = "# Git Worktree Directory\n\nThis directo
 #[test]
 fn resolves_from_cwd_discovery() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let repo_root = temp.path().join("repo");
+    let temp_root = canonical_temp_root(&temp);
+    let repo_root = temp_root.join("repo");
     let repo = Repository::init(&repo_root)?;
     commit_initial(&repo)?;
     let nested = repo_root.join("src").join("nested");
@@ -39,7 +40,8 @@ fn readme_sentinel_contents_is_byte_for_byte_expected() {
 #[test]
 fn resolves_from_config_when_other_sources_missing() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
-    let repo_root = temp.path().join("repo");
+    let temp_root = canonical_temp_root(&temp);
+    let repo_root = temp_root.join("repo");
     Repository::init(&repo_root)?;
     let config = GwtConfig {
         default_repo: Some(repo_root.join(".git").to_string_lossy().into_owned()),
@@ -47,7 +49,7 @@ fn resolves_from_config_when_other_sources_missing() -> Result<(), Box<dyn Error
     };
 
     let resolved = ControlRepo::resolve(&ResolveControlRepoOptions {
-        cwd: Some(temp.path()),
+        cwd: Some(temp_root.as_path()),
         config: Some(&config),
         ..ResolveControlRepoOptions::default()
     })?;
@@ -65,9 +67,10 @@ fn does_not_fall_through_on_non_not_found_discovery_errors() -> Result<(), Box<d
     use std::os::unix::fs::PermissionsExt;
 
     let temp = TempDir::new()?;
-    let blocked = temp.path().join("blocked");
+    let temp_root = canonical_temp_root(&temp);
+    let blocked = temp_root.join("blocked");
     let nested = blocked.join("nested");
-    let env_repo = temp.path().join("env-repo");
+    let env_repo = temp_root.join("env-repo");
     Repository::init(&env_repo)?;
     std::fs::create_dir_all(&nested)?;
 
@@ -93,6 +96,19 @@ fn does_not_fall_through_on_non_not_found_discovery_errors() -> Result<(), Box<d
     }
 
     Ok(())
+}
+
+fn canonical_temp_root(temp: &TempDir) -> std::path::PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        temp.path()
+            .canonicalize()
+            .expect("canonicalize TempDir path on macOS")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temp.path().to_path_buf()
+    }
 }
 
 fn commit_initial(repo: &Repository) -> Result<(), Box<dyn Error>> {
