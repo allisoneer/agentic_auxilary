@@ -27,7 +27,12 @@ pub fn execute_switch_plan(
     control_repo.ensure_worktree_base()?;
 
     let path = match &plan.kind {
-        SwitchPlanKind::Main | SwitchPlanKind::ExistingWorktree => plan.target_path.clone(),
+        SwitchPlanKind::Main | SwitchPlanKind::ExistingWorktree => {
+            if !plan.target_path.exists() {
+                return Err(Error::MissingWorktreePath(plan.target_path.clone()));
+            }
+            plan.target_path.clone()
+        }
         SwitchPlanKind::ExistingLocalBranch => {
             attach_existing_branch(&repo, plan)?;
             plan.target_path.clone()

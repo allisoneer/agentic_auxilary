@@ -43,7 +43,7 @@ pub fn plan_remove(
         .into_iter()
         .find(|entry| entry.branch.as_deref() == Some(request.branch.as_str()))
         .ok_or_else(|| Error::BranchNotFound(request.branch.to_string()))?;
-    let dirty = if entry.is_main {
+    let dirty = if entry.is_main || entry.prunable || !entry.path.exists() {
         false
     } else {
         is_worktree_dirty(&Repository::open(&entry.path)?)?

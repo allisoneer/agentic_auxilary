@@ -1,5 +1,6 @@
 use git2::Repository;
 use gwt_worktree::config::GwtConfig;
+use gwt_worktree::error::Error as GwtError;
 use gwt_worktree::repo::ControlRepo;
 use gwt_worktree::repo::ResolveControlRepoOptions;
 use std::error::Error;
@@ -47,6 +48,42 @@ fn resolves_from_config_when_other_sources_missing() -> Result<(), Box<dyn Error
         resolved.git_dir_key,
         repo_root.join(".git").to_string_lossy()
     );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn does_not_fall_through_on_non_not_found_discovery_errors() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new()?;
+    let blocked = temp.path().join("blocked");
+    let nested = blocked.join("nested");
+    let env_repo = temp.path().join("env-repo");
+    Repository::init(&env_repo)?;
+    std::fs::create_dir_all(&nested)?;
+
+    let original_permissions = std::fs::metadata(&blocked)?.permissions();
+    let mut restricted = original_permissions.clone();
+    restricted.set_mode(0o000);
+    std::fs::set_permissions(&blocked, restricted)?;
+
+    let resolved = ControlRepo::resolve(&ResolveControlRepoOptions {
+        cwd: Some(nested.as_path()),
+        env_git_dir: Some(env_repo.join(".git").to_str().ok_or("non-utf8 env repo")?),
+        ..ResolveControlRepoOptions::default()
+    });
+
+    std::fs::set_permissions(&blocked, original_permissions)?;
+
+    match resolved {
+        Err(GwtError::Git(error)) => assert_ne!(error.code(), git2::ErrorCode::NotFound),
+        Err(other) => return Err(format!("expected git discovery error, got {other}").into()),
+        Ok(repo) => {
+            return Err(format!("expected discovery error, resolved {}", repo.git_dir_key).into());
+        }
+    }
+
     Ok(())
 }
 

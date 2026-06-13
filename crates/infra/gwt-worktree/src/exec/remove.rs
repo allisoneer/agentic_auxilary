@@ -3,10 +3,10 @@ use crate::error::Result;
 use crate::plan::remove::RemovePlan;
 use crate::remote::RemoteBranchDeleter;
 use crate::repo::ControlRepo;
+use crate::worktree::find_worktree_by_path;
 use crate::worktree::is_worktree_dirty;
 use git2::BranchType;
 use git2::Repository;
-use git2::Worktree;
 use git2::WorktreePruneOptions;
 
 pub fn execute_remove_plan(
@@ -21,13 +21,18 @@ pub fn execute_remove_plan(
         return Err(Error::WorktreeOutsideBase);
     }
 
-    let linked_repo = Repository::open(&plan.worktree_path)?;
-    if is_worktree_dirty(&linked_repo)? && !plan.force {
-        return Err(Error::DirtyWorktree);
+    if !plan.prunable && plan.worktree_path.exists() {
+        let linked_repo = Repository::open(&plan.worktree_path)?;
+        if is_worktree_dirty(&linked_repo)? && !plan.force {
+            return Err(Error::DirtyWorktree);
+        }
     }
 
-    let worktree = Worktree::open_from_repository(&linked_repo)?;
-    if !matches!(worktree.is_locked()?, git2::WorktreeLockStatus::Unlocked) && !plan.force {
+    let control = Repository::open(&control_repo.common_dir)?;
+    let worktree = find_worktree_by_path(&control, &plan.worktree_path)?
+        .ok_or_else(|| Error::RegisteredWorktreeNotFound(plan.worktree_path.clone()))?;
+    let locked = !matches!(worktree.is_locked()?, git2::WorktreeLockStatus::Unlocked);
+    if locked && !plan.force {
         return Err(Error::LockedWorktree);
     }
 
@@ -41,10 +46,9 @@ pub fn execute_remove_plan(
     prune_options
         .valid(true)
         .working_tree(true)
-        .locked(plan.force);
+        .locked(plan.force || locked);
     worktree.prune(Some(&mut prune_options))?;
 
-    let control = Repository::open(&control_repo.common_dir)?;
     if let Ok(mut branch) = control.find_branch(plan.branch.as_str(), BranchType::Local) {
         branch.delete()?;
     }

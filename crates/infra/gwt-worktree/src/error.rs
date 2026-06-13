@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use std::path::PathBuf;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Error)]
@@ -40,4 +42,8 @@ pub enum Error {
     WorktreeOutsideBase,
     #[error("remote branch deleter is required")]
     MissingRemoteBranchDeleter,
+    #[error("worktree path no longer exists: {0}")]
+    MissingWorktreePath(PathBuf),
+    #[error("registered worktree not found for path: {0}")]
+    RegisteredWorktreeNotFound(PathBuf),
 }

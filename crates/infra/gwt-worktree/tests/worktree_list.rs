@@ -45,6 +45,29 @@ fn dirty_helper_detects_untracked_files() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn listing_survives_missing_linked_worktree() -> Result<(), Box<dyn Error>> {
+    let temp = TempDir::new()?;
+    let main_repo = temp.path().join("main");
+    let linked_path = temp.path().join("main.gwt").join("feature");
+    let repo = Repository::init(&main_repo)?;
+    commit_initial(&repo)?;
+    std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
+    repo.worktree("feature", &linked_path, None)?;
+    std::fs::remove_dir_all(&linked_path)?;
+
+    let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8 path")?)?;
+    let entries = list_worktrees(&control)?;
+
+    assert!(entries.iter().any(|entry| {
+        !entry.is_main
+            && entry.path == linked_path
+            && entry.branch.as_deref() == Some("feature")
+            && entry.prunable
+    }));
+    Ok(())
+}
+
 fn commit_initial(repo: &Repository) -> Result<(), Box<dyn Error>> {
     let sig = git2::Signature::now("Test", "test@example.com")?;
     let tree_id = {

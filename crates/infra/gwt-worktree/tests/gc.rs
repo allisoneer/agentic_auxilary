@@ -67,6 +67,82 @@ fn gc_execution_deletes_only_authorized_entries() -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
+#[test]
+fn gc_plan_keeps_prunable_entries_exclusive() -> Result<(), Box<dyn Error>> {
+    let fixture = make_gc_fixture()?;
+    std::fs::remove_dir_all(&fixture.prunable_path)?;
+
+    let plan = plan_gc(
+        &fixture.control,
+        None,
+        &GcPolicy {
+            clean_days: 0,
+            delete_days: 0,
+        },
+    )?;
+
+    assert!(
+        plan.prunable
+            .iter()
+            .any(|item| item.path == fixture.prunable_path && item.prunable)
+    );
+    assert!(
+        !plan
+            .to_delete
+            .iter()
+            .any(|item| item.path == fixture.prunable_path)
+    );
+    assert!(
+        !plan
+            .to_clean
+            .iter()
+            .any(|item| item.path == fixture.prunable_path)
+    );
+    assert!(
+        !plan
+            .dirty
+            .iter()
+            .any(|item| item.path == fixture.prunable_path)
+    );
+    assert!(
+        !plan
+            .unmerged
+            .iter()
+            .any(|item| item.path == fixture.prunable_path)
+    );
+    assert!(
+        !plan
+            .skip
+            .iter()
+            .any(|item| item.path == fixture.prunable_path)
+    );
+    Ok(())
+}
+
+#[test]
+fn gc_execution_prunes_prunable_entries() -> Result<(), Box<dyn Error>> {
+    let fixture = make_gc_fixture()?;
+    std::fs::remove_dir_all(&fixture.prunable_path)?;
+    let plan = plan_gc(
+        &fixture.control,
+        None,
+        &GcPolicy {
+            clean_days: 0,
+            delete_days: 0,
+        },
+    )?;
+
+    let result = execute_gc_plan(&fixture.control, &plan)?;
+
+    assert!(result.pruned_paths.contains(&fixture.prunable_path));
+    let control_repo = Repository::open(&fixture.control.common_dir)?;
+    assert!(
+        control_repo.find_worktree("prunable").is_err(),
+        "prunable worktree should be removed from git registry"
+    );
+    Ok(())
+}
+
 fn mark_repo_dirty(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     let linked_repo = Repository::open(path)?;
     std::fs::write(path.join("dirty.txt"), "data")?;
@@ -81,6 +157,7 @@ struct GcFixture {
     merged_path: std::path::PathBuf,
     dirty_path: std::path::PathBuf,
     unmerged_path: std::path::PathBuf,
+    prunable_path: std::path::PathBuf,
 }
 
 fn make_gc_fixture() -> Result<GcFixture, Box<dyn Error>> {
@@ -92,9 +169,11 @@ fn make_gc_fixture() -> Result<GcFixture, Box<dyn Error>> {
     let merged_path = main_repo.with_extension("gwt").join("merged");
     let dirty_path = main_repo.with_extension("gwt").join("dirty");
     let unmerged_path = main_repo.with_extension("gwt").join("unmerged");
+    let prunable_path = main_repo.with_extension("gwt").join("prunable");
     create_branch_worktree(&repo, &merged_path, "merged", true)?;
     create_branch_worktree(&repo, &dirty_path, "dirty", true)?;
     create_branch_worktree(&repo, &unmerged_path, "unmerged", false)?;
+    create_branch_worktree(&repo, &prunable_path, "prunable", true)?;
     let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
 
     Ok(GcFixture {
@@ -103,6 +182,7 @@ fn make_gc_fixture() -> Result<GcFixture, Box<dyn Error>> {
         merged_path,
         dirty_path,
         unmerged_path,
+        prunable_path,
     })
 }
 

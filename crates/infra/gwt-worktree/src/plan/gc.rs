@@ -57,6 +57,19 @@ pub fn plan_gc(
             continue;
         }
 
+        if entry.prunable || !entry.path.exists() {
+            plan.prunable.push(GcItem {
+                path: entry.path,
+                branch: entry.branch,
+                age_days: 0,
+                dirty: false,
+                merged_to_main: false,
+                locked: entry.locked,
+                prunable: true,
+            });
+            continue;
+        }
+
         let metadata = std::fs::metadata(&entry.path)?;
         let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         let age_days = SystemTime::now()
@@ -91,9 +104,6 @@ pub fn plan_gc(
             prunable: entry.prunable,
         };
 
-        if item.prunable {
-            plan.prunable.push(item.clone());
-        }
         if item.locked {
             plan.skip.push(item);
         } else if item.dirty {

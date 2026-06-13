@@ -32,8 +32,8 @@ These items have dependencies and should be done in order.
 
 ### `gwt-worktree` follow-up work
 
-- Consider a CLI/tooling layer on top of `crates/infra/gwt-worktree/` for direct user-facing worktree operations.
-- Consider a pure-gix backend alternative if we later want to reduce libgit2 coupling while preserving the current plan/execute API.
+- TODO(3): Consider a CLI/tooling layer on top of `crates/infra/gwt-worktree/` for direct user-facing worktree operations.
+- TODO(3): Consider a pure-gix backend alternative if we later want to reduce libgit2 coupling while preserving the current plan/execute API.
 
 ### Optional config escape hatch for project-wide orchestrator session listing
 

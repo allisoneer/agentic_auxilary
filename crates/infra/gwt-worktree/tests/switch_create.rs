@@ -1,7 +1,9 @@
 use git2::BranchType;
 use git2::Repository;
 use gwt_worktree::config::RepoConfig;
+use gwt_worktree::error::Error as GwtError;
 use gwt_worktree::exec::switch::execute_switch_plan;
+use gwt_worktree::plan::switch::SwitchPlan;
 use gwt_worktree::plan::switch::SwitchPlanKind;
 use gwt_worktree::plan::switch::SwitchRequest;
 use gwt_worktree::plan::switch::plan_switch;
@@ -143,6 +145,96 @@ fn remote_guess_requires_provider_and_sets_upstream() -> Result<(), Box<dyn Erro
     let branch = repo.find_branch("feature/remote", BranchType::Local)?;
     let upstream = branch.upstream()?;
     assert_eq!(upstream.name()?, Some("origin/feature/remote"));
+    Ok(())
+}
+
+#[test]
+fn existing_worktree_plan_uses_actual_path_outside_base() -> Result<(), Box<dyn Error>> {
+    let temp = TempDir::new()?;
+    let main_repo = temp.path().join("main");
+    let outside_path = temp.path().join("elsewhere").join("feature");
+    let repo = Repository::init(&main_repo)?;
+    commit_initial(&repo)?;
+    repo.branch("feature", &repo.head()?.peel_to_commit()?, false)?;
+    std::fs::create_dir_all(outside_path.parent().ok_or("missing parent")?)?;
+    let branch = repo.find_branch("feature", BranchType::Local)?;
+    let reference = branch.into_reference();
+    let mut options = git2::WorktreeAddOptions::new();
+    options.reference(Some(&reference));
+    repo.worktree("feature", &outside_path, Some(&options))?;
+    let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
+
+    let plan = plan_switch(
+        &control,
+        &SwitchRequest {
+            branch: BranchName::new("feature")?,
+            create: false,
+            force_create: false,
+            start_point: None,
+            guess_remote: false,
+        },
+        None,
+    )?;
+
+    assert!(matches!(plan.kind, SwitchPlanKind::ExistingWorktree));
+    assert_eq!(plan.target_path, outside_path);
+    Ok(())
+}
+
+#[test]
+fn existing_worktree_execution_fails_when_target_path_is_missing() -> Result<(), Box<dyn Error>> {
+    let temp = TempDir::new()?;
+    let main_repo = temp.path().join("main");
+    let linked_path = temp.path().join("main.gwt").join("feature");
+    let repo = Repository::init(&main_repo)?;
+    commit_initial(&repo)?;
+    std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
+    repo.worktree("feature", &linked_path, None)?;
+    let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
+
+    let plan = plan_switch(
+        &control,
+        &SwitchRequest {
+            branch: BranchName::new("feature")?,
+            create: false,
+            force_create: false,
+            start_point: None,
+            guess_remote: false,
+        },
+        None,
+    )?;
+    std::fs::remove_dir_all(&linked_path)?;
+
+    match execute_switch_plan(&control, &plan, None) {
+        Err(GwtError::MissingWorktreePath(path)) => assert_eq!(path, linked_path),
+        Err(other) => return Err(format!("expected missing-path error, got {other}").into()),
+        Ok(result) => return Err(format!("expected failure, got {:?}", result.path).into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn main_switch_execution_fails_when_target_path_is_missing() -> Result<(), Box<dyn Error>> {
+    let temp = TempDir::new()?;
+    let control_git_dir = temp.path().join("control.git");
+    Repository::init_bare(&control_git_dir)?;
+    let control = ControlRepo::from_git_dir(control_git_dir.to_str().ok_or("non-utf8")?)?;
+    let missing_main_path = temp.path().join("missing-main");
+    let plan = SwitchPlan {
+        branch: BranchName::new("main")?,
+        admin_name: BranchName::new("main")?.encode_admin_name(),
+        target_path: missing_main_path.clone(),
+        kind: SwitchPlanKind::Main,
+        post_create_commands: Vec::new(),
+    };
+
+    match execute_switch_plan(&control, &plan, None) {
+        Err(GwtError::MissingWorktreePath(path)) => assert_eq!(path, missing_main_path),
+        Err(other) => return Err(format!("expected missing-path error, got {other}").into()),
+        Ok(result) => return Err(format!("expected failure, got {:?}", result.path).into()),
+    }
+
     Ok(())
 }
 

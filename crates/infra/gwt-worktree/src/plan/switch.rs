@@ -77,14 +77,14 @@ pub fn plan_switch(
         });
     }
 
-    if list_worktrees(control_repo)?
-        .iter()
-        .any(|entry| entry.branch.as_deref() == Some(request.branch.as_str()))
+    if let Some(entry) = list_worktrees(control_repo)?
+        .into_iter()
+        .find(|entry| entry.branch.as_deref() == Some(request.branch.as_str()))
     {
         return Ok(SwitchPlan {
             branch: request.branch.clone(),
             admin_name,
-            target_path,
+            target_path: entry.path,
             kind: SwitchPlanKind::ExistingWorktree,
             post_create_commands,
         });

@@ -131,6 +131,40 @@ fn remote_delete_requires_deleter_and_pr_lookup_is_plugged() -> Result<(), Box<d
     Ok(())
 }
 
+#[test]
+fn removes_prunable_missing_worktree() -> Result<(), Box<dyn Error>> {
+    let fixture = make_worktree_fixture("prunable")?;
+    std::fs::remove_dir_all(&fixture.linked_path)?;
+
+    let plan = plan_remove(
+        &fixture.control,
+        &RemoveRequest {
+            branch: BranchName::new("prunable")?,
+            force: false,
+            allow_outside_base: false,
+            delete_remote: false,
+        },
+        None,
+    )?;
+
+    assert!(plan.prunable);
+    assert!(!plan.dirty);
+
+    execute_remove_plan(&fixture.control, &plan, None)?;
+    assert!(
+        fixture
+            .repo
+            .find_branch("prunable", git2::BranchType::Local)
+            .is_err()
+    );
+    assert!(
+        Repository::open(&fixture.control.common_dir)?
+            .find_worktree("prunable")
+            .is_err()
+    );
+    Ok(())
+}
+
 struct RemoveFixture {
     _temp: TempDir,
     repo: Repository,

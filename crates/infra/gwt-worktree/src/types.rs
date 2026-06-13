@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::error::Result;
+use git2::Reference;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
@@ -118,6 +119,12 @@ fn validate_branch_name(name: &str) -> Result<()> {
     if name.is_empty() || name.contains('\0') {
         return Err(Error::InvalidBranchName(name.to_owned()));
     }
+
+    let full_ref = format!("refs/heads/{name}");
+    if !Reference::is_valid_name(&full_ref) {
+        return Err(Error::InvalidBranchName(name.to_owned()));
+    }
+
     Ok(())
 }
 
@@ -175,5 +182,21 @@ mod tests {
         let admin = branch.encode_admin_name();
 
         assert_eq!(admin.decode_branch_name().unwrap(), branch);
+    }
+
+    #[test]
+    fn accepts_valid_slash_and_unicode_branch_names() {
+        assert!(BranchName::new("feature/foo").is_ok());
+        assert!(BranchName::new("føø/東京").is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_git_reference_names() {
+        for invalid in ["../x", "x/../y", "foo.lock", "foo/", "foo//bar"] {
+            assert_eq!(
+                BranchName::new(invalid).unwrap_err().to_string(),
+                Error::InvalidBranchName(invalid.to_owned()).to_string()
+            );
+        }
     }
 }

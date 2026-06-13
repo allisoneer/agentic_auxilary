@@ -10,21 +10,15 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Programmatic, gwt-compatible git worktree management library for typed listing, switching/creating, removing, and GC flows.
 
 ## Quick Commands
 
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
-# Lint & Clippy
-cargo fmt -p gwt-worktree -- --check
-cargo clippy -p gwt-worktree --all-targets -- -D warnings
-
-# Tests
-cargo test -p gwt-worktree
-
-# Build
-cargo build -p gwt-worktree
+just crate-check gwt-worktree
+just crate-test gwt-worktree
+just crate-build gwt-worktree
 ```
 <!-- END:xtask:autogen -->
 

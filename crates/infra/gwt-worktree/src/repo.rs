@@ -1,11 +1,13 @@
 use crate::config::GwtConfig;
 use crate::error::Error;
 use crate::error::Result;
+use git2::ErrorCode;
 use git2::Repository;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
-const README_SENTINEL: &str = "# Git Worktree Directory\n\nThis directory contains git worktrees managed by the gwt tool.\nEach subdirectory is a separate worktree for a branch.\n\nFor more information, see: https://github.com/username/gwt\n";
+const README_SENTINEL: &str = "# Git Worktree Directory\n\nThis directory contains git worktrees managed by the gwt tool.\nEach subdirectory is a separate worktree for a branch.\n\nFor more information, see: https://github.com/General-Wisdom/gwt\n";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlRepo {
@@ -41,12 +43,12 @@ impl ControlRepo {
     }
 
     pub fn resolve(options: &ResolveControlRepoOptions<'_>) -> Result<Self> {
-        if let Some(repo) = options
-            .path
-            .or(options.cwd)
-            .and_then(|path| resolve_from_discovery(path).ok())
-        {
-            return Ok(repo);
+        if let Some(path) = options.path.or(options.cwd) {
+            match resolve_from_discovery(path) {
+                Ok(repo) => return Ok(repo),
+                Err(Error::Git(error)) if error.code() == ErrorCode::NotFound => {}
+                Err(err) => return Err(err),
+            }
         }
 
         if let Some(env_git_dir) = options.env_git_dir {
@@ -89,11 +91,12 @@ pub fn compute_gwt_base_from_parts(git_dir: &str, resolved_git_dir: &Path) -> Pa
         ));
     }
 
-    if has_exact_git_suffix(git_dir) {
-        return PathBuf::from(format!("{}.gwt", git_dir.trim_end_matches(".git")));
+    let trimmed = git_dir.trim_end_matches('/');
+    if has_exact_git_suffix(trimmed) {
+        return PathBuf::from(format!("{}.gwt", trimmed.trim_end_matches(".git")));
     }
 
-    PathBuf::from(format!("{}.gwt", git_dir.trim_end_matches('/')))
+    PathBuf::from(format!("{trimmed}.gwt"))
 }
 
 pub fn main_worktree_path(git_dir: &str) -> Option<PathBuf> {
@@ -183,7 +186,29 @@ fn resolve_gitdir_pointer(dot_git_file: &Path) -> Result<String> {
             .join(raw_path)
     };
 
+    let resolved = resolved
+        .canonicalize()
+        .unwrap_or_else(|_| normalize_path(resolved.as_path()));
+
     Ok(resolved.to_string_lossy().into_owned())
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+
+    normalized
 }
 
 fn normalize_git_dir_key(path: &Path) -> String {
@@ -224,6 +249,12 @@ mod tests {
     }
 
     #[test]
+    fn computes_base_for_bare_suffix_repo_with_trailing_slash() {
+        let base = compute_gwt_base("/tmp/example.git/");
+        assert_eq!(base, PathBuf::from("/tmp/example.gwt"));
+    }
+
+    #[test]
     fn computes_base_for_fallback_path() {
         let base = compute_gwt_base("/tmp/example/");
         assert_eq!(base, PathBuf::from("/tmp/example.gwt"));
@@ -248,6 +279,11 @@ mod tests {
         ensure_worktree_base_dir(&base).unwrap();
 
         assert_eq!(std::fs::read_to_string(&readme).unwrap(), "custom");
+    }
+
+    #[test]
+    fn readme_sentinel_uses_canonical_gwt_url() {
+        assert!(readme_sentinel_contents().contains("https://github.com/General-Wisdom/gwt"));
     }
 
     #[test]
@@ -343,6 +379,32 @@ mod tests {
 
         assert!(resolved.git_dir_key.contains(".git/worktrees/feature"));
         assert_eq!(resolved.common_dir, main_repo.join(".git"));
+    }
+
+    #[test]
+    fn resolves_gitdir_pointer_to_normalized_path() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        let dot_git = repo_root.join(".git");
+        let private_gitdir = temp
+            .path()
+            .join("private")
+            .join("worktrees")
+            .join("feature");
+        std::fs::create_dir_all(&repo_root).unwrap();
+        std::fs::create_dir_all(&private_gitdir).unwrap();
+        std::fs::write(
+            &dot_git,
+            "gitdir: ../private/./worktrees/feature/../feature\n",
+        )
+        .unwrap();
+
+        let resolved = resolve_gitdir_pointer(&dot_git).unwrap();
+
+        assert_eq!(
+            PathBuf::from(resolved),
+            private_gitdir.canonicalize().unwrap()
+        );
     }
 
     fn commit_initial(repo: &Repository) {
