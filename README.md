@@ -39,8 +39,8 @@ GPT-5 prompt optimization and execution tool with MCP and CLI interfaces. Implem
 
 ```bash
 # Clone repository
-git clone https://github.com/allisoneer/agentic_auxilary
-cd agentic_auxilary
+git clone https://github.com/allisoneer/agentic_auxiliary
+cd agentic_auxiliary
 
 # Build entire workspace
 just build
