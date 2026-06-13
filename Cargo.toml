@@ -41,6 +41,7 @@ members = [
   # Infra family
   "crates/infra/agentic-config",
   "crates/infra/agentic-logging",
+  "crates/infra/gwt-worktree",
   "crates/infra/thoughts-core",
 
   # Legacy family

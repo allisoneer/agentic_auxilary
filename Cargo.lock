@@ -2898,6 +2898,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gwt-worktree"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "filetime",
+ "git2",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"

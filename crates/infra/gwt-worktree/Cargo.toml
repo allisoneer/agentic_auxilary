@@ -1,0 +1,35 @@
+[package]
+name = "gwt-worktree"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Programmatic gwt-compatible git worktree management library"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+homepage = "https://github.com/allisoneer/agentic_auxilary"
+readme = "README.md"
+keywords = ["git", "worktree", "gwt"]
+categories = ["development-tools"]
+
+[package.metadata.repo]
+role = "lib"
+family = "infra"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[dependencies]
+dirs = { workspace = true }
+git2 = { version = "0.20", features = ["vendored-openssl", "ssh", "https"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+toml = "0.8"
+
+[dev-dependencies]
+filetime = "0.2"
+tempfile = "3"
+
+[lints]
+workspace = true
