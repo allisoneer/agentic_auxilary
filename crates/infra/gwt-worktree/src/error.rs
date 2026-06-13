@@ -42,8 +42,14 @@ pub enum Error {
     WorktreeOutsideBase,
     #[error("remote branch deleter is required")]
     MissingRemoteBranchDeleter,
+    #[error("could not resolve remote for deleting branch: {branch}")]
+    RemoteDeleteRemoteUnresolved { branch: String },
+    #[error("configured delete remote not found for branch {branch}: {remote}")]
+    RemoteDeleteRemoteMissing { branch: String, remote: String },
     #[error("worktree path no longer exists: {0}")]
     MissingWorktreePath(PathBuf),
+    #[error("switch target path is outside worktree base: base={base:?} target={target:?}")]
+    SwitchTargetOutsideBase { base: PathBuf, target: PathBuf },
     #[error("registered worktree not found for path: {0}")]
     RegisteredWorktreeNotFound(PathBuf),
 }

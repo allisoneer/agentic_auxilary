@@ -54,7 +54,12 @@ pub fn execute_remove_plan(
     }
 
     if let Some(deleter) = deleter {
-        deleter.delete_remote_branch(&control, "origin", &plan.branch)?;
+        let remote = plan.remote_to_delete.as_deref().ok_or_else(|| {
+            Error::RemoteDeleteRemoteUnresolved {
+                branch: plan.branch.to_string(),
+            }
+        })?;
+        deleter.delete_remote_branch(&control, remote, &plan.branch)?;
     }
 
     Ok(())

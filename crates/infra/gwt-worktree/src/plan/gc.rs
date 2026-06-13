@@ -5,6 +5,7 @@ use crate::repo::ControlRepo;
 use crate::worktree::is_worktree_dirty;
 use crate::worktree::list_worktrees;
 use git2::Repository;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -70,14 +71,44 @@ pub fn plan_gc(
             continue;
         }
 
-        let metadata = std::fs::metadata(&entry.path)?;
+        let metadata = match std::fs::metadata(&entry.path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                plan.prunable.push(GcItem {
+                    path: entry.path,
+                    branch: entry.branch,
+                    age_days: 0,
+                    dirty: false,
+                    merged_to_main: false,
+                    locked: entry.locked,
+                    prunable: true,
+                });
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         let age_days = SystemTime::now()
             .duration_since(modified)
             .unwrap_or_default()
             .as_secs()
             / 86_400;
-        let linked_repo = Repository::open(&entry.path)?;
+        let linked_repo = match Repository::open(&entry.path) {
+            Ok(linked_repo) => linked_repo,
+            Err(error) if error.code() == git2::ErrorCode::NotFound => {
+                plan.prunable.push(GcItem {
+                    path: entry.path,
+                    branch: entry.branch,
+                    age_days: 0,
+                    dirty: false,
+                    merged_to_main: false,
+                    locked: entry.locked,
+                    prunable: true,
+                });
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         let dirty = is_worktree_dirty(&linked_repo)?;
         let merged_to_main = match (
             main_oid,

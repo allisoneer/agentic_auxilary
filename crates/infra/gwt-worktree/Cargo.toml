@@ -28,6 +28,7 @@ thiserror = { workspace = true }
 toml = "0.8"
 
 [dev-dependencies]
+filetime = "0.2"
 tempfile = "3"
 
 [lints]

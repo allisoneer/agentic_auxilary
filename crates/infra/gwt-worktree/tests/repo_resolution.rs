@@ -3,8 +3,11 @@ use gwt_worktree::config::GwtConfig;
 use gwt_worktree::error::Error as GwtError;
 use gwt_worktree::repo::ControlRepo;
 use gwt_worktree::repo::ResolveControlRepoOptions;
+use gwt_worktree::repo::readme_sentinel_contents;
 use std::error::Error;
 use tempfile::TempDir;
+
+const EXPECTED_README_SENTINEL: &str = "# Git Worktree Directory\n\nThis directory contains git worktrees managed by the gwt tool.\nEach subdirectory is a separate worktree for a branch.\n\nFor more information, see: https://github.com/General-Wisdom/gwt\n";
 
 #[test]
 fn resolves_from_cwd_discovery() -> Result<(), Box<dyn Error>> {
@@ -26,6 +29,11 @@ fn resolves_from_cwd_discovery() -> Result<(), Box<dyn Error>> {
     );
     assert_eq!(resolved.main_workdir, Some(repo_root));
     Ok(())
+}
+
+#[test]
+fn readme_sentinel_contents_is_byte_for_byte_expected() {
+    assert_eq!(readme_sentinel_contents(), EXPECTED_README_SENTINEL);
 }
 
 #[test]

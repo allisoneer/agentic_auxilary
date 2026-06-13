@@ -2,12 +2,13 @@ use crate::error::Error;
 use crate::error::Result;
 use git2::Reference;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 use std::fmt;
 
 const ADMIN_PREFIX: &str = "gwt-";
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct BranchName(String);
 
@@ -34,6 +35,16 @@ impl BranchName {
             encoded.push(hex_digit(byte & 0x0f));
         }
         AdminName(encoded)
+    }
+}
+
+impl<'de> Deserialize<'de> for BranchName {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let name = String::deserialize(deserializer)?;
+        Self::new(name).map_err(serde::de::Error::custom)
     }
 }
 
@@ -158,6 +169,8 @@ fn hex_value(value: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::de::value::Error as ValueError;
+    use serde::de::value::StrDeserializer;
 
     #[test]
     fn encodes_and_decodes_feature_branch() {
@@ -197,6 +210,26 @@ mod tests {
                 BranchName::new(invalid).unwrap_err().to_string(),
                 Error::InvalidBranchName(invalid.to_owned()).to_string()
             );
+        }
+    }
+
+    #[test]
+    fn branch_name_deserialize_accepts_valid_slash_and_unicode_names() {
+        let feature =
+            BranchName::deserialize(StrDeserializer::<ValueError>::new("feature/foo")).unwrap();
+        let unicode =
+            BranchName::deserialize(StrDeserializer::<ValueError>::new("føø/東京")).unwrap();
+
+        assert_eq!(feature.as_str(), "feature/foo");
+        assert_eq!(unicode.as_str(), "føø/東京");
+    }
+
+    #[test]
+    fn branch_name_deserialize_rejects_traversal_adjacent_names() {
+        for invalid in ["../x", "x/../y"] {
+            let error =
+                BranchName::deserialize(StrDeserializer::<ValueError>::new(invalid)).unwrap_err();
+            assert!(error.to_string().contains(invalid));
         }
     }
 }

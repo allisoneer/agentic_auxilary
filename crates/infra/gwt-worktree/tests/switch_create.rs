@@ -215,6 +215,36 @@ fn existing_worktree_execution_fails_when_target_path_is_missing() -> Result<(),
 }
 
 #[test]
+fn create_like_switch_execution_rejects_target_path_outside_base() -> Result<(), Box<dyn Error>> {
+    let temp = TempDir::new()?;
+    let main_repo = temp.path().join("main");
+    let outside_path = temp.path().join("elsewhere").join("feature-outside");
+    let repo = Repository::init(&main_repo)?;
+    commit_initial(&repo)?;
+    repo.branch("feature-outside", &repo.head()?.peel_to_commit()?, false)?;
+    let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
+    let plan = SwitchPlan {
+        branch: BranchName::new("feature-outside")?,
+        admin_name: BranchName::new("feature-outside")?.encode_admin_name(),
+        target_path: outside_path.clone(),
+        kind: SwitchPlanKind::ExistingLocalBranch,
+        post_create_commands: Vec::new(),
+    };
+
+    match execute_switch_plan(&control, &plan, None) {
+        Err(GwtError::SwitchTargetOutsideBase { base, target }) => {
+            assert_eq!(base, control.worktree_base);
+            assert_eq!(target, outside_path);
+        }
+        Err(other) => return Err(format!("expected containment error, got {other}").into()),
+        Ok(result) => return Err(format!("expected failure, got {:?}", result.path).into()),
+    }
+
+    assert!(!outside_path.exists());
+    Ok(())
+}
+
+#[test]
 fn main_switch_execution_fails_when_target_path_is_missing() -> Result<(), Box<dyn Error>> {
     let temp = TempDir::new()?;
     let control_git_dir = temp.path().join("control.git");

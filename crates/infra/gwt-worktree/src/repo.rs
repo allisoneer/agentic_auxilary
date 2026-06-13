@@ -7,6 +7,8 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
+// Compatibility-critical sentinel written for upstream gwt interoperability.
+// Do not edit without intentionally updating byte-for-byte regression coverage.
 const README_SENTINEL: &str = "# Git Worktree Directory\n\nThis directory contains git worktrees managed by the gwt tool.\nEach subdirectory is a separate worktree for a branch.\n\nFor more information, see: https://github.com/General-Wisdom/gwt\n";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,6 +231,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    const EXPECTED_README_SENTINEL: &str = "# Git Worktree Directory\n\nThis directory contains git worktrees managed by the gwt tool.\nEach subdirectory is a separate worktree for a branch.\n\nFor more information, see: https://github.com/General-Wisdom/gwt\n";
+
     #[test]
     fn computes_base_for_normal_repo_git_dir() {
         let temp = TempDir::new().unwrap();
@@ -283,7 +287,7 @@ mod tests {
 
     #[test]
     fn readme_sentinel_uses_canonical_gwt_url() {
-        assert!(readme_sentinel_contents().contains("https://github.com/General-Wisdom/gwt"));
+        assert_eq!(readme_sentinel_contents(), EXPECTED_README_SENTINEL);
     }
 
     #[test]

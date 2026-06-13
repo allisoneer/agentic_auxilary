@@ -1,4 +1,5 @@
 use git2::Repository;
+use gwt_worktree::error::Error as GwtError;
 use gwt_worktree::exec::remove::execute_remove_plan;
 use gwt_worktree::plan::remove::RemoveRequest;
 use gwt_worktree::plan::remove::plan_remove;
@@ -7,6 +8,7 @@ use gwt_worktree::pr::PullRequestState;
 use gwt_worktree::remote::RemoteBranchDeleter;
 use gwt_worktree::repo::ControlRepo;
 use gwt_worktree::types::BranchName;
+use std::cell::RefCell;
 use std::error::Error;
 use tempfile::TempDir;
 
@@ -111,6 +113,9 @@ fn outside_base_requires_override() -> Result<(), Box<dyn Error>> {
 #[test]
 fn remote_delete_requires_deleter_and_pr_lookup_is_plugged() -> Result<(), Box<dyn Error>> {
     let fixture = make_worktree_fixture("remote")?;
+    fixture
+        .repo
+        .remote("origin", "https://example.com/origin.git")?;
     let plan = plan_remove(
         &fixture.control,
         &RemoveRequest {
@@ -123,11 +128,120 @@ fn remote_delete_requires_deleter_and_pr_lookup_is_plugged() -> Result<(), Box<d
     )?;
 
     assert_eq!(plan.pr_state, Some(PullRequestState::Merged));
+    assert_eq!(plan.remote_to_delete.as_deref(), Some("origin"));
     let error = execute_remove_plan(&fixture.control, &plan, None)
         .expect_err("remote delete should need deleter");
     assert!(error.to_string().contains("deleter"));
 
-    execute_remove_plan(&fixture.control, &plan, Some(&StubRemoteDeleter))?;
+    let deleter = CapturingRemoteDeleter::default();
+    execute_remove_plan(&fixture.control, &plan, Some(&deleter))?;
+    assert_eq!(deleter.calls.borrow().as_slice(), [String::from("origin")]);
+    Ok(())
+}
+
+#[test]
+fn remote_delete_prefers_upstream_remote() -> Result<(), Box<dyn Error>> {
+    let fixture = make_worktree_fixture("remote-upstream")?;
+    let head_oid = fixture.repo.head()?.peel_to_commit()?.id();
+    fixture
+        .repo
+        .remote("origin", "https://example.com/origin.git")?;
+    fixture
+        .repo
+        .remote("upstream", "https://example.com/upstream.git")?;
+    fixture.repo.reference(
+        "refs/remotes/upstream/remote-upstream",
+        head_oid,
+        true,
+        "test upstream ref",
+    )?;
+    fixture
+        .repo
+        .find_branch("remote-upstream", git2::BranchType::Local)?
+        .set_upstream(Some("upstream/remote-upstream"))?;
+
+    let plan = plan_remove(
+        &fixture.control,
+        &RemoveRequest {
+            branch: BranchName::new("remote-upstream")?,
+            force: true,
+            allow_outside_base: false,
+            delete_remote: true,
+        },
+        None,
+    )?;
+
+    assert_eq!(plan.remote_to_delete.as_deref(), Some("upstream"));
+    let deleter = CapturingRemoteDeleter::default();
+    execute_remove_plan(&fixture.control, &plan, Some(&deleter))?;
+    assert_eq!(
+        deleter.calls.borrow().as_slice(),
+        [String::from("upstream")]
+    );
+    Ok(())
+}
+
+#[test]
+fn remote_delete_fails_without_upstream_or_origin() -> Result<(), Box<dyn Error>> {
+    let fixture = make_worktree_fixture("remote-missing")?;
+    fixture
+        .repo
+        .remote("backup", "https://example.com/backup.git")?;
+
+    match plan_remove(
+        &fixture.control,
+        &RemoveRequest {
+            branch: BranchName::new("remote-missing")?,
+            force: true,
+            allow_outside_base: false,
+            delete_remote: true,
+        },
+        None,
+    ) {
+        Err(GwtError::RemoteDeleteRemoteUnresolved { branch }) => {
+            assert_eq!(branch, "remote-missing");
+        }
+        Err(other) => return Err(format!("expected unresolved remote error, got {other}").into()),
+        Ok(plan) => {
+            return Err(format!("expected remote resolution failure, got {plan:?}").into());
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn remove_outside_base_detection_handles_symlink_alias() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new()?;
+    let main_repo = temp.path().join("main");
+    let repo = Repository::init(&main_repo)?;
+    commit_initial(&repo)?;
+    repo.branch("alias", &repo.head()?.peel_to_commit()?, false)?;
+    let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
+    control.ensure_worktree_base()?;
+
+    let alias_base = temp.path().join("main-alias.gwt");
+    symlink(&control.worktree_base, &alias_base)?;
+    let alias_path = alias_base.join("alias");
+    create_registered_worktree(&repo, &alias_path, "alias")?;
+
+    let plan = plan_remove(
+        &control,
+        &RemoveRequest {
+            branch: BranchName::new("alias")?,
+            force: false,
+            allow_outside_base: false,
+            delete_remote: false,
+        },
+        None,
+    )?;
+
+    assert!(!plan.outside_base);
+    execute_remove_plan(&control, &plan, None)?;
+    assert!(!alias_path.exists());
     Ok(())
 }
 
@@ -183,15 +297,19 @@ impl PullRequestLookup for StubPrLookup {
     }
 }
 
-struct StubRemoteDeleter;
+#[derive(Default)]
+struct CapturingRemoteDeleter {
+    calls: RefCell<Vec<String>>,
+}
 
-impl RemoteBranchDeleter for StubRemoteDeleter {
+impl RemoteBranchDeleter for CapturingRemoteDeleter {
     fn delete_remote_branch(
         &self,
         _repo: &Repository,
-        _remote: &str,
+        remote: &str,
         _branch: &BranchName,
     ) -> gwt_worktree::Result<()> {
+        self.calls.borrow_mut().push(remote.to_owned());
         Ok(())
     }
 }
@@ -206,14 +324,7 @@ fn make_worktree_fixture(branch_name: &str) -> Result<RemoveFixture, Box<dyn Err
         let commit = repo.head()?.peel_to_commit()?;
         repo.branch(branch_name, &commit, false)?;
     }
-    std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
-    {
-        let branch = repo.find_branch(branch_name, git2::BranchType::Local)?;
-        let reference = branch.into_reference();
-        let mut options = git2::WorktreeAddOptions::new();
-        options.reference(Some(&reference));
-        repo.worktree(branch_name, &linked_path, Some(&options))?;
-    }
+    create_registered_worktree(&repo, &linked_path, branch_name)?;
     let control = ControlRepo::from_git_dir(main_repo.to_str().ok_or("non-utf8")?)?;
     Ok(RemoveFixture {
         _temp: temp,
@@ -221,6 +332,20 @@ fn make_worktree_fixture(branch_name: &str) -> Result<RemoveFixture, Box<dyn Err
         control,
         linked_path,
     })
+}
+
+fn create_registered_worktree(
+    repo: &Repository,
+    linked_path: &std::path::Path,
+    branch_name: &str,
+) -> Result<(), Box<dyn Error>> {
+    std::fs::create_dir_all(linked_path.parent().ok_or("missing parent")?)?;
+    let branch = repo.find_branch(branch_name, git2::BranchType::Local)?;
+    let reference = branch.into_reference();
+    let mut options = git2::WorktreeAddOptions::new();
+    options.reference(Some(&reference));
+    repo.worktree(branch_name, linked_path, Some(&options))?;
+    Ok(())
 }
 
 fn commit_initial(repo: &Repository) -> Result<(), Box<dyn Error>> {

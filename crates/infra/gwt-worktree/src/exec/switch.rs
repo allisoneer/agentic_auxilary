@@ -10,6 +10,8 @@ use git2::BranchType;
 use git2::Oid;
 use git2::Repository;
 use git2::WorktreeAddOptions;
+use std::path::Component;
+use std::path::Path;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,18 +36,22 @@ pub fn execute_switch_plan(
             plan.target_path.clone()
         }
         SwitchPlanKind::ExistingLocalBranch => {
+            ensure_target_path_within_base(&control_repo.worktree_base, &plan.target_path)?;
             attach_existing_branch(&repo, plan)?;
             plan.target_path.clone()
         }
         SwitchPlanKind::CreateBranch { start_point } => {
+            ensure_target_path_within_base(&control_repo.worktree_base, &plan.target_path)?;
             create_branch_and_worktree(&repo, plan, start_point, false)?;
             plan.target_path.clone()
         }
         SwitchPlanKind::ForceCreateBranch { start_point } => {
+            ensure_target_path_within_base(&control_repo.worktree_base, &plan.target_path)?;
             create_branch_and_worktree(&repo, plan, start_point, true)?;
             plan.target_path.clone()
         }
         SwitchPlanKind::CreateTrackingBranch { .. } => {
+            ensure_target_path_within_base(&control_repo.worktree_base, &plan.target_path)?;
             create_tracking_branch_and_worktree(
                 &repo,
                 plan,
@@ -116,4 +122,33 @@ fn resolve_start_point<'a>(
             Ok(branch.get().peel_to_commit()?)
         }
     }
+}
+
+fn ensure_target_path_within_base(base: &Path, target: &Path) -> Result<()> {
+    if normalize_path(target).starts_with(normalize_path(base)) {
+        Ok(())
+    } else {
+        Err(Error::SwitchTargetOutsideBase {
+            base: base.to_path_buf(),
+            target: target.to_path_buf(),
+        })
+    }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+
+    normalized
 }
