@@ -17,6 +17,7 @@ export const getToolNames = native.getToolNames;
 export const callLs = native.callLs;
 export const callAskAgent = native.callAskAgent;
 export const callGrep = native.callGrep;
+export const callInstantGrep = native.callInstantGrep;
 export const callGlob = native.callGlob;
 export const callJustSearch = native.callJustSearch;
 export const callJustExecute = native.callJustExecute;
@@ -70,6 +71,10 @@ export async function callAskAgentTyped(input: unknown): Promise<any> {
 
 export async function callGrepTyped(input: unknown): Promise<any> {
   return callTyped(native.callGrep, input, 'callGrepTyped');
+}
+
+export async function callInstantGrepTyped(input: unknown): Promise<any> {
+  return callTyped(native.callInstantGrep, input, 'callInstantGrepTyped');
 }
 
 export async function callGlobTyped(input: unknown): Promise<any> {
