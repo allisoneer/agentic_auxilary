@@ -83,7 +83,7 @@ release = true
 name = "thoughts-tool"
 changelog_path = "crates/infra/thoughts-core/CHANGELOG.md"
 git_tag_name = "thoughts-tool-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -97,7 +97,7 @@ release = true
 name = "agentic_logging"
 changelog_path = "crates/infra/agentic-logging/CHANGELOG.md"
 git_tag_name = "agentic_logging-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -118,7 +118,7 @@ release = true
 name = "agentic-tools-registry"
 changelog_path = "crates/agentic-tools/registry/CHANGELOG.md"
 git_tag_name = "agentic-tools-registry-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -188,7 +188,7 @@ release = true
 name = "web-retrieval"
 changelog_path = "crates/tools/web-retrieval/CHANGELOG.md"
 git_tag_name = "web-retrieval-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -252,7 +252,7 @@ release = true
 name = "gwt-worktree"
 changelog_path = "crates/infra/gwt-worktree/CHANGELOG.md"
 git_tag_name = "gwt-worktree-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
