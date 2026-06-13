@@ -49,7 +49,11 @@ pub(crate) fn resolve_remote_for_branch_deletion(
 }
 
 fn upstream_remote_name(repo: &Repository, branch: &BranchName) -> Result<Option<String>> {
-    let branch = repo.find_branch(branch.as_str(), BranchType::Local)?;
+    let branch = match repo.find_branch(branch.as_str(), BranchType::Local) {
+        Ok(branch) => branch,
+        Err(error) if error.code() == git2::ErrorCode::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
     let upstream = match branch.upstream() {
         Ok(upstream) => upstream,
         Err(error) if error.code() == git2::ErrorCode::NotFound => return Ok(None),

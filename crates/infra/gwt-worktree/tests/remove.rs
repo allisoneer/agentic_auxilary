@@ -182,6 +182,35 @@ fn remote_delete_prefers_upstream_remote() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn remote_delete_uses_origin_when_local_branch_is_missing() -> Result<(), Box<dyn Error>> {
+    let fixture = make_worktree_fixture("remote-missing-local")?;
+    fixture
+        .repo
+        .remote("origin", "https://example.com/origin.git")?;
+    fixture
+        .repo
+        .find_reference("refs/heads/remote-missing-local")?
+        .delete()?;
+
+    let plan = plan_remove(
+        &fixture.control,
+        &RemoveRequest {
+            branch: BranchName::new("remote-missing-local")?,
+            force: true,
+            allow_outside_base: false,
+            delete_remote: true,
+        },
+        None,
+    )?;
+
+    assert_eq!(plan.remote_to_delete.as_deref(), Some("origin"));
+    let deleter = CapturingRemoteDeleter::default();
+    execute_remove_plan(&fixture.control, &plan, Some(&deleter))?;
+    assert_eq!(deleter.calls.borrow().as_slice(), [String::from("origin")]);
+    Ok(())
+}
+
+#[test]
 fn remote_delete_fails_without_upstream_or_origin() -> Result<(), Box<dyn Error>> {
     let fixture = make_worktree_fixture("remote-missing")?;
     fixture
