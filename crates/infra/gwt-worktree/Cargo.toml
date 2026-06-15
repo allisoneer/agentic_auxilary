@@ -1,6 +1,6 @@
 [package]
 name = "gwt-worktree"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Programmatic gwt-compatible git worktree management library"
