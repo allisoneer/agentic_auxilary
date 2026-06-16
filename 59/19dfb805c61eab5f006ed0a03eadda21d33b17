@@ -1,0 +1,74 @@
+crates/tools/workspace-tools/src/tools.rs
+  s_4d8fd9df8d91ca::t_322430b71e7077 722,730,733,752,755,774,777,793,796,814,827,849,852,874,877,895,898,916,919,939,942,964,967,990,1008,1040,1043
+  s_4d8fd9df8d91ca::t_dc6127fe6cda45 16,23-25,67-69,72-74,77-79,82-84,97,113,129,145,151,155-157,160-162,165-167,170-171
+  s_4d8fd9df8d91ca::t_f2731ee9b5d3ec 7-8,14,126,218-220,222-231,234-278,539-555,557-560,562-563,565-571,574-579,582,584-614,616,618-627,629,843-848,850-851,853-873,875-876,878-894,896-897,899-915,917-918,920-929,934-938,940-941,943-953,958-963,965-966,968-977
+  s_4d8fd9df8d91ca::t_4454d4acf0a0d5 1,3-6,9-10,31-66,70-71,75-76,80-81,85-89,91-93,95-96,99-105,107-109,111-112,115-121,123-125,127-128,131-137,139-141,143-144,147-149,153,158,163,168,172-174,1069
+  s_4d8fd9df8d91ca::t_9070f7ff396935 232-233,930-933,954-957,978-981,1019-1026,1029-1032
+  s_4d8fd9df8d91ca::t_bcea0300f3c6b1 723
+  s_4d8fd9df8d91ca::t_e628875dfeae50 114,130,177-178,180,212,221,281-282,529,556,564,572-573,580,661
+  s_4d8fd9df8d91ca::t_f76bc577e81a96 992,1005
+  s_4d8fd9df8d91ca::t_9513572fb4338a 2,90,106,122,138,152
+  s_4d8fd9df8d91ca::t_6bbc40f778ea08 1009,1044
+  s_4d8fd9df8d91ca::t_94f6f921d04853 734,756
+  s_4d8fd9df8d91ca::t_b99413101743c7 98,146,179,283
+  s_4d8fd9df8d91ca::t_847b2ee96b2582 17-21,142,279-280,284,286,288-320,322-433,631-653,656-660,662-691,982-989,991,993-1004,1006-1007,1010-1018,1027-1028,1033-1039,1041-1042,1045-1053
+  s_4d8fd9df8d91ca::t_8f9700b66800a4 321,778,797
+  s_4d8fd9df8d91ca::t_2b8f17404c53d4 150,154,159,164,169
+  s_4d8fd9df8d91ca::t_12370079ab72be 1055-1068
+  s_4d8fd9df8d91ca::t_92dc421c622b6a 12-13,15,22,26-30,94,110,175-176,181-198,200-206,208-211,213-217,434-495,497,499-528,530-538,654-655,692-721,724-729,731-732,735-751,753-754,757-773,775-776,779-792,794-795,798-813,815-826,828-842,1054
+crates/tools/workspace-tools/src/paths.rs
+  s_4d8fd9df8d91ca::t_b99413101743c7 97-99
+  s_4d8fd9df8d91ca::t_dc6127fe6cda45 1-96,100-205
+crates/agentic-tools/registry/Cargo.toml
+  s_4d8fd9df8d91ca::t_4454d4acf0a0d5 31-32
+crates/tools/workspace-tools/src/lib.rs
+  s_4d8fd9df8d91ca::t_4454d4acf0a0d5 1-3,7-9
+  s_4d8fd9df8d91ca::t_dc6127fe6cda45 5-6
+  s_4d8fd9df8d91ca::t_24a36c5e3540d2 4
+crates/agentic-tools/registry/src/lib.rs
+  s_4d8fd9df8d91ca::t_273d1d64439e9e 40,64-67,147-153,239,241-242,269,273-279,303,343,383-386,534-570
+  s_4d8fd9df8d91ca::t_2b8f17404c53d4 240
+crates/tools/workspace-tools/Cargo.toml
+  s_4d8fd9df8d91ca::t_4454d4acf0a0d5 1-30
+Cargo.toml
+  s_4d8fd9df8d91ca::t_4454d4acf0a0d5 39,91
+crates/infra/agentic-config/src/types.rs
+  s_4d8fd9df8d91ca::t_3eeb16787231cc 47-49,312-318,320-331,517,680-688
+  s_4d8fd9df8d91ca::t_2cc20455deeb30 319
+agentic.toml.example
+  s_4d8fd9df8d91ca::t_ad02555c4fd4ff 114-124
+crates/infra/agentic-config/src/validation.rs
+  s_4d8fd9df8d91ca::t_32928efd81792f 86
+crates/infra/agentic-config/src/schema.rs
+  s_4d8fd9df8d91ca::t_32928efd81792f 67-72
+crates/tools/workspace-tools/src/service.rs
+  s_4d8fd9df8d91ca::t_13c6c9682e7345 33-37,57-58
+  s_4d8fd9df8d91ca::t_dc6127fe6cda45 1-5,7-30,38-55,61-101
+  s_4d8fd9df8d91ca::t_b99413101743c7 6,32,56,59-60
+  s_4d8fd9df8d91ca::t_f76bc577e81a96 31
+apps/agentic-mcp/src/main.rs
+  s_4d8fd9df8d91ca::t_273d1d64439e9e 179
+apps/agentic/src/commands/config.rs
+  s_4d8fd9df8d91ca::t_ad02555c4fd4ff 351-355
+crates/tools/workspace-tools/src/patch.rs
+  s_4d8fd9df8d91ca::t_f76bc577e81a96 268,277
+  s_4d8fd9df8d91ca::t_94f6f921d04853 229
+  s_4d8fd9df8d91ca::t_24a36c5e3540d2 1-195,197-203,205-224,226-227,230-267,269-276,278-302
+  s_4d8fd9df8d91ca::t_b99413101743c7 204,225,228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "5919dfb805c61eab5f006ed0a03eadda21d33b17",
+  "prompts": {},
+  "sessions": {
+    "s_4d8fd9df8d91ca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_12d4b4067ffe2au44yvtQcA4RV",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
