@@ -348,6 +348,11 @@ mod tests {
         assert!(toml.contains("runtime_timeout_secs = 3600"));
         assert!(toml.contains("just_execute_timeout_secs = 1800"));
         assert!(toml.contains("just_search_timeout_secs = 30"));
+        assert!(toml.contains("[workspace_tools]"));
+        assert!(toml.contains("workspace_read = false"));
+        assert!(toml.contains("workspace_todowrite = false"));
+        assert!(toml.contains("workspace_edit = false"));
+        assert!(toml.contains("workspace_apply_patch = false"));
         assert!(toml.contains("[services.linear]"));
         assert!(toml.contains("connect_timeout_secs = 10"));
         assert!(toml.contains("[services.github]"));

@@ -36,6 +36,7 @@ members = [
   "crates/tools/review-tools",
   "crates/tools/message-optimizer",
   "crates/tools/thoughts-mcp-tools",
+  "crates/tools/workspace-tools",
   "crates/tools/web-retrieval",
 
   # Infra family
@@ -87,6 +88,7 @@ agentic-tools-registry = { version = "0.4.6", path = "crates/agentic-tools/regis
 agentic_logging = { version = "0.2.0", path = "crates/infra/agentic-logging" }
 thoughts-tool = { version = "0.12.1", path = "crates/infra/thoughts-core" }
 thoughts-mcp-tools = { version = "0.3.2", path = "crates/tools/thoughts-mcp-tools" }
+workspace_tools = { version = "0.1.0", path = "crates/tools/workspace-tools" }
 coding_agent_tools = { version = "0.5.2", path = "crates/tools/coding-agent-tools" }
 pr_comments = { version = "0.8.3", path = "crates/tools/pr-comments" }
 gpt5_reasoner = { version = "0.11.5", path = "crates/tools/gpt5-reasoner" }

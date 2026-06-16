@@ -213,6 +213,13 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "workspace_tools"
+changelog_path = "crates/tools/workspace-tools/CHANGELOG.md"
+git_tag_name = "workspace_tools-v{{ version }}"
+git_tag_enable = true
+release = true
+
+[[package]]
 name = "message-optimizer-bin"
 changelog_path = "apps/message-optimizer/CHANGELOG.md"
 git_tag_name = "message-optimizer-bin-v{{ version }}"

@@ -83,6 +83,7 @@ const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
     "orchestrator",
     "web_retrieval",
     "cli_tools",
+    "workspace_tools",
     "review",
     "thoughts",
     "logging",

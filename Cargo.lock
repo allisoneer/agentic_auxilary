@@ -151,6 +151,7 @@ dependencies = [
  "tokio",
  "tracing",
  "web-retrieval",
+ "workspace_tools",
 ]
 
 [[package]]
@@ -7819,6 +7820,21 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
+]
+
+[[package]]
+name = "workspace_tools"
+version = "0.1.0"
+dependencies = [
+ "agentic-config",
+ "agentic-tools-core",
+ "anyhow",
+ "atomicwrites",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

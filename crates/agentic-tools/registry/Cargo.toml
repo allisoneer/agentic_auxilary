@@ -28,6 +28,8 @@ serde_json = { workspace = true }
 thoughts-mcp-tools = { workspace = true }
 tracing = { workspace = true }
 web-retrieval = { workspace = true }
+workspace_tools = { workspace = true }
+
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

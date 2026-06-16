@@ -1,0 +1,30 @@
+[package]
+name = "workspace_tools"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Workspace-scoped file and todo MCP tools"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[dependencies]
+agentic-config = { workspace = true }
+agentic-tools-core = { workspace = true }
+anyhow = { workspace = true }
+atomicwrites = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

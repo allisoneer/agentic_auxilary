@@ -64,6 +64,12 @@ mod tests {
                 .is_some()
         );
 
+        let workspace_props = &json["$defs"]["WorkspaceToolsConfig"]["properties"];
+        assert!(workspace_props.get("workspace_read").is_some());
+        assert!(workspace_props.get("workspace_todowrite").is_some());
+        assert!(workspace_props.get("workspace_edit").is_some());
+        assert!(workspace_props.get("workspace_apply_patch").is_some());
+
         let services_properties = &json["$defs"]["ServicesConfig"]["properties"];
         assert!(services_properties.get("linear").is_some());
         assert!(services_properties.get("github").is_some());
