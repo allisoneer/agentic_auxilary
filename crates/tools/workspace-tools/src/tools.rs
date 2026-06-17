@@ -1149,8 +1149,8 @@ mod tests {
         let runtime = runtime_for(&dir);
         let tools = runtime.tools().unwrap();
 
-        let first_lock = tools.file_lock(&dir.path.join("a.txt")).unwrap();
-        let second_lock = tools.file_lock(&dir.path.join("z.txt")).unwrap();
+        let first_lock = tools.file_lock(&tools.root().join("a.txt")).unwrap();
+        let second_lock = tools.file_lock(&tools.root().join("z.txt")).unwrap();
         let first_guard = first_lock.lock_owned().await;
 
         let patch_text = String::from(
