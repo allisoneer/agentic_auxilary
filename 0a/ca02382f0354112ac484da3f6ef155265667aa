@@ -1,0 +1,19 @@
+crates/tools/workspace-tools/src/tools.rs
+  s_ac39ffaaa1ea15::t_2ed8af742be467 1152-1153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "0aca02382f0354112ac484da3f6ef155265667aa",
+  "prompts": {},
+  "sessions": {
+    "s_ac39ffaaa1ea15": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_129c4970bffeb15I7Gop9ms90b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
