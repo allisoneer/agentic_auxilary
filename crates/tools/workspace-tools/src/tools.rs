@@ -321,146 +321,149 @@ async fn workspace_apply_patch(
         let lock = tools.file_lock(path)?;
         guards.push(lock.lock_owned().await);
     }
-    let _ = guards.len();
+    let result = (|| {
+        let mut planned = Vec::new();
+        let mut touched = HashSet::new();
 
-    let mut planned = Vec::new();
-    let mut touched = HashSet::new();
-
-    for operation in operations {
-        match operation {
-            PatchOp::Add { path, contents } => {
-                let resolved = resolve_workspace_path(tools.root(), &path)?;
-                if resolved.absolute_path.exists() {
-                    return Err(ToolError::InvalidInput(format!(
-                        "apply_patch verification failed: {} already exists",
-                        resolved.display_path
-                    )));
-                }
-                ensure_unique_touch(&mut touched, &resolved.display_path)?;
-
-                let (bom, text) = split_bom(&contents);
-                planned.push(PlannedChange::Add {
-                    path: resolved.absolute_path,
-                    display_path: resolved.display_path,
-                    contents: text,
-                    bom,
-                });
-            }
-            PatchOp::Delete { path } => {
-                let resolved = resolve_workspace_path(tools.root(), &path)?;
-                read_text_file(&resolved.absolute_path, &resolved.display_path)?;
-                ensure_unique_touch(&mut touched, &resolved.display_path)?;
-
-                planned.push(PlannedChange::Delete {
-                    path: resolved.absolute_path,
-                    display_path: resolved.display_path,
-                });
-            }
-            PatchOp::Update {
-                path,
-                move_to,
-                chunks,
-            } => {
-                let resolved = resolve_workspace_path(tools.root(), &path)?;
-                let source = read_text_file(&resolved.absolute_path, &resolved.display_path)?;
-                ensure_unique_touch(&mut touched, &resolved.display_path)?;
-
-                let normalized_chunks = normalize_patch_chunks(&chunks, source.line_ending);
-                let updated = if normalized_chunks.is_empty() {
-                    source.text.clone()
-                } else {
-                    apply_chunks(&source.text, &normalized_chunks).map_err(|error| {
-                        ToolError::InvalidInput(format!(
-                            "apply_patch verification failed for {}: {error}",
-                            resolved.display_path
-                        ))
-                    })?
-                };
-
-                if let Some(move_to) = move_to {
-                    let destination = resolve_workspace_path(tools.root(), &move_to)?;
-                    if destination.absolute_path != resolved.absolute_path
-                        && destination.absolute_path.exists()
-                    {
+        for operation in operations {
+            match operation {
+                PatchOp::Add { path, contents } => {
+                    let resolved = resolve_workspace_path(tools.root(), &path)?;
+                    if resolved.absolute_path.exists() {
                         return Err(ToolError::InvalidInput(format!(
-                            "apply_patch verification failed: destination {} already exists",
-                            destination.display_path
+                            "apply_patch verification failed: {} already exists",
+                            resolved.display_path
                         )));
                     }
-                    ensure_unique_touch(&mut touched, &destination.display_path)?;
+                    ensure_unique_touch(&mut touched, &resolved.display_path)?;
 
-                    planned.push(PlannedChange::Move {
-                        source_path: resolved.absolute_path,
-                        destination_path: destination.absolute_path,
-                        destination_display_path: destination.display_path,
-                        contents: updated,
-                        bom: source.bom,
-                    });
-                } else {
-                    planned.push(PlannedChange::Update {
+                    let (bom, text) = split_bom(&contents);
+                    planned.push(PlannedChange::Add {
                         path: resolved.absolute_path,
                         display_path: resolved.display_path,
-                        contents: updated,
-                        bom: source.bom,
+                        contents: text,
+                        bom,
                     });
+                }
+                PatchOp::Delete { path } => {
+                    let resolved = resolve_workspace_path(tools.root(), &path)?;
+                    read_text_file(&resolved.absolute_path, &resolved.display_path)?;
+                    ensure_unique_touch(&mut touched, &resolved.display_path)?;
+
+                    planned.push(PlannedChange::Delete {
+                        path: resolved.absolute_path,
+                        display_path: resolved.display_path,
+                    });
+                }
+                PatchOp::Update {
+                    path,
+                    move_to,
+                    chunks,
+                } => {
+                    let resolved = resolve_workspace_path(tools.root(), &path)?;
+                    let source = read_text_file(&resolved.absolute_path, &resolved.display_path)?;
+                    ensure_unique_touch(&mut touched, &resolved.display_path)?;
+
+                    let normalized_chunks = normalize_patch_chunks(&chunks, source.line_ending);
+                    let updated = if normalized_chunks.is_empty() {
+                        source.text.clone()
+                    } else {
+                        apply_chunks(&source.text, &normalized_chunks).map_err(|error| {
+                            ToolError::InvalidInput(format!(
+                                "apply_patch verification failed for {}: {error}",
+                                resolved.display_path
+                            ))
+                        })?
+                    };
+
+                    if let Some(move_to) = move_to {
+                        let destination = resolve_workspace_path(tools.root(), &move_to)?;
+                        if destination.absolute_path != resolved.absolute_path
+                            && destination.absolute_path.exists()
+                        {
+                            return Err(ToolError::InvalidInput(format!(
+                                "apply_patch verification failed: destination {} already exists",
+                                destination.display_path
+                            )));
+                        }
+                        ensure_unique_touch(&mut touched, &destination.display_path)?;
+
+                        planned.push(PlannedChange::Move {
+                            source_path: resolved.absolute_path,
+                            destination_path: destination.absolute_path,
+                            destination_display_path: destination.display_path,
+                            contents: updated,
+                            bom: source.bom,
+                        });
+                    } else {
+                        planned.push(PlannedChange::Update {
+                            path: resolved.absolute_path,
+                            display_path: resolved.display_path,
+                            contents: updated,
+                            bom: source.bom,
+                        });
+                    }
                 }
             }
         }
-    }
 
-    let mut summary = Vec::new();
-    for change in &planned {
-        match change {
-            PlannedChange::Add {
-                path,
-                display_path,
-                contents,
-                bom,
-            } => {
-                write_text_file(path, contents, *bom)?;
-                summary.push(format!("A {display_path}"));
-            }
-            PlannedChange::Update {
-                path,
-                display_path,
-                contents,
-                bom,
-            } => {
-                write_text_file(path, contents, *bom)?;
-                summary.push(format!("M {display_path}"));
-            }
-            PlannedChange::Move {
-                source_path,
-                destination_path,
-                destination_display_path,
-                contents,
-                bom,
-                ..
-            } => {
-                write_text_file(destination_path, contents, *bom)?;
-                fs::remove_file(source_path).map_err(|error| {
-                    ToolError::Internal(format!(
-                        "Failed to remove {}: {error}",
-                        source_path.display()
-                    ))
-                })?;
-                summary.push(format!("M {destination_display_path}"));
-            }
-            PlannedChange::Delete {
-                path, display_path, ..
-            } => {
-                fs::remove_file(path).map_err(|error| {
-                    ToolError::Internal(format!("Failed to remove {}: {error}", path.display()))
-                })?;
-                summary.push(format!("D {display_path}"));
+        let mut summary = Vec::new();
+        for change in &planned {
+            match change {
+                PlannedChange::Add {
+                    path,
+                    display_path,
+                    contents,
+                    bom,
+                } => {
+                    write_text_file(path, contents, *bom)?;
+                    summary.push(format!("A {display_path}"));
+                }
+                PlannedChange::Update {
+                    path,
+                    display_path,
+                    contents,
+                    bom,
+                } => {
+                    write_text_file(path, contents, *bom)?;
+                    summary.push(format!("M {display_path}"));
+                }
+                PlannedChange::Move {
+                    source_path,
+                    destination_path,
+                    destination_display_path,
+                    contents,
+                    bom,
+                    ..
+                } => {
+                    write_text_file(destination_path, contents, *bom)?;
+                    fs::remove_file(source_path).map_err(|error| {
+                        ToolError::Internal(format!(
+                            "Failed to remove {}: {error}",
+                            source_path.display()
+                        ))
+                    })?;
+                    summary.push(format!("M {destination_display_path}"));
+                }
+                PlannedChange::Delete {
+                    path, display_path, ..
+                } => {
+                    fs::remove_file(path).map_err(|error| {
+                        ToolError::Internal(format!("Failed to remove {}: {error}", path.display()))
+                    })?;
+                    summary.push(format!("D {display_path}"));
+                }
             }
         }
-    }
 
-    Ok(format!(
-        "Success. Updated the following files:\n{}",
-        summary.join("\n")
-    ))
+        Ok(format!(
+            "Success. Updated the following files:\n{}",
+            summary.join("\n")
+        ))
+    })();
+
+    drop(guards);
+    result
 }
 
 fn render_directory(
