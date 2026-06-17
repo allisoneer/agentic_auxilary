@@ -1,0 +1,20 @@
+crates/tools/workspace-tools/src/tools.rs
+  s_968ec660387f61::t_fa869b8348b93a 324-329,410-412,459-466
+  s_968ec660387f61::t_1b60d5ffd3b8ef 330-332,334-335,338-345,347-353,358-406,413-455
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "7f6eec3dbee0003d61e3d5db1fd19f181566e79a",
+  "prompts": {},
+  "sessions": {
+    "s_968ec660387f61": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_129f7f9fbffeoQyWDBkzMOqORv",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
