@@ -116,14 +116,16 @@ pub fn parse_patch(patch_text: &str) -> Result<Vec<PatchOp>, String> {
                 let mut new_lines = Vec::new();
                 let mut end_of_file = false;
 
-                while index < end
-                    && !lines[index].starts_with("@@")
-                    && !lines[index].starts_with("*** ")
-                {
-                    let body = &lines[index];
+                while index < end && !lines[index].starts_with("@@") {
+                    let body = lines[index].trim_end();
+
                     if body == "*** End of File" {
                         end_of_file = true;
                         index += 1;
+                        break;
+                    }
+
+                    if body.starts_with("*** ") {
                         break;
                     }
 
@@ -165,6 +167,11 @@ pub fn parse_patch(patch_text: &str) -> Result<Vec<PatchOp>, String> {
 
 pub fn apply_chunks(original_text: &str, chunks: &[PatchChunk]) -> Result<String, String> {
     let original_had_trailing_newline = original_text.ends_with('\n');
+    let line_ending = if original_text.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
     let mut lines = split_lines(original_text);
     let mut cursor = 0_usize;
 
@@ -175,36 +182,44 @@ pub fn apply_chunks(original_text: &str, chunks: &[PatchChunk]) -> Result<String
         cursor = start + chunk.new_lines.len();
     }
 
-    let mut output = lines.join("\n");
+    let mut output = lines.join(line_ending);
     if original_had_trailing_newline && !output.ends_with('\n') {
-        output.push('\n');
+        output.push_str(line_ending);
     }
     Ok(output)
 }
 
 fn locate_chunk(lines: &[String], chunk: &PatchChunk, cursor: usize) -> Result<usize, String> {
+    let mut cursor = cursor;
+
+    if let Some(context) = &chunk.context {
+        let matches = lines
+            .iter()
+            .enumerate()
+            .skip(cursor)
+            .filter_map(|(index, line)| (line == context).then_some(index))
+            .collect::<Vec<_>>();
+        let context_index = unique_match(&matches, "chunk context")?;
+        cursor = context_index + 1;
+    }
+
     if chunk.old_lines.is_empty() {
         if chunk.end_of_file {
             return Ok(lines.len());
         }
 
-        if let Some(context) = &chunk.context {
-            let matches = lines
-                .iter()
-                .enumerate()
-                .skip(cursor)
-                .filter_map(|(index, line)| {
-                    if line == context {
-                        Some(index + 1)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            return unique_match(&matches, "insert location");
-        }
-
         return Ok(cursor.min(lines.len()));
+    }
+
+    if lines.len() < chunk.old_lines.len() {
+        return Err(String::from("Failed to locate update chunk in target file"));
+    }
+
+    if chunk.end_of_file {
+        let start = lines.len().saturating_sub(chunk.old_lines.len());
+        if start >= cursor && lines[start..start + chunk.old_lines.len()] == chunk.old_lines[..] {
+            return Ok(start);
+        }
     }
 
     let max = lines.len().saturating_sub(chunk.old_lines.len());
@@ -298,5 +313,80 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, "before\nnew\nafter\n");
+    }
+
+    #[test]
+    fn parses_end_of_file_sentinel_in_update_chunk() {
+        let patch = r"*** Begin Patch
+*** Update File: notes.txt
+@@
+-old
++new
+*** End of File
+*** End Patch";
+
+        let operations = parse_patch(patch).unwrap();
+
+        assert_eq!(
+            operations,
+            vec![PatchOp::Update {
+                path: String::from("notes.txt"),
+                move_to: None,
+                chunks: vec![PatchChunk {
+                    context: None,
+                    old_lines: vec![String::from("old")],
+                    new_lines: vec![String::from("new")],
+                    end_of_file: true,
+                }],
+            }]
+        );
+    }
+
+    #[test]
+    fn apply_chunks_prefers_eof_match_when_end_of_file_is_set() {
+        let result = apply_chunks(
+            "old\nkeep\nold\n",
+            &[PatchChunk {
+                context: None,
+                old_lines: vec![String::from("old")],
+                new_lines: vec![String::from("new")],
+                end_of_file: true,
+            }],
+        )
+        .unwrap();
+
+        assert_eq!(result, "old\nkeep\nnew\n");
+    }
+
+    #[test]
+    fn apply_chunks_uses_context_to_disambiguate_replacements() {
+        let result = apply_chunks(
+            "alpha\nold\nseparator\nbeta\nold\n",
+            &[PatchChunk {
+                context: Some(String::from("beta")),
+                old_lines: vec![String::from("old")],
+                new_lines: vec![String::from("new")],
+                end_of_file: false,
+            }],
+        )
+        .unwrap();
+
+        assert_eq!(result, "alpha\nold\nseparator\nbeta\nnew\n");
+    }
+
+    #[test]
+    fn apply_chunks_preserves_crlf_line_endings() {
+        let result = apply_chunks(
+            "before\r\nold\r\nafter\r\n",
+            &[PatchChunk {
+                context: None,
+                old_lines: vec![String::from("old")],
+                new_lines: vec![String::from("new")],
+                end_of_file: false,
+            }],
+        )
+        .unwrap();
+
+        assert_eq!(result, "before\r\nnew\r\nafter\r\n");
     }
 }

@@ -10,7 +10,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::ErrorKind;
+use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -143,7 +146,7 @@ impl Tool for WorkspaceApplyPatchTool {
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let runtime = Arc::clone(&self.runtime);
-        Box::pin(async move { workspace_apply_patch(runtime.as_ref(), &input) })
+        Box::pin(async move { workspace_apply_patch(runtime.as_ref(), &input).await })
     }
 }
 
@@ -233,18 +236,16 @@ async fn workspace_edit(
     let _guard = file_lock.lock().await;
 
     if input.old_string.is_empty() {
-        let existing = read_text_file_if_exists(&resolved.absolute_path, &resolved.display_path)?;
+        if resolved.absolute_path.exists() {
+            return Err(ToolError::InvalidInput(format!(
+                "File `{}` already exists; create mode (oldString=\"\") cannot overwrite. Provide oldString to update it.",
+                resolved.display_path
+            )));
+        }
+
         let (new_bom, new_text) = split_bom(&input.new_string);
-        let desired_bom = existing
-            .as_ref()
-            .map_or(new_bom, |file| file.bom || new_bom);
-        write_text_file(&resolved.absolute_path, &new_text, desired_bom)?;
-        let verb = if existing.is_some() {
-            "Updated"
-        } else {
-            "Created"
-        };
-        return Ok(format!("{verb} {}", resolved.display_path));
+        write_text_file(&resolved.absolute_path, &new_text, new_bom)?;
+        return Ok(format!("Created {}", resolved.display_path));
     }
 
     let source = read_text_file(&resolved.absolute_path, &resolved.display_path)?;
@@ -278,7 +279,7 @@ async fn workspace_edit(
     Ok(format!("Updated {}", resolved.display_path))
 }
 
-fn workspace_apply_patch(
+async fn workspace_apply_patch(
     runtime: &WorkspaceRuntime,
     input: &WorkspaceApplyPatchInput,
 ) -> Result<String, ToolError> {
@@ -293,6 +294,35 @@ fn workspace_apply_patch(
     }
 
     let tools = runtime.tools()?;
+    let mut lock_paths = HashSet::new();
+    for operation in &operations {
+        match operation {
+            PatchOp::Add { path, .. } | PatchOp::Delete { path } => {
+                let resolved = resolve_workspace_path(tools.root(), path)?;
+                lock_paths.insert(resolved.absolute_path);
+            }
+            PatchOp::Update { path, move_to, .. } => {
+                let resolved = resolve_workspace_path(tools.root(), path)?;
+                lock_paths.insert(resolved.absolute_path);
+
+                if let Some(move_to) = move_to {
+                    let destination = resolve_workspace_path(tools.root(), move_to)?;
+                    lock_paths.insert(destination.absolute_path);
+                }
+            }
+        }
+    }
+
+    let mut lock_paths = lock_paths.into_iter().collect::<Vec<_>>();
+    lock_paths.sort_by(|a, b| a.as_os_str().cmp(b.as_os_str()));
+
+    let mut guards = Vec::with_capacity(lock_paths.len());
+    for path in &lock_paths {
+        let lock = tools.file_lock(path)?;
+        guards.push(lock.lock_owned().await);
+    }
+    let _ = guards.len();
+
     let mut planned = Vec::new();
     let mut touched = HashSet::new();
 
@@ -484,29 +514,52 @@ fn render_file(
     offset: Option<usize>,
     limit: Option<usize>,
 ) -> Result<String, ToolError> {
-    let bytes = fs::read(path)
+    let mut file = std::fs::File::open(path)
         .map_err(|error| ToolError::Internal(format!("Failed to read {display_path}: {error}")))?;
 
-    if is_binary(&bytes) {
+    let mut sample = vec![0_u8; BINARY_SAMPLE_BYTES];
+    let read = file
+        .read(&mut sample)
+        .map_err(|error| ToolError::Internal(format!("Failed to read {display_path}: {error}")))?;
+    sample.truncate(read);
+
+    if is_binary(&sample) {
         return Err(ToolError::InvalidInput(format!(
             "`{display_path}` appears to be a binary file. Use workspace-relative paths such as `src/main.rs` for text files."
         )));
     }
 
-    let text = String::from_utf8(bytes).map_err(|_| {
-        ToolError::InvalidInput(format!("`{display_path}` is not valid UTF-8 text."))
-    })?;
+    let cursor = std::io::Cursor::new(sample);
+    let mut reader = BufReader::new(cursor.chain(file));
     let offset = offset.unwrap_or(1).max(1);
     let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
     let start = offset.saturating_sub(1);
+    let end = start.saturating_add(limit);
+    let mut numbered_lines = Vec::new();
+    let mut buf = String::new();
+    let mut line_no = 0_usize;
 
-    let numbered_lines = text
-        .lines()
-        .enumerate()
-        .skip(start)
-        .take(limit)
-        .map(|(index, line)| format!("{}: {}", index + 1, truncate_line(line)))
-        .collect::<Vec<_>>();
+    loop {
+        buf.clear();
+        let read = reader.read_line(&mut buf).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::InvalidData {
+                ToolError::InvalidInput(format!("`{display_path}` is not valid UTF-8 text."))
+            } else {
+                ToolError::Internal(format!("Failed to read {display_path}: {error}"))
+            }
+        })?;
+        if read == 0 {
+            break;
+        }
+
+        line_no += 1;
+        let line = buf.strip_suffix('\n').unwrap_or(&buf);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+
+        if (start..end).contains(&(line_no - 1)) {
+            numbered_lines.push(format!("{}: {}", line_no, truncate_line(line)));
+        }
+    }
 
     Ok(format!(
         "<path>{display_path}</path>\n<type>file</type>\n<content>\n{}\n</content>",
@@ -554,19 +607,6 @@ fn read_text_file(path: &Path, display_path: &str) -> Result<TextFile, ToolError
     })?;
 
     decode_text_file(&bytes, display_path)
-}
-
-fn read_text_file_if_exists(
-    path: &Path,
-    display_path: &str,
-) -> Result<Option<TextFile>, ToolError> {
-    match fs::read(path) {
-        Ok(bytes) => decode_text_file(&bytes, display_path).map(Some),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(ToolError::Internal(format!(
-            "Failed to read {display_path}: {error}"
-        ))),
-    }
 }
 
 fn decode_text_file(bytes: &[u8], display_path: &str) -> Result<TextFile, ToolError> {
@@ -806,6 +846,25 @@ mod tests {
     }
 
     #[test]
+    fn workspace_read_rejects_invalid_utf8_even_outside_requested_page() {
+        let dir = TestDir::new("workspace-read-");
+        std::fs::write(dir.path.join("notes.txt"), b"ok\n\xFFtail").unwrap();
+        let runtime = runtime_for(&dir);
+
+        let error = workspace_read(
+            &runtime,
+            &WorkspaceReadInput {
+                file_path: String::from("notes.txt"),
+                offset: Some(1),
+                limit: Some(1),
+            },
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("not valid UTF-8 text"));
+    }
+
+    #[test]
     fn workspace_todowrite_replaces_entire_list() {
         let dir = TestDir::new("workspace-todo-");
         let runtime = runtime_for(&dir);
@@ -958,6 +1017,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn workspace_edit_create_mode_rejects_overwrite_existing_file() {
+        let dir = TestDir::new("workspace-edit-");
+        let file_path = dir.path.join("src/existing.txt");
+        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        std::fs::write(&file_path, "original\n").unwrap();
+        let runtime = runtime_for(&dir);
+
+        let error = workspace_edit(
+            &runtime,
+            WorkspaceEditInput {
+                file_path: String::from("src/existing.txt"),
+                old_string: String::new(),
+                new_string: String::from("replacement\n"),
+                replace_all: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("cannot overwrite"));
+        assert_eq!(std::fs::read_to_string(file_path).unwrap(), "original\n");
+    }
+
+    #[tokio::test]
     async fn workspace_edit_preserves_existing_line_endings() {
         let dir = TestDir::new("workspace-edit-");
         std::fs::write(dir.path.join("file.txt"), b"hello\r\nworld\r\n").unwrap();
@@ -1010,6 +1093,7 @@ mod tests {
                 patch_text: patch_text.to_string(),
             },
         )
+        .await
         .unwrap();
 
         assert!(result.contains("A add.txt"));
@@ -1047,10 +1131,81 @@ mod tests {
                 ),
             },
         )
+        .await
         .unwrap_err();
 
         assert!(error.to_string().contains("verification failed"));
         assert_eq!(std::fs::read_to_string(file_path).unwrap(), "original\n");
+    }
+
+    #[tokio::test]
+    async fn workspace_apply_patch_acquires_sorted_locks_before_verification() {
+        let dir = TestDir::new("workspace-patch-");
+        std::fs::write(dir.path.join("a.txt"), "old-a\n").unwrap();
+        std::fs::write(dir.path.join("z.txt"), "old-z\n").unwrap();
+        let runtime = runtime_for(&dir);
+        let tools = runtime.tools().unwrap();
+
+        let first_lock = tools.file_lock(&dir.path.join("a.txt")).unwrap();
+        let second_lock = tools.file_lock(&dir.path.join("z.txt")).unwrap();
+        let first_guard = first_lock.lock_owned().await;
+
+        let patch_text = String::from(
+            "*** Begin Patch\n*** Update File: z.txt\n@@\n-old-z\n+new-z\n*** Update File: a.txt\n@@\n-old-a\n+new-a\n*** End Patch",
+        );
+        let runtime_clone = runtime.clone();
+        let input = WorkspaceApplyPatchInput { patch_text };
+        let task = tokio::spawn(async move { workspace_apply_patch(&runtime_clone, &input).await });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let second_guard = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            second_lock.lock_owned(),
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(!task.is_finished());
+
+        drop(first_guard);
+        drop(second_guard);
+
+        let result = task.await.unwrap().unwrap();
+        assert!(result.contains("M z.txt"));
+        assert!(result.contains("M a.txt"));
+        assert_eq!(
+            std::fs::read_to_string(dir.path.join("a.txt")).unwrap(),
+            "new-a\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path.join("z.txt")).unwrap(),
+            "new-z\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_apply_patch_preserves_existing_line_endings() {
+        let dir = TestDir::new("workspace-patch-");
+        std::fs::write(dir.path.join("file.txt"), b"hello\r\nworld\r\n").unwrap();
+        let runtime = runtime_for(&dir);
+
+        workspace_apply_patch(
+            &runtime,
+            &WorkspaceApplyPatchInput {
+                patch_text: String::from(
+                    "*** Begin Patch\n*** Update File: file.txt\n@@\n-hello\n+hi\n*** End Patch",
+                ),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read(dir.path.join("file.txt")).unwrap(),
+            b"hi\r\nworld\r\n"
+        );
     }
 
     #[test]

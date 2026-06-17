@@ -3,7 +3,7 @@ name = "workspace_tools"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Workspace-scoped file and todo MCP tools"
+description = "Workspace-scoped read/todowrite/edit/apply_patch tools"
 repository = "https://github.com/allisoneer/agentic_auxilary"
 
 [package.metadata.repo]
