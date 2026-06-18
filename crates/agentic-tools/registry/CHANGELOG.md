@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.0] - 2026-06-18
+
+### ⚙️  Miscellaneous
+- Release
+
+### ⛰️  Features
+- *(workspace_tools)* Add workspace-scoped mcp file and todo tools
+
+### 🐛 Bug Fixes
+- *(release)* Rename workspace tools crate for crates.io
 ## [0.4.6] - 2026-06-12
 
 ### ⚙️  Miscellaneous
