@@ -1,0 +1,31 @@
+apps/opencode-orchestrator-mcp/Cargo.toml
+  s_def9a4a27c98ae::t_2257f203edfd34 3
+Cargo.lock
+  s_def9a4a27c98ae::t_7fb25c1f86a47d 63,139,143,170-184,4367
+crates/tools/workspace-tools/Cargo.toml
+  s_def9a4a27c98ae::t_2257f203edfd34 2-3
+crates/agentic-tools/registry/Cargo.toml
+  s_def9a4a27c98ae::t_2257f203edfd34 3
+Cargo.toml
+  s_def9a4a27c98ae::t_2257f203edfd34 87,91
+tools/policy.toml
+  s_def9a4a27c98ae::t_bc7eddd6135e68 153-154
+apps/agentic-mcp/Cargo.toml
+  s_def9a4a27c98ae::t_2257f203edfd34 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "286eccd3f42556cedc57b2a1e71b9f28a21d2193",
+  "prompts": {},
+  "sessions": {
+    "s_def9a4a27c98ae": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1238ba8c8ffeEPnGctpZODhAPT",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
