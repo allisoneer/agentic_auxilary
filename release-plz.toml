@@ -213,12 +213,11 @@ git_tag_enable = false
 release = true
 
 [[package]]
-name = "workspace_tools"
+name = "agentic-workspace-tools"
 changelog_path = "crates/tools/workspace-tools/CHANGELOG.md"
-git_tag_name = "workspace_tools-v{{ version }}"
-git_tag_enable = true
-release = false
-publish = false
+git_tag_name = "agentic-workspace-tools-v{{ version }}"
+git_tag_enable = false
+release = true
 
 [[package]]
 name = "message-optimizer-bin"

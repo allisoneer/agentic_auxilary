@@ -150,8 +150,8 @@ git_tag_enable = false
 [release_plz.overrides.agentic-tools-napi]
 publish = false
 
-[release_plz.overrides.workspace_tools]
-publish = false
+[release_plz.overrides.agentic-workspace-tools]
+git_tag_enable = false
 
 [release_plz.overrides.opencode_rs]
 git_tag_enable = false
