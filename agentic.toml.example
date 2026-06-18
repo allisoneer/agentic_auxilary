@@ -111,6 +111,18 @@ just_search_timeout_secs = 30
 extra_ignore_patterns = []
 
 # =============================================================================
+# Workspace Tools - Local workspace-scoped file and todo tools
+# =============================================================================
+[workspace_tools]
+# Disabled by default. When enabled, these tools only operate inside the current
+# workspace/repo root and strongly prefer workspace-relative paths like src/main.rs.
+# Absolute paths are only accepted when they still resolve inside the workspace root.
+workspace_read = false
+workspace_todowrite = false
+workspace_edit = false
+workspace_apply_patch = false
+
+# =============================================================================
 # Services - External API configurations
 # =============================================================================
 [services.anthropic]

@@ -37,6 +37,7 @@ use agentic_config::types::ReviewConfig;
 use agentic_config::types::SubagentsConfig;
 use agentic_config::types::ThoughtsConfig;
 use agentic_config::types::WebRetrievalConfig;
+use agentic_config::types::WorkspaceToolsConfig;
 use agentic_tools_core::ToolRegistry;
 use serde::Deserialize;
 use serde::Serialize;
@@ -59,6 +60,10 @@ pub struct AgenticToolsConfig {
     /// Tool-specific config for CLI tools (limits, ignore patterns).
     #[serde(default)]
     pub cli_tools: CliToolsConfig,
+
+    /// Tool-specific config for workspace-local file and todo tools.
+    #[serde(default)]
+    pub workspace_tools: WorkspaceToolsConfig,
 
     /// Tool-specific config for gpt5-reasoner.
     #[serde(default)]
@@ -138,6 +143,13 @@ const THOUGHTS_NAMES: &[&str] = &[
 const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
 
 const REVIEW_NAMES: &[&str] = &["review_diff_snapshot", "review_diff_page", "review_run"];
+
+const WORKSPACE_NAMES: &[&str] = &[
+    "workspace_read",
+    "workspace_todowrite",
+    "workspace_edit",
+    "workspace_apply_patch",
+];
 
 impl AgenticTools {
     /// Build the unified `ToolRegistry` using domain registries.
@@ -224,6 +236,10 @@ impl AgenticTools {
             regs.push(review_tools::build_registry(svc));
         }
 
+        if workspace_tools_enabled(&config.workspace_tools) && domain_wanted(WORKSPACE_NAMES) {
+            regs.push(workspace_tools::build_registry(&config.workspace_tools));
+        }
+
         let merged = ToolRegistry::merge_all(regs);
 
         // Final allowlist filtering at registry level (authoritative)
@@ -250,7 +266,15 @@ impl AgenticTools {
             + THOUGHTS_NAMES.len()
             + WEB_NAMES.len()
             + REVIEW_NAMES.len()
+            + WORKSPACE_NAMES.len()
     }
+}
+
+fn workspace_tools_enabled(config: &WorkspaceToolsConfig) -> bool {
+    config.workspace_read
+        || config.workspace_todowrite
+        || config.workspace_edit
+        || config.workspace_apply_patch
 }
 
 /// Normalize allowlist: lowercase, trim, filter empty strings.
@@ -276,7 +300,7 @@ mod tests {
 
     #[test]
     fn total_tool_count_is_30() {
-        assert_eq!(AgenticTools::total_tool_count(), 30);
+        assert_eq!(AgenticTools::total_tool_count(), 34);
     }
 
     #[test]
@@ -316,7 +340,7 @@ mod tests {
         let reg = AgenticTools::new(AgenticToolsConfig::default());
         let names = reg.list_names();
 
-        // Should have all 27 tools
+        // Workspace tools remain disabled by default.
         assert!(
             names.len() >= 27,
             "expected at least 27 tools, got {}",
@@ -356,6 +380,10 @@ mod tests {
             reg.contains("web_search"),
             "missing web_search from web_retrieval"
         );
+        assert!(!reg.contains("workspace_read"));
+        assert!(!reg.contains("workspace_todowrite"));
+        assert!(!reg.contains("workspace_edit"));
+        assert!(!reg.contains("workspace_apply_patch"));
     }
 
     #[test]
@@ -502,5 +530,43 @@ mod tests {
             reg.contains("ask_reasoning_model"),
             "missing ask_reasoning_model (uses reasoning config)"
         );
+    }
+
+    #[test]
+    fn workspace_tools_require_matching_toggle() {
+        let reg = AgenticTools::new(AgenticToolsConfig {
+            workspace_tools: WorkspaceToolsConfig {
+                workspace_read: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert!(reg.contains("workspace_read"));
+        assert!(!reg.contains("workspace_todowrite"));
+        assert!(!reg.contains("workspace_edit"));
+        assert!(!reg.contains("workspace_apply_patch"));
+    }
+
+    #[test]
+    fn workspace_tools_respect_allowlist_intersection() {
+        let reg = AgenticTools::new(AgenticToolsConfig {
+            allowlist: Some(HashSet::from([
+                String::from("workspace_read"),
+                String::from("workspace_edit"),
+            ])),
+            workspace_tools: WorkspaceToolsConfig {
+                workspace_read: true,
+                workspace_edit: true,
+                workspace_apply_patch: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert!(reg.contains("workspace_read"));
+        assert!(reg.contains("workspace_edit"));
+        assert!(!reg.contains("workspace_todowrite"));
+        assert!(!reg.contains("workspace_apply_patch"));
     }
 }

@@ -44,6 +44,9 @@ pub struct AgenticConfig {
     /// CLI tools (grep, glob, ls) configuration.
     pub cli_tools: CliToolsConfig,
 
+    /// Workspace-local file and todo tools configuration.
+    pub workspace_tools: WorkspaceToolsConfig,
+
     /// Logging and diagnostics configuration.
     pub logging: LoggingConfig,
 }
@@ -308,6 +311,26 @@ impl Default for CliToolsConfig {
 
 //
 // ─────────────────────────────────────────────────────────────────────────────
+// WORKSPACE TOOLS CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+//
+
+/// Configuration for workspace-local file and todo tools.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct WorkspaceToolsConfig {
+    /// Enable the `workspace_read` tool.
+    pub workspace_read: bool,
+    /// Enable the `workspace_todowrite` tool.
+    pub workspace_todowrite: bool,
+    /// Enable the `workspace_edit` tool.
+    pub workspace_edit: bool,
+    /// Enable the `workspace_apply_patch` tool.
+    pub workspace_apply_patch: bool,
+}
+
+//
+// ─────────────────────────────────────────────────────────────────────────────
 // SERVICES CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
 //
@@ -491,6 +514,7 @@ mod tests {
         assert!(toml_str.contains("[orchestrator.agents]"));
         assert!(toml_str.contains("[web_retrieval]"));
         assert!(toml_str.contains("[cli_tools]"));
+        assert!(toml_str.contains("[workspace_tools]"));
         assert!(toml_str.contains("[logging]"));
         // Ensure old sections are NOT present
         assert!(!toml_str.contains("[models]"));
@@ -652,5 +676,15 @@ deny = ["Bash"]
         assert_eq!(cfg.subagents.runtime_timeout_secs, 3600);
         assert_eq!(cfg.review.run_timeout_secs, 1800);
         assert_eq!(cfg.thoughts.add_reference_timeout_secs, 600);
+    }
+
+    #[test]
+    fn test_workspace_tools_defaults_match_plan() {
+        let cfg = AgenticConfig::default();
+
+        assert!(!cfg.workspace_tools.workspace_read);
+        assert!(!cfg.workspace_tools.workspace_todowrite);
+        assert!(!cfg.workspace_tools.workspace_edit);
+        assert!(!cfg.workspace_tools.workspace_apply_patch);
     }
 }

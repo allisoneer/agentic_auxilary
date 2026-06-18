@@ -176,6 +176,7 @@ async fn main() -> anyhow::Result<()> {
     reg_cfg.reasoning = loaded.config.reasoning.clone();
     reg_cfg.web_retrieval = loaded.config.web_retrieval.clone();
     reg_cfg.cli_tools = loaded.config.cli_tools.clone();
+    reg_cfg.workspace_tools = loaded.config.workspace_tools.clone();
     reg_cfg.exa = loaded.config.services.exa.clone();
     reg_cfg.anthropic = loaded.config.services.anthropic.clone();
     reg_cfg.linear = loaded.config.services.linear.clone();

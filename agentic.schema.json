@@ -120,6 +120,16 @@
           "temperature": 0.2
         }
       }
+    },
+    "workspace_tools": {
+      "description": "Workspace-local file and todo tools configuration.",
+      "$ref": "#/$defs/WorkspaceToolsConfig",
+      "default": {
+        "workspace_apply_patch": false,
+        "workspace_edit": false,
+        "workspace_read": false,
+        "workspace_todowrite": false
+      }
     }
   },
   "$defs": {
@@ -587,6 +597,32 @@
           "type": "number",
           "format": "double",
           "default": 0.2
+        }
+      }
+    },
+    "WorkspaceToolsConfig": {
+      "description": "Configuration for workspace-local file and todo tools.",
+      "type": "object",
+      "properties": {
+        "workspace_apply_patch": {
+          "description": "Enable the `workspace_apply_patch` tool.",
+          "type": "boolean",
+          "default": false
+        },
+        "workspace_edit": {
+          "description": "Enable the `workspace_edit` tool.",
+          "type": "boolean",
+          "default": false
+        },
+        "workspace_read": {
+          "description": "Enable the `workspace_read` tool.",
+          "type": "boolean",
+          "default": false
+        },
+        "workspace_todowrite": {
+          "description": "Enable the `workspace_todowrite` tool.",
+          "type": "boolean",
+          "default": false
         }
       }
     }
