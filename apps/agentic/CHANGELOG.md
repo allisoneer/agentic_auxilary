@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.10] - 2026-06-18
+
+### ⛰️  Features
+- *(workspace_tools)* Add workspace-scoped mcp file and todo tools
 ## [0.1.9] - 2026-06-05
 
 ### ⚙️  Miscellaneous

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.3.13] - 2026-06-18
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: agentic-config
 ## [0.3.12] - 2026-06-12
 
 ### ⚙️  Miscellaneous
