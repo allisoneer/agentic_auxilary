@@ -1,0 +1,19 @@
+tools/policy.toml
+  s_def9a4a27c98ae::t_0be9f8f50eb396 153-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "0230eedb4e2efbd63e99feaa2f25bc258001e735",
+  "prompts": {},
+  "sessions": {
+    "s_def9a4a27c98ae": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1238ba8c8ffeEPnGctpZODhAPT",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
