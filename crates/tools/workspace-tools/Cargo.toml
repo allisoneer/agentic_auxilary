@@ -1,6 +1,6 @@
 [package]
 name = "workspace_tools"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Workspace-scoped read/todowrite/edit/apply_patch tools"
