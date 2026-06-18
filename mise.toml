@@ -72,7 +72,7 @@ macos-x64 = { asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-bin]
-version = "0.1.9"
+version = "0.1.10"
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin.platforms]
@@ -82,7 +82,7 @@ macos-x64 = { asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-mcp]
-version = "0.2.33"
+version = "0.2.34"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp.platforms]
@@ -92,7 +92,7 @@ macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
 [tools.opencode-orchestrator-mcp]
-version = "0.7.1"
+version = "0.7.2"
 version_prefix = "opencode-orchestrator-mcp-v"
 
 [tools.opencode-orchestrator-mcp.platforms]
