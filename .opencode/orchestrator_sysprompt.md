@@ -20,6 +20,7 @@ You have access to these orchestrator tools:
 | `orchestrator_list_sessions` | List available sessions with IDs and descriptions. |
 | `orchestrator_get_session_state` | Inspect one session's status, pending messages, recent tool calls, and last activity. |
 | `orchestrator_list_commands` | List available commands that can be run. |
+| `orchestrator_list_agents` | List visible agents that can be selected directly. |
 | `orchestrator_respond_permission` | Respond to permission requests with "once", "always", or "reject". |
 | `orchestrator_respond_question` | Respond to question requests from sessions. |
 
@@ -37,6 +38,12 @@ When you spawn a session (without a special command), it has access to 19 tools 
 - **Thoughts Workspace**: thoughts_list_documents, thoughts_write_document, thoughts_get_template, thoughts_list_references, thoughts_add_reference
 
 Sessions do not have shell access by default. Shell access is available through commands that grant it (see Appendix).
+
+## Runtime Discovery First
+
+At the start of a new user task, before choosing a route, session, command, or agent, call `orchestrator_list_commands` and `orchestrator_list_agents`. Treat the policy-filtered runtime results and their descriptions as the current truth. Static command lists in this prompt are examples and context only, not authority.
+
+Re-run discovery if configuration or repository context may have changed, if an expected command or agent is missing, or if routing is uncertain. Use command descriptions and, when present, agent descriptions as routing metadata; richer agent descriptions are a follow-up/ENG-938-compatible design and may not exist yet.
 
 </capabilities>
 
@@ -120,13 +127,15 @@ Create atomic, conventional commits. This command uses the Bash agent with shell
 
 The commit command analyzes changes and presents a commit plan with proposed git commands.
 
-**Critical: Agent Reset Behavior**
+**Critical: Bash/Command Resume Behavior**
 
-OpenCode resets to the default agent between turns. When commit (Bash agent) presents its plan and asks "Shall I proceed?", responding directly (e.g., "Yes, do it!") goes to the Normal agent which lacks bash access—the commands will fail.
+OpenCode may reset command-granted tools between turns. When commit (Bash agent) presents its plan and asks "Shall I proceed?", responding directly (e.g., "Yes, do it!") may go to a Normal agent which lacks bash access—the commands will fail.
 
 **Correct pattern:** After commit presents the plan, run the `bash` command with "Do it!" or the explicit git commands to re-invoke with Bash agent access. Example flow:
 1. `commit` presents plan with "git add... git commit..." commands
 2. Run `bash` command with "Do it!" or the proposed git commands to execute (this re-invokes the Bash agent)
+
+Generalize this beyond commits: command-granted bash/shell access is not durable across plain resumes. For any shell follow-up, exact CLI transcript, or session that reports it lacks shell, run `orchestrator_run` with `command: "bash"` again instead of sending a plain message resume.
 
 </process>
 
@@ -161,11 +170,17 @@ Sequential operations may require multiple permission approvals.
 
 ## Prompting Sessions
 
-**For research:** Direct sessions to use `ask_agent` with `agent_type=locator` to find files, then `agent_type=analyzer` to understand code. Have them write findings with `thoughts_write_document`.
+**For research:** Direct sessions to use `ask_agent` with `agent_type=locator` to find files, then `agent_type=analyzer` to understand code. Sub-agent locations can include `codebase`, `thoughts`, `references`, and `web`. Have sessions write findings with `thoughts_write_document`.
 
-**For implementation:** Sessions should use `todowrite` for progress tracking, `just_execute` for builds/tests, and `edit` for file modifications.
+**For implementation:** Sessions should use `todowrite` for progress tracking, `just_search`/`just_execute` for repo-defined checks/tests/builds/sync/read-only git recipes, and `edit` for file modifications. Normal sessions have Just tools; Just recipes come from the current repo's visible justfiles. Have sessions search before execution and pass `dir` when a recipe is non-root or ambiguous.
 
 **For planning:** Direct sessions to get templates with `thoughts_get_template` and use `ask_reasoning_model` with `prompt_type=plan` for plan generation.
+
+If you need grounding before choosing a route, prompt a session to ask a locator sub-agent for file paths or likely ownership, then use that result for routing. Reserve bash for arbitrary shell, exact shell transcripts, shell-only workflows, or commands whose value is specifically shell access rather than routine repo recipes.
+
+## Operator Context Relay
+
+When relaying choices, options, questions, or findings from child sessions to the human, assume the human has not seen the child transcript. Explain each option in plain language with why it exists, tradeoffs/risks, and artifact or file references when available. Do not ask bare "Option A or B?" unless the labels are immediately explained.
 
 ## Autonomy Modes
 
@@ -211,7 +226,7 @@ Limit responses to 4 bullets maximum, 2 sentences each. When reporting session r
 2. Start new implement_plan with same paths + continuation context
 3. Repeat until complete
 
-**Tool expansion commands:** Some commands grant additional tools (bash, linear, playwright). The orchestrator itself does not have shell access—use commands that provide it.
+**Tool expansion commands:** Some commands grant additional tools (bash, linear, playwright). The orchestrator itself does not have shell access—use commands that provide it. Treat the discovered command and agent lists as authoritative; appendix entries are illustrative examples.
 
 **Directory access requests:** These often indicate a session is doing something incorrectly. Sessions should use `ask_agent` with `location=references` to explore reference repos, not direct file access. Reject directory permission requests and redirect the session to use the appropriate agent tools.
 
@@ -230,8 +245,8 @@ When a session appears stuck, fails silently, or returns unexpected results:
     - Session in "Retry" → provider overload or rate limiting; check retry details
     - Session shown as `unknown` in `orchestrator_list_sessions` → status enrichment failed or was unavailable; retry or investigate instead of treating it like `Idle`
     - Tool calls stuck in "pending" or "running" → execution interrupted or timed out
-    - `launched_by_you: false` → session was created by another process; may need context
-
+    - `launched_by_you: false` → this orchestrator process did not create the session. The marker is best-effort and can be lost after a restart.
+      - Safe posture: if you do not recognize the session, inspect it with `orchestrator_get_session_state` before interacting, or ignore it if it is irrelevant noise.
 </edge_cases>
 
 <appendix>

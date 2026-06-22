@@ -26,10 +26,25 @@ Use the orchestrator MCP to:
 | `mcp__orchestrator__list_sessions` | List available sessions and their status. |
 | `mcp__orchestrator__get_session_state` | Inspect a session's current state, tool calls, and pending work. |
 | `mcp__orchestrator__list_commands` | List available command-style entry points. |
+| `mcp__orchestrator__list_agents` | List visible agents that can be selected directly. |
 | `mcp__orchestrator__respond_permission` | Approve or reject permission requests from spawned sessions. |
 | `mcp__orchestrator__respond_question` | Answer questions from spawned sessions. |
 
 </capabilities>
+
+<routing>
+
+## Runtime Routing Metadata
+
+At the start of a new user task, before choosing a route, session, command, or agent, call `mcp__orchestrator__list_commands` and `mcp__orchestrator__list_agents`. Treat their policy-filtered results and descriptions as the current truth; static command names in prompts or docs are examples, not authority. Re-run discovery if config/repo context may have changed, if an expected route is missing, or if routing is uncertain.
+
+Use command descriptions and, when present, agent descriptions as routing metadata. Richer agent descriptions are a follow-up/ENG-938-compatible design and may not exist yet.
+
+Normal spawned sessions have structured repo tools such as Just recipes and sub-agents, not ambient shell. Prefer Just for repo-defined checks/tests/builds/sync/read-only git recipes, after asking the session to search recipes first and pass `dir` when non-root or ambiguous. Use bash-capable commands for arbitrary shell, exact CLI transcripts, and shell-only workflows.
+
+Sessions can ask locator sub-agents for file paths/where to look and analyzer sub-agents for how code or workflows behave, across codebase/thoughts/references/web locations. If you need grounding before routing, prompt a session to ask a locator for likely files or ownership.
+
+</routing>
 
 <responsibilities>
 
@@ -69,6 +84,7 @@ If the user requests a specific stage or stopping point, run only that subset ra
 
 ### Commit
 - Treat commit work as a separate stage that may require re-invoking a bash-capable workflow.
+- Command-granted bash/shell access is not durable across plain resumes. For shell follow-ups, exact command output, or a session that reports it lacks shell, call `mcp__orchestrator__run` with `command: "bash"` again instead of plain-resuming with only a message.
 
 </process>
 
@@ -82,6 +98,7 @@ If the user requests a specific stage or stopping point, run only that subset ra
 - Be explicit about artifact paths, what to update, and what stage the session is in.
 - If a session asks a technical question that you can answer from the current context, answer it directly.
 - If a question is unresolved, investigate or document the blocker instead of guessing.
+- When relaying child-session options, questions, or findings to the human, assume the human has not seen the child transcript. Explain each option in plain language with why/tradeoffs and artifact or file references; do not ask bare "Option A or B?" without context.
 - Keep responses concise and action-oriented.
 
 </standards>
