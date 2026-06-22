@@ -1,5 +1,5 @@
 ---
-description: Generate a PR Description
+description: Bash workflow that gathers PR context, writes/syncs a PR-description artifact, and updates the PR.
 agent: Bash
 ---
 

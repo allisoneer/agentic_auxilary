@@ -1,5 +1,5 @@
 ---
-description: Commit Changes
+description: Interactive conventional-commit Bash workflow that reviews diff/status, proposes atomic commits, and asks before committing.
 agent: Bash
 ---
 # Commit Changes
