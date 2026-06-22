@@ -245,8 +245,8 @@ When a session appears stuck, fails silently, or returns unexpected results:
     - Session in "Retry" → provider overload or rate limiting; check retry details
     - Session shown as `unknown` in `orchestrator_list_sessions` → status enrichment failed or was unavailable; retry or investigate instead of treating it like `Idle`
     - Tool calls stuck in "pending" or "running" → execution interrupted or timed out
-    - `launched_by_you: false` → session was created by another process; may need context
-
+    - `launched_by_you: false` → this orchestrator process did not create the session. The marker is best-effort and can be lost after a restart.
+      - Safe posture: if you do not recognize the session, inspect it with `orchestrator_get_session_state` before interacting, or ignore it if it is irrelevant noise.
 </edge_cases>
 
 <appendix>
