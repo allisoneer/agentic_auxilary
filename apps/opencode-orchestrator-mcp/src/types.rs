@@ -745,4 +745,18 @@ mod tests {
         assert!(text.contains("orchestrator_run"));
         assert!(text.contains("agent=<name>"));
     }
+
+    #[test]
+    fn list_agents_text_format_omits_dash_when_description_missing() {
+        let out = ListAgentsOutput {
+            agents: vec![AgentInfo {
+                name: "NoDesc".into(),
+                description: None,
+            }],
+        };
+
+        let text = out.fmt_text(&TextOptions::default());
+        assert!(text.contains("  NoDesc\n"));
+        assert!(!text.contains("NoDesc -"));
+    }
 }

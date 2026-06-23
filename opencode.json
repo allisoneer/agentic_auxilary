@@ -23,15 +23,18 @@
   },
   "agent": {
     "Normal": {
+      "description": "General-purpose primary session for repo coding and research with the standard non-shell toolset.",
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary"
     },
     "NormalOpenAI": {
+      "description": "OpenAI-backed general-purpose primary session for repo research, planning, and implementation workflows.",
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
       "model": "openai/gpt-5.4",
       "mode": "primary"
     },
     "OrchestratorClaude": {
+      "description": "Claude orchestration-only agent for routing, coordination, and todowrite/read state management without direct code execution.",
       "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
       "model": "anthropic/claude-opus-4-5",
       "mode": "primary",
@@ -43,6 +46,7 @@
       }
     },
     "OrchestratorOpenAI": {
+      "description": "OpenAI orchestration-only agent for routing, coordination, and todowrite/read state management without direct code execution.",
       "prompt": "{file:./.opencode/orchestrator_sysprompt_gpt54.md}",
       "model": "openai/gpt-5.5",
       "mode": "primary",
@@ -54,6 +58,7 @@
       }
     },
     "ReviewClaude": {
+      "description": "Claude adversarial review agent for evidence-grounded change review using review tools and read-only discovery surfaces.",
       "prompt": "{file:./.opencode/review_sysprompt.md}",
       "model": "anthropic/claude-opus-4-5",
       "mode": "primary",
@@ -70,6 +75,7 @@
       }
     },
     "ReviewOpenAI": {
+      "description": "OpenAI adversarial review agent for evidence-grounded change review using review tools and read-only discovery surfaces.",
       "prompt": "{file:./.opencode/review_sysprompt_gpt54.md}",
       "model": "openai/gpt-5.5",
       "mode": "primary",
@@ -86,6 +92,7 @@
       }
     },
     "Bash": {
+      "description": "Shell-enabled session for exact CLI work, git/build/test commands, and command-output-driven tasks; prefer Just recipes when suitable.",
       "mode": "primary",
       "permission": {
         "bash": {
@@ -141,6 +148,7 @@
       }
     },
     "Playwright": {
+      "description": "Browser automation session for navigation, interaction, screenshots, and Playwright-style UI workflows.",
       "prompt": "{file:./.opencode/sysprompt.md}",
       "mode": "primary",
       "permission": {
@@ -148,6 +156,7 @@
       }
     },
     "Linear": {
+      "description": "Linear issue-management session for reading, searching, updating, commenting on, and creating Linear work items.",
       "permission": {
         "tools_linear_*": "allow"
       }
