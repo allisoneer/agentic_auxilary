@@ -1,0 +1,106 @@
+apps/agentic-outer-dag/src/linear/mod.rs
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-7,10-20,55
+  s_5e97f011b8e0e9::t_ee1805706e31df 8-9,21-54
+apps/agentic-outer-dag/src/worktree/freshness.rs
+  s_5e97f011b8e0e9::t_25a39036c6fea0 162,168,176-183
+  s_5e97f011b8e0e9::t_530309fd411198 1-41,44-81
+  s_5e97f011b8e0e9::t_62439d327720dc 88,161,170
+  s_5e97f011b8e0e9::t_d5d9840d2cb91d 42-43,160,163-167
+  s_5e97f011b8e0e9::t_090cc7bc132078 82-87,89-159,169,171-175,184-232
+apps/agentic-outer-dag/src/github/pr.rs
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-19
+crates/tools/pr-comments/src/lib.rs
+  s_5e97f011b8e0e9::t_870d8905669b67 275-280,290-295,302-304
+  s_5e97f011b8e0e9::t_0070200d8e412d 11,13-14,17,257-261,265-274,281-289,296-301,305-310
+  s_5e97f011b8e0e9::t_1526264a5605dd 262-264
+apps/agentic-outer-dag/src/github/mod.rs
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-2
+Cargo.toml
+  s_5e97f011b8e0e9::t_d6c23ff7d75628 91
+  s_5e97f011b8e0e9::t_77ce190c505569 6
+crates/tools/pr-comments/Cargo.toml
+  s_5e97f011b8e0e9::t_3cbd1c87682431 37-40
+crates/tools/pr-comments/src/models.rs
+  s_5e97f011b8e0e9::t_0070200d8e412d 50-83,557-579
+apps/agentic-outer-dag/src/dag/stages.rs
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-14,19-38
+  s_5e97f011b8e0e9::t_289f42d54523c9 15-18
+apps/agentic-outer-dag/src/github/coderabbit.rs
+  s_5e97f011b8e0e9::t_289f42d54523c9 31-34,72-75
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-30,35-71,76-105
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_5e97f011b8e0e9::t_993516c0a226b0 150-153,159-168,173-174,242-246,275-276
+  s_5e97f011b8e0e9::t_f1fb3e702f0993 98-99,140-142
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-22,25-31,33-42,49-50,56-65,77-84,100-103,110-111,121,124-139,143,147-149,154-158,169-172,175-183,185-225,227-241,247-274,277-289
+  s_5e97f011b8e0e9::t_6d1ef3e7212ca7 43-48,51-55,67-70,72-76
+  s_5e97f011b8e0e9::t_8e370d17eb0b85 66,71
+  s_5e97f011b8e0e9::t_d7c2fc649004db 23-24
+  s_5e97f011b8e0e9::t_620310e6249ba9 86-89,104-109,112-120,144-146
+  s_5e97f011b8e0e9::t_c666ea89a2230f 32
+  s_5e97f011b8e0e9::t_06e95029341a49 85,90-97,122-123,184,226
+apps/agentic-outer-dag/src/cli.rs
+  s_5e97f011b8e0e9::t_911c08d6e3ba60 71-97
+  s_5e97f011b8e0e9::t_5f6089ff1a4945 1-70
+apps/agentic-outer-dag/src/state/mod.rs
+  s_5e97f011b8e0e9::t_530309fd411198 1-87,89-269,271-274
+  s_5e97f011b8e0e9::t_b43954ea2e230c 88
+  s_5e97f011b8e0e9::t_d5d9840d2cb91d 270
+apps/agentic-outer-dag/src/main.rs
+  s_5e97f011b8e0e9::t_d7c2fc649004db 67-69,80,107,114
+  s_5e97f011b8e0e9::t_5f6089ff1a4945 1-5,8-12,19-22,25-45,50,77,245
+  s_5e97f011b8e0e9::t_3289bc2380ef69 100,113,182,222
+  s_5e97f011b8e0e9::t_6174c037b0a109 46-49
+  s_5e97f011b8e0e9::t_1526264a5605dd 71-73,150-153,167-168,207-208
+  s_5e97f011b8e0e9::t_274281bd649598 97
+  s_5e97f011b8e0e9::t_b43954ea2e230c 13-16,74-76,99,101-104,111,115-116,141-149,154-166,169-181,183-206,209-221,223-238,240-243
+  s_5e97f011b8e0e9::t_289f42d54523c9 57-66
+  s_5e97f011b8e0e9::t_530309fd411198 6-7,17-18,23-24,51-56,70,78-79,81-96,98,105-106,108-110,112,117-140,239,244
+apps/agentic-outer-dag/src/worktree/mod.rs
+  s_5e97f011b8e0e9::t_25a39036c6fea0 28-32,48-50,145-148
+  s_5e97f011b8e0e9::t_c2d6be51cfe490 91
+  s_5e97f011b8e0e9::t_530309fd411198 1-27,33-47,51-90,92-144,149-154
+apps/agentic-outer-dag/src/state/store.rs
+  s_5e97f011b8e0e9::t_530309fd411198 1-11,15-34,47
+  s_5e97f011b8e0e9::t_d5d9840d2cb91d 12-14
+  s_5e97f011b8e0e9::t_b43954ea2e230c 35-46
+apps/agentic-outer-dag/Cargo.toml
+  s_5e97f011b8e0e9::t_cf0a8eaf6a5d39 42
+  s_5e97f011b8e0e9::t_530309fd411198 25,27-28,33,39-41
+  s_5e97f011b8e0e9::t_b43954ea2e230c 29,31-32
+  s_5e97f011b8e0e9::t_5f6089ff1a4945 1-24,26,34-38,43-45
+  s_5e97f011b8e0e9::t_900daf19e18e51 30
+apps/agentic-outer-dag/src/opencode/mod.rs
+  s_5e97f011b8e0e9::t_cf0a8eaf6a5d39 1
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_5e97f011b8e0e9::t_06e95029341a49 294
+  s_5e97f011b8e0e9::t_cf0a8eaf6a5d39 1-30,34-52,57-111,116-156,158-167,169-267,274,276,278,280-284,286-290,292-293,295-468
+  s_5e97f011b8e0e9::t_1526264a5605dd 31-33,53-56
+  s_5e97f011b8e0e9::t_aa92b2ea7c56a8 469-502,504-534,536-546,548-566
+  s_5e97f011b8e0e9::t_274281bd649598 112-115,157,168,268-273,275,277,279,285,291
+  s_5e97f011b8e0e9::t_b462c632eeed2d 503,535,547
+crates/tools/pr-comments/src/github.rs
+  s_5e97f011b8e0e9::t_1526264a5605dd 9,131-134,143-146,152-155,180-182
+  s_5e97f011b8e0e9::t_993516c0a226b0 32,54,82,94
+  s_5e97f011b8e0e9::t_0070200d8e412d 1,4-6,14-18,25,48-53,55-65,68,75-81,83-93,95-100,102-130,135-142,147-151,156-164,167-174,176-179,183-184,186-189,193,604-690
+apps/agentic-outer-dag/src/dag/mod.rs
+  s_5e97f011b8e0e9::t_b43954ea2e230c 1-2
+crates/tools/pr-comments/tests/github_phase4_parsing.rs
+  s_5e97f011b8e0e9::t_870d8905669b67 24
+  s_5e97f011b8e0e9::t_c3a2e4c9a11b21 1-23,25-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "72919e9f753b273d726002f25c2dcf36f0707dc2",
+  "prompts": {},
+  "sessions": {
+    "s_5e97f011b8e0e9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_104bcc3e9ffeznXO5uFzvrtUcq",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
