@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   # Apps
   "apps/agentic",
+  "apps/agentic-outer-dag",
   "apps/thoughts",
   "apps/agentic-mcp",
   "apps/message-optimizer",
@@ -87,6 +88,7 @@ agentic-tools-utils = { version = "0.1.5", path = "crates/agentic-tools/utils" }
 agentic-tools-registry = { version = "0.5.0", path = "crates/agentic-tools/registry" }
 agentic_logging = { version = "0.2.0", path = "crates/infra/agentic-logging" }
 thoughts-tool = { version = "0.12.1", path = "crates/infra/thoughts-core" }
+gwt-worktree = { version = "0.1.1", path = "crates/infra/gwt-worktree" }
 thoughts-mcp-tools = { version = "0.3.3", path = "crates/tools/thoughts-mcp-tools" }
 workspace_tools = { package = "agentic-workspace-tools", version = "0.1.0", path = "crates/tools/workspace-tools" }
 coding_agent_tools = { version = "0.5.3", path = "crates/tools/coding-agent-tools" }

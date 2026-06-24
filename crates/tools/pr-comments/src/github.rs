@@ -1,23 +1,35 @@
+use crate::models::CheckSuiteSummary;
 use crate::models::CommentSourceType;
 use crate::models::GraphQLResponse;
+use crate::models::IssueCommentSummary;
+use crate::models::OpenPrRefData;
+use crate::models::PrRef;
 use crate::models::PrSummary;
 use crate::models::PullRequestData;
+use crate::models::PullRequestReviewSummary;
 use crate::models::ReviewComment;
 use crate::models::Thread;
 use anyhow::Result;
 use octocrab::Octocrab;
+use reqwest::header::ACCEPT;
+use reqwest::header::AUTHORIZATION;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use reqwest::header::USER_AGENT;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
 
 pub struct GitHubClient {
     client: Octocrab,
+    http: reqwest::Client,
     owner: String,
     repo: String,
 }
 
 impl GitHubClient {
     pub fn new(owner: String, repo: String, token: Option<String>) -> Result<Self> {
+        let header_token = token.clone();
         let builder = Octocrab::builder()
             .set_connect_timeout(Some(Duration::from_secs(10)))
             .set_read_timeout(Some(Duration::from_secs(30)))
@@ -33,38 +45,152 @@ impl GitHubClient {
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to create GitHub client: {e:?}"))?;
 
+        let mut headers = HeaderMap::new();
+        headers.insert(USER_AGENT, HeaderValue::from_static("pr_comments"));
+        headers.insert(
+            ACCEPT,
+            HeaderValue::from_static("application/vnd.github+json"),
+        );
+        if let Some(token) = header_token.as_deref() {
+            let value = HeaderValue::from_str(&format!("Bearer {token}"))
+                .map_err(|e| anyhow::anyhow!("Invalid GitHub token header: {e}"))?;
+            headers.insert(AUTHORIZATION, value);
+        }
+        let http = reqwest::Client::builder()
+            .default_headers(headers)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to create GitHub REST client: {e}"))?;
+
         Ok(Self {
             client,
+            http,
             owner,
             repo,
         })
     }
 
     pub async fn get_pr_from_branch(&self, branch: &str) -> Result<Option<u64>> {
-        // Search for open PRs with this head branch
-        let pulls = self
-            .client
-            .pulls(&self.owner, &self.repo)
-            .list()
-            .state(octocrab::params::State::Open)
-            .send()
-            .await
-            .map_err(|e| {
-                let owner = self.owner.as_str();
-                let repo = self.repo.as_str();
-                anyhow::anyhow!("Failed to list open pull requests for {owner}/{repo}: {e:?}")
-            })?;
+        Ok(self
+            .get_open_pr_ref_from_branch(branch)
+            .await?
+            .map(|pr| pr.number))
+    }
 
-        for pr in pulls {
-            if pr.head.ref_field == branch {
-                return Ok(Some(pr.number));
+    pub async fn get_open_pr_ref_from_branch(&self, branch: &str) -> Result<Option<PrRef>> {
+        let query = r"
+            query($owner: String!, $repo: String!, $branch: String!) {
+                repository(owner: $owner, name: $repo) {
+                    pullRequests(states: OPEN, headRefName: $branch, first: 1) {
+                        nodes {
+                            number
+                            url
+                            headRefOid
+                        }
+                    }
+                }
             }
+        ";
+        let variables = serde_json::json!({
+            "owner": self.owner,
+            "repo": self.repo,
+            "branch": branch,
+        });
+        let response: GraphQLResponse<OpenPrRefData> = self
+            .client
+            .graphql(&serde_json::json!({
+                "query": query,
+                "variables": variables,
+            }))
+            .await
+            .map_err(|e| anyhow::anyhow!("GraphQL query failed: {e}"))?;
+
+        if let Some(errors) = response.errors
+            && !errors.is_empty()
+        {
+            let messages = errors
+                .iter()
+                .map(|error| error.message.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!("GraphQL errors: {messages}");
         }
 
-        Ok(None)
+        Ok(response
+            .data
+            .and_then(|data| data.repository.pull_requests.nodes.into_iter().next())
+            .map(|node| PrRef {
+                number: node.number,
+                url: node.url,
+                head_sha: node.head_ref_oid,
+            }))
+    }
+
+    pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
+        let path = format!(
+            "/repos/{}/{}/commits/{sha}/check-suites",
+            self.owner, self.repo
+        );
+        let value = self.rest_get(&path).await?;
+        parse_check_suites_response(value)
+    }
+
+    pub async fn list_pull_request_reviews(
+        &self,
+        pr_number: u64,
+    ) -> Result<Vec<PullRequestReviewSummary>> {
+        let path = format!(
+            "/repos/{}/{}/pulls/{pr_number}/reviews",
+            self.owner, self.repo
+        );
+        let value = self.rest_get(&path).await?;
+        parse_reviews_response(value)
+    }
+
+    pub async fn list_issue_comments(&self, issue_number: u64) -> Result<Vec<IssueCommentSummary>> {
+        let path = format!(
+            "/repos/{}/{}/issues/{issue_number}/comments",
+            self.owner, self.repo
+        );
+        let value = self.rest_get(&path).await?;
+        parse_issue_comments_response(value)
+    }
+
+    async fn rest_get(&self, path: &str) -> Result<serde_json::Value> {
+        let url = format!("https://api.github.com{path}");
+        let response = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?
+            .error_for_status()
+            .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?;
+        response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub REST JSON parse failed: {e}"))
+    }
+
+    pub fn parse_check_suites_fixture(value: serde_json::Value) -> Result<Vec<CheckSuiteSummary>> {
+        parse_check_suites_response(value)
+    }
+
+    pub fn parse_reviews_fixture(
+        value: serde_json::Value,
+    ) -> Result<Vec<PullRequestReviewSummary>> {
+        parse_reviews_response(value)
+    }
+
+    pub fn parse_issue_comments_fixture(
+        value: serde_json::Value,
+    ) -> Result<Vec<IssueCommentSummary>> {
+        parse_issue_comments_response(value)
     }
 
     pub async fn get_review_comments(
+        // Search for open PRs with this head branch
         &self,
         pr_number: u64,
         include_resolved: Option<bool>,
@@ -473,6 +599,94 @@ impl GitHubClient {
 
         Ok(ReviewComment::from_review_comment(comment))
     }
+}
+
+#[derive(serde::Deserialize)]
+struct CheckSuitesEnvelope {
+    check_suites: Vec<CheckSuiteEntry>,
+}
+
+#[derive(serde::Deserialize)]
+struct CheckSuiteEntry {
+    id: u64,
+    status: String,
+    conclusion: Option<String>,
+    app: Option<CheckSuiteApp>,
+    updated_at: String,
+}
+
+#[derive(serde::Deserialize)]
+struct CheckSuiteApp {
+    slug: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ReviewEntry {
+    id: u64,
+    state: String,
+    submitted_at: Option<String>,
+    user: ReviewUser,
+}
+
+#[derive(serde::Deserialize)]
+struct ReviewUser {
+    login: String,
+    #[serde(rename = "type")]
+    user_type: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct IssueCommentEntry {
+    id: u64,
+    body: String,
+    created_at: String,
+    user: ReviewUser,
+}
+
+fn parse_check_suites_response(value: serde_json::Value) -> Result<Vec<CheckSuiteSummary>> {
+    let envelope: CheckSuitesEnvelope = serde_json::from_value(value)
+        .map_err(|e| anyhow::anyhow!("Failed to parse check suites response: {e}"))?;
+    Ok(envelope
+        .check_suites
+        .into_iter()
+        .map(|suite| CheckSuiteSummary {
+            id: suite.id,
+            status: suite.status,
+            conclusion: suite.conclusion,
+            app_slug: suite.app.and_then(|app| app.slug),
+            updated_at: suite.updated_at,
+        })
+        .collect())
+}
+
+fn parse_reviews_response(value: serde_json::Value) -> Result<Vec<PullRequestReviewSummary>> {
+    let entries: Vec<ReviewEntry> = serde_json::from_value(value)
+        .map_err(|e| anyhow::anyhow!("Failed to parse reviews response: {e}"))?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| PullRequestReviewSummary {
+            id: entry.id,
+            user_login: entry.user.login,
+            user_type: entry.user.user_type,
+            state: entry.state,
+            submitted_at: entry.submitted_at,
+        })
+        .collect())
+}
+
+fn parse_issue_comments_response(value: serde_json::Value) -> Result<Vec<IssueCommentSummary>> {
+    let entries: Vec<IssueCommentEntry> = serde_json::from_value(value)
+        .map_err(|e| anyhow::anyhow!("Failed to parse issue comments response: {e}"))?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| IssueCommentSummary {
+            id: entry.id,
+            user_login: entry.user.login,
+            user_type: entry.user.user_type,
+            body: entry.body,
+            created_at: entry.created_at,
+        })
+        .collect())
 }
 
 // Test helper module - public for integration tests

@@ -8,9 +8,13 @@ pub mod tools;
 use agentic_config::types::GitHubServiceConfig;
 use anyhow::Context;
 use anyhow::Result;
+use models::CheckSuiteSummary;
 use models::CommentSourceType;
+use models::IssueCommentSummary;
+use models::PrRef;
 use models::PrSummary;
 use models::PrSummaryList;
+use models::PullRequestReviewSummary;
 use models::ReviewComment;
 use models::ReviewCommentList;
 use models::Thread;
@@ -249,6 +253,60 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
                 }
             }
         }
+    }
+
+    pub async fn get_open_pr_ref_from_branch(&self, branch: &str) -> Result<Option<PrRef>> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .context("internal: failed to create GitHub client")?;
+        self.with_github_total_timeout(
+            &format!("looking up open pull request ref for branch '{branch}'"),
+            async { client.get_open_pr_ref_from_branch(branch).await },
+        )
+        .await
+    }
+
+    pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .context("internal: failed to create GitHub client")?;
+        self.with_github_total_timeout(&format!("listing check suites for ref {sha}"), async {
+            client.list_check_suites_for_ref(sha).await
+        })
+        .await
+    }
+
+    pub async fn list_pull_request_reviews(
+        &self,
+        pr_number: u64,
+    ) -> Result<Vec<PullRequestReviewSummary>> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .context("internal: failed to create GitHub client")?;
+        self.with_github_total_timeout(&format!("listing reviews for PR #{pr_number}"), async {
+            client.list_pull_request_reviews(pr_number).await
+        })
+        .await
+    }
+
+    pub async fn list_issue_comments(&self, issue_number: u64) -> Result<Vec<IssueCommentSummary>> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .context("internal: failed to create GitHub client")?;
+        self.with_github_total_timeout(
+            &format!("listing issue comments for issue #{issue_number}"),
+            async { client.list_issue_comments(issue_number).await },
+        )
+        .await
     }
 }
 

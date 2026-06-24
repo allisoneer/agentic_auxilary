@@ -1,0 +1,97 @@
+use clap::Parser;
+use clap::Subcommand;
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(name = "agentic-outer-dag")]
+#[command(version)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+
+    /// Increase logging verbosity (-v, -vv, -vvv)
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    pub verbose: u8,
+
+    /// Suppress output except errors
+    #[arg(short, long)]
+    pub quiet: bool,
+
+    /// Do not run side-effecting operations.
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    Start {
+        #[arg(long)]
+        ticket: String,
+
+        #[arg(long)]
+        branch: Option<String>,
+
+        #[arg(long)]
+        worktree: Option<PathBuf>,
+
+        #[arg(long)]
+        force: bool,
+    },
+    Resume {
+        #[arg(long)]
+        branch: Option<String>,
+
+        #[arg(long)]
+        worktree: Option<PathBuf>,
+    },
+    Status {
+        #[arg(long)]
+        json: bool,
+    },
+    RespondPermission {
+        #[arg(long)]
+        allow: bool,
+
+        #[arg(long)]
+        deny: bool,
+    },
+    RespondQuestion {
+        #[arg(long)]
+        answer: String,
+    },
+    Handoff {
+        #[arg(long)]
+        message: Option<String>,
+    },
+    Reset {
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    #[test]
+    fn generated_help_includes_expected_subcommands_and_flags() {
+        let mut command = Cli::command();
+        let help = command.render_long_help().to_string();
+
+        for expected in [
+            "start",
+            "resume",
+            "status",
+            "respond-permission",
+            "respond-question",
+            "handoff",
+            "reset",
+            "--dry-run",
+            "--quiet",
+            "--verbose",
+        ] {
+            assert!(help.contains(expected), "missing help entry: {expected}");
+        }
+    }
+}
