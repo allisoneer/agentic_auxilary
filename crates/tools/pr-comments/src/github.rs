@@ -20,11 +20,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
 
+const REST_PER_PAGE: usize = 100;
+
 pub struct GitHubClient {
     client: Octocrab,
     http: reqwest::Client,
     owner: String,
     repo: String,
+    rest_base_url: String,
 }
 
 impl GitHubClient {
@@ -68,7 +71,14 @@ impl GitHubClient {
             http,
             owner,
             repo,
+            rest_base_url: "https://api.github.com".to_string(),
         })
+    }
+
+    #[cfg(test)]
+    fn with_rest_base_url(mut self, rest_base_url: String) -> Self {
+        self.rest_base_url = rest_base_url;
+        self
     }
 
     pub async fn get_pr_from_branch(&self, branch: &str) -> Result<Option<u64>> {
@@ -128,37 +138,76 @@ impl GitHubClient {
     }
 
     pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
-        let path = format!(
+        let base_path = format!(
             "/repos/{}/{}/commits/{sha}/check-suites",
             self.owner, self.repo
         );
-        let value = self.rest_get(&path).await?;
-        parse_check_suites_response(value)
+        let mut suites = Vec::new();
+        let mut page = 1u32;
+        loop {
+            let value = self
+                .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
+                .await?;
+            let page_suites = parse_check_suites_response(value)?;
+            let page_len = page_suites.len();
+            suites.extend(page_suites);
+            if page_len < REST_PER_PAGE {
+                break;
+            }
+            page += 1;
+        }
+        Ok(suites)
     }
 
     pub async fn list_pull_request_reviews(
         &self,
         pr_number: u64,
     ) -> Result<Vec<PullRequestReviewSummary>> {
-        let path = format!(
+        let base_path = format!(
             "/repos/{}/{}/pulls/{pr_number}/reviews",
             self.owner, self.repo
         );
-        let value = self.rest_get(&path).await?;
-        parse_reviews_response(value)
+        let mut reviews = Vec::new();
+        let mut page = 1u32;
+        loop {
+            let value = self
+                .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
+                .await?;
+            let page_reviews = parse_reviews_response(value)?;
+            let page_len = page_reviews.len();
+            reviews.extend(page_reviews);
+            if page_len < REST_PER_PAGE {
+                break;
+            }
+            page += 1;
+        }
+        Ok(reviews)
     }
 
     pub async fn list_issue_comments(&self, issue_number: u64) -> Result<Vec<IssueCommentSummary>> {
-        let path = format!(
+        let base_path = format!(
             "/repos/{}/{}/issues/{issue_number}/comments",
             self.owner, self.repo
         );
-        let value = self.rest_get(&path).await?;
-        parse_issue_comments_response(value)
+        let mut comments = Vec::new();
+        let mut page = 1u32;
+        loop {
+            let value = self
+                .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
+                .await?;
+            let page_comments = parse_issue_comments_response(value)?;
+            let page_len = page_comments.len();
+            comments.extend(page_comments);
+            if page_len < REST_PER_PAGE {
+                break;
+            }
+            page += 1;
+        }
+        Ok(comments)
     }
 
     async fn rest_get(&self, path: &str) -> Result<serde_json::Value> {
-        let url = format!("https://api.github.com{path}");
+        let url = format!("{}{path}", self.rest_base_url);
         let response = self
             .http
             .get(&url)
@@ -687,6 +736,179 @@ fn parse_issue_comments_response(value: serde_json::Value) -> Result<Vec<IssueCo
             created_at: entry.created_at,
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GitHubClient;
+    use super::REST_PER_PAGE;
+    use mockito::Matcher;
+    use serde_json::json;
+    use std::sync::Once;
+
+    fn install_rustls_provider() {
+        static INSTALL: Once = Once::new();
+        INSTALL.call_once(|| {
+            rustls::crypto::aws_lc_rs::default_provider()
+                .install_default()
+                .expect("rustls provider should install once");
+        });
+    }
+
+    fn client(base_url: String) -> GitHubClient {
+        install_rustls_provider();
+        GitHubClient::new("owner".to_string(), "repo".to_string(), None)
+            .expect("client should build")
+            .with_rest_base_url(base_url)
+    }
+
+    fn check_suites_response(count: usize) -> serde_json::Value {
+        json!({
+            "check_suites": (0..count)
+                .map(|index| json!({
+                    "id": index + 1,
+                    "status": "completed",
+                    "conclusion": "success",
+                    "app": { "slug": "coderabbitai" },
+                    "updated_at": "2026-01-01T00:00:00Z"
+                }))
+                .collect::<Vec<_>>()
+        })
+    }
+
+    fn reviews_response(count: usize) -> serde_json::Value {
+        json!(
+            (0..count)
+                .map(|index| json!({
+                    "id": index + 1,
+                    "state": "COMMENTED",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "user": {
+                        "login": format!("coderabbit-{index}"),
+                        "type": "Bot"
+                    }
+                }))
+                .collect::<Vec<_>>()
+        )
+    }
+
+    fn issue_comments_response(count: usize) -> serde_json::Value {
+        json!(
+            (0..count)
+                .map(|index| json!({
+                    "id": index + 1,
+                    "body": format!("comment {index}"),
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "user": {
+                        "login": format!("coderabbit-{index}"),
+                        "type": "Bot"
+                    }
+                }))
+                .collect::<Vec<_>>()
+        )
+    }
+
+    #[tokio::test]
+    async fn list_check_suites_for_ref_aggregates_multiple_pages() {
+        let mut server = mockito::Server::new_async().await;
+        let page1 = server
+            .mock("GET", "/repos/owner/repo/commits/abc/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(check_suites_response(REST_PER_PAGE).to_string())
+            .create_async()
+            .await;
+        let page2 = server
+            .mock("GET", "/repos/owner/repo/commits/abc/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "2".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(check_suites_response(1).to_string())
+            .create_async()
+            .await;
+
+        let suites = client(server.url())
+            .list_check_suites_for_ref("abc")
+            .await
+            .expect("pagination should succeed");
+
+        assert_eq!(suites.len(), REST_PER_PAGE + 1);
+        page1.assert_async().await;
+        page2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn list_pull_request_reviews_aggregates_multiple_pages() {
+        let mut server = mockito::Server::new_async().await;
+        let page1 = server
+            .mock("GET", "/repos/owner/repo/pulls/7/reviews")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(reviews_response(REST_PER_PAGE).to_string())
+            .create_async()
+            .await;
+        let page2 = server
+            .mock("GET", "/repos/owner/repo/pulls/7/reviews")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "2".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(reviews_response(1).to_string())
+            .create_async()
+            .await;
+
+        let reviews = client(server.url())
+            .list_pull_request_reviews(7)
+            .await
+            .expect("pagination should succeed");
+
+        assert_eq!(reviews.len(), REST_PER_PAGE + 1);
+        page1.assert_async().await;
+        page2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn list_issue_comments_aggregates_multiple_pages() {
+        let mut server = mockito::Server::new_async().await;
+        let page1 = server
+            .mock("GET", "/repos/owner/repo/issues/9/comments")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(issue_comments_response(REST_PER_PAGE).to_string())
+            .create_async()
+            .await;
+        let page2 = server
+            .mock("GET", "/repos/owner/repo/issues/9/comments")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "2".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(issue_comments_response(1).to_string())
+            .create_async()
+            .await;
+
+        let comments = client(server.url())
+            .list_issue_comments(9)
+            .await
+            .expect("pagination should succeed");
+
+        assert_eq!(comments.len(), REST_PER_PAGE + 1);
+        page1.assert_async().await;
+        page2.assert_async().await;
+    }
 }
 
 // Test helper module - public for integration tests

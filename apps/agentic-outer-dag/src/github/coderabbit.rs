@@ -57,23 +57,19 @@ fn interpret_check_suites(suites: &[CheckSuiteSummary]) -> Option<CodeRabbitPoll
 }
 
 fn has_coderabbit_review(reviews: &[PullRequestReviewSummary]) -> bool {
-    reviews.iter().any(|review| {
-        review
-            .user_login
-            .to_ascii_lowercase()
-            .contains("coderabbit")
-            || review.user_type.as_deref() == Some("Bot")
-    })
+    reviews
+        .iter()
+        .any(|review| is_coderabbit_login(&review.user_login))
+}
+
+fn is_coderabbit_login(login: &str) -> bool {
+    login.to_ascii_lowercase().contains("coderabbit")
 }
 
 fn interpret_issue_comments(comments: &[IssueCommentSummary]) -> CodeRabbitPoll {
     for comment in comments {
         let body = comment.body.to_ascii_lowercase();
-        let is_coderabbit = comment
-            .user_login
-            .to_ascii_lowercase()
-            .contains("coderabbit")
-            || comment.user_type.as_deref() == Some("Bot");
+        let is_coderabbit = is_coderabbit_login(&comment.user_login);
         if is_coderabbit && body.contains("review skipped") {
             return CodeRabbitPoll::Skipped {
                 reason: comment.body.clone(),
@@ -91,15 +87,72 @@ fn interpret_issue_comments(comments: &[IssueCommentSummary]) -> CodeRabbitPoll 
 mod tests {
     use super::*;
 
+    fn issue_comment(user_login: &str, body: &str) -> IssueCommentSummary {
+        IssueCommentSummary {
+            id: 1,
+            user_login: user_login.to_string(),
+            user_type: Some("Bot".to_string()),
+            body: body.to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn review(user_login: &str) -> PullRequestReviewSummary {
+        PullRequestReviewSummary {
+            id: 1,
+            user_login: user_login.to_string(),
+            user_type: Some("Bot".to_string()),
+            state: "COMMENTED".to_string(),
+            submitted_at: Some("2026-01-01T00:00:00Z".to_string()),
+        }
+    }
+
+    #[test]
+    fn matches_coderabbit_logins_case_insensitively() {
+        for login in [
+            "coderabbitai",
+            "coderabbitai[bot]",
+            "CodeRabbitAI",
+            "my-coderabbit-helper",
+        ] {
+            assert!(is_coderabbit_login(login), "expected match for {login}");
+        }
+    }
+
+    #[test]
+    fn rejects_unrelated_bot_logins() {
+        for login in ["dependabot[bot]", "renovate[bot]"] {
+            assert!(!is_coderabbit_login(login), "unexpected match for {login}");
+        }
+    }
+
+    #[test]
+    fn coderabbit_review_detection_requires_coderabbit_login() {
+        assert!(has_coderabbit_review(&[review("coderabbitai[bot]")]));
+        assert!(!has_coderabbit_review(&[review("dependabot[bot]")]));
+    }
+
     #[test]
     fn detects_skipped_comment() {
-        let result = interpret_issue_comments(&[IssueCommentSummary {
-            id: 1,
-            user_login: "coderabbitai[bot]".to_string(),
-            user_type: Some("Bot".to_string()),
-            body: "Review skipped because no actionable changes were found".to_string(),
-            created_at: "2026-01-01T00:00:00Z".to_string(),
-        }]);
+        let result = interpret_issue_comments(&[issue_comment(
+            "coderabbitai[bot]",
+            "Review skipped because no actionable changes were found",
+        )]);
         assert!(matches!(result, CodeRabbitPoll::Skipped { .. }));
+    }
+
+    #[test]
+    fn unrelated_bot_comment_does_not_complete_poll() {
+        let result = interpret_issue_comments(&[issue_comment(
+            "dependabot[bot]",
+            "Review skipped because no actionable changes were found",
+        )]);
+        assert_eq!(result, CodeRabbitPoll::Waiting);
+    }
+
+    #[test]
+    fn coderabbit_comment_completes_poll() {
+        let result = interpret_issue_comments(&[issue_comment("CodeRabbitAI", "Looks good to me")]);
+        assert_eq!(result, CodeRabbitPoll::Completed);
     }
 }

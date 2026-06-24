@@ -7,6 +7,8 @@ pub fn is_terminal(kind: &StageKind) -> bool {
             | StageKind::StoppedReviewSkipped
             | StageKind::StoppedTimedOut
             | StageKind::StoppedReadyForHumanReview
+            | StageKind::StoppedDirtyTree
+            | StageKind::StoppedRebaseConflict
             | StageKind::StoppedFailed
     )
 }
@@ -26,6 +28,8 @@ mod tests {
     fn classifies_terminal_states() {
         assert!(is_terminal(&StageKind::StoppedReadyForHumanReview));
         assert!(is_terminal(&StageKind::StoppedManualHandoff));
+        assert!(is_terminal(&StageKind::StoppedDirtyTree));
+        assert!(is_terminal(&StageKind::StoppedRebaseConflict));
         assert!(!is_terminal(&StageKind::WaitingForCoderabbit));
     }
 

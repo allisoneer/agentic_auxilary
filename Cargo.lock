@@ -4819,6 +4819,7 @@ dependencies = [
  "mockito",
  "octocrab",
  "reqwest 0.12.28",
+ "rustls",
  "schemars 1.2.1",
  "serde",
  "serde_json",

@@ -1,3 +1,4 @@
+use clap::ArgGroup;
 use clap::Parser;
 use clap::Subcommand;
 use std::path::PathBuf;
@@ -48,6 +49,12 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+    #[command(group(
+        ArgGroup::new("decision")
+            .required(true)
+            .multiple(false)
+            .args(["allow", "deny"])
+    ))]
     RespondPermission {
         #[arg(long)]
         allow: bool,
@@ -72,7 +79,10 @@ pub enum Commands {
 #[cfg(test)]
 mod tests {
     use super::Cli;
+    use super::Commands;
     use clap::CommandFactory;
+    use clap::Parser;
+    use clap::error::ErrorKind;
 
     #[test]
     fn generated_help_includes_expected_subcommands_and_flags() {
@@ -93,5 +103,47 @@ mod tests {
         ] {
             assert!(help.contains(expected), "missing help entry: {expected}");
         }
+    }
+
+    #[test]
+    fn respond_permission_requires_exactly_one_flag() {
+        let err = Cli::try_parse_from(["agentic-outer-dag", "respond-permission"])
+            .expect_err("missing decision flag should fail");
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+
+        let err = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "respond-permission",
+            "--allow",
+            "--deny",
+        ])
+        .expect_err("both decision flags should fail");
+        assert_eq!(err.kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn respond_permission_accepts_allow_flag() {
+        let cli = Cli::try_parse_from(["agentic-outer-dag", "respond-permission", "--allow"])
+            .expect("allow should parse");
+        assert!(matches!(
+            cli.command,
+            Commands::RespondPermission {
+                allow: true,
+                deny: false,
+            }
+        ));
+    }
+
+    #[test]
+    fn respond_permission_accepts_deny_flag() {
+        let cli = Cli::try_parse_from(["agentic-outer-dag", "respond-permission", "--deny"])
+            .expect("deny should parse");
+        assert!(matches!(
+            cli.command,
+            Commands::RespondPermission {
+                allow: false,
+                deny: true,
+            }
+        ));
     }
 }

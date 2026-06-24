@@ -19,6 +19,10 @@ pub struct DagEngine {
     coderabbit: CodeRabbitClient,
 }
 
+fn poll_interval_sleep_duration(poll_interval_seconds: u64) -> std::time::Duration {
+    std::time::Duration::from_secs(poll_interval_seconds.max(1))
+}
+
 impl DagEngine {
     pub async fn for_current_dir() -> Result<Self> {
         let supervisor = OpenCodeSupervisor::start(Path::new(".")).await?;
@@ -147,7 +151,7 @@ impl DagEngine {
                                     ThoughtsStateStore::save(&state)?;
                                     return Ok(());
                                 }
-                                tokio::time::sleep(std::time::Duration::from_secs(
+                                tokio::time::sleep(poll_interval_sleep_duration(
                                     state.settings.poll_interval_seconds,
                                 ))
                                 .await;
@@ -285,5 +289,18 @@ impl DagEngine {
             }
         }
         ThoughtsStateStore::save(state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::poll_interval_sleep_duration;
+    use std::time::Duration;
+
+    #[test]
+    fn poll_interval_sleep_duration_clamps_to_one_second_minimum() {
+        assert_eq!(poll_interval_sleep_duration(0), Duration::from_secs(1));
+        assert_eq!(poll_interval_sleep_duration(1), Duration::from_secs(1));
+        assert_eq!(poll_interval_sleep_duration(5), Duration::from_secs(5));
     }
 }
