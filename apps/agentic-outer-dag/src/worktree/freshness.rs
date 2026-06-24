@@ -31,6 +31,7 @@ pub fn run(base_ref: &str, dry_run: bool) -> Result<FreshnessOutcome> {
     let old_head = rev_parse("HEAD")?;
     let status = git_status(["rebase", base_ref])?;
     if !status.success() {
+        git(["rebase", "--abort"])?;
         return Ok(FreshnessOutcome::Conflict);
     }
     let new_head = rev_parse("HEAD")?;
@@ -135,8 +136,12 @@ mod tests {
 
         let outcome = run("origin/main", false).unwrap();
 
+        assert!(!fixture.rebase_in_progress().unwrap());
+        let rerun_outcome = run("origin/main", false).unwrap();
+
         env::set_current_dir(saved).unwrap();
         assert_eq!(outcome, FreshnessOutcome::Conflict);
+        assert_eq!(rerun_outcome, FreshnessOutcome::Conflict);
     }
 
     fn cwd_lock() -> &'static Mutex<()> {
@@ -209,6 +214,12 @@ mod tests {
             run_git(&self.feature_clone, ["commit", "-m", message])?;
             Ok(())
         }
+
+        fn rebase_in_progress(&self) -> Result<bool> {
+            let git_dir = git_output(&self.feature_clone, ["rev-parse", "--git-dir"])?;
+            let git_dir = self.feature_clone.join(git_dir);
+            Ok(git_dir.join("rebase-apply").exists() || git_dir.join("rebase-merge").exists())
+        }
     }
 
     fn configure_repo(path: &Path) -> Result<()> {
@@ -221,6 +232,19 @@ mod tests {
         let output = Command::new("git").current_dir(cwd).args(args).output()?;
         if output.status.success() {
             Ok(())
+        } else {
+            anyhow::bail!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
+        }
+    }
+
+    fn git_output<const N: usize>(cwd: &Path, args: [&str; N]) -> Result<String> {
+        let output = Command::new("git").current_dir(cwd).args(args).output()?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
             anyhow::bail!(
                 "git {} failed: {}",
