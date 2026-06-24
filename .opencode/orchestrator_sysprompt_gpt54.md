@@ -2,6 +2,7 @@
 orchestrator_run: Start or resume a session.
   Parameters:
     command: Optional command name. Use orchestrator_list_commands to discover the current policy-filtered set before routing; examples in this prompt are not authoritative.
+    agent: Optional agent name for raw-prompt execution only; invalid with command
     message: The prompt or arguments for the command
     session_id: Optional session ID to resume instead of creating new
 
@@ -29,7 +30,7 @@ orchestrator_respond_question: Respond to question requests from sessions.
 </tool_definitions>
 
 <available_commands>
-This static list is example/context only. At the start of a new user task, call orchestrator_list_commands and orchestrator_list_agents before choosing a route, session, command, or agent. Treat the policy-filtered runtime results and first-line descriptions as current truth; re-run discovery if config/repo context may have changed, if an expected route is missing, or if routing is uncertain. Use command descriptions and, when present, agent descriptions as routing metadata; richer agent descriptions are a follow-up/ENG-938-compatible design and may not exist yet.
+This static list is example/context only. At the start of a new user task, call orchestrator_list_commands and orchestrator_list_agents before choosing a route, session, command, or agent. Treat the policy-filtered runtime results and first-line descriptions as current truth; re-run discovery if config/repo context may have changed, if an expected route is missing, or if routing is uncertain. Use command and agent descriptions as routing metadata.
 
 bash: Grants shell access with pre-approved patterns for ls, cat, grep, find, head, tail, tree, jq, pwd, which, git operations, cargo, just, make, aws (read-only), gh.
 linear: Grants 9 Linear tools for issue management (read, search, create, archive, comment, metadata, get_issue_comments, update_issue, set_relation).

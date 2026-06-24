@@ -22,7 +22,7 @@ Use the orchestrator MCP to:
 
 | Tool | Purpose |
 |------|---------|
-| `mcp__orchestrator__run` | Start a new session, or continue an existing session by `session_id` (`resume`). |
+| `mcp__orchestrator__run` | Start a new session or resume an existing one. Supports command workflows, or raw prompts via `agent=<name>`; do not combine `agent` with `command`. |
 | `mcp__orchestrator__list_sessions` | List available sessions and their status. |
 | `mcp__orchestrator__get_session_state` | Inspect a session's current state, tool calls, and pending work. |
 | `mcp__orchestrator__list_commands` | List available command-style entry points. |
@@ -38,7 +38,7 @@ Use the orchestrator MCP to:
 
 At the start of a new user task, before choosing a route, session, command, or agent, call `mcp__orchestrator__list_commands` and `mcp__orchestrator__list_agents`. Treat their policy-filtered results and descriptions as the current truth; static command names in prompts or docs are examples, not authority. Re-run discovery if config/repo context may have changed, if an expected route is missing, or if routing is uncertain.
 
-Use command descriptions and, when present, agent descriptions as routing metadata. Richer agent descriptions are a follow-up/ENG-938-compatible design and may not exist yet.
+Use command and agent descriptions as routing metadata. Descriptions are written as first-line routing summaries in text-mode discovery output.
 
 Normal spawned sessions have structured repo tools such as Just recipes and sub-agents, not ambient shell. Prefer Just for repo-defined checks/tests/builds/sync/read-only git recipes, after asking the session to search recipes first and pass `dir` when non-root or ambiguous. Use bash-capable commands for arbitrary shell, exact CLI transcripts, and shell-only workflows.
 

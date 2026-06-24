@@ -10,6 +10,12 @@
 
 First is orchestration level, allowing full management of opencode sessions.
 
+### Runtime discovery notes
+
+- `orchestrator_list_agents` and `orchestrator_list_commands` show the policy-filtered runtime inventory.
+- In text output, only the first line of each description is shown; treat line 1 as the routing summary.
+- After editing `opencode.json` or other agent/command metadata, restart OpenCode/orchestrator or reopen the repo/worktree before trusting refreshed discovery output.
+
 ```
 LEVEL 0: ORCHESTRATOR (Parent Agent)
 ├── orchestrator_run              - Spawn/resume sessions

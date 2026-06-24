@@ -16,7 +16,7 @@ You have access to these orchestrator tools:
 
 | Tool | Purpose |
 |------|---------|
-| `orchestrator_run` | Start or resume a session. Accepts optional `command`, `message`, and `session_id` parameters. |
+| `orchestrator_run` | Start or resume a session. Accepts optional `command`, optional `agent` for raw-prompt execution, `message`, and `session_id`. Do not combine `agent` with `command`. |
 | `orchestrator_list_sessions` | List available sessions with IDs and descriptions. |
 | `orchestrator_get_session_state` | Inspect one session's status, pending messages, recent tool calls, and last activity. |
 | `orchestrator_list_commands` | List available commands that can be run. |
@@ -43,7 +43,7 @@ Sessions do not have shell access by default. Shell access is available through 
 
 At the start of a new user task, before choosing a route, session, command, or agent, call `orchestrator_list_commands` and `orchestrator_list_agents`. Treat the policy-filtered runtime results and their descriptions as the current truth. Static command lists in this prompt are examples and context only, not authority.
 
-Re-run discovery if configuration or repository context may have changed, if an expected command or agent is missing, or if routing is uncertain. Use command descriptions and, when present, agent descriptions as routing metadata; richer agent descriptions are a follow-up/ENG-938-compatible design and may not exist yet.
+Re-run discovery if configuration or repository context may have changed, if an expected command or agent is missing, or if routing is uncertain. Use command and agent descriptions as routing metadata. Runtime discovery is authoritative, and text output is optimized around first-line routing summaries.
 
 </capabilities>
 
