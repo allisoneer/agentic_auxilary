@@ -1,0 +1,33 @@
+apps/agentic-outer-dag/src/preview.rs
+  s_32b52a1a586604::t_9cbca9681bc4e4 71,73-74,77-78,128,130-131,136-137,145-148
+  s_32b52a1a586604::t_7630d6bd96c970 114-116,133-135
+  s_32b52a1a586604::t_8bc91ed53ff6cd 1-70,72,75-76,79-113,117-127,129,132,138-144,149-208
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_32b52a1a586604::t_ff752042a1466b 22-80,356,366-390
+apps/agentic-outer-dag/src/cli.rs
+  s_32b52a1a586604::t_6a9c06ed7b517e 149-172
+apps/agentic-outer-dag/src/worktree/mod.rs
+  s_32b52a1a586604::t_0534717e1a9d10 6-7,24-30,54-76,126-164,166,194-197,225-320
+  s_32b52a1a586604::t_7efa6cf0fa0136 167,180
+  s_32b52a1a586604::t_85c30b8802f555 198-201
+apps/agentic-outer-dag/src/worktree/freshness.rs
+  s_32b52a1a586604::t_f607eddbd41616 128-140
+apps/agentic-outer-dag/src/main.rs
+  s_32b52a1a586604::t_4ccce9dcab5472 17,94-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "ba618ea2011c23ab29b1153fd964e9082f32c9fe",
+  "prompts": {},
+  "sessions": {
+    "s_32b52a1a586604": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_103232087ffed4ZmputhuDNIwO",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
