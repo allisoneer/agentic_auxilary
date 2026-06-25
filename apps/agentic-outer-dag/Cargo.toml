@@ -37,6 +37,13 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
+# TLS backend - explicit dependency for CryptoProvider initialization
+# Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
+# in without explicit provider selection (due to Cargo's additive features)
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+] }
+
 [dev-dependencies]
 tempfile = "3"
 wiremock = "0.6"

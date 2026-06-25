@@ -19,6 +19,12 @@ mod worktree;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Install the rustls CryptoProvider before any HTTP clients are created.
+    // Required because Cargo's additive features cause both ring and aws-lc-rs
+    // to be compiled in via transitive dependencies, and rustls 0.23+ panics
+    // if it can't auto-select a single provider.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     let cli = cli::Cli::parse();
     let dry_run = cli.dry_run;
     let command = cli.command;
