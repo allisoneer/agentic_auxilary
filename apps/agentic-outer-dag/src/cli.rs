@@ -146,4 +146,28 @@ mod tests {
             }
         ));
     }
+
+    #[test]
+    fn start_accepts_top_level_dry_run_flag() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "--dry-run",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--branch",
+            "feature/eng-992",
+        ])
+        .expect("dry-run start should parse");
+
+        assert!(cli.dry_run);
+        assert!(matches!(
+            cli.command,
+            Commands::Start {
+                ticket,
+                branch: Some(branch),
+                ..
+            } if ticket == "ENG-992" && branch == "feature/eng-992"
+        ));
+    }
 }

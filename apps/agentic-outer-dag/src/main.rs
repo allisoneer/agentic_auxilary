@@ -14,6 +14,7 @@ mod dag;
 mod github;
 mod linear;
 mod opencode;
+mod preview;
 mod state;
 mod worktree;
 
@@ -90,6 +91,12 @@ async fn handle_start(
     dry_run: bool,
     force: bool,
 ) -> Result<()> {
+    if dry_run {
+        let plan = preview::build_dry_run_start_preview(ticket, branch, worktree_path, force)?;
+        println!("{}", serde_json::to_string_pretty(&plan)?);
+        return Ok(());
+    }
+
     let target = worktree::resolve(branch, worktree_path, true)?;
     worktree::chdir_to(&target)?;
 

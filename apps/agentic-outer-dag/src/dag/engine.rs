@@ -19,6 +19,65 @@ pub struct DagEngine {
     coderabbit: CodeRabbitClient,
 }
 
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+pub struct PlannedAction {
+    pub id: &'static str,
+    pub summary: &'static str,
+}
+
+pub fn planned_actions_for_start() -> Vec<PlannedAction> {
+    vec![
+        PlannedAction {
+            id: "worktree.resolve",
+            summary: "Resolve target worktree (create if missing)",
+        },
+        PlannedAction {
+            id: "state.check_existing",
+            summary: "Check for existing outer DAG state file",
+        },
+        PlannedAction {
+            id: "state.write_initial",
+            summary: "Persist initial outer DAG run state",
+        },
+        PlannedAction {
+            id: "opencode.start",
+            summary: "Start embedded OpenCode server",
+        },
+        PlannedAction {
+            id: "freshness.before_ticket_to_pr",
+            summary: "Freshness gate before ticket_to_pr (fetch/rebase)",
+        },
+        PlannedAction {
+            id: "github.pr.detect_existing",
+            summary: "Detect existing open PR for branch",
+        },
+        PlannedAction {
+            id: "opencode.run.linear_ticket_2_pr",
+            summary: "If no PR, run OpenCode command linear_ticket_2_pr",
+        },
+        PlannedAction {
+            id: "github.pr.detect_after_ticket_to_pr",
+            summary: "Detect open PR after ticket_to_pr",
+        },
+        PlannedAction {
+            id: "freshness.before_coderabbit_wait",
+            summary: "Freshness gate before CodeRabbit wait (fetch/rebase)",
+        },
+        PlannedAction {
+            id: "github.coderabbit.wait",
+            summary: "Poll GitHub until CodeRabbit completes",
+        },
+        PlannedAction {
+            id: "opencode.run.resolve_pr_comments",
+            summary: "Run OpenCode command resolve_pr_comments",
+        },
+        PlannedAction {
+            id: "stop.ready_for_human_review",
+            summary: "Stop at ready_for_human_review",
+        },
+    ]
+}
+
 fn poll_interval_sleep_duration(poll_interval_seconds: u64) -> std::time::Duration {
     std::time::Duration::from_secs(poll_interval_seconds.max(1))
 }
@@ -294,6 +353,7 @@ impl DagEngine {
 
 #[cfg(test)]
 mod tests {
+    use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
     use std::time::Duration;
 
@@ -302,5 +362,31 @@ mod tests {
         assert_eq!(poll_interval_sleep_duration(0), Duration::from_secs(1));
         assert_eq!(poll_interval_sleep_duration(1), Duration::from_secs(1));
         assert_eq!(poll_interval_sleep_duration(5), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn planned_actions_for_start_returns_expected_ordered_ids() {
+        let ids: Vec<_> = planned_actions_for_start()
+            .into_iter()
+            .map(|action| action.id)
+            .collect();
+
+        assert_eq!(
+            ids,
+            vec![
+                "worktree.resolve",
+                "state.check_existing",
+                "state.write_initial",
+                "opencode.start",
+                "freshness.before_ticket_to_pr",
+                "github.pr.detect_existing",
+                "opencode.run.linear_ticket_2_pr",
+                "github.pr.detect_after_ticket_to_pr",
+                "freshness.before_coderabbit_wait",
+                "github.coderabbit.wait",
+                "opencode.run.resolve_pr_comments",
+                "stop.ready_for_human_review",
+            ]
+        );
     }
 }

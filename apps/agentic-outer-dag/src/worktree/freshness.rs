@@ -125,6 +125,20 @@ mod tests {
     }
 
     #[test]
+    fn dry_run_returns_up_to_date_when_origin_main_moves_forward() {
+        let _guard = cwd_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        fixture.advance_main("main update\n").unwrap();
+        let saved = env::current_dir().unwrap();
+        env::set_current_dir(&fixture.feature_clone).unwrap();
+
+        let outcome = run("origin/main", true).unwrap();
+
+        env::set_current_dir(saved).unwrap();
+        assert_eq!(outcome, FreshnessOutcome::UpToDate);
+    }
+
+    #[test]
     fn returns_conflict_when_rebase_hits_merge_conflict() {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
