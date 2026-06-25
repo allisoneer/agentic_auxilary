@@ -89,6 +89,7 @@ dependencies = [
  "linear-tools",
  "opencode_rs",
  "pr_comments",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",
