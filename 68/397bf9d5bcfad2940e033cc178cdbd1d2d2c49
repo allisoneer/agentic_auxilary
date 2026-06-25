@@ -1,0 +1,21 @@
+apps/agentic-outer-dag/Cargo.toml
+  s_ec93803566e0fe::t_7ec03881f44b00 40-46
+apps/agentic-outer-dag/src/main.rs
+  s_ec93803566e0fe::t_7ec03881f44b00 22-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.13",
+  "base_commit_sha": "68397bf9d5bcfad2940e033cc178cdbd1d2d2c49",
+  "prompts": {},
+  "sessions": {
+    "s_ec93803566e0fe": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1035a828bffefTapwhG5sw7qxy",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
