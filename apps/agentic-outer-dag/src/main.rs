@@ -280,6 +280,7 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
         "pr_url": state.pr.url,
         "opencode_session_id": state.opencode.active_session_id,
         "opencode_last_command": state.opencode.last_command,
+        "opencode_last_diagnostics": state.opencode.last_diagnostics,
         "ticket_to_pr_runs": state.counters.ticket_to_pr_runs,
         "resolve_comments_runs": state.counters.resolve_comments_runs,
         "opencode_dispatch_enabled": state.settings.opencode_dispatch_enabled,
@@ -422,6 +423,17 @@ mod tests {
         state.pr.url = Some("https://example.invalid/pr/258".to_string());
         state.opencode.active_session_id = Some("session-123".to_string());
         state.opencode.last_command = Some("linear_ticket_2_pr".to_string());
+        state.opencode.last_diagnostics = Some(state::OpenCodeDiagnostics {
+            checked_at: "2026-01-01T00:00:00Z".to_string(),
+            command_message_id: Some("msg-outer-dag-1".to_string()),
+            final_assistant_message_id: Some("msg-assistant-1".to_string()),
+            final_finish_reason: Some("stop".to_string()),
+            guard_detected: true,
+            final_tool_error: Some(state::OpenCodeToolErrorDiagnostics {
+                tool: "read".to_string(),
+                error: "nested guard tripped".to_string(),
+            }),
+        });
         state.counters.ticket_to_pr_runs = 1;
         state.counters.resolve_comments_runs = 0;
         state.settings.opencode_dispatch_enabled = false;
@@ -463,6 +475,7 @@ mod tests {
             "pr_url",
             "opencode_session_id",
             "opencode_last_command",
+            "opencode_last_diagnostics",
             "ticket_to_pr_runs",
             "resolve_comments_runs",
             "opencode_dispatch_enabled",
@@ -522,6 +535,12 @@ mod tests {
                 .get("pr_lookup")
                 .and_then(|lookup| lookup.get("repo_owner")),
             Some(&Value::String("allisoneer".to_string()))
+        );
+        assert_eq!(
+            payload
+                .get("opencode_last_diagnostics")
+                .and_then(|diagnostics| diagnostics.get("guard_detected")),
+            Some(&Value::Bool(true))
         );
     }
 

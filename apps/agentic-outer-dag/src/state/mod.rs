@@ -89,12 +89,40 @@ pub enum StageKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OpenCodeState {
+    #[serde(default)]
     pub active_session_id: Option<String>,
+    #[serde(default)]
     pub last_command: Option<String>,
     pub dispatch_attempt: u32,
+    #[serde(default)]
     pub resume_stage: Option<StageKind>,
+    #[serde(default)]
     pub pending_permission: Option<PendingPermission>,
+    #[serde(default)]
     pub pending_question: Option<PendingQuestion>,
+    #[serde(default)]
+    pub last_diagnostics: Option<OpenCodeDiagnostics>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OpenCodeDiagnostics {
+    pub checked_at: String,
+    #[serde(default)]
+    pub command_message_id: Option<String>,
+    #[serde(default)]
+    pub final_assistant_message_id: Option<String>,
+    #[serde(default)]
+    pub final_finish_reason: Option<String>,
+    #[serde(default)]
+    pub guard_detected: bool,
+    #[serde(default)]
+    pub final_tool_error: Option<OpenCodeToolErrorDiagnostics>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OpenCodeToolErrorDiagnostics {
+    pub tool: String,
+    pub error: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -285,6 +313,17 @@ mod tests {
             request_id: "question-1".to_string(),
             prompt: "Continue?".to_string(),
         });
+        state.opencode.last_diagnostics = Some(OpenCodeDiagnostics {
+            checked_at: "2026-01-01T00:00:00Z".to_string(),
+            command_message_id: Some("msg-outer-dag-1".to_string()),
+            final_assistant_message_id: Some("msg-assistant-1".to_string()),
+            final_finish_reason: Some("stop".to_string()),
+            guard_detected: false,
+            final_tool_error: Some(OpenCodeToolErrorDiagnostics {
+                tool: "read".to_string(),
+                error: "permission denied".to_string(),
+            }),
+        });
         state.stage.kind = StageKind::StoppedQuestionRequired;
 
         let json = serde_json::to_string_pretty(&state).unwrap();
@@ -303,6 +342,15 @@ mod tests {
         assert_eq!(
             roundtrip.opencode.pending_question.as_ref().unwrap().prompt,
             "Continue?"
+        );
+        assert_eq!(
+            roundtrip
+                .opencode
+                .last_diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.final_tool_error.as_ref())
+                .map(|diagnostics| diagnostics.tool.as_str()),
+            Some("read")
         );
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
@@ -340,7 +388,8 @@ mod tests {
                 "dispatch_attempt": 0,
                 "resume_stage": null,
                 "pending_permission": null,
-                "pending_question": null
+                "pending_question": null,
+                "last_diagnostics": null
             },
             "pr": {
                 "number": null,
@@ -372,6 +421,22 @@ mod tests {
 
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
+        assert!(roundtrip.opencode.last_diagnostics.is_none());
+    }
+
+    #[test]
+    fn opencode_diagnostics_default_new_fields_for_legacy_state() {
+        let opencode: OpenCodeState = serde_json::from_value(serde_json::json!({
+            "active_session_id": null,
+            "last_command": null,
+            "dispatch_attempt": 0,
+            "resume_stage": null,
+            "pending_permission": null,
+            "pending_question": null
+        }))
+        .unwrap();
+
+        assert!(opencode.last_diagnostics.is_none());
     }
 
     #[test]

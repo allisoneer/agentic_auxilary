@@ -13,6 +13,16 @@ use crate::state::store::ThoughtsStateStore;
 use crate::worktree::freshness;
 use anyhow::Result;
 use std::fmt::Write as _;
+use std::future::Future;
+use std::time::Duration;
+
+const DETECTING_PR_MAX_ATTEMPTS: usize = 5;
+const DETECTING_PR_BACKOFFS: [Duration; 4] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+    Duration::from_secs(8),
+];
 
 pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
@@ -234,10 +244,20 @@ impl DagEngine {
                     ThoughtsStateStore::save(&state)?;
                 }
                 StageKind::DetectingPr => {
-                    let lookup = self
-                        .github
-                        .detect_open_pr_from_branch(&state.worktree.branch)
-                        .await?;
+                    let branch = state.worktree.branch.clone();
+                    let lookup = detect_pr_with_retry(
+                        || self.github.detect_open_pr_from_branch(&branch),
+                        |next_attempt, backoff, lookup| {
+                            record_pr_lookup(&mut state, StageKind::DetectingPr, lookup);
+                            state.stage.details = Some(format!(
+                                "no PR visible yet after ticket_to_pr; retry {next_attempt}/{DETECTING_PR_MAX_ATTEMPTS} in {}s",
+                                backoff.as_secs()
+                            ));
+                            ThoughtsStateStore::save(&state)
+                        },
+                        tokio::time::sleep,
+                    )
+                    .await?;
                     record_pr_lookup(&mut state, StageKind::DetectingPr, &lookup);
                     if let Some(pr) = lookup.pr {
                         state.pr.number = Some(pr.number);
@@ -407,8 +427,12 @@ impl DagEngine {
             )
             .await?;
         match outcome {
-            SupervisedOutcome::Completed { session_id } => {
+            SupervisedOutcome::Completed {
+                session_id,
+                diagnostics,
+            } => {
                 state.opencode.active_session_id = Some(session_id);
+                state.opencode.last_diagnostics = Some(diagnostics);
                 state.opencode.pending_permission = None;
                 state.opencode.pending_question = None;
                 state.stage.kind = resume_stage;
@@ -438,8 +462,13 @@ impl DagEngine {
                 state.stage.kind = StageKind::StoppedQuestionRequired;
                 state.stage.details = Some("OpenCode question response required".to_string());
             }
-            SupervisedOutcome::Failed { session_id, error } => {
+            SupervisedOutcome::Failed {
+                session_id,
+                error,
+                diagnostics,
+            } => {
                 state.opencode.active_session_id = session_id;
+                state.opencode.last_diagnostics = diagnostics;
                 transition_to_stopped_failed(state, error);
             }
         }
@@ -455,6 +484,32 @@ impl DagEngine {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("supervisor should be initialized before use"))
     }
+}
+
+async fn detect_pr_with_retry<Lookup, LookupFut, OnRetry, Sleep, SleepFut>(
+    mut lookup: Lookup,
+    mut on_retry: OnRetry,
+    mut sleep: Sleep,
+) -> Result<DetectedPrLookup>
+where
+    Lookup: FnMut() -> LookupFut,
+    LookupFut: Future<Output = Result<DetectedPrLookup>>,
+    OnRetry: FnMut(usize, Duration, &DetectedPrLookup) -> Result<()>,
+    Sleep: FnMut(Duration) -> SleepFut,
+    SleepFut: Future<Output = ()>,
+{
+    for (attempt_index, backoff) in DETECTING_PR_BACKOFFS.into_iter().enumerate() {
+        let lookup_result = lookup().await?;
+        if lookup_result.pr.is_some() {
+            return Ok(lookup_result);
+        }
+
+        on_retry(attempt_index + 2, backoff, &lookup_result)?;
+        sleep(backoff).await;
+    }
+
+    let lookup_result = lookup().await?;
+    Ok(lookup_result)
 }
 
 #[cfg(test)]
@@ -688,6 +743,94 @@ mod tests {
         }
 
         assert!(result.is_ok(), "engine construction should stay lazy");
+    }
+
+    #[tokio::test]
+    async fn detect_pr_with_retry_stops_after_pr_appears() {
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen_sleeps = std::sync::Arc::new(Mutex::new(Vec::new()));
+
+        let lookup_attempts = std::sync::Arc::clone(&attempts);
+        let sleep_log = std::sync::Arc::clone(&seen_sleeps);
+        let result = super::detect_pr_with_retry(
+            move || {
+                let lookup_attempts = std::sync::Arc::clone(&lookup_attempts);
+                async move {
+                    let attempt =
+                        lookup_attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    Ok(DetectedPrLookup {
+                        requested_branch: "feature/eng-992".to_string(),
+                        current_branch: Some("feature/eng-992".to_string()),
+                        repo_owner: "allisoneer".to_string(),
+                        repo_name: "agentic_auxilary".to_string(),
+                        token_source: Some("GH_TOKEN".to_string()),
+                        empty_result_reason: (attempt < 1)
+                            .then_some("no_open_pull_requests_matched_branch".to_string()),
+                        pr: (attempt >= 1).then_some(pr_comments::models::PrRef {
+                            number: 258,
+                            url: "https://example.invalid/pr/258".to_string(),
+                            head_sha: "abc123".to_string(),
+                        }),
+                    })
+                }
+            },
+            |_, _, _| Ok(()),
+            move |duration| {
+                let sleep_log = std::sync::Arc::clone(&sleep_log);
+                async move {
+                    sleep_log.lock().unwrap().push(duration);
+                }
+            },
+        )
+        .await
+        .expect("retry should succeed once PR appears");
+
+        assert_eq!(result.pr.as_ref().map(|pr| pr.number), Some(258));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 2);
+        assert_eq!(
+            seen_sleeps.lock().unwrap().as_slice(),
+            &[Duration::from_secs(1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn detect_pr_with_retry_exhausts_backoff_schedule() {
+        let seen_sleeps = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let sleep_log = std::sync::Arc::clone(&seen_sleeps);
+
+        let result = super::detect_pr_with_retry(
+            || async {
+                Ok(DetectedPrLookup {
+                    requested_branch: "feature/eng-992".to_string(),
+                    current_branch: Some("feature/eng-992".to_string()),
+                    repo_owner: "allisoneer".to_string(),
+                    repo_name: "agentic_auxilary".to_string(),
+                    token_source: Some("GH_TOKEN".to_string()),
+                    empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
+                    pr: None,
+                })
+            },
+            |_, _, _| Ok(()),
+            move |duration| {
+                let sleep_log = std::sync::Arc::clone(&sleep_log);
+                async move {
+                    sleep_log.lock().unwrap().push(duration);
+                }
+            },
+        )
+        .await
+        .expect("retry helper should return final empty lookup after exhaustion");
+
+        assert!(result.pr.is_none());
+        assert_eq!(
+            seen_sleeps.lock().unwrap().as_slice(),
+            &[
+                Duration::from_secs(1),
+                Duration::from_secs(2),
+                Duration::from_secs(4),
+                Duration::from_secs(8)
+            ]
+        );
     }
 
     fn opencode_env_lock() -> &'static Mutex<()> {
