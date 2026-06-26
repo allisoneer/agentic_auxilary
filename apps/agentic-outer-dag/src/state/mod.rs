@@ -51,6 +51,8 @@ pub struct Settings {
     pub poll_interval_seconds: u64,
     pub coderabbit_timeout_seconds: u64,
     pub max_review_cycles: u32,
+    #[serde(default = "default_linear_handoff_enabled")]
+    pub linear_handoff_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,8 +61,9 @@ pub struct Stage {
     pub details: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
+#[value(rename_all = "snake_case")]
 pub enum StageKind {
     Init,
     FreshnessBeforeTicketToPr,
@@ -166,6 +169,7 @@ impl RunState {
                 poll_interval_seconds: 30,
                 coderabbit_timeout_seconds: 3600,
                 max_review_cycles: 5,
+                linear_handoff_enabled: default_linear_handoff_enabled(),
             },
             stage: Stage {
                 kind: StageKind::FreshnessBeforeTicketToPr,
@@ -184,6 +188,10 @@ impl RunState {
     pub fn touch(&mut self) {
         self.updated_at = Utc::now().to_rfc3339();
     }
+}
+
+const fn default_linear_handoff_enabled() -> bool {
+    true
 }
 
 fn generate_run_id() -> String {
@@ -270,5 +278,71 @@ mod tests {
             roundtrip.opencode.pending_question.as_ref().unwrap().prompt,
             "Continue?"
         );
+        assert!(roundtrip.settings.linear_handoff_enabled);
+    }
+
+    #[test]
+    fn settings_default_linear_handoff_enabled_for_legacy_state_files() {
+        let value = serde_json::json!({
+            "schema_version": 1,
+            "run_id": "outer-dag-test",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "ticket": {
+                "linear_key": "ENG-992",
+                "linear_url": null
+            },
+            "worktree": {
+                "path": "/tmp/worktree",
+                "branch": "feature/eng-992",
+                "base_ref": "origin/main"
+            },
+            "settings": {
+                "dry_run": false,
+                "poll_interval_seconds": 30,
+                "coderabbit_timeout_seconds": 3600,
+                "max_review_cycles": 5
+            },
+            "stage": {
+                "kind": "freshness_before_ticket_to_pr",
+                "details": null
+            },
+            "opencode": {
+                "active_session_id": null,
+                "last_command": null,
+                "dispatch_attempt": 0,
+                "resume_stage": null,
+                "pending_permission": null,
+                "pending_question": null
+            },
+            "pr": {
+                "number": null,
+                "url": null,
+                "head_sha": null,
+                "last_observed_head_sha": null
+            },
+            "freshness": {
+                "last_checked_at": null,
+                "last_result": null
+            },
+            "coderabbit": {
+                "current_cycle": 0,
+                "cycles": []
+            },
+            "handoff": {
+                "linear_comment_posted": false,
+                "linear_comment_body_sha256": null,
+                "posted_at": null
+            },
+            "counters": {
+                "ticket_to_pr_runs": 0,
+                "resolve_comments_runs": 0
+            },
+            "last_error": null
+        });
+
+        let roundtrip: RunState = serde_json::from_value(value).unwrap();
+
+        assert!(roundtrip.settings.linear_handoff_enabled);
     }
 }

@@ -5,6 +5,18 @@ use sha2::Digest;
 use sha2::Sha256;
 
 pub async fn post_handoff_once(state: &mut RunState, message: &str) -> Result<()> {
+    if !state.settings.linear_handoff_enabled {
+        return Ok(());
+    }
+
+    post_handoff_once_unchecked(state, message).await
+}
+
+pub async fn post_handoff_once_forced(state: &mut RunState, message: &str) -> Result<()> {
+    post_handoff_once_unchecked(state, message).await
+}
+
+async fn post_handoff_once_unchecked(state: &mut RunState, message: &str) -> Result<()> {
     let digest = handoff_digest(message);
     if should_skip_handoff(state, &digest) {
         return Ok(());
@@ -51,5 +63,28 @@ mod tests {
 
         assert!(should_skip_handoff(&state, &digest));
         assert!(!should_skip_handoff(&state, &handoff_digest("different")));
+    }
+
+    #[tokio::test]
+    async fn handoff_is_suppressed_when_disabled_in_settings() {
+        let mut state = crate::state::RunState::for_start(
+            "ENG-992",
+            &crate::worktree::TargetWorktree {
+                path: std::env::current_dir().unwrap(),
+                branch: "feature/eng-992".to_string(),
+                base_ref: "origin/main".to_string(),
+            },
+            true,
+        )
+        .unwrap();
+        state.settings.linear_handoff_enabled = false;
+
+        post_handoff_once(&mut state, "suppressed during safety test")
+            .await
+            .unwrap();
+
+        assert!(!state.handoff.linear_comment_posted);
+        assert!(state.handoff.linear_comment_body_sha256.is_none());
+        assert!(state.handoff.posted_at.is_none());
     }
 }

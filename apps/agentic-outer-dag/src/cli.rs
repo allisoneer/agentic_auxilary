@@ -1,3 +1,4 @@
+use crate::state::StageKind;
 use clap::ArgGroup;
 use clap::Parser;
 use clap::Subcommand;
@@ -37,6 +38,12 @@ pub enum Commands {
 
         #[arg(long)]
         force: bool,
+
+        #[arg(long)]
+        no_linear_handoff: bool,
+
+        #[arg(long, value_enum)]
+        stop_after: Option<StageKind>,
     },
     Resume {
         #[arg(long)]
@@ -44,6 +51,12 @@ pub enum Commands {
 
         #[arg(long)]
         worktree: Option<PathBuf>,
+
+        #[arg(long)]
+        no_linear_handoff: bool,
+
+        #[arg(long, value_enum)]
+        stop_after: Option<StageKind>,
     },
     Status {
         #[arg(long)]
@@ -80,6 +93,7 @@ pub enum Commands {
 mod tests {
     use super::Cli;
     use super::Commands;
+    use crate::state::StageKind;
     use clap::CommandFactory;
     use clap::Parser;
     use clap::error::ErrorKind;
@@ -166,8 +180,116 @@ mod tests {
             Commands::Start {
                 ticket,
                 branch: Some(branch),
+                no_linear_handoff: false,
+                stop_after: None,
                 ..
             } if ticket == "ENG-992" && branch == "feature/eng-992"
+        ));
+    }
+
+    #[test]
+    fn start_accepts_valid_stop_after_stage() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--stop-after",
+            "waiting_for_coderabbit",
+        ])
+        .expect("valid stop-after should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Start {
+                no_linear_handoff: false,
+                stop_after: Some(StageKind::WaitingForCoderabbit),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn resume_accepts_valid_stop_after_stage() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "resume",
+            "--stop-after",
+            "dispatching_ticket_to_pr",
+        ])
+        .expect("valid stop-after should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Resume {
+                no_linear_handoff: false,
+                stop_after: Some(StageKind::DispatchingTicketToPr),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn stop_after_rejects_invalid_stage_name() {
+        let err = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--stop-after",
+            "not_a_stage",
+        ])
+        .expect_err("invalid stop-after stage should fail");
+
+        assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn start_help_lists_stop_after_flag_and_stage_values() {
+        let mut command = Cli::command();
+        let help = command
+            .find_subcommand_mut("start")
+            .expect("start subcommand exists")
+            .render_long_help()
+            .to_string();
+
+        assert!(help.contains("--stop-after"));
+        assert!(help.contains("--no-linear-handoff"));
+        assert!(help.contains("waiting_for_coderabbit"));
+        assert!(help.contains("dispatching_resolve_pr_comments"));
+    }
+
+    #[test]
+    fn start_accepts_no_linear_handoff_flag() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--no-linear-handoff",
+        ])
+        .expect("start no-linear-handoff should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Start {
+                no_linear_handoff: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn resume_accepts_no_linear_handoff_flag() {
+        let cli = Cli::try_parse_from(["agentic-outer-dag", "resume", "--no-linear-handoff"])
+            .expect("resume no-linear-handoff should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Resume {
+                no_linear_handoff: true,
+                ..
+            }
         ));
     }
 }

@@ -63,6 +63,8 @@ async fn main() -> Result<()> {
             branch,
             worktree,
             force,
+            no_linear_handoff,
+            stop_after,
         } => {
             handle_start(
                 &ticket,
@@ -70,11 +72,24 @@ async fn main() -> Result<()> {
                 worktree.as_deref(),
                 dry_run,
                 force,
+                no_linear_handoff,
+                stop_after,
             )
             .await
         }
-        cli::Commands::Resume { branch, worktree } => {
-            handle_resume(branch.as_deref(), worktree.as_deref()).await
+        cli::Commands::Resume {
+            branch,
+            worktree,
+            no_linear_handoff,
+            stop_after,
+        } => {
+            handle_resume(
+                branch.as_deref(),
+                worktree.as_deref(),
+                no_linear_handoff,
+                stop_after,
+            )
+            .await
         }
         cli::Commands::Status { json } => handle_status(json),
         cli::Commands::RespondPermission { allow, deny } => {
@@ -92,6 +107,8 @@ async fn handle_start(
     worktree_path: Option<&Path>,
     dry_run: bool,
     force: bool,
+    no_linear_handoff: bool,
+    stop_after: Option<state::StageKind>,
 ) -> Result<()> {
     if dry_run {
         let plan = preview::build_dry_run_start_preview(ticket, branch, worktree_path, force)?;
@@ -109,24 +126,34 @@ async fn handle_start(
         );
     }
 
-    let state = state::RunState::for_start(ticket, &target, dry_run)?;
+    let mut state = state::RunState::for_start(ticket, &target, dry_run)?;
+    state.settings.linear_handoff_enabled = !no_linear_handoff;
     state::store::ThoughtsStateStore::save(&state)?;
 
-    let engine = dag::engine::DagEngine::for_current_dir().await?;
-    engine.run_until_stop().await?;
+    let mut engine = dag::engine::DagEngine::for_current_dir()?;
+    engine.run_until_stop(stop_after).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after start"))?;
     print_status(&state, false)
 }
 
-async fn handle_resume(branch: Option<&str>, worktree_path: Option<&Path>) -> Result<()> {
+async fn handle_resume(
+    branch: Option<&str>,
+    worktree_path: Option<&Path>,
+    no_linear_handoff: bool,
+    stop_after: Option<state::StageKind>,
+) -> Result<()> {
     let target = worktree::resolve(branch, worktree_path, false)?;
     worktree::chdir_to(&target)?;
 
-    state::store::ThoughtsStateStore::load()?
+    let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found; run start first"))?;
-    let engine = dag::engine::DagEngine::for_current_dir().await?;
-    engine.run_until_stop().await?;
+    if no_linear_handoff {
+        state.settings.linear_handoff_enabled = false;
+        state::store::ThoughtsStateStore::save(&state)?;
+    }
+    let mut engine = dag::engine::DagEngine::for_current_dir()?;
+    engine.run_until_stop(stop_after).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after resume"))?;
     print_status(&state, false)
@@ -144,17 +171,37 @@ fn print_status(state: &state::RunState, as_json: bool) -> Result<()> {
     } else {
         println!(
             "{}",
-            serde_json::to_string_pretty(&json!({
-                "ticket": state.ticket.linear_key,
-                "branch": state.worktree.branch,
-                "worktree": state.worktree.path,
-                "stage": state.stage.kind,
-                "state_file": format!("./thoughts/{}/artifacts/{}", state.worktree.branch, state::STATE_FILENAME),
-            }))?
+            serde_json::to_string_pretty(&compact_status_payload(state))?
         );
     }
 
     Ok(())
+}
+
+fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
+    let worktree_exists = Path::new(&state.worktree.path).exists();
+
+    json!({
+        "ticket": state.ticket.linear_key,
+        "branch": state.worktree.branch,
+        "worktree": state.worktree.path,
+        "stage": state.stage.kind,
+        "state_file": format!("./thoughts/{}/artifacts/{}", state.worktree.branch, state::STATE_FILENAME),
+        "stage_details": state.stage.details,
+        "last_error": state.last_error,
+        "worktree_exists": worktree_exists,
+        "pr_number": state.pr.number,
+        "pr_url": state.pr.url,
+        "opencode_session_id": state.opencode.active_session_id,
+        "opencode_last_command": state.opencode.last_command,
+        "ticket_to_pr_runs": state.counters.ticket_to_pr_runs,
+        "resolve_comments_runs": state.counters.resolve_comments_runs,
+        "linear_handoff_enabled": state.settings.linear_handoff_enabled,
+        "linear_handoff_posted": state.handoff.linear_comment_posted,
+        "linear_handoff_posted_at": state.handoff.posted_at,
+        "run_id": state.run_id,
+        "updated_at": state.updated_at,
+    })
 }
 
 async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
@@ -194,8 +241,8 @@ async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
     state.stage.details = None;
     state::store::ThoughtsStateStore::save(&state)?;
 
-    let engine = dag::engine::DagEngine::for_current_dir().await?;
-    engine.run_until_stop().await?;
+    let mut engine = dag::engine::DagEngine::for_current_dir()?;
+    engine.run_until_stop(None).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after responding"))?;
     print_status(&state, false)
@@ -234,8 +281,8 @@ async fn handle_respond_question(answer: &str) -> Result<()> {
     state.stage.details = None;
     state::store::ThoughtsStateStore::save(&state)?;
 
-    let engine = dag::engine::DagEngine::for_current_dir().await?;
-    engine.run_until_stop().await?;
+    let mut engine = dag::engine::DagEngine::for_current_dir()?;
+    engine.run_until_stop(None).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after responding"))?;
     print_status(&state, false)
@@ -245,7 +292,7 @@ async fn handle_handoff(message: Option<&str>) -> Result<()> {
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
     let body = message.unwrap_or("manual handoff requested from agentic-outer-dag");
-    linear::post_handoff_once(&mut state, body).await?;
+    linear::post_handoff_once_forced(&mut state, body).await?;
     state.stage.kind = state::StageKind::StoppedManualHandoff;
     state.stage.details = Some(body.to_string());
     state::store::ThoughtsStateStore::save(&state)?;
@@ -257,4 +304,110 @@ fn handle_reset(yes: bool) -> Result<()> {
     state::store::ThoughtsStateStore::delete()?;
     println!("state reset");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compact_status_payload;
+    use super::state;
+    use crate::worktree::TargetWorktree;
+    use serde_json::Value;
+
+    fn sample_state() -> state::RunState {
+        let mut state = state::RunState::for_start(
+            "ENG-992",
+            &TargetWorktree {
+                path: std::env::current_dir().expect("cwd available for test"),
+                branch: "feature/eng-992".to_string(),
+                base_ref: "origin/main".to_string(),
+            },
+            false,
+        )
+        .expect("sample state builds");
+
+        state.stage.kind = state::StageKind::StoppedFailed;
+        state.stage.details = Some("detailed failure".to_string());
+        state.last_error = Some("detailed failure".to_string());
+        state.pr.number = Some(258);
+        state.pr.url = Some("https://example.invalid/pr/258".to_string());
+        state.opencode.active_session_id = Some("session-123".to_string());
+        state.opencode.last_command = Some("linear_ticket_2_pr".to_string());
+        state.counters.ticket_to_pr_runs = 1;
+        state.counters.resolve_comments_runs = 0;
+        state.handoff.linear_comment_posted = false;
+        state
+    }
+
+    #[test]
+    fn compact_status_payload_preserves_existing_fields_and_adds_diagnostics() {
+        let mut state = sample_state();
+        state.worktree.path = std::env::temp_dir()
+            .join(format!("missing-outer-dag-worktree-{}", std::process::id()))
+            .display()
+            .to_string();
+
+        let payload = compact_status_payload(&state);
+
+        for key in [
+            "ticket",
+            "branch",
+            "worktree",
+            "stage",
+            "state_file",
+            "stage_details",
+            "last_error",
+            "worktree_exists",
+            "pr_number",
+            "pr_url",
+            "opencode_session_id",
+            "opencode_last_command",
+            "ticket_to_pr_runs",
+            "resolve_comments_runs",
+            "linear_handoff_enabled",
+            "linear_handoff_posted",
+            "linear_handoff_posted_at",
+            "run_id",
+            "updated_at",
+        ] {
+            assert!(payload.get(key).is_some(), "missing key: {key}");
+        }
+
+        assert_eq!(
+            payload.get("ticket"),
+            Some(&Value::String("ENG-992".to_string()))
+        );
+        assert_eq!(
+            payload.get("branch"),
+            Some(&Value::String("feature/eng-992".to_string()))
+        );
+        assert_eq!(
+            payload.get("state_file"),
+            Some(&Value::String(format!(
+                "./thoughts/{}/artifacts/{}",
+                state.worktree.branch,
+                state::STATE_FILENAME
+            )))
+        );
+        assert_eq!(
+            payload.get("stage"),
+            Some(&Value::String("stopped_failed".to_string()))
+        );
+        assert_eq!(
+            payload.get("stage_details"),
+            Some(&Value::String("detailed failure".to_string()))
+        );
+        assert_eq!(
+            payload.get("last_error"),
+            Some(&Value::String("detailed failure".to_string()))
+        );
+        assert_eq!(payload.get("worktree_exists"), Some(&Value::Bool(false)));
+        assert_eq!(
+            payload.get("linear_handoff_enabled"),
+            Some(&Value::Bool(true))
+        );
+        assert_eq!(
+            payload.get("pr_number"),
+            Some(&Value::Number(258_u64.into()))
+        );
+    }
 }

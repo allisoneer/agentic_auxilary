@@ -11,10 +11,9 @@ use crate::state::StageKind;
 use crate::state::store::ThoughtsStateStore;
 use crate::worktree::freshness;
 use anyhow::Result;
-use std::path::Path;
 
 pub struct DagEngine {
-    supervisor: OpenCodeSupervisor,
+    supervisor: Option<OpenCodeSupervisor>,
     github: GitHubPrClient,
     coderabbit: CodeRabbitClient,
 }
@@ -40,10 +39,6 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
             summary: "Persist initial outer DAG run state",
         },
         PlannedAction {
-            id: "opencode.start",
-            summary: "Start embedded OpenCode server",
-        },
-        PlannedAction {
             id: "freshness.before_ticket_to_pr",
             summary: "Freshness gate before ticket_to_pr (fetch/rebase)",
         },
@@ -53,7 +48,7 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
         },
         PlannedAction {
             id: "opencode.run.linear_ticket_2_pr",
-            summary: "If no PR, run OpenCode command linear_ticket_2_pr",
+            summary: "If no PR, lazily start OpenCode and run linear_ticket_2_pr",
         },
         PlannedAction {
             id: "github.pr.detect_after_ticket_to_pr",
@@ -69,7 +64,7 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
         },
         PlannedAction {
             id: "opencode.run.resolve_pr_comments",
-            summary: "Run OpenCode command resolve_pr_comments",
+            summary: "Lazily start OpenCode if needed and run resolve_pr_comments",
         },
         PlannedAction {
             id: "stop.ready_for_human_review",
@@ -82,22 +77,34 @@ fn poll_interval_sleep_duration(poll_interval_seconds: u64) -> std::time::Durati
     std::time::Duration::from_secs(poll_interval_seconds.max(1))
 }
 
+fn transition_to_stopped_failed(state: &mut RunState, message: impl Into<String>) {
+    let message = message.into();
+    state.last_error = Some(message.clone());
+    state.stage.kind = StageKind::StoppedFailed;
+    state.stage.details = Some(message);
+}
+
 impl DagEngine {
-    pub async fn for_current_dir() -> Result<Self> {
-        let supervisor = OpenCodeSupervisor::start(Path::new(".")).await?;
+    pub fn for_current_dir() -> Result<Self> {
         Ok(Self {
-            supervisor,
+            supervisor: None,
             github: GitHubPrClient::new()?,
             coderabbit: CodeRabbitClient::new()?,
         })
     }
 
-    pub async fn run_until_stop(&self) -> Result<()> {
+    pub async fn run_until_stop(&mut self, stop_after: Option<StageKind>) -> Result<()> {
         loop {
             let mut state = ThoughtsStateStore::load()?
                 .ok_or_else(|| anyhow::anyhow!("no state; run start first"))?;
 
             if stages::is_terminal(&state.stage.kind) || stages::is_paused(&state.stage.kind) {
+                return Ok(());
+            }
+
+            if let Some(stop_after) = stop_after.as_ref()
+                && stages::is_beyond_stop_after(&state.stage.kind, stop_after)
+            {
                 return Ok(());
             }
 
@@ -111,6 +118,7 @@ impl DagEngine {
                     .await?;
                 }
                 StageKind::DispatchingTicketToPr => {
+                    // INVARIANT: duplicate-PR guard must remain before linear_ticket_2_pr dispatch.
                     if let Some(pr) = self
                         .github
                         .detect_open_pr_from_branch(&state.worktree.branch)
@@ -157,9 +165,10 @@ impl DagEngine {
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                     } else {
-                        state.stage.kind = StageKind::StoppedFailed;
-                        state.stage.details =
-                            Some("no open PR found for branch after ticket_to_pr run".to_string());
+                        transition_to_stopped_failed(
+                            &mut state,
+                            "no open PR found for branch after ticket_to_pr run",
+                        );
                     }
                     ThoughtsStateStore::save(&state)?;
                 }
@@ -286,13 +295,14 @@ impl DagEngine {
     }
 
     async fn run_supervised_command(
-        &self,
+        &mut self,
         state: &mut RunState,
         resume_stage: StageKind,
         command_name: &str,
         message: Option<&str>,
     ) -> Result<()> {
-        self.supervisor
+        self.supervisor()
+            .await?
             .ensure_commands_present(&[command_name, "linear_ticket_2_pr", "resolve_pr_comments"])
             .await?;
         state.opencode.resume_stage = Some(resume_stage.clone());
@@ -301,7 +311,8 @@ impl DagEngine {
         ThoughtsStateStore::save(state)?;
 
         let outcome = self
-            .supervisor
+            .supervisor()
+            .await?
             .run_command_supervised(
                 state.opencode.active_session_id.as_deref(),
                 command_name,
@@ -342,20 +353,50 @@ impl DagEngine {
             }
             SupervisedOutcome::Failed { session_id, error } => {
                 state.opencode.active_session_id = session_id;
-                state.last_error = Some(error.clone());
-                state.stage.kind = StageKind::StoppedFailed;
-                state.stage.details = Some(error);
+                transition_to_stopped_failed(state, error);
             }
         }
         ThoughtsStateStore::save(state)
+    }
+
+    async fn supervisor(&mut self) -> Result<&OpenCodeSupervisor> {
+        if self.supervisor.is_none() {
+            self.supervisor = Some(OpenCodeSupervisor::start(std::path::Path::new(".")).await?);
+        }
+
+        self.supervisor
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("supervisor should be initialized before use"))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::DagEngine;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
+    use super::transition_to_stopped_failed;
+    use crate::state::RunState;
+    use crate::state::StageKind;
+    use crate::worktree::TargetWorktree;
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
     use std::time::Duration;
+
+    static OPENCODE_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn sample_state() -> RunState {
+        RunState::for_start(
+            "ENG-992",
+            &TargetWorktree {
+                path: std::env::current_dir().expect("cwd available for test"),
+                branch: "feature/eng-992".to_string(),
+                base_ref: "origin/main".to_string(),
+            },
+            false,
+        )
+        .expect("sample state builds")
+    }
 
     #[test]
     fn poll_interval_sleep_duration_clamps_to_one_second_minimum() {
@@ -377,7 +418,6 @@ mod tests {
                 "worktree.resolve",
                 "state.check_existing",
                 "state.write_initial",
-                "opencode.start",
                 "freshness.before_ticket_to_pr",
                 "github.pr.detect_existing",
                 "opencode.run.linear_ticket_2_pr",
@@ -388,5 +428,53 @@ mod tests {
                 "stop.ready_for_human_review",
             ]
         );
+    }
+
+    #[test]
+    fn transition_to_stopped_failed_sets_last_error_and_stage_details() {
+        let mut state = sample_state();
+
+        transition_to_stopped_failed(
+            &mut state,
+            "no open PR found for branch after ticket_to_pr run",
+        );
+
+        assert_eq!(state.stage.kind, StageKind::StoppedFailed);
+        assert_eq!(
+            state.stage.details.as_deref(),
+            Some("no open PR found for branch after ticket_to_pr run")
+        );
+        assert_eq!(
+            state.last_error.as_deref(),
+            Some("no open PR found for branch after ticket_to_pr run")
+        );
+    }
+
+    #[test]
+    fn for_current_dir_does_not_start_opencode_eagerly() {
+        let _guard = opencode_env_lock().lock().unwrap();
+        let previous = std::env::var_os("OPENCODE_BINARY");
+
+        // SAFETY: this test serializes OPENCODE_BINARY mutation with a process-wide mutex.
+        unsafe { std::env::set_var("OPENCODE_BINARY", "/definitely/not/opencode") };
+
+        let result = DagEngine::for_current_dir();
+
+        match previous {
+            Some(value) => {
+                // SAFETY: this test serializes OPENCODE_BINARY mutation with a process-wide mutex.
+                unsafe { std::env::set_var("OPENCODE_BINARY", value) };
+            }
+            None => {
+                // SAFETY: this test serializes OPENCODE_BINARY mutation with a process-wide mutex.
+                unsafe { std::env::remove_var("OPENCODE_BINARY") };
+            }
+        }
+
+        assert!(result.is_ok(), "engine construction should stay lazy");
+    }
+
+    fn opencode_env_lock() -> &'static Mutex<()> {
+        OPENCODE_ENV_LOCK.get_or_init(|| Mutex::new(()))
     }
 }
