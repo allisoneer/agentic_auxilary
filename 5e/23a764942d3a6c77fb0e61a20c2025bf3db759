@@ -1,0 +1,26 @@
+apps/agentic-outer-dag/src/state/mod.rs
+  s_fcf4ddecc49434::t_441631e020acb4 13-14,190-191,377-397
+  s_fcf4ddecc49434::t_2fabf25d08f585 398-399
+apps/agentic-outer-dag/src/cli.rs
+  s_fcf4ddecc49434::t_0543a592ddec6e 50-55,72-77,204-205,229-230,252-253,284-285,292-364
+  s_fcf4ddecc49434::t_bdef6d2217c9d6 365
+apps/agentic-outer-dag/src/main.rs
+  s_fcf4ddecc49434::t_9602fac59bae08 153-156,560-563,590-593
+  s_fcf4ddecc49434::t_112948ecbbffad 29-30,39-48,99-100,112-113,124-125,133-134,148-152,157-181,205-213,229-238,399-400,527-559,564-589,594
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "5e23a764942d3a6c77fb0e61a20c2025bf3db759",
+  "prompts": {},
+  "sessions": {
+    "s_fcf4ddecc49434": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0fa70f487ffeGlejIj0BmQSyts",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}

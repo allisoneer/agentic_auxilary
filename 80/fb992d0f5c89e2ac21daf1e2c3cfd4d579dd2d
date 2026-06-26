@@ -1,0 +1,38 @@
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_5949e13e8b2e4d::t_773dddbf5f851c 619-625,652-658
+  s_5949e13e8b2e4d::t_fb39ae6745325c 97-98,126-131,146-151,557-558,572-576,591-592,639-640
+apps/agentic-outer-dag/src/main.rs
+  s_5949e13e8b2e4d::t_fb39ae6745325c 369-370
+crates/tools/pr-comments/src/github.rs
+  s_5949e13e8b2e4d::t_773dddbf5f851c 1
+  s_5949e13e8b2e4d::t_fb39ae6745325c 772-774,942-981
+  s_5949e13e8b2e4d::t_337866f756a1e8 93-99,127-129,131-142,145-166
+crates/tools/pr-comments/src/lib.rs
+  s_5949e13e8b2e4d::t_773dddbf5f851c 289-290
+  s_5949e13e8b2e4d::t_fb39ae6745325c 652-655,841-846,848-855,864-865,874-878,934-935
+  s_5949e13e8b2e4d::t_1d4a463b46b83a 847,856-863,866-873
+  s_5949e13e8b2e4d::t_337866f756a1e8 60,67-89,91-92,94-99,106,113,117,121,146,152,169,174,189,194,288,291-296,305,310-312,936
+  s_5949e13e8b2e4d::t_02c8713ee00056 313
+  s_5949e13e8b2e4d::t_1df9c62714dfe3 937
+apps/agentic-outer-dag/src/github/pr.rs
+  s_5949e13e8b2e4d::t_fb39ae6745325c 3,17-18,31,33-37,42-46,52-54,61,64-66
+apps/agentic-outer-dag/src/state/mod.rs
+  s_5949e13e8b2e4d::t_fb39ae6745325c 128-131,374-389
+  s_5949e13e8b2e4d::t_c1731af393573b 390
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "80fb992d0f5c89e2ac21daf1e2c3cfd4d579dd2d",
+  "prompts": {},
+  "sessions": {
+    "s_5949e13e8b2e4d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0fa844170ffefEkM4UzqlhSDf9",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}

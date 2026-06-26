@@ -1,0 +1,36 @@
+apps/agentic-outer-dag/src/github/pr.rs
+  s_a9fd9a2521ee8c::t_0e662375638723 100
+  s_a9fd9a2521ee8c::t_bded58c7a8e8ec 2,8-24,31-62,65-90,92-99,101-102
+apps/agentic-outer-dag/src/state/mod.rs
+  s_a9fd9a2521ee8c::t_bded58c7a8e8ec 56-57,116-128,188,213-216,302,306,368
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_a9fd9a2521ee8c::t_8485f7f04f5164 15,89,92,116-117,120,122,136
+  s_a9fd9a2521ee8c::t_0e662375638723 119,581-595
+  s_a9fd9a2521ee8c::t_bded58c7a8e8ec 4,90-91,93-115,118,121,123-135,137-152,188,191-193,223,226-228,236,238,372-376,451-454,456,531-580,596-628
+  s_a9fd9a2521ee8c::t_31a001baaf0d1d 629
+apps/agentic-outer-dag/src/cli.rs
+  s_a9fd9a2521ee8c::t_bded58c7a8e8ec 45-47,61-63,190,213,234,267,287,302-329,332-336
+  s_a9fd9a2521ee8c::t_0e662375638723 330-331
+apps/agentic-outer-dag/CLAUDE.md
+  s_a9fd9a2521ee8c::t_bded58c7a8e8ec 41,62,70,73
+apps/agentic-outer-dag/src/main.rs
+  s_a9fd9a2521ee8c::t_8485f7f04f5164 21-38,90-98,128-135,140,143,150-152,156,162-163,168,171,174,178
+  s_a9fd9a2521ee8c::t_bded58c7a8e8ec 85,106,170,172-173,221,225,361-370,400,404,440-443,452-457
+  s_a9fd9a2521ee8c::t_1743b41e66b8ed 109-111,113,115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "e7f72245859bda50d11939539805e21b5956786b",
+  "prompts": {},
+  "sessions": {
+    "s_a9fd9a2521ee8c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0fabe9155ffeAhADmoP3a0M8T5",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
