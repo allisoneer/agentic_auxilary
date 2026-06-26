@@ -1,9 +1,31 @@
 use pr_comments::github::GitHubClient;
-use pr_comments::models::GraphQLResponse;
 use pr_comments::models::OpenPrRefData;
 
 #[test]
 fn parses_open_pr_ref_graphql_payload() {
+    let payload = serde_json::json!({
+        "repository": {
+            "pullRequests": {
+                "nodes": [
+                    {
+                        "number": 42,
+                        "url": "https://github.com/owner/repo/pull/42",
+                        "headRefOid": "0123456789abcdef0123456789abcdef01234567"
+                    }
+                ]
+            }
+        }
+    });
+
+    let response: OpenPrRefData = serde_json::from_value(payload).unwrap();
+    let node = &response.repository.pull_requests.nodes[0];
+
+    assert_eq!(node.number, 42);
+    assert_eq!(node.head_ref_oid.len(), 40);
+}
+
+#[test]
+fn graphql_envelope_does_not_deserialize_as_inner_open_pr_data() {
     let payload = serde_json::json!({
         "data": {
             "repository": {
@@ -20,11 +42,8 @@ fn parses_open_pr_ref_graphql_payload() {
         }
     });
 
-    let response: GraphQLResponse<OpenPrRefData> = serde_json::from_value(payload).unwrap();
-    let node = &response.data.unwrap().repository.pull_requests.nodes[0];
-
-    assert_eq!(node.number, 42);
-    assert_eq!(node.head_ref_oid.len(), 40);
+    let error = serde_json::from_value::<OpenPrRefData>(payload).unwrap_err();
+    assert!(error.to_string().contains("repository"));
 }
 
 #[test]
