@@ -24,7 +24,9 @@ async fn main() -> Result<()> {
     // Required because Cargo's additive features cause both ring and aws-lc-rs
     // to be compiled in via transitive dependencies, and rustls 0.23+ panics
     // if it can't auto-select a single provider.
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("failed to install rustls aws-lc-rs CryptoProvider"))?;
 
     let cli = cli::Cli::parse();
     let dry_run = cli.dry_run;

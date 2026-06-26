@@ -10,7 +10,9 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+`agentic-outer-dag` drives the outer workflow around a feature worktree: it resolves or creates the target worktree, persists run state under `thoughts/<branch>/artifacts/`, runs the ticket-to-PR and PR-comment-resolution phases through the embedded OpenCode supervisor, waits for CodeRabbit review completion, and stops when human input or review is required.
+
+Use `agentic-outer-dag start --ticket <LINEAR-KEY>` to begin a run, `resume` to continue a paused run in the current worktree, and `status` to inspect the persisted state. Use `respond-permission`, `respond-question`, `handoff`, and `reset` to drive the workflow when the supervised agent pauses for operator input.
 
 ## Quick Commands
 
