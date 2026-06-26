@@ -10,6 +10,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 pub const STATE_FILENAME: &str = "agentic-outer-dag-state.json";
+pub const DEFAULT_POLL_INTERVAL_SECONDS: u64 = 30;
+pub const DEFAULT_CODERABBIT_TIMEOUT_SECONDS: u64 = 3600;
 const SCHEMA_VERSION: u32 = 1;
 static RUN_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -185,8 +187,8 @@ impl RunState {
             },
             settings: Settings {
                 dry_run,
-                poll_interval_seconds: 30,
-                coderabbit_timeout_seconds: 3600,
+                poll_interval_seconds: DEFAULT_POLL_INTERVAL_SECONDS,
+                coderabbit_timeout_seconds: DEFAULT_CODERABBIT_TIMEOUT_SECONDS,
                 max_review_cycles: 5,
                 linear_handoff_enabled: default_linear_handoff_enabled(),
                 opencode_dispatch_enabled: default_opencode_dispatch_enabled(),
@@ -370,6 +372,29 @@ mod tests {
 
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
+    }
+
+    #[test]
+    fn run_state_for_start_uses_default_timing_settings() {
+        let state = RunState::for_start(
+            "ENG-992",
+            &TargetWorktree {
+                path: std::env::current_dir().unwrap(),
+                branch: "feature/eng-992".to_string(),
+                base_ref: "origin/main".to_string(),
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(
+            state.settings.poll_interval_seconds,
+            DEFAULT_POLL_INTERVAL_SECONDS
+        );
+        assert_eq!(
+            state.settings.coderabbit_timeout_seconds,
+            DEFAULT_CODERABBIT_TIMEOUT_SECONDS
+        );
     }
 
     #[test]

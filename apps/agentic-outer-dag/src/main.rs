@@ -26,6 +26,8 @@ struct StartOptions<'a> {
     no_linear_handoff: bool,
     no_opencode_dispatch: bool,
     stop_after: Option<state::StageKind>,
+    poll_interval_seconds: Option<u64>,
+    coderabbit_timeout_seconds: Option<u64>,
 }
 
 struct ResumeOptions<'a> {
@@ -34,6 +36,16 @@ struct ResumeOptions<'a> {
     no_linear_handoff: bool,
     no_opencode_dispatch: bool,
     stop_after: Option<state::StageKind>,
+    poll_interval_seconds: Option<u64>,
+    coderabbit_timeout_seconds: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct SettingsOverrides {
+    linear_handoff_enabled: Option<bool>,
+    opencode_dispatch_enabled: Option<bool>,
+    poll_interval_seconds: Option<u64>,
+    coderabbit_timeout_seconds: Option<u64>,
 }
 
 #[tokio::main]
@@ -84,6 +96,8 @@ async fn main() -> Result<()> {
             no_linear_handoff,
             no_opencode_dispatch,
             stop_after,
+            poll_interval_seconds,
+            coderabbit_timeout_seconds,
         } => {
             handle_start(
                 &ticket,
@@ -95,6 +109,8 @@ async fn main() -> Result<()> {
                     no_linear_handoff,
                     no_opencode_dispatch,
                     stop_after,
+                    poll_interval_seconds,
+                    coderabbit_timeout_seconds,
                 },
             )
             .await
@@ -105,6 +121,8 @@ async fn main() -> Result<()> {
             no_linear_handoff,
             no_opencode_dispatch,
             stop_after,
+            poll_interval_seconds,
+            coderabbit_timeout_seconds,
         } => {
             handle_resume(ResumeOptions {
                 branch: branch.as_deref(),
@@ -112,6 +130,8 @@ async fn main() -> Result<()> {
                 no_linear_handoff,
                 no_opencode_dispatch,
                 stop_after,
+                poll_interval_seconds,
+                coderabbit_timeout_seconds,
             })
             .await
         }
@@ -123,6 +143,40 @@ async fn main() -> Result<()> {
         cli::Commands::Handoff { message } => handle_handoff(message.as_deref()).await,
         cli::Commands::Reset { yes } => handle_reset(yes),
     }
+}
+
+fn apply_settings_overrides(
+    settings: &mut state::Settings,
+    overrides: SettingsOverrides,
+) -> Result<bool> {
+    if let Some(poll_interval_seconds) = overrides.poll_interval_seconds {
+        anyhow::ensure!(
+            poll_interval_seconds > 0,
+            "poll interval must be at least 1 second"
+        );
+        settings.poll_interval_seconds = poll_interval_seconds;
+    }
+
+    if let Some(coderabbit_timeout_seconds) = overrides.coderabbit_timeout_seconds {
+        anyhow::ensure!(
+            coderabbit_timeout_seconds > 0,
+            "CodeRabbit timeout must be at least 1 second"
+        );
+        settings.coderabbit_timeout_seconds = coderabbit_timeout_seconds;
+    }
+
+    if let Some(linear_handoff_enabled) = overrides.linear_handoff_enabled {
+        settings.linear_handoff_enabled = linear_handoff_enabled;
+    }
+
+    if let Some(opencode_dispatch_enabled) = overrides.opencode_dispatch_enabled {
+        settings.opencode_dispatch_enabled = opencode_dispatch_enabled;
+    }
+
+    Ok(overrides.poll_interval_seconds.is_some()
+        || overrides.coderabbit_timeout_seconds.is_some()
+        || overrides.linear_handoff_enabled.is_some()
+        || overrides.opencode_dispatch_enabled.is_some())
 }
 
 async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
@@ -148,8 +202,15 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
     }
 
     let mut state = state::RunState::for_start(ticket, &target, options.dry_run)?;
-    state.settings.linear_handoff_enabled = !options.no_linear_handoff;
-    state.settings.opencode_dispatch_enabled = !options.no_opencode_dispatch;
+    apply_settings_overrides(
+        &mut state.settings,
+        SettingsOverrides {
+            linear_handoff_enabled: Some(!options.no_linear_handoff),
+            opencode_dispatch_enabled: Some(!options.no_opencode_dispatch),
+            poll_interval_seconds: options.poll_interval_seconds,
+            coderabbit_timeout_seconds: options.coderabbit_timeout_seconds,
+        },
+    )?;
     state::store::ThoughtsStateStore::save(&state)?;
 
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
@@ -165,13 +226,16 @@ async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
 
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found; run start first"))?;
-    if options.no_linear_handoff {
-        state.settings.linear_handoff_enabled = false;
-    }
-    if options.no_opencode_dispatch {
-        state.settings.opencode_dispatch_enabled = false;
-    }
-    if options.no_linear_handoff || options.no_opencode_dispatch {
+    let settings_changed = apply_settings_overrides(
+        &mut state.settings,
+        SettingsOverrides {
+            linear_handoff_enabled: options.no_linear_handoff.then_some(false),
+            opencode_dispatch_enabled: options.no_opencode_dispatch.then_some(false),
+            poll_interval_seconds: options.poll_interval_seconds,
+            coderabbit_timeout_seconds: options.coderabbit_timeout_seconds,
+        },
+    )?;
+    if settings_changed {
         state::store::ThoughtsStateStore::save(&state)?;
     }
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
@@ -332,6 +396,8 @@ fn handle_reset(yes: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::SettingsOverrides;
+    use super::apply_settings_overrides;
     use super::compact_status_payload;
     use super::state;
     use crate::worktree::TargetWorktree;
@@ -456,6 +522,74 @@ mod tests {
                 .get("pr_lookup")
                 .and_then(|lookup| lookup.get("repo_owner")),
             Some(&Value::String("allisoneer".to_string()))
+        );
+    }
+
+    #[test]
+    fn apply_settings_overrides_updates_resume_relevant_fields() {
+        let mut state = sample_state();
+
+        let changed = apply_settings_overrides(
+            &mut state.settings,
+            SettingsOverrides {
+                linear_handoff_enabled: Some(false),
+                opencode_dispatch_enabled: Some(false),
+                poll_interval_seconds: Some(3),
+                coderabbit_timeout_seconds: Some(90),
+            },
+        )
+        .expect("overrides should apply");
+
+        assert!(changed);
+        assert!(!state.settings.linear_handoff_enabled);
+        assert!(!state.settings.opencode_dispatch_enabled);
+        assert_eq!(state.settings.poll_interval_seconds, 3);
+        assert_eq!(state.settings.coderabbit_timeout_seconds, 90);
+    }
+
+    #[test]
+    fn apply_settings_overrides_preserves_defaults_when_no_overrides_given() {
+        let mut state = sample_state();
+        let original = state.settings.clone();
+
+        let changed = apply_settings_overrides(&mut state.settings, SettingsOverrides::default())
+            .expect("empty overrides should succeed");
+
+        assert!(!changed);
+        assert_eq!(
+            state.settings.poll_interval_seconds,
+            original.poll_interval_seconds
+        );
+        assert_eq!(
+            state.settings.coderabbit_timeout_seconds,
+            original.coderabbit_timeout_seconds
+        );
+        assert_eq!(
+            state.settings.linear_handoff_enabled,
+            original.linear_handoff_enabled
+        );
+        assert_eq!(
+            state.settings.opencode_dispatch_enabled,
+            original.opencode_dispatch_enabled
+        );
+    }
+
+    #[test]
+    fn apply_settings_overrides_rejects_zero_poll_interval() {
+        let mut state = sample_state();
+
+        let err = apply_settings_overrides(
+            &mut state.settings,
+            SettingsOverrides {
+                poll_interval_seconds: Some(0),
+                ..SettingsOverrides::default()
+            },
+        )
+        .expect_err("zero poll interval should fail");
+
+        assert!(
+            err.to_string()
+                .contains("poll interval must be at least 1 second")
         );
     }
 }

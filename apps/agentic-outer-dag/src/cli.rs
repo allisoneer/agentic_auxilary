@@ -47,6 +47,12 @@ pub enum Commands {
 
         #[arg(long, value_enum)]
         stop_after: Option<StageKind>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        poll_interval_seconds: Option<u64>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        coderabbit_timeout_seconds: Option<u64>,
     },
     Resume {
         #[arg(long)]
@@ -63,6 +69,12 @@ pub enum Commands {
 
         #[arg(long, value_enum)]
         stop_after: Option<StageKind>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        poll_interval_seconds: Option<u64>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        coderabbit_timeout_seconds: Option<u64>,
     },
     Status {
         #[arg(long)]
@@ -189,6 +201,8 @@ mod tests {
                 no_linear_handoff: false,
                 no_opencode_dispatch: false,
                 stop_after: None,
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
                 ..
             } if ticket == "ENG-992" && branch == "feature/eng-992"
         ));
@@ -212,6 +226,8 @@ mod tests {
                 no_linear_handoff: false,
                 no_opencode_dispatch: false,
                 stop_after: Some(StageKind::WaitingForCoderabbit),
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
                 ..
             }
         ));
@@ -233,6 +249,8 @@ mod tests {
                 no_linear_handoff: false,
                 no_opencode_dispatch: false,
                 stop_after: Some(StageKind::DispatchingTicketToPr),
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
                 ..
             }
         ));
@@ -263,10 +281,86 @@ mod tests {
             .to_string();
 
         assert!(help.contains("--stop-after"));
+        assert!(help.contains("--poll-interval-seconds"));
+        assert!(help.contains("--coderabbit-timeout-seconds"));
         assert!(help.contains("--no-linear-handoff"));
         assert!(help.contains("--no-opencode-dispatch"));
         assert!(help.contains("waiting_for_coderabbit"));
         assert!(help.contains("dispatching_resolve_pr_comments"));
+    }
+
+    #[test]
+    fn start_accepts_timing_override_flags() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--poll-interval-seconds",
+            "5",
+            "--coderabbit-timeout-seconds",
+            "120",
+        ])
+        .expect("start timing overrides should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Start {
+                poll_interval_seconds: Some(5),
+                coderabbit_timeout_seconds: Some(120),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn resume_accepts_timing_override_flags() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "resume",
+            "--poll-interval-seconds",
+            "2",
+            "--coderabbit-timeout-seconds",
+            "45",
+        ])
+        .expect("resume timing overrides should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Resume {
+                poll_interval_seconds: Some(2),
+                coderabbit_timeout_seconds: Some(45),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn start_rejects_zero_poll_interval() {
+        let err = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--poll-interval-seconds",
+            "0",
+        ])
+        .expect_err("zero poll interval should fail");
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn resume_rejects_zero_coderabbit_timeout() {
+        let err = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "resume",
+            "--coderabbit-timeout-seconds",
+            "0",
+        ])
+        .expect_err("zero timeout should fail");
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 
     #[test]
