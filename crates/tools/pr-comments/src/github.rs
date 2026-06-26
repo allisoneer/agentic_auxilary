@@ -1,3 +1,4 @@
+use crate::OpenPrRefLookupResult;
 use crate::models::CheckSuiteSummary;
 use crate::models::CommentSourceType;
 use crate::models::GraphQLResponse;
@@ -89,6 +90,13 @@ impl GitHubClient {
     }
 
     pub async fn get_open_pr_ref_from_branch(&self, branch: &str) -> Result<Option<PrRef>> {
+        Ok(self.get_open_pr_ref_from_branch_detailed(branch).await?.pr)
+    }
+
+    pub async fn get_open_pr_ref_from_branch_detailed(
+        &self,
+        branch: &str,
+    ) -> Result<OpenPrRefLookupResult> {
         let query = r"
             query($owner: String!, $repo: String!, $branch: String!) {
                 repository(owner: $owner, name: $repo) {
@@ -116,27 +124,46 @@ impl GitHubClient {
             .await
             .map_err(|e| anyhow::anyhow!("GraphQL query failed: {e}"))?;
 
-        if let Some(errors) = response.errors
-            && !errors.is_empty()
-        {
-            let messages = errors
-                .iter()
-                .map(|error| error.message.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            anyhow::bail!("GraphQL errors: {messages}");
-        }
+        parse_open_pr_ref_lookup_response(response)
+    }
+}
 
-        Ok(response
-            .data
-            .and_then(|data| data.repository.pull_requests.nodes.into_iter().next())
-            .map(|node| PrRef {
-                number: node.number,
-                url: node.url,
-                head_sha: node.head_ref_oid,
-            }))
+fn parse_open_pr_ref_lookup_response(
+    response: GraphQLResponse<OpenPrRefData>,
+) -> Result<OpenPrRefLookupResult> {
+    if let Some(errors) = response.errors
+        && !errors.is_empty()
+    {
+        let messages = errors
+            .iter()
+            .map(|error| error.message.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::bail!("GraphQL errors: {messages}");
     }
 
+    let Some(data) = response.data else {
+        return Ok(OpenPrRefLookupResult {
+            pr: None,
+            empty_result_reason: Some("graphql_response_missing_data".to_string()),
+        });
+    };
+
+    let nodes = data.repository.pull_requests.nodes;
+    let pr = nodes.into_iter().next().map(|node| PrRef {
+        number: node.number,
+        url: node.url,
+        head_sha: node.head_ref_oid,
+    });
+
+    Ok(OpenPrRefLookupResult {
+        empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string())
+            .filter(|_| pr.is_none()),
+        pr,
+    })
+}
+
+impl GitHubClient {
     pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
         let base_path = format!(
             "/repos/{}/{}/commits/{sha}/check-suites",
@@ -742,6 +769,9 @@ fn parse_issue_comments_response(value: serde_json::Value) -> Result<Vec<IssueCo
 mod tests {
     use super::GitHubClient;
     use super::REST_PER_PAGE;
+    use super::parse_open_pr_ref_lookup_response;
+    use crate::models::GraphQLResponse;
+    use crate::models::OpenPrRefData;
     use mockito::Matcher;
     use serde_json::json;
     use std::sync::Once;
@@ -908,6 +938,46 @@ mod tests {
         assert_eq!(comments.len(), REST_PER_PAGE + 1);
         page1.assert_async().await;
         page2.assert_async().await;
+    }
+
+    #[test]
+    fn parse_open_pr_ref_lookup_response_reports_missing_data() {
+        let response: GraphQLResponse<OpenPrRefData> = serde_json::from_value(json!({
+            "data": null,
+            "errors": null
+        }))
+        .expect("response should deserialize");
+
+        let lookup = parse_open_pr_ref_lookup_response(response).expect("parse should succeed");
+
+        assert!(lookup.pr.is_none());
+        assert_eq!(
+            lookup.empty_result_reason.as_deref(),
+            Some("graphql_response_missing_data")
+        );
+    }
+
+    #[test]
+    fn parse_open_pr_ref_lookup_response_reports_empty_nodes() {
+        let response: GraphQLResponse<OpenPrRefData> = serde_json::from_value(json!({
+            "data": {
+                "repository": {
+                    "pullRequests": {
+                        "nodes": []
+                    }
+                }
+            },
+            "errors": null
+        }))
+        .expect("response should deserialize");
+
+        let lookup = parse_open_pr_ref_lookup_response(response).expect("parse should succeed");
+
+        assert!(lookup.pr.is_none());
+        assert_eq!(
+            lookup.empty_result_reason.as_deref(),
+            Some("no_open_pull_requests_matched_branch")
+        );
     }
 }
 

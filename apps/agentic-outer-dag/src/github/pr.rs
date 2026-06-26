@@ -1,6 +1,6 @@
 use anyhow::Result;
-use git2::Repository;
 use pr_comments::PrComments;
+use pr_comments::git;
 use pr_comments::models::PrRef;
 
 pub struct GitHubPrClient {
@@ -14,6 +14,8 @@ pub struct DetectedPrLookup {
     pub current_branch: Option<String>,
     pub repo_owner: String,
     pub repo_name: String,
+    pub token_source: Option<String>,
+    pub empty_result_reason: Option<String>,
     pub pr: Option<PrRef>,
 }
 
@@ -26,79 +28,42 @@ struct RepoContext {
 
 impl GitHubPrClient {
     pub fn new() -> Result<Self> {
+        let repo_context = RepoContext::from_current_dir()?;
         Ok(Self {
-            pr_comments: PrComments::new()?,
-            repo_context: RepoContext::from_current_dir()?,
+            pr_comments: PrComments::with_repo(
+                repo_context.owner.clone(),
+                repo_context.repo.clone(),
+            ),
+            repo_context,
         })
     }
 
     pub async fn detect_open_pr_from_branch(&self, branch: &str) -> Result<DetectedPrLookup> {
+        let lookup = self
+            .pr_comments
+            .get_open_pr_ref_from_branch_detailed(branch)
+            .await?;
+
         Ok(DetectedPrLookup {
             requested_branch: branch.to_string(),
             current_branch: self.repo_context.current_branch.clone(),
             repo_owner: self.repo_context.owner.clone(),
             repo_name: self.repo_context.repo.clone(),
-            pr: self.pr_comments.get_open_pr_ref_from_branch(branch).await?,
+            token_source: self.pr_comments.token_source_label().map(str::to_string),
+            empty_result_reason: lookup.empty_result_reason,
+            pr: lookup.pr,
         })
     }
 }
 
 impl RepoContext {
     fn from_current_dir() -> Result<Self> {
-        let repo = Repository::discover(".")?;
-        let remote = repo.find_remote("origin")?;
-        let url = remote
-            .url()
-            .ok_or_else(|| anyhow::anyhow!("Remote 'origin' has no URL"))?;
-        let (owner, repo_name) = parse_github_remote(url)?;
-        let current_branch = repo
-            .head()
-            .ok()
-            .and_then(|head| head.shorthand().map(String::from));
+        let git_info = git::get_git_info()?;
 
         Ok(Self {
-            owner,
-            repo: repo_name,
-            current_branch,
+            owner: git_info.owner,
+            repo: git_info.repo,
+            current_branch: git_info.current_branch,
         })
-    }
-}
-
-fn parse_github_remote(url: &str) -> Result<(String, String)> {
-    if let Some(path) = url.strip_prefix("git@github.com:") {
-        return parse_repo_path(path);
-    }
-
-    if let Some(path) = url.strip_prefix("https://github.com/") {
-        return parse_repo_path(path);
-    }
-
-    anyhow::bail!("Not a supported GitHub remote URL: {url}");
-}
-
-fn parse_repo_path(path: &str) -> Result<(String, String)> {
-    let trimmed = path.trim_end_matches(".git");
-    let mut parts = trimmed.split('/');
-    match (parts.next(), parts.next(), parts.next()) {
-        (Some(owner), Some(repo), None) => Ok((owner.to_string(), repo.to_string())),
-        _ => anyhow::bail!("Invalid GitHub repository path: {trimmed}"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_github_remote;
-
-    #[test]
-    fn parse_github_remote_supports_https_and_ssh() {
-        assert_eq!(
-            parse_github_remote("https://github.com/owner/repo.git")
-                .expect("https remote should parse"),
-            ("owner".to_string(), "repo".to_string())
-        );
-        assert_eq!(
-            parse_github_remote("git@github.com:owner/repo").expect("ssh remote should parse"),
-            ("owner".to_string(), "repo".to_string())
-        );
     }
 }

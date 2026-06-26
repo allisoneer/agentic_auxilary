@@ -366,6 +366,8 @@ mod tests {
             current_branch: Some("feature/eng-992".to_string()),
             repo_owner: "allisoneer".to_string(),
             repo_name: "agentic_auxilary".to_string(),
+            token_source: Some("GH_TOKEN".to_string()),
+            empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
             outcome: "not_found".to_string(),
         });
         state.handoff.linear_comment_posted = false;

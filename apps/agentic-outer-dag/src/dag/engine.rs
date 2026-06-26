@@ -94,6 +94,8 @@ fn record_pr_lookup(state: &mut RunState, stage_kind: StageKind, lookup: &Detect
         current_branch: lookup.current_branch.clone(),
         repo_owner: lookup.repo_owner.clone(),
         repo_name: lookup.repo_name.clone(),
+        token_source: lookup.token_source.clone(),
+        empty_result_reason: lookup.empty_result_reason.clone(),
         outcome: if lookup.pr.is_some() {
             "found".to_string()
         } else {
@@ -121,6 +123,12 @@ fn transition_to_dispatch_disabled(
         if let Some(current_branch) = lookup.current_branch.as_deref() {
             let _ = write!(message, " (git HEAD: '{current_branch}')");
         }
+        if let Some(token_source) = lookup.token_source.as_deref() {
+            let _ = write!(message, "; token source={token_source}");
+        }
+        if let Some(empty_result_reason) = lookup.empty_result_reason.as_deref() {
+            let _ = write!(message, "; diagnostic={empty_result_reason}");
+        }
     }
 
     transition_to_stopped_failed(state, message);
@@ -134,6 +142,12 @@ fn transition_to_missing_pr_after_lookup(state: &mut RunState, context: &str) {
         );
         if let Some(current_branch) = lookup.current_branch.as_deref() {
             let _ = write!(message, " (git HEAD: '{current_branch}')");
+        }
+        if let Some(token_source) = lookup.token_source.as_deref() {
+            let _ = write!(message, "; token source={token_source}");
+        }
+        if let Some(empty_result_reason) = lookup.empty_result_reason.as_deref() {
+            let _ = write!(message, "; diagnostic={empty_result_reason}");
         }
         message
     } else {
@@ -540,6 +554,8 @@ mod tests {
                 current_branch: Some("feature/eng-992".to_string()),
                 repo_owner: "allisoneer".to_string(),
                 repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
                 pr: None,
             },
         );
@@ -553,6 +569,11 @@ mod tests {
         assert_eq!(lookup.outcome, "not_found");
         assert_eq!(lookup.repo_owner, "allisoneer");
         assert_eq!(lookup.repo_name, "agentic_auxilary");
+        assert_eq!(lookup.token_source.as_deref(), Some("GH_TOKEN"));
+        assert_eq!(
+            lookup.empty_result_reason.as_deref(),
+            Some("no_open_pull_requests_matched_branch")
+        );
     }
 
     #[test]
@@ -567,6 +588,8 @@ mod tests {
                 current_branch: Some("feature/eng-992".to_string()),
                 repo_owner: "allisoneer".to_string(),
                 repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("gh-config".to_string()),
+                empty_result_reason: Some("graphql_response_missing_data".to_string()),
                 pr: None,
             },
         );
@@ -593,6 +616,13 @@ mod tests {
                 .expect("last error should exist")
                 .contains("allisoneer/agentic_auxilary")
         );
+        assert!(
+            state
+                .last_error
+                .as_deref()
+                .expect("last error should exist")
+                .contains("token source=gh-config")
+        );
     }
 
     #[test]
@@ -606,6 +636,8 @@ mod tests {
                 current_branch: Some("feature/eng-992".to_string()),
                 repo_owner: "allisoneer".to_string(),
                 repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
                 pr: None,
             },
         );
@@ -617,6 +649,13 @@ mod tests {
             .as_deref()
             .expect("last error should exist")
             .contains("no open PR found for branch 'feature/eng-992' in allisoneer/agentic_auxilary after ticket_to_pr run"));
+        assert!(
+            state
+                .last_error
+                .as_deref()
+                .expect("last error should exist")
+                .contains("diagnostic=no_open_pull_requests_matched_branch")
+        );
     }
 
     #[test]

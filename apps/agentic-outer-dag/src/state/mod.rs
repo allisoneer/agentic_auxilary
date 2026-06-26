@@ -125,6 +125,10 @@ pub struct PrLookupDiagnostics {
     pub current_branch: Option<String>,
     pub repo_owner: String,
     pub repo_name: String,
+    #[serde(default)]
+    pub token_source: Option<String>,
+    #[serde(default)]
+    pub empty_result_reason: Option<String>,
     pub outcome: String,
 }
 
@@ -366,5 +370,22 @@ mod tests {
 
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
+    }
+
+    #[test]
+    fn pr_lookup_diagnostics_default_new_fields_for_legacy_state() {
+        let diagnostics: PrLookupDiagnostics = serde_json::from_value(serde_json::json!({
+            "checked_at": "2026-01-01T00:00:00Z",
+            "stage": "dispatching_ticket_to_pr",
+            "requested_branch": "feature/eng-992",
+            "current_branch": "feature/eng-992",
+            "repo_owner": "allisoneer",
+            "repo_name": "agentic_auxilary",
+            "outcome": "not_found"
+        }))
+        .unwrap();
+
+        assert_eq!(diagnostics.token_source, None);
+        assert_eq!(diagnostics.empty_result_reason, None);
     }
 }
