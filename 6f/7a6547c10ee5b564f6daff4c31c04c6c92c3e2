@@ -1,0 +1,41 @@
+crates/services/opencode-rs/src/server.rs
+  s_fcfa993c74dd4f::t_3d80ee3d93c81e 76-80,94,171-185,248-249,402,418,473-507
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_fcfa993c74dd4f::t_57b73fb025a208 324-326
+  s_fcfa993c74dd4f::t_8397c3523a954f 741,826,830,872,894-895,915,919
+  s_fcfa993c74dd4f::t_f6360009c1ab89 124
+  s_fcfa993c74dd4f::t_e4f37322ffe4e3 1-2,10-12,21-22,29-34,46,61-98,205-208,214,219,243,250,290-292,298,317-319,350,357,371-373,471-498,500,502-510,512,514-658,742-757,823-825,827-829,831-871,873-893,896-914,916-918,920-947
+  s_fcfa993c74dd4f::t_351172c9889edc 511,513
+  s_fcfa993c74dd4f::t_006d396c833c86 499
+  s_fcfa993c74dd4f::t_092a0f136be532 501
+  s_fcfa993c74dd4f::t_50b7b7e35caf5c 948
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_fcfa993c74dd4f::t_8397c3523a954f 512,753-754,757,779,799,815
+  s_fcfa993c74dd4f::t_5c77ddae9f2d26 16-25,247-250,252-255,257-260,430-433,435,465-469,471,489-500,502,504-510,749-752,755-756,758-768,770-778,780-795,797-798,800-814,816-834
+  s_fcfa993c74dd4f::t_57b73fb025a208 251,256
+  s_fcfa993c74dd4f::t_7203d818b7a0ec 769
+  s_fcfa993c74dd4f::t_5d367eb4649711 501,503,511,748,796
+  s_fcfa993c74dd4f::t_1f73fc5ab0d20c 513-514
+  s_fcfa993c74dd4f::t_85f801889b4d9e 835
+apps/agentic-outer-dag/src/state/mod.rs
+  s_fcfa993c74dd4f::t_7b9af76e0d045f 92,94,97,99,101,103-125,316-326,346-354,391-392,424-439
+apps/agentic-outer-dag/src/main.rs
+  s_fcfa993c74dd4f::t_ffe268fa036662 283,426-436,478,539-543
+  s_fcfa993c74dd4f::t_e53f1a450f29a4 544
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "6f7a6547c10ee5b564f6daff4c31c04c6c92c3e2",
+  "prompts": {},
+  "sessions": {
+    "s_fcfa993c74dd4f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0f9bb567fffeWNlxlUw2kXlvqh",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
