@@ -53,6 +53,8 @@ pub struct Settings {
     pub max_review_cycles: u32,
     #[serde(default = "default_linear_handoff_enabled")]
     pub linear_handoff_enabled: bool,
+    #[serde(default = "default_opencode_dispatch_enabled")]
+    pub opencode_dispatch_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,6 +113,19 @@ pub struct PrState {
     pub url: Option<String>,
     pub head_sha: Option<String>,
     pub last_observed_head_sha: Option<String>,
+    #[serde(default)]
+    pub last_lookup: Option<PrLookupDiagnostics>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrLookupDiagnostics {
+    pub checked_at: String,
+    pub stage: StageKind,
+    pub requested_branch: String,
+    pub current_branch: Option<String>,
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub outcome: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -170,6 +185,7 @@ impl RunState {
                 coderabbit_timeout_seconds: 3600,
                 max_review_cycles: 5,
                 linear_handoff_enabled: default_linear_handoff_enabled(),
+                opencode_dispatch_enabled: default_opencode_dispatch_enabled(),
             },
             stage: Stage {
                 kind: StageKind::FreshnessBeforeTicketToPr,
@@ -191,6 +207,10 @@ impl RunState {
 }
 
 const fn default_linear_handoff_enabled() -> bool {
+    true
+}
+
+const fn default_opencode_dispatch_enabled() -> bool {
     true
 }
 
@@ -279,10 +299,11 @@ mod tests {
             "Continue?"
         );
         assert!(roundtrip.settings.linear_handoff_enabled);
+        assert!(roundtrip.settings.opencode_dispatch_enabled);
     }
 
     #[test]
-    fn settings_default_linear_handoff_enabled_for_legacy_state_files() {
+    fn settings_default_safety_flags_enabled_for_legacy_state_files() {
         let value = serde_json::json!({
             "schema_version": 1,
             "run_id": "outer-dag-test",
@@ -344,5 +365,6 @@ mod tests {
         let roundtrip: RunState = serde_json::from_value(value).unwrap();
 
         assert!(roundtrip.settings.linear_handoff_enabled);
+        assert!(roundtrip.settings.opencode_dispatch_enabled);
     }
 }

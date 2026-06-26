@@ -1,6 +1,7 @@
 use crate::dag::stages;
 use crate::github::coderabbit::CodeRabbitClient;
 use crate::github::coderabbit::CodeRabbitPoll;
+use crate::github::pr::DetectedPrLookup;
 use crate::github::pr::GitHubPrClient;
 use crate::linear;
 use crate::opencode::supervisor::OpenCodeSupervisor;
@@ -11,6 +12,7 @@ use crate::state::StageKind;
 use crate::state::store::ThoughtsStateStore;
 use crate::worktree::freshness;
 use anyhow::Result;
+use std::fmt::Write as _;
 
 pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
@@ -84,6 +86,70 @@ fn transition_to_stopped_failed(state: &mut RunState, message: impl Into<String>
     state.stage.details = Some(message);
 }
 
+fn record_pr_lookup(state: &mut RunState, stage_kind: StageKind, lookup: &DetectedPrLookup) {
+    state.pr.last_lookup = Some(state::PrLookupDiagnostics {
+        checked_at: chrono::Utc::now().to_rfc3339(),
+        stage: stage_kind,
+        requested_branch: lookup.requested_branch.clone(),
+        current_branch: lookup.current_branch.clone(),
+        repo_owner: lookup.repo_owner.clone(),
+        repo_name: lookup.repo_name.clone(),
+        outcome: if lookup.pr.is_some() {
+            "found".to_string()
+        } else {
+            "not_found".to_string()
+        },
+    });
+}
+
+fn transition_to_dispatch_disabled(
+    state: &mut RunState,
+    resume_stage: &StageKind,
+    command_name: &str,
+) {
+    let mut message = format!(
+        "OpenCode dispatch disabled; refusing to run {command_name} at stage {}",
+        stage_kind_label(resume_stage)
+    );
+
+    if let Some(lookup) = state.pr.last_lookup.as_ref() {
+        let _ = write!(
+            message,
+            " after PR lookup outcome={} for branch '{}' in {}/{}",
+            lookup.outcome, lookup.requested_branch, lookup.repo_owner, lookup.repo_name,
+        );
+        if let Some(current_branch) = lookup.current_branch.as_deref() {
+            let _ = write!(message, " (git HEAD: '{current_branch}')");
+        }
+    }
+
+    transition_to_stopped_failed(state, message);
+}
+
+fn transition_to_missing_pr_after_lookup(state: &mut RunState, context: &str) {
+    let message = if let Some(lookup) = state.pr.last_lookup.as_ref() {
+        let mut message = format!(
+            "no open PR found for branch '{}' in {}/{} {context}",
+            lookup.requested_branch, lookup.repo_owner, lookup.repo_name,
+        );
+        if let Some(current_branch) = lookup.current_branch.as_deref() {
+            let _ = write!(message, " (git HEAD: '{current_branch}')");
+        }
+        message
+    } else {
+        format!("no open PR found {context}")
+    };
+
+    transition_to_stopped_failed(state, message);
+}
+
+fn stage_kind_label(kind: &StageKind) -> String {
+    serde_json::to_value(kind)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| format!("{kind:?}"))
+}
+
 impl DagEngine {
     pub fn for_current_dir() -> Result<Self> {
         Ok(Self {
@@ -119,11 +185,12 @@ impl DagEngine {
                 }
                 StageKind::DispatchingTicketToPr => {
                     // INVARIANT: duplicate-PR guard must remain before linear_ticket_2_pr dispatch.
-                    if let Some(pr) = self
+                    let lookup = self
                         .github
                         .detect_open_pr_from_branch(&state.worktree.branch)
-                        .await?
-                    {
+                        .await?;
+                    record_pr_lookup(&mut state, StageKind::DispatchingTicketToPr, &lookup);
+                    if let Some(pr) = lookup.pr {
                         state.pr.number = Some(pr.number);
                         state.pr.url = Some(pr.url);
                         state.pr.head_sha = Some(pr.head_sha.clone());
@@ -153,11 +220,12 @@ impl DagEngine {
                     ThoughtsStateStore::save(&state)?;
                 }
                 StageKind::DetectingPr => {
-                    if let Some(pr) = self
+                    let lookup = self
                         .github
                         .detect_open_pr_from_branch(&state.worktree.branch)
-                        .await?
-                    {
+                        .await?;
+                    record_pr_lookup(&mut state, StageKind::DetectingPr, &lookup);
+                    if let Some(pr) = lookup.pr {
                         state.pr.number = Some(pr.number);
                         state.pr.url = Some(pr.url);
                         state.pr.head_sha = Some(pr.head_sha.clone());
@@ -165,9 +233,9 @@ impl DagEngine {
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                     } else {
-                        transition_to_stopped_failed(
+                        transition_to_missing_pr_after_lookup(
                             &mut state,
-                            "no open PR found for branch after ticket_to_pr run",
+                            "after ticket_to_pr run; inspect status.pr_lookup for lookup context",
                         );
                     }
                     ThoughtsStateStore::save(&state)?;
@@ -301,6 +369,11 @@ impl DagEngine {
         command_name: &str,
         message: Option<&str>,
     ) -> Result<()> {
+        if !state.settings.opencode_dispatch_enabled {
+            transition_to_dispatch_disabled(state, &resume_stage, command_name);
+            return ThoughtsStateStore::save(state);
+        }
+
         self.supervisor()
             .await?
             .ensure_commands_present(&[command_name, "linear_ticket_2_pr", "resolve_pr_comments"])
@@ -375,7 +448,12 @@ mod tests {
     use super::DagEngine;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
+    use super::record_pr_lookup;
+    use super::stage_kind_label;
+    use super::transition_to_dispatch_disabled;
+    use super::transition_to_missing_pr_after_lookup;
     use super::transition_to_stopped_failed;
+    use crate::github::pr::DetectedPrLookup;
     use crate::state::RunState;
     use crate::state::StageKind;
     use crate::worktree::TargetWorktree;
@@ -447,6 +525,105 @@ mod tests {
         assert_eq!(
             state.last_error.as_deref(),
             Some("no open PR found for branch after ticket_to_pr run")
+        );
+    }
+
+    #[test]
+    fn record_pr_lookup_persists_safe_context_for_status_debugging() {
+        let mut state = sample_state();
+
+        record_pr_lookup(
+            &mut state,
+            StageKind::DispatchingTicketToPr,
+            &DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                pr: None,
+            },
+        );
+
+        let lookup = state
+            .pr
+            .last_lookup
+            .as_ref()
+            .expect("lookup diagnostics should be stored");
+        assert_eq!(lookup.stage, StageKind::DispatchingTicketToPr);
+        assert_eq!(lookup.outcome, "not_found");
+        assert_eq!(lookup.repo_owner, "allisoneer");
+        assert_eq!(lookup.repo_name, "agentic_auxilary");
+    }
+
+    #[test]
+    fn transition_to_dispatch_disabled_sets_clear_failure_without_dispatch() {
+        let mut state = sample_state();
+        state.settings.opencode_dispatch_enabled = false;
+        record_pr_lookup(
+            &mut state,
+            StageKind::DispatchingTicketToPr,
+            &DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                pr: None,
+            },
+        );
+
+        transition_to_dispatch_disabled(
+            &mut state,
+            &StageKind::DispatchingTicketToPr,
+            "linear_ticket_2_pr",
+        );
+
+        assert_eq!(state.stage.kind, StageKind::StoppedFailed);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("failure message should exist")
+                .contains("OpenCode dispatch disabled; refusing to run linear_ticket_2_pr")
+        );
+        assert!(
+            state
+                .last_error
+                .as_deref()
+                .expect("last error should exist")
+                .contains("allisoneer/agentic_auxilary")
+        );
+    }
+
+    #[test]
+    fn transition_to_missing_pr_after_lookup_uses_lookup_context() {
+        let mut state = sample_state();
+        record_pr_lookup(
+            &mut state,
+            StageKind::DetectingPr,
+            &DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                pr: None,
+            },
+        );
+
+        transition_to_missing_pr_after_lookup(&mut state, "after ticket_to_pr run");
+
+        assert!(state
+            .last_error
+            .as_deref()
+            .expect("last error should exist")
+            .contains("no open PR found for branch 'feature/eng-992' in allisoneer/agentic_auxilary after ticket_to_pr run"));
+    }
+
+    #[test]
+    fn stage_kind_label_uses_snake_case_status_names() {
+        assert_eq!(
+            stage_kind_label(&StageKind::DispatchingResolvePrComments),
+            "dispatching_resolve_pr_comments"
         );
     }
 

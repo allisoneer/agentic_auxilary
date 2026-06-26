@@ -38,6 +38,7 @@ Add any human-authored notes below. Content outside autogen blocks is preserved 
 
 Goals: exercise worktree selection/creation, state persistence, and existing-PR observation without:
 - creating a PR,
+- running `linear_ticket_2_pr`,
 - running `resolve_pr_comments`,
 - posting Linear handoff comments.
 
@@ -58,7 +59,7 @@ Steps:
    ```
 3. Existing-PR guard validation without eager OpenCode startup:
    ```bash
-   agentic-outer-dag start --ticket ENG-992 --branch <branch> --stop-after dispatching_ticket_to_pr --force
+   agentic-outer-dag start --ticket ENG-992 --branch <branch> --stop-after dispatching_ticket_to_pr --no-opencode-dispatch --force
    ```
 4. Safety-test dirty/conflict freshness stops without posting Linear comments:
    ```bash
@@ -66,7 +67,7 @@ Steps:
    ```
 5. Stop before `resolve_pr_comments`:
    ```bash
-   agentic-outer-dag resume --stop-after waiting_for_coderabbit --no-linear-handoff
+   agentic-outer-dag resume --stop-after waiting_for_coderabbit --no-linear-handoff --no-opencode-dispatch
    ```
 
-Compact `status` output includes both `linear_handoff_enabled` and `linear_handoff_posted` so live tests can confirm whether safety suppression was active and whether a handoff comment was actually posted.
+Compact `status` output includes `opencode_dispatch_enabled`, `linear_handoff_enabled`, and `linear_handoff_posted`, plus `pr_lookup` diagnostics, so live tests can confirm whether safety suppression was active and recover branch/repo lookup context when PR detection returns no match.

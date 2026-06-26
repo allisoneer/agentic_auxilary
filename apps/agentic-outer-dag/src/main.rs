@@ -18,6 +18,24 @@ mod preview;
 mod state;
 mod worktree;
 
+struct StartOptions<'a> {
+    branch: Option<&'a str>,
+    worktree_path: Option<&'a Path>,
+    dry_run: bool,
+    force: bool,
+    no_linear_handoff: bool,
+    no_opencode_dispatch: bool,
+    stop_after: Option<state::StageKind>,
+}
+
+struct ResumeOptions<'a> {
+    branch: Option<&'a str>,
+    worktree_path: Option<&'a Path>,
+    no_linear_handoff: bool,
+    no_opencode_dispatch: bool,
+    stop_after: Option<state::StageKind>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Install the rustls CryptoProvider before any HTTP clients are created.
@@ -64,16 +82,20 @@ async fn main() -> Result<()> {
             worktree,
             force,
             no_linear_handoff,
+            no_opencode_dispatch,
             stop_after,
         } => {
             handle_start(
                 &ticket,
-                branch.as_deref(),
-                worktree.as_deref(),
-                dry_run,
-                force,
-                no_linear_handoff,
-                stop_after,
+                StartOptions {
+                    branch: branch.as_deref(),
+                    worktree_path: worktree.as_deref(),
+                    dry_run,
+                    force,
+                    no_linear_handoff,
+                    no_opencode_dispatch,
+                    stop_after,
+                },
             )
             .await
         }
@@ -81,14 +103,16 @@ async fn main() -> Result<()> {
             branch,
             worktree,
             no_linear_handoff,
+            no_opencode_dispatch,
             stop_after,
         } => {
-            handle_resume(
-                branch.as_deref(),
-                worktree.as_deref(),
+            handle_resume(ResumeOptions {
+                branch: branch.as_deref(),
+                worktree_path: worktree.as_deref(),
                 no_linear_handoff,
+                no_opencode_dispatch,
                 stop_after,
-            )
+            })
             .await
         }
         cli::Commands::Status { json } => handle_status(json),
@@ -101,59 +125,57 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn handle_start(
-    ticket: &str,
-    branch: Option<&str>,
-    worktree_path: Option<&Path>,
-    dry_run: bool,
-    force: bool,
-    no_linear_handoff: bool,
-    stop_after: Option<state::StageKind>,
-) -> Result<()> {
-    if dry_run {
-        let plan = preview::build_dry_run_start_preview(ticket, branch, worktree_path, force)?;
+async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
+    if options.dry_run {
+        let plan = preview::build_dry_run_start_preview(
+            ticket,
+            options.branch,
+            options.worktree_path,
+            options.force,
+        )?;
         println!("{}", serde_json::to_string_pretty(&plan)?);
         return Ok(());
     }
 
-    let target = worktree::resolve(branch, worktree_path, true)?;
+    let target = worktree::resolve(options.branch, options.worktree_path, true)?;
     worktree::chdir_to(&target)?;
 
-    if state::store::ThoughtsStateStore::load()?.is_some() && !force {
+    if state::store::ThoughtsStateStore::load()?.is_some() && !options.force {
         anyhow::bail!(
             "state file already exists for branch '{}'; rerun with --force to overwrite",
             target.branch
         );
     }
 
-    let mut state = state::RunState::for_start(ticket, &target, dry_run)?;
-    state.settings.linear_handoff_enabled = !no_linear_handoff;
+    let mut state = state::RunState::for_start(ticket, &target, options.dry_run)?;
+    state.settings.linear_handoff_enabled = !options.no_linear_handoff;
+    state.settings.opencode_dispatch_enabled = !options.no_opencode_dispatch;
     state::store::ThoughtsStateStore::save(&state)?;
 
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    engine.run_until_stop(stop_after).await?;
+    engine.run_until_stop(options.stop_after).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after start"))?;
     print_status(&state, false)
 }
 
-async fn handle_resume(
-    branch: Option<&str>,
-    worktree_path: Option<&Path>,
-    no_linear_handoff: bool,
-    stop_after: Option<state::StageKind>,
-) -> Result<()> {
-    let target = worktree::resolve(branch, worktree_path, false)?;
+async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
+    let target = worktree::resolve(options.branch, options.worktree_path, false)?;
     worktree::chdir_to(&target)?;
 
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found; run start first"))?;
-    if no_linear_handoff {
+    if options.no_linear_handoff {
         state.settings.linear_handoff_enabled = false;
+    }
+    if options.no_opencode_dispatch {
+        state.settings.opencode_dispatch_enabled = false;
+    }
+    if options.no_linear_handoff || options.no_opencode_dispatch {
         state::store::ThoughtsStateStore::save(&state)?;
     }
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    engine.run_until_stop(stop_after).await?;
+    engine.run_until_stop(options.stop_after).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after resume"))?;
     print_status(&state, false)
@@ -196,9 +218,11 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
         "opencode_last_command": state.opencode.last_command,
         "ticket_to_pr_runs": state.counters.ticket_to_pr_runs,
         "resolve_comments_runs": state.counters.resolve_comments_runs,
+        "opencode_dispatch_enabled": state.settings.opencode_dispatch_enabled,
         "linear_handoff_enabled": state.settings.linear_handoff_enabled,
         "linear_handoff_posted": state.handoff.linear_comment_posted,
         "linear_handoff_posted_at": state.handoff.posted_at,
+        "pr_lookup": state.pr.last_lookup,
         "run_id": state.run_id,
         "updated_at": state.updated_at,
     })
@@ -334,6 +358,16 @@ mod tests {
         state.opencode.last_command = Some("linear_ticket_2_pr".to_string());
         state.counters.ticket_to_pr_runs = 1;
         state.counters.resolve_comments_runs = 0;
+        state.settings.opencode_dispatch_enabled = false;
+        state.pr.last_lookup = Some(state::PrLookupDiagnostics {
+            checked_at: "2026-01-01T00:00:00Z".to_string(),
+            stage: state::StageKind::DispatchingTicketToPr,
+            requested_branch: "feature/eng-992".to_string(),
+            current_branch: Some("feature/eng-992".to_string()),
+            repo_owner: "allisoneer".to_string(),
+            repo_name: "agentic_auxilary".to_string(),
+            outcome: "not_found".to_string(),
+        });
         state.handoff.linear_comment_posted = false;
         state
     }
@@ -363,9 +397,11 @@ mod tests {
             "opencode_last_command",
             "ticket_to_pr_runs",
             "resolve_comments_runs",
+            "opencode_dispatch_enabled",
             "linear_handoff_enabled",
             "linear_handoff_posted",
             "linear_handoff_posted_at",
+            "pr_lookup",
             "run_id",
             "updated_at",
         ] {
@@ -402,12 +438,22 @@ mod tests {
         );
         assert_eq!(payload.get("worktree_exists"), Some(&Value::Bool(false)));
         assert_eq!(
+            payload.get("opencode_dispatch_enabled"),
+            Some(&Value::Bool(false))
+        );
+        assert_eq!(
             payload.get("linear_handoff_enabled"),
             Some(&Value::Bool(true))
         );
         assert_eq!(
             payload.get("pr_number"),
             Some(&Value::Number(258_u64.into()))
+        );
+        assert_eq!(
+            payload
+                .get("pr_lookup")
+                .and_then(|lookup| lookup.get("repo_owner")),
+            Some(&Value::String("allisoneer".to_string()))
         );
     }
 }

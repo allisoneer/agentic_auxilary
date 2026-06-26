@@ -42,6 +42,9 @@ pub enum Commands {
         #[arg(long)]
         no_linear_handoff: bool,
 
+        #[arg(long)]
+        no_opencode_dispatch: bool,
+
         #[arg(long, value_enum)]
         stop_after: Option<StageKind>,
     },
@@ -54,6 +57,9 @@ pub enum Commands {
 
         #[arg(long)]
         no_linear_handoff: bool,
+
+        #[arg(long)]
+        no_opencode_dispatch: bool,
 
         #[arg(long, value_enum)]
         stop_after: Option<StageKind>,
@@ -181,6 +187,7 @@ mod tests {
                 ticket,
                 branch: Some(branch),
                 no_linear_handoff: false,
+                no_opencode_dispatch: false,
                 stop_after: None,
                 ..
             } if ticket == "ENG-992" && branch == "feature/eng-992"
@@ -203,6 +210,7 @@ mod tests {
             cli.command,
             Commands::Start {
                 no_linear_handoff: false,
+                no_opencode_dispatch: false,
                 stop_after: Some(StageKind::WaitingForCoderabbit),
                 ..
             }
@@ -223,6 +231,7 @@ mod tests {
             cli.command,
             Commands::Resume {
                 no_linear_handoff: false,
+                no_opencode_dispatch: false,
                 stop_after: Some(StageKind::DispatchingTicketToPr),
                 ..
             }
@@ -255,6 +264,7 @@ mod tests {
 
         assert!(help.contains("--stop-after"));
         assert!(help.contains("--no-linear-handoff"));
+        assert!(help.contains("--no-opencode-dispatch"));
         assert!(help.contains("waiting_for_coderabbit"));
         assert!(help.contains("dispatching_resolve_pr_comments"));
     }
@@ -274,6 +284,7 @@ mod tests {
             cli.command,
             Commands::Start {
                 no_linear_handoff: true,
+                no_opencode_dispatch: false,
                 ..
             }
         ));
@@ -288,6 +299,41 @@ mod tests {
             cli.command,
             Commands::Resume {
                 no_linear_handoff: true,
+                no_opencode_dispatch: false,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn start_accepts_no_opencode_dispatch_flag() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--no-opencode-dispatch",
+        ])
+        .expect("start no-opencode-dispatch should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Start {
+                no_opencode_dispatch: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn resume_accepts_no_opencode_dispatch_flag() {
+        let cli = Cli::try_parse_from(["agentic-outer-dag", "resume", "--no-opencode-dispatch"])
+            .expect("resume no-opencode-dispatch should parse");
+
+        assert!(matches!(
+            cli.command,
+            Commands::Resume {
+                no_opencode_dispatch: true,
                 ..
             }
         ));
