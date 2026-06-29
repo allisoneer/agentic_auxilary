@@ -1,0 +1,24 @@
+crates/linear/tools/src/tools.rs
+  s_6cd513233bc55b::t_c07483e47839b0 319
+  s_6cd513233bc55b::t_b9b66842d936d3 149
+.opencode/command/linear.md
+  s_6cd513233bc55b::t_78028ea9b303b0 7-14
+.opencode/command/linear_ticket_2_pr.md
+  s_6cd513233bc55b::t_28c259e45d194f 92-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "3a366db6e50b9a70afc4303a418ad674a8716aca",
+  "prompts": {},
+  "sessions": {
+    "s_6cd513233bc55b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0eb2783aaffeqrf1qrwWmEdNBX",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
