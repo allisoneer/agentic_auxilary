@@ -325,14 +325,10 @@ mod tests {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/post-create").unwrap();
-        let config_home = TempDir::new().unwrap();
-        write_gwt_config(
-            config_home.path(),
-            &fixture.repo_git_dir(),
-            &["echo ready > created.txt"],
-        )
-        .unwrap();
-        let _config_guard = ConfigHomeGuard::set(config_home.path());
+        let _config_guard = ConfigHomeGuard::new().unwrap();
+        let config_path =
+            write_gwt_config(&fixture.repo_git_dir(), &["echo ready > created.txt"]).unwrap();
+        assert_gwt_config_loads_repo(&config_path, &fixture.repo_git_dir());
         let saved = env::current_dir().unwrap();
         env::set_current_dir(&fixture.repo).unwrap();
 
@@ -350,14 +346,10 @@ mod tests {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/no-rerun").unwrap();
-        let config_home = TempDir::new().unwrap();
-        write_gwt_config(
-            config_home.path(),
-            &fixture.repo_git_dir(),
-            &["echo run >> run-count.txt"],
-        )
-        .unwrap();
-        let _config_guard = ConfigHomeGuard::set(config_home.path());
+        let _config_guard = ConfigHomeGuard::new().unwrap();
+        let config_path =
+            write_gwt_config(&fixture.repo_git_dir(), &["echo run >> run-count.txt"]).unwrap();
+        assert_gwt_config_loads_repo(&config_path, &fixture.repo_git_dir());
         let saved = env::current_dir().unwrap();
         env::set_current_dir(&fixture.repo).unwrap();
 
@@ -377,14 +369,9 @@ mod tests {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/cwd-check").unwrap();
-        let config_home = TempDir::new().unwrap();
-        write_gwt_config(
-            config_home.path(),
-            &fixture.repo_git_dir(),
-            &["pwd > cwd.txt"],
-        )
-        .unwrap();
-        let _config_guard = ConfigHomeGuard::set(config_home.path());
+        let _config_guard = ConfigHomeGuard::new().unwrap();
+        let config_path = write_gwt_config(&fixture.repo_git_dir(), &["pwd > cwd.txt"]).unwrap();
+        assert_gwt_config_loads_repo(&config_path, &fixture.repo_git_dir());
         let saved = env::current_dir().unwrap();
         env::set_current_dir(&fixture.repo).unwrap();
 
@@ -433,23 +420,36 @@ mod tests {
     }
 
     struct ConfigHomeGuard {
-        previous: Option<OsString>,
+        _temp: TempDir,
+        previous_xdg_config_home: Option<OsString>,
+        previous_home: Option<OsString>,
     }
 
     impl ConfigHomeGuard {
-        fn set(path: &Path) -> Self {
-            let previous = env::var_os("XDG_CONFIG_HOME");
+        fn new() -> Result<Self> {
+            let temp = TempDir::new()?;
+            let xdg_config_home = temp.path().join("xdg-config");
+            let home = temp.path().join("home");
+            fs::create_dir_all(&xdg_config_home)?;
+            fs::create_dir_all(&home)?;
+            let previous_xdg_config_home = env::var_os("XDG_CONFIG_HOME");
+            let previous_home = env::var_os("HOME");
             // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
             unsafe {
-                env::set_var("XDG_CONFIG_HOME", path);
+                env::set_var("XDG_CONFIG_HOME", &xdg_config_home);
+                env::set_var("HOME", &home);
             }
-            Self { previous }
+            Ok(Self {
+                _temp: temp,
+                previous_xdg_config_home,
+                previous_home,
+            })
         }
     }
 
     impl Drop for ConfigHomeGuard {
         fn drop(&mut self) {
-            match &self.previous {
+            match &self.previous_xdg_config_home {
                 Some(previous) => {
                     // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
                     unsafe {
@@ -463,6 +463,21 @@ mod tests {
                     }
                 }
             }
+
+            match &self.previous_home {
+                Some(previous) => {
+                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    unsafe {
+                        env::set_var("HOME", previous);
+                    }
+                }
+                None => {
+                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    unsafe {
+                        env::remove_var("HOME");
+                    }
+                }
+            }
         }
     }
 
@@ -472,21 +487,30 @@ mod tests {
         Ok(())
     }
 
-    fn write_gwt_config(config_home: &Path, repo_git_dir: &str, commands: &[&str]) -> Result<()> {
-        let gwt_dir = config_home.join("gwt");
-        fs::create_dir_all(&gwt_dir)?;
+    fn write_gwt_config(repo_git_dir: &str, commands: &[&str]) -> Result<PathBuf> {
+        let config_path = gwt_worktree::config::config_path()?;
+        let Some(gwt_dir) = config_path.parent() else {
+            anyhow::bail!("gwt config path has no parent directory");
+        };
+        fs::create_dir_all(gwt_dir)?;
         let serialized_commands = commands
             .iter()
             .map(|command| format!("    {command:?}"))
             .collect::<Vec<_>>()
             .join(",\n");
         fs::write(
-            gwt_dir.join("config.toml"),
+            &config_path,
             format!(
                 "[repos.{repo_git_dir:?}]\npost_create_commands = [\n{serialized_commands}\n]\n"
             ),
         )?;
-        Ok(())
+        Ok(config_path)
+    }
+
+    fn assert_gwt_config_loads_repo(config_path: &Path, repo_git_dir: &str) {
+        assert!(config_path.exists());
+        let loaded = GwtConfig::load().unwrap();
+        assert!(loaded.repos.contains_key(repo_git_dir));
     }
 
     fn worktree_paths(cwd: &Path) -> Result<Vec<String>> {
