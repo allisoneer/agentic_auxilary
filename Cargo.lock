@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.34"
+version = "0.2.35"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -3801,7 +3801,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
