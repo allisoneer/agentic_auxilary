@@ -1,0 +1,43 @@
+apps/agentic-outer-dag/src/cli.rs
+  s_c1555695385242::t_72423a89812a7c 56-61,84-89,218-219,245-246,270-271,304-305,323-326,335-336,351-354,363-364,398-421,423-424
+  s_c1555695385242::t_b73066a4c26d59 422
+  s_c1555695385242::t_209edbbe237197 425
+apps/agentic-outer-dag/src/main.rs
+  s_82182cbcb00da3::t_e15271645167ed 644,690
+  s_c1555695385242::t_72423a89812a7c 31-32,43-44,53-54,107-108,122-123,136-137,147-148,182-189,192-198,209-210,245-246,271-272,324-325,527-528,605-606,616-617,637-643,673-689,691
+  s_c1555695385242::t_4918848409e329 190
+  s_c1555695385242::t_5cc57fa5c34905 191,357-361,400-404
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_c1555695385242::t_72423a89812a7c 411,421,478,480-488
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_c1555695385242::t_faf6462eee3b17 586,590
+  s_c1555695385242::t_72423a89812a7c 38,41-53,117,168,243,254,257-260,267-270,584-585,587-589,591-596,775-781,932-933,938-941,1017
+  s_c1555695385242::t_5cc57fa5c34905 934-937
+  s_82182cbcb00da3::t_57640745699b4e 39-40
+apps/agentic-outer-dag/src/state/mod.rs
+  s_c1555695385242::t_72423a89812a7c 15-16,57-60,226-227,259-266,440-447,487-494
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "65d9eaf30812c47b8a3f9954908ded538cf58678",
+  "prompts": {},
+  "sessions": {
+    "s_82182cbcb00da3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ebc6f3bbffenKs1FJcP0Ifhx0",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_c1555695385242": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ebbdc220ffecrY3M08tjOrFco",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
