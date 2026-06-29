@@ -89,10 +89,10 @@ $ARGUMENTS
 
 ## Step 4: Persist the Ticket Corpus as a Thoughts Artifact
 
-1. Because the orchestrator cannot write artifacts directly and the Linear child may not have thoughts tools, use an explicit handoff pattern:
-   - first collect the full ticket description and comments in the Linear child result
-   - then spawn a normal or research-capable child session whose bounded task is to write a thoughts artifact containing that full corpus
-   - if it is cleaner, fold this into creation of a research-style artifact, but the full ticket description and comments must still be preserved verbatim enough for downstream reuse
+1. Because the orchestrator cannot write artifacts directly, persist the corpus via a child session:
+   - Preferred: have the same Linear child session from Step 3 write the thoughts artifact directly and return the artifact path.
+   - Fallback: if thoughts tools are unavailable in that Linear child configuration, hand off the full corpus to a normal or research-capable child whose bounded task is to write the artifact.
+   - If it is cleaner, fold this into creation of a research-style artifact, but the full ticket description and comments must still be preserved verbatim enough for downstream reuse.
 2. The artifact should capture at minimum:
    - ticket key and URL
    - current Linear status

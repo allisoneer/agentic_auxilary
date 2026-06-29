@@ -146,8 +146,7 @@ impl Tool for ReadIssueTool {
     type Input = ReadIssueInput;
     type Output = IssueDetails;
     const NAME: &'static str = "linear_read_issue";
-    const DESCRIPTION: &'static str =
-        "Read a Linear issue by ID, identifier (e.g., ENG-245), or URL";
+    const DESCRIPTION: &'static str = "Read a Linear issue by ID, identifier (e.g., ENG-245), or URL. Returns issue details and description only; comments are separate. For a full ticket read, also call linear_get_issue_comments until has_more=false.";
 
     fn call(
         &self,
@@ -317,7 +316,7 @@ impl Tool for GetIssueCommentsTool {
     type Input = GetIssueCommentsInput;
     type Output = crate::models::CommentsResult;
     const NAME: &'static str = "linear_get_issue_comments";
-    const DESCRIPTION: &'static str = "Get comments on a Linear issue. Returns 10 comments per call with implicit pagination - call again with the same issue to get more comments.";
+    const DESCRIPTION: &'static str = "Get comments on a Linear issue (up to 10 per call) with implicit pagination. Repeat calls with the same issue until has_more=false; another call after completion restarts from the beginning.";
 
     fn call(
         &self,

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.6.3] - 2026-06-29
+
+### 🐛 Bug Fixes
+- *(linear)* Clarify full ticket read guidance
 ## [0.6.2] - 2026-06-18
 
 ### ⚙️  Miscellaneous
