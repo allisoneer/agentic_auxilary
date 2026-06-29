@@ -3,6 +3,9 @@ pub mod freshness;
 use anyhow::Context;
 use anyhow::Result;
 use git2::Repository;
+use gwt_worktree::command::CommandSpec;
+use gwt_worktree::config::GwtConfig;
+use gwt_worktree::config::RepoConfig;
 use gwt_worktree::plan::switch::SwitchPlan;
 use gwt_worktree::plan::switch::SwitchPlanKind;
 use gwt_worktree::plan::switch::SwitchRequest;
@@ -13,6 +16,7 @@ use gwt_worktree::types::BranchName;
 use gwt_worktree::worktree::list_worktrees;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct TargetWorktree {
@@ -123,8 +127,13 @@ fn resolve_from_branch(branch: &str, create_if_missing: bool) -> Result<TargetWo
         anyhow::bail!("no worktree found for branch '{branch}'");
     }
 
-    let plan = plan_for_branch(&control, branch)?;
+    let repo_config = load_repo_config(&control);
+    let plan = plan_for_branch(&control, branch, repo_config.as_ref())?;
+    let would_create = plan_would_create(&plan);
     let execution = gwt_worktree::exec::switch::execute_switch_plan(&control, &plan, None)?;
+    if would_create {
+        run_post_create_commands(&execution.path, &execution.post_create_commands);
+    }
     let repo = Repository::open(&control.common_dir)?;
 
     Ok(TargetWorktree {
@@ -153,7 +162,8 @@ fn preview_from_branch(branch: &str) -> Result<WorktreePreview> {
         });
     }
 
-    let plan = plan_for_branch(&control, branch)?;
+    let repo_config = load_repo_config(&control);
+    let plan = plan_for_branch(&control, branch, repo_config.as_ref())?;
     Ok(WorktreePreview {
         path: Some(plan.target_path.clone()),
         branch: branch.to_string(),
@@ -161,7 +171,11 @@ fn preview_from_branch(branch: &str) -> Result<WorktreePreview> {
     })
 }
 
-fn plan_for_branch(control: &ControlRepo, branch: &str) -> Result<SwitchPlan> {
+fn plan_for_branch(
+    control: &ControlRepo,
+    branch: &str,
+    repo_config: Option<&RepoConfig>,
+) -> Result<SwitchPlan> {
     let branch_name = BranchName::new(branch.to_string())?;
     plan_switch(
         control,
@@ -172,7 +186,7 @@ fn plan_for_branch(control: &ControlRepo, branch: &str) -> Result<SwitchPlan> {
             start_point: None,
             guess_remote: false,
         },
-        None,
+        repo_config,
     )
     .or_else(|error| {
         if matches!(error, gwt_worktree::Error::BranchNotFound(_)) {
@@ -185,7 +199,7 @@ fn plan_for_branch(control: &ControlRepo, branch: &str) -> Result<SwitchPlan> {
                     start_point: None,
                     guess_remote: false,
                 },
-                None,
+                repo_config,
             )
         } else {
             Err(error)
@@ -199,6 +213,57 @@ fn plan_would_create(plan: &SwitchPlan) -> bool {
         plan.kind,
         SwitchPlanKind::Main | SwitchPlanKind::ExistingWorktree
     )
+}
+
+fn load_repo_config(control: &ControlRepo) -> Option<RepoConfig> {
+    match GwtConfig::load() {
+        Ok(config) => config.repos.get(&control.git_dir_key).cloned(),
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                git_dir_key = %control.git_dir_key,
+                "failed to load gwt config; continuing without post-create commands"
+            );
+            None
+        }
+    }
+}
+
+fn run_post_create_commands(worktree_path: &Path, commands: &[CommandSpec]) {
+    for command in commands {
+        match Command::new("sh")
+            .arg("-c")
+            .arg(command.as_str())
+            .current_dir(worktree_path)
+            .output()
+        {
+            Ok(output) if output.status.success() => {
+                tracing::info!(
+                    command = %command,
+                    cwd = %worktree_path.display(),
+                    "completed gwt post-create command"
+                );
+            }
+            Ok(output) => {
+                tracing::warn!(
+                    command = %command,
+                    cwd = %worktree_path.display(),
+                    status = ?output.status.code(),
+                    stdout = %String::from_utf8_lossy(&output.stdout).trim(),
+                    stderr = %String::from_utf8_lossy(&output.stderr).trim(),
+                    "gwt post-create command failed; continuing"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    command = %command,
+                    cwd = %worktree_path.display(),
+                    error = %error,
+                    "failed to start gwt post-create command; continuing"
+                );
+            }
+        }
+    }
 }
 
 fn current_branch(repo: &Repository) -> Result<String> {
@@ -228,6 +293,7 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use std::env;
+    use std::ffi::OsString;
     use std::fs;
     use std::path::Path;
     use std::sync::Mutex;
@@ -254,6 +320,85 @@ mod tests {
         assert_eq!(preview.branch, "feature/preview-only");
     }
 
+    #[test]
+    fn resolve_runs_post_create_commands_for_new_worktree() {
+        let _guard = cwd_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        fixture.branch("feature/post-create").unwrap();
+        let config_home = TempDir::new().unwrap();
+        write_gwt_config(
+            config_home.path(),
+            &fixture.repo_git_dir(),
+            &["echo ready > created.txt"],
+        )
+        .unwrap();
+        let _config_guard = ConfigHomeGuard::set(config_home.path());
+        let saved = env::current_dir().unwrap();
+        env::set_current_dir(&fixture.repo).unwrap();
+
+        let target = resolve(Some("feature/post-create"), None, true).unwrap();
+
+        env::set_current_dir(saved).unwrap();
+        assert_eq!(
+            fs::read_to_string(target.path.join("created.txt")).unwrap(),
+            "ready\n"
+        );
+    }
+
+    #[test]
+    fn resolve_does_not_rerun_post_create_commands_for_existing_worktree() {
+        let _guard = cwd_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        fixture.branch("feature/no-rerun").unwrap();
+        let config_home = TempDir::new().unwrap();
+        write_gwt_config(
+            config_home.path(),
+            &fixture.repo_git_dir(),
+            &["echo run >> run-count.txt"],
+        )
+        .unwrap();
+        let _config_guard = ConfigHomeGuard::set(config_home.path());
+        let saved = env::current_dir().unwrap();
+        env::set_current_dir(&fixture.repo).unwrap();
+
+        let first = resolve(Some("feature/no-rerun"), None, true).unwrap();
+        let second = resolve(Some("feature/no-rerun"), None, true).unwrap();
+
+        env::set_current_dir(saved).unwrap();
+        assert_eq!(first.path, second.path);
+        assert_eq!(
+            fs::read_to_string(first.path.join("run-count.txt")).unwrap(),
+            "run\n"
+        );
+    }
+
+    #[test]
+    fn resolve_runs_post_create_commands_from_worktree_cwd() {
+        let _guard = cwd_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        fixture.branch("feature/cwd-check").unwrap();
+        let config_home = TempDir::new().unwrap();
+        write_gwt_config(
+            config_home.path(),
+            &fixture.repo_git_dir(),
+            &["pwd > cwd.txt"],
+        )
+        .unwrap();
+        let _config_guard = ConfigHomeGuard::set(config_home.path());
+        let saved = env::current_dir().unwrap();
+        env::set_current_dir(&fixture.repo).unwrap();
+
+        let target = resolve(Some("feature/cwd-check"), None, true).unwrap();
+
+        env::set_current_dir(saved).unwrap();
+        assert_eq!(
+            fs::read_to_string(target.path.join("cwd.txt"))
+                .unwrap()
+                .trim(),
+            target.path.display().to_string()
+        );
+    }
+
     fn cwd_lock() -> &'static Mutex<()> {
         CWD_LOCK.get_or_init(|| Mutex::new(()))
     }
@@ -277,11 +422,70 @@ mod tests {
 
             Ok(Self { _temp: temp, repo })
         }
+
+        fn branch(&self, name: &str) -> Result<()> {
+            run_git(&self.repo, ["branch", name])
+        }
+
+        fn repo_git_dir(&self) -> String {
+            self.repo.join(".git").display().to_string()
+        }
+    }
+
+    struct ConfigHomeGuard {
+        previous: Option<OsString>,
+    }
+
+    impl ConfigHomeGuard {
+        fn set(path: &Path) -> Self {
+            let previous = env::var_os("XDG_CONFIG_HOME");
+            // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+            unsafe {
+                env::set_var("XDG_CONFIG_HOME", path);
+            }
+            Self { previous }
+        }
+    }
+
+    impl Drop for ConfigHomeGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(previous) => {
+                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    unsafe {
+                        env::set_var("XDG_CONFIG_HOME", previous);
+                    }
+                }
+                None => {
+                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    unsafe {
+                        env::remove_var("XDG_CONFIG_HOME");
+                    }
+                }
+            }
+        }
     }
 
     fn configure_repo(path: &Path) -> Result<()> {
         run_git(path, ["config", "user.name", "Test User"])?;
         run_git(path, ["config", "user.email", "test@example.com"])?;
+        Ok(())
+    }
+
+    fn write_gwt_config(config_home: &Path, repo_git_dir: &str, commands: &[&str]) -> Result<()> {
+        let gwt_dir = config_home.join("gwt");
+        fs::create_dir_all(&gwt_dir)?;
+        let serialized_commands = commands
+            .iter()
+            .map(|command| format!("    {command:?}"))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        fs::write(
+            gwt_dir.join("config.toml"),
+            format!(
+                "[repos.{repo_git_dir:?}]\npost_create_commands = [\n{serialized_commands}\n]\n"
+            ),
+        )?;
         Ok(())
     }
 
@@ -315,6 +519,4 @@ mod tests {
             )
         }
     }
-
-    use std::process::Command;
 }
