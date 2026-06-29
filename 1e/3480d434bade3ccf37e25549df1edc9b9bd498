@@ -1,0 +1,52 @@
+crates/tools/pr-comments/src/models.rs
+  s_9823f48c5dc280::t_76851b8b70e1da 55-56,577,582-600
+crates/tools/pr-comments/src/lib.rs
+  s_9823f48c5dc280::t_76851b8b70e1da 314-326
+apps/agentic-outer-dag/src/state/mod.rs
+  s_9823f48c5dc280::t_e91f682769f8ad 393-398,477-482
+  s_9823f48c5dc280::t_a0f6cf7cc99c55 153-154,156-157,172-175,179-189,392,475-476,546-547
+crates/tools/pr-comments/src/github.rs
+  s_9823f48c5dc280::t_76851b8b70e1da 4,6,32,76,81-82,121,125-142,145-146,148-149,154,163-172,244,259-283,809,987,990-991,1007-1008,1013-1025,1028,1044-1045,1049-1072,1084-1085,1089-1100
+  s_9823f48c5dc280::t_e91f682769f8ad 1029-1043,1046-1048,1073-1083,1086-1088
+  s_9823f48c5dc280::t_2e13ec755e423f 143-144,147
+  s_9823f48c5dc280::t_3f074fe8fd6449 106,110,1026-1027
+apps/agentic-outer-dag/src/github/coderabbit.rs
+  s_9823f48c5dc280::t_fa5d257582405b 86-92,165-167,174-176
+  s_9823f48c5dc280::t_e91f682769f8ad 168-173
+  s_9823f48c5dc280::t_82245d86282be1 177
+crates/tools/pr-comments/tests/github_phase4_parsing.rs
+  s_9823f48c5dc280::t_ec93eb9f56c3fc 11,14-15,37,40-41
+.opencode/command/linear_ticket_2_pr.md
+  s_9823f48c5dc280::t_76851b8b70e1da 183-188
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_9823f48c5dc280::t_d75c32a46809f7 4,110-111,180-194,196-205,207-231,233-241,248-270,319,362-365,367-368,412-414,417-433
+  s_9823f48c5dc280::t_e3267b9e4c4e8e 195,206,232,410
+  s_9823f48c5dc280::t_b771c15a7a7f4b 312,317,361,366,411,415-416
+  s_9823f48c5dc280::t_64ee552e0d12a7 242-247,1059-1068,1070-1085
+  s_9823f48c5dc280::t_2e13ec755e423f 662
+  s_9823f48c5dc280::t_e91f682769f8ad 1049-1056
+  s_9823f48c5dc280::t_0830ee2d9ab94a 313-316,318
+  s_9823f48c5dc280::t_171e23ee9660ad 648-649,653,669-678,776-800,938,1001-1048,1057-1058
+  s_9823f48c5dc280::t_e3e41118ab000d 1069
+  s_9823f48c5dc280::t_85302e1b1489b1 1086
+apps/agentic-outer-dag/src/main.rs
+  s_9823f48c5dc280::t_5b4c4720887d1b 318-319,471-472,498-499,527-528,588
+apps/agentic-outer-dag/src/github/pr.rs
+  s_9823f48c5dc280::t_76851b8b70e1da 57-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "1e3480d434bade3ccf37e25549df1edc9b9bd498",
+  "prompts": {},
+  "sessions": {
+    "s_9823f48c5dc280": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0eaf56cefffeSauEMDjyzn5cs9",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
