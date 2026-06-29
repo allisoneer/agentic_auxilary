@@ -83,6 +83,13 @@ fn interpret_issue_comments(comments: &[IssueCommentSummary]) -> CodeRabbitPoll 
     CodeRabbitPoll::Waiting
 }
 
+pub fn skip_reason_indicates_draft(reason: &str) -> bool {
+    let reason = reason.to_ascii_lowercase();
+    reason.contains("draft detected")
+        || reason.contains("draft pull request")
+        || reason.contains("pr is draft")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +161,18 @@ mod tests {
     fn coderabbit_comment_completes_poll() {
         let result = interpret_issue_comments(&[issue_comment("CodeRabbitAI", "Looks good to me")]);
         assert_eq!(result, CodeRabbitPoll::Completed);
+    }
+
+    #[test]
+    fn detects_draft_skip_reason_variants() {
+        assert!(skip_reason_indicates_draft(
+            "Review skipped. Draft detected."
+        ));
+        assert!(skip_reason_indicates_draft(
+            "review skipped because PR is draft"
+        ));
+        assert!(!skip_reason_indicates_draft(
+            "Review skipped because no actionable changes were found"
+        ));
     }
 }

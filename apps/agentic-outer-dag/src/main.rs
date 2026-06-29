@@ -315,6 +315,8 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
         "worktree_exists": worktree_exists,
         "pr_number": state.pr.number,
         "pr_url": state.pr.url,
+        "pr_is_draft": state.pr.is_draft,
+        "pr_ready_for_review": state.pr.ready_for_review,
         "opencode_session_id": state.opencode.active_session_id,
         "opencode_last_command": state.opencode.last_command,
         "opencode_last_diagnostics": state.opencode.last_diagnostics,
@@ -466,6 +468,8 @@ mod tests {
         state.last_error = Some("detailed failure".to_string());
         state.pr.number = Some(258);
         state.pr.url = Some("https://example.invalid/pr/258".to_string());
+        state.pr.is_draft = Some(false);
+        state.pr.ready_for_review.last_result = Some("already_ready:existing_pr_guard".to_string());
         state.opencode.active_session_id = Some("session-123".to_string());
         state.opencode.last_command = Some("linear_ticket_2_pr".to_string());
         state.opencode.last_diagnostics = Some(state::OpenCodeDiagnostics {
@@ -491,6 +495,8 @@ mod tests {
             repo_name: "agentic_auxilary".to_string(),
             token_source: Some("GH_TOKEN".to_string()),
             empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
+            pr_number: None,
+            pr_is_draft: None,
             outcome: "not_found".to_string(),
         });
         state.handoff.linear_comment_posted = false;
@@ -518,6 +524,8 @@ mod tests {
             "worktree_exists",
             "pr_number",
             "pr_url",
+            "pr_is_draft",
+            "pr_ready_for_review",
             "opencode_session_id",
             "opencode_last_command",
             "opencode_last_diagnostics",
@@ -577,6 +585,7 @@ mod tests {
             payload.get("pr_number"),
             Some(&Value::Number(258_u64.into()))
         );
+        assert_eq!(payload.get("pr_is_draft"), Some(&Value::Bool(false)));
         assert_eq!(
             payload
                 .get("pr_lookup")

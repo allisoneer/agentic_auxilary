@@ -52,6 +52,8 @@ pub struct PrRef {
     pub number: u64,
     pub url: String,
     pub head_sha: String,
+    pub node_id: String,
+    pub is_draft: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -572,10 +574,30 @@ pub struct OpenPrRefConnection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenPrRefNode {
+    pub id: String,
     pub number: u64,
     pub url: String,
     #[serde(rename = "headRefOid")]
     pub head_ref_oid: String,
+    #[serde(rename = "isDraft")]
+    pub is_draft: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphqlResponse<T> {
+    pub data: T,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarkPullRequestReadyForReviewData {
+    #[serde(rename = "markPullRequestReadyForReview")]
+    pub mark_pull_request_ready_for_review: MarkPullRequestReadyForReviewPayload,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarkPullRequestReadyForReviewPayload {
+    #[serde(rename = "pullRequest")]
+    pub pull_request: OpenPrRefNode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

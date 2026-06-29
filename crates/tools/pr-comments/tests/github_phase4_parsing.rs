@@ -8,9 +8,11 @@ fn parses_open_pr_ref_graphql_payload() {
             "pullRequests": {
                 "nodes": [
                     {
+                        "id": "PR_42",
                         "number": 42,
                         "url": "https://github.com/owner/repo/pull/42",
-                        "headRefOid": "0123456789abcdef0123456789abcdef01234567"
+                        "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+                        "isDraft": false
                     }
                 ]
             }
@@ -32,9 +34,11 @@ fn graphql_envelope_does_not_deserialize_as_inner_open_pr_data() {
                 "pullRequests": {
                     "nodes": [
                         {
+                            "id": "PR_42",
                             "number": 42,
                             "url": "https://github.com/owner/repo/pull/42",
-                            "headRefOid": "0123456789abcdef0123456789abcdef01234567"
+                            "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+                            "isDraft": false
                         }
                     ]
                 }

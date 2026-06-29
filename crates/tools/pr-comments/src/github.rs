@@ -1,7 +1,9 @@
 use crate::OpenPrRefLookupResult;
 use crate::models::CheckSuiteSummary;
 use crate::models::CommentSourceType;
+use crate::models::GraphqlResponse;
 use crate::models::IssueCommentSummary;
+use crate::models::MarkPullRequestReadyForReviewData;
 use crate::models::OpenPrRefData;
 use crate::models::PrRef;
 use crate::models::PrSummary;
@@ -27,7 +29,7 @@ pub struct GitHubClient {
     http: reqwest::Client,
     owner: String,
     repo: String,
-    rest_base_url: String,
+    api_base_url: String,
 }
 
 impl GitHubClient {
@@ -71,13 +73,13 @@ impl GitHubClient {
             http,
             owner,
             repo,
-            rest_base_url: "https://api.github.com".to_string(),
+            api_base_url: "https://api.github.com".to_string(),
         })
     }
 
     #[cfg(test)]
-    fn with_rest_base_url(mut self, rest_base_url: String) -> Self {
-        self.rest_base_url = rest_base_url;
+    fn with_api_base_url(mut self, api_base_url: String) -> Self {
+        self.api_base_url = api_base_url;
         self
     }
 
@@ -101,9 +103,11 @@ impl GitHubClient {
                 repository(owner: $owner, name: $repo) {
                     pullRequests(states: OPEN, headRefName: $branch, first: 1) {
                         nodes {
+                            id
                             number
                             url
                             headRefOid
+                            isDraft
                         }
                     }
                 }
@@ -114,31 +118,55 @@ impl GitHubClient {
             "repo": self.repo,
             "branch": branch,
         });
-        let response: OpenPrRefData = self
-            .client
-            .graphql(&serde_json::json!({
-                "query": query,
-                "variables": variables,
-            }))
-            .await
-            .map_err(|e| anyhow::anyhow!("GraphQL query failed: {e}"))?;
+        let response: OpenPrRefData = self.graphql_post(query, variables).await?;
 
         Ok(parse_open_pr_ref_lookup_response(response))
+    }
+
+    pub async fn mark_pr_ready_for_review(&self, pull_request_id: &str) -> Result<PrRef> {
+        let query = r"
+            mutation($pullRequestId: ID!) {
+                markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+                    pullRequest {
+                        id
+                        number
+                        url
+                        headRefOid
+                        isDraft
+                    }
+                }
+            }
+        ";
+        let variables = serde_json::json!({
+            "pullRequestId": pull_request_id,
+        });
+        let response: MarkPullRequestReadyForReviewData =
+            self.graphql_post(query, variables).await?;
+
+        Ok(pr_ref_from_open_pr_node(
+            response.mark_pull_request_ready_for_review.pull_request,
+        ))
     }
 }
 
 fn parse_open_pr_ref_lookup_response(response: OpenPrRefData) -> OpenPrRefLookupResult {
     let nodes = response.repository.pull_requests.nodes;
-    let pr = nodes.into_iter().next().map(|node| PrRef {
-        number: node.number,
-        url: node.url,
-        head_sha: node.head_ref_oid,
-    });
+    let pr = nodes.into_iter().next().map(pr_ref_from_open_pr_node);
 
     OpenPrRefLookupResult {
         empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string())
             .filter(|_| pr.is_none()),
         pr,
+    }
+}
+
+fn pr_ref_from_open_pr_node(node: crate::models::OpenPrRefNode) -> PrRef {
+    PrRef {
+        number: node.number,
+        url: node.url,
+        head_sha: node.head_ref_oid,
+        node_id: node.id,
+        is_draft: node.is_draft,
     }
 }
 
@@ -213,7 +241,7 @@ impl GitHubClient {
     }
 
     async fn rest_get(&self, path: &str) -> Result<serde_json::Value> {
-        let url = format!("{}{path}", self.rest_base_url);
+        let url = format!("{}{path}", self.api_base_url);
         let response = self
             .http
             .get(&url)
@@ -226,6 +254,31 @@ impl GitHubClient {
             .json()
             .await
             .map_err(|e| anyhow::anyhow!("GitHub REST JSON parse failed: {e}"))
+    }
+
+    async fn graphql_post<T>(&self, query: &str, variables: serde_json::Value) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let url = format!("{}/graphql", self.api_base_url);
+        let response = self
+            .http
+            .post(&url)
+            .json(&serde_json::json!({
+                "query": query,
+                "variables": variables,
+            }))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub GraphQL request failed: {e}"))?
+            .error_for_status()
+            .map_err(|e| anyhow::anyhow!("GitHub GraphQL request failed: {e}"))?;
+
+        let body: GraphqlResponse<T> = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub GraphQL JSON parse failed: {e}"))?;
+        Ok(body.data)
     }
 
     pub fn parse_check_suites_fixture(value: serde_json::Value) -> Result<Vec<CheckSuiteSummary>> {
@@ -753,7 +806,7 @@ mod tests {
         install_rustls_provider();
         GitHubClient::new("owner".to_string(), "repo".to_string(), None)
             .expect("client should build")
-            .with_rest_base_url(base_url)
+            .with_api_base_url(base_url)
     }
 
     fn check_suites_response(count: usize) -> serde_json::Value {
@@ -931,9 +984,11 @@ mod tests {
                 "pullRequests": {
                     "nodes": [
                         {
+                            "id": "PR_kwDOAA",
                             "number": 258,
                             "url": "https://github.com/allisoneer/agentic_auxilary/pull/258",
-                            "headRefOid": "0123456789abcdef0123456789abcdef01234567"
+                            "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+                            "isDraft": true
                         }
                     ]
                 }
@@ -949,9 +1004,99 @@ mod tests {
                 number: 258,
                 url: "https://github.com/allisoneer/agentic_auxilary/pull/258".to_string(),
                 head_sha: "0123456789abcdef0123456789abcdef01234567".to_string(),
+                node_id: "PR_kwDOAA".to_string(),
+                is_draft: true,
             })
         );
         assert_eq!(lookup.empty_result_reason, None);
+    }
+
+    #[tokio::test]
+    async fn get_open_pr_ref_from_branch_detailed_posts_graphql_request_with_draft_fields() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .match_body(Matcher::PartialJson(json!({
+                "variables": {
+                    "owner": "owner",
+                    "repo": "repo",
+                    "branch": "feature/eng-992"
+                }
+            })))
+            .match_body(Matcher::Regex("id".to_string()))
+            .match_body(Matcher::Regex("isDraft".to_string()))
+            .with_status(200)
+            .with_body(
+                json!({
+                    "data": {
+                        "repository": {
+                            "pullRequests": {
+                                "nodes": [
+                                    {
+                                        "id": "PR_123",
+                                        "number": 42,
+                                        "url": "https://example.invalid/pr/42",
+                                        "headRefOid": "abc123",
+                                        "isDraft": false
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                })
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let lookup = client(server.url())
+            .get_open_pr_ref_from_branch_detailed("feature/eng-992")
+            .await
+            .expect("graphql request should succeed");
+
+        assert_eq!(lookup.pr.as_ref().map(|pr| pr.number), Some(42));
+        assert_eq!(lookup.pr.as_ref().map(|pr| pr.is_draft), Some(false));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn mark_pr_ready_for_review_posts_graphql_mutation() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .match_body(Matcher::PartialJson(json!({
+                "variables": {
+                    "pullRequestId": "PR_123"
+                }
+            })))
+            .with_status(200)
+            .with_body(
+                json!({
+                    "data": {
+                        "markPullRequestReadyForReview": {
+                            "pullRequest": {
+                                "id": "PR_123",
+                                "number": 42,
+                                "url": "https://example.invalid/pr/42",
+                                "headRefOid": "abc123",
+                                "isDraft": false
+                            }
+                        }
+                    }
+                })
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let pr = client(server.url())
+            .mark_pr_ready_for_review("PR_123")
+            .await
+            .expect("mutation should succeed");
+
+        assert_eq!(pr.number, 42);
+        assert!(!pr.is_draft);
+        mock.assert_async().await;
     }
 }
 

@@ -150,7 +150,11 @@ pub struct PrState {
     pub head_sha: Option<String>,
     pub last_observed_head_sha: Option<String>,
     #[serde(default)]
+    pub is_draft: Option<bool>,
+    #[serde(default)]
     pub last_lookup: Option<PrLookupDiagnostics>,
+    #[serde(default)]
+    pub ready_for_review: ReadyForReviewState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -165,7 +169,22 @@ pub struct PrLookupDiagnostics {
     pub token_source: Option<String>,
     #[serde(default)]
     pub empty_result_reason: Option<String>,
+    #[serde(default)]
+    pub pr_number: Option<u64>,
+    #[serde(default)]
+    pub pr_is_draft: Option<bool>,
     pub outcome: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReadyForReviewState {
+    pub attempts: u32,
+    #[serde(default)]
+    pub last_attempted_at: Option<String>,
+    #[serde(default)]
+    pub last_result: Option<String>,
+    #[serde(default)]
+    pub coderabbit_draft_skip_recovered: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -370,6 +389,13 @@ mod tests {
         );
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
+        assert_eq!(roundtrip.pr.ready_for_review.attempts, 0);
+        assert!(
+            !roundtrip
+                .pr
+                .ready_for_review
+                .coderabbit_draft_skip_recovered
+        );
     }
 
     #[test]
@@ -446,6 +472,14 @@ mod tests {
             DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS
         );
         assert!(roundtrip.opencode.last_diagnostics.is_none());
+        assert_eq!(roundtrip.pr.is_draft, None);
+        assert_eq!(roundtrip.pr.ready_for_review.attempts, 0);
+        assert!(
+            !roundtrip
+                .pr
+                .ready_for_review
+                .coderabbit_draft_skip_recovered
+        );
     }
 
     #[test]
@@ -509,5 +543,7 @@ mod tests {
 
         assert_eq!(diagnostics.token_source, None);
         assert_eq!(diagnostics.empty_result_reason, None);
+        assert_eq!(diagnostics.pr_number, None);
+        assert_eq!(diagnostics.pr_is_draft, None);
     }
 }

@@ -1,6 +1,7 @@
 use crate::dag::stages;
 use crate::github::coderabbit::CodeRabbitClient;
 use crate::github::coderabbit::CodeRabbitPoll;
+use crate::github::coderabbit::skip_reason_indicates_draft;
 use crate::github::pr::DetectedPrLookup;
 use crate::github::pr::GitHubPrClient;
 use crate::linear;
@@ -106,6 +107,8 @@ fn record_pr_lookup(state: &mut RunState, stage_kind: StageKind, lookup: &Detect
         repo_name: lookup.repo_name.clone(),
         token_source: lookup.token_source.clone(),
         empty_result_reason: lookup.empty_result_reason.clone(),
+        pr_number: lookup.pr.as_ref().map(|pr| pr.number),
+        pr_is_draft: lookup.pr.as_ref().map(|pr| pr.is_draft),
         outcome: if lookup.pr.is_some() {
             "found".to_string()
         } else {
@@ -174,6 +177,97 @@ fn stage_kind_label(kind: &StageKind) -> String {
         .unwrap_or_else(|| format!("{kind:?}"))
 }
 
+fn persist_detected_pr(state: &mut RunState, pr: &pr_comments::models::PrRef) {
+    state.pr.number = Some(pr.number);
+    state.pr.url = Some(pr.url.clone());
+    state.pr.head_sha = Some(pr.head_sha.clone());
+    state.pr.last_observed_head_sha = Some(pr.head_sha.clone());
+    state.pr.is_draft = Some(pr.is_draft);
+}
+
+async fn ensure_pr_ready_for_review<MarkReady, MarkReadyFut>(
+    state: &mut RunState,
+    pr: &pr_comments::models::PrRef,
+    context: &str,
+    mark_ready: MarkReady,
+) -> Result<pr_comments::models::PrRef>
+where
+    MarkReady: FnOnce(pr_comments::models::PrRef) -> MarkReadyFut,
+    MarkReadyFut: Future<Output = Result<pr_comments::models::PrRef>>,
+{
+    persist_detected_pr(state, pr);
+    if !pr.is_draft {
+        state.pr.ready_for_review.last_result = Some(format!("already_ready:{context}"));
+        return Ok(pr.clone());
+    }
+
+    state.pr.ready_for_review.attempts += 1;
+    state.pr.ready_for_review.last_attempted_at = Some(chrono::Utc::now().to_rfc3339());
+    let updated_pr = mark_ready(pr.clone()).await.map_err(|error| {
+        anyhow::anyhow!(
+            "draft PR #{} must be ready for review before proceeding ({context}): {error}",
+            pr.number
+        )
+    })?;
+    persist_detected_pr(state, &updated_pr);
+    state.pr.is_draft = Some(false);
+    state.pr.ready_for_review.last_result = Some(format!("marked_ready:{context}"));
+    Ok(updated_pr)
+}
+
+enum DraftSkipRecovery {
+    ContinueWaiting,
+    TerminalStop { message: String },
+}
+
+async fn recover_from_draft_review_skip<DetectPr, DetectPrFut, MarkReady, MarkReadyFut>(
+    state: &mut RunState,
+    reason: &str,
+    detect_pr: DetectPr,
+    mark_ready: MarkReady,
+) -> Result<DraftSkipRecovery>
+where
+    DetectPr: FnOnce() -> DetectPrFut,
+    DetectPrFut: Future<Output = Result<DetectedPrLookup>>,
+    MarkReady: FnOnce(pr_comments::models::PrRef) -> MarkReadyFut,
+    MarkReadyFut: Future<Output = Result<pr_comments::models::PrRef>>,
+{
+    if !skip_reason_indicates_draft(reason) {
+        return Ok(DraftSkipRecovery::TerminalStop {
+            message: reason.to_string(),
+        });
+    }
+
+    if state.pr.ready_for_review.coderabbit_draft_skip_recovered {
+        state.stage.kind = StageKind::WaitingForCoderabbit;
+        state.stage.details = Some(
+            "CodeRabbit still reports the earlier draft-skip comment after recovery; treating it as stale and continuing to wait"
+                .to_string(),
+        );
+        return Ok(DraftSkipRecovery::ContinueWaiting);
+    }
+
+    let lookup = detect_pr().await?;
+    record_pr_lookup(state, StageKind::WaitingForCoderabbit, &lookup);
+    let Some(pr) = lookup.pr else {
+        return Ok(DraftSkipRecovery::TerminalStop {
+            message: format!(
+                "CodeRabbit reported draft-detected skip, but no open PR could be re-detected for branch '{}'",
+                state.worktree.branch
+            ),
+        });
+    };
+
+    ensure_pr_ready_for_review(state, &pr, "coderabbit_draft_skip_recovery", mark_ready).await?;
+    state.pr.ready_for_review.coderabbit_draft_skip_recovered = true;
+    state.stage.kind = StageKind::WaitingForCoderabbit;
+    state.stage.details = Some(
+        "CodeRabbit skipped review because the PR was draft; marked ready for review and continuing to wait"
+            .to_string(),
+    );
+    Ok(DraftSkipRecovery::ContinueWaiting)
+}
+
 impl DagEngine {
     pub fn for_current_dir() -> Result<Self> {
         Ok(Self {
@@ -215,10 +309,14 @@ impl DagEngine {
                         .await?;
                     record_pr_lookup(&mut state, StageKind::DispatchingTicketToPr, &lookup);
                     if let Some(pr) = lookup.pr {
-                        state.pr.number = Some(pr.number);
-                        state.pr.url = Some(pr.url);
-                        state.pr.head_sha = Some(pr.head_sha.clone());
-                        state.pr.last_observed_head_sha = Some(pr.head_sha);
+                        let github = &self.github;
+                        ensure_pr_ready_for_review(
+                            &mut state,
+                            &pr,
+                            "existing_pr_guard",
+                            |pr| async move { github.mark_ready_for_review(&pr).await },
+                        )
+                        .await?;
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                         ThoughtsStateStore::save(&state)?;
@@ -260,10 +358,14 @@ impl DagEngine {
                     .await?;
                     record_pr_lookup(&mut state, StageKind::DetectingPr, &lookup);
                     if let Some(pr) = lookup.pr {
-                        state.pr.number = Some(pr.number);
-                        state.pr.url = Some(pr.url);
-                        state.pr.head_sha = Some(pr.head_sha.clone());
-                        state.pr.last_observed_head_sha = Some(pr.head_sha);
+                        let github = &self.github;
+                        ensure_pr_ready_for_review(
+                            &mut state,
+                            &pr,
+                            "post_ticket_to_pr_detection",
+                            |pr| async move { github.mark_ready_for_review(&pr).await },
+                        )
+                        .await?;
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                     } else {
@@ -305,10 +407,30 @@ impl DagEngine {
                                 break;
                             }
                             CodeRabbitPoll::Skipped { reason } => {
-                                state.stage.kind = StageKind::StoppedReviewSkipped;
-                                state.stage.details = Some(reason);
-                                ThoughtsStateStore::save(&state)?;
-                                return Ok(());
+                                let branch = state.worktree.branch.clone();
+                                let github = &self.github;
+                                match recover_from_draft_review_skip(
+                                    &mut state,
+                                    &reason,
+                                    || github.detect_open_pr_from_branch(&branch),
+                                    |pr| async move { github.mark_ready_for_review(&pr).await },
+                                )
+                                .await?
+                                {
+                                    DraftSkipRecovery::ContinueWaiting => {
+                                        ThoughtsStateStore::save(&state)?;
+                                        tokio::time::sleep(poll_interval_sleep_duration(
+                                            state.settings.poll_interval_seconds,
+                                        ))
+                                        .await;
+                                    }
+                                    DraftSkipRecovery::TerminalStop { message } => {
+                                        state.stage.kind = StageKind::StoppedReviewSkipped;
+                                        state.stage.details = Some(message);
+                                        ThoughtsStateStore::save(&state)?;
+                                        return Ok(());
+                                    }
+                                }
                             }
                             CodeRabbitPoll::Waiting => {
                                 if (chrono::Utc::now() - started_at).num_seconds()
@@ -523,9 +645,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::DagEngine;
+    use super::DraftSkipRecovery;
+    use super::ensure_pr_ready_for_review;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
     use super::record_pr_lookup;
+    use super::recover_from_draft_review_skip;
     use super::stage_kind_label;
     use super::transition_to_dispatch_disabled;
     use super::transition_to_missing_pr_after_lookup;
@@ -534,11 +659,22 @@ mod tests {
     use crate::state::RunState;
     use crate::state::StageKind;
     use crate::worktree::TargetWorktree;
+    use pr_comments::models::PrRef;
     use std::sync::Mutex;
     use std::sync::OnceLock;
     use std::time::Duration;
 
     static OPENCODE_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn sample_pr(is_draft: bool) -> PrRef {
+        PrRef {
+            number: 258,
+            url: "https://example.invalid/pr/258".to_string(),
+            head_sha: "abc123".to_string(),
+            node_id: "PR_258".to_string(),
+            is_draft,
+        }
+    }
 
     fn sample_state() -> RunState {
         RunState::for_start(
@@ -637,6 +773,31 @@ mod tests {
             lookup.empty_result_reason.as_deref(),
             Some("no_open_pull_requests_matched_branch")
         );
+        assert_eq!(lookup.pr_number, None);
+        assert_eq!(lookup.pr_is_draft, None);
+    }
+
+    #[test]
+    fn record_pr_lookup_persists_detected_draft_state() {
+        let mut state = sample_state();
+
+        record_pr_lookup(
+            &mut state,
+            StageKind::DetectingPr,
+            &DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr(true)),
+            },
+        );
+
+        let lookup = state.pr.last_lookup.as_ref().expect("lookup stored");
+        assert_eq!(lookup.pr_number, Some(258));
+        assert_eq!(lookup.pr_is_draft, Some(true));
     }
 
     #[test]
@@ -774,11 +935,7 @@ mod tests {
                         token_source: Some("GH_TOKEN".to_string()),
                         empty_result_reason: (attempt < 1)
                             .then_some("no_open_pull_requests_matched_branch".to_string()),
-                        pr: (attempt >= 1).then_some(pr_comments::models::PrRef {
-                            number: 258,
-                            url: "https://example.invalid/pr/258".to_string(),
-                            head_sha: "abc123".to_string(),
-                        }),
+                        pr: (attempt >= 1).then_some(sample_pr(false)),
                     })
                 }
             },
@@ -838,6 +995,92 @@ mod tests {
                 Duration::from_secs(4),
                 Duration::from_secs(8)
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn ensure_pr_ready_for_review_marks_draft_before_coderabbit_wait() {
+        let mut state = sample_state();
+
+        let updated = ensure_pr_ready_for_review(
+            &mut state,
+            &sample_pr(true),
+            "existing_pr_guard",
+            |_| async { Ok(sample_pr(false)) },
+        )
+        .await
+        .expect("draft PR should be marked ready");
+
+        assert!(!updated.is_draft);
+        assert_eq!(state.pr.number, Some(258));
+        assert_eq!(state.pr.is_draft, Some(false));
+        assert_eq!(
+            state.pr.ready_for_review.last_result.as_deref(),
+            Some("marked_ready:existing_pr_guard")
+        );
+        assert_eq!(state.pr.ready_for_review.attempts, 1);
+    }
+
+    #[tokio::test]
+    async fn recover_from_draft_review_skip_continues_waiting_after_readying_pr() {
+        let mut state = sample_state();
+
+        let recovery = recover_from_draft_review_skip(
+            &mut state,
+            "Review skipped. Draft detected.",
+            || async {
+                Ok(DetectedPrLookup {
+                    requested_branch: "feature/eng-992".to_string(),
+                    current_branch: Some("feature/eng-992".to_string()),
+                    repo_owner: "allisoneer".to_string(),
+                    repo_name: "agentic_auxilary".to_string(),
+                    token_source: Some("GH_TOKEN".to_string()),
+                    empty_result_reason: None,
+                    pr: Some(sample_pr(true)),
+                })
+            },
+            |_| async { Ok(sample_pr(false)) },
+        )
+        .await
+        .expect("recovery should succeed");
+
+        assert!(matches!(recovery, DraftSkipRecovery::ContinueWaiting));
+        assert_eq!(state.stage.kind, StageKind::WaitingForCoderabbit);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("recovery detail")
+                .contains("marked ready for review")
+        );
+        assert!(state.pr.ready_for_review.coderabbit_draft_skip_recovered);
+        assert_eq!(state.pr.is_draft, Some(false));
+    }
+
+    #[tokio::test]
+    async fn recover_from_draft_review_skip_treats_repeat_draft_skip_as_stale() {
+        let mut state = sample_state();
+        state.pr.ready_for_review.coderabbit_draft_skip_recovered = true;
+
+        let recovery = recover_from_draft_review_skip(
+            &mut state,
+            "Review skipped. Draft detected.",
+            || async { panic!("repeat draft skip should not trigger another PR lookup") },
+            |_| async { panic!("repeat draft skip should not try to ready the PR again") },
+        )
+        .await
+        .expect("repeat draft skip should continue waiting");
+
+        assert!(matches!(recovery, DraftSkipRecovery::ContinueWaiting));
+        assert_eq!(state.stage.kind, StageKind::WaitingForCoderabbit);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("stale detail")
+                .contains("treating it as stale")
         );
     }
 

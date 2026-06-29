@@ -311,6 +311,19 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
         Ok(self.get_open_pr_ref_from_branch_detailed(branch).await?.pr)
     }
 
+    pub async fn mark_pr_ready_for_review(&self, pull_request_id: &str) -> Result<PrRef> {
+        self.ensure_repo_configured()
+            .context("invalid argument: missing repository context")?;
+
+        let client =
+            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+                .context("internal: failed to create GitHub client")?;
+        self.with_github_total_timeout("marking pull request ready for review", async {
+            client.mark_pr_ready_for_review(pull_request_id).await
+        })
+        .await
+    }
+
     pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;

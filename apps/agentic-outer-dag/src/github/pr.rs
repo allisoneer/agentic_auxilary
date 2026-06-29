@@ -54,6 +54,10 @@ impl GitHubPrClient {
             pr: lookup.pr,
         })
     }
+
+    pub async fn mark_ready_for_review(&self, pr: &PrRef) -> Result<PrRef> {
+        self.pr_comments.mark_pr_ready_for_review(&pr.node_id).await
+    }
 }
 
 impl RepoContext {
