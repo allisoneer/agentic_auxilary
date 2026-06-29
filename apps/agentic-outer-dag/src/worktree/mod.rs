@@ -325,10 +325,12 @@ mod tests {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/post-create").unwrap();
+        let repo_git_dir_key = fixture.control_git_dir_key().unwrap();
         let _config_guard = ConfigHomeGuard::new().unwrap();
         let config_path =
-            write_gwt_config(&fixture.repo_git_dir(), &["echo ready > created.txt"]).unwrap();
-        assert_gwt_config_loads_repo(&config_path, &fixture.repo_git_dir());
+            write_gwt_config(&repo_git_dir_key, &["echo ready > created.txt"]).unwrap();
+        assert_gwt_config_loads_repo(&config_path, &repo_git_dir_key);
+        assert_load_repo_config_uses_resolved_key(&fixture, &repo_git_dir_key);
         let saved = env::current_dir().unwrap();
         env::set_current_dir(&fixture.repo).unwrap();
 
@@ -346,10 +348,12 @@ mod tests {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/no-rerun").unwrap();
+        let repo_git_dir_key = fixture.control_git_dir_key().unwrap();
         let _config_guard = ConfigHomeGuard::new().unwrap();
         let config_path =
-            write_gwt_config(&fixture.repo_git_dir(), &["echo run >> run-count.txt"]).unwrap();
-        assert_gwt_config_loads_repo(&config_path, &fixture.repo_git_dir());
+            write_gwt_config(&repo_git_dir_key, &["echo run >> run-count.txt"]).unwrap();
+        assert_gwt_config_loads_repo(&config_path, &repo_git_dir_key);
+        assert_load_repo_config_uses_resolved_key(&fixture, &repo_git_dir_key);
         let saved = env::current_dir().unwrap();
         env::set_current_dir(&fixture.repo).unwrap();
 
@@ -369,9 +373,11 @@ mod tests {
         let _guard = cwd_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/cwd-check").unwrap();
+        let repo_git_dir_key = fixture.control_git_dir_key().unwrap();
         let _config_guard = ConfigHomeGuard::new().unwrap();
-        let config_path = write_gwt_config(&fixture.repo_git_dir(), &["pwd > cwd.txt"]).unwrap();
-        assert_gwt_config_loads_repo(&config_path, &fixture.repo_git_dir());
+        let config_path = write_gwt_config(&repo_git_dir_key, &["pwd > cwd.txt"]).unwrap();
+        assert_gwt_config_loads_repo(&config_path, &repo_git_dir_key);
+        assert_load_repo_config_uses_resolved_key(&fixture, &repo_git_dir_key);
         let saved = env::current_dir().unwrap();
         env::set_current_dir(&fixture.repo).unwrap();
 
@@ -414,8 +420,12 @@ mod tests {
             run_git(&self.repo, ["branch", name])
         }
 
-        fn repo_git_dir(&self) -> String {
-            self.repo.join(".git").display().to_string()
+        fn control_git_dir_key(&self) -> Result<String> {
+            Ok(ControlRepo::resolve(&ResolveControlRepoOptions {
+                cwd: Some(&self.repo),
+                ..ResolveControlRepoOptions::default()
+            })?
+            .git_dir_key)
         }
     }
 
@@ -511,6 +521,16 @@ mod tests {
         assert!(config_path.exists());
         let loaded = GwtConfig::load().unwrap();
         assert!(loaded.repos.contains_key(repo_git_dir));
+    }
+
+    fn assert_load_repo_config_uses_resolved_key(fixture: &GitFixture, repo_git_dir_key: &str) {
+        let control = ControlRepo::resolve(&ResolveControlRepoOptions {
+            cwd: Some(&fixture.repo),
+            ..ResolveControlRepoOptions::default()
+        })
+        .unwrap();
+        assert_eq!(control.git_dir_key, repo_git_dir_key);
+        assert!(load_repo_config(&control).is_some());
     }
 
     fn worktree_paths(cwd: &Path) -> Result<Vec<String>> {
