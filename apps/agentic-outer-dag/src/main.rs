@@ -28,6 +28,8 @@ struct StartOptions<'a> {
     stop_after: Option<state::StageKind>,
     poll_interval_seconds: Option<u64>,
     coderabbit_timeout_seconds: Option<u64>,
+    opencode_session_deadline_seconds: Option<u64>,
+    opencode_inactivity_timeout_seconds: Option<u64>,
 }
 
 struct ResumeOptions<'a> {
@@ -38,6 +40,8 @@ struct ResumeOptions<'a> {
     stop_after: Option<state::StageKind>,
     poll_interval_seconds: Option<u64>,
     coderabbit_timeout_seconds: Option<u64>,
+    opencode_session_deadline_seconds: Option<u64>,
+    opencode_inactivity_timeout_seconds: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -46,6 +50,8 @@ struct SettingsOverrides {
     opencode_dispatch_enabled: Option<bool>,
     poll_interval_seconds: Option<u64>,
     coderabbit_timeout_seconds: Option<u64>,
+    opencode_session_deadline_seconds: Option<u64>,
+    opencode_inactivity_timeout_seconds: Option<u64>,
 }
 
 #[tokio::main]
@@ -98,6 +104,8 @@ async fn main() -> Result<()> {
             stop_after,
             poll_interval_seconds,
             coderabbit_timeout_seconds,
+            opencode_session_deadline_seconds,
+            opencode_inactivity_timeout_seconds,
         } => {
             handle_start(
                 &ticket,
@@ -111,6 +119,8 @@ async fn main() -> Result<()> {
                     stop_after,
                     poll_interval_seconds,
                     coderabbit_timeout_seconds,
+                    opencode_session_deadline_seconds,
+                    opencode_inactivity_timeout_seconds,
                 },
             )
             .await
@@ -123,6 +133,8 @@ async fn main() -> Result<()> {
             stop_after,
             poll_interval_seconds,
             coderabbit_timeout_seconds,
+            opencode_session_deadline_seconds,
+            opencode_inactivity_timeout_seconds,
         } => {
             handle_resume(ResumeOptions {
                 branch: branch.as_deref(),
@@ -132,6 +144,8 @@ async fn main() -> Result<()> {
                 stop_after,
                 poll_interval_seconds,
                 coderabbit_timeout_seconds,
+                opencode_session_deadline_seconds,
+                opencode_inactivity_timeout_seconds,
             })
             .await
         }
@@ -165,6 +179,23 @@ fn apply_settings_overrides(
         settings.coderabbit_timeout_seconds = coderabbit_timeout_seconds;
     }
 
+    if let Some(opencode_session_deadline_seconds) = overrides.opencode_session_deadline_seconds {
+        anyhow::ensure!(
+            opencode_session_deadline_seconds > 0,
+            "OpenCode session deadline must be at least 1 second"
+        );
+        settings.opencode_session_deadline_seconds = opencode_session_deadline_seconds;
+    }
+
+    if let Some(opencode_inactivity_timeout_seconds) = overrides.opencode_inactivity_timeout_seconds
+    {
+        anyhow::ensure!(
+            opencode_inactivity_timeout_seconds > 0,
+            "OpenCode inactivity timeout must be at least 1 second"
+        );
+        settings.opencode_inactivity_timeout_seconds = opencode_inactivity_timeout_seconds;
+    }
+
     if let Some(linear_handoff_enabled) = overrides.linear_handoff_enabled {
         settings.linear_handoff_enabled = linear_handoff_enabled;
     }
@@ -175,6 +206,8 @@ fn apply_settings_overrides(
 
     Ok(overrides.poll_interval_seconds.is_some()
         || overrides.coderabbit_timeout_seconds.is_some()
+        || overrides.opencode_session_deadline_seconds.is_some()
+        || overrides.opencode_inactivity_timeout_seconds.is_some()
         || overrides.linear_handoff_enabled.is_some()
         || overrides.opencode_dispatch_enabled.is_some())
 }
@@ -209,6 +242,8 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
             opencode_dispatch_enabled: Some(!options.no_opencode_dispatch),
             poll_interval_seconds: options.poll_interval_seconds,
             coderabbit_timeout_seconds: options.coderabbit_timeout_seconds,
+            opencode_session_deadline_seconds: options.opencode_session_deadline_seconds,
+            opencode_inactivity_timeout_seconds: options.opencode_inactivity_timeout_seconds,
         },
     )?;
     state::store::ThoughtsStateStore::save(&state)?;
@@ -233,6 +268,8 @@ async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
             opencode_dispatch_enabled: options.no_opencode_dispatch.then_some(false),
             poll_interval_seconds: options.poll_interval_seconds,
             coderabbit_timeout_seconds: options.coderabbit_timeout_seconds,
+            opencode_session_deadline_seconds: options.opencode_session_deadline_seconds,
+            opencode_inactivity_timeout_seconds: options.opencode_inactivity_timeout_seconds,
         },
     )?;
     if settings_changed {
@@ -284,6 +321,8 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
         "ticket_to_pr_runs": state.counters.ticket_to_pr_runs,
         "resolve_comments_runs": state.counters.resolve_comments_runs,
         "opencode_dispatch_enabled": state.settings.opencode_dispatch_enabled,
+        "opencode_session_deadline_seconds": state.settings.opencode_session_deadline_seconds,
+        "opencode_inactivity_timeout_seconds": state.settings.opencode_inactivity_timeout_seconds,
         "linear_handoff_enabled": state.settings.linear_handoff_enabled,
         "linear_handoff_posted": state.handoff.linear_comment_posted,
         "linear_handoff_posted_at": state.handoff.posted_at,
@@ -315,8 +354,11 @@ async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
         .clone()
         .ok_or_else(|| anyhow::anyhow!("no active OpenCode session found in state"))?;
 
-    let supervisor =
-        opencode::supervisor::OpenCodeSupervisor::start(std::path::Path::new(".")).await?;
+    let supervisor = opencode::supervisor::OpenCodeSupervisor::start(
+        std::path::Path::new("."),
+        opencode::supervisor::OpenCodeSupervisorTimeouts::from_settings(&state.settings),
+    )
+    .await?;
     supervisor
         .respond_permission(&session_id, &pending.request_id, allow)
         .await?;
@@ -355,8 +397,11 @@ async fn handle_respond_question(answer: &str) -> Result<()> {
         .clone()
         .ok_or_else(|| anyhow::anyhow!("no active OpenCode session found in state"))?;
 
-    let supervisor =
-        opencode::supervisor::OpenCodeSupervisor::start(std::path::Path::new(".")).await?;
+    let supervisor = opencode::supervisor::OpenCodeSupervisor::start(
+        std::path::Path::new("."),
+        opencode::supervisor::OpenCodeSupervisorTimeouts::from_settings(&state.settings),
+    )
+    .await?;
     supervisor
         .respond_question(&session_id, &pending.request_id, answer)
         .await?;
@@ -479,6 +524,8 @@ mod tests {
             "ticket_to_pr_runs",
             "resolve_comments_runs",
             "opencode_dispatch_enabled",
+            "opencode_session_deadline_seconds",
+            "opencode_inactivity_timeout_seconds",
             "linear_handoff_enabled",
             "linear_handoff_posted",
             "linear_handoff_posted_at",
@@ -555,6 +602,8 @@ mod tests {
                 opencode_dispatch_enabled: Some(false),
                 poll_interval_seconds: Some(3),
                 coderabbit_timeout_seconds: Some(90),
+                opencode_session_deadline_seconds: Some(28_800),
+                opencode_inactivity_timeout_seconds: Some(900),
             },
         )
         .expect("overrides should apply");
@@ -564,6 +613,8 @@ mod tests {
         assert!(!state.settings.opencode_dispatch_enabled);
         assert_eq!(state.settings.poll_interval_seconds, 3);
         assert_eq!(state.settings.coderabbit_timeout_seconds, 90);
+        assert_eq!(state.settings.opencode_session_deadline_seconds, 28_800);
+        assert_eq!(state.settings.opencode_inactivity_timeout_seconds, 900);
     }
 
     #[test]
@@ -582,6 +633,14 @@ mod tests {
         assert_eq!(
             state.settings.coderabbit_timeout_seconds,
             original.coderabbit_timeout_seconds
+        );
+        assert_eq!(
+            state.settings.opencode_session_deadline_seconds,
+            original.opencode_session_deadline_seconds
+        );
+        assert_eq!(
+            state.settings.opencode_inactivity_timeout_seconds,
+            original.opencode_inactivity_timeout_seconds
         );
         assert_eq!(
             state.settings.linear_handoff_enabled,
@@ -609,6 +668,25 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("poll interval must be at least 1 second")
+        );
+    }
+
+    #[test]
+    fn apply_settings_overrides_rejects_zero_opencode_session_deadline() {
+        let mut state = sample_state();
+
+        let err = apply_settings_overrides(
+            &mut state.settings,
+            SettingsOverrides {
+                opencode_session_deadline_seconds: Some(0),
+                ..SettingsOverrides::default()
+            },
+        )
+        .expect_err("zero deadline should fail");
+
+        assert!(
+            err.to_string()
+                .contains("OpenCode session deadline must be at least 1 second")
         );
     }
 }

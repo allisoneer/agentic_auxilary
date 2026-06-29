@@ -12,6 +12,8 @@ use std::sync::atomic::Ordering;
 pub const STATE_FILENAME: &str = "agentic-outer-dag-state.json";
 pub const DEFAULT_POLL_INTERVAL_SECONDS: u64 = 30;
 pub const DEFAULT_CODERABBIT_TIMEOUT_SECONDS: u64 = 3600;
+pub const DEFAULT_OPENCODE_SESSION_DEADLINE_SECONDS: u64 = 8 * 60 * 60;
+pub const DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS: u64 = 5 * 60;
 const SCHEMA_VERSION: u32 = 1;
 static RUN_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -52,6 +54,10 @@ pub struct Settings {
     pub dry_run: bool,
     pub poll_interval_seconds: u64,
     pub coderabbit_timeout_seconds: u64,
+    #[serde(default = "default_opencode_session_deadline_seconds")]
+    pub opencode_session_deadline_seconds: u64,
+    #[serde(default = "default_opencode_inactivity_timeout_seconds")]
+    pub opencode_inactivity_timeout_seconds: u64,
     pub max_review_cycles: u32,
     #[serde(default = "default_linear_handoff_enabled")]
     pub linear_handoff_enabled: bool,
@@ -217,6 +223,8 @@ impl RunState {
                 dry_run,
                 poll_interval_seconds: DEFAULT_POLL_INTERVAL_SECONDS,
                 coderabbit_timeout_seconds: DEFAULT_CODERABBIT_TIMEOUT_SECONDS,
+                opencode_session_deadline_seconds: DEFAULT_OPENCODE_SESSION_DEADLINE_SECONDS,
+                opencode_inactivity_timeout_seconds: DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS,
                 max_review_cycles: 5,
                 linear_handoff_enabled: default_linear_handoff_enabled(),
                 opencode_dispatch_enabled: default_opencode_dispatch_enabled(),
@@ -246,6 +254,14 @@ const fn default_linear_handoff_enabled() -> bool {
 
 const fn default_opencode_dispatch_enabled() -> bool {
     true
+}
+
+const fn default_opencode_session_deadline_seconds() -> u64 {
+    DEFAULT_OPENCODE_SESSION_DEADLINE_SECONDS
+}
+
+const fn default_opencode_inactivity_timeout_seconds() -> u64 {
+    DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS
 }
 
 fn generate_run_id() -> String {
@@ -421,6 +437,14 @@ mod tests {
 
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
+        assert_eq!(
+            roundtrip.settings.opencode_session_deadline_seconds,
+            DEFAULT_OPENCODE_SESSION_DEADLINE_SECONDS
+        );
+        assert_eq!(
+            roundtrip.settings.opencode_inactivity_timeout_seconds,
+            DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS
+        );
         assert!(roundtrip.opencode.last_diagnostics.is_none());
     }
 
@@ -459,6 +483,14 @@ mod tests {
         assert_eq!(
             state.settings.coderabbit_timeout_seconds,
             DEFAULT_CODERABBIT_TIMEOUT_SECONDS
+        );
+        assert_eq!(
+            state.settings.opencode_session_deadline_seconds,
+            DEFAULT_OPENCODE_SESSION_DEADLINE_SECONDS
+        );
+        assert_eq!(
+            state.settings.opencode_inactivity_timeout_seconds,
+            DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS
         );
     }
 

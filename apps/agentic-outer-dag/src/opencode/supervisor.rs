@@ -24,8 +24,6 @@ use std::time::Duration;
 
 const IDLE_GRACE: Duration = Duration::from_millis(1000);
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
-const SESSION_DEADLINE: Duration = Duration::from_secs(3600);
-const INACTIVITY_TIMEOUT: Duration = Duration::from_secs(300);
 const TRANSCRIPT_EMPTY_RETRY_BACKOFFS: [Duration; 2] =
     [Duration::from_millis(250), Duration::from_millis(500)];
 const NESTED_GUARD_NEEDLE: &str = "OPENCODE_ORCHESTRATOR_MANAGED";
@@ -37,6 +35,22 @@ pub struct OpenCodeSupervisor {
     _managed_server: ManagedServer,
     client: Client,
     _directory: PathBuf,
+    timeouts: OpenCodeSupervisorTimeouts,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenCodeSupervisorTimeouts {
+    pub session_deadline: Duration,
+    pub inactivity_timeout: Duration,
+}
+
+impl OpenCodeSupervisorTimeouts {
+    pub fn from_settings(settings: &crate::state::Settings) -> Self {
+        Self {
+            session_deadline: Duration::from_secs(settings.opencode_session_deadline_seconds),
+            inactivity_timeout: Duration::from_secs(settings.opencode_inactivity_timeout_seconds),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,7 +114,7 @@ enum CompletionValidation {
 }
 
 impl OpenCodeSupervisor {
-    pub async fn start(directory: &Path) -> Result<Self> {
+    pub async fn start(directory: &Path, timeouts: OpenCodeSupervisorTimeouts) -> Result<Self> {
         let cwd = directory.canonicalize().with_context(|| {
             format!(
                 "failed to canonicalize OpenCode directory {}",
@@ -151,6 +165,7 @@ impl OpenCodeSupervisor {
             _managed_server: managed,
             client,
             _directory: cwd,
+            timeouts,
         })
     }
 
@@ -225,7 +240,7 @@ impl OpenCodeSupervisor {
                 .map(|_| ())
         }));
 
-        let deadline = tokio::time::Instant::now() + SESSION_DEADLINE;
+        let deadline = tokio::time::Instant::now() + self.timeouts.session_deadline;
         let mut last_activity = tokio::time::Instant::now();
         let mut poll_interval = tokio::time::interval(POLL_INTERVAL);
         poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -236,17 +251,23 @@ impl OpenCodeSupervisor {
 
         loop {
             let now = tokio::time::Instant::now();
-            if now.duration_since(last_activity) >= INACTIVITY_TIMEOUT {
+            if now.duration_since(last_activity) >= self.timeouts.inactivity_timeout {
                 return Ok(SupervisedOutcome::Failed {
                     session_id: Some(session_id.clone()),
-                    error: "session idle timeout after 5 minutes".to_string(),
+                    error: format!(
+                        "session idle timeout after {}",
+                        describe_duration(self.timeouts.inactivity_timeout)
+                    ),
                     diagnostics: None,
                 });
             }
             if now >= deadline {
                 return Ok(SupervisedOutcome::Failed {
                     session_id: Some(session_id.clone()),
-                    error: "session execution timed out after 1 hour".to_string(),
+                    error: format!(
+                        "session execution timed out after {}",
+                        describe_duration(self.timeouts.session_deadline)
+                    ),
                     diagnostics: None,
                 });
             }
@@ -560,6 +581,19 @@ impl OpenCodeSupervisor {
     }
 }
 
+fn describe_duration(duration: Duration) -> String {
+    let seconds = duration.as_secs();
+    if seconds.is_multiple_of(3600) {
+        let hours = seconds / 3600;
+        return format!("{hours} hour{}", if hours == 1 { "" } else { "s" });
+    }
+    if seconds.is_multiple_of(60) {
+        let minutes = seconds / 60;
+        return format!("{minutes} minute{}", if minutes == 1 { "" } else { "s" });
+    }
+    format!("{seconds} second{}", if seconds == 1 { "" } else { "s" })
+}
+
 fn generate_command_message_id() -> String {
     let tick = COMMAND_MESSAGE_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!(
@@ -738,6 +772,13 @@ mod tests {
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
+    fn test_timeouts() -> OpenCodeSupervisorTimeouts {
+        OpenCodeSupervisorTimeouts {
+            session_deadline: Duration::from_secs(8 * 60 * 60),
+            inactivity_timeout: Duration::from_secs(5 * 60),
+        }
+    }
+
     fn transcript_message(role: &str, id: &str, parts: &serde_json::Value) -> serde_json::Value {
         serde_json::json!({
             "info": {
@@ -889,6 +930,16 @@ mod tests {
     }
 
     #[test]
+    fn describe_duration_uses_human_friendly_units() {
+        assert_eq!(
+            describe_duration(Duration::from_secs(8 * 60 * 60)),
+            "8 hours"
+        );
+        assert_eq!(describe_duration(Duration::from_secs(5 * 60)), "5 minutes");
+        assert_eq!(describe_duration(Duration::from_secs(45)), "45 seconds");
+    }
+
+    #[test]
     fn requires_assistant_message_after_dispatch_window() {
         let messages = parse_messages(serde_json::json!([
             transcript_message("assistant", "msg-before", &serde_json::json!([])),
@@ -963,6 +1014,7 @@ mod tests {
             _managed_server: managed,
             client,
             _directory: directory.to_path_buf(),
+            timeouts: test_timeouts(),
         }
     }
 }

@@ -53,6 +53,12 @@ pub enum Commands {
 
         #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
         coderabbit_timeout_seconds: Option<u64>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        opencode_session_deadline_seconds: Option<u64>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        opencode_inactivity_timeout_seconds: Option<u64>,
     },
     Resume {
         #[arg(long)]
@@ -75,6 +81,12 @@ pub enum Commands {
 
         #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
         coderabbit_timeout_seconds: Option<u64>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        opencode_session_deadline_seconds: Option<u64>,
+
+        #[arg(long, value_name = "u64", value_parser = clap::value_parser!(u64).range(1..))]
+        opencode_inactivity_timeout_seconds: Option<u64>,
     },
     Status {
         #[arg(long)]
@@ -203,6 +215,8 @@ mod tests {
                 stop_after: None,
                 poll_interval_seconds: None,
                 coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
                 ..
             } if ticket == "ENG-992" && branch == "feature/eng-992"
         ));
@@ -228,6 +242,8 @@ mod tests {
                 stop_after: Some(StageKind::WaitingForCoderabbit),
                 poll_interval_seconds: None,
                 coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
                 ..
             }
         ));
@@ -251,6 +267,8 @@ mod tests {
                 stop_after: Some(StageKind::DispatchingTicketToPr),
                 poll_interval_seconds: None,
                 coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
                 ..
             }
         ));
@@ -283,6 +301,8 @@ mod tests {
         assert!(help.contains("--stop-after"));
         assert!(help.contains("--poll-interval-seconds"));
         assert!(help.contains("--coderabbit-timeout-seconds"));
+        assert!(help.contains("--opencode-session-deadline-seconds"));
+        assert!(help.contains("--opencode-inactivity-timeout-seconds"));
         assert!(help.contains("--no-linear-handoff"));
         assert!(help.contains("--no-opencode-dispatch"));
         assert!(help.contains("waiting_for_coderabbit"));
@@ -300,6 +320,10 @@ mod tests {
             "5",
             "--coderabbit-timeout-seconds",
             "120",
+            "--opencode-session-deadline-seconds",
+            "28800",
+            "--opencode-inactivity-timeout-seconds",
+            "900",
         ])
         .expect("start timing overrides should parse");
 
@@ -308,6 +332,8 @@ mod tests {
             Commands::Start {
                 poll_interval_seconds: Some(5),
                 coderabbit_timeout_seconds: Some(120),
+                opencode_session_deadline_seconds: Some(28800),
+                opencode_inactivity_timeout_seconds: Some(900),
                 ..
             }
         ));
@@ -322,6 +348,10 @@ mod tests {
             "2",
             "--coderabbit-timeout-seconds",
             "45",
+            "--opencode-session-deadline-seconds",
+            "14400",
+            "--opencode-inactivity-timeout-seconds",
+            "600",
         ])
         .expect("resume timing overrides should parse");
 
@@ -330,6 +360,8 @@ mod tests {
             Commands::Resume {
                 poll_interval_seconds: Some(2),
                 coderabbit_timeout_seconds: Some(45),
+                opencode_session_deadline_seconds: Some(14400),
+                opencode_inactivity_timeout_seconds: Some(600),
                 ..
             }
         ));
@@ -359,6 +391,34 @@ mod tests {
             "0",
         ])
         .expect_err("zero timeout should fail");
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn start_rejects_zero_opencode_session_deadline() {
+        let err = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "start",
+            "--ticket",
+            "ENG-992",
+            "--opencode-session-deadline-seconds",
+            "0",
+        ])
+        .expect_err("zero deadline should fail");
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn resume_rejects_zero_opencode_inactivity_timeout() {
+        let err = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "resume",
+            "--opencode-inactivity-timeout-seconds",
+            "0",
+        ])
+        .expect_err("zero inactivity timeout should fail");
 
         assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }

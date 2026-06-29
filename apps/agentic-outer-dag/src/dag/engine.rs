@@ -408,7 +408,7 @@ impl DagEngine {
             return ThoughtsStateStore::save(state);
         }
 
-        self.supervisor()
+        self.supervisor(&state.settings)
             .await?
             .ensure_commands_present(&[command_name, "linear_ticket_2_pr", "resolve_pr_comments"])
             .await?;
@@ -418,7 +418,7 @@ impl DagEngine {
         ThoughtsStateStore::save(state)?;
 
         let outcome = self
-            .supervisor()
+            .supervisor(&state.settings)
             .await?
             .run_command_supervised(
                 state.opencode.active_session_id.as_deref(),
@@ -475,9 +475,17 @@ impl DagEngine {
         ThoughtsStateStore::save(state)
     }
 
-    async fn supervisor(&mut self) -> Result<&OpenCodeSupervisor> {
+    async fn supervisor(&mut self, settings: &state::Settings) -> Result<&OpenCodeSupervisor> {
         if self.supervisor.is_none() {
-            self.supervisor = Some(OpenCodeSupervisor::start(std::path::Path::new(".")).await?);
+            self.supervisor = Some(
+                OpenCodeSupervisor::start(
+                    std::path::Path::new("."),
+                    crate::opencode::supervisor::OpenCodeSupervisorTimeouts::from_settings(
+                        settings,
+                    ),
+                )
+                .await?,
+            );
         }
 
         self.supervisor
