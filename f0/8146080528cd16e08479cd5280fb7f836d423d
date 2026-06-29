@@ -1,0 +1,21 @@
+apps/agentic-outer-dag/src/worktree/mod.rs
+  s_567d3b67ceb653::t_e30d2feeb4046c 328,332-333,351,355-356,376,378-380,423,525-533
+  s_567d3b67ceb653::t_b0795f35372d3a 331,354,424-428
+  s_567d3b67ceb653::t_b4aae92b207df2 534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "f08146080528cd16e08479cd5280fb7f836d423d",
+  "prompts": {},
+  "sessions": {
+    "s_567d3b67ceb653": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0eac3836effeggJPq0fqcjeM0O",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
