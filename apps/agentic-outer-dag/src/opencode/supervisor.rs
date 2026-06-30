@@ -701,8 +701,12 @@ struct LauncherConfig {
 fn resolve_launcher_config(base_dir: &Path) -> Result<LauncherConfig> {
     let launcher_args = parse_launcher_args();
     if !launcher_args.is_empty() {
-        let binary = std::env::var(version::OPENCODE_BINARY_ENV)
-            .map_or_else(|_| "opencode".to_string(), |value| value.trim().to_string());
+        let binary = match std::env::var(version::OPENCODE_BINARY_ENV) {
+            Ok(value) => value.trim().to_string(),
+            Err(_) => anyhow::bail!(
+                "OPENCODE_BINARY_ARGS is set but OPENCODE_BINARY is not set; set OPENCODE_BINARY to the launcher command"
+            ),
+        };
         if binary.is_empty() {
             anyhow::bail!(
                 "OPENCODE_BINARY_ARGS is set but OPENCODE_BINARY is empty; set it to the launcher command"
@@ -763,6 +767,7 @@ fn parse_launcher_args() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::process_state_lock;
     use std::process::Stdio;
     use tempfile::TempDir;
     use tokio::process::Command;
@@ -1016,5 +1021,129 @@ mod tests {
             _directory: directory.to_path_buf(),
             timeouts: test_timeouts(),
         }
+    }
+
+    #[test]
+    fn resolve_launcher_config_errors_when_args_set_but_binary_missing() {
+        let _guard = process_state_lock().lock().unwrap();
+        let previous_binary = std::env::var_os(version::OPENCODE_BINARY_ENV);
+        let previous_args = std::env::var_os(version::OPENCODE_BINARY_ARGS_ENV);
+
+        // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+        unsafe {
+            std::env::remove_var(version::OPENCODE_BINARY_ENV);
+            std::env::set_var(version::OPENCODE_BINARY_ARGS_ENV, "serve --help");
+        }
+
+        let err = resolve_launcher_config(Path::new("/tmp/project"))
+            .expect_err("missing launcher binary should fail");
+
+        match previous_binary {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::set_var(version::OPENCODE_BINARY_ENV, value) };
+            }
+            None => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::remove_var(version::OPENCODE_BINARY_ENV) };
+            }
+        }
+        match previous_args {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::set_var(version::OPENCODE_BINARY_ARGS_ENV, value) };
+            }
+            None => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::remove_var(version::OPENCODE_BINARY_ARGS_ENV) };
+            }
+        }
+
+        assert!(
+            err.to_string()
+                .contains("OPENCODE_BINARY_ARGS is set but OPENCODE_BINARY is not set")
+        );
+    }
+
+    #[test]
+    fn resolve_launcher_config_errors_when_args_set_but_binary_empty() {
+        let _guard = process_state_lock().lock().unwrap();
+        let previous_binary = std::env::var_os(version::OPENCODE_BINARY_ENV);
+        let previous_args = std::env::var_os(version::OPENCODE_BINARY_ARGS_ENV);
+
+        // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+        unsafe {
+            std::env::set_var(version::OPENCODE_BINARY_ENV, "   ");
+            std::env::set_var(version::OPENCODE_BINARY_ARGS_ENV, "serve --help");
+        }
+
+        let err = resolve_launcher_config(Path::new("/tmp/project"))
+            .expect_err("empty launcher binary should fail");
+
+        match previous_binary {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::set_var(version::OPENCODE_BINARY_ENV, value) };
+            }
+            None => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::remove_var(version::OPENCODE_BINARY_ENV) };
+            }
+        }
+        match previous_args {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::set_var(version::OPENCODE_BINARY_ARGS_ENV, value) };
+            }
+            None => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::remove_var(version::OPENCODE_BINARY_ARGS_ENV) };
+            }
+        }
+
+        assert!(err.to_string().contains("OPENCODE_BINARY is empty"));
+    }
+
+    #[test]
+    fn resolve_launcher_config_accepts_explicit_binary_with_args() {
+        let _guard = process_state_lock().lock().unwrap();
+        let previous_binary = std::env::var_os(version::OPENCODE_BINARY_ENV);
+        let previous_args = std::env::var_os(version::OPENCODE_BINARY_ARGS_ENV);
+
+        // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+        unsafe {
+            std::env::set_var(version::OPENCODE_BINARY_ENV, "bunx");
+            std::env::set_var(
+                version::OPENCODE_BINARY_ARGS_ENV,
+                "--yes opencode-ai@1.17.4",
+            );
+        }
+
+        let config = resolve_launcher_config(Path::new("/tmp/project"))
+            .expect("explicit launcher binary should succeed");
+
+        match previous_binary {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::set_var(version::OPENCODE_BINARY_ENV, value) };
+            }
+            None => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::remove_var(version::OPENCODE_BINARY_ENV) };
+            }
+        }
+        match previous_args {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::set_var(version::OPENCODE_BINARY_ARGS_ENV, value) };
+            }
+            None => {
+                // SAFETY: this test serializes process-wide env mutation with process_state_lock.
+                unsafe { std::env::remove_var(version::OPENCODE_BINARY_ARGS_ENV) };
+            }
+        }
+
+        assert_eq!(config.binary, "bunx");
+        assert_eq!(config.launcher_args, vec!["--yes", "opencode-ai@1.17.4"]);
     }
 }
