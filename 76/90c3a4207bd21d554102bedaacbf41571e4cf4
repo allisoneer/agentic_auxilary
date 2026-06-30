@@ -1,0 +1,50 @@
+apps/agentic-outer-dag/src/worktree/freshness.rs
+  s_9ce2e255bdb79f::t_39277a07457f58 101-102,110,112,120,123,134,137,145,150
+  s_9ce2e255bdb79f::t_17c640c169dda6 48-64,91,161-170
+apps/agentic-outer-dag/src/worktree/mod.rs
+  s_9ce2e255bdb79f::t_39277a07457f58 294-295,305,307,321,330,341,350,363,371,430,447,453,462,468
+apps/agentic-outer-dag/src/test_support.rs
+  s_9ce2e255bdb79f::t_39277a07457f58 1-7,9-11,13-16,18-28
+  s_9ce2e255bdb79f::t_e412841433cda3 8,12,17
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_9ce2e255bdb79f::t_341286c40eee00 693
+  s_9ce2e255bdb79f::t_b729256df12221 680
+  s_9ce2e255bdb79f::t_aca38b7b2a9a94 1126,1132-1141,1144-1147
+  s_9ce2e255bdb79f::t_b321da89d9ae2f 275,281-285,536-537,544-545
+  s_9ce2e255bdb79f::t_8904de545b213d 442-445
+  s_9ce2e255bdb79f::t_39277a07457f58 933
+  s_9ce2e255bdb79f::t_bda92d57e6df24 93-96,276-280,286,414,429-430,440-441,446-448,685,729-734,1125,1127-1131,1142,1148-1154
+  s_9ce2e255bdb79f::t_e454b262937263 287
+  s_9ce2e255bdb79f::t_d251def907dbaf 735-736
+  s_9ce2e255bdb79f::t_131dae2fd5677f 1143
+  s_9ce2e255bdb79f::t_7b65cee2c85ff7 1155
+apps/agentic-outer-dag/src/preview.rs
+  s_9ce2e255bdb79f::t_39277a07457f58 70-71,126,128,142-154
+apps/agentic-outer-dag/src/github/coderabbit.rs
+  s_9ce2e255bdb79f::t_49a6d064722d08 27-29,36,41-45,64-67,74,79,83,107,114,138-154,159,163-166,171,175,179,182
+  s_9ce2e255bdb79f::t_c16b9e35272e4c 180-181
+apps/agentic-outer-dag/src/main.rs
+  s_9ce2e255bdb79f::t_281e6978dfa89b 770-771
+  s_9ce2e255bdb79f::t_bfa5aed544de82 754-757,765-766
+  s_9ce2e255bdb79f::t_39277a07457f58 19-20
+  s_9ce2e255bdb79f::t_e99bfcad625503 59-86,100,400,439,473-474,476,727-753,758-764,767-769,772-781,783
+  s_9ce2e255bdb79f::t_1c05d9ad8c5ff3 782
+apps/agentic-outer-dag/src/state/store.rs
+  s_9ce2e255bdb79f::t_17c640c169dda6 24,49-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "7690c3a4207bd21d554102bedaacbf41571e4cf4",
+  "prompts": {},
+  "sessions": {
+    "s_9ce2e255bdb79f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ea3469eeffep4YKy64JiylBB6",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
