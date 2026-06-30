@@ -176,21 +176,8 @@ impl GitHubClient {
             "/repos/{}/{}/commits/{sha}/check-suites",
             self.owner, self.repo
         );
-        let mut suites = Vec::new();
-        let mut page = 1u32;
-        loop {
-            let value = self
-                .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
-                .await?;
-            let page_suites = parse_check_suites_response(value)?;
-            let page_len = page_suites.len();
-            suites.extend(page_suites);
-            if page_len < REST_PER_PAGE {
-                break;
-            }
-            page += 1;
-        }
-        Ok(suites)
+        self.rest_get_paginated(&base_path, parse_check_suites_response)
+            .await
     }
 
     pub async fn list_pull_request_reviews(
@@ -201,21 +188,8 @@ impl GitHubClient {
             "/repos/{}/{}/pulls/{pr_number}/reviews",
             self.owner, self.repo
         );
-        let mut reviews = Vec::new();
-        let mut page = 1u32;
-        loop {
-            let value = self
-                .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
-                .await?;
-            let page_reviews = parse_reviews_response(value)?;
-            let page_len = page_reviews.len();
-            reviews.extend(page_reviews);
-            if page_len < REST_PER_PAGE {
-                break;
-            }
-            page += 1;
-        }
-        Ok(reviews)
+        self.rest_get_paginated(&base_path, parse_reviews_response)
+            .await
     }
 
     pub async fn list_issue_comments(&self, issue_number: u64) -> Result<Vec<IssueCommentSummary>> {
@@ -223,21 +197,29 @@ impl GitHubClient {
             "/repos/{}/{}/issues/{issue_number}/comments",
             self.owner, self.repo
         );
-        let mut comments = Vec::new();
+        self.rest_get_paginated(&base_path, parse_issue_comments_response)
+            .await
+    }
+
+    async fn rest_get_paginated<T, F>(&self, base_path: &str, parse_page: F) -> Result<Vec<T>>
+    where
+        F: Fn(serde_json::Value) -> Result<Vec<T>>,
+    {
+        let mut items = Vec::new();
         let mut page = 1u32;
         loop {
             let value = self
                 .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
                 .await?;
-            let page_comments = parse_issue_comments_response(value)?;
-            let page_len = page_comments.len();
-            comments.extend(page_comments);
+            let page_items = parse_page(value)?;
+            let page_len = page_items.len();
+            items.extend(page_items);
             if page_len < REST_PER_PAGE {
                 break;
             }
             page += 1;
         }
-        Ok(comments)
+        Ok(items)
     }
 
     async fn rest_get(&self, path: &str) -> Result<serde_json::Value> {
@@ -971,6 +953,58 @@ mod tests {
         assert_eq!(comments.len(), REST_PER_PAGE + 1);
         page1.assert_async().await;
         page2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn rest_get_reports_http_status_failures() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/repos/owner/repo/commits/missing/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(500)
+            .with_body("server error")
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .list_check_suites_for_ref("missing")
+            .await
+            .expect_err("http status failure should bubble up");
+
+        assert!(
+            err.to_string().contains("GitHub REST request failed:"),
+            "unexpected error: {err}"
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn rest_get_reports_json_parse_failures() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/repos/owner/repo/issues/9/comments")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body("{not-json")
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .list_issue_comments(9)
+            .await
+            .expect_err("malformed json should bubble up");
+
+        assert!(
+            err.to_string().contains("GitHub REST JSON parse failed:"),
+            "unexpected error: {err}"
+        );
+        mock.assert_async().await;
     }
 
     #[test]

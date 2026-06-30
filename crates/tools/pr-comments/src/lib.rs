@@ -26,6 +26,9 @@ use pagination::paginate_slice;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(test)]
+use std::ffi::OsString;
+
 // Re-export agentic-tools types for MCP server usage
 pub use tools::build_registry;
 
@@ -241,6 +244,11 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
         anyhow::bail!(msg);
     }
 
+    fn github_client(&self) -> Result<github::GitHubClient> {
+        github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
+            .context("internal: failed to create GitHub client")
+    }
+
     async fn get_pr_number(&self, pr_number: Option<u64>) -> Result<u64> {
         if let Some(pr) = pr_number {
             return Ok(pr);
@@ -252,8 +260,7 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
             .current_branch
             .context("Could not determine current git branch")?;
 
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())?;
+        let client = self.github_client()?;
 
         match self
             .with_github_total_timeout(
@@ -303,9 +310,7 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;
 
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let client = self.github_client()?;
         self.with_github_total_timeout(
             &format!("looking up open pull request ref for branch '{branch}'"),
             async { client.get_open_pr_ref_from_branch_detailed(branch).await },
@@ -321,9 +326,7 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;
 
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let client = self.github_client()?;
         self.with_github_total_timeout("marking pull request ready for review", async {
             client.mark_pr_ready_for_review(pull_request_id).await
         })
@@ -333,9 +336,7 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
     pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let client = self.github_client()?;
         self.with_github_total_timeout(&format!("listing check suites for ref {sha}"), async {
             client.list_check_suites_for_ref(sha).await
         })
@@ -348,9 +349,7 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
     ) -> Result<Vec<PullRequestReviewSummary>> {
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let client = self.github_client()?;
         self.with_github_total_timeout(&format!("listing reviews for PR #{pr_number}"), async {
             client.list_pull_request_reviews(pr_number).await
         })
@@ -360,9 +359,7 @@ This tool relies on ambient git repo detection. Run it inside a git checkout wit
     pub async fn list_issue_comments(&self, issue_number: u64) -> Result<Vec<IssueCommentSummary>> {
         self.ensure_repo_configured()
             .context("invalid argument: missing repository context")?;
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let client = self.github_client()?;
         self.with_github_total_timeout(
             &format!("listing issue comments for issue #{issue_number}"),
             async { client.list_issue_comments(issue_number).await },
@@ -425,12 +422,7 @@ impl PrComments {
 
         // If we need to fetch, do async work without holding the lock
         if needs_fetch {
-            let client = github::GitHubClient::new(
-                self.owner.clone(),
-                self.repo.clone(),
-                self.token.clone(),
-            )
-            .context("internal: failed to create GitHub client")?;
+            let client = self.github_client()?;
 
             let (comments, resolution_map) = self
                 .with_github_total_timeout(
@@ -544,12 +536,7 @@ impl PrComments {
         };
 
         if needs_fetch {
-            let client = github::GitHubClient::new(
-                self.owner.clone(),
-                self.repo.clone(),
-                self.token.clone(),
-            )
-            .context("internal: failed to create GitHub client")?;
+            let client = self.github_client()?;
 
             let prs = self
                 .with_github_total_timeout(&format!("listing pull requests for state={state}"), async {
@@ -628,9 +615,7 @@ impl PrComments {
             .await
             .context("invalid argument: failed to determine PR number")?;
 
-        let client =
-            github::GitHubClient::new(self.owner.clone(), self.repo.clone(), self.token.clone())
-                .context("internal: failed to create GitHub client")?;
+        let client = self.github_client()?;
 
         // Apply AI prefix to clearly identify automated responses
         let prefixed_body = with_ai_prefix(&body);
@@ -667,11 +652,62 @@ impl PrComments {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsStr;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::MutexGuard;
     use std::sync::OnceLock;
 
     static TOKEN_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    struct TokenEnvGuard {
+        _lock: MutexGuard<'static, ()>,
+        previous_gh: Option<OsString>,
+        previous_github: Option<OsString>,
+    }
+
+    impl TokenEnvGuard {
+        fn acquire() -> Self {
+            let lock = token_env_lock()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            Self {
+                _lock: lock,
+                previous_gh: std::env::var_os("GH_TOKEN"),
+                previous_github: std::env::var_os("GITHUB_TOKEN"),
+            }
+        }
+
+        fn set_var(key: &str, value: impl AsRef<OsStr>) {
+            // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+            unsafe { std::env::set_var(key, value) }
+        }
+
+        fn remove_var(key: &str) {
+            // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+            unsafe { std::env::remove_var(key) }
+        }
+    }
+
+    impl Drop for TokenEnvGuard {
+        fn drop(&mut self) {
+            restore_env_var("GH_TOKEN", self.previous_gh.as_ref());
+            restore_env_var("GITHUB_TOKEN", self.previous_github.as_ref());
+        }
+    }
+
+    fn restore_env_var(key: &str, value: Option<&OsString>) {
+        match value {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+                unsafe { std::env::set_var(key, value) }
+            }
+            None => {
+                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+                unsafe { std::env::remove_var(key) }
+            }
+        }
+    }
 
     fn sample_comment(id: u64) -> ReviewComment {
         ReviewComment {
@@ -859,76 +895,22 @@ mod tests {
 
     #[test]
     fn with_repo_records_safe_token_source_label() {
-        let _guard = token_env_lock().lock().expect("env lock should succeed");
-        let previous_gh = std::env::var_os("GH_TOKEN");
-        let previous_github = std::env::var_os("GITHUB_TOKEN");
-
-        // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-        unsafe {
-            std::env::set_var("GH_TOKEN", "test-token");
-            std::env::remove_var("GITHUB_TOKEN");
-        }
+        let _guard = TokenEnvGuard::acquire();
+        TokenEnvGuard::set_var("GH_TOKEN", "test-token");
+        TokenEnvGuard::remove_var("GITHUB_TOKEN");
 
         let comments = PrComments::with_repo("owner".into(), "repo".into());
-
-        match previous_gh {
-            Some(value) => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::set_var("GH_TOKEN", value) }
-            }
-            None => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::remove_var("GH_TOKEN") }
-            }
-        }
-        match previous_github {
-            Some(value) => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::set_var("GITHUB_TOKEN", value) }
-            }
-            None => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::remove_var("GITHUB_TOKEN") }
-            }
-        }
 
         assert_eq!(comments.token_source_label(), Some("GH_TOKEN"));
     }
 
     #[test]
     fn resolve_token_ignores_empty_gh_token_and_falls_back_to_github_token() {
-        let _guard = token_env_lock().lock().expect("env lock should succeed");
-        let previous_gh = std::env::var_os("GH_TOKEN");
-        let previous_github = std::env::var_os("GITHUB_TOKEN");
-
-        // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-        unsafe {
-            std::env::set_var("GH_TOKEN", "   ");
-            std::env::set_var("GITHUB_TOKEN", " fallback-token ");
-        }
+        let _guard = TokenEnvGuard::acquire();
+        TokenEnvGuard::set_var("GH_TOKEN", "   ");
+        TokenEnvGuard::set_var("GITHUB_TOKEN", " fallback-token ");
 
         let (token, source) = PrComments::resolve_token();
-
-        match previous_gh {
-            Some(value) => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::set_var("GH_TOKEN", value) }
-            }
-            None => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::remove_var("GH_TOKEN") }
-            }
-        }
-        match previous_github {
-            Some(value) => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::set_var("GITHUB_TOKEN", value) }
-            }
-            None => {
-                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
-                unsafe { std::env::remove_var("GITHUB_TOKEN") }
-            }
-        }
 
         assert_eq!(token.as_deref(), Some("fallback-token"));
         assert_eq!(source, Some(GitHubTokenSource::GitHubToken));
