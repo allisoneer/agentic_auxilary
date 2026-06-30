@@ -1,0 +1,24 @@
+crates/tools/pr-comments/src/github.rs
+  s_2bdf7568102e2c::t_44a10a4976c59d 179-180,191-192,200-208,214-216,222,958-1008
+  s_2bdf7568102e2c::t_85aa17db444297 1009
+crates/tools/pr-comments/src/lib.rs
+  s_2bdf7568102e2c::t_e0762719f4333f 681,686,898-900,909-911
+  s_2bdf7568102e2c::t_44a10a4976c59d 29-31,247-251,263,313,329,339,352,362,425,539,618,655,658,663-680,682-684,687-711
+  s_2bdf7568102e2c::t_56ad0792ab03c4 685
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "6555c190e2f270d55fd62a5c5c7ff8a31c53ba87",
+  "prompts": {},
+  "sessions": {
+    "s_2bdf7568102e2c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e53bdf21ffe4dx33NfmkMXnty",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
