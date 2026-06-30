@@ -1,23 +1,44 @@
 use crate::state::StageKind;
 
 pub fn is_terminal(kind: &StageKind) -> bool {
-    matches!(
-        kind,
-        StageKind::StoppedManualHandoff
-            | StageKind::StoppedReviewSkipped
-            | StageKind::StoppedTimedOut
-            | StageKind::StoppedReadyForHumanReview
-            | StageKind::StoppedDirtyTree
-            | StageKind::StoppedRebaseConflict
-            | StageKind::StoppedFailed
-    )
+    match kind {
+        StageKind::Init
+        | StageKind::FreshnessBeforeTicketToPr
+        | StageKind::DispatchingTicketToPr
+        | StageKind::DetectingPr
+        | StageKind::FreshnessBeforeCoderabbitWait
+        | StageKind::WaitingForCoderabbit
+        | StageKind::DispatchingResolvePrComments
+        | StageKind::StoppedPermissionRequired
+        | StageKind::StoppedQuestionRequired => false,
+        StageKind::StoppedDirtyTree
+        | StageKind::StoppedRebaseConflict
+        | StageKind::StoppedManualHandoff
+        | StageKind::StoppedReviewSkipped
+        | StageKind::StoppedTimedOut
+        | StageKind::StoppedReadyForHumanReview
+        | StageKind::StoppedFailed => true,
+    }
 }
 
 pub fn is_paused(kind: &StageKind) -> bool {
-    matches!(
-        kind,
-        StageKind::StoppedPermissionRequired | StageKind::StoppedQuestionRequired
-    )
+    match kind {
+        StageKind::StoppedPermissionRequired | StageKind::StoppedQuestionRequired => true,
+        StageKind::Init
+        | StageKind::FreshnessBeforeTicketToPr
+        | StageKind::DispatchingTicketToPr
+        | StageKind::DetectingPr
+        | StageKind::FreshnessBeforeCoderabbitWait
+        | StageKind::WaitingForCoderabbit
+        | StageKind::DispatchingResolvePrComments
+        | StageKind::StoppedDirtyTree
+        | StageKind::StoppedRebaseConflict
+        | StageKind::StoppedManualHandoff
+        | StageKind::StoppedReviewSkipped
+        | StageKind::StoppedTimedOut
+        | StageKind::StoppedReadyForHumanReview
+        | StageKind::StoppedFailed => false,
+    }
 }
 
 pub fn sequence_index(kind: &StageKind) -> Option<u8> {
@@ -29,7 +50,15 @@ pub fn sequence_index(kind: &StageKind) -> Option<u8> {
         StageKind::FreshnessBeforeCoderabbitWait => Some(4),
         StageKind::WaitingForCoderabbit => Some(5),
         StageKind::DispatchingResolvePrComments => Some(6),
-        _ => None,
+        StageKind::StoppedPermissionRequired
+        | StageKind::StoppedQuestionRequired
+        | StageKind::StoppedDirtyTree
+        | StageKind::StoppedRebaseConflict
+        | StageKind::StoppedManualHandoff
+        | StageKind::StoppedReviewSkipped
+        | StageKind::StoppedTimedOut
+        | StageKind::StoppedReadyForHumanReview
+        | StageKind::StoppedFailed => None,
     }
 }
 

@@ -115,6 +115,20 @@ mod tests {
         }
     }
 
+    fn check_suite(
+        status: &str,
+        conclusion: Option<&str>,
+        app_slug: Option<&str>,
+    ) -> CheckSuiteSummary {
+        CheckSuiteSummary {
+            id: 1,
+            status: status.to_string(),
+            conclusion: conclusion.map(str::to_string),
+            app_slug: app_slug.map(str::to_string),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
     #[test]
     fn matches_coderabbit_logins_case_insensitively() {
         for login in [
@@ -132,6 +146,48 @@ mod tests {
         for login in ["dependabot[bot]", "renovate[bot]"] {
             assert!(!is_coderabbit_login(login), "unexpected match for {login}");
         }
+    }
+
+    #[test]
+    fn interpret_check_suites_returns_none_without_coderabbit_suite() {
+        assert_eq!(
+            interpret_check_suites(&[check_suite("queued", None, Some("github-actions"))]),
+            None
+        );
+    }
+
+    #[test]
+    fn interpret_check_suites_treats_queued_and_in_progress_as_waiting() {
+        for status in ["queued", "in_progress"] {
+            assert_eq!(
+                interpret_check_suites(&[check_suite(status, None, Some("coderabbitai"))]),
+                Some(CodeRabbitPoll::Waiting)
+            );
+        }
+    }
+
+    #[test]
+    fn interpret_check_suites_treats_completed_success_as_completed() {
+        assert_eq!(
+            interpret_check_suites(&[check_suite(
+                "completed",
+                Some("success"),
+                Some("coderabbitai")
+            )]),
+            Some(CodeRabbitPoll::Completed)
+        );
+    }
+
+    #[test]
+    fn interpret_check_suites_keeps_completed_non_success_as_completed_for_current_policy() {
+        assert_eq!(
+            interpret_check_suites(&[check_suite(
+                "completed",
+                Some("failure"),
+                Some("coderabbitai")
+            )]),
+            Some(CodeRabbitPoll::Completed)
+        );
     }
 
     #[test]

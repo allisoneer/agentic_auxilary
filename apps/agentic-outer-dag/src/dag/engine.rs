@@ -17,13 +17,13 @@ use std::fmt::Write as _;
 use std::future::Future;
 use std::time::Duration;
 
-const DETECTING_PR_MAX_ATTEMPTS: usize = 5;
 const DETECTING_PR_BACKOFFS: [Duration; 4] = [
     Duration::from_secs(1),
     Duration::from_secs(2),
     Duration::from_secs(4),
     Duration::from_secs(8),
 ];
+const DETECTING_PR_MAX_ATTEMPTS: usize = DETECTING_PR_BACKOFFS.len() + 1;
 
 pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
@@ -92,6 +92,10 @@ fn poll_interval_sleep_duration(poll_interval_seconds: u64) -> std::time::Durati
 
 fn should_reset_coderabbit_timeout_baseline(was_recovered: bool, now_recovered: bool) -> bool {
     !was_recovered && now_recovered
+}
+
+fn detecting_pr_retry_attempt_number(attempt_index: usize) -> usize {
+    attempt_index + 2
 }
 
 fn transition_to_stopped_failed(state: &mut RunState, message: impl Into<String>) {
@@ -499,7 +503,16 @@ impl DagEngine {
                     ThoughtsStateStore::save(&state)?;
                     return Ok(());
                 }
-                _ => return Ok(()),
+                StageKind::Init
+                | StageKind::StoppedPermissionRequired
+                | StageKind::StoppedQuestionRequired
+                | StageKind::StoppedDirtyTree
+                | StageKind::StoppedRebaseConflict
+                | StageKind::StoppedManualHandoff
+                | StageKind::StoppedReviewSkipped
+                | StageKind::StoppedTimedOut
+                | StageKind::StoppedReadyForHumanReview
+                | StageKind::StoppedFailed => return Ok(()),
             }
         }
     }
@@ -664,7 +677,11 @@ where
             return Ok(lookup_result);
         }
 
-        on_retry(attempt_index + 2, backoff, &lookup_result)?;
+        on_retry(
+            detecting_pr_retry_attempt_number(attempt_index),
+            backoff,
+            &lookup_result,
+        )?;
         sleep(backoff).await;
     }
 
@@ -676,6 +693,7 @@ where
 mod tests {
     use super::DagEngine;
     use super::DraftSkipRecovery;
+    use super::detecting_pr_retry_attempt_number;
     use super::ensure_pr_ready_for_review;
     use super::persist_stop_state_before_handoff;
     use super::planned_actions_for_start;
@@ -732,6 +750,13 @@ mod tests {
         assert!(!should_reset_coderabbit_timeout_baseline(false, false));
         assert!(!should_reset_coderabbit_timeout_baseline(true, true));
         assert!(!should_reset_coderabbit_timeout_baseline(true, false));
+    }
+
+    #[test]
+    fn detecting_pr_retry_attempt_number_starts_from_second_attempt() {
+        assert_eq!(detecting_pr_retry_attempt_number(0), 2);
+        assert_eq!(detecting_pr_retry_attempt_number(1), 3);
+        assert_eq!(detecting_pr_retry_attempt_number(3), 5);
     }
 
     #[test]
@@ -956,9 +981,11 @@ mod tests {
     async fn detect_pr_with_retry_stops_after_pr_appears() {
         let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let seen_sleeps = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let seen_attempt_numbers = std::sync::Arc::new(Mutex::new(Vec::new()));
 
         let lookup_attempts = std::sync::Arc::clone(&attempts);
         let sleep_log = std::sync::Arc::clone(&seen_sleeps);
+        let attempt_log = std::sync::Arc::clone(&seen_attempt_numbers);
         let result = super::detect_pr_with_retry(
             move || {
                 let lookup_attempts = std::sync::Arc::clone(&lookup_attempts);
@@ -977,7 +1004,10 @@ mod tests {
                     })
                 }
             },
-            |_, _, _| Ok(()),
+            move |attempt_number, _, _| {
+                attempt_log.lock().unwrap().push(attempt_number);
+                Ok(())
+            },
             move |duration| {
                 let sleep_log = std::sync::Arc::clone(&sleep_log);
                 async move {
@@ -994,6 +1024,7 @@ mod tests {
             seen_sleeps.lock().unwrap().as_slice(),
             &[Duration::from_secs(1)]
         );
+        assert_eq!(seen_attempt_numbers.lock().unwrap().as_slice(), &[2]);
     }
 
     #[tokio::test]

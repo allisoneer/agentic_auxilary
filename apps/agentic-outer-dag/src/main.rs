@@ -395,6 +395,7 @@ async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
     supervisor
         .respond_permission(&session_id, &pending.request_id, allow)
         .await?;
+    drop(supervisor);
 
     state.opencode.pending_permission = None;
     state.stage.kind = require_actionable_resume_stage(&state)?;
@@ -434,6 +435,7 @@ async fn handle_respond_question(answer: &str) -> Result<()> {
     supervisor
         .respond_question(&session_id, &pending.request_id, answer)
         .await?;
+    drop(supervisor);
 
     state.opencode.pending_question = None;
     state.stage.kind = require_actionable_resume_stage(&state)?;

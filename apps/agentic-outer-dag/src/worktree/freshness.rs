@@ -141,6 +141,20 @@ mod tests {
     }
 
     #[test]
+    fn dirty_tree_blocks_freshness_even_in_dry_run() {
+        let _guard = process_state_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
+        fixture.write_shared_file("uncommitted change\n").unwrap();
+
+        let outcome = run("origin/main", false).unwrap();
+        let dry_run_outcome = run("origin/main", true).unwrap();
+
+        assert_eq!(outcome, FreshnessOutcome::DirtyTree);
+        assert_eq!(dry_run_outcome, FreshnessOutcome::DirtyTree);
+    }
+
+    #[test]
     fn returns_conflict_when_rebase_hits_merge_conflict() {
         let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();

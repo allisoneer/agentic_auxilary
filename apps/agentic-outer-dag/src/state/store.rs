@@ -62,13 +62,14 @@ fn validate_schema_version(state: &RunState, path: &std::path::Path) -> Result<(
 mod tests {
     use super::validate_schema_version;
     use crate::state;
+    use crate::test_support::process_state_lock;
     use crate::worktree::TargetWorktree;
 
-    fn sample_state() -> state::RunState {
+    fn sample_state(cwd: std::path::PathBuf) -> state::RunState {
         state::RunState::for_start(
             "ENG-992",
             &TargetWorktree {
-                path: std::env::current_dir().unwrap(),
+                path: cwd,
                 branch: "feature/eng-992".to_string(),
                 base_ref: "origin/main".to_string(),
             },
@@ -79,13 +80,15 @@ mod tests {
 
     #[test]
     fn validate_schema_version_accepts_current_version() {
-        let state = sample_state();
+        let _guard = process_state_lock().lock().unwrap();
+        let state = sample_state(std::env::current_dir().unwrap());
         validate_schema_version(&state, std::path::Path::new("state.json")).unwrap();
     }
 
     #[test]
     fn validate_schema_version_rejects_mismatch_with_reset_guidance() {
-        let mut state = sample_state();
+        let _guard = process_state_lock().lock().unwrap();
+        let mut state = sample_state(std::env::current_dir().unwrap());
         state.schema_version = state.schema_version.saturating_add(1);
 
         let err = validate_schema_version(&state, std::path::Path::new("state.json"))
