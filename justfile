@@ -34,6 +34,7 @@ help:
     @echo "  just fix              # auto-fix clippy warnings for entire workspace"
     @echo "  just test             # run tests for entire workspace"
     @echo "  just build            # build entire workspace"
+    @echo "  just clean            # clean workspace + vendored Codex artifacts"
     @echo "  just fmt              # format entire workspace"
     @echo "  just fmt-check        # check formatting for entire workspace"
     @echo ""
@@ -73,6 +74,20 @@ test-integration: mcp-test
 
 build:
     {{ exec }}cargo build --workspace
+
+clean: clean-workspace clean-codex
+
+clean-workspace:
+    {{ exec }}cargo clean --workspace
+
+clean-codex:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    MANIFEST="vendor/codex/codex-rs/Cargo.toml"
+    if [ -f "$MANIFEST" ]; then
+      {{ exec }}cargo clean --manifest-path "$MANIFEST"
+    fi
 
 codex-check:
     cd vendor/codex/codex-rs && cargo check -p codex-cli --all-targets
