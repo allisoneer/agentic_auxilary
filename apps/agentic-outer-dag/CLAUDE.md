@@ -33,6 +33,10 @@ just crate-build agentic-outer-dag-bin
 
 Add any human-authored notes below. Content outside autogen blocks is preserved by xtask sync.
 
+- OpenCode session monitoring/completion detection in `src/opencode/supervisor.rs` is intentionally kept in behavioral parity with
+  `apps/opencode-orchestrator-mcp/src/tools.rs` (OrchestratorRunTool). If changing idle gating or transcript settling, update the
+  outer-DAG regression tests for ENG-929/ENG-972 and cross-check orchestrator behavior.
+
 ## Phase 1 live-test ladder (conservative)
 
 Goals: exercise worktree selection/creation, state persistence, and existing-PR observation without:

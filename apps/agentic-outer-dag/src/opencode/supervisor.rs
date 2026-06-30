@@ -24,8 +24,12 @@ use std::time::Duration;
 
 const IDLE_GRACE: Duration = Duration::from_millis(1000);
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
-const TRANSCRIPT_EMPTY_RETRY_BACKOFFS: [Duration; 2] =
-    [Duration::from_millis(250), Duration::from_millis(500)];
+const TRANSCRIPT_SETTLING_RETRY_BACKOFFS: [Duration; 4] = [
+    Duration::from_millis(50),
+    Duration::from_millis(100),
+    Duration::from_millis(200),
+    Duration::from_millis(400),
+];
 const NESTED_GUARD_NEEDLE: &str = "OPENCODE_ORCHESTRATOR_MANAGED";
 const TOOL_ERROR_SUMMARY_LIMIT: usize = 240;
 
@@ -89,6 +93,14 @@ struct TranscriptAnalysis {
     final_finish_reason: Option<String>,
     guard_detected: bool,
     final_tool_error: Option<OpenCodeToolErrorDiagnostics>,
+    unresolved_tool_calls: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdleGateDecision {
+    Finalize,
+    WaitForGrace,
+    IgnoreUntilDispatchConfirmed,
 }
 
 impl TranscriptAnalysis {
@@ -101,6 +113,22 @@ impl TranscriptAnalysis {
             guard_detected: self.guard_detected,
             final_tool_error: self.final_tool_error.clone(),
         }
+    }
+}
+
+fn idle_gate_decision(
+    observed_busy: bool,
+    idle_grace_deadline: Option<tokio::time::Instant>,
+    now: tokio::time::Instant,
+) -> IdleGateDecision {
+    if observed_busy {
+        return IdleGateDecision::Finalize;
+    }
+
+    match idle_grace_deadline {
+        Some(deadline) if now >= deadline => IdleGateDecision::Finalize,
+        Some(_) => IdleGateDecision::WaitForGrace,
+        None => IdleGateDecision::IgnoreUntilDispatchConfirmed,
     }
 }
 
@@ -308,9 +336,21 @@ impl OpenCodeSupervisor {
                             awaiting_idle_grace = false;
                         }
                         Event::SessionIdle { .. } => {
-                            return Ok(self
-                                .completion_outcome(session_id, &transcript_window)
-                                .await);
+                            match idle_gate_decision(
+                                observed_busy,
+                                idle_grace_deadline,
+                                tokio::time::Instant::now(),
+                            ) {
+                                IdleGateDecision::Finalize => {
+                                    return Ok(self
+                                        .completion_outcome(session_id, &transcript_window)
+                                        .await);
+                                }
+                                IdleGateDecision::WaitForGrace => {
+                                    awaiting_idle_grace = true;
+                                }
+                                IdleGateDecision::IgnoreUntilDispatchConfirmed => {}
+                            }
                         }
                         Event::SessionError { properties } => {
                             return Ok(SupervisedOutcome::Failed {
@@ -334,19 +374,21 @@ impl OpenCodeSupervisor {
                             awaiting_idle_grace = false;
                         }
                         Ok(SessionStatusInfo::Idle) => {
-                            if observed_busy {
-                                return Ok(self
-                                    .completion_outcome(session_id, &transcript_window)
-                                    .await);
+                            match idle_gate_decision(
+                                observed_busy,
+                                idle_grace_deadline,
+                                tokio::time::Instant::now(),
+                            ) {
+                                IdleGateDecision::Finalize => {
+                                    return Ok(self
+                                        .completion_outcome(session_id, &transcript_window)
+                                        .await);
+                                }
+                                IdleGateDecision::WaitForGrace => {
+                                    awaiting_idle_grace = true;
+                                }
+                                IdleGateDecision::IgnoreUntilDispatchConfirmed => {}
                             }
-
-                            let grace = idle_grace_deadline.get_or_insert_with(|| tokio::time::Instant::now() + IDLE_GRACE);
-                            if tokio::time::Instant::now() >= *grace {
-                                return Ok(self
-                                    .completion_outcome(session_id, &transcript_window)
-                                    .await);
-                            }
-                            awaiting_idle_grace = true;
                         }
                         Err(error) => {
                             tracing::warn!(error = %error, "failed to poll session status");
@@ -529,9 +571,9 @@ impl OpenCodeSupervisor {
         session_id: &str,
         transcript_window: &TranscriptWindow,
     ) -> CompletionValidation {
-        for attempt in 0..=TRANSCRIPT_EMPTY_RETRY_BACKOFFS.len() {
+        for attempt in 0..=TRANSCRIPT_SETTLING_RETRY_BACKOFFS.len() {
             if attempt > 0 {
-                tokio::time::sleep(TRANSCRIPT_EMPTY_RETRY_BACKOFFS[attempt - 1]).await;
+                tokio::time::sleep(TRANSCRIPT_SETTLING_RETRY_BACKOFFS[attempt - 1]).await;
             }
 
             let messages = match self.client.messages().list(session_id).await {
@@ -562,15 +604,23 @@ impl OpenCodeSupervisor {
                     diagnostics: Some(diagnostics),
                 };
             }
+            if analysis.unresolved_tool_calls > 0 {
+                if attempt == TRANSCRIPT_SETTLING_RETRY_BACKOFFS.len() {
+                    return CompletionValidation::Failed {
+                        error: format!(
+                            "completed session transcript still has {} unresolved tool call(s) after settling retries",
+                            analysis.unresolved_tool_calls
+                        ),
+                        diagnostics: Some(diagnostics),
+                    };
+                }
+                continue;
+            }
             if analysis.has_assistant_message {
                 return CompletionValidation::Passed(diagnostics);
             }
-            if attempt == TRANSCRIPT_EMPTY_RETRY_BACKOFFS.len() {
-                return CompletionValidation::Failed {
-                    error: "completed session transcript did not contain an assistant response after dispatch"
-                        .to_string(),
-                    diagnostics: Some(diagnostics),
-                };
+            if attempt == TRANSCRIPT_SETTLING_RETRY_BACKOFFS.len() {
+                return CompletionValidation::Passed(diagnostics);
             }
         }
 
@@ -623,6 +673,7 @@ fn analyze_transcript_window(
         .rev()
         .find(|message| message.role() == "assistant");
     let mut guard_detected = false;
+    let mut unresolved_tool_calls = 0;
 
     for message in window {
         for part in &message.parts {
@@ -632,14 +683,18 @@ fn analyze_transcript_window(
                         guard_detected = true;
                     }
                 }
-                Part::Tool {
-                    state: Some(tool_state),
-                    ..
-                } => {
-                    if tool_state
-                        .error()
-                        .is_some_and(|error| error.contains(NESTED_GUARD_NEEDLE))
-                    {
+                Part::Tool { state, .. } => {
+                    if state.as_ref().is_none_or(|tool_state| {
+                        !matches!(tool_state, ToolState::Completed(_) | ToolState::Error(_))
+                    }) {
+                        unresolved_tool_calls += 1;
+                    }
+
+                    if state.as_ref().is_some_and(|tool_state| {
+                        tool_state
+                            .error()
+                            .is_some_and(|error| error.contains(NESTED_GUARD_NEEDLE))
+                    }) {
                         guard_detected = true;
                     }
                 }
@@ -678,6 +733,7 @@ fn analyze_transcript_window(
         }),
         guard_detected,
         final_tool_error,
+        unresolved_tool_calls,
     }
 }
 
@@ -769,13 +825,49 @@ mod tests {
     use super::*;
     use crate::test_support::process_state_lock;
     use std::process::Stdio;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering as AtomicOrdering;
     use tempfile::TempDir;
     use tokio::process::Command;
+    use tokio::time::timeout;
     use wiremock::Mock;
     use wiremock::MockServer;
+    use wiremock::Request;
+    use wiremock::Respond;
     use wiremock::ResponseTemplate;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
+
+    #[derive(Clone)]
+    struct SequenceResponder {
+        responders: Vec<ResponseTemplate>,
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl SequenceResponder {
+        fn new(responders: Vec<ResponseTemplate>) -> Self {
+            assert!(!responders.is_empty(), "responders must not be empty");
+            Self {
+                responders,
+                calls: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+
+        fn call_count(&self) -> usize {
+            self.calls.load(AtomicOrdering::SeqCst)
+        }
+    }
+
+    impl Respond for SequenceResponder {
+        fn respond(&self, _req: &Request) -> ResponseTemplate {
+            let idx = self.calls.fetch_add(1, AtomicOrdering::SeqCst);
+            self.responders
+                .get(idx)
+                .cloned()
+                .unwrap_or_else(|| self.responders.last().cloned().expect("non-empty"))
+        }
+    }
 
     fn test_timeouts() -> OpenCodeSupervisorTimeouts {
         OpenCodeSupervisorTimeouts {
@@ -799,6 +891,41 @@ mod tests {
 
     fn parse_messages(value: serde_json::Value) -> Vec<Message> {
         serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn idle_gate_ignores_idle_until_dispatch_is_confirmed() {
+        assert_eq!(
+            idle_gate_decision(false, None, tokio::time::Instant::now()),
+            IdleGateDecision::IgnoreUntilDispatchConfirmed
+        );
+    }
+
+    #[test]
+    fn idle_gate_finalizes_after_observed_busy() {
+        let future_deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+        assert_eq!(
+            idle_gate_decision(true, Some(future_deadline), tokio::time::Instant::now()),
+            IdleGateDecision::Finalize
+        );
+    }
+
+    #[test]
+    fn idle_gate_waits_for_grace_before_deadline() {
+        let now = tokio::time::Instant::now();
+        assert_eq!(
+            idle_gate_decision(false, Some(now + Duration::from_millis(50)), now),
+            IdleGateDecision::WaitForGrace
+        );
+    }
+
+    #[test]
+    fn idle_gate_finalizes_after_grace_deadline_elapses() {
+        let now = tokio::time::Instant::now();
+        assert_eq!(
+            idle_gate_decision(false, Some(now), now),
+            IdleGateDecision::Finalize
+        );
     }
 
     #[tokio::test]
@@ -962,6 +1089,81 @@ mod tests {
         assert!(!analysis.has_assistant_message);
     }
 
+    #[test]
+    fn counts_unresolved_tool_states_conservatively() {
+        let messages = parse_messages(serde_json::json!([transcript_message(
+            "assistant",
+            "msg-assistant",
+            &serde_json::json!([
+                {
+                    "type": "tool",
+                    "callID": "call-pending",
+                    "tool": "read",
+                    "state": {
+                        "status": "pending",
+                        "input": {},
+                        "raw": "read"
+                    }
+                },
+                {
+                    "type": "tool",
+                    "callID": "call-running",
+                    "tool": "grep",
+                    "state": {
+                        "status": "running",
+                        "input": {},
+                        "time": { "start": 1 }
+                    }
+                },
+                {
+                    "type": "tool",
+                    "callID": "call-none",
+                    "tool": "write"
+                },
+                {
+                    "type": "tool",
+                    "callID": "call-unknown",
+                    "tool": "edit",
+                    "state": { "status": "paused" }
+                },
+                {
+                    "type": "tool",
+                    "callID": "call-completed",
+                    "tool": "done",
+                    "state": {
+                        "status": "completed",
+                        "input": {},
+                        "output": "ok",
+                        "title": "done",
+                        "metadata": {},
+                        "time": { "start": 1, "end": 2 }
+                    }
+                },
+                {
+                    "type": "tool",
+                    "callID": "call-error",
+                    "tool": "fail",
+                    "state": {
+                        "status": "error",
+                        "input": {},
+                        "error": "boom",
+                        "time": { "start": 1, "end": 2 }
+                    }
+                }
+            ]),
+        )]));
+
+        let analysis = analyze_transcript_window(
+            &messages,
+            &TranscriptWindow {
+                command_message_id: "msg-assistant".to_string(),
+                baseline_tail_message_id: None,
+            },
+        );
+
+        assert_eq!(analysis.unresolved_tool_calls, 4);
+    }
+
     #[tokio::test]
     async fn fetches_and_validates_completed_transcript() {
         let mock = MockServer::start().await;
@@ -1000,6 +1202,291 @@ mod tests {
             Some("msg-assistant")
         );
         assert_eq!(diagnostics.final_finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[tokio::test]
+    async fn missing_assistant_after_settling_still_passes() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-dispatch", &serde_json::json!([]))
+            ])))
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let validation = supervisor
+            .validate_completion_with_retries(
+                "session-1",
+                &TranscriptWindow {
+                    command_message_id: "msg-dispatch".to_string(),
+                    baseline_tail_message_id: None,
+                },
+            )
+            .await;
+
+        let CompletionValidation::Passed(diagnostics) = validation else {
+            panic!("expected transcript validation success without assistant");
+        };
+        assert_eq!(diagnostics.final_assistant_message_id, None);
+    }
+
+    #[tokio::test]
+    async fn assistant_appears_after_settling_retry() {
+        let mock = MockServer::start().await;
+        let transcript_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([transcript_message(
+                "user",
+                "msg-dispatch",
+                &serde_json::json!([])
+            )])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-dispatch", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        { "type": "text", "text": "done" },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ])
+                )
+            ])),
+        ]);
+        let transcript_seq_for_assert = transcript_seq.clone();
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(transcript_seq)
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let validation = supervisor
+            .validate_completion_with_retries(
+                "session-1",
+                &TranscriptWindow {
+                    command_message_id: "msg-dispatch".to_string(),
+                    baseline_tail_message_id: None,
+                },
+            )
+            .await;
+
+        let CompletionValidation::Passed(diagnostics) = validation else {
+            panic!("expected transcript validation success after assistant retry");
+        };
+        assert_eq!(
+            diagnostics.final_assistant_message_id.as_deref(),
+            Some("msg-assistant")
+        );
+        assert!(transcript_seq_for_assert.call_count() >= 2);
+    }
+
+    #[tokio::test]
+    async fn unresolved_tool_state_retries_until_resolved() {
+        let mock = MockServer::start().await;
+        let transcript_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-dispatch", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        {
+                            "type": "tool",
+                            "callID": "call-1",
+                            "tool": "read",
+                            "state": {
+                                "status": "pending",
+                                "input": {},
+                                "raw": "read"
+                            }
+                        },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ])
+                )
+            ])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-dispatch", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        {
+                            "type": "tool",
+                            "callID": "call-1",
+                            "tool": "read",
+                            "state": {
+                                "status": "completed",
+                                "input": {},
+                                "output": "ok",
+                                "title": "read",
+                                "metadata": {},
+                                "time": { "start": 1, "end": 2 }
+                            }
+                        },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ])
+                )
+            ])),
+        ]);
+        let transcript_seq_for_assert = transcript_seq.clone();
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(transcript_seq)
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let validation = supervisor
+            .validate_completion_with_retries(
+                "session-1",
+                &TranscriptWindow {
+                    command_message_id: "msg-dispatch".to_string(),
+                    baseline_tail_message_id: None,
+                },
+            )
+            .await;
+
+        assert!(matches!(validation, CompletionValidation::Passed(_)));
+        assert!(transcript_seq_for_assert.call_count() >= 2);
+    }
+
+    #[tokio::test]
+    async fn unresolved_tool_state_after_settling_fails() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-dispatch", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        {
+                            "type": "tool",
+                            "callID": "call-1",
+                            "tool": "read"
+                        },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ])
+                )
+            ])))
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let validation = supervisor
+            .validate_completion_with_retries(
+                "session-1",
+                &TranscriptWindow {
+                    command_message_id: "msg-dispatch".to_string(),
+                    baseline_tail_message_id: None,
+                },
+            )
+            .await;
+
+        let CompletionValidation::Failed { error, .. } = validation else {
+            panic!("expected unresolved tool state to fail after retries");
+        };
+        assert!(error.contains("unresolved tool call"));
+    }
+
+    #[tokio::test]
+    async fn run_command_supervised_does_not_complete_before_dispatch_confirmation() {
+        let mock = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/session/session-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "session-1",
+                "slug": "session-1",
+                "projectId": "proj-1",
+                "directory": "/tmp",
+                "path": null,
+                "title": "Test Session",
+                "version": "1.0",
+                "time": { "created": 1, "updated": 1 }
+            })))
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/permission"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/question"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/event"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_delay(Duration::from_secs(30)),
+            )
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/command"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(2))
+                    .set_body_json(serde_json::json!({})),
+            )
+            .mount(&mock)
+            .await;
+
+        let transcript_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([transcript_message(
+                "assistant",
+                "msg-assistant",
+                &serde_json::json!([
+                    { "type": "text", "text": "done" },
+                    { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                ]),
+            )])),
+        ]);
+        let transcript_seq_for_assert = transcript_seq.clone();
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(transcript_seq)
+            .mount(&mock)
+            .await;
+
+        let temp_dir = TempDir::new().unwrap();
+        let supervisor = test_supervisor(&mock, temp_dir.path());
+        let mut handle = tokio::spawn(async move {
+            supervisor
+                .run_command_supervised(Some("session-1"), "implement_plan", Some("do it"))
+                .await
+        });
+
+        assert!(
+            timeout(Duration::from_millis(1200), &mut handle)
+                .await
+                .is_err(),
+            "supervisor should still be waiting before dispatch is confirmed"
+        );
+
+        let outcome = timeout(Duration::from_secs(5), &mut handle)
+            .await
+            .expect("supervisor should eventually complete")
+            .expect("join should succeed")
+            .expect("run should succeed");
+
+        assert!(matches!(outcome, SupervisedOutcome::Completed { .. }));
+        assert!(
+            transcript_seq_for_assert.call_count() >= 2,
+            "expected baseline and completion transcript fetches"
+        );
     }
 
     fn test_supervisor(mock: &MockServer, directory: &Path) -> OpenCodeSupervisor {
