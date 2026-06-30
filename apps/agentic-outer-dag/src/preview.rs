@@ -67,14 +67,12 @@ fn state_file_path(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::CwdGuard;
+    use crate::test_support::process_state_lock;
     use anyhow::Result;
     use std::env;
     use std::fs;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
     use tempfile::TempDir;
-
-    static CWD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[test]
     fn serializes_nullable_worktree_field_as_null() {
@@ -125,16 +123,13 @@ mod tests {
 
     #[test]
     fn reports_would_create_for_branch_without_existing_worktree() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.repo).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
 
         let preview =
             build_dry_run_start_preview("ENG-992", Some("feature/preview-only"), None, false)
                 .unwrap();
-
-        env::set_current_dir(saved).unwrap();
 
         assert!(preview.would_create);
         assert_eq!(preview.branch, "feature/preview-only");
@@ -144,8 +139,19 @@ mod tests {
         );
     }
 
-    fn cwd_lock() -> &'static Mutex<()> {
-        CWD_LOCK.get_or_init(|| Mutex::new(()))
+    #[test]
+    fn cwd_guard_restores_on_panic() {
+        let _guard = process_state_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        let saved = env::current_dir().unwrap();
+
+        let panic = std::panic::catch_unwind(|| {
+            let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
+            panic!("intentional panic to test cwd restoration");
+        });
+
+        assert!(panic.is_err());
+        assert_eq!(env::current_dir().unwrap(), saved);
     }
 
     struct GitFixture {

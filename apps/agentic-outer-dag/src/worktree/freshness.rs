@@ -3,7 +3,6 @@ use anyhow::Result;
 use git2::Repository;
 use gwt_worktree::worktree::is_worktree_dirty;
 use std::process::Command;
-use std::process::ExitStatus;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FreshnessOutcome {
@@ -46,8 +45,23 @@ fn is_dirty() -> Result<bool> {
 }
 
 fn needs_rebase(base_ref: &str) -> Result<bool> {
-    let status = git_status(["merge-base", "--is-ancestor", base_ref, "HEAD"])?;
-    Ok(!status.success())
+    let output = Command::new("git")
+        .args(["merge-base", "--is-ancestor", base_ref, "HEAD"])
+        .output()
+        .with_context(|| format!("failed to run git merge-base --is-ancestor {base_ref} HEAD"))?;
+
+    match output.status.code() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        Some(code) => anyhow::bail!(
+            "git merge-base --is-ancestor {base_ref} HEAD failed (exit={code}): {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ),
+        None => anyhow::bail!(
+            "git merge-base --is-ancestor {base_ref} HEAD terminated unexpectedly: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ),
+    }
 }
 
 fn rev_parse(rev: &str) -> Result<String> {
@@ -74,7 +88,7 @@ fn git<const N: usize>(args: [&str; N]) -> Result<()> {
     }
 }
 
-fn git_status<const N: usize>(args: [&str; N]) -> Result<ExitStatus> {
+fn git_status<const N: usize>(args: [&str; N]) -> Result<std::process::ExitStatus> {
     Command::new("git")
         .args(args)
         .status()
@@ -84,40 +98,31 @@ fn git_status<const N: usize>(args: [&str; N]) -> Result<ExitStatus> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use crate::test_support::CwdGuard;
+    use crate::test_support::process_state_lock;
     use std::fs;
     use std::path::Path;
     use std::path::PathBuf;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
     use tempfile::TempDir;
-
-    static CWD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[test]
     fn returns_up_to_date_when_branch_is_current() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.feature_clone).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
 
         let outcome = run("origin/main", false).unwrap();
-
-        env::set_current_dir(saved).unwrap();
         assert_eq!(outcome, FreshnessOutcome::UpToDate);
     }
 
     #[test]
     fn rebases_when_origin_main_moves_forward() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.advance_main("main update\n").unwrap();
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.feature_clone).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
 
         let outcome = run("origin/main", false).unwrap();
-
-        env::set_current_dir(saved).unwrap();
         match outcome {
             FreshnessOutcome::Rebases { old_head, new_head } => assert_ne!(old_head, new_head),
             other => panic!("expected rebase outcome, got {other:?}"),
@@ -126,40 +131,43 @@ mod tests {
 
     #[test]
     fn dry_run_returns_up_to_date_when_origin_main_moves_forward() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.advance_main("main update\n").unwrap();
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.feature_clone).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
 
         let outcome = run("origin/main", true).unwrap();
-
-        env::set_current_dir(saved).unwrap();
         assert_eq!(outcome, FreshnessOutcome::UpToDate);
     }
 
     #[test]
     fn returns_conflict_when_rebase_hits_merge_conflict() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.write_shared_file("feature change\n").unwrap();
         fixture.commit_feature("feature change").unwrap();
         fixture.advance_main("main change\n").unwrap();
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.feature_clone).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
 
         let outcome = run("origin/main", false).unwrap();
 
         assert!(!fixture.rebase_in_progress().unwrap());
         let rerun_outcome = run("origin/main", false).unwrap();
 
-        env::set_current_dir(saved).unwrap();
         assert_eq!(outcome, FreshnessOutcome::Conflict);
         assert_eq!(rerun_outcome, FreshnessOutcome::Conflict);
     }
 
-    fn cwd_lock() -> &'static Mutex<()> {
-        CWD_LOCK.get_or_init(|| Mutex::new(()))
+    #[test]
+    fn invalid_base_ref_returns_err() {
+        let _guard = process_state_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
+
+        let err = run("origin/does-not-exist", false).expect_err("invalid base ref should fail");
+        let text = err.to_string();
+        assert!(text.contains("merge-base --is-ancestor origin/does-not-exist HEAD failed"));
+        assert!(text.contains("Not a valid object name origin/does-not-exist"));
     }
 
     struct GitFixture {

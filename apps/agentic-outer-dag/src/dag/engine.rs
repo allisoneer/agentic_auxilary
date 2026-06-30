@@ -90,6 +90,10 @@ fn poll_interval_sleep_duration(poll_interval_seconds: u64) -> std::time::Durati
     std::time::Duration::from_secs(poll_interval_seconds.max(1))
 }
 
+fn should_reset_coderabbit_timeout_baseline(was_recovered: bool, now_recovered: bool) -> bool {
+    !was_recovered && now_recovered
+}
+
 fn transition_to_stopped_failed(state: &mut RunState, message: impl Into<String>) {
     let message = message.into();
     state.last_error = Some(message.clone());
@@ -268,6 +272,19 @@ where
     Ok(DraftSkipRecovery::ContinueWaiting)
 }
 
+fn persist_stop_state_before_handoff<Save>(state: &RunState, save: Save) -> Result<String>
+where
+    Save: FnMut(&RunState) -> Result<()>,
+{
+    let mut save = save;
+    save(state)?;
+    state
+        .stage
+        .details
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("missing stop detail before Linear handoff"))
+}
+
 impl DagEngine {
     pub fn for_current_dir() -> Result<Self> {
         Ok(Self {
@@ -394,7 +411,7 @@ impl DagEngine {
                         .head_sha
                         .clone()
                         .ok_or_else(|| anyhow::anyhow!("missing PR head SHA in state"))?;
-                    let started_at = chrono::Utc::now();
+                    let mut started_at = chrono::Utc::now();
                     let timeout_seconds = i64::try_from(state.settings.coderabbit_timeout_seconds)
                         .map_err(|_| anyhow::anyhow!("coderabbit timeout exceeds i64 range"))?;
                     loop {
@@ -409,6 +426,8 @@ impl DagEngine {
                             CodeRabbitPoll::Skipped { reason } => {
                                 let branch = state.worktree.branch.clone();
                                 let github = &self.github;
+                                let recovered_before =
+                                    state.pr.ready_for_review.coderabbit_draft_skip_recovered;
                                 match recover_from_draft_review_skip(
                                     &mut state,
                                     &reason,
@@ -418,6 +437,15 @@ impl DagEngine {
                                 .await?
                                 {
                                     DraftSkipRecovery::ContinueWaiting => {
+                                        if should_reset_coderabbit_timeout_baseline(
+                                            recovered_before,
+                                            state
+                                                .pr
+                                                .ready_for_review
+                                                .coderabbit_draft_skip_recovered,
+                                        ) {
+                                            started_at = chrono::Utc::now();
+                                        }
                                         ThoughtsStateStore::save(&state)?;
                                         tokio::time::sleep(poll_interval_sleep_duration(
                                             state.settings.poll_interval_seconds,
@@ -502,17 +530,19 @@ impl DagEngine {
             }
             freshness::FreshnessOutcome::Conflict => {
                 let message = "rebase conflict requires manual handoff".to_string();
-                linear::post_handoff_once(state, &message).await?;
                 state.freshness.last_result = Some("conflict".to_string());
                 state.stage.kind = StageKind::StoppedRebaseConflict;
                 state.stage.details = Some(message);
+                let message = persist_stop_state_before_handoff(state, ThoughtsStateStore::save)?;
+                linear::post_handoff_once(state, &message).await?;
             }
             freshness::FreshnessOutcome::DirtyTree => {
                 let message = "dirty worktree blocks freshness gate".to_string();
-                linear::post_handoff_once(state, &message).await?;
                 state.freshness.last_result = Some("dirty_tree".to_string());
                 state.stage.kind = StageKind::StoppedDirtyTree;
                 state.stage.details = Some(message);
+                let message = persist_stop_state_before_handoff(state, ThoughtsStateStore::save)?;
+                linear::post_handoff_once(state, &message).await?;
             }
         }
         ThoughtsStateStore::save(state)
@@ -647,10 +677,12 @@ mod tests {
     use super::DagEngine;
     use super::DraftSkipRecovery;
     use super::ensure_pr_ready_for_review;
+    use super::persist_stop_state_before_handoff;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
     use super::record_pr_lookup;
     use super::recover_from_draft_review_skip;
+    use super::should_reset_coderabbit_timeout_baseline;
     use super::stage_kind_label;
     use super::transition_to_dispatch_disabled;
     use super::transition_to_missing_pr_after_lookup;
@@ -658,13 +690,11 @@ mod tests {
     use crate::github::pr::DetectedPrLookup;
     use crate::state::RunState;
     use crate::state::StageKind;
+    use crate::test_support::process_state_lock;
     use crate::worktree::TargetWorktree;
     use pr_comments::models::PrRef;
     use std::sync::Mutex;
-    use std::sync::OnceLock;
     use std::time::Duration;
-
-    static OPENCODE_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     fn sample_pr(is_draft: bool) -> PrRef {
         PrRef {
@@ -694,6 +724,14 @@ mod tests {
         assert_eq!(poll_interval_sleep_duration(0), Duration::from_secs(1));
         assert_eq!(poll_interval_sleep_duration(1), Duration::from_secs(1));
         assert_eq!(poll_interval_sleep_duration(5), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn should_reset_coderabbit_timeout_baseline_only_on_false_to_true_transition() {
+        assert!(should_reset_coderabbit_timeout_baseline(false, true));
+        assert!(!should_reset_coderabbit_timeout_baseline(false, false));
+        assert!(!should_reset_coderabbit_timeout_baseline(true, true));
+        assert!(!should_reset_coderabbit_timeout_baseline(true, false));
     }
 
     #[test]
@@ -892,7 +930,7 @@ mod tests {
 
     #[test]
     fn for_current_dir_does_not_start_opencode_eagerly() {
-        let _guard = opencode_env_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let previous = std::env::var_os("OPENCODE_BINARY");
 
         // SAFETY: this test serializes OPENCODE_BINARY mutation with a process-wide mutex.
@@ -1084,7 +1122,36 @@ mod tests {
         );
     }
 
-    fn opencode_env_lock() -> &'static Mutex<()> {
-        OPENCODE_ENV_LOCK.get_or_init(|| Mutex::new(()))
+    #[tokio::test]
+    async fn persist_stop_state_before_handoff_saves_before_posting() {
+        let mut state = sample_state();
+        state.stage.kind = StageKind::StoppedDirtyTree;
+        state.stage.details = Some("dirty worktree blocks freshness gate".to_string());
+
+        let events = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let message = persist_stop_state_before_handoff(&state, {
+            let events = std::sync::Arc::clone(&events);
+            move |saved_state| {
+                events
+                    .lock()
+                    .unwrap()
+                    .push(format!("save:{:?}", saved_state.stage.kind));
+                Ok(())
+            }
+        })
+        .expect("save-before-post helper should succeed");
+
+        events
+            .lock()
+            .unwrap()
+            .push(format!("post:{:?}:{}", state.stage.kind, message));
+
+        assert_eq!(
+            events.lock().unwrap().as_slice(),
+            &[
+                "save:StoppedDirtyTree".to_string(),
+                "post:StoppedDirtyTree:dirty worktree blocks freshness gate".to_string(),
+            ]
+        );
     }
 }

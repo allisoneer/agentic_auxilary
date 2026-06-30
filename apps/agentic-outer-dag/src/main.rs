@@ -16,6 +16,8 @@ mod linear;
 mod opencode;
 mod preview;
 mod state;
+#[cfg(test)]
+mod test_support;
 mod worktree;
 
 struct StartOptions<'a> {
@@ -54,6 +56,34 @@ struct SettingsOverrides {
     opencode_inactivity_timeout_seconds: Option<u64>,
 }
 
+fn ensure_supported_dry_run_usage(dry_run: bool, command: &cli::Commands) -> Result<()> {
+    if !dry_run {
+        return Ok(());
+    }
+
+    match command {
+        cli::Commands::Start { .. } | cli::Commands::Status { .. } => Ok(()),
+        _ => anyhow::bail!(
+            "--dry-run is only supported with `start` (preview); remove it for this command"
+        ),
+    }
+}
+
+fn require_actionable_resume_stage(state: &state::RunState) -> Result<state::StageKind> {
+    let resume_stage = state.opencode.resume_stage.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "missing resume_stage in state; state may be corrupted; consider `agentic-outer-dag reset --yes`"
+        )
+    })?;
+
+    anyhow::ensure!(
+        crate::dag::stages::sequence_index(&resume_stage).is_some(),
+        "invalid resume_stage in state ({resume_stage:?}); expected an actionable stage; consider `agentic-outer-dag reset --yes`"
+    );
+
+    Ok(resume_stage)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Install the rustls CryptoProvider before any HTTP clients are created.
@@ -67,6 +97,7 @@ async fn main() -> Result<()> {
     let cli = cli::Cli::parse();
     let dry_run = cli.dry_run;
     let command = cli.command;
+    ensure_supported_dry_run_usage(dry_run, &command)?;
 
     let log_level = match (cli.quiet, cli.verbose) {
         (true, _) => "error",
@@ -366,11 +397,7 @@ async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
         .await?;
 
     state.opencode.pending_permission = None;
-    state.stage.kind = state
-        .opencode
-        .resume_stage
-        .clone()
-        .unwrap_or(state::StageKind::DispatchingTicketToPr);
+    state.stage.kind = require_actionable_resume_stage(&state)?;
     state.stage.details = None;
     state::store::ThoughtsStateStore::save(&state)?;
 
@@ -409,11 +436,7 @@ async fn handle_respond_question(answer: &str) -> Result<()> {
         .await?;
 
     state.opencode.pending_question = None;
-    state.stage.kind = state
-        .opencode
-        .resume_stage
-        .clone()
-        .unwrap_or(state::StageKind::DispatchingTicketToPr);
+    state.stage.kind = require_actionable_resume_stage(&state)?;
     state.stage.details = None;
     state::store::ThoughtsStateStore::save(&state)?;
 
@@ -447,7 +470,10 @@ mod tests {
     use super::SettingsOverrides;
     use super::apply_settings_overrides;
     use super::compact_status_payload;
+    use super::ensure_supported_dry_run_usage;
+    use super::require_actionable_resume_stage;
     use super::state;
+    use crate::cli;
     use crate::worktree::TargetWorktree;
     use serde_json::Value;
 
@@ -696,6 +722,63 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("OpenCode session deadline must be at least 1 second")
+        );
+    }
+
+    #[test]
+    fn ensure_supported_dry_run_usage_rejects_mutating_non_start_commands() {
+        for command in [
+            cli::Commands::Resume {
+                branch: None,
+                worktree: None,
+                no_linear_handoff: false,
+                no_opencode_dispatch: false,
+                stop_after: None,
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
+            },
+            cli::Commands::RespondPermission {
+                allow: true,
+                deny: false,
+            },
+            cli::Commands::RespondQuestion {
+                answer: "yes".to_string(),
+            },
+            cli::Commands::Handoff { message: None },
+            cli::Commands::Reset { yes: true },
+        ] {
+            let err = ensure_supported_dry_run_usage(true, &command)
+                .expect_err("mutating command should reject --dry-run");
+            assert!(
+                err.to_string()
+                    .contains("--dry-run is only supported with `start`")
+            );
+        }
+    }
+
+    #[test]
+    fn require_actionable_resume_stage_rejects_missing_and_terminal_stages() {
+        let mut state = sample_state();
+        state.opencode.resume_stage = None;
+        let err =
+            require_actionable_resume_stage(&state).expect_err("missing resume stage should fail");
+        assert!(err.to_string().contains("missing resume_stage in state"));
+
+        state.opencode.resume_stage = Some(state::StageKind::StoppedFailed);
+        let err =
+            require_actionable_resume_stage(&state).expect_err("terminal resume stage should fail");
+        assert!(err.to_string().contains("invalid resume_stage in state"));
+    }
+
+    #[test]
+    fn require_actionable_resume_stage_accepts_active_stage() {
+        let mut state = sample_state();
+        state.opencode.resume_stage = Some(state::StageKind::DispatchingResolvePrComments);
+        assert_eq!(
+            require_actionable_resume_stage(&state).unwrap(),
+            state::StageKind::DispatchingResolvePrComments
         );
     }
 }

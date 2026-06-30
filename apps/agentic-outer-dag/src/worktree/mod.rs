@@ -291,29 +291,25 @@ fn default_base_ref(repo: &Repository) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::CwdGuard;
+    use crate::test_support::process_state_lock;
     use anyhow::Result;
     use std::env;
     use std::ffi::OsString;
     use std::fs;
     use std::path::Path;
-    use std::sync::Mutex;
-    use std::sync::OnceLock;
     use tempfile::TempDir;
-
-    static CWD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     #[test]
     fn preview_resolve_does_not_create_missing_branch_worktree() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.repo).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
 
         let before = worktree_paths(&fixture.repo).unwrap();
         let preview = preview_resolve(Some("feature/preview-only"), None).unwrap();
         let after = worktree_paths(&fixture.repo).unwrap();
 
-        env::set_current_dir(saved).unwrap();
         assert_eq!(before, after);
         assert!(preview.would_create);
         assert!(preview.path.is_some());
@@ -322,7 +318,7 @@ mod tests {
 
     #[test]
     fn resolve_runs_post_create_commands_for_new_worktree() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/post-create").unwrap();
         let repo_git_dir_key = fixture.control_git_dir_key().unwrap();
@@ -331,12 +327,9 @@ mod tests {
             write_gwt_config(&repo_git_dir_key, &["echo ready > created.txt"]).unwrap();
         assert_gwt_config_loads_repo(&config_path, &repo_git_dir_key);
         assert_load_repo_config_uses_resolved_key(&fixture, &repo_git_dir_key);
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.repo).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
 
         let target = resolve(Some("feature/post-create"), None, true).unwrap();
-
-        env::set_current_dir(saved).unwrap();
         assert_eq!(
             fs::read_to_string(target.path.join("created.txt")).unwrap(),
             "ready\n"
@@ -345,7 +338,7 @@ mod tests {
 
     #[test]
     fn resolve_does_not_rerun_post_create_commands_for_existing_worktree() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/no-rerun").unwrap();
         let repo_git_dir_key = fixture.control_git_dir_key().unwrap();
@@ -354,13 +347,10 @@ mod tests {
             write_gwt_config(&repo_git_dir_key, &["echo run >> run-count.txt"]).unwrap();
         assert_gwt_config_loads_repo(&config_path, &repo_git_dir_key);
         assert_load_repo_config_uses_resolved_key(&fixture, &repo_git_dir_key);
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.repo).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
 
         let first = resolve(Some("feature/no-rerun"), None, true).unwrap();
         let second = resolve(Some("feature/no-rerun"), None, true).unwrap();
-
-        env::set_current_dir(saved).unwrap();
         assert_eq!(first.path, second.path);
         assert_eq!(
             fs::read_to_string(first.path.join("run-count.txt")).unwrap(),
@@ -370,7 +360,7 @@ mod tests {
 
     #[test]
     fn resolve_runs_post_create_commands_from_worktree_cwd() {
-        let _guard = cwd_lock().lock().unwrap();
+        let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.branch("feature/cwd-check").unwrap();
         let repo_git_dir_key = fixture.control_git_dir_key().unwrap();
@@ -378,22 +368,15 @@ mod tests {
         let config_path = write_gwt_config(&repo_git_dir_key, &["pwd > cwd.txt"]).unwrap();
         assert_gwt_config_loads_repo(&config_path, &repo_git_dir_key);
         assert_load_repo_config_uses_resolved_key(&fixture, &repo_git_dir_key);
-        let saved = env::current_dir().unwrap();
-        env::set_current_dir(&fixture.repo).unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
 
         let target = resolve(Some("feature/cwd-check"), None, true).unwrap();
-
-        env::set_current_dir(saved).unwrap();
         assert_eq!(
             fs::read_to_string(target.path.join("cwd.txt"))
                 .unwrap()
                 .trim(),
             target.path.display().to_string()
         );
-    }
-
-    fn cwd_lock() -> &'static Mutex<()> {
-        CWD_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     struct GitFixture {
@@ -444,7 +427,7 @@ mod tests {
             fs::create_dir_all(&home)?;
             let previous_xdg_config_home = env::var_os("XDG_CONFIG_HOME");
             let previous_home = env::var_os("HOME");
-            // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+            // SAFETY: tests serialize cwd/env mutation with crate::test_support::process_state_lock and restore it on drop.
             unsafe {
                 env::set_var("XDG_CONFIG_HOME", &xdg_config_home);
                 env::set_var("HOME", &home);
@@ -461,13 +444,13 @@ mod tests {
         fn drop(&mut self) {
             match &self.previous_xdg_config_home {
                 Some(previous) => {
-                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    // SAFETY: tests serialize cwd/env mutation with crate::test_support::process_state_lock and restore it on drop.
                     unsafe {
                         env::set_var("XDG_CONFIG_HOME", previous);
                     }
                 }
                 None => {
-                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    // SAFETY: tests serialize cwd/env mutation with crate::test_support::process_state_lock and restore it on drop.
                     unsafe {
                         env::remove_var("XDG_CONFIG_HOME");
                     }
@@ -476,13 +459,13 @@ mod tests {
 
             match &self.previous_home {
                 Some(previous) => {
-                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    // SAFETY: tests serialize cwd/env mutation with crate::test_support::process_state_lock and restore it on drop.
                     unsafe {
                         env::set_var("HOME", previous);
                     }
                 }
                 None => {
-                    // SAFETY: tests serialize cwd/env mutation with a global mutex and restore it on drop.
+                    // SAFETY: tests serialize cwd/env mutation with crate::test_support::process_state_lock and restore it on drop.
                     unsafe {
                         env::remove_var("HOME");
                     }
