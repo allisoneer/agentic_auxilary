@@ -1,0 +1,26 @@
+apps/opencode-orchestrator-mcp/src/version.rs
+  s_9ce2e255bdb79f::t_810dfefb9e423c 258-262
+  s_9ce2e255bdb79f::t_c56a34ea5bb96c 96-104,245-257,265-267,269
+  s_9ce2e255bdb79f::t_e07270439c9120 263-264
+  s_9ce2e255bdb79f::t_7e8983411f1521 268
+  s_9ce2e255bdb79f::t_f6f329d36f0e15 270
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_9ce2e255bdb79f::t_c56a34ea5bb96c 704-709,770,1025-1061,1066-1115,1120-1148
+  s_9ce2e255bdb79f::t_810dfefb9e423c 1062-1065,1116-1119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "ea042d53a1ea7ca51e31041fcc0672af43b45493",
+  "prompts": {},
+  "sessions": {
+    "s_9ce2e255bdb79f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ea3469eeffep4YKy64JiylBB6",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
