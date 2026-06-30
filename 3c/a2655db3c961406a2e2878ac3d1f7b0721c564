@@ -1,0 +1,20 @@
+justfile
+  s_28d0de6d1bff4d::t_244390b91ad7d7 78-91
+  s_28d0de6d1bff4d::t_dc3be172d058cf 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "3ca2655db3c961406a2e2878ac3d1f7b0721c564",
+  "prompts": {},
+  "sessions": {
+    "s_28d0de6d1bff4d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e62d177affeY4Bi4uYPVr49E7",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
