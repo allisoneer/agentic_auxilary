@@ -1,0 +1,23 @@
+apps/agentic-outer-dag/CLAUDE.md
+  s_9ce2e255bdb79f::t_8521074d221540 52,56,58,62,64,68,70,74,76
+tools/templates/CLAUDE.template.md
+  s_9ce2e255bdb79f::t_05df42da939b6e 20,23,26
+crates/meta/xtask/src/claude.rs
+  s_9ce2e255bdb79f::t_05df42da939b6e 187,190,193,195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.4",
+  "base_commit_sha": "0212cfe24fbfbe54831a2cb9f03c492093d4ef7a",
+  "prompts": {},
+  "sessions": {
+    "s_9ce2e255bdb79f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ea3469eeffep4YKy64JiylBB6",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
