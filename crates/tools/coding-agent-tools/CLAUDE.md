@@ -36,13 +36,12 @@ just fmt          # Format code
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p coding_agent_tools -- --check
-cargo clippy -p coding_agent_tools --all-targets -- -D warnings
+just crate-check coding_agent_tools
 
 # Tests
-cargo test -p coding_agent_tools
+just crate-test coding_agent_tools
 
 # Build
-cargo build -p coding_agent_tools
+just crate-build coding_agent_tools
 ```
 <!-- END:xtask:autogen -->

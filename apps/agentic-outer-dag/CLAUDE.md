@@ -19,14 +19,13 @@ Use `agentic-outer-dag start --ticket <LINEAR-KEY>` to begin a run, `resume` to 
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p agentic-outer-dag-bin -- --check
-cargo clippy -p agentic-outer-dag-bin --all-targets -- -D warnings
+just crate-check agentic-outer-dag-bin
 
 # Tests
-cargo test -p agentic-outer-dag-bin
+just crate-test agentic-outer-dag-bin
 
 # Build
-cargo build -p agentic-outer-dag-bin
+just crate-build agentic-outer-dag-bin
 ```
 <!-- END:xtask:autogen -->
 
@@ -50,22 +49,31 @@ Do not proceed past `dispatching_resolve_pr_comments` in Phase 1.
 
 Steps:
 1. Preview only:
+
    ```bash
    agentic-outer-dag --dry-run start --ticket ENG-992 --branch <branch>
    ```
+
 2. Force OpenCode startup failure only when a dispatch actually needs OpenCode:
+
    ```bash
    OPENCODE_BINARY=/does-not-exist agentic-outer-dag start --ticket ENG-992 --branch <branch> --force
    ```
+
 3. Existing-PR guard validation without eager OpenCode startup:
+
    ```bash
    agentic-outer-dag start --ticket ENG-992 --branch <branch> --stop-after dispatching_ticket_to_pr --no-opencode-dispatch --force
    ```
+
 4. Safety-test dirty/conflict freshness stops without posting Linear comments:
+
    ```bash
    agentic-outer-dag start --ticket ENG-992 --branch <branch> --no-linear-handoff --force
    ```
+
 5. Stop before `resolve_pr_comments`:
+
    ```bash
    agentic-outer-dag resume --stop-after waiting_for_coderabbit --no-linear-handoff --no-opencode-dispatch
    ```

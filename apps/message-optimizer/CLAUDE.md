@@ -17,14 +17,13 @@ Thin CLI for optimizing a single message into GPT-5.4 prompt components. Pass th
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p message-optimizer-bin -- --check
-cargo clippy -p message-optimizer-bin --all-targets -- -D warnings
+just crate-check message-optimizer-bin
 
 # Tests
-cargo test -p message-optimizer-bin
+just crate-test message-optimizer-bin
 
 # Build
-cargo build -p message-optimizer-bin
+just crate-build message-optimizer-bin
 ```
 <!-- END:xtask:autogen -->
 

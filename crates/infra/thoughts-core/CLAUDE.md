@@ -255,13 +255,12 @@ The tool now fully supports git worktrees through automatic detection and smart 
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p thoughts-tool -- --check
-cargo clippy -p thoughts-tool --all-targets -- -D warnings
+just crate-check thoughts-tool
 
 # Tests
-cargo test -p thoughts-tool
+just crate-test thoughts-tool
 
 # Build
-cargo build -p thoughts-tool
+just crate-build thoughts-tool
 ```
 <!-- END:xtask:autogen -->

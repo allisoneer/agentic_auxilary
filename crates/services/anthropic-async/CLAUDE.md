@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p anthropic-async -- --check
-cargo clippy -p anthropic-async --all-targets -- -D warnings
+just crate-check anthropic-async
 
 # Tests
-cargo test -p anthropic-async
+just crate-test anthropic-async
 
 # Build
-cargo build -p anthropic-async
+just crate-build anthropic-async
 ```
 <!-- END:xtask:autogen -->
 
