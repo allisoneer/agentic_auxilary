@@ -72,6 +72,8 @@ pub struct PullRequestReviewSummary {
     pub user_type: Option<String>,
     pub state: String,
     pub submitted_at: Option<String>,
+    #[serde(default)]
+    pub commit_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -581,11 +583,6 @@ pub struct OpenPrRefNode {
     pub head_ref_oid: String,
     #[serde(rename = "isDraft")]
     pub is_draft: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GraphqlResponse<T> {
-    pub data: T,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

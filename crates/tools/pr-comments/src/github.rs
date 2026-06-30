@@ -1,7 +1,7 @@
 use crate::OpenPrRefLookupResult;
 use crate::models::CheckSuiteSummary;
 use crate::models::CommentSourceType;
-use crate::models::GraphqlResponse;
+use crate::models::GraphQLResponse;
 use crate::models::IssueCommentSummary;
 use crate::models::MarkPullRequestReadyForReviewData;
 use crate::models::OpenPrRefData;
@@ -274,11 +274,22 @@ impl GitHubClient {
             .error_for_status()
             .map_err(|e| anyhow::anyhow!("GitHub GraphQL request failed: {e}"))?;
 
-        let body: GraphqlResponse<T> = response
+        let body: GraphQLResponse<T> = response
             .json()
             .await
             .map_err(|e| anyhow::anyhow!("GitHub GraphQL JSON parse failed: {e}"))?;
-        Ok(body.data)
+
+        if let Some(errors) = body.errors.as_ref().filter(|errors| !errors.is_empty()) {
+            let messages = errors
+                .iter()
+                .map(|error| error.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            anyhow::bail!("GitHub GraphQL response contained errors: {messages}");
+        }
+
+        body.data
+            .ok_or_else(|| anyhow::anyhow!("GitHub GraphQL response missing data"))
     }
 
     pub fn parse_check_suites_fixture(value: serde_json::Value) -> Result<Vec<CheckSuiteSummary>> {
@@ -719,6 +730,8 @@ struct ReviewEntry {
     id: u64,
     state: String,
     submitted_at: Option<String>,
+    #[serde(default)]
+    commit_id: Option<String>,
     user: ReviewUser,
 }
 
@@ -764,6 +777,7 @@ fn parse_reviews_response(value: serde_json::Value) -> Result<Vec<PullRequestRev
             user_type: entry.user.user_type,
             state: entry.state,
             submitted_at: entry.submitted_at,
+            commit_id: entry.commit_id,
         })
         .collect())
 }
@@ -830,6 +844,7 @@ mod tests {
                     "id": index + 1,
                     "state": "COMMENTED",
                     "submitted_at": "2026-01-01T00:00:00Z",
+                    "commit_id": format!("sha-{index}"),
                     "user": {
                         "login": format!("coderabbit-{index}"),
                         "type": "Bot"
@@ -919,6 +934,7 @@ mod tests {
             .expect("pagination should succeed");
 
         assert_eq!(reviews.len(), REST_PER_PAGE + 1);
+        assert_eq!(reviews[0].commit_id.as_deref(), Some("sha-0"));
         page1.assert_async().await;
         page2.assert_async().await;
     }
@@ -1056,6 +1072,65 @@ mod tests {
 
         assert_eq!(lookup.pr.as_ref().map(|pr| pr.number), Some(42));
         assert_eq!(lookup.pr.as_ref().map(|pr| pr.is_draft), Some(false));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn graphql_post_fails_when_http_200_contains_errors() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .with_status(200)
+            .with_body(
+                json!({
+                    "data": {
+                        "repository": {
+                            "pullRequests": {
+                                "nodes": []
+                            }
+                        }
+                    },
+                    "errors": [
+                        { "message": "boom" },
+                        { "message": "bad news" }
+                    ]
+                })
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .get_open_pr_ref_from_branch_detailed("feature/eng-992")
+            .await
+            .expect_err("graphql errors should fail the request");
+
+        assert!(
+            err.to_string()
+                .contains("GitHub GraphQL response contained errors: boom; bad news")
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn graphql_post_fails_when_http_200_omits_data() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .with_status(200)
+            .with_body(json!({ "data": null }).to_string())
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .get_open_pr_ref_from_branch_detailed("feature/eng-992")
+            .await
+            .expect_err("missing data should fail the request");
+
+        assert!(
+            err.to_string()
+                .contains("GitHub GraphQL response missing data")
+        );
         mock.assert_async().await;
     }
 

@@ -76,11 +76,13 @@ fn parses_reviews_and_issue_comments_payloads() {
             "id": 9,
             "state": "COMMENTED",
             "submitted_at": "2026-06-24T18:05:00Z",
+            "commit_id": "abc123",
             "user": { "login": "coderabbitai[bot]", "type": "Bot" }
         }
     ]))
     .unwrap();
     assert_eq!(reviews[0].user_type.as_deref(), Some("Bot"));
+    assert_eq!(reviews[0].commit_id.as_deref(), Some("abc123"));
 
     let comments = GitHubClient::parse_issue_comments_fixture(serde_json::json!([
         {

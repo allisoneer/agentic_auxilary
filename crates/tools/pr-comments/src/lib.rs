@@ -90,13 +90,19 @@ pub struct OpenPrRefLookupResult {
 impl PrComments {
     fn resolve_token() -> (Option<String>, Option<GitHubTokenSource>) {
         if let Ok(t) = std::env::var("GH_TOKEN") {
-            tracing::debug!("Using GitHub token from environment");
-            return (Some(t), Some(GitHubTokenSource::GhToken));
+            let t = t.trim().to_string();
+            if !t.is_empty() {
+                tracing::debug!("Using GitHub token from environment");
+                return (Some(t), Some(GitHubTokenSource::GhToken));
+            }
         }
 
         if let Ok(t) = std::env::var("GITHUB_TOKEN") {
-            tracing::debug!("Using GitHub token from environment");
-            return (Some(t), Some(GitHubTokenSource::GitHubToken));
+            let t = t.trim().to_string();
+            if !t.is_empty() {
+                tracing::debug!("Using GitHub token from environment");
+                return (Some(t), Some(GitHubTokenSource::GitHubToken));
+            }
         }
 
         let hosts = match gh_config::Hosts::load() {
@@ -887,6 +893,45 @@ mod tests {
         }
 
         assert_eq!(comments.token_source_label(), Some("GH_TOKEN"));
+    }
+
+    #[test]
+    fn resolve_token_ignores_empty_gh_token_and_falls_back_to_github_token() {
+        let _guard = token_env_lock().lock().expect("env lock should succeed");
+        let previous_gh = std::env::var_os("GH_TOKEN");
+        let previous_github = std::env::var_os("GITHUB_TOKEN");
+
+        // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+        unsafe {
+            std::env::set_var("GH_TOKEN", "   ");
+            std::env::set_var("GITHUB_TOKEN", " fallback-token ");
+        }
+
+        let (token, source) = PrComments::resolve_token();
+
+        match previous_gh {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+                unsafe { std::env::set_var("GH_TOKEN", value) }
+            }
+            None => {
+                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+                unsafe { std::env::remove_var("GH_TOKEN") }
+            }
+        }
+        match previous_github {
+            Some(value) => {
+                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+                unsafe { std::env::set_var("GITHUB_TOKEN", value) }
+            }
+            None => {
+                // SAFETY: this test serializes process-wide environment mutation with TOKEN_ENV_LOCK.
+                unsafe { std::env::remove_var("GITHUB_TOKEN") }
+            }
+        }
+
+        assert_eq!(token.as_deref(), Some("fallback-token"));
+        assert_eq!(source, Some(GitHubTokenSource::GitHubToken));
     }
 
     #[tokio::test(start_paused = true)]
