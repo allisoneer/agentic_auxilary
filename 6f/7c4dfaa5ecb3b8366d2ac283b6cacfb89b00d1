@@ -1,0 +1,31 @@
+workflow.md
+  s_a965d5af1c30f7::t_2a4a7a3499b31d 44-45,70
+crates/agentic-tools/registry/Cargo.toml
+  s_a965d5af1c30f7::t_a124d0c40fae5a 22
+.opencode/command/discord.md
+  s_a965d5af1c30f7::t_2a4a7a3499b31d 1-13
+apps/agentic-mcp/src/main.rs
+  s_a965d5af1c30f7::t_47771015b7a7fa 184
+crates/agentic-tools/registry/src/lib.rs
+  s_a965d5af1c30f7::t_31ce891b27bba9 32,93-96,137-138,220-227,280,318-319,379-382,493-503
+  s_a965d5af1c30f7::t_74bae21203cfb4 504-505
+opencode.json
+  s_a965d5af1c30f7::t_2a4a7a3499b31d 22,165-168
+  s_a965d5af1c30f7::t_5f2471c3e8dd10 169-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "6f7c4dfaa5ecb3b8366d2ac283b6cacfb89b00d1",
+  "prompts": {},
+  "sessions": {
+    "s_a965d5af1c30f7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e023979dffeNoNSF2v8Q24jhh",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
