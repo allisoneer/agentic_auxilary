@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.7.4] - 2026-07-01
+
+### 🐛 Bug Fixes
+- *(opencode-orchestrator-mcp)* Tolerate stale legacy permission failures
 ## [0.7.3] - 2026-06-24
 
 ### ⛰️  Features

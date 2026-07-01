@@ -458,7 +458,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
 }
 
 #[tokio::test]
-async fn run_still_errors_on_initial_permission_list_bad_request() {
+async fn run_tolerates_initial_permission_list_bad_request_with_warning() {
     let _guard = env_lock().await;
     let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
     // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
@@ -491,7 +491,19 @@ async fn run_still_errors_on_initial_permission_list_bad_request() {
         .mount(&mock)
         .await;
 
-    let err = timeout(
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("OK"))))
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
         Duration::from_secs(2),
         tool.call(
             OrchestratorRunInput {
@@ -505,8 +517,120 @@ async fn run_still_errors_on_initial_permission_list_bad_request() {
         ),
     )
     .await
-    .expect("strict run regression should not hang")
-    .expect_err("run should remain strict on initial permission-list failures");
+    .expect("degraded-success regression should not hang")
+    .expect("run should continue with a warning on initial permission-list 400");
 
-    assert!(matches!(err, ToolError::Internal(_)));
+    assert!(matches!(result.status, RunStatus::Completed));
+    assert_eq!(result.response.as_deref(), Some("OK"));
+    assert!(result.warnings.iter().any(|warning| {
+        let warning = warning.to_lowercase();
+        warning.contains("could not be listed")
+            && warning.contains("stale")
+            && warning.contains("malformed")
+    }));
+}
+
+#[tokio::test]
+async fn respond_permission_no_id_permission_list_400_is_actionable_invalid_input() {
+    let _guard = env_lock().await;
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = RespondPermissionTool::new(Arc::clone(&server));
+    let sid = "permission-discovery-400";
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .and(query_param("directory", "/tmp"))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_json(permission_patch_file_array_bad_request_fixture()),
+        )
+        .mount(&mock)
+        .await;
+
+    let err = tool
+        .call(
+            RespondPermissionInput {
+                session_id: sid.into(),
+                permission_request_id: None,
+                reply: PermissionReply::Once,
+                message: None,
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect_err("no-id discovery should surface actionable invalid input");
+
+    match err {
+        ToolError::InvalidInput(message) => {
+            let message = message.to_lowercase();
+            assert!(message.contains("could not be listed"));
+            assert!(message.contains("permission_request_id"));
+        }
+        other => panic!("expected invalid input error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn respond_permission_reply_404_is_actionable_invalid_input() {
+    let _guard = env_lock().await;
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = RespondPermissionTool::new(Arc::clone(&server));
+    let sid = "permission-reply-404";
+    let perm_id = "perm-stale-404";
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            permission_fixture(perm_id, sid, "file.write", &["/tmp/out.txt"])
+        ])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/permission/{perm_id}/reply")))
+        .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+            "name": "NotFound",
+            "message": "Permission request not found"
+        })))
+        .mount(&mock)
+        .await;
+
+    let err = tool
+        .call(
+            RespondPermissionInput {
+                session_id: sid.into(),
+                permission_request_id: None,
+                reply: PermissionReply::Once,
+                message: None,
+            },
+            &ToolContext::default(),
+        )
+        .await
+        .expect_err("stale reply should surface actionable invalid input");
+
+    match err {
+        ToolError::InvalidInput(message) => {
+            let message = message.to_lowercase();
+            assert!(message.contains(perm_id));
+            assert!(message.contains("not found") || message.contains("no longer pending"));
+        }
+        other => panic!("expected invalid input error, got {other:?}"),
+    }
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.url.path() == format!("/permission/{perm_id}/reply")),
+        "reply POST should be observed for stale permission id: {:?}",
+        requests
+            .iter()
+            .map(|request| request.url.path().to_string())
+            .collect::<Vec<_>>()
+    );
 }
