@@ -27,6 +27,22 @@ pub enum ReasonerError {
     #[error("Token limit exceeded: {current} > {limit}")]
     TokenLimit { current: usize, limit: usize },
 
+    #[error("Corpus too large: {current} files (max {limit}=500). Reduce scope and retry.")]
+    CorpusFileLimit { current: usize, limit: usize },
+
+    #[error(
+        "Corpus too large: {current} filesystem bytes (max {limit}=26214400 / 25 MiB). Reduce scope and retry."
+    )]
+    CorpusByteLimit { current: u64, limit: u64 },
+
+    #[error(
+        "Corpus too large: estimated optimizer prompt tokens {current} (max {limit}=60000). Reduce scope and retry."
+    )]
+    CorpusOptimizerPromptTokenEstimateLimit { current: usize, limit: usize },
+
+    #[error("Optimizer selected file(s) not in validated corpus: {0:?}")]
+    OptimizerSelectedUnknownFiles(Vec<String>),
+
     #[error("Unsupported file encoding (non-UTF8): {0}")]
     NonUtf8(PathBuf),
 
@@ -40,10 +56,14 @@ impl From<ReasonerError> for ToolError {
             ReasonerError::MissingFile(_) => Self::NotFound(e.to_string()),
             ReasonerError::MissingEnv(_)
             | ReasonerError::NonUtf8(_)
-            | ReasonerError::TokenLimit { .. } => Self::InvalidInput(e.to_string()),
-            ReasonerError::Template(_) | ReasonerError::Yaml(_) | ReasonerError::Json(_) => {
-                Self::InvalidInput(e.to_string())
-            }
+            | ReasonerError::TokenLimit { .. }
+            | ReasonerError::CorpusFileLimit { .. }
+            | ReasonerError::CorpusByteLimit { .. }
+            | ReasonerError::CorpusOptimizerPromptTokenEstimateLimit { .. }
+            | ReasonerError::OptimizerSelectedUnknownFiles(_)
+            | ReasonerError::Template(_)
+            | ReasonerError::Yaml(_)
+            | ReasonerError::Json(_) => Self::InvalidInput(e.to_string()),
             ReasonerError::OpenAI(_) => Self::External(e.to_string()),
             ReasonerError::Io(_) => Self::Internal(e.to_string()),
         }

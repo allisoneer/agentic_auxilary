@@ -3,6 +3,7 @@ pub mod guards;
 pub mod memory;
 pub mod orchestration;
 pub mod paths;
+pub mod preflight;
 
 // Re-exports: only selectively export what the crate root needs
 pub use directory::expand_directories_to_filemeta;

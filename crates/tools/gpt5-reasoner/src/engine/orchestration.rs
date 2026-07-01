@@ -7,6 +7,7 @@ use crate::engine::memory::injection_enabled_from_env;
 use crate::engine::paths::dedup_files_in_place;
 use crate::engine::paths::normalize_paths_in_place;
 use crate::engine::paths::precheck_files;
+use crate::engine::preflight;
 use crate::errors::ReasonerError;
 use crate::optimizer::call_optimizer;
 use crate::optimizer::parser::OptimizerOutput;
@@ -31,6 +32,7 @@ use async_openai::types::chat::CreateChatCompletionRequestArgs;
 use async_openai::types::chat::FinishReason;
 use async_openai::types::chat::ReasoningEffort;
 use futures::StreamExt;
+use std::collections::HashSet;
 use thoughts_tool::DocumentType;
 use thoughts_tool::write_document;
 
@@ -255,7 +257,29 @@ pub async fn gpt5_reasoner_impl(
         tracing::info!("CLAUDE.md auto-injection disabled via INJECT_CLAUDE_MD");
     }
 
-    // Pre-validate after injection so newly discovered files are checked
+    // Auto-inject plan_structure.md for Plan prompts before preflight and optimizer.
+    maybe_inject_plan_structure_meta(&prompt_type, &mut files);
+
+    let aggregate_stats = match preflight::aggregate_corpus_preflight(&prompt_type, &prompt, &files)
+    {
+        Ok(stats) => stats,
+        Err(e) => {
+            let msg = format!("stage=preflight_aggregate: {e}");
+            log_record(false, Some(msg), None, None, None, files.len(), None);
+            return Err(ToolError::InvalidInput(format!(
+                "stage=preflight_aggregate: {e}"
+            )));
+        }
+    };
+    tracing::info!(
+        unique_files = aggregate_stats.unique_files,
+        fs_bytes = aggregate_stats.fs_bytes,
+        optimizer_prompt_tokens_est = aggregate_stats.optimizer_prompt_tokens_est,
+        "Aggregate corpus preflight passed"
+    );
+    let allowed_paths: HashSet<String> = files.iter().map(|f| f.filename.clone()).collect();
+
+    // Pre-validate after aggregate preflight so newly discovered files are checked.
     tracing::info!("Pre-validating {} file(s) before optimizer", files.len());
     if let Err(e) = precheck_files(&files) {
         let msg = format!("stage=precheck_files: {e}");
@@ -263,9 +287,6 @@ pub async fn gpt5_reasoner_impl(
         return Err(e);
     }
     // ===== END NEW =====
-
-    // Auto-inject plan_structure.md for Plan prompts (before optimizer)
-    maybe_inject_plan_structure_meta(&prompt_type, &mut files);
 
     if ctx.is_cancelled() {
         return Err(ToolError::cancelled(None));
@@ -375,6 +396,20 @@ pub async fn gpt5_reasoner_impl(
     // Executor-side guard: ensure plan_template group and safe marker
     if matches!(prompt_type, PromptType::Plan) {
         ensure_plan_template_group(&mut parsed);
+    }
+
+    if let Err(e) = preflight::selected_file_subset_preflight(&allowed_paths, &parsed.groups) {
+        let msg = format!("stage=preflight_selected_files: {e}");
+        log_record(
+            false,
+            Some(msg.clone()),
+            None,
+            None,
+            None,
+            files.len(),
+            None,
+        );
+        return Err(ToolError::InvalidInput(msg));
     }
 
     // Step 2: inject, token check, execute
@@ -840,8 +875,14 @@ pub async fn gpt5_reasoner_impl(
 #[allow(clippy::unwrap_used)]
 mod retry_tests {
     use super::*;
+    use crate::engine::preflight;
     use crate::errors::ReasonerError;
+    use crate::test_support::EnvGuard;
     use agentic_config::types::ReasoningConfig;
+    use serial_test::serial;
+    use std::fs;
+    use std::fs::OpenOptions;
+    use tempfile::TempDir;
 
     #[test]
     fn test_template_error_is_retryable() {
@@ -935,5 +976,102 @@ mod retry_tests {
         .await;
 
         assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn aggregate_preflight_file_limit_fails_before_missing_env() {
+        let _api_key = EnvGuard::remove("OPENROUTER_API_KEY");
+        let _inject = EnvGuard::set("INJECT_CLAUDE_MD", "0");
+
+        let files = (0..=preflight::MAX_UNIQUE_FILES)
+            .map(|idx| FileMeta {
+                filename: format!("/tmp/nonexistent-{idx}.rs"),
+                description: "desc".into(),
+            })
+            .collect::<Vec<_>>();
+
+        let err = gpt5_reasoner_impl(
+            "test".to_string(),
+            files,
+            None,
+            &ReasoningConfig::default(),
+            PromptType::Reasoning,
+            None,
+            &ToolContext::default(),
+        )
+        .await
+        .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("stage=preflight_aggregate"));
+        assert!(msg.contains("500"));
+        assert!(!msg.contains("Missing environment variable"));
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn aggregate_preflight_byte_limit_fails_before_missing_env() {
+        let _api_key = EnvGuard::remove("OPENROUTER_API_KEY");
+        let _inject = EnvGuard::set("INJECT_CLAUDE_MD", "0");
+        let td = TempDir::new().unwrap();
+        let file = td.path().join("large.txt");
+        fs::write(&file, "x").unwrap();
+        OpenOptions::new()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_len(preflight::MAX_FS_BYTES + 1)
+            .unwrap();
+
+        let err = gpt5_reasoner_impl(
+            "test".to_string(),
+            vec![FileMeta {
+                filename: file.to_string_lossy().to_string(),
+                description: "large file".into(),
+            }],
+            None,
+            &ReasoningConfig::default(),
+            PromptType::Reasoning,
+            None,
+            &ToolContext::default(),
+        )
+        .await
+        .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("stage=preflight_aggregate"));
+        assert!(msg.contains("25 MiB"));
+        assert!(!msg.contains("Missing environment variable"));
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn aggregate_preflight_token_estimate_limit_fails_before_missing_env() {
+        let _api_key = EnvGuard::remove("OPENROUTER_API_KEY");
+        let _inject = EnvGuard::set("INJECT_CLAUDE_MD", "0");
+        let td = TempDir::new().unwrap();
+        let file = td.path().join("small.txt");
+        fs::write(&file, "tiny").unwrap();
+
+        let err = gpt5_reasoner_impl(
+            "test".to_string(),
+            vec![FileMeta {
+                filename: file.to_string_lossy().to_string(),
+                description: "word ".repeat(preflight::MAX_OPTIMIZER_PROMPT_TOKENS_EST),
+            }],
+            None,
+            &ReasoningConfig::default(),
+            PromptType::Reasoning,
+            None,
+            &ToolContext::default(),
+        )
+        .await
+        .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("stage=preflight_aggregate"));
+        assert!(msg.contains("60000"));
+        assert!(!msg.contains("Missing environment variable"));
     }
 }
