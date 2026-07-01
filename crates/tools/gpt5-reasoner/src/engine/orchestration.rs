@@ -1047,7 +1047,7 @@ mod retry_tests {
 
         let msg = err.to_string();
         assert!(msg.contains("stage=preflight_aggregate"));
-        assert!(msg.contains("25 MiB"));
+        assert!(msg.contains("max 26214400"));
         assert!(!msg.contains("Missing environment variable"));
     }
 

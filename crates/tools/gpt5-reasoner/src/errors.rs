@@ -27,12 +27,10 @@ pub enum ReasonerError {
     #[error("Token limit exceeded: {current} > {limit}")]
     TokenLimit { current: usize, limit: usize },
 
-    #[error("Corpus too large: {current} files (max {limit}=500). Reduce scope and retry.")]
+    #[error("Corpus too large: {current} files (max {limit}). Reduce scope and retry.")]
     CorpusFileLimit { current: usize, limit: usize },
 
-    #[error(
-        "Corpus too large: {current} filesystem bytes (max {limit}=26214400 / 25 MiB). Reduce scope and retry."
-    )]
+    #[error("Corpus too large: {current} filesystem bytes (max {limit}). Reduce scope and retry.")]
     CorpusByteLimit { current: u64, limit: u64 },
 
     #[error(
@@ -120,5 +118,38 @@ mod tests {
         fn _type_check(e: &OpenAIError) -> bool {
             super::is_retryable_app_level(e)
         }
+    }
+
+    #[test]
+    fn corpus_limit_errors_use_dynamic_limit_text_only() {
+        let file_msg = ReasonerError::CorpusFileLimit {
+            current: 501,
+            limit: 500,
+        }
+        .to_string();
+        assert_eq!(
+            file_msg,
+            "Corpus too large: 501 files (max 500). Reduce scope and retry."
+        );
+
+        let byte_msg = ReasonerError::CorpusByteLimit {
+            current: 26_214_401,
+            limit: 26_214_400,
+        }
+        .to_string();
+        assert_eq!(
+            byte_msg,
+            "Corpus too large: 26214401 filesystem bytes (max 26214400). Reduce scope and retry."
+        );
+
+        let token_msg = ReasonerError::CorpusOptimizerPromptTokenEstimateLimit {
+            current: 60_001,
+            limit: 60_000,
+        }
+        .to_string();
+        assert_eq!(
+            token_msg,
+            "Corpus too large: estimated optimizer prompt tokens 60001 (max 60000). Reduce scope and retry."
+        );
     }
 }
