@@ -365,18 +365,30 @@ impl OrchestratorRunTool {
             Ok(pending_permissions) => Ok(pending_permissions
                 .into_iter()
                 .find(|permission| permission.session_id == session_id)),
-            Err(error)
-                if matches!(mode, PermissionPreflightMode::RespondPermissionContinuation)
-                    && error.is_validation_error() =>
-            {
-                tracing::warn!(
-                    session_id = %session_id,
-                    error = %error,
-                    "failed to list permissions during respond_permission continuation; falling back to polling"
-                );
-                warnings.push(format!(
-                    "Permission refresh failed after reply ({error}); continuing with polling fallback."
-                ));
+            Err(error) if error.is_validation_error() => {
+                match mode {
+                    PermissionPreflightMode::RespondPermissionContinuation => {
+                        tracing::warn!(
+                            session_id = %session_id,
+                            error = %error,
+                            "failed to list permissions during respond_permission continuation; falling back to polling"
+                        );
+                        warnings.push(format!(
+                            "Permission refresh failed after reply ({error}); permission state could not be listed and may be stale or malformed. Continuing with polling fallback."
+                        ));
+                    }
+                    PermissionPreflightMode::Strict => {
+                        tracing::warn!(
+                            session_id = %session_id,
+                            error = %error,
+                            "failed to list permissions during run preflight; continuing without permission preflight"
+                        );
+                        warnings.push(
+                            "Permission state could not be listed during preflight (HTTP 400). Permission state may be stale or malformed; pending permissions may be stale or undiscoverable."
+                                .to_string(),
+                        );
+                    }
+                }
                 Ok(None)
             }
             Err(error) => Err(ToolError::Internal(format!(
@@ -556,7 +568,7 @@ impl OrchestratorRunTool {
         if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
             let token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
             let output =
-                Self::finalize_completed(client, session_id, &token_tracker, vec![]).await?;
+                Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
             return Ok(RunOutcome::with_tracker(output, &token_tracker));
         }
 
@@ -1636,9 +1648,20 @@ Parameters:
                         }
                     } else {
                         // Find the pending permission for this session when discovery is required.
-                        let pending = client.permissions().list().await.map_err(|e| {
-                            ToolError::Internal(format!("Failed to list permissions: {e}"))
-                        })?;
+                        let pending = match client.permissions().list().await {
+                            Ok(pending) => pending,
+                            Err(error) if error.is_validation_error() => {
+                                return Err(ToolError::InvalidInput(format!(
+                                    "Unable to discover a pending permission for session '{}': permission state could not be listed (HTTP 400). Permission state may be stale or malformed. Retry with permission_request_id (from run) if available; otherwise reopen the session or start a new one.",
+                                    input.session_id
+                                )));
+                            }
+                            Err(error) => {
+                                return Err(ToolError::Internal(format!(
+                                    "Failed to list permissions: {error}"
+                                )));
+                            }
+                        };
 
                         let mut perms: Vec<_> = pending
                             .into_iter()
@@ -1697,7 +1720,9 @@ Parameters:
                 };
 
                 // Send the reply
-                client
+                let session_id_for_error = input.session_id.clone();
+
+                match client
                     .permissions()
                     .reply(
                         &permission_request_id,
@@ -1707,9 +1732,19 @@ Parameters:
                         },
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::Internal(format!("Failed to reply to permission: {e}"))
-                    })?;
+                {
+                    Ok(_) => {}
+                    Err(error) if error.is_not_found() => {
+                        return Err(ToolError::InvalidInput(format!(
+                            "Permission request '{permission_request_id}' was not found or is no longer pending (HTTP 404). It may be stale. Re-run orchestrator_run(session_id='{session_id_for_error}') to get the latest permission_request_id and retry."
+                        )));
+                    }
+                    Err(error) => {
+                        return Err(ToolError::Internal(format!(
+                            "Failed to reply to permission: {error}"
+                        )));
+                    }
+                }
 
                 // Now continue monitoring the session using run logic
                 let run_tool = OrchestratorRunTool::new(Arc::clone(&server_handle));
