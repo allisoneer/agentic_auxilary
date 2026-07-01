@@ -60,6 +60,27 @@ async fn ensure_ready(readiness: &ThoughtsMcpReadinessGate) -> Result<(), ToolEr
         .map_err(|error| ToolError::Internal(format!("{error:#}")))
 }
 
+async fn ensure_ready_and_log_failure(
+    readiness: &ThoughtsMcpReadinessGate,
+    timer: &CallTimer,
+    tool_name: &'static str,
+    req_json: &serde_json::Value,
+) -> Result<(), ToolError> {
+    if let Err(error) = ensure_ready(readiness).await {
+        log_tool_call(
+            timer,
+            tool_name,
+            req_json.clone(),
+            false,
+            Some(error.to_string()),
+            None,
+        );
+        return Err(error);
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // WriteDocument Tool
 // ============================================================================
@@ -99,17 +120,8 @@ impl Tool for WriteDocumentTool {
                 "filename": &input.filename,
             });
 
-            if let Err(error) = ensure_ready(&readiness).await {
-                log_tool_call(
-                    &timer,
-                    "thoughts_write_document",
-                    req_json,
-                    false,
-                    Some(error.to_string()),
-                    None,
-                );
-                return Err(error);
-            }
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_write_document", &req_json)
+                .await?;
 
             let result = write_document(&input.doc_type, &input.filename, &input.content);
 
@@ -181,17 +193,8 @@ impl Tool for ListActiveDocumentsTool {
                 "subdir": input.subdir.as_ref().map(|d| format!("{d:?}").to_lowercase()),
             });
 
-            if let Err(error) = ensure_ready(&readiness).await {
-                log_tool_call(
-                    &timer,
-                    "thoughts_list_documents",
-                    req_json,
-                    false,
-                    Some(error.to_string()),
-                    None,
-                );
-                return Err(error);
-            }
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_list_documents", &req_json)
+                .await?;
 
             let result = list_documents(input.subdir.as_ref());
 
@@ -257,17 +260,8 @@ impl Tool for ListReferencesTool {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({});
 
-            if let Err(error) = ensure_ready(&readiness).await {
-                log_tool_call(
-                    &timer,
-                    "thoughts_list_references",
-                    req_json,
-                    false,
-                    Some(error.to_string()),
-                    None,
-                );
-                return Err(error);
-            }
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_list_references", &req_json)
+                .await?;
 
             let result = (|| -> Result<ReferencesList, ToolError> {
                 let control_root = get_control_repo_root(
@@ -382,17 +376,8 @@ impl Tool for GetRepoRefsTool {
                 "limit": input.limit,
             });
 
-            if let Err(error) = ensure_ready(&readiness).await {
-                log_tool_call(
-                    &timer,
-                    "thoughts_get_repo_refs",
-                    req_json,
-                    false,
-                    Some(error.to_string()),
-                    None,
-                );
-                return Err(error);
-            }
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_get_repo_refs", &req_json)
+                .await?;
 
             let result = get_repo_refs_impl_adapter(input.url, input.limit)
                 .await
@@ -480,17 +465,8 @@ impl Tool for AddReferenceTool {
                 "configured_timeout_secs": thoughts.add_reference_timeout_secs,
             });
 
-            if let Err(error) = ensure_ready(&readiness).await {
-                log_tool_call(
-                    &timer,
-                    "thoughts_add_reference",
-                    req_json,
-                    false,
-                    Some(error.to_string()),
-                    None,
-                );
-                return Err(error);
-            }
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_add_reference", &req_json)
+                .await?;
 
             // Delegate to the shared adapter function
             let result = add_reference_impl_adapter(
@@ -574,17 +550,8 @@ impl Tool for GetTemplateTool {
                 "template": input.template.label(),
             });
 
-            if let Err(error) = ensure_ready(&readiness).await {
-                log_tool_call(
-                    &timer,
-                    "thoughts_get_template",
-                    req_json,
-                    false,
-                    Some(error.to_string()),
-                    None,
-                );
-                return Err(error);
-            }
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_get_template", &req_json)
+                .await?;
 
             let result = TemplateResponse {
                 template_type: input.template,

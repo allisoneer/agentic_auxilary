@@ -17,7 +17,9 @@ use crate::platform::detect_platform;
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -77,6 +79,7 @@ fn ensure_safe_repo_layout(
     mount_dirs: &MountDirsV2,
     _thoughts_mount: &ThoughtsMount,
 ) -> Result<()> {
+    validate_mount_dirs(mount_dirs)?;
     let is_worktree = is_worktree(repo_root)?;
     let control_data_root = control_root.join(".thoughts-data");
     ensure_directory_path(&control_data_root)?;
@@ -274,6 +277,7 @@ fn verify_expected_mounts(
     references: &[ReferenceMount],
     active_mounts: &[MountInfo],
 ) -> Result<()> {
+    validate_mount_dirs(mount_dirs)?;
     let expected_mounts =
         expected_mount_spaces(mount_dirs, thoughts_mount, context_mounts, references)?;
     let control_data_root = control_root.join(".thoughts-data");
@@ -325,6 +329,7 @@ fn expected_mount_spaces(
     context_mounts: &[ContextMount],
     references: &[ReferenceMount],
 ) -> Result<Vec<MountSpace>> {
+    validate_mount_dirs(mount_dirs)?;
     let mut spaces = vec![MountSpace::Thoughts];
     for mount in context_mounts {
         spaces.push(MountSpace::Context(mount.mount_path.clone()));
@@ -348,17 +353,46 @@ fn expected_mount_spaces(
         });
     }
 
-    for base_dir in [
-        &mount_dirs.thoughts,
-        &mount_dirs.context,
-        &mount_dirs.references,
+    Ok(spaces)
+}
+
+fn validate_mount_dirs(mount_dirs: &MountDirsV2) -> Result<()> {
+    for (name, value) in [
+        ("thoughts", mount_dirs.thoughts.as_str()),
+        ("context", mount_dirs.context.as_str()),
+        ("references", mount_dirs.references.as_str()),
     ] {
-        if base_dir.is_empty() {
-            anyhow::bail!("Configured mount directories must not be empty.");
-        }
+        validate_mount_dir_name(name, value)?;
     }
 
-    Ok(spaces)
+    if mount_dirs.thoughts == mount_dirs.context
+        || mount_dirs.thoughts == mount_dirs.references
+        || mount_dirs.context == mount_dirs.references
+    {
+        anyhow::bail!("Mount directories must be distinct (thoughts/context/references)");
+    }
+
+    Ok(())
+}
+
+fn validate_mount_dir_name(name: &str, value: &str) -> Result<()> {
+    if value.trim().is_empty() {
+        anyhow::bail!("Mount directory '{name}' cannot be empty");
+    }
+    if value == ".thoughts-data" {
+        anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
+    }
+    if value.contains('/') || value.contains('\\') {
+        anyhow::bail!("Mount directory '{name}' must be a single path segment (got {value})");
+    }
+
+    let mut components = Path::new(value).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(segment)), None) if segment == OsStr::new(value) => Ok(()),
+        _ => anyhow::bail!(
+            "Mount directory '{name}' must be a single safe path segment (got {value})"
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -457,6 +491,79 @@ mod tests {
 
         assert!(error.contains("Path collision"));
         assert!(error.contains("context"));
+    }
+
+    #[test]
+    fn rejects_absolute_mount_dir_names() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        fs::create_dir_all(&repo_root).unwrap();
+
+        let mount_dirs = MountDirsV2 {
+            thoughts: "/tmp/escape".to_string(),
+            ..MountDirsV2::default()
+        };
+
+        let error = ensure_safe_repo_layout(
+            &repo_root,
+            &repo_root,
+            &mount_dirs,
+            &sample_thoughts_mount(),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(
+            error.contains("single path segment") || error.contains("single safe path segment")
+        );
+    }
+
+    #[test]
+    fn rejects_parent_traversal_mount_dir_names() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        fs::create_dir_all(&repo_root).unwrap();
+
+        let mount_dirs = MountDirsV2 {
+            context: "..".to_string(),
+            ..MountDirsV2::default()
+        };
+
+        let error = ensure_safe_repo_layout(
+            &repo_root,
+            &repo_root,
+            &mount_dirs,
+            &sample_thoughts_mount(),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(
+            error.contains("single safe path segment") || error.contains("cannot be '.' or '..'")
+        );
+    }
+
+    #[test]
+    fn rejects_multi_segment_mount_dir_names() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        fs::create_dir_all(&repo_root).unwrap();
+
+        let mount_dirs = MountDirsV2 {
+            references: "nested/path".to_string(),
+            ..MountDirsV2::default()
+        };
+
+        let error = ensure_safe_repo_layout(
+            &repo_root,
+            &repo_root,
+            &mount_dirs,
+            &sample_thoughts_mount(),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("single path segment"));
     }
 
     #[test]
