@@ -1,0 +1,31 @@
+crates/tools/thoughts-mcp-tools/src/lib.rs
+  s_f3ea53dd682d89::t_56830bfda8e476 9-10,26-27,29-45
+  s_f3ea53dd682d89::t_2a22a857518bd6 6
+crates/tools/thoughts-mcp-tools/src/tools.rs
+  s_f3ea53dd682d89::t_2a22a857518bd6 80,163,241,362,458,556
+  s_f3ea53dd682d89::t_369875f02e7204 35-36,56-62,79,81,94,102-113,162,164,177,184-195,240,242,255,260-271,361,363,377,385-395,473,483-494,555,557,570,577-588,609-636,638
+  s_f3ea53dd682d89::t_d70e8d5b21987c 396
+  s_f3ea53dd682d89::t_958eb7e9e5cc27 637
+crates/tools/thoughts-mcp-tools/src/readiness.rs
+  s_f3ea53dd682d89::t_d84ad692b11ab1 42
+  s_f3ea53dd682d89::t_9d3a11c06c21ce 80
+  s_f3ea53dd682d89::t_56830bfda8e476 1-7,9-17,19-23,25-35,37-41,43,46-79,81-133
+  s_f3ea53dd682d89::t_27bbb9fbe92f6d 8,18,24,36
+  s_f3ea53dd682d89::t_2a22a857518bd6 44-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "99deac31a32baa34217c989b90d140c89cf63375",
+  "prompts": {},
+  "sessions": {
+    "s_f3ea53dd682d89": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e10fc208ffeOPDZMiIWs3xquE",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
