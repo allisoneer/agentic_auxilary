@@ -135,6 +135,9 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     if let Some(v) = env_trimmed("AGENTIC_SERVICES_GITHUB_BASE_URL") {
         cfg.services.github.base_url = v;
     }
+    if let Some(v) = env_trimmed("AGENTIC_SERVICES_DISCORD_BASE_URL") {
+        cfg.services.discord.base_url = v;
+    }
 
     // --- Subagents model overrides ---
     if let Some(v) = env_trimmed("AGENTIC_SUBAGENTS_LOCATOR_MODEL") {
@@ -216,6 +219,11 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     {
         cfg.services.github.total_timeout_secs = n;
     }
+    if let Some(v) = env_trimmed("AGENTIC_SERVICES_DISCORD_REQUEST_TIMEOUT_SECS")
+        && let Ok(n) = v.parse()
+    {
+        cfg.services.discord.request_timeout_secs = n;
+    }
 
     // --- Review/thoughts overrides ---
     if let Some(v) = env_trimmed("AGENTIC_REVIEW_RUN_TIMEOUT_SECS")
@@ -291,6 +299,11 @@ mod tests {
         assert_eq!(loaded.config.subagents.runtime_timeout_secs, 3600);
         assert_eq!(loaded.config.cli_tools.just_execute_timeout_secs, 1800);
         assert_eq!(loaded.config.review.run_timeout_secs, 1800);
+        assert_eq!(
+            loaded.config.services.discord.base_url,
+            "https://discord.com"
+        );
+        assert_eq!(loaded.config.services.discord.request_timeout_secs, 30);
         assert!(loaded.warnings.is_empty());
     }
 
@@ -424,8 +437,9 @@ optimizer_model = "file-model"
         let _g4 = EnvGuard::set("AGENTIC_SERVICES_LINEAR_CONNECT_TIMEOUT_SECS", "11");
         let _g5 = EnvGuard::set("AGENTIC_SERVICES_LINEAR_REQUEST_TIMEOUT_SECS", "22");
         let _g6 = EnvGuard::set("AGENTIC_SERVICES_GITHUB_TOTAL_TIMEOUT_SECS", "33");
-        let _g7 = EnvGuard::set("AGENTIC_REVIEW_RUN_TIMEOUT_SECS", "44");
-        let _g8 = EnvGuard::set("AGENTIC_THOUGHTS_ADD_REFERENCE_TIMEOUT_SECS", "55");
+        let _g7 = EnvGuard::set("AGENTIC_SERVICES_DISCORD_REQUEST_TIMEOUT_SECS", "66");
+        let _g8 = EnvGuard::set("AGENTIC_REVIEW_RUN_TIMEOUT_SECS", "44");
+        let _g9 = EnvGuard::set("AGENTIC_THOUGHTS_ADD_REFERENCE_TIMEOUT_SECS", "55");
 
         let loaded = load_merged(temp.path()).unwrap();
 
@@ -435,8 +449,27 @@ optimizer_model = "file-model"
         assert_eq!(loaded.config.services.linear.connect_timeout_secs, 11);
         assert_eq!(loaded.config.services.linear.request_timeout_secs, 22);
         assert_eq!(loaded.config.services.github.total_timeout_secs, 33);
+        assert_eq!(loaded.config.services.discord.request_timeout_secs, 66);
         assert_eq!(loaded.config.review.run_timeout_secs, 44);
         assert_eq!(loaded.config.thoughts.add_reference_timeout_secs, 55);
+    }
+
+    #[test]
+    #[serial]
+    fn test_discord_base_url_env_override_applies() {
+        let temp = TempDir::new().unwrap();
+        let _guard = EnvGuard::set(CONFIG_DIR_TEST_VAR, temp.path());
+        let _env_guard = EnvGuard::set(
+            "AGENTIC_SERVICES_DISCORD_BASE_URL",
+            "https://discord-proxy.example",
+        );
+
+        let loaded = load_merged(temp.path()).unwrap();
+
+        assert_eq!(
+            loaded.config.services.discord.base_url,
+            "https://discord-proxy.example"
+        );
     }
 
     #[test]

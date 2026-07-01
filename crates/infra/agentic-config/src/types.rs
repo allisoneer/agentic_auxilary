@@ -347,6 +347,8 @@ pub struct ServicesConfig {
     pub linear: LinearServiceConfig,
     /// GitHub API configuration.
     pub github: GitHubServiceConfig,
+    /// Discord API configuration.
+    pub discord: DiscordServiceConfig,
 }
 
 /// Anthropic API service configuration.
@@ -418,6 +420,25 @@ impl Default for GitHubServiceConfig {
         Self {
             base_url: "https://api.github.com".into(),
             total_timeout_secs: 120,
+        }
+    }
+}
+
+/// Discord API service configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct DiscordServiceConfig {
+    /// Base URL for the Discord API.
+    pub base_url: String,
+    /// Per-request timeout in seconds. `0` disables the timeout.
+    pub request_timeout_secs: u64,
+}
+
+impl Default for DiscordServiceConfig {
+    fn default() -> Self {
+        Self {
+            base_url: "https://discord.com".into(),
+            request_timeout_secs: 30,
         }
     }
 }
@@ -507,6 +528,7 @@ mod tests {
         assert!(toml_str.contains("[services.exa]"));
         assert!(toml_str.contains("[services.linear]"));
         assert!(toml_str.contains("[services.github]"));
+        assert!(toml_str.contains("[services.discord]"));
         assert!(toml_str.contains("[review]"));
         assert!(toml_str.contains("[thoughts]"));
         assert!(toml_str.contains("[orchestrator]"));
@@ -550,6 +572,8 @@ locator_model = "custom-model"
             config.services.linear.base_url,
             "https://api.linear.app/graphql"
         );
+        assert_eq!(config.services.discord.base_url, "https://discord.com");
+        assert_eq!(config.services.discord.request_timeout_secs, 30);
         assert!(config.orchestrator.commands.allow.is_empty());
         assert!(config.orchestrator.commands.deny.is_empty());
         assert!(config.orchestrator.agents.allow.is_empty());
@@ -667,6 +691,10 @@ deny = ["Bash"]
         // GitHub
         assert_eq!(cfg.github.base_url, "https://api.github.com");
         assert_eq!(cfg.github.total_timeout_secs, 120);
+
+        // Discord
+        assert_eq!(cfg.discord.base_url, "https://discord.com");
+        assert_eq!(cfg.discord.request_timeout_secs, 30);
     }
 
     #[test]
