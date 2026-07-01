@@ -369,6 +369,11 @@
       "remote": "https://github.com/anomalyco/opencode",
       "description": "OpenCode upstream exact release for 1.17.4 upgrade-diff research",
       "ref": "refs/tags/v1.17.4"
+    },
+    {
+      "remote": "https://github.com/twilight-rs/twilight.git",
+      "description": "Rust Discord HTTP client candidate for ENG-392 Discord search integration research",
+      "ref": "refs/heads/main"
     }
   ]
 }
