@@ -31,6 +31,7 @@ members = [
 
   # Tools family
   "crates/tools/coding-agent-tools",
+  "crates/tools/discord-tools",
   "crates/tools/pr-comments",
   "crates/tools/gpt5-reasoner",
   "crates/tools/review-tools",
@@ -90,6 +91,7 @@ thoughts-tool = { version = "0.12.1", path = "crates/infra/thoughts-core" }
 thoughts-mcp-tools = { version = "0.3.3", path = "crates/tools/thoughts-mcp-tools" }
 workspace_tools = { package = "agentic-workspace-tools", version = "0.1.0", path = "crates/tools/workspace-tools" }
 coding_agent_tools = { version = "0.5.3", path = "crates/tools/coding-agent-tools" }
+discord-tools = { version = "0.1.0", path = "crates/tools/discord-tools" }
 pr_comments = { version = "0.8.4", path = "crates/tools/pr-comments" }
 gpt5_reasoner = { version = "0.11.6", path = "crates/tools/gpt5-reasoner" }
 linear-tools = { version = "0.6.3", path = "crates/linear/tools" }
