@@ -1,0 +1,19 @@
+apps/opencode-orchestrator-mcp/CHANGELOG.md
+  s_aaec1f20ec2ffd::t_fb4b34dc15588f 7,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "f81a67fa87bc9d6af49eacdbe76b448a0abd1431",
+  "prompts": {},
+  "sessions": {
+    "s_aaec1f20ec2ffd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e02147a7ffe9WCEjeo4V5ELEB",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
