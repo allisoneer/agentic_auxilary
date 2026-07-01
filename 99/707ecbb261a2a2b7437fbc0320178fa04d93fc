@@ -1,0 +1,40 @@
+crates/infra/thoughts-core/src/workspace/readiness.rs
+  s_f3ea53dd682d89::t_f7953eba135e11 149-153,161-163,165,277-278,280-281,289-292,339-343,351-355
+  s_f3ea53dd682d89::t_73b3d1c3e2fb92 172,204
+  s_f3ea53dd682d89::t_d1c053219e2b25 78,121-131,166-171,173,175-179,227-231,367-368
+  s_f3ea53dd682d89::t_fb76f8f549c1f3 1-16,19-26,28-30,32-62,64-77,79-95,97-120,132-148,154-156,158-160,174,180-194,196-203,205-226,232-276,279,282-288,293-338,344-350,356-366,369-513
+  s_f3ea53dd682d89::t_ec14ccadb78f8e 17-18,31
+  s_f3ea53dd682d89::t_1066836dcc49d8 27,63,96,157,164,195
+crates/infra/thoughts-core/src/workspace/mod.rs
+  s_f3ea53dd682d89::t_fb76f8f549c1f3 1-4
+crates/tools/thoughts-mcp-tools/src/lib.rs
+  s_f3ea53dd682d89::t_56830bfda8e476 9-10,26-27,29-45
+  s_f3ea53dd682d89::t_2a22a857518bd6 6
+crates/tools/thoughts-mcp-tools/src/tools.rs
+  s_f3ea53dd682d89::t_2a22a857518bd6 80,163,241,362,458,556
+  s_f3ea53dd682d89::t_369875f02e7204 35-36,56-62,79,81,94,102-113,162,164,177,184-195,240,242,255,260-271,361,363,377,385-395,473,483-494,555,557,570,577-588,609-636,638
+  s_f3ea53dd682d89::t_d70e8d5b21987c 396
+  s_f3ea53dd682d89::t_958eb7e9e5cc27 637
+crates/tools/thoughts-mcp-tools/src/readiness.rs
+  s_f3ea53dd682d89::t_d84ad692b11ab1 42
+  s_f3ea53dd682d89::t_9d3a11c06c21ce 80
+  s_f3ea53dd682d89::t_56830bfda8e476 1-7,9-17,19-23,25-35,37-41,43,46-79,81-133
+  s_f3ea53dd682d89::t_27bbb9fbe92f6d 8,18,24,36
+  s_f3ea53dd682d89::t_2a22a857518bd6 44-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "99707ecbb261a2a2b7437fbc0320178fa04d93fc",
+  "prompts": {},
+  "sessions": {
+    "s_f3ea53dd682d89": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e10fc208ffeOPDZMiIWs3xquE",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
