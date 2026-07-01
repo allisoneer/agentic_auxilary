@@ -1,4 +1,4 @@
-name: README Sync
+name: Xtask Sync (release PR)
 
 on:
   pull_request:
@@ -11,10 +11,10 @@ permissions:
 
 jobs:
   readme-sync:
-    name: Sync README versions
+    name: Sync xtask-managed generated files
     runs-on: ubuntu-latest
-    # Only run on PRs labeled "release"
-    if: ${{ github.event_name == 'pull_request' && contains(toJson(github.event.pull_request.labels), '"name":"release"') }}
+    # Only run on same-repo PRs labeled "release"
+    if: ${{ github.event_name == 'pull_request' && contains(toJson(github.event.pull_request.labels), '"name":"release"') && github.event.pull_request.head.repo.full_name == github.repository }}
     # Don't block releases if something goes wrong
     continue-on-error: true
     concurrency:
@@ -26,6 +26,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Generate GitHub token
         id: generate-token
@@ -37,21 +38,32 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: 1.92
+          toolchain: 1.93.0
           cache: true
 
-      - name: Sync README
+      - name: Sync generated files
         id: sync
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          cargo run -p xtask -- readme-sync
+          cargo run -p xtask -- sync
+
           if git diff --quiet --exit-code; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          changed_files="$(git diff --name-only)"
+          allowed_re='^(CLAUDE\.md|README\.md|release-plz\.toml|mise\.toml|justfile|agentic\.schema\.json|apps/.*/CLAUDE\.md|crates/.*/CLAUDE\.md|bindings/.*/CLAUDE\.md)$'
+          bad="$(echo "$changed_files" | grep -Ev "$allowed_re" || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::xtask sync modified unexpected files; refusing to auto-commit"
+            echo "$bad"
+            exit 1
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit changes
         if: steps.sync.outputs.changed == 'true'
@@ -59,8 +71,8 @@ jobs:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          git config user.name "readme-sync[bot]"
-          git config user.email "readme-sync[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "chore(readme): sync dependency versions [skip ci]"
+          git config user.name "xtask-sync[bot]"
+          git config user.email "xtask-sync[bot]@users.noreply.github.com"
+          git diff --name-only | xargs git add --
+          git commit -m "chore(sync): xtask sync [skip ci]"
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"
