@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+## [0.5.3] - 2026-07-01
+
+### 🐛 Bug Fixes
+- *(xtask)* Generate crate claude commands with just wrappers
 ## [0.5.2] - 2026-03-26
 
 ### ⚙️  Miscellaneous
