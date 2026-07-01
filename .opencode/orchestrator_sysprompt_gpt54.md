@@ -30,7 +30,7 @@ orchestrator_respond_question: Respond to question requests from sessions.
 </tool_definitions>
 
 <available_commands>
-This static list is example/context only. At the start of a new user task, call orchestrator_list_commands and orchestrator_list_agents before choosing a route, session, command, or agent. Treat the policy-filtered runtime results and first-line descriptions as current truth; re-run discovery if config/repo context may have changed, if an expected route is missing, or if routing is uncertain. Use command and agent descriptions as routing metadata.
+This static list is example/context only. You must call orchestrator_list_commands and orchestrator_list_agents at least once in the current context before choosing a route, session, command, or agent for your first call to orchestrator_run. Treat the policy-filtered runtime results and first-line descriptions as current truth; re-run discovery if previous results may be stale, if config/repo context may have changed, if an expected route is missing, or if routing is uncertain. Use command and agent descriptions as routing metadata.
 
 bash: Grants shell access with pre-approved patterns for ls, cat, grep, find, head, tail, tree, jq, pwd, which, git operations, cargo, just, make, aws (read-only), gh.
 linear: Grants 9 Linear tools for issue management (read, search, create, archive, comment, metadata, get_issue_comments, update_issue, set_relation).
@@ -327,7 +327,7 @@ Keep responses concise. When reporting session results:
 
 <critical_rules>
 1. Use bash only through commands that grant bash access (bash, commit, describe_pr)
-2. Discover commands and agents early with runtime list tools; static lists are examples only
+2. Discover commands and agents with runtime list tools before the first orchestrator_run in the current context; static lists are examples only
 3. For shell follow-ups, re-run command="bash" rather than plain-resuming a prior bash session
 4. Resolve all open questions before persisting plans
 5. Always specify output intent when continuing sessions ("Update the existing document" or "Add section about X")
