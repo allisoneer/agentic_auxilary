@@ -1,0 +1,28 @@
+crates/tools/thoughts-mcp-tools/src/readiness.rs
+  s_20c0ac76fd482a::t_3c03b559026897 49-54
+crates/tools/thoughts-mcp-tools/src/tools.rs
+  s_20c0ac76fd482a::t_3c03b559026897 63-83,124,197,264,380,468-469,553-554
+  s_20c0ac76fd482a::t_540bff51a3d6c9 123
+  s_20c0ac76fd482a::t_cec88344382e39 196
+  s_20c0ac76fd482a::t_e8da2ede3434fe 263
+  s_20c0ac76fd482a::t_7d47a2745d9fa1 379
+crates/infra/thoughts-core/src/workspace/readiness.rs
+  s_20c0ac76fd482a::t_3c03b559026897 20,22,82,280,332,356-363,365,368-395,496-567
+  s_20c0ac76fd482a::t_8e18dceeb1b435 568
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "1f7870ae5d924e9941768f6e45d8a9f9c5474459",
+  "prompts": {},
+  "sessions": {
+    "s_20c0ac76fd482a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e051b8ddffecIMcEmr0DsgQuo",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
