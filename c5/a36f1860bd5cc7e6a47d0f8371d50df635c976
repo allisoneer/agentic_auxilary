@@ -1,0 +1,22 @@
+crates/infra/thoughts-core/src/workspace/readiness.rs
+  s_b1aa33e25ebc8c::t_822ab26e1ccb13 368-376,388,575-620
+  s_b1aa33e25ebc8c::t_71cf02c7600fb2 621
+crates/infra/thoughts-core/src/config/repo_manager.rs
+  s_b1aa33e25ebc8c::t_822ab26e1ccb13 273,283-286,623-642,703-722
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c5a36f1860bd5cc7e6a47d0f8371d50df635c976",
+  "prompts": {},
+  "sessions": {
+    "s_b1aa33e25ebc8c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e02045f8ffegYzunXkTmWV0NM",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
