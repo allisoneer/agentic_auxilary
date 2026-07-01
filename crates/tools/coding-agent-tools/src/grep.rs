@@ -31,6 +31,8 @@ pub struct GrepConfig {
     pub ignore_globs: Vec<String>,
     /// Include hidden files
     pub include_hidden: bool,
+    /// Include paths normally ignored by gitignore and default ignores
+    pub include_ignored: bool,
     /// Case-insensitive matching
     pub case_insensitive: bool,
     /// Allow patterns to span lines
@@ -221,7 +223,11 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
     let include_gs = build_include_globset(&cfg.include_globs)?;
 
     // Build ignore globset
-    let ignore_gs = walker::build_ignore_globset(&cfg.ignore_globs)?;
+    let ignore_gs = if cfg.include_ignored {
+        walker::build_user_ignore_globset(&cfg.ignore_globs)?
+    } else {
+        walker::build_ignore_globset(&cfg.ignore_globs)?
+    };
 
     // Cap head_limit
     let head_limit = cfg.head_limit.min(MAX_HEAD_LIMIT);
@@ -272,9 +278,11 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
         // Directory traversal
         let mut builder = WalkBuilder::new(root_path);
         builder.hidden(!cfg.include_hidden);
-        builder.git_ignore(true);
-        builder.git_global(true);
-        builder.git_exclude(true);
+        let use_git_ignores = !cfg.include_ignored;
+        builder.git_ignore(use_git_ignores);
+        builder.git_global(use_git_ignores);
+        builder.git_exclude(use_git_ignores);
+        builder.ignore(use_git_ignores);
         builder.parents(false);
         builder.follow_links(false);
 

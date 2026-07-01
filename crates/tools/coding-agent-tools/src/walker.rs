@@ -72,15 +72,9 @@ pub const BUILTIN_IGNORES: &[&str] = &[
     "**/env/**",
 ];
 
-/// Build a `GlobSet` from built-in and user patterns.
-/// Public for reuse in grep/glob tools.
-pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+fn build_globset<'a>(patterns: impl IntoIterator<Item = &'a str>) -> Result<GlobSet, ToolError> {
     let mut builder = GlobSetBuilder::new();
-    for pattern in BUILTIN_IGNORES
-        .iter()
-        .copied()
-        .chain(user_patterns.iter().map(String::as_str))
-    {
+    for pattern in patterns {
         let glob = Glob::new(pattern).map_err(|e| {
             ToolError::invalid_input(format!("Invalid glob pattern '{pattern}': {e}"))
         })?;
@@ -89,6 +83,22 @@ pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolErr
     builder
         .build()
         .map_err(|e| ToolError::internal(format!("Failed to build globset: {e}")))
+}
+
+/// Build a `GlobSet` from built-in and user patterns.
+/// Public for reuse in grep/glob tools.
+pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+    build_globset(
+        BUILTIN_IGNORES
+            .iter()
+            .copied()
+            .chain(user_patterns.iter().map(String::as_str)),
+    )
+}
+
+/// Build a `GlobSet` from user-provided patterns only.
+pub fn build_user_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+    build_globset(user_patterns.iter().map(String::as_str))
 }
 
 /// Configuration for directory walking.
@@ -267,6 +277,14 @@ mod tests {
     fn invalid_pattern_errors() {
         let result = build_ignore_globset(&["[invalid".into()]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn user_ignore_globset_excludes_builtins() {
+        let gs = build_user_ignore_globset(&["*.log".into()]).unwrap();
+        assert!(gs.is_match("app.log"));
+        assert!(!gs.is_match("logs/app.jsonl"));
+        assert!(!gs.is_match("node_modules/pkg/index.js"));
     }
 
     #[test]

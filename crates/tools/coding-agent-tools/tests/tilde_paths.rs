@@ -73,6 +73,7 @@ async fn search_glob_accepts_tilde_root() {
             None,
             Some(true),
             None,
+            None,
             Some(10),
             Some(0),
         )
@@ -104,6 +105,7 @@ async fn search_grep_accepts_tilde_root() {
             None,
             None,
             Some(true),
+            None,
             None,
             None,
             None,

@@ -19,6 +19,8 @@ pub struct GlobConfig {
     pub ignore_globs: Vec<String>,
     /// Include hidden files
     pub include_hidden: bool,
+    /// Include paths normally ignored by gitignore and default ignores
+    pub include_ignored: bool,
     /// Sort order: name or mtime
     pub sort: SortOrder,
     /// Max results to return (capped at 1000)
@@ -55,7 +57,11 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
     let pattern_matcher = pattern_glob.compile_matcher();
 
     // Build ignore globset
-    let ignore_gs = walker::build_ignore_globset(&cfg.ignore_globs)?;
+    let ignore_gs = if cfg.include_ignored {
+        walker::build_user_ignore_globset(&cfg.ignore_globs)?
+    } else {
+        walker::build_ignore_globset(&cfg.ignore_globs)?
+    };
 
     // Cap head_limit
     let head_limit = cfg.head_limit.min(MAX_HEAD_LIMIT);
@@ -66,9 +72,11 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
     // Configure walker
     let mut builder = WalkBuilder::new(root_path);
     builder.hidden(!cfg.include_hidden);
-    builder.git_ignore(true);
-    builder.git_global(true);
-    builder.git_exclude(true);
+    let use_git_ignores = !cfg.include_ignored;
+    builder.git_ignore(use_git_ignores);
+    builder.git_global(use_git_ignores);
+    builder.git_exclude(use_git_ignores);
+    builder.ignore(use_git_ignores);
     builder.parents(false);
     builder.follow_links(false);
 
