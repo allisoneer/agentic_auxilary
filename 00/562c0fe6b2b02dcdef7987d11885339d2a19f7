@@ -1,0 +1,24 @@
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_a2e61405d174a0::t_8ab5c578879b2c 368-391,571
+  s_a2e61405d174a0::t_31b25913be85c7 1651-1664,1723-1725,1735-1738,1740-1747
+  s_a2e61405d174a0::t_402b69f7d7a155 1739
+apps/opencode-orchestrator-mcp/tests/fast_idle_race_wiremock.rs
+  s_a2e61405d174a0::t_dd4b83bc12ef3b 461,494-506,520-530
+  s_a2e61405d174a0::t_0005f389aab4d8 531-572,574-635
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "00562c0fe6b2b02dcdef7987d11885339d2a19f7",
+  "prompts": {},
+  "sessions": {
+    "s_a2e61405d174a0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e42b05a2ffeV7QmDPf81pz37R",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
