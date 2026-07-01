@@ -365,9 +365,15 @@ fn validate_mount_dirs(mount_dirs: &MountDirsV2) -> Result<()> {
         validate_mount_dir_name(name, value)?;
     }
 
-    if mount_dirs.thoughts == mount_dirs.context
-        || mount_dirs.thoughts == mount_dirs.references
-        || mount_dirs.context == mount_dirs.references
+    if mount_dirs
+        .thoughts
+        .eq_ignore_ascii_case(&mount_dirs.context)
+        || mount_dirs
+            .thoughts
+            .eq_ignore_ascii_case(&mount_dirs.references)
+        || mount_dirs
+            .context
+            .eq_ignore_ascii_case(&mount_dirs.references)
     {
         anyhow::bail!("Mount directories must be distinct (thoughts/context/references)");
     }
@@ -379,7 +385,7 @@ fn validate_mount_dir_name(name: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
         anyhow::bail!("Mount directory '{name}' cannot be empty");
     }
-    if value == ".thoughts-data" {
+    if value.eq_ignore_ascii_case(".thoughts-data") {
         anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
     }
     if value.contains('/') || value.contains('\\') {
@@ -564,6 +570,53 @@ mod tests {
         .to_string();
 
         assert!(error.contains("single path segment"));
+    }
+
+    #[test]
+    fn rejects_case_insensitive_reserved_mount_dir_names() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        fs::create_dir_all(&repo_root).unwrap();
+
+        let mount_dirs = MountDirsV2 {
+            thoughts: ".Thoughts-data".to_string(),
+            ..MountDirsV2::default()
+        };
+
+        let error = ensure_safe_repo_layout(
+            &repo_root,
+            &repo_root,
+            &mount_dirs,
+            &sample_thoughts_mount(),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("cannot be named '.thoughts-data'"));
+    }
+
+    #[test]
+    fn rejects_case_insensitive_duplicate_mount_dir_names() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        fs::create_dir_all(&repo_root).unwrap();
+
+        let mount_dirs = MountDirsV2 {
+            thoughts: "thoughts".to_string(),
+            context: "Thoughts".to_string(),
+            references: "references".to_string(),
+        };
+
+        let error = ensure_safe_repo_layout(
+            &repo_root,
+            &repo_root,
+            &mount_dirs,
+            &sample_thoughts_mount(),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("must be distinct"));
     }
 
     #[test]
