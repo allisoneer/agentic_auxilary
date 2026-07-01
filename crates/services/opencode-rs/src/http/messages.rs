@@ -2,6 +2,7 @@
 //!
 //! This module provides methods for message endpoints (6 total).
 
+use crate::OpencodeError;
 use crate::error::Result;
 use crate::http::HttpClient;
 use crate::http::encode_path_segment;
@@ -13,6 +14,7 @@ use crate::types::message::Message;
 use crate::types::message::PromptRequest;
 use crate::types::message::ShellRequest;
 use reqwest::Method;
+use std::time::Duration;
 
 /// Messages API client.
 #[derive(Clone)]
@@ -86,24 +88,48 @@ impl MessagesApi {
 
     /// Execute a command in a session.
     ///
-    /// Uses transport-level retry for transient network failures (connect/timeout).
-    ///
-    /// Live verification against `OpenCode` 1.17.4 must confirm whether command
-    /// dispatch dedupes by `messageID`. Until that contract is revalidated,
-    /// callers should treat this endpoint as at-least-once, not exactly-once:
-    /// if the server has already started executing the command before a
-    /// retryable network failure occurs (for example, a connection drop
-    /// mid-response), a retry can trigger duplicate command execution.
+    /// This endpoint is completion-coupled in upstream `OpenCode` v1.17.x,
+    /// so callers must treat the HTTP request as dispatch initiation only.
+    /// To reduce duplicate-dispatch risk, this method does not retry timeout
+    /// or generic request transport failures after the request may have reached
+    /// the server. At most, it retries a connect failure before any response.
     ///
     /// # Errors
     ///
-    /// Returns an error if the request fails after retries.
+    /// Returns an error if the request fails.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
+        const MAX_ATTEMPTS: usize = 2;
+        const BACKOFF_MS: u64 = 50;
+
         let sid = encode_path_segment(session_id);
         let body = serde_json::to_value(req)?;
-        self.http
-            .post_json_with_retry(&format!("/session/{sid}/command"), Some(body))
-            .await
+        let path = format!("/session/{sid}/command");
+
+        for attempt in 1..=MAX_ATTEMPTS {
+            match self
+                .http
+                .request_json(Method::POST, &path, Some(body.clone()))
+                .await
+            {
+                Ok(response) => return Ok(response),
+                Err(err) => {
+                    let connect_only_retry = matches!(
+                        &err,
+                        OpencodeError::Transport(inner) if inner.is_connect()
+                    );
+
+                    if connect_only_retry && attempt < MAX_ATTEMPTS {
+                        tracing::debug!(attempt, error = %err, "connect error on /command; retrying");
+                        tokio::time::sleep(Duration::from_millis(BACKOFF_MS)).await;
+                        continue;
+                    }
+
+                    return Err(err);
+                }
+            }
+        }
+
+        unreachable!("loop returns on success or error")
     }
 
     /// Execute a shell command in a session.
@@ -306,6 +332,52 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.status, Some("executed".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_command_does_not_retry_on_timeout() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/session/s1/command"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(200))
+                    .set_body_json(serde_json::json!({"status": "executed"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_millis(50),
+        })
+        .unwrap();
+
+        let messages = MessagesApi::new(http);
+        let result = messages
+            .command(
+                "s1",
+                &CommandRequest {
+                    command: "test_command".to_string(),
+                    arguments: String::new(),
+                    message_id: None,
+                },
+            )
+            .await;
+
+        assert!(matches!(result, Err(OpencodeError::Transport(_))));
+
+        let requests = mock_server.received_requests().await.unwrap();
+        let command_requests = requests
+            .into_iter()
+            .filter(|request| {
+                request.method.as_str() == "POST" && request.url.path() == "/session/s1/command"
+            })
+            .count();
+        assert_eq!(command_requests, 1);
     }
 
     #[tokio::test]

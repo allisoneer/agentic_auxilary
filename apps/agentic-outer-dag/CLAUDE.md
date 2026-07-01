@@ -36,6 +36,9 @@ Add any human-authored notes below. Content outside autogen blocks is preserved 
 - OpenCode session monitoring/completion detection in `src/opencode/supervisor.rs` is intentionally kept in behavioral parity with
   `apps/opencode-orchestrator-mcp/src/tools.rs` (OrchestratorRunTool). If changing idle gating or transcript settling, update the
   outer-DAG regression tests for ENG-929/ENG-972 and cross-check orchestrator behavior.
+- OpenCode v1.17.x `POST /session/{id}/command` is completion-coupled rather than enqueue-and-return. Treat that HTTP call as
+  dispatch initiation only: once session start is confirmed via SSE, `/session/status`, or bounded transcript evidence, outer-DAG
+  must keep supervising via SSE + `/session/status` and treat later `/command` transport failures as non-terminal warnings.
 
 ## Phase 1 live-test ladder (conservative)
 

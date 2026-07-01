@@ -155,10 +155,10 @@ fn transition_to_dispatch_disabled(
     transition_to_stopped_failed(state, message);
 }
 
-fn transition_to_missing_pr_after_lookup(state: &mut RunState, context: &str) {
+fn transition_to_ticket_to_pr_no_pr_handoff(state: &mut RunState, context: &str) {
     let message = if let Some(lookup) = state.pr.last_lookup.as_ref() {
         let mut message = format!(
-            "no open PR found for branch '{}' in {}/{} {context}",
+            "ticket_to_pr completed but no open PR found for branch '{}' in {}/{} {context}; stopping for human handoff. Inspect status.pr_lookup for lookup context",
             lookup.requested_branch, lookup.repo_owner, lookup.repo_name,
         );
         if let Some(current_branch) = lookup.current_branch.as_deref() {
@@ -172,10 +172,11 @@ fn transition_to_missing_pr_after_lookup(state: &mut RunState, context: &str) {
         }
         message
     } else {
-        format!("no open PR found {context}")
+        format!("ticket_to_pr completed but no open PR found {context}; stopping for human handoff")
     };
 
-    transition_to_stopped_failed(state, message);
+    state.stage.kind = StageKind::StoppedTicketToPrNoPrHandoff;
+    state.stage.details = Some(message);
 }
 
 fn stage_kind_label(kind: &StageKind) -> String {
@@ -390,9 +391,9 @@ impl DagEngine {
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                     } else {
-                        transition_to_missing_pr_after_lookup(
+                        transition_to_ticket_to_pr_no_pr_handoff(
                             &mut state,
-                            "after ticket_to_pr run; inspect status.pr_lookup for lookup context",
+                            "after ticket_to_pr run",
                         );
                     }
                     ThoughtsStateStore::save(&state)?;
@@ -512,6 +513,7 @@ impl DagEngine {
                 | StageKind::StoppedReviewSkipped
                 | StageKind::StoppedTimedOut
                 | StageKind::StoppedReadyForHumanReview
+                | StageKind::StoppedTicketToPrNoPrHandoff
                 | StageKind::StoppedFailed => return Ok(()),
             }
         }
@@ -703,8 +705,8 @@ mod tests {
     use super::should_reset_coderabbit_timeout_baseline;
     use super::stage_kind_label;
     use super::transition_to_dispatch_disabled;
-    use super::transition_to_missing_pr_after_lookup;
     use super::transition_to_stopped_failed;
+    use super::transition_to_ticket_to_pr_no_pr_handoff;
     use crate::github::pr::DetectedPrLookup;
     use crate::state::RunState;
     use crate::state::StageKind;
@@ -913,7 +915,7 @@ mod tests {
     }
 
     #[test]
-    fn transition_to_missing_pr_after_lookup_uses_lookup_context() {
+    fn transition_to_ticket_to_pr_no_pr_handoff_uses_lookup_context_and_does_not_set_last_error() {
         let mut state = sample_state();
         record_pr_lookup(
             &mut state,
@@ -929,18 +931,24 @@ mod tests {
             },
         );
 
-        transition_to_missing_pr_after_lookup(&mut state, "after ticket_to_pr run");
+        transition_to_ticket_to_pr_no_pr_handoff(&mut state, "after ticket_to_pr run");
 
-        assert!(state
-            .last_error
-            .as_deref()
-            .expect("last error should exist")
-            .contains("no open PR found for branch 'feature/eng-992' in allisoneer/agentic_auxilary after ticket_to_pr run"));
+        assert_eq!(state.stage.kind, StageKind::StoppedTicketToPrNoPrHandoff);
+        assert_eq!(state.last_error, None);
         assert!(
             state
-                .last_error
+                .stage
+                .details
                 .as_deref()
-                .expect("last error should exist")
+                .expect("stage details should exist")
+                .contains("ticket_to_pr completed but no open PR found for branch 'feature/eng-992' in allisoneer/agentic_auxilary after ticket_to_pr run")
+        );
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("stage details should exist")
                 .contains("diagnostic=no_open_pull_requests_matched_branch")
         );
     }

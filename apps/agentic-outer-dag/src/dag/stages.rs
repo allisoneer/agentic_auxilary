@@ -17,6 +17,7 @@ pub fn is_terminal(kind: &StageKind) -> bool {
         | StageKind::StoppedReviewSkipped
         | StageKind::StoppedTimedOut
         | StageKind::StoppedReadyForHumanReview
+        | StageKind::StoppedTicketToPrNoPrHandoff
         | StageKind::StoppedFailed => true,
     }
 }
@@ -37,6 +38,7 @@ pub fn is_paused(kind: &StageKind) -> bool {
         | StageKind::StoppedReviewSkipped
         | StageKind::StoppedTimedOut
         | StageKind::StoppedReadyForHumanReview
+        | StageKind::StoppedTicketToPrNoPrHandoff
         | StageKind::StoppedFailed => false,
     }
 }
@@ -58,6 +60,7 @@ pub fn sequence_index(kind: &StageKind) -> Option<u8> {
         | StageKind::StoppedReviewSkipped
         | StageKind::StoppedTimedOut
         | StageKind::StoppedReadyForHumanReview
+        | StageKind::StoppedTicketToPrNoPrHandoff
         | StageKind::StoppedFailed => None,
     }
 }
@@ -76,6 +79,7 @@ mod tests {
     #[test]
     fn classifies_terminal_states() {
         assert!(is_terminal(&StageKind::StoppedReadyForHumanReview));
+        assert!(is_terminal(&StageKind::StoppedTicketToPrNoPrHandoff));
         assert!(is_terminal(&StageKind::StoppedManualHandoff));
         assert!(is_terminal(&StageKind::StoppedDirtyTree));
         assert!(is_terminal(&StageKind::StoppedRebaseConflict));
@@ -86,6 +90,7 @@ mod tests {
     fn classifies_paused_states() {
         assert!(is_paused(&StageKind::StoppedPermissionRequired));
         assert!(is_paused(&StageKind::StoppedQuestionRequired));
+        assert!(!is_paused(&StageKind::StoppedTicketToPrNoPrHandoff));
         assert!(!is_paused(&StageKind::StoppedFailed));
     }
 
@@ -106,6 +111,10 @@ mod tests {
         assert_eq!(
             sequence_index(&StageKind::DispatchingResolvePrComments),
             Some(6)
+        );
+        assert_eq!(
+            sequence_index(&StageKind::StoppedTicketToPrNoPrHandoff),
+            None
         );
         assert_eq!(sequence_index(&StageKind::StoppedFailed), None);
     }

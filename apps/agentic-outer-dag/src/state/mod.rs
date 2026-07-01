@@ -90,6 +90,7 @@ pub enum StageKind {
     StoppedReviewSkipped,
     StoppedTimedOut,
     StoppedReadyForHumanReview,
+    StoppedTicketToPrNoPrHandoff,
     StoppedFailed,
 }
 
@@ -123,6 +124,8 @@ pub struct OpenCodeDiagnostics {
     pub guard_detected: bool,
     #[serde(default)]
     pub final_tool_error: Option<OpenCodeToolErrorDiagnostics>,
+    #[serde(default)]
+    pub command_transport_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -314,6 +317,7 @@ mod tests {
             StageKind::StoppedReviewSkipped,
             StageKind::StoppedTimedOut,
             StageKind::StoppedReadyForHumanReview,
+            StageKind::StoppedTicketToPrNoPrHandoff,
             StageKind::StoppedFailed,
         ]
     }
@@ -358,6 +362,7 @@ mod tests {
                 tool: "read".to_string(),
                 error: "permission denied".to_string(),
             }),
+            command_transport_error: None,
         });
         state.stage.kind = StageKind::StoppedQuestionRequired;
 

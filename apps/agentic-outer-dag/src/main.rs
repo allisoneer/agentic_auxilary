@@ -510,6 +510,7 @@ mod tests {
                 tool: "read".to_string(),
                 error: "nested guard tripped".to_string(),
             }),
+            command_transport_error: None,
         });
         state.counters.ticket_to_pr_runs = 1;
         state.counters.resolve_comments_runs = 0;

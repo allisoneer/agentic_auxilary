@@ -3,6 +3,7 @@ use crate::state::OpenCodeToolErrorDiagnostics;
 use anyhow::Context;
 use anyhow::Result;
 use opencode_rs::Client;
+use opencode_rs::OpencodeError;
 use opencode_rs::server::ManagedServer;
 use opencode_rs::server::ServerOptions;
 use opencode_rs::types::event::Event;
@@ -112,6 +113,7 @@ impl TranscriptAnalysis {
             final_finish_reason: self.final_finish_reason.clone(),
             guard_detected: self.guard_detected,
             final_tool_error: self.final_tool_error.clone(),
+            command_transport_error: None,
         }
     }
 }
@@ -130,6 +132,27 @@ fn idle_gate_decision(
         Some(_) => IdleGateDecision::WaitForGrace,
         None => IdleGateDecision::IgnoreUntilDispatchConfirmed,
     }
+}
+
+fn transcript_indicates_dispatch(
+    messages: &[Message],
+    transcript_window: &TranscriptWindow,
+) -> bool {
+    if messages
+        .iter()
+        .any(|message| message.id() == transcript_window.command_message_id)
+    {
+        return true;
+    }
+
+    if let Some(baseline) = transcript_window.baseline_tail_message_id.as_ref() {
+        return messages
+            .iter()
+            .position(|message| message.id() == baseline)
+            .is_some_and(|index| index + 1 < messages.len());
+    }
+
+    !messages.is_empty()
 }
 
 #[derive(Debug)]
@@ -276,6 +299,7 @@ impl OpenCodeSupervisor {
         let mut idle_grace_deadline: Option<tokio::time::Instant> = None;
         let mut awaiting_idle_grace = false;
         let mut sse_active = true;
+        let mut command_transport_error: Option<String> = None;
 
         loop {
             let now = tokio::time::Instant::now();
@@ -343,7 +367,11 @@ impl OpenCodeSupervisor {
                             ) {
                                 IdleGateDecision::Finalize => {
                                     return Ok(self
-                                        .completion_outcome(session_id, &transcript_window)
+                                        .completion_outcome(
+                                            session_id,
+                                            &transcript_window,
+                                            command_transport_error.as_ref(),
+                                        )
                                         .await);
                                 }
                                 IdleGateDecision::WaitForGrace => {
@@ -381,7 +409,11 @@ impl OpenCodeSupervisor {
                             ) {
                                 IdleGateDecision::Finalize => {
                                     return Ok(self
-                                        .completion_outcome(session_id, &transcript_window)
+                                        .completion_outcome(
+                                            session_id,
+                                            &transcript_window,
+                                            command_transport_error.as_ref(),
+                                        )
                                         .await);
                                 }
                                 IdleGateDecision::WaitForGrace => {
@@ -407,10 +439,66 @@ impl OpenCodeSupervisor {
                             command_task = None;
                         }
                         Some(Ok(Err(error))) => {
+                            if !matches!(error, OpencodeError::Transport(_)) {
+                                return Ok(SupervisedOutcome::Failed {
+                                    session_id: Some(session_id),
+                                    error: error.to_string(),
+                                    diagnostics: None,
+                                });
+                            }
+
+                            let mut start_evidence = observed_busy;
+
+                            if !start_evidence
+                                && let Ok(status) = self.client.sessions().status_for(&session_id).await
+                                && status.is_busy_like()
+                            {
+                                start_evidence = true;
+                                observed_busy = true;
+                                last_activity = tokio::time::Instant::now();
+                                awaiting_idle_grace = false;
+                            }
+
+                            if !start_evidence {
+                                match self.client.messages().list(&session_id).await {
+                                    Ok(messages) if transcript_indicates_dispatch(&messages, &transcript_window) => {
+                                        start_evidence = true;
+                                        idle_grace_deadline
+                                            .get_or_insert_with(|| tokio::time::Instant::now() + IDLE_GRACE);
+                                        last_activity = tokio::time::Instant::now();
+                                    }
+                                    Ok(_) => {}
+                                    Err(probe_error) => {
+                                        tracing::warn!(error = %probe_error, "failed transcript probe after /command transport error");
+                                    }
+                                }
+                            }
+
+                            if start_evidence {
+                                tracing::warn!(
+                                    session_id = %session_id,
+                                    error = %error,
+                                    "POST /session/{session_id}/command transport error after start evidence; continuing supervision via SSE/status"
+                                );
+                                command_transport_error.get_or_insert_with(|| error.to_string());
+                                command_task = None;
+                                continue;
+                            }
+
                             return Ok(SupervisedOutcome::Failed {
                                 session_id: Some(session_id),
-                                error: error.to_string(),
-                                diagnostics: None,
+                                error: format!(
+                                    "transport error dispatching OpenCode command '{command_name}' (no session start evidence observed): {error}"
+                                ),
+                                diagnostics: Some(OpenCodeDiagnostics {
+                                    checked_at: chrono::Utc::now().to_rfc3339(),
+                                    command_message_id: Some(transcript_window.command_message_id.clone()),
+                                    final_assistant_message_id: None,
+                                    final_finish_reason: None,
+                                    guard_detected: false,
+                                    final_tool_error: None,
+                                    command_transport_error: Some(error.to_string()),
+                                }),
                             });
                         }
                         Some(Err(error)) => {
@@ -432,7 +520,11 @@ impl OpenCodeSupervisor {
                     awaiting_idle_grace = false;
                     if matches!(self.client.sessions().status_for(&session_id).await, Ok(SessionStatusInfo::Idle)) {
                         return Ok(self
-                            .completion_outcome(session_id, &transcript_window)
+                            .completion_outcome(
+                                session_id,
+                                &transcript_window,
+                                command_transport_error.as_ref(),
+                            )
                             .await);
                     }
                     observed_busy = true;
@@ -536,8 +628,9 @@ impl OpenCodeSupervisor {
         &self,
         session_id: String,
         transcript_window: &TranscriptWindow,
+        command_transport_error: Option<&String>,
     ) -> SupervisedOutcome {
-        match self
+        let outcome = match self
             .validate_completion_with_retries(&session_id, transcript_window)
             .await
         {
@@ -550,7 +643,9 @@ impl OpenCodeSupervisor {
                 error,
                 diagnostics,
             },
-        }
+        };
+
+        attach_transport_warning(outcome, command_transport_error)
     }
 
     async fn fetch_transcript_tail_id(&self, session_id: &str) -> Result<Option<String>> {
@@ -734,6 +829,41 @@ fn analyze_transcript_window(
         guard_detected,
         final_tool_error,
         unresolved_tool_calls,
+    }
+}
+
+fn attach_transport_warning(
+    outcome: SupervisedOutcome,
+    warning: Option<&String>,
+) -> SupervisedOutcome {
+    let Some(warning) = warning.cloned() else {
+        return outcome;
+    };
+
+    match outcome {
+        SupervisedOutcome::Completed {
+            session_id,
+            mut diagnostics,
+        } => {
+            diagnostics.command_transport_error.get_or_insert(warning);
+            SupervisedOutcome::Completed {
+                session_id,
+                diagnostics,
+            }
+        }
+        SupervisedOutcome::Failed {
+            session_id,
+            error,
+            diagnostics: Some(mut diagnostics),
+        } => {
+            diagnostics.command_transport_error.get_or_insert(warning);
+            SupervisedOutcome::Failed {
+                session_id,
+                error,
+                diagnostics: Some(diagnostics),
+            }
+        }
+        other => other,
     }
 }
 
@@ -1490,6 +1620,170 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn command_transport_error_after_busy_observed_continues_until_idle_and_completes() {
+        let mock = MockServer::start().await;
+
+        mount_existing_session(&mock).await;
+        mount_empty_interruptions(&mock).await;
+        Mock::given(method("GET"))
+            .and(path("/event"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(
+                        "data: {\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n",
+                    ),
+            )
+            .mount(&mock)
+            .await;
+
+        let status_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"session-1": {"type": "busy"}})),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({})),
+        ]);
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(status_seq)
+            .mount(&mock)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/command"))
+            .respond_with(
+                ResponseTemplate::new(307)
+                    .set_delay(Duration::from_millis(50))
+                    .insert_header("location", "http://127.0.0.1:1/redirected-command"),
+            )
+            .mount(&mock)
+            .await;
+
+        let transcript_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([transcript_message(
+                "assistant",
+                "msg-assistant",
+                &serde_json::json!([
+                    { "type": "text", "text": "done" },
+                    { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                ]),
+            )])),
+        ]);
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(transcript_seq)
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let outcome = supervisor
+            .run_command_supervised(Some("session-1"), "implement_plan", Some("do it"))
+            .await
+            .expect("run should succeed");
+
+        let SupervisedOutcome::Completed { diagnostics, .. } = outcome else {
+            panic!("expected completed outcome after post-start transport error");
+        };
+        assert!(diagnostics.command_transport_error.is_some());
+    }
+
+    #[tokio::test]
+    async fn attach_transport_warning_sets_completed_diagnostics_warning() {
+        let warning = Some("Transport error: timeout".to_string());
+        let outcome = attach_transport_warning(
+            SupervisedOutcome::Completed {
+                session_id: "session-1".to_string(),
+                diagnostics: OpenCodeDiagnostics {
+                    checked_at: "2026-01-01T00:00:00Z".to_string(),
+                    command_message_id: Some("msg-dispatch".to_string()),
+                    final_assistant_message_id: Some("msg-assistant".to_string()),
+                    final_finish_reason: Some("stop".to_string()),
+                    guard_detected: false,
+                    final_tool_error: None,
+                    command_transport_error: None,
+                },
+            },
+            warning.as_ref(),
+        );
+
+        let SupervisedOutcome::Completed { diagnostics, .. } = outcome else {
+            panic!("expected completed outcome");
+        };
+        assert_eq!(
+            diagnostics.command_transport_error.as_deref(),
+            Some("Transport error: timeout")
+        );
+    }
+
+    #[tokio::test]
+    async fn command_transport_error_before_any_start_evidence_fails_fast() {
+        let mock = MockServer::start().await;
+
+        mount_existing_session(&mock).await;
+        mount_empty_interruptions(&mock).await;
+        mount_stalled_event_stream(&mock).await;
+
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/command"))
+            .respond_with(
+                ResponseTemplate::new(307)
+                    .set_delay(Duration::from_secs(2))
+                    .insert_header("location", "http://127.0.0.1:1/redirected-command"),
+            )
+            .mount(&mock)
+            .await;
+
+        let transcript_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ]);
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(transcript_seq)
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let outcome = supervisor
+            .run_command_supervised(Some("session-1"), "implement_plan", Some("do it"))
+            .await
+            .expect("run should return classified failure");
+
+        let SupervisedOutcome::Failed {
+            error,
+            diagnostics: Some(diagnostics),
+            ..
+        } = outcome
+        else {
+            panic!("expected failed outcome without start evidence");
+        };
+        assert!(error.contains("no session start evidence observed"));
+        assert!(diagnostics.command_transport_error.is_some());
+    }
+
+    #[tokio::test]
+    async fn command_transport_error_before_busy_but_transcript_shows_dispatch_window_continues() {
+        let messages = parse_messages(serde_json::json!([
+            transcript_message("assistant", "msg-baseline", &serde_json::json!([])),
+            transcript_message("user", "msg-dispatch-window", &serde_json::json!([])),
+        ]));
+
+        assert!(transcript_indicates_dispatch(
+            &messages,
+            &TranscriptWindow {
+                command_message_id: "msg-missing".to_string(),
+                baseline_tail_message_id: Some("msg-baseline".to_string()),
+            },
+        ));
+    }
+
     fn test_supervisor(mock: &MockServer, directory: &Path) -> OpenCodeSupervisor {
         let child = Command::new("sleep")
             .arg("60")
@@ -1509,6 +1803,48 @@ mod tests {
             _directory: directory.to_path_buf(),
             timeouts: test_timeouts(),
         }
+    }
+
+    async fn mount_existing_session(mock: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path("/session/session-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "session-1",
+                "slug": "session-1",
+                "projectId": "proj-1",
+                "directory": "/tmp",
+                "path": null,
+                "title": "Test Session",
+                "version": "1.0",
+                "time": { "created": 1, "updated": 1 }
+            })))
+            .mount(mock)
+            .await;
+    }
+
+    async fn mount_empty_interruptions(mock: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path("/permission"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/question"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(mock)
+            .await;
+    }
+
+    async fn mount_stalled_event_stream(mock: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path("/event"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_delay(Duration::from_secs(30)),
+            )
+            .mount(mock)
+            .await;
     }
 
     #[test]
