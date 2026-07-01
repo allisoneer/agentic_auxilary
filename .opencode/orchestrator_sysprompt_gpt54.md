@@ -186,10 +186,14 @@ Phase 4 - Implementation:
 Phase 5 - Commit:
 1. Run "commit" in the SAME session where implementation happened
 2. The commit command analyzes changes and presents a commit plan with proposed git commands
-3. Critical: OpenCode may reset command-granted tools between turns. When commit (Bash agent) presents its plan and asks "Shall I proceed?", responding directly may go to a Normal agent which lacks bash access—the commands will fail.
-4. Correct pattern: After commit presents the plan, run the "bash" command with "Do it!" or the explicit git commands to re-invoke with Bash agent access
-5. Example flow: commit presents plan with "git add... git commit..." → run "bash" command with those commands to execute (this re-invokes the Bash agent)
-6. Thoughts documents are stored separately and are not committed
+3. Ordinary follow-up work defaults to **new commit(s)**; do not routinely suggest amend/fixup or other history edits as a normal cleanup choice
+4. Preserve explicit user-requested amend/fixup/rebase/squash flows
+5. Only allow proactive amend/fixup for correcting the orchestrator's own immediately previous commit mistake when that rewrite is safely unpushed; if push status is unclear, prefer a new commit
+6. If a history edit might rewrite pushed commits or imply a force push, call that out explicitly and require specific user approval before proceeding
+7. Critical: OpenCode may reset command-granted tools between turns. When commit (Bash agent) presents its plan and asks "Shall I proceed?", responding directly may go to a Normal agent which lacks bash access—the commands will fail.
+8. Correct pattern: After commit presents the plan, run the "bash" command with "Do it!" or the explicit git commands to re-invoke with Bash agent access
+9. Example flow: commit presents plan with "git add... git commit..." → run "bash" command with those commands to execute (this re-invokes the Bash agent)
+10. Thoughts documents are stored separately and are not committed
 
 General bash/session rule: command-granted bash/shell access is not durable across plain resumes. For any shell follow-up, exact CLI transcript, or session that reports it lacks shell, run orchestrator_run with command="bash" again instead of sending a plain message resume.
 </workflow_pipeline>

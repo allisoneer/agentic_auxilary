@@ -15,6 +15,9 @@ You are tasked with creating git commits for the changes made during this sessio
    - Run `git status` to see current changes
    - Run `git diff` to understand the modifications
    - Consider whether changes should be one commit or multiple logical commits
+   - For ordinary follow-up work, present new commit(s) rather than history-editing actions
+   - If the user explicitly requested amend/fixup/rebase/squash, or if you are correcting your own immediately previous unpushed commit mistake, state the rewrite implications explicitly
+   - If pushed-history rewrite or force-push implications exist or might exist, ask for specific approval instead of a generic confirmation
 
 2. **Determine commit type:**
    Analyze the changes and categorize them:
@@ -47,7 +50,8 @@ You are tasked with creating git commits for the changes made during this sessio
 4. **Present your plan to the user:**
    - List the files you plan to add for each commit
    - Show the conventional commit message(s) you'll use
-   - Ask: "I plan to create [N] commit(s) with these changes. Shall I proceed?"
+   - Ask: "I plan to create [N] commit(s) with these changes. Shall I proceed?" for ordinary new commits
+   - Ask: "This plan would rewrite history [and may require a force push]. Do you want me to proceed with that history edit?" for history-rewrite actions
 
 5. **Execute upon confirmation:**
    - Use `git add` with specific files (never use `-A` or `.`)
@@ -69,6 +73,15 @@ You are tasked with creating git commits for the changes made during this sessio
 - Do not add "Co-Authored-By" lines
 - Write commit messages as if the user wrote them
 - **ALWAYS use conventional commit format for automated versioning**
+
+### History-editing policy:
+
+- Default to **new commit(s)** for ordinary follow-up work, even when the changes are small or overlap with a recent commit.
+- Do **not** routinely suggest `--amend`, `--fixup`, rebase, or other history-editing actions as a normal cleanup choice.
+- Preserve explicit user-requested history editing. If the user explicitly asks to amend, fix up, rebase, or squash, you may plan that path.
+- You may proactively offer amend/fixup only to correct your own immediately previous commit mistake, and only when it is safe to do so without rewriting pushed history.
+- If push status is unclear, assume a rewrite may affect pushed history and prefer a new commit instead.
+- If any plan would rewrite pushed commits, require force-push, or might do either because upstream status is ambiguous, call that out explicitly and ask for specific user approval before proceeding.
 
 ## Breaking Changes:
 If a change breaks backward compatibility, add `BREAKING CHANGE:` in the footer:
