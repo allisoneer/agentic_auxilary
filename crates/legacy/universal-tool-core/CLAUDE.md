@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p universal-tool-core -- --check
-cargo clippy -p universal-tool-core --all-targets -- -D warnings
+just crate-check universal-tool-core
 
 # Tests
-cargo test -p universal-tool-core
+just crate-test universal-tool-core
 
 # Build
-cargo build -p universal-tool-core
+just crate-build universal-tool-core
 ```
 <!-- END:xtask:autogen -->
 

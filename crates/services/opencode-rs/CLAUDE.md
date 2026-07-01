@@ -67,13 +67,12 @@ cargo test --features http
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p opencode_rs -- --check
-cargo clippy -p opencode_rs --all-targets -- -D warnings
+just crate-check opencode_rs
 
 # Tests
-cargo test -p opencode_rs
+just crate-test opencode_rs
 
 # Build
-cargo build -p opencode_rs
+just crate-build opencode_rs
 ```
 <!-- END:xtask:autogen -->

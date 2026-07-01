@@ -1,6 +1,6 @@
-//! SDK-level regression test for command dispatch retry.
+//! SDK-level regression test for command dispatch retry policy.
 //!
-//! Verifies that `messages().command()` retries on transport-level timeout.
+//! Verifies that `messages().command()` does not retry on transport-level timeout.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -13,34 +13,22 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
-/// Verify that command dispatch retries on transport timeout.
+/// Verify that command dispatch does not retry on transport timeout.
 ///
 /// Setup:
 /// - First request: 30s delay (causes timeout with 1s client timeout)
-/// - Second request: immediate success
 ///
-/// Expected: Second request succeeds after retry.
+/// Expected: Timeout is returned and only one POST attempt is made.
 #[tokio::test]
-async fn command_retries_on_timeout() {
+async fn command_does_not_retry_on_timeout() {
     let server = MockServer::start().await;
 
-    // First request: timeout (30s delay > 1s client timeout)
     Mock::given(method("POST"))
         .and(path("/session/s1/command"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(serde_json::json!({"status": "executed"}))
                 .set_delay(Duration::from_secs(30)),
-        )
-        .up_to_n_times(1)
-        .mount(&server)
-        .await;
-
-    // Second request: immediate success
-    Mock::given(method("POST"))
-        .and(path("/session/s1/command"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "executed"})),
         )
         .mount(&server)
         .await;
@@ -58,9 +46,11 @@ async fn command_retries_on_timeout() {
     };
 
     let result = client.messages().command("s1", &req).await;
-    assert!(result.is_ok(), "expected retry to succeed, got: {result:?}");
+    assert!(
+        result.is_err(),
+        "expected timeout transport error, got: {result:?}"
+    );
 
-    // Verify 2 requests made (1 timeout + 1 success)
     let received = server.received_requests().await.unwrap();
     let command_requests: Vec<_> = received
         .iter()
@@ -68,15 +58,9 @@ async fn command_retries_on_timeout() {
         .collect();
     assert_eq!(
         command_requests.len(),
-        2,
-        "expected 2 command requests (1 timeout + 1 success), got {}",
+        1,
+        "expected 1 command request (no timeout retry), got {}",
         command_requests.len()
-    );
-
-    // Verify both retry attempts reused the exact same serialized body bytes.
-    assert_eq!(
-        command_requests[0].body, command_requests[1].body,
-        "expected identical request bodies across retries"
     );
 
     let body: serde_json::Value = serde_json::from_slice(&command_requests[0].body).unwrap();

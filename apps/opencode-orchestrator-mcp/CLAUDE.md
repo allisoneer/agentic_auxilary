@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p opencode-orchestrator-mcp -- --check
-cargo clippy -p opencode-orchestrator-mcp --all-targets -- -D warnings
+just crate-check opencode-orchestrator-mcp
 
 # Tests
-cargo test -p opencode-orchestrator-mcp
+just crate-test opencode-orchestrator-mcp
 
 # Build
-cargo build -p opencode-orchestrator-mcp
+just crate-build opencode-orchestrator-mcp
 ```
 <!-- END:xtask:autogen -->
 
