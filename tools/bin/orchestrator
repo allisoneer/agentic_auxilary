@@ -1,6 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+append_disallowed_tools() {
+	local value="$1"
+	local IFS=,
+	local tool
+	local parsed_tools=()
+
+	read -r -a parsed_tools <<<"$value"
+	for tool in "${parsed_tools[@]}"; do
+		[[ -z "$tool" ]] && continue
+
+		case ",$disallowed_tools," in
+		*",$tool,"*) ;;
+		*) disallowed_tools+=",$tool" ;;
+		esac
+	done
+}
+
+run_claude() {
+	local disallowed_tools="LSP"
+	local arg
+	local -a args=()
+
+	while (($#)); do
+		arg="$1"
+		shift
+
+		case "$arg" in
+		--)
+			args+=("$arg" "$@")
+			break
+			;;
+		--disallowedTools=*)
+			append_disallowed_tools "${arg#--disallowedTools=}"
+			;;
+		--disallowedTools)
+			if (($# == 0)) || [[ "$1" == "--" ]]; then
+				args+=("$arg")
+			else
+				append_disallowed_tools "$1"
+				shift
+			fi
+			;;
+		*)
+			args+=("$arg")
+			;;
+		esac
+	done
+
+	exec claude --disallowedTools "$disallowed_tools" "${args[@]}"
+}
+
 for arg in "$@"; do
 	[[ "$arg" == "--" ]] && break
 
@@ -9,7 +60,7 @@ for arg in "$@"; do
 		--system-prompt-file | --system-prompt-file=* | \
 		--append-system-prompt | --append-system-prompt=* | \
 		--append-system-prompt-file | --append-system-prompt-file=*)
-		exec claude "$@"
+		run_claude "$@"
 		;;
 	esac
 done
@@ -27,4 +78,4 @@ if [[ ! -f "$prompt_file" ]]; then
 	exit 1
 fi
 
-exec claude --system-prompt-file "$prompt_file" "$@"
+run_claude --system-prompt-file "$prompt_file" "$@"
