@@ -7,7 +7,6 @@ use agentic_tools_core::ToolError;
 use globset::Glob;
 use globset::GlobSet;
 use globset::GlobSetBuilder;
-use ignore::WalkBuilder;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs::File;
@@ -222,13 +221,6 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
     // Build include globset
     let include_gs = build_include_globset(&cfg.include_globs)?;
 
-    // Build ignore globset
-    let ignore_gs = if cfg.include_ignored {
-        walker::build_user_ignore_globset(&cfg.ignore_globs)?
-    } else {
-        walker::build_ignore_globset(&cfg.ignore_globs)?
-    };
-
     // Cap head_limit
     let head_limit = cfg.head_limit.min(MAX_HEAD_LIMIT);
 
@@ -276,29 +268,12 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
         }
     } else {
         // Directory traversal
-        let mut builder = WalkBuilder::new(root_path);
-        builder.hidden(!cfg.include_hidden);
-        let use_git_ignores = !cfg.include_ignored;
-        builder.git_ignore(use_git_ignores);
-        builder.git_global(use_git_ignores);
-        builder.git_exclude(use_git_ignores);
-        builder.ignore(use_git_ignores);
-        builder.parents(false);
-        builder.follow_links(false);
-
-        // Apply custom ignore filter
-        let root_clone = root_path.to_path_buf();
-        builder.filter_entry(move |entry| {
-            let rel = entry
-                .path()
-                .strip_prefix(&root_clone)
-                .map(|p| p.to_string_lossy().replace('\\', "/"))
-                .unwrap_or_default();
-            if rel.is_empty() {
-                return true;
-            }
-            !ignore_gs.is_match(&rel)
-        });
+        let builder = walker::build_search_walker(
+            root_path,
+            cfg.include_hidden,
+            cfg.include_ignored,
+            &cfg.ignore_globs,
+        )?;
 
         for result in builder.build() {
             match result {

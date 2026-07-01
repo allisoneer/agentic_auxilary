@@ -101,6 +101,45 @@ pub fn build_user_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, To
     build_globset(user_patterns.iter().map(String::as_str))
 }
 
+/// Build a search walker with shared ignore/filter semantics for glob and grep.
+pub fn build_search_walker(
+    root: &Path,
+    include_hidden: bool,
+    include_ignored: bool,
+    ignore_globs: &[String],
+) -> Result<WalkBuilder, ToolError> {
+    let ignore_globset = if include_ignored {
+        build_user_ignore_globset(ignore_globs)?
+    } else {
+        build_ignore_globset(ignore_globs)?
+    };
+
+    let mut builder = WalkBuilder::new(root);
+    builder.hidden(!include_hidden);
+    let use_git_ignores = !include_ignored;
+    builder.git_ignore(use_git_ignores);
+    builder.git_global(use_git_ignores);
+    builder.git_exclude(use_git_ignores);
+    builder.ignore(use_git_ignores);
+    builder.parents(false);
+    builder.follow_links(false);
+
+    let root = root.to_path_buf();
+    builder.filter_entry(move |entry| {
+        let rel = entry
+            .path()
+            .strip_prefix(&root)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        if rel.is_empty() {
+            return true;
+        }
+        !ignore_globset.is_match(&rel)
+    });
+
+    Ok(builder)
+}
+
 /// Configuration for directory walking.
 pub struct WalkConfig<'a> {
     pub root: &'a Path,

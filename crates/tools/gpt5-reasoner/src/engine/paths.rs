@@ -1,3 +1,4 @@
+use crate::PLAN_STRUCTURE_FILENAME;
 use crate::errors::ReasonerError;
 use crate::types::FileMeta;
 use agentic_tools_core::ToolError;
@@ -20,7 +21,7 @@ pub fn to_abs_string(p: &str) -> String {
 
 pub fn normalize_paths_in_place(files: &mut [FileMeta]) {
     for f in files {
-        if f.filename == "plan_structure.md" {
+        if f.filename == PLAN_STRUCTURE_FILENAME {
             continue;
         }
         f.filename = to_abs_string(&f.filename);
@@ -34,7 +35,7 @@ pub fn dedup_files_in_place(files: &mut Vec<FileMeta>) {
 
 pub fn precheck_files(files: &[FileMeta]) -> Result<(), ToolError> {
     for f in files {
-        if f.filename == "plan_structure.md" {
+        if f.filename == PLAN_STRUCTURE_FILENAME {
             continue;
         }
         let pb = std::path::PathBuf::from(&f.filename);
@@ -109,7 +110,7 @@ mod pre_validation_tests {
     fn test_normalize_paths_in_place_skips_embedded() {
         let mut files = vec![
             FileMeta {
-                filename: "plan_structure.md".into(),
+                filename: PLAN_STRUCTURE_FILENAME.into(),
                 description: "embedded".into(),
             },
             FileMeta {
@@ -118,7 +119,7 @@ mod pre_validation_tests {
             },
         ];
         normalize_paths_in_place(&mut files);
-        assert_eq!(files[0].filename, "plan_structure.md");
+        assert_eq!(files[0].filename, PLAN_STRUCTURE_FILENAME);
         assert!(std::path::Path::new(&files[1].filename).is_absolute());
     }
 
@@ -194,7 +195,7 @@ mod pre_validation_tests {
     #[test]
     fn test_precheck_files_skips_plan_structure() {
         let files = vec![FileMeta {
-            filename: "plan_structure.md".into(),
+            filename: PLAN_STRUCTURE_FILENAME.into(),
             description: "embedded template".into(),
         }];
         precheck_files(&files).unwrap();

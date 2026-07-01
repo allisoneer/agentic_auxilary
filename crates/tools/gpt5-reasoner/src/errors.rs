@@ -36,7 +36,7 @@ pub enum ReasonerError {
     CorpusByteLimit { current: u64, limit: u64 },
 
     #[error(
-        "Corpus too large: estimated optimizer prompt tokens {current} (max {limit}=60000). Reduce scope and retry."
+        "Corpus too large: estimated optimizer prompt tokens {current} (max {limit}). Reduce scope and retry."
     )]
     CorpusOptimizerPromptTokenEstimateLimit { current: usize, limit: usize },
 

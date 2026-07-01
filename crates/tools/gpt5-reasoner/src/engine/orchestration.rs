@@ -265,10 +265,16 @@ pub async fn gpt5_reasoner_impl(
         Ok(stats) => stats,
         Err(e) => {
             let msg = format!("stage=preflight_aggregate: {e}");
-            log_record(false, Some(msg), None, None, None, files.len(), None);
-            return Err(ToolError::InvalidInput(format!(
-                "stage=preflight_aggregate: {e}"
-            )));
+            log_record(
+                false,
+                Some(msg.clone()),
+                None,
+                None,
+                None,
+                files.len(),
+                None,
+            );
+            return Err(ToolError::InvalidInput(msg));
         }
     };
     tracing::info!(

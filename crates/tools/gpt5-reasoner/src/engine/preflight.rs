@@ -1,3 +1,4 @@
+use crate::PLAN_STRUCTURE_FILENAME;
 use crate::engine::paths;
 use crate::errors::ReasonerError;
 use crate::errors::Result;
@@ -20,11 +21,17 @@ pub struct AggregatePreflightStats {
 }
 
 fn file_fs_bytes(file: &FileMeta) -> Result<u64> {
-    if file.filename == "plan_structure.md" {
+    if file.filename == PLAN_STRUCTURE_FILENAME {
         return Ok(prompts::PLAN_STRUCTURE_TEMPLATE.len() as u64);
     }
 
-    Ok(std::fs::metadata(&file.filename)?.len())
+    match std::fs::metadata(&file.filename) {
+        Ok(metadata) => Ok(metadata.len()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            Err(ReasonerError::MissingFile(file.filename.clone().into()))
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 pub fn aggregate_corpus_preflight(
@@ -79,7 +86,7 @@ pub fn selected_file_subset_preflight<S: std::hash::BuildHasher>(
         .flat_map(|group| group.files.iter().cloned())
         .filter(|path| seen.insert(path.clone()))
     {
-        if path == "plan_structure.md" {
+        if path == PLAN_STRUCTURE_FILENAME {
             continue;
         }
 
@@ -199,7 +206,7 @@ mod tests {
                 name: "plan_template".into(),
                 purpose: None,
                 critical: None,
-                files: vec!["plan_structure.md".into()],
+                files: vec![PLAN_STRUCTURE_FILENAME.into()],
             }],
         };
 
@@ -215,7 +222,7 @@ mod tests {
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(&file, "fn main() {}\n").unwrap();
 
-        let allowed = HashSet::from([file.to_string_lossy().to_string()]);
+        let allowed = HashSet::from([paths::to_abs_string(&file.to_string_lossy())]);
         let groups = FileGrouping {
             file_groups: vec![FileGroup {
                 name: "code".into(),
