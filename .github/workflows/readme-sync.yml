@@ -49,14 +49,20 @@ jobs:
           set -euo pipefail
           cargo run -p xtask -- sync
 
-          if git diff --quiet --exit-code; then
+          changed_files="$(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } | sort -u
+          )"
+
+          if [ -z "$changed_files" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          changed_files="$(git diff --name-only)"
           allowed_re='^(CLAUDE\.md|README\.md|release-plz\.toml|mise\.toml|justfile|agentic\.schema\.json|apps/.*/CLAUDE\.md|crates/.*/CLAUDE\.md|bindings/.*/CLAUDE\.md)$'
-          bad="$(echo "$changed_files" | grep -Ev "$allowed_re" || true)"
+          bad="$(printf '%s\n' "$changed_files" | grep -Ev "$allowed_re" || true)"
           if [ -n "$bad" ]; then
             echo "::error::xtask sync modified unexpected files; refusing to auto-commit"
             echo "$bad"
@@ -73,6 +79,14 @@ jobs:
           set -euo pipefail
           git config user.name "xtask-sync[bot]"
           git config user.email "xtask-sync[bot]@users.noreply.github.com"
-          git diff --name-only | xargs git add --
+          changed_files="$(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } | sort -u
+          )"
+          while IFS= read -r path; do
+            git add -- "$path"
+          done <<< "$changed_files"
           git commit -m "chore(sync): xtask sync [skip ci]"
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"

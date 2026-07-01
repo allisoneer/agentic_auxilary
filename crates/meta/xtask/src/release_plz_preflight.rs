@@ -6,13 +6,49 @@ use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use reqwest::StatusCode;
 use std::collections::BTreeSet;
+use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 const CRATES_IO_API_BASE: &str = "https://crates.io/api/v1/crates";
+const CRATES_IO_USER_AGENT: &str =
+    "xtask-release-plz-preflight (+https://github.com/allisoneer/agentic_auxilary)";
+const CRATES_IO_PACE_INTERVAL: Duration = Duration::from_secs(1);
 const CRATES_IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub trait CratesIoClient {
     fn crate_exists(&self, crate_name: &str) -> Result<bool>;
+}
+
+trait RequestPacer {
+    fn pace(&mut self);
+}
+
+struct FixedIntervalPacer {
+    interval: Duration,
+    last: Option<Instant>,
+}
+
+impl FixedIntervalPacer {
+    fn new(interval: Duration) -> Self {
+        Self {
+            interval,
+            last: None,
+        }
+    }
+}
+
+impl RequestPacer for FixedIntervalPacer {
+    fn pace(&mut self) {
+        if let Some(last) = self.last {
+            let elapsed = last.elapsed();
+            if let Some(remaining) = self.interval.checked_sub(elapsed) {
+                thread::sleep(remaining);
+            }
+        }
+
+        self.last = Some(Instant::now());
+    }
 }
 
 struct HttpCratesIoClient {
@@ -23,7 +59,7 @@ struct HttpCratesIoClient {
 impl HttpCratesIoClient {
     fn new() -> Result<Self> {
         let client = reqwest::blocking::Client::builder()
-            .user_agent("xtask-release-plz-preflight")
+            .user_agent(CRATES_IO_USER_AGENT)
             .timeout(CRATES_IO_TIMEOUT)
             .build()
             .context("Failed to build crates.io HTTP client")?;
@@ -86,10 +122,12 @@ where
 fn missing_publishable_crates(
     client: &dyn CratesIoClient,
     crate_names: &[String],
+    pacer: &mut dyn RequestPacer,
 ) -> Result<Vec<String>> {
     let mut missing = Vec::new();
 
     for crate_name in crate_names {
+        pacer.pace();
         if !client.crate_exists(crate_name)? {
             missing.push(crate_name.clone());
         }
@@ -126,7 +164,8 @@ pub fn run() -> Result<()> {
     let policy = Policy::load()?;
     let client = HttpCratesIoClient::new()?;
     let crate_names = publishable_crate_names(workspace_package_names(&metadata), &policy);
-    let missing = missing_publishable_crates(&client, &crate_names)?;
+    let mut pacer = FixedIntervalPacer::new(CRATES_IO_PACE_INTERVAL);
+    let missing = missing_publishable_crates(&client, &crate_names, &mut pacer)?;
     ensure_no_missing_crates(&missing)?;
 
     eprintln!("[release-plz-preflight] All publishable crates exist on crates.io.");
@@ -142,10 +181,26 @@ mod tests {
         existing: BTreeSet<String>,
     }
 
+    struct CountingPacer {
+        count: usize,
+    }
+
+    struct NoopPacer;
+
     impl CratesIoClient for FakeCratesIoClient {
         fn crate_exists(&self, crate_name: &str) -> Result<bool> {
             Ok(self.existing.contains(crate_name))
         }
+    }
+
+    impl RequestPacer for CountingPacer {
+        fn pace(&mut self) {
+            self.count += 1;
+        }
+    }
+
+    impl RequestPacer for NoopPacer {
+        fn pace(&mut self) {}
     }
 
     fn parse_policy(toml: &str) -> Policy {
@@ -198,9 +253,11 @@ publish = false
         let client = FakeCratesIoClient {
             existing: BTreeSet::from(["existing-crate".to_string()]),
         };
+        let mut pacer = NoopPacer;
         let missing = missing_publishable_crates(
             &client,
             &["existing-crate".to_string(), "new-crate".to_string()],
+            &mut pacer,
         )
         .expect("missing crate detection should succeed");
 
@@ -222,16 +279,45 @@ publish = false
                 "existing-crate".to_string(),
             ]),
         };
+        let mut pacer = NoopPacer;
         let missing = missing_publishable_crates(
             &client,
             &[
                 "existing-crate".to_string(),
                 "another-existing-crate".to_string(),
             ],
+            &mut pacer,
         )
         .expect("lookup should succeed");
 
         assert!(missing.is_empty());
         ensure_no_missing_crates(&missing).expect("no missing crates should pass");
+    }
+
+    #[test]
+    fn missing_publishable_crates_invokes_pacing_once_per_lookup() {
+        let client = FakeCratesIoClient {
+            existing: BTreeSet::from(["existing-crate".to_string()]),
+        };
+        let mut pacer = CountingPacer { count: 0 };
+        let missing = missing_publishable_crates(
+            &client,
+            &[
+                "existing-crate".to_string(),
+                "missing-crate".to_string(),
+                "another-missing-crate".to_string(),
+            ],
+            &mut pacer,
+        )
+        .expect("lookup should succeed");
+
+        assert_eq!(pacer.count, 3);
+        assert_eq!(
+            missing,
+            vec![
+                "missing-crate".to_string(),
+                "another-missing-crate".to_string()
+            ]
+        );
     }
 }
