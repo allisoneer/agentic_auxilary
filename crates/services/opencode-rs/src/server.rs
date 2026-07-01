@@ -73,6 +73,11 @@ pub struct ServerOptions {
     /// Use this to pass custom configuration, secrets, or feature flags
     /// without modifying the system environment.
     pub env_vars: HashMap<String, String>,
+    /// Whether to force `OPENCODE_ORCHESTRATOR_MANAGED=1` in the child process.
+    ///
+    /// When disabled, the child process explicitly removes the variable so any
+    /// inherited parent value is cleared.
+    pub inject_orchestrator_managed_env: bool,
 }
 
 impl Default for ServerOptions {
@@ -86,6 +91,7 @@ impl Default for ServerOptions {
             binary: "opencode".to_string(),
             launcher_args: Vec::new(),
             env_vars: HashMap::new(),
+            inject_orchestrator_managed_env: true,
         }
     }
 }
@@ -162,6 +168,21 @@ impl ServerOptions {
             .collect();
         self
     }
+
+    /// Control whether `OPENCODE_ORCHESTRATOR_MANAGED=1` is forced into the child.
+    #[must_use]
+    pub fn inject_orchestrator_managed_env(mut self, enabled: bool) -> Self {
+        self.inject_orchestrator_managed_env = enabled;
+        self
+    }
+}
+
+fn apply_managed_env_policy(cmd: &mut Command, opts: &ServerOptions) {
+    if opts.inject_orchestrator_managed_env {
+        cmd.env("OPENCODE_ORCHESTRATOR_MANAGED", "1");
+    } else {
+        cmd.env_remove("OPENCODE_ORCHESTRATOR_MANAGED");
+    }
 }
 
 /// A managed `OpenCode` server instance.
@@ -224,8 +245,8 @@ impl ManagedServer {
         }
 
         // Recursion guard: any MCP servers spawned by this `opencode serve` should
-        // know they're in an orchestrator-managed context.
-        cmd.env("OPENCODE_ORCHESTRATOR_MANAGED", "1");
+        // know they're in an orchestrator-managed context unless explicitly disabled.
+        apply_managed_env_policy(&mut cmd, &opts);
 
         if let Some(cfg) = &opts.config_json {
             cmd.env("OPENCODE_CONFIG_CONTENT", cfg);
@@ -378,6 +399,7 @@ mod tests {
         assert_eq!(opts.binary, "opencode");
         assert!(opts.launcher_args.is_empty());
         assert!(opts.env_vars.is_empty());
+        assert!(opts.inject_orchestrator_managed_env);
     }
 
     #[test]
@@ -393,6 +415,7 @@ mod tests {
         assert_eq!(opts.startup_timeout_ms, 10000);
         assert_eq!(opts.binary, "/usr/local/bin/opencode");
         assert!(opts.launcher_args.is_empty());
+        assert!(opts.inject_orchestrator_managed_env);
     }
 
     #[test]
@@ -446,5 +469,40 @@ mod tests {
 
         assert_eq!(opts.env_vars.get("FOO"), Some(&"bar".to_string()));
         assert_eq!(opts.env_vars.get("BAZ"), Some(&"qux".to_string()));
+    }
+
+    #[test]
+    fn test_server_options_can_disable_managed_env_injection() {
+        let opts = ServerOptions::new().inject_orchestrator_managed_env(false);
+
+        assert!(!opts.inject_orchestrator_managed_env);
+    }
+
+    #[test]
+    fn test_apply_managed_env_policy_removes_inherited_env_when_disabled() {
+        let opts = ServerOptions::new().inject_orchestrator_managed_env(false);
+        let mut cmd = Command::new("opencode");
+        cmd.env("OPENCODE_ORCHESTRATOR_MANAGED", "parent-value");
+
+        apply_managed_env_policy(&mut cmd, &opts);
+
+        let envs: Vec<_> = cmd.as_std().get_envs().collect();
+        assert!(envs.iter().any(|(key, value)| {
+            *key == std::ffi::OsStr::new("OPENCODE_ORCHESTRATOR_MANAGED") && value.is_none()
+        }));
+    }
+
+    #[test]
+    fn test_apply_managed_env_policy_injects_guard_when_enabled() {
+        let opts = ServerOptions::new();
+        let mut cmd = Command::new("opencode");
+
+        apply_managed_env_policy(&mut cmd, &opts);
+
+        let envs: Vec<_> = cmd.as_std().get_envs().collect();
+        assert!(envs.iter().any(|(key, value)| {
+            *key == std::ffi::OsStr::new("OPENCODE_ORCHESTRATOR_MANAGED")
+                && *value == Some(std::ffi::OsStr::new("1"))
+        }));
     }
 }

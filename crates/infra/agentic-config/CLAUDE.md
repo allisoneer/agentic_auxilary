@@ -17,14 +17,13 @@ Unified configuration system for the agentic tools ecosystem. Handles loading, m
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p agentic-config -- --check
-cargo clippy -p agentic-config --all-targets -- -D warnings
+just crate-check agentic-config
 
 # Tests
-cargo test -p agentic-config
+just crate-test agentic-config
 
 # Build
-cargo build -p agentic-config
+just crate-build agentic-config
 ```
 <!-- END:xtask:autogen -->
 

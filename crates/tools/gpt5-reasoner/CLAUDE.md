@@ -131,13 +131,12 @@ fn my_env_test() {
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p gpt5_reasoner -- --check
-cargo clippy -p gpt5_reasoner --all-targets -- -D warnings
+just crate-check gpt5_reasoner
 
 # Tests
-cargo test -p gpt5_reasoner
+just crate-test gpt5_reasoner
 
 # Build
-cargo build -p gpt5_reasoner
+just crate-build gpt5_reasoner
 ```
 <!-- END:xtask:autogen -->

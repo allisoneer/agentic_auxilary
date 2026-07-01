@@ -24,14 +24,13 @@ Environment:
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p web-retrieval -- --check
-cargo clippy -p web-retrieval --all-targets -- -D warnings
+just crate-check web-retrieval
 
 # Tests
-cargo test -p web-retrieval
+just crate-test web-retrieval
 
 # Build
-cargo build -p web-retrieval
+just crate-build web-retrieval
 ```
 <!-- END:xtask:autogen -->
 

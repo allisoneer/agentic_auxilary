@@ -78,6 +78,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentic-outer-dag-bin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "git2",
+ "gwt-worktree",
+ "linear-tools",
+ "opencode_rs",
+ "pr_comments",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thoughts-tool",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wiremock",
+]
+
+[[package]]
 name = "agentic-tools-core"
 version = "0.4.0"
 dependencies = [
@@ -4795,6 +4819,8 @@ dependencies = [
  "git2",
  "mockito",
  "octocrab",
+ "reqwest 0.12.28",
+ "rustls",
  "schemars 1.2.1",
  "serde",
  "serde_json",

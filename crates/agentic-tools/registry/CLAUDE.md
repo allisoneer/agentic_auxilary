@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p agentic-tools-registry -- --check
-cargo clippy -p agentic-tools-registry --all-targets -- -D warnings
+just crate-check agentic-tools-registry
 
 # Tests
-cargo test -p agentic-tools-registry
+just crate-test agentic-tools-registry
 
 # Build
-cargo build -p agentic-tools-registry
+just crate-build agentic-tools-registry
 ```
 <!-- END:xtask:autogen -->
 

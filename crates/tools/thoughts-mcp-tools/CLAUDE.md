@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p thoughts-mcp-tools -- --check
-cargo clippy -p thoughts-mcp-tools --all-targets -- -D warnings
+just crate-check thoughts-mcp-tools
 
 # Tests
-cargo test -p thoughts-mcp-tools
+just crate-test thoughts-mcp-tools
 
 # Build
-cargo build -p thoughts-mcp-tools
+just crate-build thoughts-mcp-tools
 ```
 <!-- END:xtask:autogen -->
 
