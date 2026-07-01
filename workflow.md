@@ -41,6 +41,8 @@ Inside of normal we have a handful of tools, most are custom, and pluggable into
 
 ### Agent Variants
 
+- Discord — Discord message search session (`tools_discord_*`)
+
 | NORMAL (19)   | NORMAL_OPENAI (19) | BASH (20)     | LINEAR (28)   | PLAYWRIGHT (41)       | REVIEW (9)            |
 |---------------|--------------------|---------------|---------------|-----------------------|-----------------------|
 | File ops      | File ops           | File ops      | File ops      | File ops              | Read only             |
@@ -65,6 +67,7 @@ NORMAL_OPENAI:
             unwind_openai, decide_findings_openai, frame_openai
 BASH:       bash, commit, describe_pr
 LINEAR:     linear
+DISCORD:    discord
 PLAYWRIGHT: playwright
 REVIEW:     review
 ```

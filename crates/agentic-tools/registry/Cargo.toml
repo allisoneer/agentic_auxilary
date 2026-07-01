@@ -19,6 +19,7 @@ napi = false
 agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 coding_agent_tools = { workspace = true }
+discord-tools = { workspace = true }
 gpt5_reasoner = { workspace = true }
 linear-tools = { workspace = true }
 pr_comments = { workspace = true }
