@@ -15,6 +15,7 @@ pub mod mise;
 pub mod policy;
 pub mod readme;
 pub mod release_plz;
+pub mod release_plz_preflight;
 pub mod schema;
 pub mod sync;
 pub mod verify;
@@ -64,6 +65,8 @@ enum Cmd {
         #[arg(long, default_value_t = false)]
         check: bool,
     },
+    /// Fail if publishable crates are missing from crates.io
+    ReleasePlzPreflight,
 }
 
 fn strict_mode() -> bool {
@@ -81,6 +84,7 @@ fn main() -> Result<()> {
         Cmd::Sync { dry_run, check } => sync::run(dry_run, check),
         Cmd::Verify { check } => verify::run(check),
         Cmd::EndpointCoverage { json, check } => endpoint_coverage::run(json, check),
+        Cmd::ReleasePlzPreflight => release_plz_preflight::run(),
     }
 }
 

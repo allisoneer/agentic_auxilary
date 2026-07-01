@@ -118,6 +118,22 @@ ignore_suffixes = [
 # Defaults for generated package entries
 git_tag_format = "{{ name }}-v{{ version }}"
 publish_default = true
+git_tag_enable_default = false
+
+[release_plz.overrides.agentic-bin]
+git_tag_enable = true
+
+[release_plz.overrides.agentic-mcp]
+git_tag_enable = true
+
+[release_plz.overrides.thoughts-bin]
+git_tag_enable = true
+
+[release_plz.overrides.message-optimizer-bin]
+git_tag_enable = true
+
+[release_plz.overrides.opencode-orchestrator-mcp]
+git_tag_enable = true
 
 # Per-crate overrides to match current practices
 [release_plz.overrides.universal-tool-core]

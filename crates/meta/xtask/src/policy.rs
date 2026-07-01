@@ -98,11 +98,17 @@ fn default_blocked_severities() -> Vec<u8> {
     vec![0]
 }
 
+fn default_git_tag_enable() -> bool {
+    true
+}
+
 /// Release-plz configuration.
 #[derive(Debug, Deserialize)]
 pub struct ReleasePlz {
     pub git_tag_format: String,
     pub publish_default: bool,
+    #[serde(default = "default_git_tag_enable")]
+    pub git_tag_enable_default: bool,
     #[serde(default)]
     pub overrides: BTreeMap<String, ReleaseOverride>,
 }
@@ -174,6 +180,7 @@ ignore_paths = ["CLAUDE.md"]
 [release_plz]
 git_tag_format = "{{ name }}-v{{ version }}"
 publish_default = true
+git_tag_enable_default = false
 "#;
         let policy: Policy = toml::from_str(toml).unwrap();
         assert!(policy.is_valid_role("app"));
@@ -184,5 +191,6 @@ publish_default = true
         assert_eq!(policy.paths.allow, vec!["apps/*", "crates/*"]);
         assert_eq!(policy.todos.blocked_severities, vec![0]);
         assert_eq!(policy.todos.ignore_paths, vec!["CLAUDE.md"]);
+        assert!(!policy.release_plz.git_tag_enable_default);
     }
 }

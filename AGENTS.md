@@ -18,6 +18,7 @@ Repository-specific facts for OpenAI-oriented tooling live here. Behavioral rule
 ### infra
 
 - `agentic-config` (lib) - `crates/infra/agentic-config/`
+- `gwt-worktree` (lib) - `crates/infra/gwt-worktree/`
 - `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 - `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 
@@ -83,13 +84,21 @@ just fmt-check      # Check formatting across entire workspace
 ### xtask commands
 
 ```bash
-just xtask-sync         # Sync generated repo metadata files (CLAUDE.md, release-plz.toml, README.md, justfile)
+just xtask-sync         # Sync generated repo metadata files (CLAUDE.md, release-plz.toml, mise.toml, README.md, justfile, agentic.schema.json)
 just xtask-verify       # Verify metadata, policy, and file freshness
 just xtask-sync-check   # Check if sync is needed (for CI)
 just xtask-verify-check # Full verification including generated files
 ```
 
-`xtask-sync` updates generated repo metadata such as `CLAUDE.md`, `release-plz.toml`, `README.md`, and `justfile`. `AGENTS.md` is not currently auto-synced, so refresh it manually when repo facts change.
+`xtask-sync` updates generated repo metadata such as root/per-crate `CLAUDE.md`, `release-plz.toml`, `mise.toml`, `README.md`, `justfile`, and `agentic.schema.json`. It does **not** update `AGENTS.md` or `mise.lock`; keep those manual.
+
+Release PRs labeled `release` trigger `.github/workflows/readme-sync.yml`, which now runs full `cargo run -p xtask -- sync` on same-repo PR heads and auto-commits only xtask-managed generated outputs when they are stale.
+
+`cargo run -p xtask -- release-plz-preflight` is the release-plz-only first-publish guard. It checks crates configured to publish by `tools/policy.toml` against crates.io before the release-plz action runs. If it fails, either first-publish the missing crate locally with `cargo publish -p <crate>` or mark it unpublished in `tools/policy.toml` and rerun `cargo run -p xtask -- sync`.
+
+`mise.lock` stays operator-managed because it depends on GitHub Release assets that do not exist until after tag-driven release automation finishes. After those releases complete, regenerate it with `MISE_LOCKED=0 mise lock` and commit the resulting `mise.lock`.
+
+Release policy is conservative by default: libraries publishable to crates.io do **not** get GitHub-release-facing tags unless explicitly allowlisted in `tools/policy.toml`. The intended tagged packages are the distributed apps, while `message-optimizer-bin` remains an intentional outlier: it keeps release-plz tagging enabled but is not being normalized into the broader shipped-app or `mise` workflows in this task.
 
 ### Endpoint coverage (opencode-rs SDK)
 
