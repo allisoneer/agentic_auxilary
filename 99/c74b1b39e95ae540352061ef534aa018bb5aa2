@@ -1,0 +1,46 @@
+crates/tools/discord-tools/src/http.rs
+  s_a965d5af1c30f7::t_b29f3533b9608c 28-31
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-27,32-110,113-114,121-131,135-138
+  s_a965d5af1c30f7::t_bfe2197515b4d2 132-134
+  s_a965d5af1c30f7::t_f99648d4fcccf9 111-112,115-120
+crates/tools/discord-tools/tests/integration.rs
+  s_a965d5af1c30f7::t_d76930ce64e809 141-144
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-8,10,19-65,67-105,107-140,145-151,153-192,194-233,235-237,243-250,256-286,288-290,296-303,309-336
+  s_a965d5af1c30f7::t_afa3f271fbe17d 238-242,251-255,291-295,304-308
+  s_a965d5af1c30f7::t_b29f3533b9608c 9,11-18,66,106,152,193,234,287
+crates/tools/discord-tools/Cargo.toml
+  s_a965d5af1c30f7::t_b29f3533b9608c 29
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-28,30-33
+crates/tools/discord-tools/src/tools.rs
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-39,41-50,52-59,63-67
+  s_a965d5af1c30f7::t_f99648d4fcccf9 40,51,60-62
+Cargo.toml
+  s_a965d5af1c30f7::t_e136a49a3981ac 34,94
+crates/tools/discord-tools/src/models.rs
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-60,64-72,76-111,117-142,146-155,157-209,214-266
+  s_a965d5af1c30f7::t_b29f3533b9608c 61-63,73-75
+  s_a965d5af1c30f7::t_d76930ce64e809 112-116,143-145,156,210-213
+crates/tools/discord-tools/src/test_support.rs
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-37
+crates/tools/discord-tools/src/lib.rs
+  s_a965d5af1c30f7::t_b29f3533b9608c 35-37,85-88,144-145
+  s_a965d5af1c30f7::t_d76930ce64e809 164
+  s_a965d5af1c30f7::t_063b08c953ef3e 1-34,38-51,58-84,89-143,146-163,165-230
+  s_a965d5af1c30f7::t_f99648d4fcccf9 52-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "99c74b1b39e95ae540352061ef534aa018bb5aa2",
+  "prompts": {},
+  "sessions": {
+    "s_a965d5af1c30f7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0e023979dffeNoNSF2v8Q24jhh",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
