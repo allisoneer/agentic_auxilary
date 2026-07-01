@@ -3,7 +3,10 @@
 //! This module provides Tool wrappers for the 6 thoughts MCP tools using the
 //! agentic-tools-core framework, enabling registration in the unified registry.
 
+pub(crate) mod readiness;
 pub mod tools;
+
+use readiness::ThoughtsMcpReadinessGate;
 
 pub use tools::AddReferenceTool;
 pub use tools::GetRepoRefsTool;
@@ -20,12 +23,25 @@ use agentic_tools_core::ToolRegistry;
 /// This registry can be merged with other domain registries in Plan 4
 /// to create a unified agentic-mcp binary.
 pub fn build_registry(thoughts: ThoughtsConfig) -> ToolRegistry {
+    let readiness = ThoughtsMcpReadinessGate::new();
+
     ToolRegistry::builder()
-        .register::<WriteDocumentTool, ()>(WriteDocumentTool)
-        .register::<ListActiveDocumentsTool, ()>(ListActiveDocumentsTool)
-        .register::<ListReferencesTool, ()>(ListReferencesTool)
-        .register::<GetRepoRefsTool, ()>(GetRepoRefsTool)
-        .register::<AddReferenceTool, ()>(AddReferenceTool { thoughts })
-        .register::<GetTemplateTool, ()>(GetTemplateTool)
+        .register::<WriteDocumentTool, ()>(WriteDocumentTool {
+            readiness: readiness.clone(),
+        })
+        .register::<ListActiveDocumentsTool, ()>(ListActiveDocumentsTool {
+            readiness: readiness.clone(),
+        })
+        .register::<ListReferencesTool, ()>(ListReferencesTool {
+            readiness: readiness.clone(),
+        })
+        .register::<GetRepoRefsTool, ()>(GetRepoRefsTool {
+            readiness: readiness.clone(),
+        })
+        .register::<AddReferenceTool, ()>(AddReferenceTool {
+            thoughts,
+            readiness: readiness.clone(),
+        })
+        .register::<GetTemplateTool, ()>(GetTemplateTool { readiness })
         .finish()
 }
