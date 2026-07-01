@@ -123,13 +123,12 @@ cargo run --example streaming_debug
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p claudecode -- --check
-cargo clippy -p claudecode --all-targets -- -D warnings
+just crate-check claudecode
 
 # Tests
-cargo test -p claudecode
+just crate-test claudecode
 
 # Build
-cargo build -p claudecode
+just crate-build claudecode
 ```
 <!-- END:xtask:autogen -->

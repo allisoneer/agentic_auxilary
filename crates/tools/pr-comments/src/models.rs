@@ -47,6 +47,44 @@ pub struct PrSummary {
     pub review_comment_count: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct PrRef {
+    pub number: u64,
+    pub url: String,
+    pub head_sha: String,
+    pub node_id: String,
+    pub is_draft: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct CheckSuiteSummary {
+    pub id: u64,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub app_slug: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct PullRequestReviewSummary {
+    pub id: u64,
+    pub user_login: String,
+    pub user_type: Option<String>,
+    pub state: String,
+    pub submitted_at: Option<String>,
+    #[serde(default)]
+    pub commit_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct IssueCommentSummary {
+    pub id: u64,
+    pub user_login: String,
+    pub user_type: Option<String>,
+    pub body: String,
+    pub created_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewCommentList {
     pub owner: String,
@@ -518,6 +556,45 @@ pub struct GraphQLError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequestData {
     pub repository: Repository,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenPrRefData {
+    pub repository: OpenPrRefRepository,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenPrRefRepository {
+    #[serde(rename = "pullRequests")]
+    pub pull_requests: OpenPrRefConnection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenPrRefConnection {
+    pub nodes: Vec<OpenPrRefNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenPrRefNode {
+    pub id: String,
+    pub number: u64,
+    pub url: String,
+    #[serde(rename = "headRefOid")]
+    pub head_ref_oid: String,
+    #[serde(rename = "isDraft")]
+    pub is_draft: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarkPullRequestReadyForReviewData {
+    #[serde(rename = "markPullRequestReadyForReview")]
+    pub mark_pull_request_ready_for_review: MarkPullRequestReadyForReviewPayload,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarkPullRequestReadyForReviewPayload {
+    #[serde(rename = "pullRequest")]
+    pub pull_request: OpenPrRefNode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

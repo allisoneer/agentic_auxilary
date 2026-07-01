@@ -56,7 +56,6 @@ async fn test_model_serialization() {
 
 #[cfg(test)]
 mod resolution_tests {
-    use pr_comments::models::GraphQLResponse;
     use pr_comments::models::PullRequestData;
 
     #[test]
@@ -78,40 +77,37 @@ mod resolution_tests {
     fn test_graphql_models() {
         // Test that GraphQL response models deserialize correctly
         let json = r#"{
-            "data": {
-                "repository": {
-                    "pullRequest": {
-                        "reviewThreads": {
-                            "nodes": [{
-                                "id": "PRRT_123",
-                                "isResolved": true,
-                                "comments": {
-                                    "nodes": [{
-                                        "id": "RC_123",
-                                        "databaseId": 456
-                                    }]
-                                }
-                            }],
-                            "pageInfo": {
-                                "hasNextPage": false,
-                                "endCursor": null
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [{
+                            "id": "PRRT_123",
+                            "isResolved": true,
+                            "comments": {
+                                "nodes": [{
+                                    "id": "RC_123",
+                                    "databaseId": 456
+                                }]
                             }
+                        }],
+                        "pageInfo": {
+                            "hasNextPage": false,
+                            "endCursor": null
                         }
                     }
                 }
             }
         }"#;
 
-        let response: GraphQLResponse<PullRequestData> = match serde_json::from_str(json) {
+        let response: PullRequestData = match serde_json::from_str(json) {
             Ok(response) => response,
-            Err(err) => panic!("GraphQLResponse should deserialize: {err}"),
+            Err(err) => panic!("PullRequestData should deserialize: {err}"),
         };
-        assert!(response.data.is_some());
-        let Some(data) = response.data else {
-            panic!("GraphQLResponse should contain data");
-        };
-        assert_eq!(data.repository.pull_request.review_threads.nodes.len(), 1);
-        assert!(data.repository.pull_request.review_threads.nodes[0].is_resolved);
+        assert_eq!(
+            response.repository.pull_request.review_threads.nodes.len(),
+            1
+        );
+        assert!(response.repository.pull_request.review_threads.nodes[0].is_resolved);
     }
 }
 

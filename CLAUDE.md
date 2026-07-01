@@ -9,8 +9,8 @@ Guidance for Claude Code when working with this repository.
 
 - `agentic-tools-utils` (lib) - `crates/agentic-tools/utils/`
 - `agentic-tools-core` (lib) - `crates/agentic-tools/core/`
-- `agentic-mcp` (app) - `apps/agentic-mcp/`
 - `agentic-tools-mcp` (lib) - `crates/agentic-tools/mcp/`
+- `agentic-mcp` (app) - `apps/agentic-mcp/`
 - `agentic-tools-registry` (lib) - `crates/agentic-tools/registry/`
 - `opencode-orchestrator-mcp` (app) - `apps/opencode-orchestrator-mcp/`
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
@@ -19,9 +19,9 @@ Guidance for Claude Code when working with this repository.
 ### infra
 
 - `agentic-config` (lib) - `crates/infra/agentic-config/`
-- `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
-- `agentic_logging` (lib) - `crates/infra/agentic-logging/`
 - `gwt-worktree` (lib) - `crates/infra/gwt-worktree/`
+- `agentic_logging` (lib) - `crates/infra/agentic-logging/`
+- `thoughts-tool` (lib) - `crates/infra/thoughts-core/`
 
 ### legacy
 
@@ -41,18 +41,19 @@ Guidance for Claude Code when working with this repository.
 
 ### services
 
+- `opencode_rs` (lib) - `crates/services/opencode-rs/`
 - `claudecode` (lib) - `crates/services/claudecode-rs/`
 - `anthropic-async` (lib) - `crates/services/anthropic-async/`
 - `exa-async` (lib) - `crates/services/exa-async/`
-- `opencode_rs` (lib) - `crates/services/opencode-rs/`
 
 ### tools
 
 - `agentic-bin` (app) - `apps/agentic/`
+- `agentic-outer-dag-bin` (app) - `apps/agentic-outer-dag/`
+- `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `thoughts-bin` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
-- `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `review_tools` (tool-lib) - `crates/tools/review-tools/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
 - `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`

@@ -70,6 +70,9 @@ These items have dependencies and should be done in order.
 
 ## To classify/investigate:
 
+- TODO(2): Extract shared OpenCode session monitoring/completion detection helper used by both
+  `apps/opencode-orchestrator-mcp` and `apps/agentic-outer-dag` (dispatch-confirmed idle grace gating, bounded transcript settling,
+  conservative unresolved tool-state handling) to reduce drift.
 - TODO(2): ENG-762 follow-up — add Node/NAPI abort-signal propagation so JS callers can drive `ToolContext` cancellation instead of always using `ToolContext::default()`.
 - TODO(2): ENG-762 follow-up — define mutation-tool cancellation semantics beyond local post-commit monitoring, including whether/when remote rollback is possible.
 - TODO(2): ENG-762 follow-up — have orchestrator monitoring call OpenCode `sessions().abort()` once the API contract and side effects are clearly defined.

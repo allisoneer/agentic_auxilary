@@ -1,0 +1,52 @@
+[package]
+name = "agentic-outer-dag-bin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+description = "External outer-DAG driver for worktree→PR→CodeRabbit loops"
+publish = true
+
+[package.metadata.repo]
+role = "app"
+family = "tools"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
+
+[[bin]]
+name = "agentic-outer-dag"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["env"] }
+git2 = { version = "0.20", features = ["vendored-openssl", "ssh", "https"] }
+gwt-worktree = { workspace = true }
+linear-tools = { workspace = true }
+opencode_rs = { workspace = true, features = ["server"] }
+pr_comments = { workspace = true }
+sha2 = "0.10"
+thoughts-tool = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# TLS backend - explicit dependency for CryptoProvider initialization
+# Required because rustls 0.23+ panics if both ring and aws-lc-rs are compiled
+# in without explicit provider selection (due to Cargo's additive features)
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"
+
+[lints]
+workspace = true

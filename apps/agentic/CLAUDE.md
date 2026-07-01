@@ -17,14 +17,13 @@ CLI application for managing `agentic.toml` configuration files. Provides comman
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p agentic-bin -- --check
-cargo clippy -p agentic-bin --all-targets -- -D warnings
+just crate-check agentic-bin
 
 # Tests
-cargo test -p agentic-bin
+just crate-test agentic-bin
 
 # Build
-cargo build -p agentic-bin
+just crate-build agentic-bin
 ```
 <!-- END:xtask:autogen -->
 

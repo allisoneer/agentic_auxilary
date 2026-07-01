@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p linear-schema -- --check
-cargo clippy -p linear-schema --all-targets -- -D warnings
+just crate-check linear-schema
 
 # Tests
-cargo test -p linear-schema
+just crate-test linear-schema
 
 # Build
-cargo build -p linear-schema
+just crate-build linear-schema
 ```
 <!-- END:xtask:autogen -->
 

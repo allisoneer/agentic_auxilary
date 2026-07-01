@@ -184,16 +184,15 @@ fn sync_single_crate_claude(
     let commands = format!(
         r"```bash
 # Lint & Clippy
-cargo fmt -p {} -- --check
-cargo clippy -p {} --all-targets -- -D warnings
+just crate-check {}
 
 # Tests
-cargo test -p {}
+just crate-test {}
 
 # Build
-cargo build -p {}
+just crate-build {}
 ```",
-        pkg.name, pkg.name, pkg.name, pkg.name
+        pkg.name, pkg.name, pkg.name
     );
 
     // Read or create file

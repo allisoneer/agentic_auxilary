@@ -17,14 +17,13 @@ Standalone Anthropic-backed library for optimizing a raw message into GPT-5.4 pr
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p message_optimizer -- --check
-cargo clippy -p message_optimizer --all-targets -- -D warnings
+just crate-check message_optimizer
 
 # Tests
-cargo test -p message_optimizer
+just crate-test message_optimizer
 
 # Build
-cargo build -p message_optimizer
+just crate-build message_optimizer
 ```
 <!-- END:xtask:autogen -->
 

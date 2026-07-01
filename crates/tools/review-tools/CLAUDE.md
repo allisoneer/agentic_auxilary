@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p review_tools -- --check
-cargo clippy -p review_tools --all-targets -- -D warnings
+just crate-check review_tools
 
 # Tests
-cargo test -p review_tools
+just crate-test review_tools
 
 # Build
-cargo build -p review_tools
+just crate-build review_tools
 ```
 <!-- END:xtask:autogen -->
 

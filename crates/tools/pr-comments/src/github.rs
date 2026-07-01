@@ -1,23 +1,40 @@
+use crate::OpenPrRefLookupResult;
+use crate::models::CheckSuiteSummary;
 use crate::models::CommentSourceType;
 use crate::models::GraphQLResponse;
+use crate::models::IssueCommentSummary;
+use crate::models::MarkPullRequestReadyForReviewData;
+use crate::models::OpenPrRefData;
+use crate::models::PrRef;
 use crate::models::PrSummary;
 use crate::models::PullRequestData;
+use crate::models::PullRequestReviewSummary;
 use crate::models::ReviewComment;
 use crate::models::Thread;
 use anyhow::Result;
 use octocrab::Octocrab;
+use reqwest::header::ACCEPT;
+use reqwest::header::AUTHORIZATION;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use reqwest::header::USER_AGENT;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
 
+const REST_PER_PAGE: usize = 100;
+
 pub struct GitHubClient {
     client: Octocrab,
+    http: reqwest::Client,
     owner: String,
     repo: String,
+    api_base_url: String,
 }
 
 impl GitHubClient {
     pub fn new(owner: String, repo: String, token: Option<String>) -> Result<Self> {
+        let header_token = token.clone();
         let builder = Octocrab::builder()
             .set_connect_timeout(Some(Duration::from_secs(10)))
             .set_read_timeout(Some(Duration::from_secs(30)))
@@ -33,38 +50,248 @@ impl GitHubClient {
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to create GitHub client: {e:?}"))?;
 
+        let mut headers = HeaderMap::new();
+        headers.insert(USER_AGENT, HeaderValue::from_static("pr_comments"));
+        headers.insert(
+            ACCEPT,
+            HeaderValue::from_static("application/vnd.github+json"),
+        );
+        if let Some(token) = header_token.as_deref() {
+            let value = HeaderValue::from_str(&format!("Bearer {token}"))
+                .map_err(|e| anyhow::anyhow!("Invalid GitHub token header: {e}"))?;
+            headers.insert(AUTHORIZATION, value);
+        }
+        let http = reqwest::Client::builder()
+            .default_headers(headers)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to create GitHub REST client: {e}"))?;
+
         Ok(Self {
             client,
+            http,
             owner,
             repo,
+            api_base_url: "https://api.github.com".to_string(),
         })
     }
 
+    #[cfg(test)]
+    fn with_api_base_url(mut self, api_base_url: String) -> Self {
+        self.api_base_url = api_base_url;
+        self
+    }
+
     pub async fn get_pr_from_branch(&self, branch: &str) -> Result<Option<u64>> {
-        // Search for open PRs with this head branch
-        let pulls = self
-            .client
-            .pulls(&self.owner, &self.repo)
-            .list()
-            .state(octocrab::params::State::Open)
+        Ok(self
+            .get_open_pr_ref_from_branch(branch)
+            .await?
+            .map(|pr| pr.number))
+    }
+
+    pub async fn get_open_pr_ref_from_branch(&self, branch: &str) -> Result<Option<PrRef>> {
+        Ok(self.get_open_pr_ref_from_branch_detailed(branch).await?.pr)
+    }
+
+    pub async fn get_open_pr_ref_from_branch_detailed(
+        &self,
+        branch: &str,
+    ) -> Result<OpenPrRefLookupResult> {
+        let query = r"
+            query($owner: String!, $repo: String!, $branch: String!) {
+                repository(owner: $owner, name: $repo) {
+                    pullRequests(states: OPEN, headRefName: $branch, first: 1) {
+                        nodes {
+                            id
+                            number
+                            url
+                            headRefOid
+                            isDraft
+                        }
+                    }
+                }
+            }
+        ";
+        let variables = serde_json::json!({
+            "owner": self.owner,
+            "repo": self.repo,
+            "branch": branch,
+        });
+        let response: OpenPrRefData = self.graphql_post(query, variables).await?;
+
+        Ok(parse_open_pr_ref_lookup_response(response))
+    }
+
+    pub async fn mark_pr_ready_for_review(&self, pull_request_id: &str) -> Result<PrRef> {
+        let query = r"
+            mutation($pullRequestId: ID!) {
+                markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+                    pullRequest {
+                        id
+                        number
+                        url
+                        headRefOid
+                        isDraft
+                    }
+                }
+            }
+        ";
+        let variables = serde_json::json!({
+            "pullRequestId": pull_request_id,
+        });
+        let response: MarkPullRequestReadyForReviewData =
+            self.graphql_post(query, variables).await?;
+
+        Ok(pr_ref_from_open_pr_node(
+            response.mark_pull_request_ready_for_review.pull_request,
+        ))
+    }
+}
+
+fn parse_open_pr_ref_lookup_response(response: OpenPrRefData) -> OpenPrRefLookupResult {
+    let nodes = response.repository.pull_requests.nodes;
+    let pr = nodes.into_iter().next().map(pr_ref_from_open_pr_node);
+
+    OpenPrRefLookupResult {
+        empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string())
+            .filter(|_| pr.is_none()),
+        pr,
+    }
+}
+
+fn pr_ref_from_open_pr_node(node: crate::models::OpenPrRefNode) -> PrRef {
+    PrRef {
+        number: node.number,
+        url: node.url,
+        head_sha: node.head_ref_oid,
+        node_id: node.id,
+        is_draft: node.is_draft,
+    }
+}
+
+impl GitHubClient {
+    pub async fn list_check_suites_for_ref(&self, sha: &str) -> Result<Vec<CheckSuiteSummary>> {
+        let base_path = format!(
+            "/repos/{}/{}/commits/{sha}/check-suites",
+            self.owner, self.repo
+        );
+        self.rest_get_paginated(&base_path, parse_check_suites_response)
+            .await
+    }
+
+    pub async fn list_pull_request_reviews(
+        &self,
+        pr_number: u64,
+    ) -> Result<Vec<PullRequestReviewSummary>> {
+        let base_path = format!(
+            "/repos/{}/{}/pulls/{pr_number}/reviews",
+            self.owner, self.repo
+        );
+        self.rest_get_paginated(&base_path, parse_reviews_response)
+            .await
+    }
+
+    pub async fn list_issue_comments(&self, issue_number: u64) -> Result<Vec<IssueCommentSummary>> {
+        let base_path = format!(
+            "/repos/{}/{}/issues/{issue_number}/comments",
+            self.owner, self.repo
+        );
+        self.rest_get_paginated(&base_path, parse_issue_comments_response)
+            .await
+    }
+
+    async fn rest_get_paginated<T, F>(&self, base_path: &str, parse_page: F) -> Result<Vec<T>>
+    where
+        F: Fn(serde_json::Value) -> Result<Vec<T>>,
+    {
+        let mut items = Vec::new();
+        let mut page = 1u32;
+        loop {
+            let value = self
+                .rest_get(&format!("{base_path}?page={page}&per_page={REST_PER_PAGE}"))
+                .await?;
+            let page_items = parse_page(value)?;
+            let page_len = page_items.len();
+            items.extend(page_items);
+            if page_len < REST_PER_PAGE {
+                break;
+            }
+            page += 1;
+        }
+        Ok(items)
+    }
+
+    async fn rest_get(&self, path: &str) -> Result<serde_json::Value> {
+        let url = format!("{}{path}", self.api_base_url);
+        let response = self
+            .http
+            .get(&url)
             .send()
             .await
-            .map_err(|e| {
-                let owner = self.owner.as_str();
-                let repo = self.repo.as_str();
-                anyhow::anyhow!("Failed to list open pull requests for {owner}/{repo}: {e:?}")
-            })?;
+            .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?
+            .error_for_status()
+            .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?;
+        response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub REST JSON parse failed: {e}"))
+    }
 
-        for pr in pulls {
-            if pr.head.ref_field == branch {
-                return Ok(Some(pr.number));
-            }
+    async fn graphql_post<T>(&self, query: &str, variables: serde_json::Value) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let url = format!("{}/graphql", self.api_base_url);
+        let response = self
+            .http
+            .post(&url)
+            .json(&serde_json::json!({
+                "query": query,
+                "variables": variables,
+            }))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub GraphQL request failed: {e}"))?
+            .error_for_status()
+            .map_err(|e| anyhow::anyhow!("GitHub GraphQL request failed: {e}"))?;
+
+        let body: GraphQLResponse<T> = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("GitHub GraphQL JSON parse failed: {e}"))?;
+
+        if let Some(errors) = body.errors.as_ref().filter(|errors| !errors.is_empty()) {
+            let messages = errors
+                .iter()
+                .map(|error| error.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            anyhow::bail!("GitHub GraphQL response contained errors: {messages}");
         }
 
-        Ok(None)
+        body.data
+            .ok_or_else(|| anyhow::anyhow!("GitHub GraphQL response missing data"))
+    }
+
+    pub fn parse_check_suites_fixture(value: serde_json::Value) -> Result<Vec<CheckSuiteSummary>> {
+        parse_check_suites_response(value)
+    }
+
+    pub fn parse_reviews_fixture(
+        value: serde_json::Value,
+    ) -> Result<Vec<PullRequestReviewSummary>> {
+        parse_reviews_response(value)
+    }
+
+    pub fn parse_issue_comments_fixture(
+        value: serde_json::Value,
+    ) -> Result<Vec<IssueCommentSummary>> {
+        parse_issue_comments_response(value)
     }
 
     pub async fn get_review_comments(
+        // Search for open PRs with this head branch
         &self,
         pr_number: u64,
         include_resolved: Option<bool>,
@@ -320,7 +547,7 @@ impl GitHubClient {
                 "cursor": cursor,
             });
 
-            let response: GraphQLResponse<PullRequestData> = self
+            let response: PullRequestData = self
                 .client
                 .graphql(&serde_json::json!({
                     "query": query,
@@ -329,21 +556,7 @@ impl GitHubClient {
                 .await
                 .map_err(|e| anyhow::anyhow!("GraphQL query failed: {e}"))?;
 
-            if let Some(errors) = response.errors
-                && !errors.is_empty()
-            {
-                let messages = errors
-                    .iter()
-                    .map(|e| e.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                return Err(anyhow::anyhow!("GraphQL errors: {messages}"));
-            }
-
-            let data = response
-                .data
-                .ok_or_else(|| anyhow::anyhow!("No data in GraphQL response"))?;
-            let threads = &data.repository.pull_request.review_threads;
+            let threads = &response.repository.pull_request.review_threads;
 
             // Build map of comment ID -> resolution status
             for thread in &threads.nodes {
@@ -472,6 +685,527 @@ impl GitHubClient {
             })?;
 
         Ok(ReviewComment::from_review_comment(comment))
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct CheckSuitesEnvelope {
+    check_suites: Vec<CheckSuiteEntry>,
+}
+
+#[derive(serde::Deserialize)]
+struct CheckSuiteEntry {
+    id: u64,
+    status: String,
+    conclusion: Option<String>,
+    app: Option<CheckSuiteApp>,
+    updated_at: String,
+}
+
+#[derive(serde::Deserialize)]
+struct CheckSuiteApp {
+    slug: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ReviewEntry {
+    id: u64,
+    state: String,
+    submitted_at: Option<String>,
+    #[serde(default)]
+    commit_id: Option<String>,
+    user: ReviewUser,
+}
+
+#[derive(serde::Deserialize)]
+struct ReviewUser {
+    login: String,
+    #[serde(rename = "type")]
+    user_type: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct IssueCommentEntry {
+    id: u64,
+    body: String,
+    created_at: String,
+    user: ReviewUser,
+}
+
+fn parse_check_suites_response(value: serde_json::Value) -> Result<Vec<CheckSuiteSummary>> {
+    let envelope: CheckSuitesEnvelope = serde_json::from_value(value)
+        .map_err(|e| anyhow::anyhow!("Failed to parse check suites response: {e}"))?;
+    Ok(envelope
+        .check_suites
+        .into_iter()
+        .map(|suite| CheckSuiteSummary {
+            id: suite.id,
+            status: suite.status,
+            conclusion: suite.conclusion,
+            app_slug: suite.app.and_then(|app| app.slug),
+            updated_at: suite.updated_at,
+        })
+        .collect())
+}
+
+fn parse_reviews_response(value: serde_json::Value) -> Result<Vec<PullRequestReviewSummary>> {
+    let entries: Vec<ReviewEntry> = serde_json::from_value(value)
+        .map_err(|e| anyhow::anyhow!("Failed to parse reviews response: {e}"))?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| PullRequestReviewSummary {
+            id: entry.id,
+            user_login: entry.user.login,
+            user_type: entry.user.user_type,
+            state: entry.state,
+            submitted_at: entry.submitted_at,
+            commit_id: entry.commit_id,
+        })
+        .collect())
+}
+
+fn parse_issue_comments_response(value: serde_json::Value) -> Result<Vec<IssueCommentSummary>> {
+    let entries: Vec<IssueCommentEntry> = serde_json::from_value(value)
+        .map_err(|e| anyhow::anyhow!("Failed to parse issue comments response: {e}"))?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| IssueCommentSummary {
+            id: entry.id,
+            user_login: entry.user.login,
+            user_type: entry.user.user_type,
+            body: entry.body,
+            created_at: entry.created_at,
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GitHubClient;
+    use super::REST_PER_PAGE;
+    use super::parse_open_pr_ref_lookup_response;
+    use crate::models::OpenPrRefData;
+    use mockito::Matcher;
+    use serde_json::json;
+    use std::sync::Once;
+
+    fn install_rustls_provider() {
+        static INSTALL: Once = Once::new();
+        INSTALL.call_once(|| {
+            rustls::crypto::aws_lc_rs::default_provider()
+                .install_default()
+                .expect("rustls provider should install once");
+        });
+    }
+
+    fn client(base_url: String) -> GitHubClient {
+        install_rustls_provider();
+        GitHubClient::new("owner".to_string(), "repo".to_string(), None)
+            .expect("client should build")
+            .with_api_base_url(base_url)
+    }
+
+    fn check_suites_response(count: usize) -> serde_json::Value {
+        json!({
+            "check_suites": (0..count)
+                .map(|index| json!({
+                    "id": index + 1,
+                    "status": "completed",
+                    "conclusion": "success",
+                    "app": { "slug": "coderabbitai" },
+                    "updated_at": "2026-01-01T00:00:00Z"
+                }))
+                .collect::<Vec<_>>()
+        })
+    }
+
+    fn reviews_response(count: usize) -> serde_json::Value {
+        json!(
+            (0..count)
+                .map(|index| json!({
+                    "id": index + 1,
+                    "state": "COMMENTED",
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "commit_id": format!("sha-{index}"),
+                    "user": {
+                        "login": format!("coderabbit-{index}"),
+                        "type": "Bot"
+                    }
+                }))
+                .collect::<Vec<_>>()
+        )
+    }
+
+    fn issue_comments_response(count: usize) -> serde_json::Value {
+        json!(
+            (0..count)
+                .map(|index| json!({
+                    "id": index + 1,
+                    "body": format!("comment {index}"),
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "user": {
+                        "login": format!("coderabbit-{index}"),
+                        "type": "Bot"
+                    }
+                }))
+                .collect::<Vec<_>>()
+        )
+    }
+
+    #[tokio::test]
+    async fn list_check_suites_for_ref_aggregates_multiple_pages() {
+        let mut server = mockito::Server::new_async().await;
+        let page1 = server
+            .mock("GET", "/repos/owner/repo/commits/abc/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(check_suites_response(REST_PER_PAGE).to_string())
+            .create_async()
+            .await;
+        let page2 = server
+            .mock("GET", "/repos/owner/repo/commits/abc/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "2".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(check_suites_response(1).to_string())
+            .create_async()
+            .await;
+
+        let suites = client(server.url())
+            .list_check_suites_for_ref("abc")
+            .await
+            .expect("pagination should succeed");
+
+        assert_eq!(suites.len(), REST_PER_PAGE + 1);
+        page1.assert_async().await;
+        page2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn list_pull_request_reviews_aggregates_multiple_pages() {
+        let mut server = mockito::Server::new_async().await;
+        let page1 = server
+            .mock("GET", "/repos/owner/repo/pulls/7/reviews")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(reviews_response(REST_PER_PAGE).to_string())
+            .create_async()
+            .await;
+        let page2 = server
+            .mock("GET", "/repos/owner/repo/pulls/7/reviews")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "2".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(reviews_response(1).to_string())
+            .create_async()
+            .await;
+
+        let reviews = client(server.url())
+            .list_pull_request_reviews(7)
+            .await
+            .expect("pagination should succeed");
+
+        assert_eq!(reviews.len(), REST_PER_PAGE + 1);
+        assert_eq!(reviews[0].commit_id.as_deref(), Some("sha-0"));
+        page1.assert_async().await;
+        page2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn list_issue_comments_aggregates_multiple_pages() {
+        let mut server = mockito::Server::new_async().await;
+        let page1 = server
+            .mock("GET", "/repos/owner/repo/issues/9/comments")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(issue_comments_response(REST_PER_PAGE).to_string())
+            .create_async()
+            .await;
+        let page2 = server
+            .mock("GET", "/repos/owner/repo/issues/9/comments")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "2".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body(issue_comments_response(1).to_string())
+            .create_async()
+            .await;
+
+        let comments = client(server.url())
+            .list_issue_comments(9)
+            .await
+            .expect("pagination should succeed");
+
+        assert_eq!(comments.len(), REST_PER_PAGE + 1);
+        page1.assert_async().await;
+        page2.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn rest_get_reports_http_status_failures() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/repos/owner/repo/commits/missing/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(500)
+            .with_body("server error")
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .list_check_suites_for_ref("missing")
+            .await
+            .expect_err("http status failure should bubble up");
+
+        assert!(
+            err.to_string().contains("GitHub REST request failed:"),
+            "unexpected error: {err}"
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn rest_get_reports_json_parse_failures() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/repos/owner/repo/issues/9/comments")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(200)
+            .with_body("{not-json")
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .list_issue_comments(9)
+            .await
+            .expect_err("malformed json should bubble up");
+
+        assert!(
+            err.to_string().contains("GitHub REST JSON parse failed:"),
+            "unexpected error: {err}"
+        );
+        mock.assert_async().await;
+    }
+
+    #[test]
+    fn parse_open_pr_ref_lookup_response_reports_empty_nodes() {
+        let response: OpenPrRefData = serde_json::from_value(json!({
+            "repository": {
+                "pullRequests": {
+                    "nodes": []
+                }
+            }
+        }))
+        .expect("response should deserialize");
+
+        let lookup = parse_open_pr_ref_lookup_response(response);
+
+        assert!(lookup.pr.is_none());
+        assert_eq!(
+            lookup.empty_result_reason.as_deref(),
+            Some("no_open_pull_requests_matched_branch")
+        );
+    }
+
+    #[test]
+    fn parse_open_pr_ref_lookup_response_reads_inner_graphql_data_shape() {
+        let response: OpenPrRefData = serde_json::from_value(json!({
+            "repository": {
+                "pullRequests": {
+                    "nodes": [
+                        {
+                            "id": "PR_kwDOAA",
+                            "number": 258,
+                            "url": "https://github.com/allisoneer/agentic_auxilary/pull/258",
+                            "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+                            "isDraft": true
+                        }
+                    ]
+                }
+            }
+        }))
+        .expect("response should deserialize");
+
+        let lookup = parse_open_pr_ref_lookup_response(response);
+
+        assert_eq!(
+            lookup.pr,
+            Some(crate::models::PrRef {
+                number: 258,
+                url: "https://github.com/allisoneer/agentic_auxilary/pull/258".to_string(),
+                head_sha: "0123456789abcdef0123456789abcdef01234567".to_string(),
+                node_id: "PR_kwDOAA".to_string(),
+                is_draft: true,
+            })
+        );
+        assert_eq!(lookup.empty_result_reason, None);
+    }
+
+    #[tokio::test]
+    async fn get_open_pr_ref_from_branch_detailed_posts_graphql_request_with_draft_fields() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .match_body(Matcher::PartialJson(json!({
+                "variables": {
+                    "owner": "owner",
+                    "repo": "repo",
+                    "branch": "feature/eng-992"
+                }
+            })))
+            .match_body(Matcher::Regex("id".to_string()))
+            .match_body(Matcher::Regex("isDraft".to_string()))
+            .with_status(200)
+            .with_body(
+                json!({
+                    "data": {
+                        "repository": {
+                            "pullRequests": {
+                                "nodes": [
+                                    {
+                                        "id": "PR_123",
+                                        "number": 42,
+                                        "url": "https://example.invalid/pr/42",
+                                        "headRefOid": "abc123",
+                                        "isDraft": false
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                })
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let lookup = client(server.url())
+            .get_open_pr_ref_from_branch_detailed("feature/eng-992")
+            .await
+            .expect("graphql request should succeed");
+
+        assert_eq!(lookup.pr.as_ref().map(|pr| pr.number), Some(42));
+        assert_eq!(lookup.pr.as_ref().map(|pr| pr.is_draft), Some(false));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn graphql_post_fails_when_http_200_contains_errors() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .with_status(200)
+            .with_body(
+                json!({
+                    "data": {
+                        "repository": {
+                            "pullRequests": {
+                                "nodes": []
+                            }
+                        }
+                    },
+                    "errors": [
+                        { "message": "boom" },
+                        { "message": "bad news" }
+                    ]
+                })
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .get_open_pr_ref_from_branch_detailed("feature/eng-992")
+            .await
+            .expect_err("graphql errors should fail the request");
+
+        assert!(
+            err.to_string()
+                .contains("GitHub GraphQL response contained errors: boom; bad news")
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn graphql_post_fails_when_http_200_omits_data() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .with_status(200)
+            .with_body(json!({ "data": null }).to_string())
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .get_open_pr_ref_from_branch_detailed("feature/eng-992")
+            .await
+            .expect_err("missing data should fail the request");
+
+        assert!(
+            err.to_string()
+                .contains("GitHub GraphQL response missing data")
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn mark_pr_ready_for_review_posts_graphql_mutation() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/graphql")
+            .match_body(Matcher::PartialJson(json!({
+                "variables": {
+                    "pullRequestId": "PR_123"
+                }
+            })))
+            .with_status(200)
+            .with_body(
+                json!({
+                    "data": {
+                        "markPullRequestReadyForReview": {
+                            "pullRequest": {
+                                "id": "PR_123",
+                                "number": 42,
+                                "url": "https://example.invalid/pr/42",
+                                "headRefOid": "abc123",
+                                "isDraft": false
+                            }
+                        }
+                    }
+                })
+                .to_string(),
+            )
+            .create_async()
+            .await;
+
+        let pr = client(server.url())
+            .mark_pr_ready_for_review("PR_123")
+            .await
+            .expect("mutation should succeed");
+
+        assert_eq!(pr.number, 42);
+        assert!(!pr.is_draft);
+        mock.assert_async().await;
     }
 }
 

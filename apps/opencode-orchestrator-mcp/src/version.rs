@@ -93,8 +93,15 @@ pub fn resolve_launcher_config(base_dir: &Path) -> anyhow::Result<LauncherConfig
     if !launcher_args.is_empty() {
         // Launcher mode: binary is expected to be in PATH (e.g., bunx, npx)
         // Don't canonicalize - it's not a file path, it's a command
-        let binary = std::env::var(OPENCODE_BINARY_ENV)
-            .map_or_else(|_| "opencode".to_string(), |v| v.trim().to_string());
+        let binary = match std::env::var(OPENCODE_BINARY_ENV) {
+            Ok(v) => v.trim().to_string(),
+            Err(_) => {
+                return Err(anyhow!(
+                    "OPENCODE_BINARY_ARGS is set but OPENCODE_BINARY is not set.
+                     When using launcher args, set OPENCODE_BINARY to the launcher command (e.g., 'bunx')."
+                ));
+            }
+        };
 
         if binary.is_empty() {
             return Err(anyhow!(
@@ -227,6 +234,32 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("OPENCODE_BINARY is empty")
+        );
+
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+        unsafe {
+            std::env::remove_var(OPENCODE_BINARY_ENV);
+            std::env::remove_var(OPENCODE_BINARY_ARGS_ENV);
+        }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn resolve_launcher_config_errors_when_args_set_but_binary_missing() {
+        // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
+        unsafe {
+            std::env::remove_var(OPENCODE_BINARY_ENV);
+            std::env::set_var(OPENCODE_BINARY_ARGS_ENV, "opencode-ai@1.17.4");
+        }
+
+        let base = Path::new("/tmp/project");
+        let result = resolve_launcher_config(base);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("OPENCODE_BINARY_ARGS is set but OPENCODE_BINARY is not set")
         );
 
         // SAFETY: Test serialized by #[serial(env)], preventing concurrent env access.
