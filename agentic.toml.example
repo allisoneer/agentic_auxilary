@@ -149,6 +149,15 @@ base_url = "https://api.github.com"
 total_timeout_secs = 120
 # token is set via GITHUB_TOKEN environment variable (never in config)
 
+[services.discord]
+# Base URL for the Discord API
+base_url = "https://discord.com"
+# Per-request timeout in seconds (0 disables the timeout)
+request_timeout_secs = 30
+# Required env vars (never in config):
+# DISCORD_BOT_TOKEN = "..."
+# DISCORD_GUILD_ID = "..."
+
 # =============================================================================
 # Review - Reviewer session configuration
 # =============================================================================

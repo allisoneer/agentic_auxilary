@@ -29,6 +29,7 @@ compile_error!(
 
 use agentic_config::types::AnthropicServiceConfig;
 use agentic_config::types::CliToolsConfig;
+use agentic_config::types::DiscordServiceConfig;
 use agentic_config::types::ExaServiceConfig;
 use agentic_config::types::GitHubServiceConfig;
 use agentic_config::types::LinearServiceConfig;
@@ -89,6 +90,10 @@ pub struct AgenticToolsConfig {
     #[serde(default)]
     pub github: GitHubServiceConfig,
 
+    /// Discord service configuration for discord tools.
+    #[serde(default)]
+    pub discord: DiscordServiceConfig,
+
     /// Review tools configuration.
     #[serde(default)]
     pub review: ReviewConfig,
@@ -128,6 +133,8 @@ const LINEAR_NAMES: &[&str] = &[
     "linear_set_relation",
     "linear_get_metadata",
 ];
+
+const DISCORD_NAMES: &[&str] = &["discord_search_messages"];
 
 const GPT5_NAMES: &[&str] = &["ask_reasoning_model"];
 
@@ -210,6 +217,14 @@ impl AgenticTools {
             regs.push(linear_tools::build_registry(linear));
         }
 
+        // discord-tools (1 tool)
+        if domain_wanted(DISCORD_NAMES) {
+            let discord = Arc::new(discord_tools::DiscordTools::with_config(
+                config.discord.clone(),
+            ));
+            regs.push(discord_tools::build_registry(discord));
+        }
+
         // gpt5_reasoner (1 tool)
         if domain_wanted(GPT5_NAMES) {
             regs.push(gpt5_reasoner::build_registry(config.reasoning.clone()));
@@ -262,6 +277,7 @@ impl AgenticTools {
         CODING_NAMES.len()
             + PR_COMMENTS_NAMES.len()
             + LINEAR_NAMES.len()
+            + DISCORD_NAMES.len()
             + GPT5_NAMES.len()
             + THOUGHTS_NAMES.len()
             + WEB_NAMES.len()
@@ -299,8 +315,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn total_tool_count_is_30() {
-        assert_eq!(AgenticTools::total_tool_count(), 34);
+    fn total_tool_count_is_35() {
+        assert_eq!(AgenticTools::total_tool_count(), 35);
     }
 
     #[test]
@@ -359,6 +375,10 @@ mod tests {
         assert!(
             reg.contains("linear_search_issues"),
             "missing linear_search_issues from linear_tools"
+        );
+        assert!(
+            reg.contains("discord_search_messages"),
+            "missing discord_search_messages from discord-tools"
         );
         assert!(
             reg.contains("ask_reasoning_model"),
@@ -468,6 +488,19 @@ mod tests {
         );
         assert!(!reg.contains("linear_search_issues"));
         assert!(!reg.contains("linear_read_issue"));
+    }
+
+    #[test]
+    fn allowlist_discord_search_only() {
+        let mut set = HashSet::new();
+        set.insert("discord_search_messages".to_string());
+        let reg = AgenticTools::new(AgenticToolsConfig {
+            allowlist: Some(set),
+            ..Default::default()
+        });
+
+        assert_eq!(reg.len(), 1);
+        assert!(reg.contains("discord_search_messages"));
     }
 
     #[test]

@@ -19,6 +19,7 @@
     "tools_ask_*": true,
     "tools_thoughts_*": true,
     "tools_gh_*": true,
+    "tools_discord_*": false,
     "tools_review_*": false
   },
   "agent": {
@@ -159,6 +160,12 @@
       "description": "Linear issue-management session for reading, searching, updating, commenting on, and creating Linear work items.",
       "permission": {
         "tools_linear_*": "allow"
+      }
+    },
+    "Discord": {
+      "description": "Discord message-search session for the configured Discord server (bot-scoped visibility).",
+      "permission": {
+        "tools_discord_*": "allow"
       }
     },
     "build": {
