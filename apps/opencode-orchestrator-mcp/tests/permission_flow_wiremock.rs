@@ -14,7 +14,6 @@ mod support;
 
 use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
-use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::tools::RespondPermissionTool;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
@@ -36,6 +35,7 @@ use support::SwitchAfterCallsResponder;
 use support::messages_fixture;
 use support::permission_fixture;
 use support::session_fixture;
+use support::short_timeout_test_orchestrator_server;
 use support::status_v2_busy;
 use support::status_v2_idle;
 use support::status_v2_retry;
@@ -495,31 +495,9 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
 #[tokio::test]
 async fn it_bug4_command_dispatch_transport_error_does_not_retry_without_start_evidence() {
     let mock = MockServer::start().await;
-    let base_url = mock.uri().trim_end_matches('/').to_string();
-    let client = opencode_rs::ClientBuilder::new()
-        .base_url(&base_url)
-        .directory("/tmp".to_string())
-        .timeout_secs(1)
-        .build()
-        .unwrap();
-    let server = Arc::new(OrchestratorServerHandle::from_server_unshared(
-        opencode_orchestrator_mcp::server::OrchestratorServer::from_client_unshared(
-            client,
-            &base_url,
-            opencode_orchestrator_mcp::server::RecoveryMode::External,
-        ),
-    ));
+    let server = short_timeout_test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "s4";
-
-    Mock::given(method("GET"))
-        .and(path("/global/health"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "healthy": true,
-            "version": "test",
-        })))
-        .mount(&mock)
-        .await;
 
     // GET /session/s4
     Mock::given(method("GET"))

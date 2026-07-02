@@ -86,7 +86,6 @@ enum PermissionPreflightMode {
 #[derive(Debug, Clone)]
 struct CommandTranscriptWindow {
     command_message_id: String,
-    baseline_tail_message_id: Option<String>,
 }
 
 fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
@@ -155,18 +154,9 @@ fn transcript_indicates_command_dispatch(
     messages: &[Message],
     transcript_window: &CommandTranscriptWindow,
 ) -> bool {
-    if messages
+    messages
         .iter()
         .any(|message| message.id() == transcript_window.command_message_id)
-    {
-        return true;
-    }
-
-    transcript_window
-        .baseline_tail_message_id
-        .as_ref()
-        .and_then(|baseline| messages.iter().position(|message| message.id() == baseline))
-        .is_some_and(|index| index + 1 < messages.len())
 }
 
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
@@ -631,16 +621,8 @@ impl OrchestratorRunTool {
             command_name_for_logging = Some(command.clone());
 
             let command_message_id = make_command_message_id(&session_id);
-            // Keep transcript usage narrowly scoped to transport-error start-evidence checks.
-            let baseline_tail_message_id = client
-                .messages()
-                .list(&session_id)
-                .await
-                .ok()
-                .and_then(|messages| messages.last().map(|message| message.id().to_string()));
             command_transcript_window = Some(CommandTranscriptWindow {
                 command_message_id: command_message_id.clone(),
-                baseline_tail_message_id,
             });
 
             let cmd_client = client.clone();

@@ -8,9 +8,6 @@ use agentic_tools_core::Tool;
 use agentic_tools_core::ToolContext;
 use agentic_tools_core::ToolError;
 use opencode_orchestrator_mcp::config::OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS;
-use opencode_orchestrator_mcp::server::OrchestratorServer;
-use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
-use opencode_orchestrator_mcp::server::RecoveryMode;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::tools::RespondPermissionTool;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
@@ -39,6 +36,7 @@ use support::permission_fixture;
 use support::permission_fixture_with_metadata;
 use support::permission_patch_file_array_bad_request_fixture;
 use support::session_fixture;
+use support::short_timeout_test_orchestrator_server;
 use support::status_v2_busy;
 use support::status_v2_idle;
 use support::test_orchestrator_server;
@@ -47,29 +45,6 @@ static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 async fn env_lock() -> tokio::sync::MutexGuard<'static, ()> {
     ENV_LOCK.get_or_init(|| Mutex::new(())).lock().await
-}
-
-async fn short_timeout_server(mock: &MockServer) -> Arc<OrchestratorServerHandle> {
-    Mock::given(method("GET"))
-        .and(path("/global/health"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "healthy": true,
-            "version": "test",
-        })))
-        .mount(mock)
-        .await;
-
-    let base_url = mock.uri().trim_end_matches('/').to_string();
-    let client = opencode_rs::ClientBuilder::new()
-        .base_url(&base_url)
-        .directory("/tmp".to_string())
-        .timeout_secs(1)
-        .build()
-        .expect("short-timeout test client should build");
-
-    Arc::new(OrchestratorServerHandle::from_server_unshared(
-        OrchestratorServer::from_client_unshared(client, &base_url, RecoveryMode::External),
-    ))
 }
 
 struct EnvVarGuard(&'static str);
@@ -134,8 +109,9 @@ async fn assert_command_dispatch_invalid_input(status: u16, body: serde_json::Va
         .mount(&mock)
         .await;
 
-    let err = tool
-        .call(
+    let err = timeout(
+        Duration::from_secs(5),
+        tool.call(
             OrchestratorRunInput {
                 session_id: Some(sid.clone()),
                 command: Some("implement_plan".into()),
@@ -144,9 +120,11 @@ async fn assert_command_dispatch_invalid_input(status: u16, body: serde_json::Va
                 wait_for_activity: None,
             },
             &ToolContext::default(),
-        )
-        .await
-        .expect_err("400/404 command dispatch should be invalid input");
+        ),
+    )
+    .await
+    .expect("invalid command dispatch regression should not hang")
+    .expect_err("400/404 command dispatch should be invalid input");
 
     match err {
         ToolError::InvalidInput(message) => {
@@ -748,7 +726,7 @@ async fn command_transport_error_after_start_evidence_warns_and_completes() {
     unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
 
     let mock = MockServer::start().await;
-    let server = short_timeout_server(&mock).await;
+    let server = short_timeout_test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "command-transport-post-start";
 
@@ -875,7 +853,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
     unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
 
     let mock = MockServer::start().await;
-    let server = short_timeout_server(&mock).await;
+    let server = short_timeout_test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let sid = "command-transport-pre-start";
 
@@ -960,6 +938,19 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
         }
         other => panic!("expected internal dispatch failure, got {other:?}"),
     }
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    let command_posts = requests
+        .iter()
+        .filter(|request| request.url.path() == format!("/session/{sid}/command"))
+        .count();
+    assert_eq!(
+        command_posts, 1,
+        "transport ambiguity must not trigger command retry"
+    );
 }
 
 #[tokio::test]

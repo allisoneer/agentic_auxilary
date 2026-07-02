@@ -63,6 +63,33 @@ pub async fn test_orchestrator_server_with_config(
     ))
 }
 
+/// Build an `OrchestratorServerHandle` connected to a wiremock `MockServer`
+/// with a one-second client timeout for transport-failure tests.
+pub async fn short_timeout_test_orchestrator_server(
+    mock: &MockServer,
+) -> Arc<OrchestratorServerHandle> {
+    Mock::given(method("GET"))
+        .and(path("/global/health"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "healthy": true,
+            "version": "test",
+        })))
+        .mount(mock)
+        .await;
+
+    let base_url = mock.uri().trim_end_matches('/').to_string();
+    let client = opencode_rs::ClientBuilder::new()
+        .base_url(&base_url)
+        .directory("/tmp".to_string())
+        .timeout_secs(1)
+        .build()
+        .unwrap();
+
+    Arc::new(OrchestratorServerHandle::from_server_unshared(
+        OrchestratorServer::from_client_unshared(client, &base_url, RecoveryMode::External),
+    ))
+}
+
 /// Respond with different responses in sequence; after exhausting, repeat last.
 ///
 /// This is useful for simulating scenarios like:
