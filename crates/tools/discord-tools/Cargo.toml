@@ -3,7 +3,7 @@ name = "discord-tools"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Discord search tools for agentic-mcp (ENG-392)"
+description = "Discord search tools for agentic-mcp"
 repository = "https://github.com/allisoneer/agentic_auxilary"
 
 [package.metadata.repo]
