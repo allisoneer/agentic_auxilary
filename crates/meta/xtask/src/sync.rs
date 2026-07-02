@@ -53,6 +53,11 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     // mise.toml
     eprintln!("[sync] Syncing mise.toml...");
     let mise_changed = mise::sync_mise(mise::MISE_PATH, &metadata, dry_run, check)?;
+    if mise_changed {
+        eprintln!(
+            "[sync] NOTE: mise.lock is not updated by xtask. After GitHub Releases finish, run:\n[sync]   MISE_LOCKED=0 mise lock\n[sync] then commit the updated mise.lock."
+        );
+    }
 
     // README.md
     eprintln!("[sync] Syncing README.md...");
