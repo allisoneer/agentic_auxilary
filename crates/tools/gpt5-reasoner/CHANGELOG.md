@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.12.0] - 2026-07-02
+
+### 🐛 Bug Fixes
+- *(gpt5_reasoner)* Fail fast on oversized corpora
+- Address pr 265 review fixes and macos preflight
+- *(gpt5_reasoner)* Remove duplicated corpus limit error literals
 ## [0.11.6] - 2026-06-18
 
 ### ⚙️  Miscellaneous

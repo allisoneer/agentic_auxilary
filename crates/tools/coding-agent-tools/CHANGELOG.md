@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.5.4] - 2026-07-02
+
+### 🐛 Bug Fixes
+- *(coding_agent_tools)* Add ignored-path search escape hatch
+- Address pr 265 review fixes and macos preflight
 ## [0.5.3] - 2026-06-18
 
 ### ⚙️  Miscellaneous
