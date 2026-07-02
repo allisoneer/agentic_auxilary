@@ -1,0 +1,27 @@
+crates/tools/coding-agent-tools/src/just/execute_pager.rs
+  s_5e7bc5358e69ad::t_e5d4a3ced7b51d 40-43
+  s_5e7bc5358e69ad::t_213238caecf961 84-85,87-88,90,201
+  s_5e7bc5358e69ad::t_917fcea41bb0ba 149,197-200,202-219
+crates/tools/coding-agent-tools/src/lib.rs
+  s_5e7bc5358e69ad::t_65bf1802e54296 983-984
+  s_5e7bc5358e69ad::t_057e7dcfffe7cc 1740-1751
+  s_5e7bc5358e69ad::t_e098096543a545 1752
+  s_5e7bc5358e69ad::t_ee2c5fdef92c7f 979
+  s_5e7bc5358e69ad::t_04f3b9dfa10d93 1683-1739,1753-1769
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "104a365c868d0bfe51d47aef7ec3c2635ddbe66d",
+  "prompts": {},
+  "sessions": {
+    "s_5e7bc5358e69ad": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0dc52b93affe7L3Ie34W5HtKHZ",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
