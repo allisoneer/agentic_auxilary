@@ -159,7 +159,6 @@ fn normalize_value(value: &Value) -> Result<Value, String> {
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -214,7 +213,7 @@ mod tests {
             Some(&args_a),
             ExecuteOutputMode::Minimal,
         )
-        .unwrap();
+        .unwrap_or_else(|err| panic!("key_a serialization failed: {err}"));
         let key_b = make_execute_key(
             "/repo",
             "check",
@@ -222,7 +221,7 @@ mod tests {
             Some(&args_b),
             ExecuteOutputMode::Minimal,
         )
-        .unwrap();
+        .unwrap_or_else(|err| panic!("key_b serialization failed: {err}"));
         assert_eq!(key_a, key_b);
     }
 
@@ -235,7 +234,7 @@ mod tests {
             None,
             ExecuteOutputMode::Minimal,
         )
-        .unwrap();
+        .unwrap_or_else(|err| panic!("key_a serialization failed: {err}"));
         let key_b = make_execute_key(
             "/repo",
             "c",
@@ -243,7 +242,7 @@ mod tests {
             None,
             ExecuteOutputMode::Minimal,
         )
-        .unwrap();
+        .unwrap_or_else(|err| panic!("key_b serialization failed: {err}"));
 
         assert_ne!(key_a, key_b);
     }
@@ -263,10 +262,10 @@ mod tests {
 
     #[test]
     fn make_execute_key_includes_output_mode() {
-        let minimal =
-            make_execute_key("/repo", "check", "/repo", None, ExecuteOutputMode::Minimal).unwrap();
-        let normal =
-            make_execute_key("/repo", "check", "/repo", None, ExecuteOutputMode::Normal).unwrap();
+        let minimal = make_execute_key("/repo", "check", "/repo", None, ExecuteOutputMode::Minimal)
+            .unwrap_or_else(|err| panic!("minimal key serialization failed: {err}"));
+        let normal = make_execute_key("/repo", "check", "/repo", None, ExecuteOutputMode::Normal)
+            .unwrap_or_else(|err| panic!("normal key serialization failed: {err}"));
 
         assert_ne!(minimal, normal);
     }
@@ -276,7 +275,10 @@ mod tests {
         let single_flight = Arc::new(SingleFlight::new());
         let poison_target = Arc::clone(&single_flight);
         let _ = thread::spawn(move || {
-            let _guard = poison_target.map.lock().unwrap();
+            let _guard = poison_target
+                .map
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             panic!("poison single-flight outer mutex");
         })
         .join();
