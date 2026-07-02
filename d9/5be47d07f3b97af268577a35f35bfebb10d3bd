@@ -1,0 +1,52 @@
+crates/tools/coding-agent-tools/src/just/types.rs
+  s_759f4a61ebef30::t_b4d915a5489cac 28-30,99-100,121-126,182,201,210-224
+  s_759f4a61ebef30::t_4adc73b522f1dd 225
+crates/tools/coding-agent-tools/src/logging.rs
+  s_759f4a61ebef30::t_73884b89007d10 320,327,336,342
+crates/tools/coding-agent-tools/src/just/exec.rs
+  s_759f4a61ebef30::t_b4d915a5489cac 214
+  s_759f4a61ebef30::t_1821089593f467 137
+  s_759f4a61ebef30::t_0d854c1825c11f 602-609,612,614-649
+  s_759f4a61ebef30::t_2a61daf8200baf 610-611
+  s_759f4a61ebef30::t_25d42eb89db073 613
+crates/tools/coding-agent-tools/src/just/execute_pager.rs
+  s_759f4a61ebef30::t_908a5d5e69de82 82,104,108
+  s_759f4a61ebef30::t_76121b6779354c 149-158,168-169,176
+  s_759f4a61ebef30::t_7fe1f043dffda9 1-81,83-103,105-107,109-148,159-167,170-175,177-190,193-195
+  s_759f4a61ebef30::t_edde8d2050c916 191-192
+crates/tools/coding-agent-tools/src/tools.rs
+  s_759f4a61ebef30::t_b4d915a5489cac 405-407,426,437
+crates/tools/coding-agent-tools/src/just/mod.rs
+  s_759f4a61ebef30::t_98ccdd26002ad3 8
+crates/tools/coding-agent-tools/src/lib.rs
+  s_759f4a61ebef30::t_790c0e69bc19eb 1143,1145,1147-1156,1509-1543,1545-1568,1571-1572,1575-1675,1680-1681
+  s_759f4a61ebef30::t_5a133172af8031 959-965,967-970
+  s_759f4a61ebef30::t_29c4fc52388e90 1024-1025,1071-1074,1398,1428
+  s_759f4a61ebef30::t_6099decce5b3b6 167-170,191-192
+  s_759f4a61ebef30::t_3cead089089838 912,921,951-954,956-958,971-1006,1008,1010-1023,1026-1065,1068-1070,1075-1095,1097-1105,1107-1108
+  s_759f4a61ebef30::t_1baac1dff4aacb 22,947-949
+  s_759f4a61ebef30::t_0686d4b3e96083 1066
+  s_759f4a61ebef30::t_0c023e26cf8fe4 1144,1494-1498,1569-1570,1573-1574,1676-1679
+  s_759f4a61ebef30::t_181947a9c0c7f7 1392-1397,1422-1427,1453
+  s_759f4a61ebef30::t_76121b6779354c 1157-1166,1544
+  s_759f4a61ebef30::t_0f65d10481e776 1146
+  s_759f4a61ebef30::t_6fe02c16d16eb0 132,149,784,824,1067
+tools/agent-wrap.sh
+  s_759f4a61ebef30::t_1c4a79bf658784 12-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "d95be47d07f3b97af268577a35f35bfebb10d3bd",
+  "prompts": {},
+  "sessions": {
+    "s_759f4a61ebef30": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0dca91701ffeHf7H9RdXxm1lMn",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
