@@ -53,6 +53,7 @@ Canonical repository guidance for AI-assisted work in this repository. Keep repo
 - `pr_comments` (tool-lib) - `crates/tools/pr-comments/`
 - `thoughts-bin` (app) - `apps/thoughts/`
 - `coding_agent_tools` (tool-lib) - `crates/tools/coding-agent-tools/`
+- `discord-tools` (tool-lib) - `crates/tools/discord-tools/`
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `review_tools` (tool-lib) - `crates/tools/review-tools/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`

@@ -73,6 +73,7 @@ mod tests {
         let services_properties = &json["$defs"]["ServicesConfig"]["properties"];
         assert!(services_properties.get("linear").is_some());
         assert!(services_properties.get("github").is_some());
+        assert!(services_properties.get("discord").is_some());
 
         let review_properties = &json["$defs"]["ReviewConfig"]["properties"];
         assert!(review_properties.get("run_timeout_secs").is_some());

@@ -147,6 +147,12 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         "services.github.base_url.invalid",
         &mut warnings,
     );
+    validate_url(
+        &cfg.services.discord.base_url,
+        "services.discord.base_url",
+        "services.discord.base_url.invalid",
+        &mut warnings,
+    );
 
     // Validate log level
     let valid_levels = ["trace", "debug", "info", "warn", "error"];
@@ -367,6 +373,13 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         5,
         "services.github.total_timeout_secs",
         "services.github.total_timeout_secs.suspicious",
+        &mut warnings,
+    );
+    validate_low_nonzero_timeout(
+        cfg.services.discord.request_timeout_secs,
+        5,
+        "services.discord.request_timeout_secs",
+        "services.discord.request_timeout_secs.suspicious",
         &mut warnings,
     );
     validate_low_nonzero_timeout(
@@ -633,6 +646,7 @@ mod tests {
         let mut config = AgenticConfig::default();
         config.services.linear.base_url = "linear".into();
         config.services.github.base_url = "github".into();
+        config.services.discord.base_url = "discord".into();
 
         let warnings = validate(&config);
         assert!(
@@ -644,6 +658,11 @@ mod tests {
             warnings
                 .iter()
                 .any(|w| w.code == "services.github.base_url.invalid")
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == "services.discord.base_url.invalid")
         );
     }
 
@@ -963,6 +982,7 @@ token_limit = 12345
         config.cli_tools.just_search_timeout_secs = 1;
         config.services.linear.request_timeout_secs = 1;
         config.services.github.total_timeout_secs = 1;
+        config.services.discord.request_timeout_secs = 1;
         config.review.run_timeout_secs = 1;
         config.thoughts.add_reference_timeout_secs = 1;
 
@@ -973,6 +993,7 @@ token_limit = 12345
             "cli_tools.just_search_timeout_secs.suspicious",
             "services.linear.request_timeout_secs.suspicious",
             "services.github.total_timeout_secs.suspicious",
+            "services.discord.request_timeout_secs.suspicious",
             "review.run_timeout_secs.suspicious",
             "thoughts.add_reference_timeout_secs.suspicious",
         ] {

@@ -185,6 +185,13 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "discord-tools"
+changelog_path = "crates/tools/discord-tools/CHANGELOG.md"
+git_tag_name = "discord-tools-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
 name = "gpt5_reasoner"
 changelog_path = "crates/tools/gpt5-reasoner/CHANGELOG.md"
 git_tag_name = "gpt5_reasoner-v{{ version }}"

@@ -41,16 +41,18 @@ Inside of normal we have a handful of tools, most are custom, and pluggable into
 
 ### Agent Variants
 
-| NORMAL (19)   | NORMAL_OPENAI (19) | BASH (20)     | LINEAR (28)   | PLAYWRIGHT (41)       | REVIEW (9)            |
-|---------------|--------------------|---------------|---------------|-----------------------|-----------------------|
-| File ops      | File ops           | File ops      | File ops      | File ops              | Read only             |
-| Search        | Search             | Search        | Search        | Search                | Search (cli_*)        |
-| Tasks         | Tasks              | Tasks         | Tasks         | Tasks                 |                       |
-| Just runner   | Just runner        | Just runner   | Just runner   | Just runner           | Just runner (limited) |
-| Thoughts      | Thoughts           | Thoughts      | Thoughts      | Thoughts              | Thoughts (write only) |
-| GitHub PRs    | GitHub PRs         | GitHub PRs    | GitHub PRs    | GitHub PRs            |                       |
-| Sub-agents    | Sub-agents         | Sub-agents    | Sub-agents    | Sub-agents            | Reasoning model       |
-|               | GPT-5.4-oriented commands | + mcp_bash (shell) | + 9 Linear tools | + 22 Browser automation | + review_* tools |
+- Discord — Discord message search session (`tools_discord_*`)
+
+| NORMAL (19)   | NORMAL_OPENAI (19) | BASH (20)     | LINEAR (28)   | DISCORD (20)                | PLAYWRIGHT (41)       | REVIEW (9)            |
+|---------------|--------------------|---------------|---------------|-----------------------------|-----------------------|-----------------------|
+| File ops      | File ops           | File ops      | File ops      | File ops                    | File ops              | Read only             |
+| Search        | Search             | Search        | Search        | Search                      | Search                | Search (cli_*)        |
+| Tasks         | Tasks              | Tasks         | Tasks         | Tasks                       | Tasks                 |                       |
+| Just runner   | Just runner        | Just runner   | Just runner   | Just runner                 | Just runner           | Just runner (limited) |
+| Thoughts      | Thoughts           | Thoughts      | Thoughts      | Thoughts                    | Thoughts              | Thoughts (write only) |
+| GitHub PRs    | GitHub PRs         | GitHub PRs    | GitHub PRs    | GitHub PRs                  | GitHub PRs            |                       |
+| Sub-agents    | Sub-agents         | Sub-agents    | Sub-agents    | Sub-agents                  | Sub-agents            | Reasoning model       |
+|               | GPT-5.4-oriented commands | + mcp_bash (shell) | + 9 Linear tools | + 1 Discord tool (`tools_discord_*`) | + 22 Browser automation | + review_* tools |
 
 ### Commands Using Each
 
@@ -65,6 +67,7 @@ NORMAL_OPENAI:
             unwind_openai, decide_findings_openai, frame_openai
 BASH:       bash, commit, describe_pr
 LINEAR:     linear
+DISCORD:    discord
 PLAYWRIGHT: playwright
 REVIEW:     review
 ```
