@@ -1,0 +1,28 @@
+crates/tools/discord-tools/tests/integration.rs
+  s_6dda9f5024efd7::t_2577e57bf8ad0d 1-2,9,58-60,74-75,88-89,107-109,122-123,141-143,158-159,181-183,196-197,216-218,233-234,251-253,266-267,281-282,299-301,314-315,329-330
+  s_6dda9f5024efd7::t_c788221d788cb7 57,61-73,76-87,90-103
+  s_6dda9f5024efd7::t_5db7c06ac9a72d 55-56
+workflow.md
+  s_6dda9f5024efd7::t_1665eb1f25b7e0 46-55
+crates/tools/discord-tools/src/lib.rs
+  s_6dda9f5024efd7::t_966fec921827a6 8,10,49-54,79-82,101,124-143
+  s_6dda9f5024efd7::t_f381888f70ed76 144
+crates/tools/discord-tools/tests/support.rs
+  s_6dda9f5024efd7::t_2577e57bf8ad0d 1-13,51-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "eb0eb9b24ef7e4e156900b3aac0c19f5aa4d9e7b",
+  "prompts": {},
+  "sessions": {
+    "s_6dda9f5024efd7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0df7f7060ffefFqjcVsUOfpJST",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
