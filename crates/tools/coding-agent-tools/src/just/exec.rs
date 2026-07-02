@@ -134,6 +134,7 @@ pub async fn execute_recipe(
     let mut child = Command::new("just")
         .args(&argv)
         .current_dir(&chosen_dir)
+        .env("AGENTIC_WRAP_PASSTHROUGH", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
@@ -210,6 +211,7 @@ pub async fn execute_recipe(
         exit_code: status.code(),
         stdout: String::from_utf8_lossy(&stdout).to_string(),
         stderr: String::from_utf8_lossy(&stderr).to_string(),
+        has_more: false,
     })
 }
 
@@ -596,5 +598,53 @@ mod tests {
 
         assert!(result.success);
         assert!(result.stdout.contains("done"));
+    }
+
+    #[tokio::test]
+    async fn wrapper_passthrough_env_disables_truncation() {
+        skip_if_just_unavailable!();
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let tools_dir = root.join("tools");
+        let wrapper_src =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tools/agent-wrap.sh");
+        fs::create_dir_all(&tools_dir).unwrap();
+        fs::copy(&wrapper_src, tools_dir.join("agent-wrap.sh")).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mut perms = fs::metadata(tools_dir.join("agent-wrap.sh"))
+                .unwrap()
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(tools_dir.join("agent-wrap.sh"), perms).unwrap();
+        }
+
+        fs::write(
+            root.join("justfile"),
+            "noisy:\n    OUTPUT_MODE=minimal ./tools/agent-wrap.sh bash -c 'seq 1 120; exit 1'",
+        )
+        .unwrap();
+
+        let registry = JustRegistry::new();
+        let output = execute_recipe(
+            &registry,
+            "noisy",
+            None,
+            None,
+            root.to_str().unwrap(),
+            0,
+            &ToolContext::default(),
+        )
+        .await
+        .unwrap();
+
+        assert!(!output.success);
+        assert!(output.stdout.contains("1\n2\n3\n"));
+        assert!(output.stdout.contains("118\n119\n120\n"));
+        assert!(!output.stdout.contains("[Showing last"));
     }
 }

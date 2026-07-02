@@ -19,6 +19,7 @@ pub use tools::build_registry;
 use agentic_config::types::CliToolsConfig;
 use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::ToolError;
+use agentic_tools_utils::pagination::paginate_slice;
 use claudecode::types::Result as ClaudeResult;
 use std::future::Future;
 use std::sync::Arc;
@@ -128,6 +129,7 @@ async fn wait_for_just_result_with_timeout<T, F>(
     ctx: &agentic_tools_core::ToolContext,
     fut: F,
     timeout_secs: u64,
+    operation: &str,
 ) -> Result<T, ToolError>
 where
     F: Future<Output = Result<T, String>>,
@@ -144,7 +146,7 @@ where
         result = tokio::time::timeout(Duration::from_secs(timeout_secs), fut) => {
             match result {
                 Ok(result) => result.map_err(ToolError::Internal),
-                Err(_) => Err(ToolError::Internal(format!("Just search timed out after {timeout_secs}s"))),
+                Err(_) => Err(ToolError::Internal(format!("{operation} timed out after {timeout_secs}s"))),
             }
         }
     }
@@ -162,6 +164,10 @@ pub struct CodingAgentTools {
     just_registry: Arc<just::JustRegistry>,
     /// Pagination cache for just search results
     just_pager: Arc<just::pager::PaginationCache>,
+    /// Pagination cache for just execute transcript pages
+    just_execute_pager: Arc<just::execute_pager::ExecuteTranscriptCache>,
+    /// Single-flight locks for just execute transcript state
+    just_execute_singleflight: Arc<just::execute_pager::SingleFlight>,
 }
 
 impl Default for CodingAgentTools {
@@ -182,6 +188,8 @@ impl CodingAgentTools {
             pager: Arc::new(pagination::PaginationCache::new()),
             just_registry: Arc::new(just::JustRegistry::new()),
             just_pager: Arc::new(just::pager::PaginationCache::new()),
+            just_execute_pager: Arc::new(just::execute_pager::ExecuteTranscriptCache::new()),
+            just_execute_singleflight: Arc::new(just::execute_pager::SingleFlight::new()),
         }
     }
 }
@@ -773,6 +781,7 @@ impl CodingAgentTools {
             ctx,
             just::ensure_just_available(),
             self.cli_tools.just_search_timeout_secs,
+            "Just search",
         )
         .await
         {
@@ -812,6 +821,7 @@ impl CodingAgentTools {
                 ctx,
                 self.just_registry.get_all_recipes(&repo_root),
                 self.cli_tools.just_search_timeout_secs,
+                "Just search",
             )
             .await
             {
@@ -899,6 +909,7 @@ impl CodingAgentTools {
         recipe: String,
         dir: Option<String>,
         args: Option<std::collections::HashMap<String, serde_json::Value>>,
+        rerun: bool,
         ctx: &agentic_tools_core::ToolContext,
     ) -> Result<just::ExecuteOutput, ToolError> {
         // Start logging context
@@ -907,6 +918,7 @@ impl CodingAgentTools {
             "recipe": &recipe,
             "dir": &dir,
             "args": &args,
+            "rerun": rerun,
             "timeout_secs": self.cli_tools.just_execute_timeout_secs,
         });
 
@@ -932,45 +944,168 @@ impl CodingAgentTools {
             }
         };
 
-        match just::exec::execute_recipe(
-            &self.just_registry,
-            &recipe,
-            dir,
-            args,
-            &repo_root,
-            self.cli_tools.just_execute_timeout_secs,
-            ctx,
-        )
-        .await
+        let chosen_dir = match self
+            .resolve_just_execute_dir(&recipe, dir.as_ref(), &repo_root, ctx)
+            .await
         {
-            Ok(output) => {
-                let summary = serde_json::json!({
-                    "exit_code": output.exit_code,
-                    "stdout_lines": output.stdout.lines().count(),
-                    "stderr_lines": output.stderr.lines().count(),
-                });
-                log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
-                Ok(output)
-            }
+            Ok(dir) => dir,
             Err(e) => {
-                if ctx.is_cancelled() {
-                    log_ctx.finish(req_json, None, false, Some(e), None, None, None);
-                    return Err(ToolError::cancelled(None));
-                }
-
-                let error_msg = e;
-                log_ctx.finish(
-                    req_json,
-                    None,
-                    false,
-                    Some(error_msg.clone()),
-                    None,
-                    None,
-                    None,
-                );
-                Err(ToolError::Internal(error_msg))
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
+                return Err(e);
             }
+        };
+
+        self.just_execute_pager.sweep_expired();
+        let key = match just::execute_pager::make_execute_key(
+            &repo_root,
+            &recipe,
+            &chosen_dir,
+            args.as_ref(),
+        ) {
+            Ok(key) => key,
+            Err(e) => {
+                log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
+                return Err(ToolError::Internal(e));
+            }
+        };
+        let qlock = self.just_execute_pager.get_or_create(&key);
+        let flight = self.just_execute_singleflight.get_or_create(&key);
+        let _guard = tokio::select! {
+            () = ctx.cancelled() => {
+                log_ctx.finish(req_json, None, false, Some("Request cancelled".into()), None, None, None);
+                return Err(ToolError::cancelled(None));
+            }
+            guard = flight.lock() => guard,
+        };
+
+        let needs_refresh = {
+            let state = qlock.lock_state();
+            rerun || state.is_empty() || state.is_expired()
+        };
+
+        if needs_refresh {
+            let output = match just::exec::execute_recipe(
+                &self.just_registry,
+                &recipe,
+                Some(chosen_dir.clone()),
+                args.clone(),
+                &repo_root,
+                self.cli_tools.just_execute_timeout_secs,
+                ctx,
+            )
+            .await
+            {
+                Ok(output) => output,
+                Err(e) => {
+                    if ctx.is_cancelled() {
+                        log_ctx.finish(req_json, None, false, Some(e), None, None, None);
+                        return Err(ToolError::cancelled(None));
+                    }
+
+                    log_ctx.finish(req_json, None, false, Some(e.clone()), None, None, None);
+                    return Err(ToolError::Internal(e));
+                }
+            };
+
+            let pages = just::execute_pager::build_pages(&output.stdout, &output.stderr);
+            let meta = just::execute_pager::ExecuteMeta {
+                dir: output.dir,
+                recipe: output.recipe,
+                success: output.success,
+                exit_code: output.exit_code,
+            };
+
+            let mut state = qlock.lock_state();
+            state.reset(pages, meta, 1);
         }
+
+        let (page, has_more, meta) = {
+            let mut state = qlock.lock_state();
+            let (page, has_more) =
+                paginate_slice(&state.results, state.next_offset, state.page_size);
+            state.next_offset = state.next_offset.saturating_add(page.len());
+            let page = page.into_iter().next().unwrap_or_default();
+            (page, has_more, state.meta.clone())
+        };
+
+        if !has_more {
+            self.just_execute_pager.remove_if_same(&key, &qlock);
+            self.just_execute_singleflight.remove_if_same(&key, &flight);
+        }
+
+        let output = just::ExecuteOutput {
+            dir: meta.dir,
+            recipe: meta.recipe,
+            success: meta.success,
+            exit_code: meta.exit_code,
+            stdout: page.stdout,
+            stderr: page.stderr,
+            has_more,
+        };
+
+        let summary = serde_json::json!({
+            "exit_code": output.exit_code,
+            "stdout_lines": output.stdout.lines().count(),
+            "stderr_lines": output.stderr.lines().count(),
+            "has_more": output.has_more,
+        });
+        log_ctx.finish(req_json, None, true, None, Some(summary), None, None);
+        Ok(output)
+    }
+
+    async fn resolve_just_execute_dir(
+        &self,
+        recipe: &str,
+        dir: Option<&String>,
+        repo_root: &str,
+        ctx: &agentic_tools_core::ToolContext,
+    ) -> Result<String, ToolError> {
+        let all = wait_for_just_result_with_timeout(
+            ctx,
+            self.just_registry.get_all_recipes(repo_root),
+            self.cli_tools.just_execute_timeout_secs,
+            "Just execute",
+        )
+        .await?;
+
+        let dir_filter = dir
+            .map(|dir| paths::to_abs_string(dir))
+            .transpose()
+            .map_err(ToolError::Internal)?;
+        let mut candidates: Vec<_> = all
+            .into_iter()
+            .filter(|(_, r)| r.name == recipe && !r.is_private && !r.is_mcp_hidden)
+            .collect();
+
+        if let Some(dir_filter) = dir_filter.as_ref() {
+            candidates.retain(|(candidate_dir, _)| candidate_dir == dir_filter);
+        }
+
+        if candidates.is_empty() {
+            return Err(ToolError::Internal(format!(
+                "Recipe '{recipe}' not found or not exposed. Use just_search(query='{recipe}') to discover available recipes."
+            )));
+        }
+
+        let unique_dirs: std::collections::HashSet<_> =
+            candidates.iter().map(|(dir, _)| dir.as_str()).collect();
+
+        if unique_dirs.len() > 1 && dir.is_none() {
+            if let Some((root_dir, _)) = candidates.iter().find(|(dir, _)| dir == repo_root) {
+                return Ok(root_dir.clone());
+            }
+
+            let dirs_list = unique_dirs
+                .into_iter()
+                .map(|dir| format!("  - {dir}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            return Err(ToolError::Internal(format!(
+                "Recipe '{recipe}' not in root justfile and exists in multiple directories:\n{dirs_list}\nSpecify dir parameter to disambiguate."
+            )));
+        }
+
+        Ok(candidates.swap_remove(0).0)
     }
 }
 
@@ -1003,6 +1138,30 @@ mod ask_agent_filter_tests {
             std::env::set_current_dir(&self.prev)
                 .unwrap_or_else(|e| panic!("restore cwd failed: {e}"));
         }
+    }
+
+    fn write_paged_justfile(root: &Path, with_sleep: bool) {
+        let sleep = if with_sleep { "sleep 1; " } else { "" };
+        let justfile = format!(
+            "paged:\n    @bash -c 'count=$(cat counter.txt 2>/dev/null || echo 0); count=$((count+1)); echo $count > counter.txt; {sleep}for i in $(seq 1 205); do echo out-$i; done; for i in $(seq 1 3); do echo err-$i >&2; done'"
+        );
+        fs::write(root.join("justfile"), justfile)
+            .unwrap_or_else(|e| panic!("writing paged justfile failed: {e}"));
+    }
+
+    fn read_counter(root: &Path) -> String {
+        fs::read_to_string(root.join("counter.txt"))
+            .unwrap_or_else(|e| panic!("reading counter failed: {e}"))
+    }
+
+    fn numbered_output(prefix: &str, range: std::ops::RangeInclusive<usize>) -> String {
+        use std::fmt::Write;
+
+        let mut out = String::new();
+        for n in range {
+            let _ = writeln!(out, "{prefix}-{n}");
+        }
+        out
     }
 
     #[test]
@@ -1230,8 +1389,13 @@ mod ask_agent_filter_tests {
         let ctx = agentic_tools_core::ToolContext::default();
 
         let handle = tokio::spawn(async move {
-            wait_for_just_result_with_timeout(&ctx, std::future::pending::<Result<(), String>>(), 1)
-                .await
+            wait_for_just_result_with_timeout(
+                &ctx,
+                std::future::pending::<Result<(), String>>(),
+                1,
+                "Just search",
+            )
+            .await
         });
 
         tokio::task::yield_now().await;
@@ -1255,8 +1419,13 @@ mod ask_agent_filter_tests {
         let cancel = ctx.cancellation_token();
 
         let handle = tokio::spawn(async move {
-            wait_for_just_result_with_timeout(&ctx, std::future::pending::<Result<(), String>>(), 1)
-                .await
+            wait_for_just_result_with_timeout(
+                &ctx,
+                std::future::pending::<Result<(), String>>(),
+                1,
+                "Just search",
+            )
+            .await
         });
 
         tokio::task::yield_now().await;
@@ -1281,6 +1450,7 @@ mod ask_agent_filter_tests {
                     Ok(())
                 },
                 0,
+                "Just search",
             )
             .await
         });
@@ -1321,8 +1491,11 @@ mod ask_agent_filter_tests {
         let ctx = agentic_tools_core::ToolContext::default();
         let cancel = ctx.cancellation_token();
 
-        let handle =
-            tokio::spawn(async move { tools.just_execute("hang".into(), None, None, &ctx).await });
+        let handle = tokio::spawn(async move {
+            tools
+                .just_execute("hang".into(), None, None, false, &ctx)
+                .await
+        });
 
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         cancel.cancel();
@@ -1332,5 +1505,178 @@ mod ask_agent_filter_tests {
             Err(err) => panic!("task join failed: {err}"),
         };
         assert!(matches!(result, Err(ToolError::Cancelled { .. })));
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_pages_cached_transcript_head_first() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let page1 = tools
+            .just_execute("paged".into(), None, None, false, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("page1 failed: {e}"));
+        assert!(page1.has_more);
+        assert!(page1.stdout.starts_with("out-1\n"));
+        assert!(page1.stdout.contains("out-200\n"));
+        assert_eq!(page1.stderr, "err-1\nerr-2\nerr-3\n");
+
+        let page2 = tools
+            .just_execute("paged".into(), None, None, false, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("page2 failed: {e}"));
+        assert!(!page2.has_more);
+        assert_eq!(page2.stdout, numbered_output("out", 201..=205));
+        assert!(page2.stderr.is_empty());
+        assert_eq!(read_counter(tmp.path()).trim(), "1");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_evicts_after_final_page_and_reruns_next_call() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        tools
+            .just_execute("paged".into(), None, None, false, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("page1 failed: {e}"));
+        tools
+            .just_execute("paged".into(), None, None, false, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("page2 failed: {e}"));
+
+        let restart = tools
+            .just_execute("paged".into(), None, None, false, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("restart failed: {e}"));
+        assert!(restart.has_more);
+        assert!(restart.stdout.starts_with("out-1\n"));
+        assert_eq!(read_counter(tmp.path()).trim(), "2");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_rerun_true_forces_fresh_execution_before_cache_exhaustion() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let page1 = tools
+            .just_execute("paged".into(), None, None, false, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("page1 failed: {e}"));
+        assert!(page1.has_more);
+
+        let rerun_page1 = tools
+            .just_execute("paged".into(), None, None, true, &ctx)
+            .await
+            .unwrap_or_else(|e| panic!("rerun page1 failed: {e}"));
+        assert!(rerun_page1.has_more);
+        assert!(rerun_page1.stdout.starts_with("out-1\n"));
+        assert_eq!(read_counter(tmp.path()).trim(), "2");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_singleflight_prevents_duplicate_same_key_execution() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), true);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+
+        let first_tools = tools.clone();
+        let second_tools = tools.clone();
+        let first = tokio::spawn(async move {
+            first_tools
+                .just_execute(
+                    "paged".into(),
+                    None,
+                    None,
+                    false,
+                    &agentic_tools_core::ToolContext::default(),
+                )
+                .await
+        });
+        let second = tokio::spawn(async move {
+            second_tools
+                .just_execute(
+                    "paged".into(),
+                    None,
+                    None,
+                    false,
+                    &agentic_tools_core::ToolContext::default(),
+                )
+                .await
+        });
+
+        let first = match first.await {
+            Ok(result) => result.unwrap_or_else(|e| panic!("first execute failed: {e}")),
+            Err(err) => panic!("first join failed: {err}"),
+        };
+        let second = match second.await {
+            Ok(result) => result.unwrap_or_else(|e| panic!("second execute failed: {e}")),
+            Err(err) => panic!("second join failed: {err}"),
+        };
+
+        assert_eq!(read_counter(tmp.path()).trim(), "1");
+        assert_eq!(
+            first.stdout.lines().count() + second.stdout.lines().count(),
+            205
+        );
+        assert!(first.has_more ^ second.has_more);
     }
 }

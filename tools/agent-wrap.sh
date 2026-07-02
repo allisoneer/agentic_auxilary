@@ -9,6 +9,12 @@ set -euo pipefail
 
 OUTPUT_MODE="${OUTPUT_MODE:-minimal}"
 
+case "${AGENTIC_WRAP_PASSTHROUGH:-}" in
+	1|true|yes|on|TRUE|YES|ON)
+		exec "$@"
+		;;
+esac
+
 task_name() {
 	# Heuristic task name from argv
 	if [[ $# -eq 0 ]]; then

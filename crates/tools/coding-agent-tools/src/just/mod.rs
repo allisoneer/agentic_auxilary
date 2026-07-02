@@ -5,6 +5,7 @@
 pub mod cache;
 pub mod discovery;
 pub mod exec;
+pub(crate) mod execute_pager;
 pub mod pager;
 pub mod parser;
 pub mod security;

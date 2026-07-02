@@ -402,6 +402,9 @@ pub struct JustExecuteInput {
     /// Arguments keyed by parameter name; star params accept arrays
     #[serde(default)]
     pub args: Option<HashMap<String, serde_json::Value>>,
+    /// Force a fresh execution instead of continuing cached transcript paging
+    #[serde(default)]
+    pub rerun: bool,
 }
 
 /// Tool for executing justfile recipes.
@@ -420,7 +423,7 @@ impl Tool for JustExecuteTool {
     type Input = JustExecuteInput;
     type Output = just::ExecuteOutput;
     const NAME: &'static str = "cli_just_execute";
-    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Only disambiguate if recipe not in root.";
+    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Repeated same-parameter calls page cached output from one prior execution; set rerun=true to force a fresh run.";
 
     fn call(
         &self,
@@ -431,7 +434,7 @@ impl Tool for JustExecuteTool {
         let ctx = ctx.clone();
         Box::pin(async move {
             tools
-                .just_execute(input.recipe, input.dir, input.args, &ctx)
+                .just_execute(input.recipe, input.dir, input.args, input.rerun, &ctx)
                 .await
         })
     }
