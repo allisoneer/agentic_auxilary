@@ -53,7 +53,7 @@ pub fn render_packages(metadata: &Metadata, policy: &Policy) -> String {
         // Determine git tag status
         let git_tag_enable = override_entry
             .and_then(|o| o.git_tag_enable)
-            .unwrap_or(true);
+            .unwrap_or(policy.release_plz.git_tag_enable_default);
 
         // Build tag name from format (keep {{ version }} as template placeholder)
         let tag_name = policy

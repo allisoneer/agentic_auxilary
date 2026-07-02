@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.8.6] - 2026-07-02
+
+### ⚙️  Miscellaneous
+- Updated the following local packages: agentic-config, agentic-tools-utils, agentic-tools-core, agentic-tools-mcp, agentic_logging, thoughts-tool
+## [0.8.5] - 2026-07-01
+
+### ⛰️  Features
+- *(agentic-outer-dag)* Add durable outer dag automation
+
+### 🐛 Bug Fixes
+- *(agentic-outer-dag)* Harden review-thread follow-up handling
+- *(agentic-outer-dag)* Use explicit repo for pr lookup
+- *(pr_comments)* Parse octocrab graphql inner data
+- *(agentic-outer-dag)* Ensure PRs are ready for review
+- *(pr_comments)* Validate graphql responses and track review commit ids
+- *(pr-comments)* Resolve bounded review findings
+
 ## [0.8.4] - 2026-06-18
 
 ### ⚙️  Miscellaneous

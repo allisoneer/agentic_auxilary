@@ -162,13 +162,12 @@ CLI returns JSON for programmatic use. MCP interface returns formatted text for 
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p pr_comments -- --check
-cargo clippy -p pr_comments --all-targets -- -D warnings
+just crate-check pr_comments
 
 # Tests
-cargo test -p pr_comments
+just crate-test pr_comments
 
 # Build
-cargo build -p pr_comments
+just crate-build pr_comments
 ```
 <!-- END:xtask:autogen -->

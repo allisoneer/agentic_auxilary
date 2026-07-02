@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.1] - 2026-07-02
+
+### 🐛 Bug Fixes
+- *(xtask)* Generate crate claude commands with just wrappers
 
 ### ⛰️  Features
 - *(workspace_tools)* Add workspace-scoped mcp file and todo tools

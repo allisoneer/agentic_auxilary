@@ -1,7 +1,7 @@
 [workspace]
 changelog_update = true
 git_release_enable = false
-git_tag_enable = true
+git_tag_enable = false
 publish = true
 pr_labels = ["release"]
 
@@ -62,28 +62,35 @@ release = true
 name = "agentic-config"
 changelog_path = "crates/infra/agentic-config/CHANGELOG.md"
 git_tag_name = "agentic-config-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "agentic-tools-utils"
 changelog_path = "crates/agentic-tools/utils/CHANGELOG.md"
 git_tag_name = "agentic-tools-utils-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
-name = "thoughts-bin"
-changelog_path = "apps/thoughts/CHANGELOG.md"
-git_tag_name = "thoughts-bin-v{{ version }}"
-git_tag_enable = true
+name = "agentic-outer-dag-bin"
+changelog_path = "apps/agentic-outer-dag/CHANGELOG.md"
+git_tag_name = "agentic-outer-dag-bin-v{{ version }}"
+git_tag_enable = false
 release = true
 
 [[package]]
-name = "thoughts-tool"
-changelog_path = "crates/infra/thoughts-core/CHANGELOG.md"
-git_tag_name = "thoughts-tool-v{{ version }}"
-git_tag_enable = true
+name = "gwt-worktree"
+changelog_path = "crates/infra/gwt-worktree/CHANGELOG.md"
+git_tag_name = "gwt-worktree-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "linear-tools"
+changelog_path = "crates/linear/tools/CHANGELOG.md"
+git_tag_name = "linear-tools-v{{ version }}"
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -94,9 +101,58 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "agentic-tools-mcp"
+changelog_path = "crates/agentic-tools/mcp/CHANGELOG.md"
+git_tag_name = "agentic-tools-mcp-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "linear-queries"
+changelog_path = "crates/linear/queries/CHANGELOG.md"
+git_tag_name = "linear-queries-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "linear-schema"
+changelog_path = "crates/linear/schema/CHANGELOG.md"
+git_tag_name = "linear-schema-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "opencode_rs"
+changelog_path = "crates/services/opencode-rs/CHANGELOG.md"
+git_tag_name = "opencode_rs-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "pr_comments"
+changelog_path = "crates/tools/pr-comments/CHANGELOG.md"
+git_tag_name = "pr_comments-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
 name = "agentic_logging"
 changelog_path = "crates/infra/agentic-logging/CHANGELOG.md"
 git_tag_name = "agentic_logging-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "thoughts-tool"
+changelog_path = "crates/infra/thoughts-core/CHANGELOG.md"
+git_tag_name = "thoughts-tool-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
+name = "thoughts-bin"
+changelog_path = "apps/thoughts/CHANGELOG.md"
+git_tag_name = "thoughts-bin-v{{ version }}"
 git_tag_enable = true
 release = true
 
@@ -108,24 +164,17 @@ git_tag_enable = true
 release = true
 
 [[package]]
-name = "agentic-tools-mcp"
-changelog_path = "crates/agentic-tools/mcp/CHANGELOG.md"
-git_tag_name = "agentic-tools-mcp-v{{ version }}"
-git_tag_enable = false
-release = true
-
-[[package]]
 name = "agentic-tools-registry"
 changelog_path = "crates/agentic-tools/registry/CHANGELOG.md"
 git_tag_name = "agentic-tools-registry-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "coding_agent_tools"
 changelog_path = "crates/tools/coding-agent-tools/CHANGELOG.md"
 git_tag_name = "coding_agent_tools-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -136,59 +185,38 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "discord-tools"
+changelog_path = "crates/tools/discord-tools/CHANGELOG.md"
+git_tag_name = "discord-tools-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
 name = "gpt5_reasoner"
 changelog_path = "crates/tools/gpt5-reasoner/CHANGELOG.md"
 git_tag_name = "gpt5_reasoner-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "linear-tools"
-changelog_path = "crates/linear/tools/CHANGELOG.md"
-git_tag_name = "linear-tools-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "linear-queries"
-changelog_path = "crates/linear/queries/CHANGELOG.md"
-git_tag_name = "linear-queries-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "linear-schema"
-changelog_path = "crates/linear/schema/CHANGELOG.md"
-git_tag_name = "linear-schema-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "pr_comments"
-changelog_path = "crates/tools/pr-comments/CHANGELOG.md"
-git_tag_name = "pr_comments-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "review_tools"
 changelog_path = "crates/tools/review-tools/CHANGELOG.md"
 git_tag_name = "review_tools-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "thoughts-mcp-tools"
 changelog_path = "crates/tools/thoughts-mcp-tools/CHANGELOG.md"
 git_tag_name = "thoughts-mcp-tools-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
 name = "web-retrieval"
 changelog_path = "crates/tools/web-retrieval/CHANGELOG.md"
 git_tag_name = "web-retrieval-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -202,13 +230,6 @@ release = true
 name = "exa-async"
 changelog_path = "crates/services/exa-async/CHANGELOG.md"
 git_tag_name = "exa-async-v{{ version }}"
-git_tag_enable = true
-release = true
-
-[[package]]
-name = "opencode_rs"
-changelog_path = "crates/services/opencode-rs/CHANGELOG.md"
-git_tag_name = "opencode_rs-v{{ version }}"
 git_tag_enable = false
 release = true
 
@@ -230,7 +251,7 @@ release = true
 name = "message_optimizer"
 changelog_path = "crates/tools/message-optimizer/CHANGELOG.md"
 git_tag_name = "message_optimizer-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = true
 
 [[package]]
@@ -244,7 +265,7 @@ release = true
 name = "agentic-tools-napi"
 changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
 git_tag_name = "agentic-tools-napi-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = false
 publish = false
 
@@ -253,13 +274,6 @@ name = "agentic-tools-macros"
 changelog_path = "crates/agentic-tools/macros/CHANGELOG.md"
 git_tag_name = "agentic-tools-macros-v{{ version }}"
 git_tag_enable = false
-release = true
-
-[[package]]
-name = "gwt-worktree"
-changelog_path = "crates/infra/gwt-worktree/CHANGELOG.md"
-git_tag_name = "gwt-worktree-v{{ version }}"
-git_tag_enable = true
 release = true
 
 [[package]]
@@ -280,7 +294,7 @@ release = true
 name = "universal-tool-integration-tests"
 changelog_path = "crates/legacy/universal-tool-integration-tests/CHANGELOG.md"
 git_tag_name = "universal-tool-integration-tests-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = false
 publish = false
 
@@ -288,7 +302,7 @@ publish = false
 name = "xtask"
 changelog_path = "crates/meta/xtask/CHANGELOG.md"
 git_tag_name = "xtask-v{{ version }}"
-git_tag_enable = true
+git_tag_enable = false
 release = false
 publish = false
 # END:xtask:autogen

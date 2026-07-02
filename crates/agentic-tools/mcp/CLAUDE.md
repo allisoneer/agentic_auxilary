@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p agentic-tools-mcp -- --check
-cargo clippy -p agentic-tools-mcp --all-targets -- -D warnings
+just crate-check agentic-tools-mcp
 
 # Tests
-cargo test -p agentic-tools-mcp
+just crate-test agentic-tools-mcp
 
 # Build
-cargo build -p agentic-tools-mcp
+just crate-build agentic-tools-mcp
 ```
 <!-- END:xtask:autogen -->
 

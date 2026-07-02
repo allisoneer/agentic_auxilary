@@ -62,7 +62,7 @@ opentofu = "latest"
 # Keep nested per-platform tables at the end so later flat tool entries remain in top-level [tools].
 # BEGIN:xtask:autogen mise:agentic-binaries
 [tools.thoughts-bin]
-version = "0.1.20"
+version = "0.1.21"
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin.platforms]
@@ -72,7 +72,7 @@ macos-x64 = { asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-bin]
-version = "0.1.10"
+version = "0.1.11"
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin.platforms]
@@ -82,7 +82,7 @@ macos-x64 = { asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-mcp]
-version = "0.2.35"
+version = "0.2.36"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp.platforms]
@@ -92,7 +92,7 @@ macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
 [tools.opencode-orchestrator-mcp]
-version = "0.7.4"
+version = "0.7.5"
 version_prefix = "opencode-orchestrator-mcp-v"
 
 [tools.opencode-orchestrator-mcp.platforms]

@@ -1,3 +1,4 @@
+use crate::PLAN_STRUCTURE_FILENAME;
 use crate::engine::paths::is_ancestor;
 use crate::engine::paths::to_abs_string;
 use crate::engine::paths::walk_up_to_boundary;
@@ -84,7 +85,7 @@ pub fn auto_inject_claude_memories(
 
     // Existing: seed from parent dirs of input files (skipping plan_structure.md)
     for f in files.iter() {
-        if f.filename == "plan_structure.md" {
+        if f.filename == PLAN_STRUCTURE_FILENAME {
             continue;
         }
         let abs = to_abs_string(&f.filename);
@@ -552,7 +553,7 @@ mod claude_injection_edge_tests {
         let _g = DirGuard::set(root);
 
         let mut files = vec![FileMeta {
-            filename: "plan_structure.md".into(),
+            filename: PLAN_STRUCTURE_FILENAME.into(),
             description: "embedded".into(),
         }];
 

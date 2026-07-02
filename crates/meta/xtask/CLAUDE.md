@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p xtask -- --check
-cargo clippy -p xtask --all-targets -- -D warnings
+just crate-check xtask
 
 # Tests
-cargo test -p xtask
+just crate-test xtask
 
 # Build
-cargo build -p xtask
+just crate-build xtask
 ```
 <!-- END:xtask:autogen -->
 

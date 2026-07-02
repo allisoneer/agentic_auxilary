@@ -17,14 +17,13 @@ Programmatic, gwt-compatible git worktree management library for typed listing, 
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p gwt-worktree -- --check
-cargo clippy -p gwt-worktree --all-targets -- -D warnings
+just crate-check gwt-worktree
 
 # Tests
-cargo test -p gwt-worktree
+just crate-test gwt-worktree
 
 # Build
-cargo build -p gwt-worktree
+just crate-build gwt-worktree
 ```
 <!-- END:xtask:autogen -->
 

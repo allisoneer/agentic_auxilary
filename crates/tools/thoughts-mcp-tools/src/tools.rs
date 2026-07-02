@@ -32,6 +32,8 @@ use thoughts_tool::mcp::get_repo_refs_impl_adapter;
 use thoughts_tool::mount::MountSpace;
 use thoughts_tool::utils::logging::log_tool_call;
 
+use crate::readiness::ThoughtsMcpReadinessGate;
+
 /// Map `anyhow::Error` to `agentic_tools_core::ToolError`.
 ///
 /// Uses string pattern matching to categorize errors appropriately.
@@ -51,6 +53,34 @@ fn map_anyhow_to_tool_error(e: &anyhow::Error) -> ToolError {
     }
 }
 
+async fn ensure_ready(readiness: &ThoughtsMcpReadinessGate) -> Result<(), ToolError> {
+    readiness
+        .ensure_ready()
+        .await
+        .map_err(|error| ToolError::Internal(format!("{error:#}")))
+}
+
+async fn ensure_ready_and_log_failure(
+    readiness: &ThoughtsMcpReadinessGate,
+    timer: &CallTimer,
+    tool_name: &'static str,
+    req_json: &serde_json::Value,
+) -> Result<(), ToolError> {
+    if let Err(error) = ensure_ready(readiness).await {
+        log_tool_call(
+            timer,
+            tool_name,
+            req_json.clone(),
+            false,
+            Some(error.to_string()),
+            None,
+        );
+        return Err(error);
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // WriteDocument Tool
 // ============================================================================
@@ -67,7 +97,9 @@ pub struct WriteDocumentInput {
 
 /// Tool for writing documents to the active work directory.
 #[derive(Clone)]
-pub struct WriteDocumentTool;
+pub struct WriteDocumentTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
 
 impl Tool for WriteDocumentTool {
     type Input = WriteDocumentInput;
@@ -80,12 +112,16 @@ impl Tool for WriteDocumentTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
                 "doc_type": input.doc_type.singular_label(),
                 "filename": &input.filename,
             });
+
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_write_document", &req_json)
+                .await?;
 
             let result = write_document(&input.doc_type, &input.filename, &input.content);
 
@@ -135,7 +171,9 @@ pub struct ListActiveDocumentsInput {
 
 /// Tool for listing files in the active work directory.
 #[derive(Clone)]
-pub struct ListActiveDocumentsTool;
+pub struct ListActiveDocumentsTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
 
 impl Tool for ListActiveDocumentsTool {
     type Input = ListActiveDocumentsInput;
@@ -148,11 +186,15 @@ impl Tool for ListActiveDocumentsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
                 "subdir": input.subdir.as_ref().map(|d| format!("{d:?}").to_lowercase()),
             });
+
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_list_documents", &req_json)
+                .await?;
 
             let result = list_documents(input.subdir.as_ref());
 
@@ -198,7 +240,9 @@ pub struct ListReferencesInput {}
 
 /// Tool for listing reference repository directory paths.
 #[derive(Clone)]
-pub struct ListReferencesTool;
+pub struct ListReferencesTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
 
 impl Tool for ListReferencesTool {
     type Input = ListReferencesInput;
@@ -211,9 +255,13 @@ impl Tool for ListReferencesTool {
         _input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({});
+
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_list_references", &req_json)
+                .await?;
 
             let result = (|| -> Result<ReferencesList, ToolError> {
                 let control_root = get_control_repo_root(
@@ -304,7 +352,9 @@ pub struct GetRepoRefsInput {
 
 /// Tool for listing remote refs without cloning the repository.
 #[derive(Clone)]
-pub struct GetRepoRefsTool;
+pub struct GetRepoRefsTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
 
 impl Tool for GetRepoRefsTool {
     type Input = GetRepoRefsInput;
@@ -318,12 +368,16 @@ impl Tool for GetRepoRefsTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
                 "url": &input.url,
                 "limit": input.limit,
             });
+
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_get_repo_refs", &req_json)
+                .await?;
 
             let result = get_repo_refs_impl_adapter(input.url, input.limit)
                 .await
@@ -386,6 +440,7 @@ pub struct AddReferenceInput {
 #[derive(Clone)]
 pub struct AddReferenceTool {
     pub thoughts: ThoughtsConfig,
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
 }
 
 impl Tool for AddReferenceTool {
@@ -400,6 +455,7 @@ impl Tool for AddReferenceTool {
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
         let thoughts = self.thoughts.clone();
+        let readiness = self.readiness.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
@@ -408,6 +464,9 @@ impl Tool for AddReferenceTool {
                 "description": &input.description,
                 "configured_timeout_secs": thoughts.add_reference_timeout_secs,
             });
+
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_add_reference", &req_json)
+                .await?;
 
             // Delegate to the shared adapter function
             let result = add_reference_impl_adapter(
@@ -469,7 +528,9 @@ pub struct GetTemplateInput {
 
 /// Tool for retrieving compile-time embedded templates.
 #[derive(Clone)]
-pub struct GetTemplateTool;
+pub struct GetTemplateTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
 
 impl Tool for GetTemplateTool {
     type Input = GetTemplateInput;
@@ -482,11 +543,15 @@ impl Tool for GetTemplateTool {
         input: Self::Input,
         _ctx: &ToolContext,
     ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
             let req_json = serde_json::json!({
                 "template": input.template.label(),
             });
+
+            ensure_ready_and_log_failure(&readiness, &timer, "thoughts_get_template", &req_json)
+                .await?;
 
             let result = TemplateResponse {
                 template_type: input.template,
@@ -506,5 +571,35 @@ impl Tool for GetTemplateTool {
 
             Ok(result)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agentic_tools_core::Tool;
+
+    #[tokio::test]
+    async fn get_template_fails_when_readiness_fails() {
+        let tool = GetTemplateTool {
+            readiness: ThoughtsMcpReadinessGate::new_with_check(|| {
+                Box::pin(async { anyhow::bail!("sentinel readiness failure") })
+            }),
+        };
+
+        let error = tool
+            .call(
+                GetTemplateInput {
+                    template: TemplateType::Plan,
+                },
+                &ToolContext::default(),
+            )
+            .await
+            .unwrap_err();
+
+        match error {
+            ToolError::Internal(message) => assert!(message.contains("sentinel readiness failure")),
+            other => panic!("expected internal readiness error, got {other:?}"),
+        }
     }
 }

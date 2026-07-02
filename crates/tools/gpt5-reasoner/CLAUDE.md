@@ -22,7 +22,7 @@ This file guides contributors and Claude Code on how to work on gpt5_reasoner. I
   - Inspect schema: cargo run --example print_schema
 
 ## 3) Architecture Overview and Data Flow
-Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML groups + XML template → inject file contents → token check → executor (GPT-5.2 xhigh) → result. The optimizer sees filenames/descriptions; the executor sees actual file contents. Directory expansion happens before optimization. Robustness: app-level network retries, template validation retries, strict group marker validation, and token limit enforcement.
+Pipeline: user prompt + file metadata → normalize/dedup → CLAUDE.md injection → early `plan_structure.md` injection for plan mode → aggregate corpus preflight → optimizer (Claude family) → YAML groups + XML template → inject file contents → exact token check → executor (GPT-5.2 xhigh) → result. The optimizer sees filenames/descriptions; the executor sees actual file contents. Directory expansion happens before optimization. Robustness: app-level network retries, template validation retries, aggregate fail-fast limits, strict group marker validation, and token limit enforcement.
 
 ## 4) Core Modules and Responsibilities
 - src/lib.rs:
@@ -56,8 +56,9 @@ Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML gro
 - Primary task placeholder: In lib.rs, the final prompt replaces a hardcoded placeholder string from templates with the actual user prompt. If you change the placeholder text in optimizer templates, update the replacement string in lib.rs.
 - GROUP marker policy: Exactly <!-- GROUP: name -->; parser validates; template replaces by exact match. Changing the format requires updating parser + tests.
 - Plan guards (PromptType::Plan):
-  - Files are auto-injected with plan_structure.md (pre-optimizer)
+  - Files are auto-injected with plan_structure.md before aggregate preflight and optimizer
   - Optimizer output must have a plan_template group referencing plan_structure.md; executor guard inserts/repairs if missing.
+- Aggregate preflight limits before optimizer setup are locked to 500 unique files, 25 MiB aggregate filesystem bytes, and 60,000 estimated optimizer prompt tokens.
 - Directory expansion:
   - Hidden dirs pruned unless include_hidden=true; extension filter is case-insensitive and accepts both "rs" and ".rs"
   - Binary/non-UTF-8 files skipped
@@ -65,7 +66,7 @@ Pipeline: user prompt + file metadata → optimizer (Claude family) → YAML gro
 - Error handling/retries:
   - Optimizer: app-level retries for transport; validation retry loop for template errors
   - Executor (GPT-5.2): app-level single retry for transient failures
-- Token budget: 250k enforced after injection; change TOKEN_LIMIT in token.rs with matching tests.
+- Token budget: 250k exact limit enforced after injection; aggregate preflight earlier is a conservative fail-fast gate, not a replacement.
 - Temperature defaults 0.2; reasoning_effort: xhigh for executor, high for optimizer gpt-5/gpt-oss models.
 
 ## 7) Typical Changes and Where to Make Them
@@ -131,13 +132,12 @@ fn my_env_test() {
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p gpt5_reasoner -- --check
-cargo clippy -p gpt5_reasoner --all-targets -- -D warnings
+just crate-check gpt5_reasoner
 
 # Tests
-cargo test -p gpt5_reasoner
+just crate-test gpt5_reasoner
 
 # Build
-cargo build -p gpt5_reasoner
+just crate-build gpt5_reasoner
 ```
 <!-- END:xtask:autogen -->

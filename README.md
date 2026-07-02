@@ -70,7 +70,7 @@ cargo install --path apps/thoughts
 <!-- BEGIN:autodeps {"crates":["claudecode"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-claudecode = "0.1.20"
+claudecode = "0.1.21"
 ```
 <!-- END:autodeps -->
 
@@ -78,7 +78,7 @@ claudecode = "0.1.20"
 <!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-anthropic-async = "0.5.2"
+anthropic-async = "0.5.3"
 ```
 <!-- END:autodeps -->
 
@@ -86,7 +86,7 @@ anthropic-async = "0.5.2"
 <!-- BEGIN:autodeps {"crates":["opencode_rs"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-opencode_rs = "0.12.0"
+opencode_rs = "0.13.0"
 ```
 <!-- END:autodeps -->
 
@@ -101,6 +101,7 @@ opencode_rs = "0.12.0"
 
 - [`agentic-workspace-tools`](crates/tools/workspace-tools) - Workspace-scoped read/todowrite/edit/apply_patch tools
 - [`coding_agent_tools`](crates/tools/coding-agent-tools) - Coding agent tools (CLI + MCP). First tool: ls.
+- [`discord-tools`](crates/tools/discord-tools) - Discord search tools for agentic-mcp (ENG-392)
 - [`message_optimizer`](crates/tools/message-optimizer) - Standalone GPT-5.4 message optimizer library
 - [`pr_comments`](crates/tools/pr-comments) - Fetch GitHub PR comments via CLI and MCP
 - [`review_tools`](crates/tools/review-tools) - Review tools for agentic-mcp: diff snapshots, lens-based review, pagination

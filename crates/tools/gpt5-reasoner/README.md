@@ -93,6 +93,8 @@ gpt5_reasoner mcp
 - **Path normalization**: All paths converted to absolute without resolving symlinks
 - **Symlinks**: Not followed (`follow_links=false`)
 - **Deduplication**: Files appearing in both `files` and `directories` are automatically deduplicated
+- **Large corpus preflight**: Oversized requests fail before optimizer setup at 500 unique files, 25 MiB aggregate filesystem bytes, or 60,000 estimated optimizer prompt tokens
+- **Scope reduction guidance**: Narrow `directories`, reduce `max_files`, trim `extensions`, or split the request when a preflight limit is hit
 - **Token limit**: Final guard enforces 250k token limit on complete prompt
 - **Multi-dot extensions**: `foo.rs.bk` matches "bk", not "rs"
 - **Platform**: Unix/Linux dotfile-based (Windows hidden attribute not checked)

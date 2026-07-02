@@ -1,3 +1,7 @@
+mod readiness;
+
+pub use readiness::ensure_thoughts_environment_ready;
+
 use anyhow::Context;
 use anyhow::Result;
 use atomicwrites::AtomicFile;

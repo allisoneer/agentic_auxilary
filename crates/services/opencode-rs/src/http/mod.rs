@@ -391,7 +391,7 @@ impl HttpClient {
             match build().send().await {
                 Ok(resp) => return Ok(resp),
                 Err(e) => {
-                    // Retry only on transport-level errors (before HTTP response received)
+                    // Retry only on transport-level errors (connect/timeout/request) before HTTP response received.
                     let retryable = e.is_connect() || e.is_timeout() || e.is_request();
                     if retryable && attempt < MAX_ATTEMPTS {
                         tracing::debug!(

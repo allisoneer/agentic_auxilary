@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.2.9] - 2026-07-02
+
+### 🐛 Bug Fixes
+- *(xtask)* Generate crate claude commands with just wrappers
 ## [0.2.8] - 2026-03-26
 
 ### ⚙️  Miscellaneous

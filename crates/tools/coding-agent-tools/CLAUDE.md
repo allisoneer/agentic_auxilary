@@ -25,6 +25,12 @@ just fmt          # Format code
 - Pagination state in struct; CLI creates fresh instance (no pagination), MCP reuses Arc-wrapped instance
 - McpFormatter for token-efficient text output
 
+## Search Ignore Policy
+
+- `cli_glob` and `cli_grep` apply default ignores from gitignore plus built-in/common directories such as `node_modules/`, `target/`, and `logs/`.
+- If an investigation expects matches inside ignored paths, retry the same request with `include_ignored=true`.
+- `include_hidden` stays independent from `include_ignored`; hidden files still require their own flag.
+
 <!-- BEGIN:xtask:autogen header -->
 - Crate: coding_agent_tools
 - Path: crates/tools/coding-agent-tools/
@@ -36,13 +42,12 @@ just fmt          # Format code
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p coding_agent_tools -- --check
-cargo clippy -p coding_agent_tools --all-targets -- -D warnings
+just crate-check coding_agent_tools
 
 # Tests
-cargo test -p coding_agent_tools
+just crate-test coding_agent_tools
 
 # Build
-cargo build -p coding_agent_tools
+just crate-build coding_agent_tools
 ```
 <!-- END:xtask:autogen -->

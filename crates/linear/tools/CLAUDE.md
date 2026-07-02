@@ -17,14 +17,13 @@ Briefly describe the purpose of this crate and how to use it.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p linear-tools -- --check
-cargo clippy -p linear-tools --all-targets -- -D warnings
+just crate-check linear-tools
 
 # Tests
-cargo test -p linear-tools
+just crate-test linear-tools
 
 # Build
-cargo build -p linear-tools
+just crate-build linear-tools
 ```
 <!-- END:xtask:autogen -->
 

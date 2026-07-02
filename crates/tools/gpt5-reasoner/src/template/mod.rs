@@ -1,3 +1,4 @@
+use crate::PLAN_STRUCTURE_FILENAME;
 use crate::errors::ReasonerError;
 use crate::errors::Result;
 use crate::optimizer::parser::FileGroup;
@@ -39,7 +40,7 @@ pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<S
             .file_groups
             .iter()
             .flat_map(|g| g.files.iter().cloned())
-            .filter(|p| p != "plan_structure.md")
+            .filter(|p| p != PLAN_STRUCTURE_FILENAME)
             .filter(|p| seen.insert(p.clone()))
             .collect()
     };
@@ -71,7 +72,7 @@ pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<S
             .iter()
             .map(|p| {
                 // Special handling for plan_structure.md - use embedded content
-                if p == "plan_structure.md" {
+                if p == PLAN_STRUCTURE_FILENAME {
                     tracing::debug!("Using embedded plan_structure.md template");
                     Ok((
                         p.clone(),
@@ -279,7 +280,7 @@ fn main() { hello(); }
                 name: "plan_template".to_string(),
                 purpose: None,
                 critical: None,
-                files: vec!["plan_structure.md".to_string()],
+                files: vec![PLAN_STRUCTURE_FILENAME.to_string()],
             }],
         };
 

@@ -16,6 +16,7 @@ fn run_grep(
     include_globs: Vec<String>,
     ignore_globs: Vec<String>,
     include_hidden: bool,
+    include_ignored: bool,
     case_insensitive: bool,
     multiline: bool,
     line_numbers: bool,
@@ -33,6 +34,7 @@ fn run_grep(
         include_globs,
         ignore_globs,
         include_hidden,
+        include_ignored,
         case_insensitive,
         multiline,
         line_numbers,
@@ -77,6 +79,27 @@ fn setup_test_dir() -> TempDir {
     tmp
 }
 
+fn setup_ignored_search_dir() -> TempDir {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".git/info")).unwrap();
+    fs::write(tmp.path().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    fs::create_dir_all(tmp.path().join("logs")).unwrap();
+    fs::write(
+        tmp.path().join("logs/found.jsonl"),
+        "server=gpt5_reasoner\n",
+    )
+    .unwrap();
+    fs::create_dir_all(tmp.path().join("gitignored")).unwrap();
+    fs::write(
+        tmp.path().join("gitignored/secret.txt"),
+        "needle in gitignored\n",
+    )
+    .unwrap();
+    fs::write(tmp.path().join(".gitignore"), "gitignored/\n").unwrap();
+    fs::write(tmp.path().join(".hidden_match"), "needle in hidden\n").unwrap();
+    tmp
+}
+
 #[test]
 fn test_grep_files_mode_basic() {
     let tmp = setup_test_dir();
@@ -88,6 +111,7 @@ fn test_grep_files_mode_basic() {
         OutputMode::Files,
         vec![],
         vec![],
+        false,
         false,
         true, // case_insensitive to match "Hello"
         false,
@@ -125,6 +149,7 @@ fn test_grep_content_mode_with_line_numbers() {
         vec![],
         vec![],
         false,
+        false,
         true,
         false,
         true, // line_numbers
@@ -160,6 +185,7 @@ fn test_grep_count_mode() {
         vec![],
         vec![],
         false,
+        false,
         true,
         false,
         true,
@@ -189,6 +215,7 @@ fn test_grep_include_globs() {
         OutputMode::Files,
         vec!["*.txt".to_string()], // Only .txt files
         vec![],
+        false,
         false,
         true,
         false,
@@ -223,6 +250,7 @@ fn test_grep_ignore_globs() {
         vec![],
         vec!["*.rs".to_string()], // Exclude .rs files
         false,
+        false,
         true,
         false,
         true,
@@ -254,6 +282,7 @@ fn test_grep_include_hidden() {
         vec![],
         vec![],
         false, // don't include hidden
+        false,
         true,
         false,
         true,
@@ -274,6 +303,7 @@ fn test_grep_include_hidden() {
         vec![],
         vec![],
         true, // include hidden
+        false,
         true,
         false,
         true,
@@ -309,6 +339,7 @@ fn test_grep_case_sensitive() {
         OutputMode::Files,
         vec![],
         vec![],
+        false,
         false,
         false, // case sensitive
         false,
@@ -349,6 +380,7 @@ fn test_grep_multiline() {
         vec![],
         false,
         false,
+        false,
         true, // multiline mode
         true,
         None,
@@ -383,6 +415,7 @@ fn test_grep_context_lines() {
         OutputMode::Content,
         vec![],
         vec![],
+        false,
         false,
         false,
         false,
@@ -430,6 +463,7 @@ fn test_grep_pagination() {
         false,
         false,
         false,
+        false,
         true,
         None,
         None,
@@ -450,6 +484,7 @@ fn test_grep_pagination() {
         OutputMode::Files,
         vec![],
         vec![],
+        false,
         false,
         false,
         false,
@@ -487,6 +522,7 @@ fn test_grep_binary_file_skip() {
         OutputMode::Files,
         vec![],
         vec![],
+        false,
         false,
         false,
         false,
@@ -530,6 +566,7 @@ fn test_grep_invalid_regex() {
         false,
         false,
         false,
+        false,
         true,
         None,
         None,
@@ -561,6 +598,7 @@ fn test_grep_no_matches() {
         false,
         false,
         false,
+        false,
         true,
         None,
         None,
@@ -589,6 +627,7 @@ fn test_grep_single_file() {
         false,
         false,
         false,
+        false,
         true,
         None,
         None,
@@ -600,4 +639,181 @@ fn test_grep_single_file() {
     .unwrap();
 
     assert!(!result.lines.is_empty(), "Should find match in single file");
+}
+
+#[test]
+fn test_grep_include_ignored_bypasses_builtin_logs() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let default_result = run_grep(
+        &root,
+        "gpt5_reasoner",
+        OutputMode::Files,
+        vec![],
+        vec![],
+        false,
+        false,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+    let include_ignored_result = run_grep(
+        &root,
+        "gpt5_reasoner",
+        OutputMode::Files,
+        vec![],
+        vec![],
+        false,
+        true,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+
+    assert!(default_result.lines.is_empty());
+    assert_eq!(include_ignored_result.lines, vec!["logs/found.jsonl"]);
+}
+
+#[test]
+fn test_grep_include_ignored_bypasses_gitignore() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let default_result = run_grep(
+        &root,
+        "needle",
+        OutputMode::Files,
+        vec!["**/*.txt".to_string()],
+        vec![],
+        false,
+        false,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+    let include_ignored_result = run_grep(
+        &root,
+        "needle",
+        OutputMode::Files,
+        vec!["**/*.txt".to_string()],
+        vec![],
+        false,
+        true,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+
+    assert!(
+        !default_result
+            .lines
+            .iter()
+            .any(|p| p == "gitignored/secret.txt")
+    );
+    assert_eq!(include_ignored_result.lines, vec!["gitignored/secret.txt"]);
+}
+
+#[test]
+fn test_grep_include_ignored_still_honors_explicit_ignore() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let result = run_grep(
+        &root,
+        "gpt5_reasoner",
+        OutputMode::Files,
+        vec![],
+        vec!["logs/**".to_string()],
+        false,
+        true,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+
+    assert!(result.lines.is_empty());
+}
+
+#[test]
+fn test_grep_include_ignored_does_not_imply_include_hidden() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let result_without_hidden = run_grep(
+        &root,
+        "needle",
+        OutputMode::Files,
+        vec![".hidden*".to_string()],
+        vec![],
+        false,
+        true,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+    let result_with_hidden = run_grep(
+        &root,
+        "needle",
+        OutputMode::Files,
+        vec![".hidden*".to_string()],
+        vec![],
+        true,
+        true,
+        false,
+        false,
+        true,
+        None,
+        None,
+        None,
+        false,
+        200,
+        0,
+    )
+    .unwrap();
+
+    assert!(result_without_hidden.lines.is_empty());
+    assert_eq!(result_with_hidden.lines, vec![".hidden_match"]);
 }

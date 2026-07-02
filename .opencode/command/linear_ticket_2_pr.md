@@ -180,10 +180,12 @@ $ARGUMENTS
 1. Once implementation is verified, run `commit` to prepare the commit plan.
 2. Respect the agent-reset caveat: after `commit`, re-enter a bash-capable child session to perform the actual git commands.
 3. In the bash-capable phase:
-   - confirm the working tree state
-   - create the commit or commits
-   - push the branch
-   - use `gh` tooling to create the PR if none exists, or update the existing PR if one already exists for the branch
+    - confirm the working tree state
+    - create the commit or commits
+    - push the branch
+    - use `gh` tooling to create the PR if none exists, or update the existing PR if one already exists for the branch
+    - the PR must be ready for review, never draft; do not create a draft PR
+    - if a created or discovered PR is draft for any reason, run `gh pr ready` before returning control to the orchestrator and verify the PR is no longer draft
 4. After the PR exists, run `describe_pr` so the PR description is generated from the actual diff and verification state.
 5. If needed, use a follow-up bash-capable child session to apply any final `gh` update steps after `describe_pr` completes.
 6. Capture the commit hash or hashes and the final PR URL for the orchestrator summary.

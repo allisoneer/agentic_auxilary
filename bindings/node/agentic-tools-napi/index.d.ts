@@ -60,6 +60,8 @@ export interface SearchGrepInput {
   ignore?: string[];
   /** Include hidden files (default: false) */
   include_hidden?: boolean;
+  /** Include paths normally ignored by gitignore and default ignores (default: false) */
+  include_ignored?: boolean;
   /** Case-insensitive matching (default: false) */
   case_insensitive?: boolean;
   /** Allow '.' to match newlines (default: false) */
@@ -90,6 +92,8 @@ export interface SearchGlobInput {
   ignore?: string[];
   /** Include hidden files (default: false) */
   include_hidden?: boolean;
+  /** Include paths normally ignored by gitignore and default ignores (default: false) */
+  include_ignored?: boolean;
   /** Sort order: 'name' (default) or 'mtime' (newest first) */
   sort?: 'name' | 'mtime';
   /** Max results to return (default: 500, capped at 1000) */

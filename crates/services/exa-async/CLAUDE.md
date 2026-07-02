@@ -20,14 +20,13 @@ Async Rust client for the Exa API.
 <!-- BEGIN:xtask:autogen commands -->
 ```bash
 # Lint & Clippy
-cargo fmt -p exa-async -- --check
-cargo clippy -p exa-async --all-targets -- -D warnings
+just crate-check exa-async
 
 # Tests
-cargo test -p exa-async
+just crate-test exa-async
 
 # Build
-cargo build -p exa-async
+just crate-build exa-async
 ```
 <!-- END:xtask:autogen -->
 
