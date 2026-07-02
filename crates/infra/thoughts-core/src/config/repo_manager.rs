@@ -270,6 +270,9 @@ impl RepoConfigManager {
             if val.trim().is_empty() {
                 anyhow::bail!("Mount directory '{name}' cannot be empty");
             }
+            if !val.is_ascii() {
+                anyhow::bail!("Mount directory '{name}' must contain only ASCII characters");
+            }
             if val.eq_ignore_ascii_case(".thoughts-data") {
                 anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
             }
@@ -731,6 +734,31 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_v2_hard_rejects_non_ascii_mount_dir_name() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "context".to_string(),
+                references: "références".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("only ASCII characters")
+        );
+    }
+
+    #[test]
     fn test_validate_v2_hard_rejects_invalid_thoughts_mount_remote() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
@@ -1091,6 +1119,35 @@ mod tests {
         assert!(result.is_err());
 
         // Verify no file was written
+        let config_path = paths::get_repo_config_path(temp_dir.path());
+        assert!(!config_path.exists());
+    }
+
+    #[test]
+    fn test_save_v2_validated_fails_before_write_on_non_ascii_mount_dir() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "context".to_string(),
+                references: "références".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+
+        let result = mgr.save_v2_validated(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("only ASCII characters")
+        );
+
         let config_path = paths::get_repo_config_path(temp_dir.path());
         assert!(!config_path.exists());
     }

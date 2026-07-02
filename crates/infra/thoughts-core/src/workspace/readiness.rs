@@ -385,6 +385,9 @@ fn validate_mount_dir_name(name: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
         anyhow::bail!("Mount directory '{name}' cannot be empty");
     }
+    if !value.is_ascii() {
+        anyhow::bail!("Mount directory '{name}' must contain only ASCII characters");
+    }
     if value.eq_ignore_ascii_case(".thoughts-data") {
         anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
     }
@@ -617,6 +620,29 @@ mod tests {
         .to_string();
 
         assert!(error.contains("must be distinct"));
+    }
+
+    #[test]
+    fn rejects_non_ascii_mount_dir_names() {
+        let temp = TempDir::new().unwrap();
+        let repo_root = temp.path().join("repo");
+        fs::create_dir_all(&repo_root).unwrap();
+
+        let mount_dirs = MountDirsV2 {
+            references: "références".to_string(),
+            ..MountDirsV2::default()
+        };
+
+        let error = ensure_safe_repo_layout(
+            &repo_root,
+            &repo_root,
+            &mount_dirs,
+            &sample_thoughts_mount(),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("only ASCII characters"));
     }
 
     #[test]
