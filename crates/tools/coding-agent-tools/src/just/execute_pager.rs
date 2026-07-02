@@ -36,12 +36,11 @@ impl SingleFlight {
         Self::default()
     }
 
-    #[expect(
-        clippy::unwrap_used,
-        reason = "Mutex poisoning indicates a prior panic. Fail fast for single-flight map."
-    )]
     fn lock_map(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<AsyncMutex<()>>>> {
-        self.map.lock().unwrap()
+        match self.map.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
     }
 
     pub fn get_or_create(&self, key: &str) -> Arc<AsyncMutex<()>> {
@@ -82,11 +81,13 @@ pub fn make_execute_key(
     args: Option<&HashMap<String, Value>>,
 ) -> Result<String, String> {
     let normalized_args = normalize_args(args)?;
-    Ok(format!(
-        "repo={repo_root}|dir={}|recipe={}|args={normalized_args}",
+    serde_json::to_string(&(
+        repo_root,
         dir.trim_end_matches('/'),
-        recipe
+        recipe,
+        normalized_args,
     ))
+    .map_err(|e| format!("Failed to serialize execute key: {e}"))
 }
 
 fn split_stream(stream: &str) -> Vec<String> {
@@ -145,6 +146,7 @@ fn normalize_value(value: &Value) -> Result<Value, String> {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::thread;
 
     fn numbered_output(prefix: &str, range: std::ops::RangeInclusive<usize>) -> String {
         use std::fmt::Write;
@@ -191,5 +193,28 @@ mod tests {
         let key_a = make_execute_key("/repo", "check", "/repo", Some(&args_a)).unwrap();
         let key_b = make_execute_key("/repo", "check", "/repo/", Some(&args_b)).unwrap();
         assert_eq!(key_a, key_b);
+    }
+
+    #[test]
+    fn make_execute_key_structured_serialization_avoids_delimiter_collisions() {
+        let key_a = make_execute_key("/repo", "b|args=null|recipe=c", "/a", None).unwrap();
+        let key_b = make_execute_key("/repo", "c", "/a|recipe=b|args=null", None).unwrap();
+
+        assert_ne!(key_a, key_b);
+    }
+
+    #[test]
+    fn single_flight_recovers_from_poisoned_outer_mutex() {
+        let single_flight = Arc::new(SingleFlight::new());
+        let poison_target = Arc::clone(&single_flight);
+        let _ = thread::spawn(move || {
+            let _guard = poison_target.map.lock().unwrap();
+            panic!("poison single-flight outer mutex");
+        })
+        .join();
+
+        let first = single_flight.get_or_create("same-key");
+        let second = single_flight.get_or_create("same-key");
+        assert!(Arc::ptr_eq(&first, &second));
     }
 }

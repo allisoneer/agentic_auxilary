@@ -968,7 +968,6 @@ impl CodingAgentTools {
                 return Err(ToolError::Internal(e));
             }
         };
-        let qlock = self.just_execute_pager.get_or_create(&key);
         let flight = self.just_execute_singleflight.get_or_create(&key);
         let _guard = tokio::select! {
             () = ctx.cancelled() => {
@@ -977,10 +976,12 @@ impl CodingAgentTools {
             }
             guard = flight.lock() => guard,
         };
+        let qlock = self.just_execute_pager.get_or_create(&key);
 
         let needs_refresh = {
             let state = qlock.lock_state();
-            rerun || state.is_empty() || state.is_expired()
+            let exhausted = !state.results.is_empty() && state.next_offset >= state.results.len();
+            rerun || state.is_empty() || state.is_expired() || exhausted
         };
 
         if needs_refresh {
@@ -1678,5 +1679,92 @@ mod ask_agent_filter_tests {
             205
         );
         assert!(first.has_more ^ second.has_more);
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_three_waiters_two_pages_reruns_after_cache_exhaustion() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), true);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+
+        let first_tools = tools.clone();
+        let second_tools = tools.clone();
+        let third_tools = tools.clone();
+        let first = tokio::spawn(async move {
+            first_tools
+                .just_execute(
+                    "paged".into(),
+                    None,
+                    None,
+                    false,
+                    &agentic_tools_core::ToolContext::default(),
+                )
+                .await
+        });
+        let second = tokio::spawn(async move {
+            second_tools
+                .just_execute(
+                    "paged".into(),
+                    None,
+                    None,
+                    false,
+                    &agentic_tools_core::ToolContext::default(),
+                )
+                .await
+        });
+        let third = tokio::spawn(async move {
+            third_tools
+                .just_execute(
+                    "paged".into(),
+                    None,
+                    None,
+                    false,
+                    &agentic_tools_core::ToolContext::default(),
+                )
+                .await
+        });
+
+        let first = match first.await {
+            Ok(result) => result.unwrap_or_else(|e| panic!("first execute failed: {e}")),
+            Err(err) => panic!("first join failed: {err}"),
+        };
+        let second = match second.await {
+            Ok(result) => result.unwrap_or_else(|e| panic!("second execute failed: {e}")),
+            Err(err) => panic!("second join failed: {err}"),
+        };
+        let third = match third.await {
+            Ok(result) => result.unwrap_or_else(|e| panic!("third execute failed: {e}")),
+            Err(err) => panic!("third join failed: {err}"),
+        };
+        let results = [first, second, third];
+
+        assert!(results.iter().all(|result| !result.stdout.is_empty()));
+
+        let first_page_count = results
+            .iter()
+            .filter(|result| result.has_more && result.stdout.starts_with("out-1\n"))
+            .count();
+        assert_eq!(first_page_count, 2);
+
+        let second_page_count = results
+            .iter()
+            .filter(|result| !result.has_more && result.stdout == numbered_output("out", 201..=205))
+            .count();
+        assert_eq!(second_page_count, 1);
+
+        assert_eq!(read_counter(tmp.path()).trim(), "2");
     }
 }
