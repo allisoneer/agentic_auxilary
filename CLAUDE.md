@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working with this repository.
+Canonical repository guidance for AI-assisted work in this repository. Keep repo-specific instructions here. Preserve the xtask-managed crate-index block unchanged.
 
 ## Repository Structure
 
@@ -62,6 +62,168 @@ Guidance for Claude Code when working with this repository.
 - `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 <!-- END:xtask:autogen -->
 
+## Common Commands
+
+### Per-crate commands
+
+```bash
+just crate-check <crate>    # Run formatting and clippy checks for a crate
+just crate-test <crate>     # Run tests for a crate
+just crate-build <crate>    # Build a crate
+just crate-run <crate>      # Run a crate
+```
+
+### Workspace commands
+
+```bash
+just check             # Check entire workspace (fmt-check + clippy)
+just fix               # Auto-fix clippy warnings across workspace
+just test              # Run tests for entire workspace
+just test-integration  # Run tests including #[ignore] integration tests (sets THOUGHTS_INTEGRATION_TESTS=1)
+just build             # Build entire workspace
+just fmt               # Format entire workspace
+just fmt-check         # Check formatting across entire workspace
+```
+
+### xtask commands
+
+```bash
+just xtask-sync         # Sync generated repo metadata files (CLAUDE.md, release-plz.toml, mise.toml, README.md, justfile, agentic.schema.json)
+just xtask-verify       # Verify metadata, policy, and file freshness
+just xtask-sync-check   # Check if sync is needed (for CI)
+just xtask-verify-check # Full verification including generated files
+```
+
+`xtask-sync` updates generated repo metadata such as root/per-crate `CLAUDE.md`, `release-plz.toml`, `mise.toml`, `README.md`, `justfile`, and `agentic.schema.json`. It does not manage `mise.lock`; keep that manual.
+
+Release PRs labeled `release` trigger `.github/workflows/readme-sync.yml`, which runs full `cargo run -p xtask -- sync` on same-repo PR heads and auto-commits only xtask-managed generated outputs when they are stale.
+
+`cargo run -p xtask -- release-plz-preflight` is the release-plz-only first-publish guard. It checks crates configured to publish by `tools/policy.toml` against crates.io before the release-plz action runs. If it fails, either first-publish the missing crate locally with `cargo publish -p <crate>` or mark it unpublished in `tools/policy.toml` and rerun `cargo run -p xtask -- sync`.
+
+`mise.lock` stays operator-managed because it depends on GitHub Release assets that do not exist until after tag-driven release automation finishes. After those releases complete, regenerate it with `MISE_LOCKED=0 mise lock` and commit the resulting `mise.lock`.
+
+Release policy is conservative by default: libraries publishable to crates.io do not get GitHub-release-facing tags unless explicitly allowlisted in `tools/policy.toml`. The intended tagged packages are the distributed apps, while `message-optimizer-bin` remains an intentional outlier: it keeps release-plz tagging enabled but is not being normalized into the broader shipped-app or `mise` workflows in this task.
+
+### Endpoint coverage (opencode-rs SDK)
+
+```bash
+just endpoint-coverage       # Print opencode-rs API endpoint coverage report
+just endpoint-coverage-check # Fail if coverage regresses
+just endpoint-coverage-json  # JSON output for tooling
+```
+
+### Schema generation
+
+```bash
+just schema-generate    # Regenerate agentic.schema.json from Rust types
+```
+
+### Vendored Codex
+
+`vendor/codex/` is a foreign vendored subtree excluded from the root workspace. Do not edit it as a first-class workspace member.
+
+```bash
+just codex-check          # Check vendored Codex workspace
+just codex-build          # Build vendored Codex CLI
+just codex-test           # Run vendored Codex tests (best-effort)
+just codex-run -- <args>  # Run the vendored codex binary
+```
+
+## Toolchain and Formatter Quirks
+
+- Stable toolchain pinned to `1.93.0` (`rust-toolchain.toml`).
+- Formatting requires nightly: `just fmt` and `just fmt-check` run `cargo +nightly fmt`. Running `cargo fmt` without `+nightly` uses the wrong edition settings and fails.
+- `rustfmt.toml` uses `edition = "2024"` and `imports_granularity = "Item"`; do not change these.
+- `just test` runs `mcp-test` (MCP schema validation via `npx @modelcontextprotocol/inspector`) before nextest. Node.js and `npx` must be available.
+
+## Lint Policy
+
+- `.unwrap()` and `.expect()` are banned workspace-wide (clippy `warn`). Use `?` or explicit error handling.
+- `clippy.toml` allows `.unwrap()` and `.expect()` inside `#[cfg(test)]` test code only.
+- Every `unsafe` block requires a `// SAFETY:` comment (`undocumented_unsafe_blocks = "warn"`).
+- `#[allow(...)]` is banned; use `#[expect(...)]` instead (`allow_attributes = "warn"`).
+- `Arc::clone(&x)` is required over `x.clone()` for ref-counted types (`clone_on_ref_ptr = "warn"`).
+- Workspace lint inheritance: add `[lints]` with `workspace = true` when creating or modifying crate `Cargo.toml` files.
+
+## Output Modes
+
+The `tools/agent-wrap.sh` wrapper controls command output:
+
+- `minimal` (default locally): print a single success line; failures show a short tail
+- `normal` (default in CI): show full command output
+- `verbose`: show direct command output with extra nextest verbosity
+
+Examples:
+
+```bash
+just test
+OUTPUT_MODE=normal just test
+OUTPUT_MODE=verbose just test
+RUST_LOG=gpt5_reasoner=debug just test
+```
+
+## Git Write Recipes
+
+For agents without shell access, these just recipes provide git-aware move/remove operations:
+
+| Recipe | Parameters | Description |
+| --- | --- | --- |
+| `git-mv` | `src` `dst` `mkdir_parents="true"` | Move/rename a tracked path with git mv |
+| `git-rm` | `path` `force="false"` `recursive="auto"` | Remove a tracked path with git rm |
+
+## Read-Only Git Inspection Recipes
+
+For agents without shell access, these just recipes provide safe, read-only git inspection. All commands use `--no-pager` to avoid interactive hangs. Paths with spaces must be quoted.
+
+| Recipe | Parameters | Description |
+| --- | --- | --- |
+| `git-context` | `n="5"` | Repo root, branch or HEAD, remotes, status, recent commits |
+| `git-log` | `n="20"` `path=""` | Commit history, optionally scoped to a path |
+| `git-diff` | `area="both"` `format="stat"` `path=""` | Diff output with scope and format controls |
+| `git-blame` | `file` `start=""` `end=""` | Line authorship, optionally limited to a range |
+| `git-show` | `ref` `path=""` | Commit details or file contents at a ref |
+| `git-files` | `patterns=""` | Tracked files, optionally filtered by pathspecs |
+
+`git-diff` supports:
+
+- `area`: `both` | `working` | `staged` | `head`
+- `format`: `stat` | `patch` | `name-only` | `name-status`
+
+Examples:
+
+```bash
+just git-context
+just git-log 30 rust/
+just git-diff working patch
+just git-diff staged name-status "frontend/src/"
+just git-blame README.md
+just git-blame "src/main.rs" 10 50
+just git-show HEAD
+just git-show HEAD rust/Cargo.toml
+just git-files
+just git-files "*.md docs/"
+```
+
+## README Version Sync
+
+Run locally to update README versions:
+
+```bash
+cargo run -p xtask -- readme-sync
+```
+
+Dry run (prints updated README content to stdout, does not write the file):
+
+```bash
+cargo run -p xtask -- readme-sync --dry-run
+```
+
+Strict mode (fails on malformed markers or unknown crates):
+
+```bash
+AUTODEPS_STRICT=1 cargo run -p xtask -- readme-sync
+```
+
 ## Project Context Files
 
 These files contain important project-level context that should be read and kept up to date:
@@ -86,135 +248,19 @@ These files contain important project-level context that should be read and kept
 - GPT-5 Reasoner integration
 - Decision flowchart for choosing the right agent/command
 
-## Common Commands
-
-### All Tools (per-tool directory)
-```bash
-just crate-check <crate>    # Run formatting and clippy checks for a crate
-just crate-test <crate>     # Run tests for a crate
-just crate-build <crate>    # Build a crate
-```
-
-### Root-level orchestration
-```bash
-just check          # Check entire workspace (fmt + clippy)
-just test           # Test entire workspace
-just build          # Build entire workspace
-just fmt            # Format entire workspace
-just fmt-check      # Check formatting across entire workspace
-```
-
-### xtask commands
-```bash
-just xtask-sync         # Sync autogen content (CLAUDE.md, release-plz.toml, README.md, justfile)
-just xtask-verify       # Verify metadata, policy, and file freshness
-just xtask-sync-check   # Check if sync is needed (for CI)
-just xtask-verify-check # Full verification including generated files
-```
-
-### Vendored Codex
-```bash
-just codex-check        # Check vendored Codex from vendor/codex/codex-rs
-just codex-build        # Build vendored Codex CLI
-just codex-test         # Run vendored Codex tests (best-effort)
-just codex-run -- ...   # Run the vendored codex binary
-```
-
-`vendor/codex/` is a foreign vendored subtree. Keep it out of the root workspace, do not edit it as if it were a first-class workspace family, and run Codex commands by delegating into `vendor/codex/codex-rs`.
-
-### Output modes
-```bash
-# Default: minimal (quiet on success, verbose on failure)
-just test
-
-# Normal mode: full cargo output
-OUTPUT_MODE=normal just test
-
-# Verbose mode: extra verbosity flags
-OUTPUT_MODE=verbose just test
-
-# Debugging example
-RUST_LOG=gpt5_reasoner=debug just test
-```
-
-The `tools/agent-wrap.sh` wrapper controls output:
-- **minimal** (default locally): Commands print a single `✓ task` line on success; failures show `✗ task failed` plus the tail of output
-- **normal** (default in CI): Commands run directly with full output
-- **verbose**: Commands run directly with additional nextest verbosity flags
-
-### Git Navigation (Read-Only)
-
-For agents without shell access, these just recipes provide safe, read-only git inspection. All commands use `--no-pager` to avoid interactive hangs. Paths with spaces must be quoted for single-path parameters. Note: `git-files` takes whitespace-separated pathspec patterns, so paths containing spaces are not supported there.
-
-| Recipe | Parameters | Description |
-|--------|------------|-------------|
-| `git-context` | `n="5"` | Snapshot: repo root, branch/HEAD, remotes, status, last N commits |
-| `git-log` | `n="20"` `path=""` | Commit history, optionally scoped to a path |
-| `git-diff` | `area="both"` `format="stat"` `path=""` | Diffs with flexible scope and output format |
-| `git-blame` | `file` `start=""` `end=""` | Line authorship, optionally limited to line range |
-| `git-show` | `ref` `path=""` | Commit details (ref only) or file contents (ref + path) |
-| `git-files` | `patterns=""` | List tracked files, optionally filtered by pathspecs |
-
-**git-diff parameters:**
-- `area`: `both` | `working` | `staged` | `head`
-- `format`: `stat` | `patch` | `name-only` | `name-status`
-
-**Examples:**
-
-```bash
-just git-context
-just git-log 30 rust/
-just git-diff working patch
-just git-diff staged name-status "frontend/src/"
-just git-blame README.md
-just git-blame "src/main.rs" 10 50
-just git-show HEAD
-just git-show HEAD rust/Cargo.toml
-just git-files
-just git-files "*.md docs/"
-```
-
-## README version sync (xtask)
-
-- Run locally to update README versions:
-```bash
-cargo run -p xtask -- readme-sync
-```
-- Dry run (prints updated README content to stdout, does not write file):
-```bash
-cargo run -p xtask -- readme-sync --dry-run
-```
-- Strict mode (fail on malformed markers or unknown crates):
-```bash
-AUTODEPS_STRICT=1 cargo run -p xtask -- readme-sync
-```
-
 ## Review Workflow
 
 See `workflow.md` -> "Code Review (/review)" for:
+
 - Dedicated Review agents (ReviewClaude/ReviewOpenAI)
 - Tool isolation rules for `review_*`
 - End-to-end `/review` usage
 
-## Code Style Guidelines
+## Code Style Guidance
 
-### Workspace Lint Conformance
+Repository-specific TODO annotations use these severity tags:
 
-When modifying any crate, bring it toward workspace lint/rule conformance if it doesn't already use `lints.workspace = true`:
-
-1. **Check current state**: Look for `[lints]` section in the crate's `Cargo.toml`
-2. **Add workspace lints**: If missing, add `[lints]` with `workspace = true`
-3. **Fix violations**: Run `cargo clippy -p <crate> --all-targets -- -D warnings` and address issues
-4. **Incremental is acceptable**: Large crates may require multiple passes; use `#[allow(...)]` with TODO comments for complex fixes that need separate PRs
-
-This ensures the codebase moves toward consistent quality standards without requiring massive all-at-once migrations.
-
-### TODO Annotations
-
-Rules on comment annotations:
-
-- Keep TODO annotations tagged with severity/priority:
-    - TODO(0): Egregious bugs, marked temporarily during development, should never be merged to head
-    - TODO(1): Significant architectural flaws, minor bugs
-    - TODO(2): Minor design flaws, lacking elegance, missing functionality
-    - TODO(3): Minor issues, e.g., lacking unit test coverage
+- `TODO(0)`: egregious bugs; temporary during development and should not merge to head
+- `TODO(1)`: significant architectural flaws or minor bugs
+- `TODO(2)`: minor design flaws, missing functionality, or elegance issues
+- `TODO(3)`: minor issues such as missing unit test coverage

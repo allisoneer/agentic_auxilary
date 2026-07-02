@@ -93,14 +93,13 @@ allow = [
 ]
 
 [todos]
-# Enforce severity-tagged annotations (see CLAUDE.md:145-149).
+# Enforce severity-tagged annotations defined in the root CLAUDE.md task-annotation section.
 # Severity 0 indicates "must never be merged to HEAD".
 blocked_severities = [0]
 
 # Repo-relative path prefixes to exclude from scanning.
 ignore_paths = [
   "CLAUDE.md",                                            # Convention definition text
-  "AGENTS.md",                                            # Convention definition text
   "crates/meta/xtask/src/verify.rs",                      # Self-referential enforcement code
   "crates/infra/thoughts-core/CLAUDE.md",                 # Prose mention
   "crates/legacy/universal-tool-examples/",               # Legacy example READMEs with CLI examples
