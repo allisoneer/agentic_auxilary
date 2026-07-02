@@ -4,10 +4,9 @@
 //! - IT-BUG1: Empty responses after permission completion (message extraction race)
 //! - IT-BUG2: Misleading response on rejection (returns stale pre-rejection text)
 //! - IT-BUG3: Session requires resumption to get response (same race as BUG1)
-//! - IT-BUG4: Network error on command dispatch (no bounded HTTP retry)
+//! - IT-BUG4: Network error on command dispatch without unsafe orchestrator retry
 //!
-//! The tests are designed to FAIL on current code (pre-fix), confirming the bugs exist.
-//! After implementing fixes, all tests should PASS.
+//! These regressions lock in the current intended behavior for each historical bug.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -492,18 +491,15 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     assert_eq!(result.response.as_deref(), Some("POST_PERMISSION_TEXT"));
 }
 
-/// IT-BUG4: Command dispatch should retry on transport-level timeout.
-///
-/// Pre-fix behavior: First timeout error propagates immediately.
-/// Post-fix behavior: Retry succeeds, command executes.
+/// IT-BUG4: Command transport failures must not be retried without start evidence.
 #[tokio::test]
-async fn it_bug4_command_dispatch_retries_on_transport_error() {
+async fn it_bug4_command_dispatch_transport_error_does_not_retry_without_start_evidence() {
     let mock = MockServer::start().await;
-    // Use short timeout client (1 second)
     let base_url = mock.uri().trim_end_matches('/').to_string();
     let client = opencode_rs::ClientBuilder::new()
         .base_url(&base_url)
-        .timeout_secs(1) // 1 second timeout
+        .directory("/tmp".to_string())
+        .timeout_secs(1)
         .build()
         .unwrap();
     let server = Arc::new(OrchestratorServerHandle::from_server_unshared(
@@ -532,12 +528,9 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .mount(&mock)
         .await;
 
-    // GET /session/status - busy initially, then idle (after command succeeds)
-    // Multiple busy responses to handle initial check + polling
     let status_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // initial check
-        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // poll: sets observed_busy=true
-        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // poll: idle, triggers completion
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
     Mock::given(method("GET"))
         .and(path("/session/status"))
@@ -558,12 +551,13 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .mount(&mock)
         .await;
 
-    // GET /session/s4/message
+    // GET /session/s4/message - baseline and transcript probe both show no start evidence.
     Mock::given(method("GET"))
         .and(path("/session/s4/message"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("COMMAND_RESULT"))),
-        )
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ]))
         .mount(&mock)
         .await;
 
@@ -578,33 +572,18 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         .mount(&mock)
         .await;
 
-    // POST /session/s4/command - FIRST: timeout (delay > client timeout), SECOND: success
-    // Note: wiremock-rs doesn't have Fault types, so we use set_delay to cause timeout
-
-    // Mount first request with long delay (causes timeout)
     Mock::given(method("POST"))
         .and(path("/session/s4/command"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(serde_json::json!({"status": "executed"}))
-                .set_delay(Duration::from_secs(30)), // 30s delay > 1s timeout
-        )
-        .up_to_n_times(1) // Only first request
-        .mount(&mock)
-        .await;
-
-    // Mount second request with immediate response
-    Mock::given(method("POST"))
-        .and(path("/session/s4/command"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "executed"})),
+                .set_delay(Duration::from_secs(30)),
         )
         .mount(&mock)
         .await;
 
-    // Act
-    let result = timeout(
-        Duration::from_secs(15), // Overall test timeout
+    let err = timeout(
+        Duration::from_secs(5),
         tool.call(
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
@@ -617,20 +596,22 @@ async fn it_bug4_command_dispatch_retries_on_transport_error() {
         ),
     )
     .await
-    .expect("test timed out");
+    .expect("test timed out")
+    .expect_err("transport error without start evidence should fail");
 
-    // Assert
-    // Pre-fix: Error returned due to timeout on first command attempt
-    // Post-fix: Retry succeeds, status is Completed
-    assert!(
-        result.is_ok(),
-        "Pre-fix: command times out; Post-fix: retry succeeds. Got error: {:?}",
-        result.err()
-    );
+    let message = err.to_string().to_lowercase();
+    assert!(message.contains("transport error before session start evidence"));
 
-    let output = result.unwrap();
-    assert!(
-        matches!(output.status, RunStatus::Completed),
-        "expected Completed status after retry"
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    let command_posts = requests
+        .iter()
+        .filter(|request| request.url.path() == "/session/s4/command")
+        .count();
+    assert_eq!(
+        command_posts, 1,
+        "orchestrator must not retry ambiguous transport errors"
     );
 }

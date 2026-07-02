@@ -42,6 +42,7 @@ use agentic_tools_core::ToolRegistry;
 use agentic_tools_core::fmt::TextFormat;
 use agentic_tools_core::fmt::TextOptions;
 use futures::future::BoxFuture;
+use opencode_rs::OpencodeError;
 use opencode_rs::types::event::Event;
 use opencode_rs::types::message::CommandRequest;
 use opencode_rs::types::message::Message;
@@ -59,6 +60,8 @@ use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use tokio::task::JoinHandle;
 
 const SERVER_NAME: &str = "opencode-orchestrator-mcp";
@@ -78,6 +81,12 @@ struct RunOutcome {
 enum PermissionPreflightMode {
     Strict,
     RespondPermissionContinuation,
+}
+
+#[derive(Debug, Clone)]
+struct CommandTranscriptWindow {
+    command_message_id: String,
+    baseline_tail_message_id: Option<String>,
 }
 
 fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
@@ -128,11 +137,36 @@ impl RunOutcome {
     }
 }
 
-async fn abort_command_task(task: &mut Option<JoinHandle<Result<(), String>>>) {
+async fn abort_command_task(task: &mut Option<JoinHandle<Result<(), OpencodeError>>>) {
     if let Some(handle) = task.take() {
         handle.abort();
         let _ = handle.await;
     }
+}
+
+fn make_command_message_id(session_id: &str) -> String {
+    let issued_at_nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    format!("orchestrator-command-{session_id}-{issued_at_nanos}")
+}
+
+fn transcript_indicates_command_dispatch(
+    messages: &[Message],
+    transcript_window: &CommandTranscriptWindow,
+) -> bool {
+    if messages
+        .iter()
+        .any(|message| message.id() == transcript_window.command_message_id)
+    {
+        return true;
+    }
+
+    transcript_window
+        .baseline_tail_message_id
+        .as_ref()
+        .and_then(|baseline| messages.iter().position(|message| message.id() == baseline))
+        .is_some_and(|index| index + 1 < messages.len())
 }
 
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
@@ -589,11 +623,25 @@ impl OrchestratorRunTool {
         }
 
         // 6. Kick off the work
-        let mut command_task: Option<JoinHandle<Result<(), String>>> = None;
+        let mut command_task: Option<JoinHandle<Result<(), OpencodeError>>> = None;
         let mut command_name_for_logging: Option<String> = None;
+        let mut command_transcript_window: Option<CommandTranscriptWindow> = None;
 
         if let Some(command) = &input.command {
             command_name_for_logging = Some(command.clone());
+
+            let command_message_id = make_command_message_id(&session_id);
+            // Keep transcript usage narrowly scoped to transport-error start-evidence checks.
+            let baseline_tail_message_id = client
+                .messages()
+                .list(&session_id)
+                .await
+                .ok()
+                .and_then(|messages| messages.last().map(|message| message.id().to_string()));
+            command_transcript_window = Some(CommandTranscriptWindow {
+                command_message_id: command_message_id.clone(),
+                baseline_tail_message_id,
+            });
 
             let cmd_client = client.clone();
             let cmd_session_id = session_id.clone();
@@ -601,10 +649,13 @@ impl OrchestratorRunTool {
             let cmd_arguments = message.clone().unwrap_or_default();
 
             command_task = Some(tokio::spawn(async move {
+                // OpenCode's /command request is completion-coupled rather than fire-and-forget.
+                // Once start evidence exists, later transport failures are ambiguous and we must
+                // continue supervision via SSE + status polling instead of retrying blindly.
                 let req = CommandRequest {
                     command: cmd_name,
                     arguments: cmd_arguments,
-                    message_id: None,
+                    message_id: Some(command_message_id),
                 };
 
                 cmd_client
@@ -612,7 +663,6 @@ impl OrchestratorRunTool {
                     .command(&cmd_session_id, &req)
                     .await
                     .map(|_| ())
-                    .map_err(|e| e.to_string())
             }));
         } else if let Some(msg) = &message {
             // Send prompt asynchronously
@@ -985,7 +1035,7 @@ impl OrchestratorRunTool {
                         Some(handle) => Some(handle.await),
                         None => {
                             std::future::pending::<
-                                Option<Result<Result<(), String>, tokio::task::JoinError>>,
+                                Option<Result<Result<(), OpencodeError>, tokio::task::JoinError>>,
                             >()
                             .await
                         }
@@ -1001,16 +1051,97 @@ impl OrchestratorRunTool {
                             );
                             command_task = None;
                         }
-                        Some(Ok(Err(e))) => {
+                        Some(Ok(Err(error))) => {
+                            let command_name = command_name_for_logging.as_deref().unwrap_or("unknown");
+
+                            if error.is_validation_error() || error.is_not_found() {
+                                tracing::warn!(
+                                    session_id = %session_id,
+                                    command = command_name,
+                                    error = %error,
+                                    "run: command dispatch rejected before start"
+                                );
+                                return Err(ToolError::InvalidInput(format!(
+                                    "Failed to dispatch command '{command_name}': {error}"
+                                )));
+                            }
+
+                            if !matches!(error, OpencodeError::Transport(_)) {
+                                tracing::error!(
+                                    session_id = %session_id,
+                                    command = command_name,
+                                    error = %error,
+                                    "run: command dispatch failed"
+                                );
+                                return Err(ToolError::Internal(format!(
+                                    "Failed to dispatch command '{command_name}': {error}"
+                                )));
+                            }
+
+                            let mut start_evidence = observed_busy;
+
+                            if !start_evidence
+                                && let Ok(status) = client.sessions().status_for(&session_id).await
+                                && status.is_busy_like()
+                            {
+                                start_evidence = true;
+                                observed_busy = true;
+                                last_activity_time = tokio::time::Instant::now();
+                                awaiting_idle_grace_check = false;
+                            }
+
+                            if !start_evidence
+                                && let Some(transcript_window) = command_transcript_window.as_ref()
+                            {
+                                // This bounded transcript probe only decides whether dispatch
+                                // already started after an ambiguous /command transport failure.
+                                match client.messages().list(&session_id).await {
+                                    Ok(messages)
+                                        if transcript_indicates_command_dispatch(
+                                            &messages,
+                                            transcript_window,
+                                        ) =>
+                                    {
+                                        start_evidence = true;
+                                        idle_grace_deadline.get_or_insert_with(|| {
+                                            tokio::time::Instant::now() + idle_grace
+                                        });
+                                        last_activity_time = tokio::time::Instant::now();
+                                    }
+                                    Ok(_) => {}
+                                    Err(probe_error) => {
+                                        tracing::warn!(
+                                            session_id = %session_id,
+                                            command = command_name,
+                                            error = %probe_error,
+                                            "run: transcript probe failed after command transport error"
+                                        );
+                                    }
+                                }
+                            }
+
+                            if start_evidence {
+                                tracing::warn!(
+                                    session_id = %session_id,
+                                    command = command_name,
+                                    error = %error,
+                                    "run: command transport error after start evidence; continuing supervision"
+                                );
+                                warnings.push(format!(
+                                    "OpenCode command transport error after start evidence; continuing supervision: {error}"
+                                ));
+                                command_task = None;
+                                continue;
+                            }
+
                             tracing::error!(
                                 session_id = %session_id,
-                                command = ?command_name_for_logging,
-                                error = %e,
-                                "run: command dispatch failed"
+                                command = command_name,
+                                error = %error,
+                                "run: command transport error before start evidence"
                             );
                             return Err(ToolError::Internal(format!(
-                                "Failed to execute command '{}': {e}",
-                                command_name_for_logging.as_deref().unwrap_or("unknown")
+                                "Failed to dispatch command '{command_name}': transport error before session start evidence: {error}"
                             )));
                         }
                         Some(Err(join_err)) => {
