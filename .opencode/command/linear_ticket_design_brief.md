@@ -14,7 +14,7 @@ Read one Linear ticket and its full comment history, persist a ticket corpus art
 4. Require exactly one Linear ticket reference; ask and stop if it is missing or ambiguous.
 5. Full ticket read means `linear_read_issue` plus repeated `linear_get_issue_comments` until `has_more=false`; stop fetching comments immediately after `has_more=false` and do not call again.
 6. Persist the authoritative ticket corpus artifact before posting to Linear, and run `thoughts_sync` after each artifact write.
-7. This command is strictly comment-only: post exactly one final Linear comment with `linear_add_comment`, and do not mutate issue fields, create plans, implement code, commit, push, or create/update PRs.
+7. This command is strictly Linear comment-only: post exactly one final Linear comment with `linear_add_comment`, and do not mutate Linear issue fields or perform any other external workflow mutations such as creating plans, implementing code, committing, pushing, or creating/updating PRs.
 8. Duplicate runs may append fresh comments and create fresh artifacts; do not attempt comment updates or deduplication.
 9. Bounded research is allowed only when needed to avoid guessing.
 10. Hard stop immediately after posting the Linear comment and returning the compact summary.
