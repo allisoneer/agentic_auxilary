@@ -5,7 +5,6 @@ use crate::types::SortOrder;
 use crate::walker::{self};
 use agentic_tools_core::ToolError;
 use globset::Glob;
-use ignore::WalkBuilder;
 use std::path::Path;
 
 /// Configuration for glob search.
@@ -19,6 +18,8 @@ pub struct GlobConfig {
     pub ignore_globs: Vec<String>,
     /// Include hidden files
     pub include_hidden: bool,
+    /// Include paths normally ignored by gitignore and default ignores
+    pub include_ignored: bool,
     /// Sort order: name or mtime
     pub sort: SortOrder,
     /// Max results to return (capped at 1000)
@@ -54,9 +55,6 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
     })?;
     let pattern_matcher = pattern_glob.compile_matcher();
 
-    // Build ignore globset
-    let ignore_gs = walker::build_ignore_globset(&cfg.ignore_globs)?;
-
     // Cap head_limit
     let head_limit = cfg.head_limit.min(MAX_HEAD_LIMIT);
 
@@ -64,27 +62,12 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
     let mut entries: Vec<GlobEntry> = Vec::new();
 
     // Configure walker
-    let mut builder = WalkBuilder::new(root_path);
-    builder.hidden(!cfg.include_hidden);
-    builder.git_ignore(true);
-    builder.git_global(true);
-    builder.git_exclude(true);
-    builder.parents(false);
-    builder.follow_links(false);
-
-    // Apply custom ignore filter
-    let root_clone = root_path.to_path_buf();
-    builder.filter_entry(move |entry| {
-        let rel = entry
-            .path()
-            .strip_prefix(&root_clone)
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default();
-        if rel.is_empty() {
-            return true;
-        }
-        !ignore_gs.is_match(&rel)
-    });
+    let builder = walker::build_search_walker(
+        root_path,
+        cfg.include_hidden,
+        cfg.include_ignored,
+        &cfg.ignore_globs,
+    )?;
 
     for result in builder.build() {
         match result {

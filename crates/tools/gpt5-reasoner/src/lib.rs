@@ -12,6 +12,8 @@ pub mod engine;
 pub use engine::gpt5_reasoner_impl;
 pub use tools::build_registry;
 
+pub(crate) const PLAN_STRUCTURE_FILENAME: &str = "plan_structure.md";
+
 // NEW: logging utilities
 mod logging; // not public; used internally via crate::logging
 

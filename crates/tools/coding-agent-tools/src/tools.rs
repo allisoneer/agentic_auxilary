@@ -189,6 +189,9 @@ pub struct SearchGrepInput {
     /// Include hidden files (default: false)
     #[serde(default)]
     pub include_hidden: Option<bool>,
+    /// Include paths normally ignored by gitignore and default ignores (default: false)
+    #[serde(default)]
+    pub include_ignored: Option<bool>,
     /// Case-insensitive matching (default: false)
     #[serde(default)]
     pub case_insensitive: Option<bool>,
@@ -234,7 +237,7 @@ impl Tool for SearchGrepTool {
     type Input = SearchGrepInput;
     type Output = GrepOutput;
     const NAME: &'static str = "cli_grep";
-    const DESCRIPTION: &'static str = "Regex-based search. Modes: files (default), content, count. Stateless pagination via head_limit+offset.";
+    const DESCRIPTION: &'static str = "Regex-based search. Applies default ignores (gitignore + common dirs like node_modules/, target/, logs/). If expected matches are missing, retry with include_ignored=true. Modes: files (default), content, count. Stateless pagination via head_limit+offset.";
 
     fn call(
         &self,
@@ -251,6 +254,7 @@ impl Tool for SearchGrepTool {
                     input.globs,
                     input.ignore,
                     input.include_hidden,
+                    input.include_ignored,
                     input.case_insensitive,
                     input.multiline,
                     input.line_numbers,
@@ -284,6 +288,9 @@ pub struct SearchGlobInput {
     /// Include hidden files (default: false)
     #[serde(default)]
     pub include_hidden: Option<bool>,
+    /// Include paths normally ignored by gitignore and default ignores (default: false)
+    #[serde(default)]
+    pub include_ignored: Option<bool>,
     /// Sort order: 'name' (default) or 'mtime' (newest first)
     #[serde(default)]
     pub sort: Option<SortOrder>,
@@ -311,7 +318,7 @@ impl Tool for SearchGlobTool {
     type Input = SearchGlobInput;
     type Output = GlobOutput;
     const NAME: &'static str = "cli_glob";
-    const DESCRIPTION: &'static str = "Glob-based path match. Sorting by name (default) or mtime (newest first). Stateless pagination via head_limit+offset.";
+    const DESCRIPTION: &'static str = "Glob-based path match. Applies default ignores (gitignore + common dirs like node_modules/, target/, logs/). If expected matches are missing, retry with include_ignored=true. Sorting by name (default) or mtime (newest first). Stateless pagination via head_limit+offset.";
 
     fn call(
         &self,
@@ -326,6 +333,7 @@ impl Tool for SearchGlobTool {
                     input.path,
                     input.ignore,
                     input.include_hidden,
+                    input.include_ignored,
                     input.sort,
                     input.head_limit,
                     input.offset,

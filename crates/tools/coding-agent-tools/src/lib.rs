@@ -585,6 +585,10 @@ impl CodingAgentTools {
 
     /// Search the codebase using a regex pattern (gitignore-aware).
     #[expect(
+        clippy::too_many_arguments,
+        reason = "Tool surface mirrors schema fields"
+    )]
+    #[expect(
         clippy::unused_async,
         reason = "Must remain async for Tool trait BoxFuture dispatch pattern."
     )]
@@ -596,6 +600,7 @@ impl CodingAgentTools {
         globs: Option<Vec<String>>,
         ignore: Option<Vec<String>>,
         include_hidden: Option<bool>,
+        include_ignored: Option<bool>,
         case_insensitive: Option<bool>,
         multiline: Option<bool>,
         line_numbers: Option<bool>,
@@ -608,6 +613,7 @@ impl CodingAgentTools {
     ) -> Result<GrepOutput, ToolError> {
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("cli_grep");
+        let include_ignored = include_ignored.unwrap_or(false);
         let req_json = serde_json::json!({
             "pattern": &pattern,
             "path": &path,
@@ -615,6 +621,7 @@ impl CodingAgentTools {
             "globs": &globs,
             "ignore": &ignore,
             "include_hidden": include_hidden,
+            "include_ignored": include_ignored,
             "case_insensitive": case_insensitive,
             "multiline": multiline,
             "line_numbers": line_numbers,
@@ -636,7 +643,9 @@ impl CodingAgentTools {
         };
         // Combine user-provided ignore patterns with config's extra_ignore_patterns
         let mut combined_ignores = ignore.unwrap_or_default();
-        combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
+        if !include_ignored {
+            combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
+        }
 
         let cfg = grep::GrepConfig {
             root: abs_root,
@@ -645,6 +654,7 @@ impl CodingAgentTools {
             include_globs: globs.unwrap_or_default(),
             ignore_globs: combined_ignores,
             include_hidden: include_hidden.unwrap_or(false),
+            include_ignored,
             case_insensitive: case_insensitive.unwrap_or(false),
             multiline: multiline.unwrap_or(false),
             line_numbers: line_numbers.unwrap_or(true),
@@ -684,17 +694,20 @@ impl CodingAgentTools {
         path: Option<String>,
         ignore: Option<Vec<String>>,
         include_hidden: Option<bool>,
+        include_ignored: Option<bool>,
         sort: Option<SortOrder>,
         head_limit: Option<usize>,
         offset: Option<usize>,
     ) -> Result<GlobOutput, ToolError> {
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("cli_glob");
+        let include_ignored = include_ignored.unwrap_or(false);
         let req_json = serde_json::json!({
             "pattern": &pattern,
             "path": &path,
             "ignore": &ignore,
             "include_hidden": include_hidden,
+            "include_ignored": include_ignored,
             "sort": sort.map(|s| format!("{s:?}").to_lowercase()),
             "head_limit": head_limit,
             "offset": offset,
@@ -710,13 +723,16 @@ impl CodingAgentTools {
         };
         // Combine user-provided ignore patterns with config's extra_ignore_patterns
         let mut combined_ignores = ignore.unwrap_or_default();
-        combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
+        if !include_ignored {
+            combined_ignores.extend(self.cli_tools.extra_ignore_patterns.iter().cloned());
+        }
 
         let cfg = glob::GlobConfig {
             root: abs_root,
             pattern,
             ignore_globs: combined_ignores,
             include_hidden: include_hidden.unwrap_or(false),
+            include_ignored,
             sort: sort.unwrap_or_default(),
             head_limit: head_limit.unwrap_or(self.cli_tools.glob_default_limit as usize),
             offset: offset.unwrap_or(0),

@@ -1,3 +1,4 @@
+use crate::PLAN_STRUCTURE_FILENAME;
 use crate::optimizer::parser::FileGroup;
 use crate::optimizer::parser::OptimizerOutput;
 use crate::types::FileMeta;
@@ -8,7 +9,7 @@ pub fn maybe_inject_plan_structure_meta(
     files: &mut Vec<FileMeta>,
 ) -> bool {
     if matches!(prompt_type, PromptType::Plan) {
-        let has_plan = files.iter().any(|f| f.filename == "plan_structure.md");
+        let has_plan = files.iter().any(|f| f.filename == PLAN_STRUCTURE_FILENAME);
         if !has_plan {
             tracing::info!(
                 "Auto-injecting plan_structure.md into files array for PromptType::Plan"
@@ -16,7 +17,7 @@ pub fn maybe_inject_plan_structure_meta(
             files.insert(
                 0,
                 FileMeta {
-                    filename: "plan_structure.md".to_string(),
+                    filename: PLAN_STRUCTURE_FILENAME.to_string(),
                     description: "Plan output structure template (auto-injected)".to_string(),
                 },
             );
@@ -77,7 +78,7 @@ pub fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
             name: "plan_template".to_string(),
             purpose: Some("Canonical plan template (executor guard).".to_string()),
             critical: Some(true),
-            files: vec!["plan_structure.md".to_string()],
+            files: vec![PLAN_STRUCTURE_FILENAME.to_string()],
         };
         parsed.groups.file_groups.insert(0, new_group);
     } else if let Some(g) = parsed
@@ -85,10 +86,10 @@ pub fn ensure_plan_template_group(parsed: &mut OptimizerOutput) {
         .file_groups
         .iter_mut()
         .find(|g| g.name == "plan_template")
-        && !g.files.iter().any(|f| f == "plan_structure.md")
+        && !g.files.iter().any(|f| f == PLAN_STRUCTURE_FILENAME)
     {
         tracing::warn!("'plan_template' group missing plan_structure.md; executor will add it.");
-        g.files.insert(0, "plan_structure.md".to_string());
+        g.files.insert(0, PLAN_STRUCTURE_FILENAME.to_string());
     }
 
     parsed.xml_template = ensure_xml_has_group_marker(&parsed.xml_template, "plan_template");
@@ -111,7 +112,7 @@ mod plan_guards_tests {
         let mut files = vec![];
         let changed = maybe_inject_plan_structure_meta(&PromptType::Plan, &mut files);
         assert!(changed);
-        assert_eq!(files[0].filename, "plan_structure.md");
+        assert_eq!(files[0].filename, PLAN_STRUCTURE_FILENAME);
 
         let changed_again = maybe_inject_plan_structure_meta(&PromptType::Plan, &mut files);
         assert!(!changed_again);
@@ -156,7 +157,7 @@ mod plan_guards_tests {
             .iter()
             .find(|g| g.name == "plan_template")
             .unwrap();
-        assert!(g.files.iter().any(|f| f == "plan_structure.md"));
+        assert!(g.files.iter().any(|f| f == PLAN_STRUCTURE_FILENAME));
         assert!(
             parsed
                 .xml_template

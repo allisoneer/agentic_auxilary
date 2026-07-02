@@ -72,15 +72,9 @@ pub const BUILTIN_IGNORES: &[&str] = &[
     "**/env/**",
 ];
 
-/// Build a `GlobSet` from built-in and user patterns.
-/// Public for reuse in grep/glob tools.
-pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+fn build_globset<'a>(patterns: impl IntoIterator<Item = &'a str>) -> Result<GlobSet, ToolError> {
     let mut builder = GlobSetBuilder::new();
-    for pattern in BUILTIN_IGNORES
-        .iter()
-        .copied()
-        .chain(user_patterns.iter().map(String::as_str))
-    {
+    for pattern in patterns {
         let glob = Glob::new(pattern).map_err(|e| {
             ToolError::invalid_input(format!("Invalid glob pattern '{pattern}': {e}"))
         })?;
@@ -89,6 +83,61 @@ pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolErr
     builder
         .build()
         .map_err(|e| ToolError::internal(format!("Failed to build globset: {e}")))
+}
+
+/// Build a `GlobSet` from built-in and user patterns.
+/// Public for reuse in grep/glob tools.
+pub fn build_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+    build_globset(
+        BUILTIN_IGNORES
+            .iter()
+            .copied()
+            .chain(user_patterns.iter().map(String::as_str)),
+    )
+}
+
+/// Build a `GlobSet` from user-provided patterns only.
+pub fn build_user_ignore_globset(user_patterns: &[String]) -> Result<GlobSet, ToolError> {
+    build_globset(user_patterns.iter().map(String::as_str))
+}
+
+/// Build a search walker with shared ignore/filter semantics for glob and grep.
+pub fn build_search_walker(
+    root: &Path,
+    include_hidden: bool,
+    include_ignored: bool,
+    ignore_globs: &[String],
+) -> Result<WalkBuilder, ToolError> {
+    let ignore_globset = if include_ignored {
+        build_user_ignore_globset(ignore_globs)?
+    } else {
+        build_ignore_globset(ignore_globs)?
+    };
+
+    let mut builder = WalkBuilder::new(root);
+    builder.hidden(!include_hidden);
+    let use_git_ignores = !include_ignored;
+    builder.git_ignore(use_git_ignores);
+    builder.git_global(use_git_ignores);
+    builder.git_exclude(use_git_ignores);
+    builder.ignore(use_git_ignores);
+    builder.parents(false);
+    builder.follow_links(false);
+
+    let root = root.to_path_buf();
+    builder.filter_entry(move |entry| {
+        let rel = entry
+            .path()
+            .strip_prefix(&root)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        if rel.is_empty() {
+            return true;
+        }
+        !ignore_globset.is_match(&rel)
+    });
+
+    Ok(builder)
 }
 
 /// Configuration for directory walking.
@@ -267,6 +316,14 @@ mod tests {
     fn invalid_pattern_errors() {
         let result = build_ignore_globset(&["[invalid".into()]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn user_ignore_globset_excludes_builtins() {
+        let gs = build_user_ignore_globset(&["*.log".into()]).unwrap();
+        assert!(gs.is_match("app.log"));
+        assert!(!gs.is_match("logs/app.jsonl"));
+        assert!(!gs.is_match("node_modules/pkg/index.js"));
     }
 
     #[test]

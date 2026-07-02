@@ -9,6 +9,7 @@ pub mod mise;
 pub mod policy;
 pub mod readme;
 pub mod release_plz;
+pub mod release_plz_preflight;
 pub mod schema;
 pub mod sync;
 pub mod verify;

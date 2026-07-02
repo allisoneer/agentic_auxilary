@@ -17,6 +17,7 @@ fn run_glob(
     pattern: &str,
     ignore_globs: Vec<String>,
     include_hidden: bool,
+    include_ignored: bool,
     sort: SortOrder,
     head_limit: usize,
     offset: usize,
@@ -26,6 +27,7 @@ fn run_glob(
         pattern: pattern.to_string(),
         ignore_globs,
         include_hidden,
+        include_ignored,
         sort,
         head_limit,
         offset,
@@ -57,12 +59,35 @@ fn setup_test_dir() -> TempDir {
     tmp
 }
 
+fn setup_ignored_search_dir() -> TempDir {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir_all(tmp.path().join(".git/info")).unwrap();
+    fs::write(tmp.path().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    fs::create_dir_all(tmp.path().join("logs")).unwrap();
+    fs::write(tmp.path().join("logs/found.jsonl"), "entry").unwrap();
+    fs::create_dir_all(tmp.path().join("gitignored")).unwrap();
+    fs::write(tmp.path().join("gitignored/secret.txt"), "secret").unwrap();
+    fs::write(tmp.path().join(".gitignore"), "gitignored/\n").unwrap();
+    fs::write(tmp.path().join(".hidden_match"), "hidden").unwrap();
+    tmp
+}
+
 #[test]
 fn test_glob_basic_pattern() {
     let tmp = setup_test_dir();
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "*.txt", vec![], false, SortOrder::Name, 500, 0).unwrap();
+    let result = run_glob(
+        &root,
+        "*.txt",
+        vec![],
+        false,
+        false,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
 
     // Should find .txt files in root (not recursive by default for this pattern)
     assert!(
@@ -76,7 +101,17 @@ fn test_glob_recursive_pattern() {
     let tmp = setup_test_dir();
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "**/*.txt", vec![], false, SortOrder::Name, 500, 0).unwrap();
+    let result = run_glob(
+        &root,
+        "**/*.txt",
+        vec![],
+        false,
+        false,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
 
     // Should find all .txt files recursively
     assert!(
@@ -98,7 +133,17 @@ fn test_glob_sort_by_name() {
     let tmp = setup_test_dir();
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "*.txt", vec![], false, SortOrder::Name, 500, 0).unwrap();
+    let result = run_glob(
+        &root,
+        "*.txt",
+        vec![],
+        false,
+        false,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
 
     // Results should be alphabetically sorted
     let sorted: Vec<String> = {
@@ -133,7 +178,17 @@ fn test_glob_sort_by_mtime() {
 
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "*.txt", vec![], false, SortOrder::Mtime, 500, 0).unwrap();
+    let result = run_glob(
+        &root,
+        "*.txt",
+        vec![],
+        false,
+        false,
+        SortOrder::Mtime,
+        500,
+        0,
+    )
+    .unwrap();
 
     // Should be sorted newest first
     assert_eq!(result.entries.len(), 3);
@@ -151,6 +206,7 @@ fn test_glob_ignore_patterns() {
         &root,
         "**/*",
         vec!["*.rs".to_string()], // Exclude .rs files
+        false,
         false,
         SortOrder::Name,
         500,
@@ -175,6 +231,7 @@ fn test_glob_include_hidden() {
         "*",
         vec![],
         false, // don't include hidden
+        false,
         SortOrder::Name,
         500,
         0,
@@ -187,6 +244,7 @@ fn test_glob_include_hidden() {
         "*",
         vec![],
         true, // include hidden
+        false,
         SortOrder::Name,
         500,
         0,
@@ -221,6 +279,7 @@ fn test_glob_pagination() {
         "*.txt",
         vec![],
         false,
+        false,
         SortOrder::Name,
         3, // head_limit
         0, // offset
@@ -235,6 +294,7 @@ fn test_glob_pagination() {
         &root,
         "*.txt",
         vec![],
+        false,
         false,
         SortOrder::Name,
         3,
@@ -264,6 +324,7 @@ fn test_glob_invalid_pattern() {
         "[invalid", // Invalid glob pattern
         vec![],
         false,
+        false,
         SortOrder::Name,
         500,
         0,
@@ -287,6 +348,7 @@ fn test_glob_no_matches() {
         "*.nonexistent",
         vec![],
         false,
+        false,
         SortOrder::Name,
         500,
         0,
@@ -303,6 +365,7 @@ fn test_glob_nonexistent_path() {
         "/nonexistent/path/12345",
         "*.txt",
         vec![],
+        false,
         false,
         SortOrder::Name,
         500,
@@ -322,7 +385,7 @@ fn test_glob_matches_directories() {
     let tmp = setup_test_dir();
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "**/*", vec![], false, SortOrder::Name, 500, 0).unwrap();
+    let result = run_glob(&root, "**/*", vec![], false, false, SortOrder::Name, 500, 0).unwrap();
 
     // Should include both files and directories
     assert!(
@@ -339,7 +402,17 @@ fn test_glob_specific_extension() {
     let tmp = setup_test_dir();
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "**/*.rs", vec![], false, SortOrder::Name, 500, 0).unwrap();
+    let result = run_glob(
+        &root,
+        "**/*.rs",
+        vec![],
+        false,
+        false,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
 
     // Should only find .rs files
     assert!(!result.entries.is_empty(), "Should find .rs files");
@@ -361,7 +434,7 @@ fn test_glob_builtin_ignores() {
 
     let root = tmp.path().to_string_lossy().to_string();
 
-    let result = run_glob(&root, "**/*", vec![], false, SortOrder::Name, 500, 0).unwrap();
+    let result = run_glob(&root, "**/*", vec![], false, false, SortOrder::Name, 500, 0).unwrap();
 
     // Should not include node_modules
     for path in &result.entries {
@@ -374,4 +447,128 @@ fn test_glob_builtin_ignores() {
         result.entries.iter().any(|p| p == "app.js"),
         "Should find app.js"
     );
+}
+
+#[test]
+fn test_glob_include_ignored_bypasses_builtin_logs() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let default_result = run_glob(
+        &root,
+        "**/*.jsonl",
+        vec![],
+        false,
+        false,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+    let include_ignored_result = run_glob(
+        &root,
+        "**/*.jsonl",
+        vec![],
+        false,
+        true,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+
+    assert!(default_result.entries.is_empty());
+    assert_eq!(include_ignored_result.entries, vec!["logs/found.jsonl"]);
+}
+
+#[test]
+fn test_glob_include_ignored_bypasses_gitignore() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let default_result = run_glob(
+        &root,
+        "**/*.txt",
+        vec![],
+        false,
+        false,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+    let include_ignored_result = run_glob(
+        &root,
+        "**/*.txt",
+        vec![],
+        false,
+        true,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+
+    assert!(
+        !default_result
+            .entries
+            .iter()
+            .any(|p| p == "gitignored/secret.txt")
+    );
+    assert_eq!(
+        include_ignored_result.entries,
+        vec!["gitignored/secret.txt"]
+    );
+}
+
+#[test]
+fn test_glob_include_ignored_still_honors_explicit_ignore() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let result = run_glob(
+        &root,
+        "**/*.jsonl",
+        vec!["logs/**".to_string()],
+        false,
+        true,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+
+    assert!(result.entries.is_empty());
+}
+
+#[test]
+fn test_glob_include_ignored_does_not_imply_include_hidden() {
+    let tmp = setup_ignored_search_dir();
+    let root = tmp.path().to_string_lossy().to_string();
+
+    let result_without_hidden = run_glob(
+        &root,
+        ".hidden*",
+        vec![],
+        false,
+        true,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+    let result_with_hidden = run_glob(
+        &root,
+        ".hidden*",
+        vec![],
+        true,
+        true,
+        SortOrder::Name,
+        500,
+        0,
+    )
+    .unwrap();
+
+    assert!(result_without_hidden.entries.is_empty());
+    assert_eq!(result_with_hidden.entries, vec![".hidden_match"]);
 }
