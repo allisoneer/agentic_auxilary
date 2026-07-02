@@ -270,7 +270,10 @@ impl RepoConfigManager {
             if val.trim().is_empty() {
                 anyhow::bail!("Mount directory '{name}' cannot be empty");
             }
-            if val == ".thoughts-data" {
+            if !val.is_ascii() {
+                anyhow::bail!("Mount directory '{name}' must contain only ASCII characters");
+            }
+            if val.eq_ignore_ascii_case(".thoughts-data") {
                 anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
             }
             if val == "." || val == ".." {
@@ -280,7 +283,10 @@ impl RepoConfigManager {
                 anyhow::bail!("Mount directory '{name}' must be a single path segment (got {val})");
             }
         }
-        if m.thoughts == m.context || m.thoughts == m.references || m.context == m.references {
+        if m.thoughts.eq_ignore_ascii_case(&m.context)
+            || m.thoughts.eq_ignore_ascii_case(&m.references)
+            || m.context.eq_ignore_ascii_case(&m.references)
+        {
             anyhow::bail!("Mount directories must be distinct (thoughts/context/references)");
         }
 
@@ -618,6 +624,26 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_v2_hard_rejects_case_insensitive_reserved_mount_dir_name() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: ".Thoughts-data".to_string(),
+                context: "context".to_string(),
+                references: "references".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(".thoughts-data"));
+    }
+
+    #[test]
     fn test_validate_v2_hard_rejects_dot_mount_dirs() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
@@ -685,6 +711,51 @@ mod tests {
         let result = mgr.validate_v2_hard(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("must be distinct"));
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_case_insensitive_duplicate_mount_dirs() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "Thoughts".to_string(),
+                references: "references".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be distinct"));
+    }
+
+    #[test]
+    fn test_validate_v2_hard_rejects_non_ascii_mount_dir_name() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "context".to_string(),
+                references: "références".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+        let result = mgr.validate_v2_hard(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("only ASCII characters")
+        );
     }
 
     #[test]
@@ -1048,6 +1119,35 @@ mod tests {
         assert!(result.is_err());
 
         // Verify no file was written
+        let config_path = paths::get_repo_config_path(temp_dir.path());
+        assert!(!config_path.exists());
+    }
+
+    #[test]
+    fn test_save_v2_validated_fails_before_write_on_non_ascii_mount_dir() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mgr = RepoConfigManager::new(temp_dir.path().to_path_buf());
+        let cfg = RepoConfigV2 {
+            version: "2.0".to_string(),
+            mount_dirs: MountDirsV2 {
+                thoughts: "thoughts".to_string(),
+                context: "context".to_string(),
+                references: "références".to_string(),
+            },
+            thoughts_mount: None,
+            context_mounts: vec![],
+            references: vec![],
+        };
+
+        let result = mgr.save_v2_validated(&cfg);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("only ASCII characters")
+        );
+
         let config_path = paths::get_repo_config_path(temp_dir.path());
         assert!(!config_path.exists());
     }
