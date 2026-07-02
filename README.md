@@ -101,7 +101,7 @@ opencode_rs = "0.13.0"
 
 - [`agentic-workspace-tools`](crates/tools/workspace-tools) - Workspace-scoped read/todowrite/edit/apply_patch tools
 - [`coding_agent_tools`](crates/tools/coding-agent-tools) - Coding agent tools (CLI + MCP). First tool: ls.
-- [`discord-tools`](crates/tools/discord-tools) - Discord search tools for agentic-mcp (ENG-392)
+- [`discord-tools`](crates/tools/discord-tools) - Discord search tools for agentic-mcp
 - [`message_optimizer`](crates/tools/message-optimizer) - Standalone GPT-5.4 message optimizer library
 - [`pr_comments`](crates/tools/pr-comments) - Fetch GitHub PR comments via CLI and MCP
 - [`review_tools`](crates/tools/review-tools) - Review tools for agentic-mcp: diff snapshots, lens-based review, pagination
