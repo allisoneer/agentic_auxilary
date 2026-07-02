@@ -1,0 +1,20 @@
+apps/opencode-orchestrator-mcp/tests/support/mod.rs
+  s_626c5585bb6a47::t_fecbffa0a5185b 87
+  s_626c5585bb6a47::t_b69c42b618e574 39-55,58,60,66-71,74,83,85-86,89,91-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c820e111d8fb9e8f718c49323c408080354dddc0",
+  "prompts": {},
+  "sessions": {
+    "s_626c5585bb6a47": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0dbdfd9d0ffeABj082MmyvOzeo",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
