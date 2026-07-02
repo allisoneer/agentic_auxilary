@@ -1,0 +1,19 @@
+crates/infra/agentic-config/Cargo.toml
+  s_da084485720904::t_afc2155baa9198 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "6649f3368c7dfc25a8fdb59409746070cec5ec60",
+  "prompts": {},
+  "sessions": {
+    "s_da084485720904": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5eebbe8-0657-49fc-a80b-811522f921ff",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
