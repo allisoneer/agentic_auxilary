@@ -598,7 +598,9 @@ impl DagEngine {
                             state.worktree.base_ref
                         ));
                     }
-                    freshness::FreshnessOutcome::Behind { .. } => {
+                    freshness::FreshnessOutcome::Behind { head_sha, base_sha } => {
+                        state.freshness.last_result =
+                            Some(format!("behind:{head_sha}..{base_sha}"));
                         state.stage.kind = StageKind::StoppedManualHandoff;
                         state.stage.details = Some(format!(
                             "{SYNC_WITH_MAIN_COMMAND} completed but branch is still behind {}; stopping to avoid infinite redispatch. Operator: run the sync command manually and re-run outer-dag from this worktree.",

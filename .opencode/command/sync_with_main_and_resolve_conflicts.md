@@ -28,14 +28,18 @@ $ARGUMENTS
 <process>
 
 <step_1>
+
 ## Step 1: Establish context + todo list
+
 - Determine current branch (`git branch --show-current`) and base ref (default `origin/main`, fallback `origin/master` if needed).
 - Record whether this was invoked manually or by OuterDAG (treat $ARGUMENTS as optional metadata only).
 - Create todos for: preflight, fetch+behind check, merge attempt, conflict resolution (if needed), verification, push, summary.
 </step_1>
 
 <step_2>
+
 ## Step 2: Preflight safe starting git state (STOP conditions)
+
 In Bash:
 - `git status --porcelain=v2`
 - `git rev-parse --abbrev-ref HEAD`
@@ -49,7 +53,9 @@ STOP if:
 </step_2>
 
 <step_3>
+
 ## Step 3: Fetch + merge origin/main (no rebase)
+
 In Bash:
 - `git fetch origin --prune`
 - If `origin/main` is already merged (ancestor of HEAD), you may still run verification and push if local commits exist.
@@ -60,14 +66,17 @@ If merge reports conflicts: proceed to Step 4.
 </step_3>
 
 <step_4>
+
 ## Step 4: Conflict handling (bounded mechanical/code-local only)
 
 ### Capture conflicts
+
 In Bash:
 - `git diff --name-only --diff-filter=U`
 - `git status --porcelain=v1`
 
 ### Eligibility gates (ALL must pass or STOP)
+
 STOP if ANY are true:
 - Any conflicted file matches a forbidden pattern:
   - lockfiles: `Cargo.lock`, `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `poetry.lock`
@@ -79,6 +88,7 @@ STOP if ANY are true:
 - Any conflict requires product/semantic choice (unclear intent, competing behaviors, or missing context)
 
 ### Mechanical/code-local resolution procedure
+
 - For each eligible conflicted file:
   - Read the file around conflict markers.
   - Resolve by combining both sides when non-overlapping, updating imports/paths/types locally, and keeping changes consistent with nearby code.
@@ -92,7 +102,9 @@ If you hit an out-of-bounds case, STOP and ask the operator to resolve manually,
 </step_4>
 
 <step_5>
+
 ## Step 5: Verification
+
 Run the strongest appropriate checks. Minimum:
 - `just check`
 - `just test`
@@ -100,7 +112,9 @@ If verification fails: STOP with actionable next steps (do not push).
 </step_5>
 
 <step_6>
+
 ## Step 6: Push (normal only, never force)
+
 In Bash:
 - `git push`
 If push is rejected (non-fast-forward) or would require force:
@@ -109,7 +123,9 @@ If push is rejected (non-fast-forward) or would require force:
 </step_6>
 
 <step_7>
+
 ## Step 7: Summary
+
 Report:
 - branch + base ref
 - old/new HEAD

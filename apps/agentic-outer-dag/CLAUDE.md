@@ -82,6 +82,7 @@ Steps:
 5. Exercise behind-main auto-sync dispatch and permission/resume flow:
 
    - use a worktree branch that is behind `origin/main`
+   - run the exercise with `--no-linear-handoff` so push-rejection/manual-stop paths never post Linear handoff comments during Phase 1
    - expect detect-only freshness to dispatch `sync_with_main_and_resolve_conflicts`
    - expect permission pauses for `git fetch`, `git merge`, and `git push`
    - confirm the sync policy stays merge-only and never uses force-push
