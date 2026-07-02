@@ -1,0 +1,20 @@
+crates/tools/coding-agent-tools/src/just/execute_pager.rs
+  s_9d99a73adb2d69::t_d4c04cca7196e5 216,224,237,245,265-268,278-280
+  s_9d99a73adb2d69::t_e6301cb9c93a84 281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c6425ea56b0bc81d79e87c478e05bb8a731071c8",
+  "prompts": {},
+  "sessions": {
+    "s_9d99a73adb2d69": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0dc1bb6b7ffeRIGArcftN6LSUy",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
