@@ -17,6 +17,16 @@ pub struct SearchParams {
 }
 
 /// Parameters for the execute tool.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecuteOutputMode {
+    #[default]
+    Minimal,
+    Normal,
+    Verbose,
+}
+
+/// Parameters for the execute tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ExecuteParams {
     /// Recipe name (e.g., "check", "test", "build")
@@ -25,6 +35,9 @@ pub struct ExecuteParams {
     pub dir: Option<String>,
     /// Arguments keyed by parameter name; star params accept arrays
     pub args: Option<HashMap<String, serde_json::Value>>,
+    /// Output presentation mode: minimal pages bounded output, normal/verbose return the full transcript
+    #[serde(default)]
+    pub output_mode: ExecuteOutputMode,
     /// Force a fresh execution instead of continuing cached transcript paging
     #[serde(default)]
     pub rerun: bool,
@@ -121,7 +134,7 @@ impl TextFormat for ExecuteOutput {
         if self.has_more {
             let _ = writeln!(
                 out,
-                "\n(more output available — call again with same params for next page, or rerun=true for a fresh execution)"
+                "\n(more output available — call again with same params for next minimal page, set output_mode=normal|verbose for the full transcript, or use rerun=true for a fresh execution)"
             );
         }
         out.trim_end().to_string()
@@ -222,5 +235,17 @@ mod tests {
         let text = output.fmt_text(&TextOptions::default());
         assert!(text.contains("more output available"));
         assert!(text.contains("rerun=true"));
+        assert!(text.contains("output_mode=normal|verbose"));
+    }
+
+    #[test]
+    fn execute_params_default_output_mode_is_minimal() {
+        let params: ExecuteParams = serde_json::from_value(serde_json::json!({
+            "recipe": "check"
+        }))
+        .unwrap_or_else(|e| panic!("deserialize ExecuteParams failed: {e}"));
+
+        assert_eq!(params.output_mode, ExecuteOutputMode::Minimal);
+        assert!(!params.rerun);
     }
 }

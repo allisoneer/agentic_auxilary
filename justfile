@@ -3,23 +3,6 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# CI/output mode detection
-
-ci := env("CI", "false")
-output_mode := env("OUTPUT_MODE", if ci == "true" { "normal" } else { "minimal" })
-
-# Execution wrapper: only wrap in minimal mode
-
-exec := if output_mode == "minimal" { "tools/agent-wrap.sh " } else { "" }
-
-# Nextest args based on mode
-
-nextest_args := if output_mode == "minimal" { "--status-level fail --failure-output immediate --hide-progress-bar" } else if output_mode == "verbose" { "--status-level all --verbose" } else { "" }
-
-# Nextest profile based on mode and CI
-
-nextest_profile := if output_mode == "minimal" { "minimal" } else if ci == "true" { "ci" } else { env("NEXTEST_PROFILE", "default") }
-
 # BEGIN:xtask:autogen justfile:mcp-servers
 
 MCP_SERVERS := "agentic-mcp opencode-orchestrator-mcp"
@@ -55,30 +38,30 @@ help:
     @echo "  just xtask-sync-check # check if sync is needed (for CI)"
     @echo "  just xtask-verify-check # full verification including generated files"
     @echo ""
-    @echo "OUTPUT_MODE: minimal (local default) | normal (CI default) | verbose"
+    @echo "Root just recipes emit direct command output; cli_just_execute owns minimal|normal|verbose agent presentation."
 
 # Workspace-wide commands
 
 check: fmt-check-just fmt-check
-    {{ exec }}cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets -- -D warnings
 
 fix:
     cargo clippy --workspace --all-targets --fix --allow-dirty
 
 test: mcp-test
-    {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
+    cargo nextest run --workspace
 
 # Run integration tests (includes ignored tests that require git setup)
 test-integration: mcp-test
-    THOUGHTS_INTEGRATION_TESTS=1 {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} -- --include-ignored
+    THOUGHTS_INTEGRATION_TESTS=1 cargo nextest run --workspace -- --include-ignored
 
 build:
-    {{ exec }}cargo build --workspace
+    cargo build --workspace
 
 clean: clean-workspace clean-codex
 
 clean-workspace:
-    {{ exec }}cargo clean --workspace
+    cargo clean --workspace
 
 clean-codex:
     #!/usr/bin/env bash
@@ -86,7 +69,7 @@ clean-codex:
 
     MANIFEST="vendor/codex/codex-rs/Cargo.toml"
     if [ -f "$MANIFEST" ]; then
-      {{ exec }}cargo clean --manifest-path "$MANIFEST"
+      cargo clean --manifest-path "$MANIFEST"
     fi
 
 codex-check:
@@ -102,16 +85,16 @@ codex-run *args:
     cd vendor/codex/codex-rs && cargo run --bin codex -- {{ args }}
 
 fmt:
-    {{ exec }}cargo +nightly fmt --all
-    {{ exec }}taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
+    cargo +nightly fmt --all
+    taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
 
 fmt-check:
-    {{ exec }}cargo +nightly fmt --all -- --check
-    {{ exec }}taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
+    cargo +nightly fmt --all -- --check
+    taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
 
 # Security audit with cargo-deny
 deny:
-    {{ exec }}cargo deny check
+    cargo deny check
 
 # Check justfile formatting
 fmt-check-just:
@@ -119,14 +102,14 @@ fmt-check-just:
 
 # Per-crate commands
 crate-check crate:
-    {{ exec }}cargo +nightly fmt -p {{ crate }} -- --check
-    {{ exec }}cargo clippy -p {{ crate }} --all-targets -- -D warnings
+    cargo +nightly fmt -p {{ crate }} -- --check
+    cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
 crate-test crate:
-    {{ exec }}cargo nextest run --profile {{ nextest_profile }} {{ nextest_args }} -E 'package({{ crate }})'
+    cargo nextest run -E 'package({{ crate }})'
 
 crate-build crate:
-    {{ exec }}cargo build -p {{ crate }}
+    cargo build -p {{ crate }}
 
 crate-run crate:
     cargo run -p {{ crate }}
@@ -134,35 +117,35 @@ crate-run crate:
 # xtask commands
 
 xtask-sync:
-    {{ exec }}cargo run -p xtask -- sync
+    cargo run -p xtask -- sync
 
 xtask-verify:
-    {{ exec }}cargo run -p xtask -- verify
+    cargo run -p xtask -- verify
 
 xtask-sync-check:
-    {{ exec }}cargo run -p xtask -- sync --check
+    cargo run -p xtask -- sync --check
 
 xtask-verify-check:
-    {{ exec }}cargo run -p xtask -- verify --check
+    cargo run -p xtask -- verify --check
 
 # Endpoint coverage commands for opencode-rs SDK
 endpoint-coverage:
-    {{ exec }}cargo run -p xtask -- endpoint-coverage
+    cargo run -p xtask -- endpoint-coverage
 
 endpoint-coverage-check:
-    {{ exec }}cargo run -p xtask -- endpoint-coverage --check
+    cargo run -p xtask -- endpoint-coverage --check
 
 endpoint-coverage-json:
-    {{ exec }}cargo run -p xtask -- endpoint-coverage --json
+    cargo run -p xtask -- endpoint-coverage --json
 
 # Utility commands
 
 thoughts_sync:
-    {{ exec }}thoughts sync
+    thoughts sync
 
 # Copy a file
 cp src dst:
-    {{ exec }}cp "{{ src }}" "{{ dst }}"
+    cp "{{ src }}" "{{ dst }}"
 
 # Remove a file
 rm path:
@@ -170,7 +153,7 @@ rm path:
 
 # Create a directory (with parents)
 mkdir path:
-    {{ exec }}mkdir -p "{{ path }}"
+    mkdir -p "{{ path }}"
 
 # Set file executable
 chmod-x path:
@@ -481,7 +464,7 @@ mcp-inspector method="tools/list":
 
 # CI-friendly MCP schema validation (validates all MCP servers in MCP_SERVERS)
 mcp-test:
-    {{ exec }}tools/mcp-validate.sh {{ MCP_SERVERS }}
+    tools/mcp-validate.sh {{ MCP_SERVERS }}
 
 # ------------------------------------------------------------------------------
 # PR Description Management

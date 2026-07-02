@@ -289,9 +289,8 @@ just build
 # Format code
 just fmt
 
-# Output mode variants
-OUTPUT_MODE=normal just test    # Full cargo output
-OUTPUT_MODE=verbose just test   # Verbose output
+# Root just commands emit direct output
+just test                       # Direct test output
 
 # Run specific test types via cargo
 cargo test --lib                              # Unit tests only

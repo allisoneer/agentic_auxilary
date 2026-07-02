@@ -147,18 +147,21 @@ just codex-run -- <args>  # Run the vendored codex binary
 
 ## Output Modes
 
-The `tools/agent-wrap.sh` wrapper controls command output:
+Root `just` recipes now emit direct command output.
 
-- `minimal` (default locally): print a single success line; failures show a short tail
-- `normal` (default in CI): show full command output
-- `verbose`: show direct command output with extra nextest verbosity
+`cli_just_execute` owns agent-facing output presentation:
+
+- `minimal` (default): bounded output with paging via repeated same-parameter calls
+- `normal`: full captured stdout/stderr in one response
+- `verbose`: full captured stdout/stderr in one response without changing recipe semantics
 
 Examples:
 
 ```bash
 just test
-OUTPUT_MODE=normal just test
-OUTPUT_MODE=verbose just test
+just check
+cli_just_execute recipe=test
+cli_just_execute recipe=test output_mode=normal
 RUST_LOG=gpt5_reasoner=debug just test
 ```
 

@@ -909,6 +909,7 @@ impl CodingAgentTools {
         recipe: String,
         dir: Option<String>,
         args: Option<std::collections::HashMap<String, serde_json::Value>>,
+        output_mode: just::ExecuteOutputMode,
         rerun: bool,
         ctx: &agentic_tools_core::ToolContext,
     ) -> Result<just::ExecuteOutput, ToolError> {
@@ -918,6 +919,7 @@ impl CodingAgentTools {
             "recipe": &recipe,
             "dir": &dir,
             "args": &args,
+            "output_mode": &output_mode,
             "rerun": rerun,
             "timeout_secs": self.cli_tools.just_execute_timeout_secs,
         });
@@ -961,6 +963,7 @@ impl CodingAgentTools {
             &recipe,
             &chosen_dir,
             args.as_ref(),
+            output_mode,
         ) {
             Ok(key) => key,
             Err(e) => {
@@ -1008,7 +1011,8 @@ impl CodingAgentTools {
                 }
             };
 
-            let pages = just::execute_pager::build_pages(&output.stdout, &output.stderr);
+            let pages =
+                just::execute_pager::build_pages(output_mode, &output.stdout, &output.stderr);
             let meta = just::execute_pager::ExecuteMeta {
                 dir: output.dir,
                 recipe: output.recipe,
@@ -1494,7 +1498,14 @@ mod ask_agent_filter_tests {
 
         let handle = tokio::spawn(async move {
             tools
-                .just_execute("hang".into(), None, None, false, &ctx)
+                .just_execute(
+                    "hang".into(),
+                    None,
+                    None,
+                    just::ExecuteOutputMode::Minimal,
+                    false,
+                    &ctx,
+                )
                 .await
         });
 
@@ -1529,7 +1540,14 @@ mod ask_agent_filter_tests {
         let ctx = agentic_tools_core::ToolContext::default();
 
         let page1 = tools
-            .just_execute("paged".into(), None, None, false, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("page1 failed: {e}"));
         assert!(page1.has_more);
@@ -1538,7 +1556,14 @@ mod ask_agent_filter_tests {
         assert_eq!(page1.stderr, "err-1\nerr-2\nerr-3\n");
 
         let page2 = tools
-            .just_execute("paged".into(), None, None, false, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("page2 failed: {e}"));
         assert!(!page2.has_more);
@@ -1568,16 +1593,37 @@ mod ask_agent_filter_tests {
         let ctx = agentic_tools_core::ToolContext::default();
 
         tools
-            .just_execute("paged".into(), None, None, false, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("page1 failed: {e}"));
         tools
-            .just_execute("paged".into(), None, None, false, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("page2 failed: {e}"));
 
         let restart = tools
-            .just_execute("paged".into(), None, None, false, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("restart failed: {e}"));
         assert!(restart.has_more);
@@ -1606,13 +1652,27 @@ mod ask_agent_filter_tests {
         let ctx = agentic_tools_core::ToolContext::default();
 
         let page1 = tools
-            .just_execute("paged".into(), None, None, false, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("page1 failed: {e}"));
         assert!(page1.has_more);
 
         let rerun_page1 = tools
-            .just_execute("paged".into(), None, None, true, &ctx)
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                true,
+                &ctx,
+            )
             .await
             .unwrap_or_else(|e| panic!("rerun page1 failed: {e}"));
         assert!(rerun_page1.has_more);
@@ -1647,6 +1707,7 @@ mod ask_agent_filter_tests {
                     "paged".into(),
                     None,
                     None,
+                    just::ExecuteOutputMode::Minimal,
                     false,
                     &agentic_tools_core::ToolContext::default(),
                 )
@@ -1658,6 +1719,7 @@ mod ask_agent_filter_tests {
                     "paged".into(),
                     None,
                     None,
+                    just::ExecuteOutputMode::Minimal,
                     false,
                     &agentic_tools_core::ToolContext::default(),
                 )
@@ -1709,6 +1771,7 @@ mod ask_agent_filter_tests {
                     "paged".into(),
                     None,
                     None,
+                    just::ExecuteOutputMode::Minimal,
                     false,
                     &agentic_tools_core::ToolContext::default(),
                 )
@@ -1720,6 +1783,7 @@ mod ask_agent_filter_tests {
                     "paged".into(),
                     None,
                     None,
+                    just::ExecuteOutputMode::Minimal,
                     false,
                     &agentic_tools_core::ToolContext::default(),
                 )
@@ -1731,6 +1795,7 @@ mod ask_agent_filter_tests {
                     "paged".into(),
                     None,
                     None,
+                    just::ExecuteOutputMode::Minimal,
                     false,
                     &agentic_tools_core::ToolContext::default(),
                 )
@@ -1765,6 +1830,144 @@ mod ask_agent_filter_tests {
             .count();
         assert_eq!(second_page_count, 1);
 
+        assert_eq!(read_counter(tmp.path()).trim(), "2");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_normal_returns_full_transcript_without_paging() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let output = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Normal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("normal output failed: {e}"));
+
+        assert!(!output.has_more);
+        assert_eq!(output.stdout, numbered_output("out", 1..=205));
+        assert_eq!(output.stderr, numbered_output("err", 1..=3));
+        assert_eq!(read_counter(tmp.path()).trim(), "1");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_verbose_rerun_true_forces_fresh_full_execution() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let first = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Verbose,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("first verbose output failed: {e}"));
+        let rerun = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Verbose,
+                true,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("rerun verbose output failed: {e}"));
+
+        assert!(!first.has_more);
+        assert!(!rerun.has_more);
+        assert_eq!(first.stdout, numbered_output("out", 1..=205));
+        assert_eq!(rerun.stdout, numbered_output("out", 1..=205));
+        assert_eq!(read_counter(tmp.path()).trim(), "2");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_cache_isolated_by_output_mode() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let tools = CodingAgentTools::new();
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let minimal = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("minimal output failed: {e}"));
+        let normal = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Normal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("normal output failed: {e}"));
+
+        assert!(minimal.has_more);
+        assert!(minimal.stdout.starts_with("out-1\n"));
+        assert!(!normal.has_more);
+        assert_eq!(normal.stdout, numbered_output("out", 1..=205));
         assert_eq!(read_counter(tmp.path()).trim(), "2");
     }
 }

@@ -134,7 +134,6 @@ pub async fn execute_recipe(
     let mut child = Command::new("just")
         .args(&argv)
         .current_dir(&chosen_dir)
-        .env("AGENTIC_WRAP_PASSTHROUGH", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
@@ -233,6 +232,7 @@ mod tests {
     use agentic_tools_core::ToolContext;
     use serde_json::json;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     /// Skip test if `just` command is not available
@@ -601,40 +601,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn wrapper_passthrough_env_disables_truncation() {
+    async fn root_mkdir_recipe_runs_directly_without_wrapper() {
         skip_if_just_unavailable!();
 
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let tools_dir = root.join("tools");
-        let wrapper_src =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tools/agent-wrap.sh");
-        fs::create_dir_all(&tools_dir).unwrap();
-        fs::copy(&wrapper_src, tools_dir.join("agent-wrap.sh")).unwrap();
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            let mut perms = fs::metadata(tools_dir.join("agent-wrap.sh"))
-                .unwrap()
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(tools_dir.join("agent-wrap.sh"), perms).unwrap();
-        }
-
-        fs::write(
-            root.join("justfile"),
-            "noisy:\n    OUTPUT_MODE=minimal ./tools/agent-wrap.sh bash -c 'seq 1 120; exit 1'",
-        )
-        .unwrap();
+        let repo_justfile = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../justfile");
+        fs::copy(&repo_justfile, root.join("justfile")).unwrap();
 
         let registry = JustRegistry::new();
         let output = execute_recipe(
             &registry,
-            "noisy",
+            "mkdir",
             None,
-            None,
+            Some(HashMap::from([("path".to_string(), json!("nested/child"))])),
             root.to_str().unwrap(),
             0,
             &ToolContext::default(),
@@ -642,9 +622,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(!output.success);
-        assert!(output.stdout.contains("1\n2\n3\n"));
-        assert!(output.stdout.contains("118\n119\n120\n"));
-        assert!(!output.stdout.contains("[Showing last"));
+        assert!(output.success);
+        assert!(root.join("nested/child").is_dir());
     }
 }

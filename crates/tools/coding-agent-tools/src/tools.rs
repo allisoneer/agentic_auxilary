@@ -23,7 +23,6 @@ use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 // ============================================================================
@@ -391,22 +390,6 @@ impl Tool for JustSearchTool {
 // JustExecute Tool
 // ============================================================================
 
-/// Input for the `just_execute` tool.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub struct JustExecuteInput {
-    /// Recipe name (e.g., 'check', 'test', 'build')
-    pub recipe: String,
-    /// Directory containing the justfile (optional; defaults to root if recipe exists there)
-    #[serde(default)]
-    pub dir: Option<String>,
-    /// Arguments keyed by parameter name; star params accept arrays
-    #[serde(default)]
-    pub args: Option<HashMap<String, serde_json::Value>>,
-    /// Force a fresh execution instead of continuing cached transcript paging
-    #[serde(default)]
-    pub rerun: bool,
-}
-
 /// Tool for executing justfile recipes.
 #[derive(Clone)]
 pub struct JustExecuteTool {
@@ -420,10 +403,10 @@ impl JustExecuteTool {
 }
 
 impl Tool for JustExecuteTool {
-    type Input = JustExecuteInput;
+    type Input = just::ExecuteParams;
     type Output = just::ExecuteOutput;
     const NAME: &'static str = "cli_just_execute";
-    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Repeated same-parameter calls page cached output from one prior execution; set rerun=true to force a fresh run.";
+    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. output_mode=minimal (default) returns bounded output with paging across repeated same-parameter calls; output_mode=normal and output_mode=verbose return the full captured stdout/stderr transcript in one response. Set rerun=true to force a fresh run.";
 
     fn call(
         &self,
@@ -434,7 +417,14 @@ impl Tool for JustExecuteTool {
         let ctx = ctx.clone();
         Box::pin(async move {
             tools
-                .just_execute(input.recipe, input.dir, input.args, input.rerun, &ctx)
+                .just_execute(
+                    input.recipe,
+                    input.dir,
+                    input.args,
+                    input.output_mode,
+                    input.rerun,
+                    &ctx,
+                )
                 .await
         })
     }

@@ -6,9 +6,8 @@ This file guides contributors and Claude Code on how to work on gpt5_reasoner. I
 ## 2) Quick Dev Commands and Workflows
 - Default targets (silent, warnings treated as failures):
   - just check | just test | just build
-- Output variants:
-  - Normal: OUTPUT_MODE=normal just test
-  - Verbose: OUTPUT_MODE=verbose just test
+- Root just commands emit direct output: just test
+- Use RUST_LOG=gpt5_reasoner=debug just test for additional logs
 - Cargo equivalents: cargo clippy | cargo test | cargo build
 - Env:
   - OPENROUTER_API_KEY required (OpenRouter)
