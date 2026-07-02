@@ -15,6 +15,7 @@ First is orchestration level, allowing full management of opencode sessions.
 - `orchestrator_list_agents` and `orchestrator_list_commands` show the policy-filtered runtime inventory.
 - In text output, only the first line of each description is shown; treat line 1 as the routing summary.
 - After editing `opencode.json` or other agent/command metadata, restart OpenCode/orchestrator or reopen the repo/worktree before trusting refreshed discovery output.
+- `/linear_ticket_design_brief` is a comment-only orchestrator command that posts a structured design/scoping brief to Linear and then stops.
 
 ```
 LEVEL 0: ORCHESTRATOR (Parent Agent)
