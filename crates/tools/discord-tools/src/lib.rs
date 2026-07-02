@@ -2,13 +2,12 @@ pub mod http;
 pub mod models;
 pub mod tools;
 
-#[doc(hidden)]
-pub mod test_support;
-
 use agentic_config::types::DiscordServiceConfig;
 use http::DiscordClient;
 use http::GuildMessageSearchParams;
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 pub use tools::build_registry;
 
@@ -47,6 +46,12 @@ pub enum DiscordToolsError {
 #[derive(Clone)]
 pub struct DiscordTools {
     config: DiscordServiceConfig,
+    client_cache: Arc<Mutex<Option<CachedDiscordClient>>>,
+}
+
+struct CachedDiscordClient {
+    token: String,
+    client: Arc<DiscordClient>,
 }
 
 impl Default for DiscordTools {
@@ -71,7 +76,10 @@ impl DiscordTools {
     }
 
     pub fn with_config(config: DiscordServiceConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            client_cache: Arc::new(Mutex::new(None)),
+        }
     }
 
     pub fn config(&self) -> &DiscordServiceConfig {
@@ -90,7 +98,7 @@ impl DiscordTools {
             .map_err(|_| DiscordToolsError::InvalidGuildId(guild_id_raw.clone()))?;
         let normalized = normalize_input(input)?;
 
-        let client = DiscordClient::new(bot_token, &self.config)?;
+        let client = self.client_for_token(bot_token).await?;
         let json = client
             .search_guild_messages_with_index_retry(
                 guild_id,
@@ -112,6 +120,27 @@ impl DiscordTools {
             normalized.warnings,
             &json,
         )
+    }
+
+    async fn client_for_token(
+        &self,
+        token: String,
+    ) -> Result<Arc<DiscordClient>, DiscordToolsError> {
+        let mut guard = self.client_cache.lock().await;
+
+        if let Some(cached) = guard.as_ref()
+            && cached.token == token
+        {
+            return Ok(Arc::clone(&cached.client));
+        }
+
+        let client = Arc::new(DiscordClient::new(token.clone(), &self.config)?);
+        *guard = Some(CachedDiscordClient {
+            token,
+            client: Arc::clone(&client),
+        });
+
+        Ok(client)
     }
 }
 

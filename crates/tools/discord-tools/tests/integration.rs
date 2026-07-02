@@ -1,20 +1,12 @@
+mod support;
+
 use anyhow::Result;
 use discord_tools::DiscordTools;
 use discord_tools::DiscordToolsError;
 use discord_tools::models::DiscordSearchMessagesInput;
-use discord_tools::test_support::EnvGuard;
 use mockito::Matcher;
-use mockito::Server;
 use serial_test::serial;
-use std::sync::Once;
-
-static RUSTLS_PROVIDER: Once = Once::new();
-
-fn install_rustls_provider() {
-    RUSTLS_PROVIDER.call_once(|| {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    });
-}
+use support::EnvGuard;
 
 #[tokio::test]
 #[serial(env)]
@@ -62,10 +54,59 @@ async fn missing_guild_id_is_error() -> Result<()> {
 
 #[tokio::test]
 #[serial(env)]
+async fn cached_client_still_requires_env_each_call() -> Result<()> {
+    let mut setup = support::setup_discord_tools().await;
+    let _mock = setup
+        .server
+        .mock("GET", "/api/v10/guilds/123/messages/search")
+        .match_query(Matcher::AllOf(vec![
+            Matcher::UrlEncoded("content".into(), "hello".into()),
+            Matcher::UrlEncoded("limit".into(), "10".into()),
+            Matcher::UrlEncoded("offset".into(), "0".into()),
+        ]))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"total_results":0,"messages":[]}"#)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let output = setup
+        .tools
+        .search_messages(DiscordSearchMessagesInput {
+            query: "hello".into(),
+            limit: None,
+            offset: None,
+            channel_id: None,
+            author_id: None,
+        })
+        .await?;
+    assert!(output.results.is_empty());
+
+    let _token = EnvGuard::remove("DISCORD_BOT_TOKEN");
+
+    let err = setup
+        .tools
+        .search_messages(DiscordSearchMessagesInput {
+            query: "hello".into(),
+            limit: None,
+            offset: None,
+            channel_id: None,
+            author_id: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, DiscordToolsError::MissingBotToken));
+    Ok(())
+}
+
+#[tokio::test]
+#[serial(env)]
 async fn auth_failure_maps_to_permission_error() -> Result<()> {
-    install_rustls_provider();
-    let mut server = Server::new_async().await;
-    let _mock = server
+    let mut setup = support::setup_discord_tools().await;
+    let _mock = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -78,14 +119,8 @@ async fn auth_failure_maps_to_permission_error() -> Result<()> {
         .create_async()
         .await;
 
-    let _token = EnvGuard::set("DISCORD_BOT_TOKEN", "token");
-    let _guild = EnvGuard::set("DISCORD_GUILD_ID", "123");
-    let tools = DiscordTools::with_config(agentic_config::types::DiscordServiceConfig {
-        base_url: server.url(),
-        request_timeout_secs: 5,
-    });
-
-    let err = tools
+    let err = setup
+        .tools
         .search_messages(DiscordSearchMessagesInput {
             query: "hello".into(),
             limit: None,
@@ -103,9 +138,9 @@ async fn auth_failure_maps_to_permission_error() -> Result<()> {
 #[tokio::test]
 #[serial(env)]
 async fn search_success_parses_hits_and_jump_urls() -> Result<()> {
-    install_rustls_provider();
-    let mut server = Server::new_async().await;
-    let _mock = server
+    let mut setup = support::setup_discord_tools().await;
+    let _mock = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -120,14 +155,8 @@ async fn search_success_parses_hits_and_jump_urls() -> Result<()> {
         .create_async()
         .await;
 
-    let _token = EnvGuard::set("DISCORD_BOT_TOKEN", "token");
-    let _guild = EnvGuard::set("DISCORD_GUILD_ID", "123");
-    let tools = DiscordTools::with_config(agentic_config::types::DiscordServiceConfig {
-        base_url: server.url(),
-        request_timeout_secs: 5,
-    });
-
-    let output = tools
+    let output = setup
+        .tools
         .search_messages(DiscordSearchMessagesInput {
             query: "hello".into(),
             limit: Some(1),
@@ -149,9 +178,9 @@ async fn search_success_parses_hits_and_jump_urls() -> Result<()> {
 #[tokio::test]
 #[serial(env)]
 async fn limit_and_offset_are_clamped_with_warnings() -> Result<()> {
-    install_rustls_provider();
-    let mut server = Server::new_async().await;
-    let _mock = server
+    let mut setup = support::setup_discord_tools().await;
+    let _mock = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -164,14 +193,8 @@ async fn limit_and_offset_are_clamped_with_warnings() -> Result<()> {
         .create_async()
         .await;
 
-    let _token = EnvGuard::set("DISCORD_BOT_TOKEN", "token");
-    let _guild = EnvGuard::set("DISCORD_GUILD_ID", "123");
-    let tools = DiscordTools::with_config(agentic_config::types::DiscordServiceConfig {
-        base_url: server.url(),
-        request_timeout_secs: 5,
-    });
-
-    let output = tools
+    let output = setup
+        .tools
         .search_messages(DiscordSearchMessagesInput {
             query: "hello".into(),
             limit: Some(99),
@@ -190,9 +213,9 @@ async fn limit_and_offset_are_clamped_with_warnings() -> Result<()> {
 #[tokio::test]
 #[serial(env)]
 async fn channel_and_author_filters_are_emitted() -> Result<()> {
-    install_rustls_provider();
-    let mut server = Server::new_async().await;
-    let _mock = server
+    let mut setup = support::setup_discord_tools().await;
+    let _mock = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -207,14 +230,8 @@ async fn channel_and_author_filters_are_emitted() -> Result<()> {
         .create_async()
         .await;
 
-    let _token = EnvGuard::set("DISCORD_BOT_TOKEN", "token");
-    let _guild = EnvGuard::set("DISCORD_GUILD_ID", "123");
-    let tools = DiscordTools::with_config(agentic_config::types::DiscordServiceConfig {
-        base_url: server.url(),
-        request_timeout_secs: 5,
-    });
-
-    let output = tools
+    let output = setup
+        .tools
         .search_messages(DiscordSearchMessagesInput {
             query: "hello".into(),
             limit: None,
@@ -231,9 +248,9 @@ async fn channel_and_author_filters_are_emitted() -> Result<()> {
 #[tokio::test]
 #[serial(env)]
 async fn indexing_202_retries_once_then_succeeds() -> Result<()> {
-    install_rustls_provider();
-    let mut server = Server::new_async().await;
-    let _first = server
+    let mut setup = support::setup_discord_tools().await;
+    let _first = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -246,7 +263,8 @@ async fn indexing_202_retries_once_then_succeeds() -> Result<()> {
         .expect(1)
         .create_async()
         .await;
-    let _second = server
+    let _second = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -260,14 +278,8 @@ async fn indexing_202_retries_once_then_succeeds() -> Result<()> {
         .create_async()
         .await;
 
-    let _token = EnvGuard::set("DISCORD_BOT_TOKEN", "token");
-    let _guild = EnvGuard::set("DISCORD_GUILD_ID", "123");
-    let tools = DiscordTools::with_config(agentic_config::types::DiscordServiceConfig {
-        base_url: server.url(),
-        request_timeout_secs: 5,
-    });
-
-    let output = tools
+    let output = setup
+        .tools
         .search_messages(DiscordSearchMessagesInput {
             query: "hello".into(),
             limit: None,
@@ -284,9 +296,9 @@ async fn indexing_202_retries_once_then_succeeds() -> Result<()> {
 #[tokio::test]
 #[serial(env)]
 async fn indexing_202_twice_returns_retryable_error() -> Result<()> {
-    install_rustls_provider();
-    let mut server = Server::new_async().await;
-    let _first = server
+    let mut setup = support::setup_discord_tools().await;
+    let _first = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -299,7 +311,8 @@ async fn indexing_202_twice_returns_retryable_error() -> Result<()> {
         .expect(1)
         .create_async()
         .await;
-    let _second = server
+    let _second = setup
+        .server
         .mock("GET", "/api/v10/guilds/123/messages/search")
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("content".into(), "hello".into()),
@@ -313,14 +326,8 @@ async fn indexing_202_twice_returns_retryable_error() -> Result<()> {
         .create_async()
         .await;
 
-    let _token = EnvGuard::set("DISCORD_BOT_TOKEN", "token");
-    let _guild = EnvGuard::set("DISCORD_GUILD_ID", "123");
-    let tools = DiscordTools::with_config(agentic_config::types::DiscordServiceConfig {
-        base_url: server.url(),
-        request_timeout_secs: 5,
-    });
-
-    let err = tools
+    let err = setup
+        .tools
         .search_messages(DiscordSearchMessagesInput {
             query: "hello".into(),
             limit: None,
