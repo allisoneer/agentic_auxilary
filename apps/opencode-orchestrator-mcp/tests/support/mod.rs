@@ -36,6 +36,42 @@ pub async fn test_orchestrator_server_with_config(
     mock: &MockServer,
     config: OrchestratorConfig,
 ) -> Arc<OrchestratorServerHandle> {
+    build_test_orchestrator_server(mock, 5, Some(config)).await
+}
+
+/// Build an `OrchestratorServerHandle` connected to a wiremock `MockServer`
+/// with a one-second client timeout for transport-failure tests.
+pub async fn short_timeout_test_orchestrator_server(
+    mock: &MockServer,
+) -> Arc<OrchestratorServerHandle> {
+    build_test_orchestrator_server(mock, 1, None).await
+}
+
+async fn build_test_orchestrator_server(
+    mock: &MockServer,
+    timeout_secs: u64,
+    config: Option<OrchestratorConfig>,
+) -> Arc<OrchestratorServerHandle> {
+    mount_test_health(mock).await;
+
+    let base_url = mock.uri().trim_end_matches('/').to_string();
+    let client = build_test_client(&base_url, timeout_secs);
+
+    let server = if let Some(config) = config {
+        OrchestratorServer::from_client_unshared_with_config(
+            client,
+            base_url,
+            RecoveryMode::External,
+            config,
+        )
+    } else {
+        OrchestratorServer::from_client_unshared(client, &base_url, RecoveryMode::External)
+    };
+
+    Arc::new(OrchestratorServerHandle::from_server_unshared(server))
+}
+
+async fn mount_test_health(mock: &MockServer) {
     Mock::given(method("GET"))
         .and(path("/global/health"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -44,23 +80,18 @@ pub async fn test_orchestrator_server_with_config(
         })))
         .mount(mock)
         .await;
+}
 
-    let base_url = mock.uri().trim_end_matches('/').to_string();
-    let client = opencode_rs::ClientBuilder::new()
-        .base_url(&base_url)
+fn build_test_client(base_url: &str, timeout_secs: u64) -> opencode_rs::Client {
+    match opencode_rs::ClientBuilder::new()
+        .base_url(base_url)
         .directory("/tmp".to_string())
-        .timeout_secs(5) // Short timeout for tests
+        .timeout_secs(timeout_secs)
         .build()
-        .unwrap();
-
-    Arc::new(OrchestratorServerHandle::from_server_unshared(
-        OrchestratorServer::from_client_unshared_with_config(
-            client,
-            base_url,
-            RecoveryMode::External,
-            config,
-        ),
-    ))
+    {
+        Ok(client) => client,
+        Err(error) => panic!("failed to build test OpenCode client for {base_url}: {error}"),
+    }
 }
 
 /// Respond with different responses in sequence; after exhausting, repeat last.
