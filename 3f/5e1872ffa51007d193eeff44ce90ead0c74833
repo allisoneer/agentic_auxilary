@@ -1,0 +1,25 @@
+crates/infra/thoughts-core/src/workspace/readiness.rs
+  s_5d21e24a3cbdf5::t_de3f664613de48 388-390,625-646
+  s_5d21e24a3cbdf5::t_0345eaf277f464 647
+crates/infra/thoughts-core/src/config/repo_manager.rs
+  s_5d21e24a3cbdf5::t_50ba315152cb44 753-758,1144-1149
+  s_5d21e24a3cbdf5::t_de3f664613de48 273-275,736-752,1126-1143,1150
+  s_5d21e24a3cbdf5::t_59289eb0480ad6 759-760
+  s_5d21e24a3cbdf5::t_d34beb9f367e62 1151-1153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "3f5e1872ffa51007d193eeff44ce90ead0c74833",
+  "prompts": {},
+  "sessions": {
+    "s_5d21e24a3cbdf5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0dfe4776fffeVSllNDZZbGJeQM",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
