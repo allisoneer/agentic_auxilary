@@ -1,0 +1,19 @@
+crates/tools/discord-tools/Cargo.toml
+  s_4e9a4feafeb9d8::t_f419a584931bce 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "a2fb460976e5898b0cbffabe17846462f8d80de1",
+  "prompts": {},
+  "sessions": {
+    "s_4e9a4feafeb9d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df39dcc4-9070-4393-b0ff-b5fbd318d66e",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
