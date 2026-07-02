@@ -1,0 +1,55 @@
+crates/infra/thoughts-core/README.md
+  s_81b22865d3b557::t_da97f1b0875fd3 292-293
+crates/services/claudecode-rs/CLAUDE.md
+  s_81b22865d3b557::t_da97f1b0875fd3 22-23
+TODO.md
+  s_81b22865d3b557::t_62e00d1d844207 148
+crates/services/opencode-rs/CLAUDE.md
+  s_81b22865d3b557::t_da97f1b0875fd3 24-25,56
+crates/tools/coding-agent-tools/src/just/mod.rs
+  s_81b22865d3b557::t_b39992a1bc1d2b 16
+justfile
+  s_81b22865d3b557::t_d17b9d1a60e259 112,467
+  s_81b22865d3b557::t_66aa1ed3c428e1 41,46,52,56,59,64,72,88-89,92-93,97,105-106,109,120,123,126,129,133,136,139,144,148,156
+crates/tools/coding-agent-tools/src/just/exec.rs
+  s_81b22865d3b557::t_fef436a5e879bd 609-610,617,626
+  s_81b22865d3b557::t_8430352b9dbede 235,604,615,625
+crates/tools/coding-agent-tools/src/just/execute_pager.rs
+  s_81b22865d3b557::t_826657c7317a28 65-79,97,105,180,190,210-225,231-246,251-273
+crates/tools/coding-agent-tools/src/lib.rs
+  s_81b22865d3b557::t_d817b3c8f23639 1671-1675,1835-1967,1970-1971
+  s_81b22865d3b557::t_826657c7317a28 912,922
+  s_81b22865d3b557::t_4a18929927448b 1501-1508,1543-1550,1559-1566,1596-1603,1607-1614,1619-1626,1655-1662,1668-1670
+  s_81b22865d3b557::t_f7588226cb1b87 1968-1969
+  s_81b22865d3b557::t_e7153998f92691 1972
+crates/tools/coding-agent-tools/src/just/types.rs
+  s_81b22865d3b557::t_47aca7e615f06c 246
+  s_81b22865d3b557::t_67fe5f6f911a0b 20-28,38-40,137,238-245,247-249
+  s_81b22865d3b557::t_2cce6334ef5975 19
+crates/tools/coding-agent-tools/src/tools.rs
+  s_81b22865d3b557::t_b39992a1bc1d2b 406,409,420-427
+crates/tools/gpt5-reasoner/CLAUDE.md
+  s_81b22865d3b557::t_da97f1b0875fd3 9-10
+crates/tools/gpt5-reasoner/README.md
+  s_81b22865d3b557::t_da97f1b0875fd3 207-208
+crates/infra/thoughts-core/CLAUDE.md
+  s_81b22865d3b557::t_da97f1b0875fd3 24-26
+CLAUDE.md
+  s_81b22865d3b557::t_bdf50edf6dd51a 150,152-156,162-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5df1751b8e0b393e7fbb08857ba687087ab2afe3",
+  "prompts": {},
+  "sessions": {
+    "s_81b22865d3b557": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0dc3184afffe2VpMavo1br5i5R",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
