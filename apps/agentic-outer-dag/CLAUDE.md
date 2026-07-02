@@ -42,7 +42,7 @@ Add any human-authored notes below. Content outside autogen blocks is preserved 
 
 ## Phase 1 live-test ladder (conservative)
 
-Goals: exercise worktree selection/creation, state persistence, and existing-PR observation without:
+Goals: exercise worktree selection/creation, state persistence, detect-only freshness checks, auto-dispatched sync behavior, and existing-PR observation without:
 - creating a PR,
 - running `linear_ticket_2_pr`,
 - running `resolve_pr_comments`,
@@ -73,13 +73,21 @@ Steps:
    agentic-outer-dag start --ticket ENG-992 --branch <branch> --stop-after dispatching_ticket_to_pr --no-opencode-dispatch --force
    ```
 
-4. Safety-test dirty/conflict freshness stops without posting Linear comments:
+4. Safety-test dirty-tree freshness stop without posting Linear comments:
 
    ```bash
    agentic-outer-dag start --ticket ENG-992 --branch <branch> --no-linear-handoff --force
    ```
 
-5. Stop before `resolve_pr_comments`:
+5. Exercise behind-main auto-sync dispatch and permission/resume flow:
+
+   - use a worktree branch that is behind `origin/main`
+   - expect detect-only freshness to dispatch `sync_with_main_and_resolve_conflicts`
+   - expect permission pauses for `git fetch`, `git merge`, and `git push`
+   - confirm the sync policy stays merge-only and never uses force-push
+   - if normal `git push` is rejected, confirm the workflow stops with operator instructions instead of using `--force` or `--force-with-lease`
+
+6. Stop before `resolve_pr_comments`:
 
    ```bash
    agentic-outer-dag resume --stop-after waiting_for_coderabbit --no-linear-handoff --no-opencode-dispatch

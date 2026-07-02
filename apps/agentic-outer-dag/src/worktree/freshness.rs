@@ -7,8 +7,7 @@ use std::process::Command;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FreshnessOutcome {
     UpToDate,
-    Rebases { old_head: String, new_head: String },
-    Conflict,
+    Behind { head_sha: String, base_sha: String },
     DirtyTree,
 }
 
@@ -23,19 +22,14 @@ pub fn run(base_ref: &str, dry_run: bool) -> Result<FreshnessOutcome> {
 
     git(["fetch", "origin", "--prune"])?;
 
-    if !needs_rebase(base_ref)? {
+    if !is_behind_base_ref(base_ref)? {
         return Ok(FreshnessOutcome::UpToDate);
     }
 
-    let old_head = rev_parse("HEAD")?;
-    let status = git_status(["rebase", base_ref])?;
-    if !status.success() {
-        git(["rebase", "--abort"])?;
-        return Ok(FreshnessOutcome::Conflict);
-    }
-    let new_head = rev_parse("HEAD")?;
-
-    Ok(FreshnessOutcome::Rebases { old_head, new_head })
+    Ok(FreshnessOutcome::Behind {
+        head_sha: rev_parse("HEAD")?,
+        base_sha: rev_parse(base_ref)?,
+    })
 }
 
 fn is_dirty() -> Result<bool> {
@@ -44,7 +38,7 @@ fn is_dirty() -> Result<bool> {
     is_worktree_dirty(&repo).context("failed to inspect worktree dirtiness")
 }
 
-fn needs_rebase(base_ref: &str) -> Result<bool> {
+fn is_behind_base_ref(base_ref: &str) -> Result<bool> {
     let output = Command::new("git")
         .args(["merge-base", "--is-ancestor", base_ref, "HEAD"])
         .output()
@@ -116,17 +110,25 @@ mod tests {
     }
 
     #[test]
-    fn rebases_when_origin_main_moves_forward() {
+    fn returns_behind_when_origin_main_moves_forward_and_does_not_mutate_head() {
         let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.advance_main("main update\n").unwrap();
         let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
 
+        let head_before = rev_parse("HEAD").unwrap();
         let outcome = run("origin/main", false).unwrap();
+        let head_after = rev_parse("HEAD").unwrap();
+
         match outcome {
-            FreshnessOutcome::Rebases { old_head, new_head } => assert_ne!(old_head, new_head),
-            other => panic!("expected rebase outcome, got {other:?}"),
+            FreshnessOutcome::Behind { head_sha, base_sha } => {
+                assert_eq!(head_sha, head_before);
+                assert_ne!(base_sha, head_sha);
+            }
+            other => panic!("expected Behind outcome, got {other:?}"),
         }
+
+        assert_eq!(head_before, head_after, "freshness must not mutate HEAD");
     }
 
     #[test]
@@ -155,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_conflict_when_rebase_hits_merge_conflict() {
+    fn remains_behind_when_feature_and_main_both_change_without_mutating_head() {
         let _guard = process_state_lock().lock().unwrap();
         let fixture = GitFixture::new().unwrap();
         fixture.write_shared_file("feature change\n").unwrap();
@@ -163,13 +165,20 @@ mod tests {
         fixture.advance_main("main change\n").unwrap();
         let _cwd = CwdGuard::pushd(&fixture.feature_clone).unwrap();
 
+        let head_before = rev_parse("HEAD").unwrap();
         let outcome = run("origin/main", false).unwrap();
-
-        assert!(!fixture.rebase_in_progress().unwrap());
+        let head_after = rev_parse("HEAD").unwrap();
         let rerun_outcome = run("origin/main", false).unwrap();
 
-        assert_eq!(outcome, FreshnessOutcome::Conflict);
-        assert_eq!(rerun_outcome, FreshnessOutcome::Conflict);
+        assert_eq!(
+            outcome,
+            FreshnessOutcome::Behind {
+                head_sha: head_before.clone(),
+                base_sha: rev_parse("origin/main").unwrap(),
+            }
+        );
+        assert_eq!(rerun_outcome, outcome);
+        assert_eq!(head_before, head_after, "freshness must not mutate HEAD");
     }
 
     #[test]
@@ -250,12 +259,6 @@ mod tests {
             run_git(&self.feature_clone, ["commit", "-m", message])?;
             Ok(())
         }
-
-        fn rebase_in_progress(&self) -> Result<bool> {
-            let git_dir = git_output(&self.feature_clone, ["rev-parse", "--git-dir"])?;
-            let git_dir = self.feature_clone.join(git_dir);
-            Ok(git_dir.join("rebase-apply").exists() || git_dir.join("rebase-merge").exists())
-        }
     }
 
     fn configure_repo(path: &Path) -> Result<()> {
@@ -268,19 +271,6 @@ mod tests {
         let output = Command::new("git").current_dir(cwd).args(args).output()?;
         if output.status.success() {
             Ok(())
-        } else {
-            anyhow::bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-        }
-    }
-
-    fn git_output<const N: usize>(cwd: &Path, args: [&str; N]) -> Result<String> {
-        let output = Command::new("git").current_dir(cwd).args(args).output()?;
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
             anyhow::bail!(
                 "git {} failed: {}",

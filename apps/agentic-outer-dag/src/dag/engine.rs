@@ -24,6 +24,7 @@ const DETECTING_PR_BACKOFFS: [Duration; 4] = [
     Duration::from_secs(8),
 ];
 const DETECTING_PR_MAX_ATTEMPTS: usize = DETECTING_PR_BACKOFFS.len() + 1;
+const SYNC_WITH_MAIN_COMMAND: &str = "sync_with_main_and_resolve_conflicts";
 
 pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
@@ -53,7 +54,7 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
         },
         PlannedAction {
             id: "freshness.before_ticket_to_pr",
-            summary: "Freshness gate before ticket_to_pr (fetch/rebase)",
+            summary: "Freshness gate before ticket_to_pr (fetch/check; auto-sync if behind)",
         },
         PlannedAction {
             id: "github.pr.detect_existing",
@@ -69,7 +70,7 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
         },
         PlannedAction {
             id: "freshness.before_coderabbit_wait",
-            summary: "Freshness gate before CodeRabbit wait (fetch/rebase)",
+            summary: "Freshness gate before CodeRabbit wait (fetch/check; auto-sync if behind)",
         },
         PlannedAction {
             id: "github.coderabbit.wait",
@@ -520,36 +521,103 @@ impl DagEngine {
     }
 
     async fn advance_freshness(
-        &self,
+        &mut self,
         state: &mut RunState,
         next_stage: StageKind,
         resume_stage: StageKind,
     ) -> Result<()> {
         let outcome = freshness::run(&state.worktree.base_ref, state.settings.dry_run)?;
         state.freshness.last_checked_at = Some(chrono::Utc::now().to_rfc3339());
-        state.opencode.resume_stage = Some(resume_stage);
+        state.opencode.resume_stage = Some(resume_stage.clone());
         match outcome {
             freshness::FreshnessOutcome::UpToDate => {
                 state.freshness.last_result = Some("up_to_date".to_string());
                 state.stage.kind = next_stage;
                 state.stage.details = None;
             }
-            freshness::FreshnessOutcome::Rebases { old_head, new_head } => {
-                state.freshness.last_result = Some(format!("rebased:{old_head}->{new_head}"));
-                state.stage.kind = next_stage;
-                state.stage.details = Some("rebased onto base ref".to_string());
-                if state.pr.head_sha.is_some() {
-                    state.pr.head_sha = Some(new_head.clone());
-                    state.pr.last_observed_head_sha = Some(new_head);
+            freshness::FreshnessOutcome::Behind { head_sha, base_sha } => {
+                state.freshness.last_result = Some(format!("behind:{head_sha}..{base_sha}"));
+
+                let message = format!(
+                    "OuterDAG freshness gate: branch '{}' is behind {} (HEAD={head_sha}, base={base_sha}). Run merge-based sync, resolve only bounded mechanical conflicts, verify, and push normally (no force).",
+                    state.worktree.branch, state.worktree.base_ref,
+                );
+
+                self.run_supervised_command(
+                    state,
+                    resume_stage.clone(),
+                    SYNC_WITH_MAIN_COMMAND,
+                    Some(message.as_str()),
+                )
+                .await?;
+
+                if stages::is_paused(&state.stage.kind)
+                    || matches!(state.stage.kind, StageKind::StoppedFailed)
+                {
+                    return Ok(());
                 }
-            }
-            freshness::FreshnessOutcome::Conflict => {
-                let message = "rebase conflict requires manual handoff".to_string();
-                state.freshness.last_result = Some("conflict".to_string());
-                state.stage.kind = StageKind::StoppedRebaseConflict;
-                state.stage.details = Some(message);
-                let message = persist_stop_state_before_handoff(state, ThoughtsStateStore::save)?;
-                linear::post_handoff_once(state, &message).await?;
+
+                let post = freshness::run(&state.worktree.base_ref, state.settings.dry_run)?;
+                state.freshness.last_checked_at = Some(chrono::Utc::now().to_rfc3339());
+
+                match post {
+                    freshness::FreshnessOutcome::UpToDate => {
+                        state.freshness.last_result = Some("up_to_date".to_string());
+
+                        if state.pr.number.is_some() {
+                            let branch = state.worktree.branch.clone();
+                            let lookup = self.github.detect_open_pr_from_branch(&branch).await?;
+                            record_pr_lookup(state, resume_stage.clone(), &lookup);
+                            let Some(pr) = lookup.pr else {
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(format!(
+                                    "sync completed but PR could not be re-detected for branch '{branch}'; stopping for human handoff"
+                                ));
+                                let message = persist_stop_state_before_handoff(
+                                    state,
+                                    ThoughtsStateStore::save,
+                                )?;
+                                linear::post_handoff_once(state, &message).await?;
+                                return ThoughtsStateStore::save(state);
+                            };
+
+                            let github = &self.github;
+                            let pr = ensure_pr_ready_for_review(
+                                state,
+                                &pr,
+                                "post_sync_refresh",
+                                |pr| async move { github.mark_ready_for_review(&pr).await },
+                            )
+                            .await?;
+                            persist_detected_pr(state, &pr);
+                        }
+
+                        state.stage.kind = next_stage;
+                        state.stage.details = Some(format!(
+                            "synced with {} via {SYNC_WITH_MAIN_COMMAND}",
+                            state.worktree.base_ref
+                        ));
+                    }
+                    freshness::FreshnessOutcome::Behind { .. } => {
+                        state.stage.kind = StageKind::StoppedManualHandoff;
+                        state.stage.details = Some(format!(
+                            "{SYNC_WITH_MAIN_COMMAND} completed but branch is still behind {}; stopping to avoid infinite redispatch. Operator: run the sync command manually and re-run outer-dag from this worktree.",
+                            state.worktree.base_ref
+                        ));
+                        let message =
+                            persist_stop_state_before_handoff(state, ThoughtsStateStore::save)?;
+                        linear::post_handoff_once(state, &message).await?;
+                    }
+                    freshness::FreshnessOutcome::DirtyTree => {
+                        let message = "dirty worktree blocks freshness gate".to_string();
+                        state.freshness.last_result = Some("dirty_tree".to_string());
+                        state.stage.kind = StageKind::StoppedDirtyTree;
+                        state.stage.details = Some(message);
+                        let message =
+                            persist_stop_state_before_handoff(state, ThoughtsStateStore::save)?;
+                        linear::post_handoff_once(state, &message).await?;
+                    }
+                }
             }
             freshness::FreshnessOutcome::DirtyTree => {
                 let message = "dirty worktree blocks freshness gate".to_string();
@@ -577,7 +645,12 @@ impl DagEngine {
 
         self.supervisor(&state.settings)
             .await?
-            .ensure_commands_present(&[command_name, "linear_ticket_2_pr", "resolve_pr_comments"])
+            .ensure_commands_present(&[
+                command_name,
+                "linear_ticket_2_pr",
+                "resolve_pr_comments",
+                SYNC_WITH_MAIN_COMMAND,
+            ])
             .await?;
         state.opencode.resume_stage = Some(resume_stage.clone());
         state.opencode.dispatch_attempt += 1;
