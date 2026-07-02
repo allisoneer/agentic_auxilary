@@ -14,8 +14,8 @@
 //!
 //! Per-tool typed wrappers for commonly used tools:
 //! - `callLs(args)`: List files and directories
-//! - `callGrep(args)`: Regex-based search
-//! - `callGlob(args)`: Glob-based file matching
+//! - `callGrep(args)`: Regex-based search; retry with `include_ignored: true` if expected matches are missing
+//! - `callGlob(args)`: Glob-based file matching; retry with `include_ignored: true` if expected matches are missing
 //! - `callAskAgent(args)`: Spawn Claude subagent
 //! - `callJustSearch(args)`: Search justfile recipes
 //! - `callJustExecute(args)`: Execute justfile recipe
@@ -387,7 +387,7 @@ pub async fn call_ask_agent(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Arguments
 ///
-/// * `args_json` - JSON string with: pattern, path?, mode?, globs?, ignore?, etc.
+/// * `args_json` - JSON string with: pattern, path?, mode?, globs?, ignore?, `include_hidden`?, `include_ignored`?, etc.
 ///
 /// # Returns
 ///
@@ -401,7 +401,7 @@ pub async fn call_grep(args_json: String) -> Result<ToolCallResult> {
 ///
 /// # Arguments
 ///
-/// * `args_json` - JSON string with: pattern, path?, ignore?, `include_hidden`?, sort?, `head_limit`?, offset?
+/// * `args_json` - JSON string with: pattern, path?, ignore?, `include_hidden`?, `include_ignored`?, sort?, `head_limit`?, offset?
 ///
 /// # Returns
 ///
