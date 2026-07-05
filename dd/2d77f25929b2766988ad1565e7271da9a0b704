@@ -1,0 +1,142 @@
+crates/services/opencode-rs/src/http/mod.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 97
+crates/tools/coding-agent-tools/src/just/pager.rs
+  s_40991aa451107d::t_21b200861dd7c0 13
+  s_6f14217fc06031::t_803012e36b6efe 222
+crates/tools/coding-agent-tools/src/walker.rs
+  s_492cae178917d7::t_65b03678b755fc 290
+crates/linear/tools/tests/live.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 71
+  s_bd6d73c63b2773::t_17e64aab7ed555 21,24
+crates/tools/review-tools/src/cache.rs
+  s_40991aa451107d::t_21b200861dd7c0 12
+  s_25b2d670f76ce9::t_49d369e6b82b70 131
+crates/tools/coding-agent-tools/tests/glob_tests.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 166,171
+CLAUDE.md
+  s_2fac85ac944aa6::t_d40495566f8316 135
+apps/opencode-orchestrator-mcp/tests/integration.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 189,249,267,313,395,442,524,552,638
+.github/workflows/readme-sync.yml
+  s_2fac85ac944aa6::t_d40495566f8316 41
+crates/services/claudecode-rs/src/bin/fake_claude.rs
+  s_27fc906f875e45::t_2a846ed3654563 96
+apps/opencode-orchestrator-mcp/tests/activity_timeout_wiremock.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 113,193
+rust-toolchain.toml
+  s_2fac85ac944aa6::t_d40495566f8316 2
+.github/workflows/release-plz.yml
+  s_2fac85ac944aa6::t_d40495566f8316 40
+crates/agentic-tools/utils/src/pagination.rs
+  s_40991aa451107d::t_21b200861dd7c0 59
+  s_6f14217fc06031::t_803012e36b6efe 389
+crates/tools/gpt5-reasoner/src/template/mod.rs
+  s_492cae178917d7::t_65b03678b755fc 48
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_6f14217fc06031::t_803012e36b6efe 1197
+  s_40991aa451107d::t_21b200861dd7c0 1005-1006,1198
+  s_25b2d670f76ce9::t_49d369e6b82b70 26,1037
+crates/services/exa-async/src/client.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 54
+.github/workflows/ci.yml
+  s_2fac85ac944aa6::t_d40495566f8316 31,68,193,220
+crates/tools/workspace-tools/src/paths.rs
+  s_d741edfb417f42::t_99607014150919 136
+crates/services/anthropic-async/src/client.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 54
+crates/services/opencode-rs/tests/integration/server_sse.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 215
+  s_bcb26ca4efb8df::t_f9d4997b4f9e5e 172,174
+crates/services/opencode-rs/tests/integration/http_endpoints.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 586
+crates/tools/review-tools/src/reviewer.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 62,401
+crates/tools/coding-agent-tools/src/glob.rs
+  s_492cae178917d7::t_65b03678b755fc 111
+crates/services/opencode-rs/examples/full_workflow.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 86
+crates/services/opencode-rs/src/client.rs
+  s_25b2d670f76ce9::t_49d369e6b82b70 41,411,427
+crates/tools/workspace-tools/src/tools.rs
+  s_d741edfb417f42::t_99607014150919 489,749
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dd2d77f25929b2766988ad1565e7271da9a0b704",
+  "prompts": {},
+  "sessions": {
+    "s_25b2d670f76ce9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db93e97fffetndxC31fg0mL40",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_27fc906f875e45": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db9721c4ffeBC2J7OsaFWhjUE",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_2fac85ac944aa6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db9ef1b6ffe1KX07jl99trf0R",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_40991aa451107d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db8e243bffesP5rtecWDIadDI",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_492cae178917d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db867c15ffe4biumvTIs6DIMB",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_6f14217fc06031": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db8c2a86ffeOx5iKDwCBkJQXL",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_bcb26ca4efb8df": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db8ac81dffe0YgrN4xVqu2vXr",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_bd6d73c63b2773": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db892fe2ffeHDiLLkrVdPwO7J",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_d741edfb417f42": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0db987fdcffeLCkEK89XGY4dQD",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
