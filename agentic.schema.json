@@ -18,6 +18,7 @@
         "extra_ignore_patterns": [],
         "glob_default_limit": 500,
         "grep_default_limit": 200,
+        "just_execute_page_lines": 200,
         "just_execute_timeout_secs": 1800,
         "just_search_timeout_secs": 30,
         "ls_page_size": 100,
@@ -169,6 +170,13 @@
         },
         "grep_default_limit": {
           "description": "Default `head_limit` for grep results (default: 200).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 200,
+          "minimum": 0
+        },
+        "just_execute_page_lines": {
+          "description": "Default line count per minimal-mode `cli_just_execute` transcript page.",
           "type": "integer",
           "format": "uint32",
           "default": 200,

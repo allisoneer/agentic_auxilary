@@ -202,6 +202,11 @@ fn apply_env_overrides(cfg: &mut AgenticConfig) {
     {
         cfg.cli_tools.just_search_timeout_secs = n;
     }
+    if let Some(v) = env_trimmed("AGENTIC_CLI_TOOLS_JUST_EXECUTE_PAGE_LINES")
+        && let Ok(n) = v.parse()
+    {
+        cfg.cli_tools.just_execute_page_lines = n;
+    }
 
     // --- Service timeout overrides ---
     if let Some(v) = env_trimmed("AGENTIC_SERVICES_LINEAR_CONNECT_TIMEOUT_SECS")
@@ -298,6 +303,7 @@ mod tests {
         assert_eq!(loaded.config.orchestrator.session_deadline_secs, 3600);
         assert_eq!(loaded.config.subagents.runtime_timeout_secs, 3600);
         assert_eq!(loaded.config.cli_tools.just_execute_timeout_secs, 1800);
+        assert_eq!(loaded.config.cli_tools.just_execute_page_lines, 200);
         assert_eq!(loaded.config.review.run_timeout_secs, 1800);
         assert_eq!(
             loaded.config.services.discord.base_url,
@@ -434,18 +440,20 @@ optimizer_model = "file-model"
         let _g1 = EnvGuard::set("AGENTIC_SUBAGENTS_RUNTIME_TIMEOUT_SECS", "123");
         let _g2 = EnvGuard::set("AGENTIC_CLI_TOOLS_JUST_EXECUTE_TIMEOUT_SECS", "456");
         let _g3 = EnvGuard::set("AGENTIC_CLI_TOOLS_JUST_SEARCH_TIMEOUT_SECS", "0");
-        let _g4 = EnvGuard::set("AGENTIC_SERVICES_LINEAR_CONNECT_TIMEOUT_SECS", "11");
-        let _g5 = EnvGuard::set("AGENTIC_SERVICES_LINEAR_REQUEST_TIMEOUT_SECS", "22");
-        let _g6 = EnvGuard::set("AGENTIC_SERVICES_GITHUB_TOTAL_TIMEOUT_SECS", "33");
-        let _g7 = EnvGuard::set("AGENTIC_SERVICES_DISCORD_REQUEST_TIMEOUT_SECS", "66");
-        let _g8 = EnvGuard::set("AGENTIC_REVIEW_RUN_TIMEOUT_SECS", "44");
-        let _g9 = EnvGuard::set("AGENTIC_THOUGHTS_ADD_REFERENCE_TIMEOUT_SECS", "55");
+        let _g4 = EnvGuard::set("AGENTIC_CLI_TOOLS_JUST_EXECUTE_PAGE_LINES", "17");
+        let _g5 = EnvGuard::set("AGENTIC_SERVICES_LINEAR_CONNECT_TIMEOUT_SECS", "11");
+        let _g6 = EnvGuard::set("AGENTIC_SERVICES_LINEAR_REQUEST_TIMEOUT_SECS", "22");
+        let _g7 = EnvGuard::set("AGENTIC_SERVICES_GITHUB_TOTAL_TIMEOUT_SECS", "33");
+        let _g8 = EnvGuard::set("AGENTIC_SERVICES_DISCORD_REQUEST_TIMEOUT_SECS", "66");
+        let _g9 = EnvGuard::set("AGENTIC_REVIEW_RUN_TIMEOUT_SECS", "44");
+        let _g10 = EnvGuard::set("AGENTIC_THOUGHTS_ADD_REFERENCE_TIMEOUT_SECS", "55");
 
         let loaded = load_merged(temp.path()).unwrap();
 
         assert_eq!(loaded.config.subagents.runtime_timeout_secs, 123);
         assert_eq!(loaded.config.cli_tools.just_execute_timeout_secs, 456);
         assert_eq!(loaded.config.cli_tools.just_search_timeout_secs, 0);
+        assert_eq!(loaded.config.cli_tools.just_execute_page_lines, 17);
         assert_eq!(loaded.config.services.linear.connect_timeout_secs, 11);
         assert_eq!(loaded.config.services.linear.request_timeout_secs, 22);
         assert_eq!(loaded.config.services.github.total_timeout_secs, 33);

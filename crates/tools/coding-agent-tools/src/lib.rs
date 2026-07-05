@@ -1011,8 +1011,13 @@ impl CodingAgentTools {
                 }
             };
 
-            let pages =
-                just::execute_pager::build_pages(output_mode, &output.stdout, &output.stderr);
+            let page_lines = self.cli_tools.just_execute_page_lines.max(1) as usize;
+            let pages = just::execute_pager::build_pages(
+                output_mode,
+                &output.stdout,
+                &output.stderr,
+                page_lines,
+            );
             let meta = just::execute_pager::ExecuteMeta {
                 dir: output.dir,
                 recipe: output.recipe,
@@ -1117,6 +1122,7 @@ impl CodingAgentTools {
 #[cfg(test)]
 mod ask_agent_filter_tests {
     use super::*;
+    use agentic_config::types::CliToolsConfig;
     use claudecode::types::Result as ClaudeResult;
     use serial_test::serial;
     use std::fs;
@@ -1569,6 +1575,132 @@ mod ask_agent_filter_tests {
         assert!(!page2.has_more);
         assert_eq!(page2.stdout, numbered_output("out", 201..=205));
         assert!(page2.stderr.is_empty());
+        assert_eq!(read_counter(tmp.path()).trim(), "1");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_uses_custom_minimal_page_lines_only_for_minimal_mode() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let cli_tools = CliToolsConfig {
+            just_execute_page_lines: 3,
+            ..CliToolsConfig::default()
+        };
+        let tools = CodingAgentTools::with_config(SubagentsConfig::default(), cli_tools);
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let minimal_page_1 = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("minimal page 1 failed: {e}"));
+        let minimal_page_2 = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("minimal page 2 failed: {e}"));
+        let normal = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Normal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("normal output failed: {e}"));
+        let verbose = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Verbose,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("verbose output failed: {e}"));
+
+        assert!(minimal_page_1.has_more);
+        assert_eq!(minimal_page_1.stdout, numbered_output("out", 1..=3));
+        assert_eq!(minimal_page_1.stderr, numbered_output("err", 1..=3));
+        assert!(minimal_page_2.has_more);
+        assert_eq!(minimal_page_2.stdout, numbered_output("out", 4..=6));
+        assert!(minimal_page_2.stderr.is_empty());
+        assert!(!normal.has_more);
+        assert_eq!(normal.stdout, numbered_output("out", 1..=205));
+        assert_eq!(normal.stderr, numbered_output("err", 1..=3));
+        assert!(!verbose.has_more);
+        assert_eq!(verbose.stdout, numbered_output("out", 1..=205));
+        assert_eq!(verbose.stderr, numbered_output("err", 1..=3));
+        assert_eq!(read_counter(tmp.path()).trim(), "3");
+    }
+
+    #[tokio::test]
+    #[serial(env)]
+    async fn just_execute_clamps_zero_page_lines_to_one() {
+        if tokio::process::Command::new("just")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            eprintln!("Skipping test: just not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap_or_else(|e| panic!("TempDir::new failed: {e}"));
+        write_paged_justfile(tmp.path(), false);
+        let _dir = DirGuard::set(tmp.path());
+
+        let cli_tools = CliToolsConfig {
+            just_execute_page_lines: 0,
+            ..CliToolsConfig::default()
+        };
+        let tools = CodingAgentTools::with_config(SubagentsConfig::default(), cli_tools);
+        let ctx = agentic_tools_core::ToolContext::default();
+
+        let output = tools
+            .just_execute(
+                "paged".into(),
+                None,
+                None,
+                just::ExecuteOutputMode::Minimal,
+                false,
+                &ctx,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("minimal output failed: {e}"));
+
+        assert!(output.has_more);
+        assert_eq!(output.stdout, numbered_output("out", 1..=1));
+        assert_eq!(output.stderr, numbered_output("err", 1..=1));
         assert_eq!(read_counter(tmp.path()).trim(), "1");
     }
 

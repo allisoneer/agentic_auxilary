@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 
+#[cfg(test)]
 pub const EXECUTE_PAGE_LINES: usize = 200;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -66,6 +67,7 @@ pub fn build_pages(
     output_mode: ExecuteOutputMode,
     stdout: &str,
     stderr: &str,
+    page_lines: usize,
 ) -> Vec<TranscriptPage> {
     if matches!(
         output_mode,
@@ -77,8 +79,8 @@ pub fn build_pages(
         }];
     }
 
-    let stdout_pages = split_stream(stdout);
-    let stderr_pages = split_stream(stderr);
+    let stdout_pages = split_stream(stdout, page_lines);
+    let stderr_pages = split_stream(stderr, page_lines);
     let page_count = stdout_pages.len().max(stderr_pages.len()).max(1);
 
     (0..page_count)
@@ -107,7 +109,7 @@ pub fn make_execute_key(
     .map_err(|e| format!("Failed to serialize execute key: {e}"))
 }
 
-fn split_stream(stream: &str) -> Vec<String> {
+fn split_stream(stream: &str, page_lines: usize) -> Vec<String> {
     if stream.is_empty() {
         return Vec::new();
     }
@@ -117,10 +119,7 @@ fn split_stream(stream: &str) -> Vec<String> {
         return vec![stream.to_string()];
     }
 
-    lines
-        .chunks(EXECUTE_PAGE_LINES)
-        .map(<[&str]>::concat)
-        .collect()
+    lines.chunks(page_lines).map(<[&str]>::concat).collect()
 }
 
 fn normalize_args(args: Option<&HashMap<String, Value>>) -> Result<String, String> {
@@ -176,7 +175,7 @@ mod tests {
 
     #[test]
     fn build_pages_always_returns_at_least_one_page() {
-        let pages = build_pages(ExecuteOutputMode::Minimal, "", "");
+        let pages = build_pages(ExecuteOutputMode::Minimal, "", "", EXECUTE_PAGE_LINES);
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0], TranscriptPage::default());
     }
@@ -186,13 +185,33 @@ mod tests {
         let stdout = numbered_output("out", 1..=205);
         let stderr = numbered_output("err", 1..=3);
 
-        let pages = build_pages(ExecuteOutputMode::Minimal, &stdout, &stderr);
+        let pages = build_pages(
+            ExecuteOutputMode::Minimal,
+            &stdout,
+            &stderr,
+            EXECUTE_PAGE_LINES,
+        );
         assert_eq!(pages.len(), 2);
         assert!(pages[0].stdout.starts_with("out-1\n"));
         assert!(pages[0].stdout.contains("out-200\n"));
         assert_eq!(pages[0].stderr, stderr);
         assert_eq!(pages[1].stdout, numbered_output("out", 201..=205));
         assert!(pages[1].stderr.is_empty());
+    }
+
+    #[test]
+    fn build_pages_respects_custom_minimal_boundary() {
+        let stdout = numbered_output("out", 1..=5);
+        let stderr = numbered_output("err", 1..=4);
+
+        let pages = build_pages(ExecuteOutputMode::Minimal, &stdout, &stderr, 2);
+        assert_eq!(pages.len(), 3);
+        assert_eq!(pages[0].stdout, numbered_output("out", 1..=2));
+        assert_eq!(pages[0].stderr, numbered_output("err", 1..=2));
+        assert_eq!(pages[1].stdout, numbered_output("out", 3..=4));
+        assert_eq!(pages[1].stderr, numbered_output("err", 3..=4));
+        assert_eq!(pages[2].stdout, numbered_output("out", 5..=5));
+        assert!(pages[2].stderr.is_empty());
     }
 
     #[test]
@@ -253,7 +272,7 @@ mod tests {
         let stderr = numbered_output("err", 1..=3);
 
         for mode in [ExecuteOutputMode::Normal, ExecuteOutputMode::Verbose] {
-            let pages = build_pages(mode, &stdout, &stderr);
+            let pages = build_pages(mode, &stdout, &stderr, 2);
             assert_eq!(pages.len(), 1);
             assert_eq!(pages[0].stdout, stdout);
             assert_eq!(pages[0].stderr, stderr);

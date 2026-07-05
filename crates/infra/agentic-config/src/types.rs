@@ -289,6 +289,8 @@ pub struct CliToolsConfig {
     pub just_execute_timeout_secs: u64,
     /// Wall-clock timeout for `cli_just_search` in seconds. `0` disables the timeout.
     pub just_search_timeout_secs: u64,
+    /// Default line count per minimal-mode `cli_just_execute` transcript page.
+    pub just_execute_page_lines: u32,
     /// Additional ignore patterns to append to builtin ignores.
     #[serde(default)]
     pub extra_ignore_patterns: Vec<String>,
@@ -304,6 +306,7 @@ impl Default for CliToolsConfig {
             pagination_cache_ttl_secs: 300,
             just_execute_timeout_secs: 1800,
             just_search_timeout_secs: 30,
+            just_execute_page_lines: 200,
             extra_ignore_patterns: vec![],
         }
     }
@@ -658,6 +661,7 @@ deny = ["Bash"]
         assert_eq!(cfg.pagination_cache_ttl_secs, 300);
         assert_eq!(cfg.just_execute_timeout_secs, 1800);
         assert_eq!(cfg.just_search_timeout_secs, 30);
+        assert_eq!(cfg.just_execute_page_lines, 200);
         assert!(cfg.extra_ignore_patterns.is_empty());
     }
 
