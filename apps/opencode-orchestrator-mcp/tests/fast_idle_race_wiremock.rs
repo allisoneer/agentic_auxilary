@@ -970,3 +970,106 @@ async fn command_dispatch_404_is_actionable_invalid_input() {
     )
     .await;
 }
+
+#[tokio::test]
+async fn command_dispatch_posts_server_valid_message_id() {
+    let _guard = env_lock().await;
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "command-valid-message-id";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    let status_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("COMMAND_DONE"))),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok"})))
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(5),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: Some("implement_plan".into()),
+                agent: None,
+                message: Some("args".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("command dispatch message-id regression should not hang")
+    .expect("command dispatch should succeed");
+
+    assert!(matches!(result.status, RunStatus::Completed));
+    assert_eq!(result.response.as_deref(), Some("COMMAND_DONE"));
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    let command_request = requests
+        .iter()
+        .find(|request| {
+            request.method.as_str() == "POST"
+                && request.url.path() == format!("/session/{sid}/command")
+        })
+        .expect("wiremock should capture command POST");
+    let body: serde_json::Value =
+        serde_json::from_slice(&command_request.body).expect("command request body should be JSON");
+    let message_id = body
+        .get("messageID")
+        .and_then(serde_json::Value::as_str)
+        .expect("command request should include messageID");
+    assert!(
+        message_id.starts_with("msg"),
+        "expected server-valid messageID prefix, got {message_id}"
+    );
+}

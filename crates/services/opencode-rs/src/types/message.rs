@@ -702,6 +702,7 @@ pub struct ShellRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::new_message_id;
 
     #[test]
     fn test_part_text_deserialize() {
@@ -736,6 +737,24 @@ mod tests {
         let json = r#"{"type":"future-part-type","data":"whatever"}"#;
         let part: Part = serde_json::from_str(json).unwrap();
         assert!(matches!(part, Part::Unknown));
+    }
+
+    #[test]
+    fn test_command_request_serializes_message_id_as_message_id() {
+        let message_id = new_message_id();
+        let value = serde_json::to_value(CommandRequest {
+            command: "implement_plan".into(),
+            arguments: "args".into(),
+            message_id: Some(message_id.clone()),
+        })
+        .unwrap();
+
+        assert_eq!(
+            value.get("messageID").and_then(serde_json::Value::as_str),
+            Some(message_id.as_str())
+        );
+        assert!(message_id.starts_with("msg"));
+        assert!(value.get("message_id").is_none());
     }
 
     #[test]
@@ -877,7 +896,7 @@ mod tests {
         }"#;
         let source: FilePartSource = serde_json::from_str(json).unwrap();
         assert!(
-            matches!(source, FilePartSource::Resource { client_name, uri, .. } 
+            matches!(source, FilePartSource::Resource { client_name, uri, .. }
             if client_name == "my-mcp-server" && uri == "resource://data/file.txt")
         );
     }

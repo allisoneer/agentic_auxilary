@@ -50,6 +50,7 @@ use opencode_rs::types::message::Part;
 use opencode_rs::types::message::PromptPart;
 use opencode_rs::types::message::PromptRequest;
 use opencode_rs::types::message::ToolState;
+use opencode_rs::types::new_message_id;
 use opencode_rs::types::permission::PermissionReply as ApiPermissionReply;
 use opencode_rs::types::permission::PermissionReplyRequest;
 use opencode_rs::types::question::QuestionReply;
@@ -60,8 +61,6 @@ use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 use tokio::task::JoinHandle;
 
 const SERVER_NAME: &str = "opencode-orchestrator-mcp";
@@ -141,13 +140,6 @@ async fn abort_command_task(task: &mut Option<JoinHandle<Result<(), OpencodeErro
         handle.abort();
         let _ = handle.await;
     }
-}
-
-fn make_command_message_id(session_id: &str) -> String {
-    let issued_at_nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_nanos());
-    format!("orchestrator-command-{session_id}-{issued_at_nanos}")
 }
 
 fn transcript_indicates_command_dispatch(
@@ -620,7 +612,7 @@ impl OrchestratorRunTool {
         if let Some(command) = &input.command {
             command_name_for_logging = Some(command.clone());
 
-            let command_message_id = make_command_message_id(&session_id);
+            let command_message_id = new_message_id();
             command_transcript_window = Some(CommandTranscriptWindow {
                 command_message_id: command_message_id.clone(),
             });
