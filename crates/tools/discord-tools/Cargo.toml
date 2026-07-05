@@ -1,0 +1,33 @@
+[package]
+name = "discord-tools"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Discord search tools for agentic-mcp"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+
+[package.metadata.repo]
+role = "tool-lib"
+family = "tools"
+
+[dependencies]
+agentic-config = { workspace = true }
+agentic-tools-core = { workspace = true }
+futures = "0.3"
+percent-encoding = "2"
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+twilight-http = { version = "0.17", features = ["rustls-webpki-roots"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+mockito = "1"
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
+serial_test = "3"
+
+[lints]
+workspace = true

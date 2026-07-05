@@ -38,7 +38,7 @@ impl Default for ClientBuilder {
             base_url: "http://127.0.0.1:4096".to_string(),
             directory: None,
             workspace: None,
-            timeout: Duration::from_secs(1800), // 30 min for long-running tool calls
+            timeout: Duration::from_mins(30), // 30 min for long-running tool calls
         }
     }
 }
@@ -408,7 +408,7 @@ mod tests {
     fn test_client_builder_defaults() {
         let builder = ClientBuilder::new();
         assert_eq!(builder.base_url, "http://127.0.0.1:4096");
-        assert_eq!(builder.timeout, Duration::from_secs(1800));
+        assert_eq!(builder.timeout, Duration::from_mins(30));
         assert!(builder.directory.is_none());
         assert!(builder.workspace.is_none());
     }
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(builder.base_url, "http://localhost:8080");
         assert_eq!(builder.directory, Some("/my/project".to_string()));
         assert_eq!(builder.workspace, Some("workspace-1".to_string()));
-        assert_eq!(builder.timeout, Duration::from_secs(60));
+        assert_eq!(builder.timeout, Duration::from_mins(1));
     }
 
     #[cfg(feature = "http")]

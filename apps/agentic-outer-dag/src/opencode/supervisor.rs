@@ -23,7 +23,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-const IDLE_GRACE: Duration = Duration::from_millis(1000);
+const IDLE_GRACE: Duration = Duration::from_secs(1);
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const TRANSCRIPT_SETTLING_RETRY_BACKOFFS: [Duration; 4] = [
     Duration::from_millis(50),
@@ -1002,8 +1002,8 @@ mod tests {
 
     fn test_timeouts() -> OpenCodeSupervisorTimeouts {
         OpenCodeSupervisorTimeouts {
-            session_deadline: Duration::from_secs(8 * 60 * 60),
-            inactivity_timeout: Duration::from_secs(5 * 60),
+            session_deadline: Duration::from_hours(8),
+            inactivity_timeout: Duration::from_mins(5),
         }
     }
 
@@ -1034,7 +1034,7 @@ mod tests {
 
     #[test]
     fn idle_gate_finalizes_after_observed_busy() {
-        let future_deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+        let future_deadline = tokio::time::Instant::now() + Duration::from_mins(1);
         assert_eq!(
             idle_gate_decision(true, Some(future_deadline), tokio::time::Instant::now()),
             IdleGateDecision::Finalize
@@ -1194,11 +1194,8 @@ mod tests {
 
     #[test]
     fn describe_duration_uses_human_friendly_units() {
-        assert_eq!(
-            describe_duration(Duration::from_secs(8 * 60 * 60)),
-            "8 hours"
-        );
-        assert_eq!(describe_duration(Duration::from_secs(5 * 60)), "5 minutes");
+        assert_eq!(describe_duration(Duration::from_hours(8)), "8 hours");
+        assert_eq!(describe_duration(Duration::from_mins(5)), "5 minutes");
         assert_eq!(describe_duration(Duration::from_secs(45)), "45 seconds");
     }
 

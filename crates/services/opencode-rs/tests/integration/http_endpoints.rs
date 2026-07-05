@@ -583,7 +583,7 @@ async fn test_session_init_required_body() {
         }
     };
 
-    let ok = match tokio::time::timeout(Duration::from_secs(300), driver).await {
+    let ok = match tokio::time::timeout(Duration::from_mins(5), driver).await {
         Ok(Ok(ok)) => ok,
         Ok(Err(error)) => {
             init_task.as_mut().abort();

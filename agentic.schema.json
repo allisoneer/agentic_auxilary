@@ -76,6 +76,10 @@
         "anthropic": {
           "base_url": "https://api.anthropic.com"
         },
+        "discord": {
+          "base_url": "https://discord.com",
+          "request_timeout_secs": 30
+        },
         "exa": {
           "base_url": "https://api.exa.ai"
         },
@@ -203,6 +207,24 @@
           "type": "integer",
           "format": "uint64",
           "default": 300,
+          "minimum": 0
+        }
+      }
+    },
+    "DiscordServiceConfig": {
+      "description": "Discord API service configuration.",
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "description": "Base URL for the Discord API.",
+          "type": "string",
+          "default": "https://discord.com"
+        },
+        "request_timeout_secs": {
+          "description": "Per-request timeout in seconds. `0` disables the timeout.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 30,
           "minimum": 0
         }
       }
@@ -469,6 +491,14 @@
           "$ref": "#/$defs/AnthropicServiceConfig",
           "default": {
             "base_url": "https://api.anthropic.com"
+          }
+        },
+        "discord": {
+          "description": "Discord API configuration.",
+          "$ref": "#/$defs/DiscordServiceConfig",
+          "default": {
+            "base_url": "https://discord.com",
+            "request_timeout_secs": 30
           }
         },
         "exa": {

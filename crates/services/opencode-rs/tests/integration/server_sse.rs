@@ -169,11 +169,9 @@ async fn test_sse_message_events() {
                     }
                     saw_message_event = true;
                 }
-                Event::MessagePartUpdated { properties } => {
+                Event::MessagePartUpdated { properties } if properties.part.is_some() => {
                     // Part events may not have session_id at top level (it's in the Part)
-                    if properties.part.is_some() {
-                        saw_message_event = true;
-                    }
+                    saw_message_event = true;
                 }
                 _ => {}
             }
@@ -214,7 +212,7 @@ async fn test_sse_heartbeat() {
     let mut subscription = client.subscribe().expect("Failed to subscribe to SSE");
 
     // Wait for a heartbeat (sent periodically)
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(120);
+    let deadline = tokio::time::Instant::now() + Duration::from_mins(2);
     let mut saw_heartbeat = false;
 
     while tokio::time::Instant::now() < deadline && !saw_heartbeat {

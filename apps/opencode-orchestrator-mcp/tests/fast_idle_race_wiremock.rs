@@ -28,12 +28,15 @@ use wiremock::matchers::path_regex;
 use wiremock::matchers::query_param;
 
 use support::SequenceResponder;
+use support::message_fixture;
+use support::message_history_fixture;
 use support::messages_fixture;
 use support::patch_file_metadata_fixture;
 use support::permission_fixture;
 use support::permission_fixture_with_metadata;
 use support::permission_patch_file_array_bad_request_fixture;
 use support::session_fixture;
+use support::short_timeout_test_orchestrator_server;
 use support::status_v2_busy;
 use support::status_v2_idle;
 use support::test_orchestrator_server;
@@ -50,6 +53,86 @@ impl Drop for EnvVarGuard {
     fn drop(&mut self) {
         // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
         unsafe { std::env::remove_var(self.0) };
+    }
+}
+
+async fn assert_command_dispatch_invalid_input(status: u16, body: serde_json::Value) {
+    let _guard = env_lock().await;
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = format!("command-invalid-input-{status}");
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(&sid)))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(message_history_fixture(vec![])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(ResponseTemplate::new(status).set_body_json(body))
+        .mount(&mock)
+        .await;
+
+    let err = timeout(
+        Duration::from_secs(5),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.clone()),
+                command: Some("implement_plan".into()),
+                agent: None,
+                message: Some("args".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("invalid command dispatch regression should not hang")
+    .expect_err("400/404 command dispatch should be invalid input");
+
+    match err {
+        ToolError::InvalidInput(message) => {
+            let lower = message.to_lowercase();
+            assert!(lower.contains("failed to dispatch command 'implement_plan'"));
+            assert!(lower.contains("bad request") || lower.contains("not found"));
+        }
+        other => panic!("expected invalid input error, got {other:?}"),
     }
 }
 
@@ -633,4 +716,257 @@ async fn respond_permission_reply_404_is_actionable_invalid_input() {
             .map(|request| request.url.path().to_string())
             .collect::<Vec<_>>()
     );
+}
+
+#[tokio::test]
+async fn command_transport_error_after_start_evidence_warns_and_completes() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
+
+    let mock = MockServer::start().await;
+    let server = short_timeout_test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "command-transport-post-start";
+
+    let baseline_messages =
+        message_history_fixture(vec![message_fixture(sid, "u0", "user", 1, None, vec![])]);
+    let transcript_with_command = message_history_fixture(vec![
+        message_fixture(sid, "u0", "user", 1, None, vec![]),
+        message_fixture(sid, "cmd-user", "user", 3, None, vec![]),
+    ]);
+    let completed_messages = message_history_fixture(vec![
+        message_fixture(sid, "u0", "user", 1, None, vec![]),
+        message_fixture(sid, "cmd-user", "user", 3, None, vec![]),
+        message_fixture(
+            sid,
+            "a1",
+            "assistant",
+            4,
+            Some(4),
+            vec![serde_json::json!({"type": "text", "text": "COMMAND_DONE"})],
+        ),
+    ]);
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+            ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+            ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ]))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(baseline_messages),
+            ResponseTemplate::new(200).set_body_json(transcript_with_command),
+            ResponseTemplate::new(200).set_body_json(completed_messages),
+        ]))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"status": "executed"}))
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(5),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: Some("implement_plan".into()),
+                agent: None,
+                message: Some("args".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("post-start transport regression should not hang")
+    .expect("post-start transport regression should complete with warning");
+
+    assert!(matches!(result.status, RunStatus::Completed));
+    assert_eq!(result.response.as_deref(), Some("COMMAND_DONE"));
+    assert!(result.warnings.iter().any(|warning| {
+        warning.contains("transport error") && warning.contains("continuing supervision")
+    }));
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    let command_posts = requests
+        .iter()
+        .filter(|request| request.url.path() == format!("/session/{sid}/command"))
+        .count();
+    assert_eq!(
+        command_posts, 1,
+        "transport ambiguity must not trigger command retry"
+    );
+}
+
+#[tokio::test]
+async fn command_transport_error_before_start_evidence_fails_clearly() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
+
+    let mock = MockServer::start().await;
+    let server = short_timeout_test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "command-transport-pre-start";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ]))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(message_history_fixture(vec![])),
+            ResponseTemplate::new(200).set_body_json(message_history_fixture(vec![])),
+        ]))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"status": "executed"}))
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    let err = timeout(
+        Duration::from_secs(5),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: Some("implement_plan".into()),
+                agent: None,
+                message: Some("args".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("pre-start transport regression should not hang")
+    .expect_err("pre-start transport regression should fail clearly");
+
+    match err {
+        ToolError::Internal(message) => {
+            let lower = message.to_lowercase();
+            assert!(lower.contains("transport error before session start evidence"));
+            assert!(lower.contains("failed to dispatch command 'implement_plan'"));
+        }
+        other => panic!("expected internal dispatch failure, got {other:?}"),
+    }
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    let command_posts = requests
+        .iter()
+        .filter(|request| request.url.path() == format!("/session/{sid}/command"))
+        .count();
+    assert_eq!(
+        command_posts, 1,
+        "transport ambiguity must not trigger command retry"
+    );
+}
+
+#[tokio::test]
+async fn command_dispatch_400_is_actionable_invalid_input() {
+    assert_command_dispatch_invalid_input(
+        400,
+        serde_json::json!({"name": "BadRequest", "message": "Bad request"}),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn command_dispatch_404_is_actionable_invalid_input() {
+    assert_command_dispatch_invalid_input(
+        404,
+        serde_json::json!({"name": "NotFound", "message": "Not found"}),
+    )
+    .await;
 }

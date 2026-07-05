@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 6: Stream response events
     println!("\n6. Streaming response...\n");
     let mut response_text = String::new();
-    let timeout = Duration::from_secs(60);
+    let timeout = Duration::from_mins(1);
     let start = std::time::Instant::now();
 
     loop {

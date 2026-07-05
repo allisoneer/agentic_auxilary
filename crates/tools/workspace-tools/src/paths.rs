@@ -133,8 +133,7 @@ mod tests {
             let mut path = std::env::temp_dir();
             let nanos = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|duration| duration.as_nanos())
-                .unwrap_or(0);
+                .map_or(0, |duration| duration.as_nanos());
             path.push(format!("{prefix}{}-{nanos}", std::process::id()));
             std::fs::create_dir_all(&path).unwrap();
             Self { path }

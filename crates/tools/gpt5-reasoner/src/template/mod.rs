@@ -45,7 +45,7 @@ pub async fn inject_files(xml_template: &str, groups: &FileGrouping) -> Result<S
             .collect()
     };
 
-    let file_map_vec: Vec<(String, String)> = stream::iter(unique_paths.into_iter())
+    let file_map_vec: Vec<(String, String)> = stream::iter(unique_paths)
         .map(|p| async move {
             let content = read_file_utf8(&p).await?;
             Ok::<_, ReasonerError>((p, content))

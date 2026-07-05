@@ -10,7 +10,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 /// Time-to-live for pagination state
-const TTL: Duration = Duration::from_secs(5 * 60);
+const TTL: Duration = Duration::from_mins(5);
 
 /// Items per page for search results
 pub const PAGE_SIZE: usize = 10;
@@ -219,9 +219,7 @@ mod tests {
         {
             let mut st = lock.state.lock().unwrap();
             // Manually expire
-            st.created_at = Instant::now()
-                .checked_sub(Duration::from_secs(6 * 60))
-                .unwrap();
+            st.created_at = Instant::now().checked_sub(Duration::from_mins(6)).unwrap();
         }
 
         cache.sweep_expired();

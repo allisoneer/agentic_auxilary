@@ -9,7 +9,7 @@ use std::time::Instant;
 use crate::types::ReviewSnapshot;
 
 /// Snapshot TTL: 60 minutes (exceeds 30-min session timeout).
-pub const SNAPSHOT_TTL: Duration = Duration::from_secs(60 * 60);
+pub const SNAPSHOT_TTL: Duration = Duration::from_hours(1);
 
 /// Thread-safe cache for review snapshots.
 #[derive(Default)]
@@ -128,6 +128,6 @@ mod tests {
 
     #[test]
     fn ttl_is_60_minutes() {
-        assert_eq!(SNAPSHOT_TTL, Duration::from_secs(3600));
+        assert_eq!(SNAPSHOT_TTL, Duration::from_hours(1));
     }
 }

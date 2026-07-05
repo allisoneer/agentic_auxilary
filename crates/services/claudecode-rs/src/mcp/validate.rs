@@ -643,7 +643,10 @@ async fn validate_stdio_server(
             let handshake_ms = start.elapsed().as_millis() as u64;
 
             // Get server info
-            let Some(server_info) = handshake_result.peer_info().cloned() else {
+            let Some(server_info) = handshake_result
+                .peer_info()
+                .map(|peer_info| peer_info.as_ref().clone())
+            else {
                 let tail = snapshot_tail(stderr_buf.as_ref()).await;
                 return Err(McpServerValidationError::HandshakeProtocol {
                     message: "Server info not available after handshake".to_string(),
