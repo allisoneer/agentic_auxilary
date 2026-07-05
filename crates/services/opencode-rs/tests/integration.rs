@@ -46,6 +46,7 @@ use opencode_rs::types::event::Event;
 use opencode_rs::types::message::CommandRequest;
 use opencode_rs::types::message::PromptPart;
 use opencode_rs::types::message::PromptRequest;
+use opencode_rs::types::new_message_id;
 use opencode_rs::types::session::CreateSessionRequest;
 use std::time::Duration;
 
@@ -533,7 +534,7 @@ async fn test_agents_list() {
 /// Test that command dispatch reaches command lookup instead of request validation.
 #[tokio::test]
 #[ignore = "requires: opencode serve"]
-async fn test_command_dispatch_passes_request_validation() {
+async fn test_command_dispatch_passes_request_validation_with_message_id() {
     if !should_run() {
         return;
     }
@@ -552,7 +553,7 @@ async fn test_command_dispatch_passes_request_validation() {
             &CommandRequest {
                 command: "___definitely_not_a_real_command___".into(),
                 arguments: "hello".into(),
-                message_id: None,
+                message_id: Some(new_message_id()),
             },
         )
         .await;
