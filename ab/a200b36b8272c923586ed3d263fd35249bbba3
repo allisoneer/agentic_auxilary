@@ -1,0 +1,38 @@
+crates/tools/coding-agent-tools/src/just/execute_pager.rs
+  s_2b3d0471eea2ad::t_4d8fe6ac3c4d08 12,122,202-214
+  s_2b3d0471eea2ad::t_227738bf536842 70,82-83,112,178,188-193,275
+  s_2b3d0471eea2ad::t_c23d45d6d21459 215-216
+agentic.toml.example
+  s_2b3d0471eea2ad::t_35bd50ffcd1d15 110-111
+crates/infra/agentic-config/src/validation.rs
+  s_2b3d0471eea2ad::t_35bd50ffcd1d15 357-363,1010-1019,1023-1026
+  s_2b3d0471eea2ad::t_3c2e45a3a63984 1020-1022
+crates/infra/agentic-config/src/schema.rs
+  s_2b3d0471eea2ad::t_35bd50ffcd1d15 66-70
+crates/infra/agentic-config/src/types.rs
+  s_2b3d0471eea2ad::t_5d1d83981dff9c 292-293,309,664
+crates/infra/agentic-config/src/loader.rs
+  s_2b3d0471eea2ad::t_35bd50ffcd1d15 205-209,306,443-449,456
+crates/tools/coding-agent-tools/src/lib.rs
+  s_2b3d0471eea2ad::t_c00c20236bd781 1014-1020,1581-1597,1602-1681,1686-1703,1705
+  s_2b3d0471eea2ad::t_1c247337f0309b 1598-1601,1682-1685
+  s_2b3d0471eea2ad::t_4d8fe6ac3c4d08 1125
+  s_2b3d0471eea2ad::t_1142414aa58794 1704
+  s_2b3d0471eea2ad::t_0d7b47232aac5c 1706
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "aba200b36b8272c923586ed3d263fd35249bbba3",
+  "prompts": {},
+  "sessions": {
+    "s_2b3d0471eea2ad": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0cc0cc78affeRkJ2lDdItxxSQR",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
