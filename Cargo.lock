@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.37"
+version = "0.2.38"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -4014,7 +4014,7 @@ dependencies = [
 
 [[package]]
 name = "message-optimizer-bin"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -4404,7 +4404,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
