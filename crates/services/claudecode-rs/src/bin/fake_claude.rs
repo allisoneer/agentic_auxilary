@@ -93,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
-            () = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
+            () = tokio::time::sleep(std::time::Duration::from_mins(1)) => {}
         }
     }
 

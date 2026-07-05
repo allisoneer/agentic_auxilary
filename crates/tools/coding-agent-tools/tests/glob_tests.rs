@@ -163,12 +163,12 @@ fn test_glob_sort_by_mtime() {
 
     // Create oldest file first
     fs::write(tmp.path().join("old.txt"), "old").unwrap();
-    let old_time = FileTime::from_system_time(now - Duration::from_secs(3600));
+    let old_time = FileTime::from_system_time(now - Duration::from_hours(1));
     set_file_mtime(tmp.path().join("old.txt"), old_time).unwrap();
 
     // Create middle file
     fs::write(tmp.path().join("mid.txt"), "mid").unwrap();
-    let mid_time = FileTime::from_system_time(now - Duration::from_secs(1800));
+    let mid_time = FileTime::from_system_time(now - Duration::from_mins(30));
     set_file_mtime(tmp.path().join("mid.txt"), mid_time).unwrap();
 
     // Create newest file

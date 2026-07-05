@@ -486,9 +486,7 @@ fn render_directory(
             .file_type()
             .map_err(|error| ToolError::Internal(error.to_string()))?;
         let is_dir = if entry_type.is_symlink() {
-            fs::metadata(entry.path())
-                .map(|meta| meta.is_dir())
-                .unwrap_or(false)
+            fs::metadata(entry.path()).is_ok_and(|meta| meta.is_dir())
         } else {
             entry_type.is_dir()
         };
@@ -748,8 +746,7 @@ mod tests {
             let mut path = std::env::temp_dir();
             let nanos = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|duration| duration.as_nanos())
-                .unwrap_or(0);
+                .map_or(0, |duration| duration.as_nanos());
             path.push(format!("{prefix}{}-{nanos}", std::process::id()));
             std::fs::create_dir_all(&path).unwrap();
             Self { path }

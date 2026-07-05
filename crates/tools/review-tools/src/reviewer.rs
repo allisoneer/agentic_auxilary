@@ -59,7 +59,7 @@ pub const MAX_CONCURRENT_SESSIONS: usize = 3;
 pub const RETRY_DELAYS: [Duration; 3] = [
     Duration::from_millis(0),
     Duration::from_millis(500),
-    Duration::from_millis(1000),
+    Duration::from_secs(1),
 ];
 
 /// Trait for reviewer runners (enables mocking in tests).
@@ -398,7 +398,7 @@ mod tests {
             [
                 Duration::from_millis(0),
                 Duration::from_millis(500),
-                Duration::from_millis(1000)
+                Duration::from_secs(1)
             ]
         );
     }

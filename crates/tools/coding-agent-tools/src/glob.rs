@@ -108,7 +108,7 @@ pub fn run(cfg: GlobConfig) -> Result<GlobOutput, ToolError> {
     match cfg.sort {
         SortOrder::Name => {
             // Case-insensitive alphabetical
-            entries.sort_by(|a, b| a.rel_path.to_lowercase().cmp(&b.rel_path.to_lowercase()));
+            entries.sort_by_key(|entry| entry.rel_path.to_lowercase());
         }
         SortOrder::Mtime => {
             // Newest first (reverse chronological)

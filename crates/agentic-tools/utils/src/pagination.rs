@@ -56,7 +56,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 /// Default TTL for pagination state: 5 minutes.
-pub const DEFAULT_TTL: Duration = Duration::from_secs(5 * 60);
+pub const DEFAULT_TTL: Duration = Duration::from_mins(5);
 
 /// Two-level locking pagination cache generic over result T and optional meta M.
 ///
@@ -386,9 +386,7 @@ mod tests {
         // Manually expire it by setting created_at to the past
         {
             let mut st = lock.state.lock().unwrap();
-            st.created_at = Instant::now()
-                .checked_sub(Duration::from_secs(6 * 60))
-                .unwrap();
+            st.created_at = Instant::now().checked_sub(Duration::from_mins(6)).unwrap();
         }
 
         // Sweep should remove expired entry

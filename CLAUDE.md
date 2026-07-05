@@ -132,7 +132,7 @@ just codex-run -- <args>  # Run the vendored codex binary
 
 ## Toolchain and Formatter Quirks
 
-- Stable toolchain pinned to `1.93.0` (`rust-toolchain.toml`).
+- Stable toolchain pinned to `1.96.1` (`rust-toolchain.toml`).
 - Formatting requires nightly: `just fmt` and `just fmt-check` run `cargo +nightly fmt`. Running `cargo fmt` without `+nightly` uses the wrong edition settings and fails.
 - `rustfmt.toml` uses `edition = "2024"` and `imports_granularity = "Item"`; do not change these.
 - `just test` runs `mcp-test` (MCP schema validation via `npx @modelcontextprotocol/inspector`) before nextest. Node.js and `npx` must be available.
