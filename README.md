@@ -78,7 +78,7 @@ claudecode = "0.1.22"
 <!-- BEGIN:autodeps {"crates":["anthropic-async"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-anthropic-async = "0.5.3"
+anthropic-async = "0.5.4"
 ```
 <!-- END:autodeps -->
 
@@ -86,7 +86,7 @@ anthropic-async = "0.5.3"
 <!-- BEGIN:autodeps {"crates":["opencode_rs"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-opencode_rs = "0.13.0"
+opencode_rs = "0.13.1"
 ```
 <!-- END:autodeps -->
 
