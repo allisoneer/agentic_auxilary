@@ -18,12 +18,10 @@ fn live_env_ready() -> bool {
     std::env::var("LINEAR_LIVE_TESTS").ok().as_deref() == Some("1")
         && std::env::var("LINEAR_API_KEY")
             .ok()
-            .filter(|v| !v.is_empty())
-            .is_some()
+            .is_some_and(|v| !v.is_empty())
         && std::env::var("LINEAR_TEST_TEAM_ID")
             .ok()
-            .filter(|v| !v.is_empty())
-            .is_some()
+            .is_some_and(|v| !v.is_empty())
 }
 
 #[tokio::test]
@@ -70,7 +68,7 @@ async fn live_create_search_read_comment_archive() {
     // TODO(3): Add cleanup guard for test issue on failure (see PR #105 review)
 
     // 2) Wait for search indexing
-    sleep(Duration::from_millis(2000)).await;
+    sleep(Duration::from_secs(2)).await;
 
     // 3) Search by term
     let search = tools

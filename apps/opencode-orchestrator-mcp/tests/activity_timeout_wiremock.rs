@@ -110,7 +110,7 @@ async fn it_times_out_after_5_min_inactivity() {
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(3600)),
+                .set_delay(Duration::from_hours(1)),
         )
         .mount(&mock)
         .await;
@@ -190,7 +190,7 @@ async fn it_does_not_timeout_while_busy() {
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(3600)),
+                .set_delay(Duration::from_hours(1)),
         )
         .mount(&mock)
         .await;

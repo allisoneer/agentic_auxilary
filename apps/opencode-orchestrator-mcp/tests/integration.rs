@@ -186,7 +186,7 @@ async fn prompt_completes_and_extracts_response() {
     };
 
     let result = timeout(
-        Duration::from_secs(180),
+        Duration::from_mins(3),
         tool.call(input, &agentic_tools_core::ToolContext::default()),
     )
     .await
@@ -246,7 +246,7 @@ async fn session_resumption_works() {
     };
 
     let result1 = timeout(
-        Duration::from_secs(180),
+        Duration::from_mins(3),
         tool.call(input1, &agentic_tools_core::ToolContext::default()),
     )
     .await
@@ -264,7 +264,7 @@ async fn session_resumption_works() {
     };
 
     let result2 = timeout(
-        Duration::from_secs(180),
+        Duration::from_mins(3),
         tool.call(input2, &agentic_tools_core::ToolContext::default()),
     )
     .await
@@ -310,7 +310,7 @@ async fn permission_request_returns_status() {
     // Should return PermissionRequired within 120 seconds, not hang
     // (Model inference time is variable; 60s was too tight)
     let result = timeout(
-        Duration::from_secs(120),
+        Duration::from_mins(2),
         run_tool.call(
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
@@ -392,7 +392,7 @@ async fn permission_response_resumes_and_completes() {
 
     // Step 1: Trigger permission request
     let result1 = timeout(
-        Duration::from_secs(60),
+        Duration::from_mins(1),
         run_tool.call(
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
@@ -439,7 +439,7 @@ async fn permission_response_resumes_and_completes() {
         );
 
         let respond_result = timeout(
-            Duration::from_secs(120),
+            Duration::from_mins(2),
             respond_tool.call(
                 RespondPermissionInput {
                     session_id: current_session_id.clone(),
@@ -521,7 +521,7 @@ async fn permission_reject_returns_none_with_warning() {
 
     // Step 1: Trigger permission request
     let result = timeout(
-        Duration::from_secs(60),
+        Duration::from_mins(1),
         run_tool.call(
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),
@@ -549,7 +549,7 @@ async fn permission_reject_returns_none_with_warning() {
 
     // Step 2: Reject the permission
     let reject_result = timeout(
-        Duration::from_secs(60),
+        Duration::from_mins(1),
         respond_tool.call(
             RespondPermissionInput {
                 session_id: session_id.clone(),
@@ -635,7 +635,7 @@ async fn live_question_tool_infrastructure() {
     // Run a simple prompt to verify the server is functional
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
     let result = timeout(
-        Duration::from_secs(60),
+        Duration::from_mins(1),
         tool.call(
             OrchestratorRunInput {
                 session_id: Some(session_id.clone()),

@@ -51,7 +51,7 @@ impl<C: Config> Client<C> {
         Self {
             http: reqwest::Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(5))
-                .timeout(std::time::Duration::from_secs(600))
+                .timeout(std::time::Duration::from_mins(10))
                 .build()
                 .expect("reqwest client"),
             config,

@@ -287,7 +287,7 @@ fn sort_entries(entries: &mut [LsEntry], show: Show) {
         }
         _ => {
             // Plain alphabetical for files-only or dirs-only
-            entries.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+            entries.sort_by_key(|entry| entry.path.to_lowercase());
         }
     }
 }
