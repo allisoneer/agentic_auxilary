@@ -358,7 +358,7 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         warnings.push(AdvisoryWarning::new(
             "cli_tools.just_execute_page_lines.zero",
             "cli_tools.just_execute_page_lines",
-            "value is 0; runtime will clamp to 1 line per minimal transcript page",
+            "value is 0; runtime will clamp to 1 line per `cli_just_execute` transcript page",
         ));
     }
     validate_low_nonzero_timeout(

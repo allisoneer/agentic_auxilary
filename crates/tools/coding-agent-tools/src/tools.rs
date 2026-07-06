@@ -406,7 +406,7 @@ impl Tool for JustExecuteTool {
     type Input = just::ExecuteParams;
     type Output = just::ExecuteOutput;
     const NAME: &'static str = "cli_just_execute";
-    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. output_mode=minimal (default) returns bounded output with paging across repeated same-parameter calls; output_mode=normal and output_mode=verbose return the full captured stdout/stderr transcript in one response. Set rerun=true to force a fresh run.";
+    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Output is paged (default 200 lines/page; configurable via [cli_tools].just_execute_page_lines). If has_more=true, call again with the same params for the next cached page. Set rerun=true to force a fresh run.";
 
     fn call(
         &self,
@@ -417,14 +417,7 @@ impl Tool for JustExecuteTool {
         let ctx = ctx.clone();
         Box::pin(async move {
             tools
-                .just_execute(
-                    input.recipe,
-                    input.dir,
-                    input.args,
-                    input.output_mode,
-                    input.rerun,
-                    &ctx,
-                )
+                .just_execute(input.recipe, input.dir, input.args, input.rerun, &ctx)
                 .await
         })
     }

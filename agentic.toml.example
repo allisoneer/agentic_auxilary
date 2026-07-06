@@ -107,7 +107,7 @@ pagination_cache_ttl_secs = 300
 just_execute_timeout_secs = 1800
 # Wall-clock timeout for cli_just_search in seconds (0 disables the timeout)
 just_search_timeout_secs = 30
-# Default line count per minimal cli_just_execute transcript page
+# Default line count per cli_just_execute transcript page
 just_execute_page_lines = 200
 # Additional ignore patterns (appended to builtin ignores)
 extra_ignore_patterns = []

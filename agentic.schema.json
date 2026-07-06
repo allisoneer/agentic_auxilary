@@ -176,7 +176,7 @@
           "minimum": 0
         },
         "just_execute_page_lines": {
-          "description": "Default line count per minimal-mode `cli_just_execute` transcript page.",
+          "description": "Default line count per `cli_just_execute` transcript page.",
           "type": "integer",
           "format": "uint32",
           "default": 200,

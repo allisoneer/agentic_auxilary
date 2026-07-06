@@ -1,6 +1,5 @@
 //! Stateful pagination helpers for `just_execute` transcripts.
 
-use super::types::ExecuteOutputMode;
 use agentic_tools_utils::pagination::PaginationCache;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -63,22 +62,7 @@ impl SingleFlight {
     }
 }
 
-pub fn build_pages(
-    output_mode: ExecuteOutputMode,
-    stdout: &str,
-    stderr: &str,
-    page_lines: usize,
-) -> Vec<TranscriptPage> {
-    if matches!(
-        output_mode,
-        ExecuteOutputMode::Normal | ExecuteOutputMode::Verbose
-    ) {
-        return vec![TranscriptPage {
-            stdout: stdout.to_string(),
-            stderr: stderr.to_string(),
-        }];
-    }
-
+pub fn build_pages(stdout: &str, stderr: &str, page_lines: usize) -> Vec<TranscriptPage> {
     let stdout_pages = split_stream(stdout, page_lines);
     let stderr_pages = split_stream(stderr, page_lines);
     let page_count = stdout_pages.len().max(stderr_pages.len()).max(1);
@@ -96,7 +80,6 @@ pub fn make_execute_key(
     recipe: &str,
     dir: &str,
     args: Option<&HashMap<String, Value>>,
-    output_mode: ExecuteOutputMode,
 ) -> Result<String, String> {
     let normalized_args = normalize_args(args)?;
     serde_json::to_string(&(
@@ -104,7 +87,6 @@ pub fn make_execute_key(
         dir.trim_end_matches('/'),
         recipe,
         normalized_args,
-        output_mode,
     ))
     .map_err(|e| format!("Failed to serialize execute key: {e}"))
 }
@@ -175,7 +157,7 @@ mod tests {
 
     #[test]
     fn build_pages_always_returns_at_least_one_page() {
-        let pages = build_pages(ExecuteOutputMode::Minimal, "", "", EXECUTE_PAGE_LINES);
+        let pages = build_pages("", "", EXECUTE_PAGE_LINES);
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0], TranscriptPage::default());
     }
@@ -185,12 +167,7 @@ mod tests {
         let stdout = numbered_output("out", 1..=205);
         let stderr = numbered_output("err", 1..=3);
 
-        let pages = build_pages(
-            ExecuteOutputMode::Minimal,
-            &stdout,
-            &stderr,
-            EXECUTE_PAGE_LINES,
-        );
+        let pages = build_pages(&stdout, &stderr, EXECUTE_PAGE_LINES);
         assert_eq!(pages.len(), 2);
         assert!(pages[0].stdout.starts_with("out-1\n"));
         assert!(pages[0].stdout.contains("out-200\n"));
@@ -200,11 +177,11 @@ mod tests {
     }
 
     #[test]
-    fn build_pages_respects_custom_minimal_boundary() {
+    fn build_pages_respects_custom_page_boundary() {
         let stdout = numbered_output("out", 1..=5);
         let stderr = numbered_output("err", 1..=4);
 
-        let pages = build_pages(ExecuteOutputMode::Minimal, &stdout, &stderr, 2);
+        let pages = build_pages(&stdout, &stderr, 2);
         assert_eq!(pages.len(), 3);
         assert_eq!(pages[0].stdout, numbered_output("out", 1..=2));
         assert_eq!(pages[0].stderr, numbered_output("err", 1..=2));
@@ -225,68 +202,33 @@ mod tests {
             ("b".to_string(), json!(2)),
         ]);
 
-        let key_a = make_execute_key(
-            "/repo",
-            "check",
-            "/repo",
-            Some(&args_a),
-            ExecuteOutputMode::Minimal,
-        )
-        .unwrap_or_else(|err| panic!("key_a serialization failed: {err}"));
-        let key_b = make_execute_key(
-            "/repo",
-            "check",
-            "/repo/",
-            Some(&args_b),
-            ExecuteOutputMode::Minimal,
-        )
-        .unwrap_or_else(|err| panic!("key_b serialization failed: {err}"));
+        let key_a = make_execute_key("/repo", "check", "/repo", Some(&args_a))
+            .unwrap_or_else(|err| panic!("key_a serialization failed: {err}"));
+        let key_b = make_execute_key("/repo", "check", "/repo/", Some(&args_b))
+            .unwrap_or_else(|err| panic!("key_b serialization failed: {err}"));
         assert_eq!(key_a, key_b);
     }
 
     #[test]
     fn make_execute_key_structured_serialization_avoids_delimiter_collisions() {
-        let key_a = make_execute_key(
-            "/repo",
-            "b|args=null|recipe=c",
-            "/a",
-            None,
-            ExecuteOutputMode::Minimal,
-        )
-        .unwrap_or_else(|err| panic!("key_a serialization failed: {err}"));
-        let key_b = make_execute_key(
-            "/repo",
-            "c",
-            "/a|recipe=b|args=null",
-            None,
-            ExecuteOutputMode::Minimal,
-        )
-        .unwrap_or_else(|err| panic!("key_b serialization failed: {err}"));
+        let key_a = make_execute_key("/repo", "b|args=null|recipe=c", "/a", None)
+            .unwrap_or_else(|err| panic!("key_a serialization failed: {err}"));
+        let key_b = make_execute_key("/repo", "c", "/a|recipe=b|args=null", None)
+            .unwrap_or_else(|err| panic!("key_b serialization failed: {err}"));
 
         assert_ne!(key_a, key_b);
     }
 
     #[test]
-    fn build_pages_full_modes_return_single_full_page() {
-        let stdout = numbered_output("out", 1..=205);
-        let stderr = numbered_output("err", 1..=3);
+    fn make_execute_key_distinguishes_null_args_from_empty_map() {
+        let empty = HashMap::new();
 
-        for mode in [ExecuteOutputMode::Normal, ExecuteOutputMode::Verbose] {
-            let pages = build_pages(mode, &stdout, &stderr, 2);
-            assert_eq!(pages.len(), 1);
-            assert_eq!(pages[0].stdout, stdout);
-            assert_eq!(pages[0].stderr, stderr);
-        }
-    }
+        let null_args = make_execute_key("/repo", "check", "/repo", None)
+            .unwrap_or_else(|err| panic!("null args key serialization failed: {err}"));
+        let empty_args = make_execute_key("/repo", "check", "/repo", Some(&empty))
+            .unwrap_or_else(|err| panic!("empty args key serialization failed: {err}"));
 
-    #[test]
-    fn make_execute_key_includes_output_mode() {
-        let minimal = make_execute_key("/repo", "check", "/repo", None, ExecuteOutputMode::Minimal)
-            .unwrap_or_else(|err| panic!("minimal key serialization failed: {err}"));
-        let normal = make_execute_key("/repo", "check", "/repo", None, ExecuteOutputMode::Normal)
-            .unwrap_or_else(|err| panic!("normal key serialization failed: {err}"));
-
-        assert_ne!(minimal, normal);
+        assert_ne!(null_args, empty_args);
     }
 
     #[test]

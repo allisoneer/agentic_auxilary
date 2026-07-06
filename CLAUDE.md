@@ -146,15 +146,14 @@ just codex-run -- <args>  # Run the vendored codex binary
 - `Arc::clone(&x)` is required over `x.clone()` for ref-counted types (`clone_on_ref_ptr = "warn"`).
 - Workspace lint inheritance: add `[lints]` with `workspace = true` when creating or modifying crate `Cargo.toml` files.
 
-## Output Modes
+## cli_just_execute Output Paging
 
 Root `just` recipes now emit direct command output.
 
-`cli_just_execute` owns agent-facing output presentation:
+`cli_just_execute` returns stdout/stderr in pages (default 200 lines per page; configurable via `[cli_tools].just_execute_page_lines`).
 
-- `minimal` (default): bounded output with paging via repeated same-parameter calls
-- `normal`: full captured stdout/stderr in one response
-- `verbose`: full captured stdout/stderr in one response without changing recipe semantics
+- If `has_more=true`, call `cli_just_execute` again with the exact same params for the next cached page.
+- Use `rerun=true` to force a fresh execution.
 
 Examples:
 
@@ -162,7 +161,6 @@ Examples:
 just test
 just check
 cli_just_execute recipe=test
-cli_just_execute recipe=test output_mode=normal
 RUST_LOG=gpt5_reasoner=debug just test
 ```
 

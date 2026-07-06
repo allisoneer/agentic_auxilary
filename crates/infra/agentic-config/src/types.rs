@@ -289,7 +289,7 @@ pub struct CliToolsConfig {
     pub just_execute_timeout_secs: u64,
     /// Wall-clock timeout for `cli_just_search` in seconds. `0` disables the timeout.
     pub just_search_timeout_secs: u64,
-    /// Default line count per minimal-mode `cli_just_execute` transcript page.
+    /// Default line count per `cli_just_execute` transcript page.
     pub just_execute_page_lines: u32,
     /// Additional ignore patterns to append to builtin ignores.
     #[serde(default)]

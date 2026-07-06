@@ -13,7 +13,6 @@ pub mod types;
 
 pub use cache::JustRegistry;
 pub use types::ExecuteOutput;
-pub use types::ExecuteOutputMode;
 pub use types::ExecuteParams;
 pub use types::SearchItem;
 pub use types::SearchOutput;
