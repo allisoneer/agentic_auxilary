@@ -1,0 +1,28 @@
+.github/workflows/ci.yml
+  s_0b17d681adf708::t_9323ff7224109e 78-79,85,95,236
+CLAUDE.md
+  s_0b17d681adf708::t_24b2971774b223 82-85,153-155,161,167,170
+tools/agent-wrap.sh
+  s_0b17d681adf708::t_27d8bf0c424cf0 1-68
+justfile
+  s_0b17d681adf708::t_8900656f12c80e 6-7,9,11,24-25,30-31,50,52-53,58,61,64-67,71-75,78,83,107-108,111-112,116,124-125,128,131,139,142,145,148,155,163
+  s_0b17d681adf708::t_ab4dabdfe1a9bc 8,10
+  s_0b17d681adf708::t_1e83c5e58d658f 165-176
+  s_0b17d681adf708::t_849c996eec438a 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1cc70c45ee109543c0ca227f2162cea2e13e275d",
+  "prompts": {},
+  "sessions": {
+    "s_0b17d681adf708": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c63e4c0ffferX7XQhuBKpe31m",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
