@@ -3,6 +3,12 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+ci := env("CI", "false")
+wrap := "tools/agent-wrap.sh"
+nextest_profile := if ci == "true" { "ci" } else if ci == "1" { "ci" } else { env("NEXTEST_PROFILE", "minimal") }
+nextest_verbose := env("NEXTEST_VERBOSE", "0")
+nextest_args := if nextest_verbose == "1" { "--status-level all --verbose" } else if nextest_verbose == "true" { "--status-level all --verbose" } else { "" }
+
 # BEGIN:xtask:autogen justfile:mcp-servers
 
 MCP_SERVERS := "agentic-mcp opencode-orchestrator-mcp"
@@ -15,11 +21,14 @@ help:
     @echo "Workspace commands:"
     @echo "  just check            # fmt-check + clippy for entire workspace"
     @echo "  just fix              # auto-fix clippy warnings for entire workspace"
-    @echo "  just test             # run tests for entire workspace"
+    @echo "  just test             # local: mcp-test + nextest (requires Node/npx)"
+    @echo "  just test-ci          # CI-safe: nextest only (no Node/npx)"
     @echo "  just build            # build entire workspace"
     @echo "  just clean            # clean workspace + vendored Codex artifacts"
     @echo "  just fmt              # format entire workspace"
     @echo "  just fmt-check        # check formatting for entire workspace"
+    @echo "  just test-integration # local: include #[ignore] integration tests"
+    @echo "  just test-thoughts-ignored-ci # CI-safe: ignored-only thoughts tests"
     @echo ""
     @echo "Vendored Codex commands:"
     @echo "  just codex-check      # check vendored Codex workspace"
@@ -38,31 +47,40 @@ help:
     @echo "  just xtask-sync-check # check if sync is needed (for CI)"
     @echo "  just xtask-verify-check # full verification including generated files"
     @echo ""
-    @echo "Root just recipes emit direct command output; cli_just_execute uses config-defined paging."
+    @echo "Interactive local root recipes may show wrapper summaries; CI and non-TTY runs pass through raw output."
     @echo "Repeat the same cli_just_execute call for the next cached page, or use rerun=true for a fresh execution."
+    @echo "Use AGENTIC_WRAP=0 for full local passthrough output."
+    @echo "Use NEXTEST_PROFILE=<profile> or NEXTEST_VERBOSE=1 to adjust local nextest behavior."
 
 # Workspace-wide commands
 
 check: fmt-check-just fmt-check
-    cargo clippy --workspace --all-targets -- -D warnings
+    AGENTIC_TASK_NAME=check {{ wrap }} cargo clippy --workspace --all-targets -- -D warnings
 
 fix:
-    cargo clippy --workspace --all-targets --fix --allow-dirty
+    AGENTIC_TASK_NAME=fix {{ wrap }} cargo clippy --workspace --all-targets --fix --allow-dirty
 
 test: mcp-test
-    cargo nextest run --workspace
+    AGENTIC_TASK_NAME=test {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
+
+test-ci:
+    AGENTIC_TASK_NAME=test-ci {{ wrap }} cargo nextest run --workspace --profile ci {{ nextest_args }}
 
 # Run integration tests (includes ignored tests that require git setup)
 test-integration: mcp-test
-    THOUGHTS_INTEGRATION_TESTS=1 cargo nextest run --workspace -- --include-ignored
+    THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-integration {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} -- --include-ignored
+
+# Run ignored-only thoughts integration tests in CI without duplicating normal runs.
+test-thoughts-ignored-ci:
+    THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-thoughts-ignored-ci {{ wrap }} cargo nextest run -p thoughts-tool -p thoughts-bin --profile ci {{ nextest_args }} -- --ignored
 
 build:
-    cargo build --workspace
+    AGENTIC_TASK_NAME=build {{ wrap }} cargo build --workspace
 
 clean: clean-workspace clean-codex
 
 clean-workspace:
-    cargo clean --workspace
+    AGENTIC_TASK_NAME=clean-workspace {{ wrap }} cargo clean --workspace
 
 clean-codex:
     #!/usr/bin/env bash
@@ -86,16 +104,16 @@ codex-run *args:
     cd vendor/codex/codex-rs && cargo run --bin codex -- {{ args }}
 
 fmt:
-    cargo +nightly fmt --all
-    taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
+    AGENTIC_TASK_NAME=fmt-rust {{ wrap }} cargo +nightly fmt --all
+    AGENTIC_TASK_NAME=fmt-toml {{ wrap }} taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
 
 fmt-check:
-    cargo +nightly fmt --all -- --check
-    taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
+    AGENTIC_TASK_NAME=fmt-check-rust {{ wrap }} cargo +nightly fmt --all -- --check
+    AGENTIC_TASK_NAME=fmt-check-toml {{ wrap }} taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
 
 # Security audit with cargo-deny
 deny:
-    cargo deny check
+    AGENTIC_TASK_NAME=deny {{ wrap }} cargo deny check
 
 # Check justfile formatting
 fmt-check-just:
@@ -103,14 +121,14 @@ fmt-check-just:
 
 # Per-crate commands
 crate-check crate:
-    cargo +nightly fmt -p {{ crate }} -- --check
-    cargo clippy -p {{ crate }} --all-targets -- -D warnings
+    AGENTIC_TASK_NAME=crate-check-fmt {{ wrap }} cargo +nightly fmt -p {{ crate }} -- --check
+    AGENTIC_TASK_NAME=crate-check-clippy {{ wrap }} cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
 crate-test crate:
-    cargo nextest run -E 'package({{ crate }})'
+    AGENTIC_TASK_NAME=crate-test {{ wrap }} cargo nextest run --profile {{ nextest_profile }} {{ nextest_args }} -E 'package({{ crate }})'
 
 crate-build crate:
-    cargo build -p {{ crate }}
+    AGENTIC_TASK_NAME=crate-build {{ wrap }} cargo build -p {{ crate }}
 
 crate-run crate:
     cargo run -p {{ crate }}
@@ -118,23 +136,23 @@ crate-run crate:
 # xtask commands
 
 xtask-sync:
-    cargo run -p xtask -- sync
+    AGENTIC_TASK_NAME=xtask-sync {{ wrap }} cargo run -p xtask -- sync
 
 xtask-verify:
-    cargo run -p xtask -- verify
+    AGENTIC_TASK_NAME=xtask-verify {{ wrap }} cargo run -p xtask -- verify
 
 xtask-sync-check:
-    cargo run -p xtask -- sync --check
+    AGENTIC_TASK_NAME=xtask-sync-check {{ wrap }} cargo run -p xtask -- sync --check
 
 xtask-verify-check:
-    cargo run -p xtask -- verify --check
+    AGENTIC_TASK_NAME=xtask-verify-check {{ wrap }} cargo run -p xtask -- verify --check
 
 # Endpoint coverage commands for opencode-rs SDK
 endpoint-coverage:
     cargo run -p xtask -- endpoint-coverage
 
 endpoint-coverage-check:
-    cargo run -p xtask -- endpoint-coverage --check
+    AGENTIC_TASK_NAME=endpoint-coverage-check {{ wrap }} cargo run -p xtask -- endpoint-coverage --check
 
 endpoint-coverage-json:
     cargo run -p xtask -- endpoint-coverage --json
@@ -142,7 +160,20 @@ endpoint-coverage-json:
 # Utility commands
 
 thoughts_sync:
-    thoughts sync
+    AGENTIC_TASK_NAME=thoughts_sync {{ wrap }} thoughts sync
+
+shellcheck:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mapfile -t scripts < <(git ls-files '*.sh' ':!:vendor/**')
+    if [ ${#scripts[@]} -gt 0 ]; then
+      shellcheck "${scripts[@]}"
+    else
+      echo "No .sh files found"
+    fi
+
+actionlint:
+    actionlint -color
 
 # Copy a file
 cp src dst:
