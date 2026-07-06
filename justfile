@@ -38,7 +38,8 @@ help:
     @echo "  just xtask-sync-check # check if sync is needed (for CI)"
     @echo "  just xtask-verify-check # full verification including generated files"
     @echo ""
-    @echo "Root just recipes emit direct command output; cli_just_execute owns minimal|normal|verbose agent presentation."
+    @echo "Root just recipes emit direct command output; cli_just_execute uses config-defined paging."
+    @echo "Repeat the same cli_just_execute call for the next cached page, or use rerun=true for a fresh execution."
 
 # Workspace-wide commands
 

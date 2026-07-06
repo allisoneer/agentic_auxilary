@@ -145,7 +145,7 @@ The core ENG-454 issues have been addressed. Remaining follow-up work:
 
 - Just tool improvements (two separate issues):
   - Cache/refresh: just commands need to refresh when justfiles change. Right now they only populate based on when they first launch? Not sure of specifics - could be caching is broken.
-  - Output format (ENG-344): the legacy shell wrapper truncated output, so agents could miss actual errors. The follow-up concern is whether the just tool presentation contract still needs broader UX improvements.
+  - Output format (ENG-344): the legacy shell wrapper truncated output, so agents could miss actual errors. I'm contemplating whether head-first pagination is the right default versus tail/smart-tail, and whether full output should also be written to an accessible file/artifact that agents can read for more details instead of relying only on pagination.
 - Pagination UX needs improvement across tools. pr_comments and just_execute both need pagination support, and the explicit pagination
 instructions ("Showing X out of Y, call again for more") should be solved elegantly at the framework level rather than per-tool. The ls
 tool has good phrasing but pr_comments only partially ported that style. Consider: should agentic-tools-utils pagination module provide
