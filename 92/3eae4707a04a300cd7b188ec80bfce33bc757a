@@ -1,0 +1,21 @@
+TODO.md
+  s_5e5d56453d678e::t_9e63796009dde4 148
+justfile
+  s_5e5d56453d678e::t_9e63796009dde4 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "923eae4707a04a300cd7b188ec80bfce33bc757a",
+  "prompts": {},
+  "sessions": {
+    "s_5e5d56453d678e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c7c77d16ffeoMDUTW0LNm6Tel",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
