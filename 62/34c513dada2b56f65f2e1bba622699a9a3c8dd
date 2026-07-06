@@ -1,0 +1,29 @@
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_eea11178dd9f17::t_4aa85f37b9d6e8 28,84-211,217-239,707-712,714-820
+  s_eea11178dd9f17::t_10fefd71d63578 30,32-36,41-44,46-49,51-57,59-62,64-71,75-82,1090-1092,1108,1140-1144,1148-1150,1159-1169,1177-1208
+  s_eea11178dd9f17::t_a10e9cb7883ccd 1088-1089,1093-1094,1151-1157,1216-1281,1286
+  s_eea11178dd9f17::t_f35df0b8d1b970 38-40,72-74,1145-1147,1209-1215
+  s_eea11178dd9f17::t_f173731d58128c 45
+  s_eea11178dd9f17::t_b35c7f5bc1fe62 1158
+  s_eea11178dd9f17::t_e2ee3fa549a2cd 83,240-245
+  s_eea11178dd9f17::t_923e9fe3368b50 212-216,1282-1285
+  s_eea11178dd9f17::t_c0af276aef6abf 31,37,50,58,63
+  s_eea11178dd9f17::t_356fc6ff7dd965 29
+  s_eea11178dd9f17::t_80c596f97ee507 1287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6234c513dada2b56f65f2e1bba622699a9a3c8dd",
+  "prompts": {},
+  "sessions": {
+    "s_eea11178dd9f17": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c62fdcb1ffeqy0bMbPc4MoxVl",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
