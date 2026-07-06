@@ -1,0 +1,37 @@
+crates/tools/coding-agent-tools/src/just/execute_pager.rs
+  s_92d676e1aa5b32::t_04bbaacc9e74bc 65,160,170,180,184,205-208,214-217,227,229
+  s_92d676e1aa5b32::t_1a3a8a35b19ef2 226
+  s_92d676e1aa5b32::t_0c6e65e9feac77 228
+crates/tools/coding-agent-tools/src/just/types.rs
+  s_92d676e1aa5b32::t_fc71b040166e00 124,225,229
+crates/tools/coding-agent-tools/src/tools.rs
+  s_92d676e1aa5b32::t_31f039205f74e9 409,420
+CLAUDE.md
+  s_92d676e1aa5b32::t_c50ac2265c484e 149,153,155-156
+agentic.toml.example
+  s_92d676e1aa5b32::t_c50ac2265c484e 110
+crates/infra/agentic-config/src/types.rs
+  s_92d676e1aa5b32::t_c50ac2265c484e 292
+crates/tools/coding-agent-tools/src/lib.rs
+  s_92d676e1aa5b32::t_efec021ece0778 1578,1580-1582,1584-1586,1588-1595,1696
+  s_92d676e1aa5b32::t_80351f5c9aa346 1577
+  s_92d676e1aa5b32::t_3d4ca441ea64da 1596-1598
+crates/infra/agentic-config/src/validation.rs
+  s_92d676e1aa5b32::t_c50ac2265c484e 361
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "60405af0534fa5f11bde9d2fb4eaa730664c5a51",
+  "prompts": {},
+  "sessions": {
+    "s_92d676e1aa5b32": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0cae47065ffeooy1JnOc6T3B2Q",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
