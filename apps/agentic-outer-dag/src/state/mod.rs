@@ -82,6 +82,7 @@ pub enum StageKind {
     FreshnessBeforeCoderabbitWait,
     WaitingForCoderabbit,
     DispatchingResolvePrComments,
+    DispatchingDescribePr,
     StoppedPermissionRequired,
     StoppedQuestionRequired,
     StoppedDirtyTree,
@@ -152,6 +153,8 @@ pub struct PrState {
     pub url: Option<String>,
     pub head_sha: Option<String>,
     pub last_observed_head_sha: Option<String>,
+    #[serde(default)]
+    pub last_described_head_sha: Option<String>,
     #[serde(default)]
     pub is_draft: Option<bool>,
     #[serde(default)]
@@ -309,6 +312,7 @@ mod tests {
             StageKind::FreshnessBeforeCoderabbitWait,
             StageKind::WaitingForCoderabbit,
             StageKind::DispatchingResolvePrComments,
+            StageKind::DispatchingDescribePr,
             StageKind::StoppedPermissionRequired,
             StageKind::StoppedQuestionRequired,
             StageKind::StoppedDirtyTree,
@@ -477,6 +481,7 @@ mod tests {
             DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS
         );
         assert!(roundtrip.opencode.last_diagnostics.is_none());
+        assert_eq!(roundtrip.pr.last_described_head_sha, None);
         assert_eq!(roundtrip.pr.is_draft, None);
         assert_eq!(roundtrip.pr.ready_for_review.attempts, 0);
         assert!(

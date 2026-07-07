@@ -81,6 +81,10 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
             summary: "Lazily start OpenCode if needed and run resolve_pr_comments",
         },
         PlannedAction {
+            id: "opencode.run.describe_pr_refresh",
+            summary: "Re-check PR head SHA and rerun describe_pr when needed before completion",
+        },
+        PlannedAction {
             id: "stop.ready_for_human_review",
             summary: "Stop at ready_for_human_review",
         },
@@ -193,6 +197,70 @@ fn persist_detected_pr(state: &mut RunState, pr: &pr_comments::models::PrRef) {
     state.pr.head_sha = Some(pr.head_sha.clone());
     state.pr.last_observed_head_sha = Some(pr.head_sha.clone());
     state.pr.is_draft = Some(pr.is_draft);
+}
+
+fn baseline_last_described_head_sha_after_pr_create(state: &mut RunState, head_sha: &str) {
+    if state.counters.ticket_to_pr_runs > 0 && state.pr.last_described_head_sha.is_none() {
+        state.pr.last_described_head_sha = Some(head_sha.to_string());
+    }
+}
+
+fn transition_to_ready_for_human_review(state: &mut RunState, details: impl Into<String>) {
+    state.stage.kind = StageKind::StoppedReadyForHumanReview;
+    state.stage.details = Some(details.into());
+}
+
+enum DescribePrRefreshDecision {
+    Stop,
+    Rerun { head_sha: String },
+}
+
+fn prepare_dispatch_describe_pr_stage(
+    state: &mut RunState,
+    lookup: DetectedPrLookup,
+) -> DescribePrRefreshDecision {
+    record_pr_lookup(state, StageKind::DispatchingDescribePr, &lookup);
+
+    let Some(pr) = lookup.pr else {
+        transition_to_stopped_failed(
+            state,
+            format!(
+                "describe_pr refresh could not re-detect an open PR for branch '{}'",
+                state.worktree.branch
+            ),
+        );
+        return DescribePrRefreshDecision::Stop;
+    };
+
+    let head_sha = pr.head_sha.clone();
+    persist_detected_pr(state, &pr);
+
+    if state.pr.last_described_head_sha.as_deref() == Some(head_sha.as_str()) {
+        transition_to_ready_for_human_review(
+            state,
+            "completed one CodeRabbit resolve cycle; describe_pr already covered current PR head SHA",
+        );
+        return DescribePrRefreshDecision::Stop;
+    }
+
+    DescribePrRefreshDecision::Rerun { head_sha }
+}
+
+fn finish_dispatch_describe_pr_stage_after_rerun(
+    state: &mut RunState,
+    head_sha: String,
+) -> DescribePrRefreshDecision {
+    if stages::is_paused(&state.stage.kind) || matches!(state.stage.kind, StageKind::StoppedFailed)
+    {
+        return DescribePrRefreshDecision::Stop;
+    }
+
+    state.pr.last_described_head_sha = Some(head_sha);
+    transition_to_ready_for_human_review(
+        state,
+        "completed one CodeRabbit resolve cycle and refreshed PR description",
+    );
+    DescribePrRefreshDecision::Stop
 }
 
 async fn ensure_pr_ready_for_review<MarkReady, MarkReadyFut>(
@@ -382,13 +450,14 @@ impl DagEngine {
                     record_pr_lookup(&mut state, StageKind::DetectingPr, &lookup);
                     if let Some(pr) = lookup.pr {
                         let github = &self.github;
-                        ensure_pr_ready_for_review(
+                        let pr = ensure_pr_ready_for_review(
                             &mut state,
                             &pr,
                             "post_ticket_to_pr_detection",
                             |pr| async move { github.mark_ready_for_review(&pr).await },
                         )
                         .await?;
+                        baseline_last_described_head_sha_after_pr_create(&mut state, &pr.head_sha);
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                     } else {
@@ -499,9 +568,26 @@ impl DagEngine {
                         return Ok(());
                     }
                     state.counters.resolve_comments_runs += 1;
-                    state.stage.kind = StageKind::StoppedReadyForHumanReview;
-                    state.stage.details =
-                        Some("completed one CodeRabbit resolve cycle".to_string());
+                    state.stage.kind = StageKind::DispatchingDescribePr;
+                    state.stage.details = None;
+                    ThoughtsStateStore::save(&state)?;
+                }
+                StageKind::DispatchingDescribePr => {
+                    let branch = state.worktree.branch.clone();
+                    let lookup = self.github.detect_open_pr_from_branch(&branch).await?;
+                    match prepare_dispatch_describe_pr_stage(&mut state, lookup) {
+                        DescribePrRefreshDecision::Stop => {}
+                        DescribePrRefreshDecision::Rerun { head_sha } => {
+                            self.run_supervised_command(
+                                &mut state,
+                                StageKind::DispatchingDescribePr,
+                                "describe_pr",
+                                None,
+                            )
+                            .await?;
+                            finish_dispatch_describe_pr_stage_after_rerun(&mut state, head_sha);
+                        }
+                    }
                     ThoughtsStateStore::save(&state)?;
                     return Ok(());
                 }
@@ -769,12 +855,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::DagEngine;
+    use super::DescribePrRefreshDecision;
     use super::DraftSkipRecovery;
+    use super::baseline_last_described_head_sha_after_pr_create;
     use super::detecting_pr_retry_attempt_number;
     use super::ensure_pr_ready_for_review;
+    use super::finish_dispatch_describe_pr_stage_after_rerun;
     use super::persist_stop_state_before_handoff;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
+    use super::prepare_dispatch_describe_pr_stage;
     use super::record_pr_lookup;
     use super::recover_from_draft_review_skip;
     use super::should_reset_coderabbit_timeout_baseline;
@@ -792,10 +882,14 @@ mod tests {
     use std::time::Duration;
 
     fn sample_pr(is_draft: bool) -> PrRef {
+        sample_pr_with_head_sha("abc123", is_draft)
+    }
+
+    fn sample_pr_with_head_sha(head_sha: &str, is_draft: bool) -> PrRef {
         PrRef {
             number: 258,
             url: "https://example.invalid/pr/258".to_string(),
-            head_sha: "abc123".to_string(),
+            head_sha: head_sha.to_string(),
             node_id: "PR_258".to_string(),
             is_draft,
         }
@@ -856,8 +950,162 @@ mod tests {
                 "freshness.before_coderabbit_wait",
                 "github.coderabbit.wait",
                 "opencode.run.resolve_pr_comments",
+                "opencode.run.describe_pr_refresh",
                 "stop.ready_for_human_review",
             ]
+        );
+    }
+
+    #[test]
+    fn baseline_last_described_head_sha_sets_once_after_pr_create() {
+        let mut state = sample_state();
+        state.counters.ticket_to_pr_runs = 1;
+
+        baseline_last_described_head_sha_after_pr_create(&mut state, "abc123");
+
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn baseline_last_described_head_sha_does_not_overwrite_existing_value() {
+        let mut state = sample_state();
+        state.counters.ticket_to_pr_runs = 1;
+        state.pr.last_described_head_sha = Some("already-set".to_string());
+
+        baseline_last_described_head_sha_after_pr_create(&mut state, "abc123");
+
+        assert_eq!(
+            state.pr.last_described_head_sha.as_deref(),
+            Some("already-set")
+        );
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_skips_when_head_sha_matches_baseline() {
+        let mut state = sample_state();
+        state.pr.last_described_head_sha = Some("abc123".to_string());
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr(false)),
+            },
+        );
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedReadyForHumanReview);
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_requests_rerun_when_head_sha_differs() {
+        let mut state = sample_state();
+        state.pr.last_described_head_sha = Some("old-sha".to_string());
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr_with_head_sha("new-sha", false)),
+            },
+        );
+
+        assert!(matches!(
+            decision,
+            DescribePrRefreshDecision::Rerun { ref head_sha } if head_sha == "new-sha"
+        ));
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("old-sha"));
+        assert_eq!(state.pr.head_sha.as_deref(), Some("new-sha"));
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_reruns_when_baseline_is_unknown() {
+        let mut state = sample_state();
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr_with_head_sha("new-sha", false)),
+            },
+        );
+
+        assert!(matches!(
+            decision,
+            DescribePrRefreshDecision::Rerun { ref head_sha } if head_sha == "new-sha"
+        ));
+        assert_eq!(state.pr.last_described_head_sha, None);
+    }
+
+    #[test]
+    fn finish_dispatch_describe_pr_stage_after_rerun_preserves_stopped_failed() {
+        let mut state = sample_state();
+        state.pr.last_described_head_sha = Some("old-sha".to_string());
+        transition_to_stopped_failed(&mut state, "describe_pr failed");
+
+        let decision =
+            finish_dispatch_describe_pr_stage_after_rerun(&mut state, "new-sha".to_string());
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedFailed);
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("old-sha"));
+    }
+
+    #[test]
+    fn finish_dispatch_describe_pr_stage_after_rerun_updates_baseline_and_stops_ready() {
+        let mut state = sample_state();
+        state.stage.kind = StageKind::DispatchingDescribePr;
+
+        let decision =
+            finish_dispatch_describe_pr_stage_after_rerun(&mut state, "new-sha".to_string());
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedReadyForHumanReview);
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("new-sha"));
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_stops_failed_when_pr_cannot_be_redetected() {
+        let mut state = sample_state();
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
+                pr: None,
+            },
+        );
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedFailed);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("failure detail should exist")
+                .contains("could not re-detect an open PR")
         );
     }
 

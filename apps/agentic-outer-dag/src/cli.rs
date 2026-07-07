@@ -255,7 +255,7 @@ mod tests {
             "agentic-outer-dag",
             "resume",
             "--stop-after",
-            "dispatching_ticket_to_pr",
+            "dispatching_describe_pr",
         ])
         .expect("valid stop-after should parse");
 
@@ -264,7 +264,7 @@ mod tests {
             Commands::Resume {
                 no_linear_handoff: false,
                 no_opencode_dispatch: false,
-                stop_after: Some(StageKind::DispatchingTicketToPr),
+                stop_after: Some(StageKind::DispatchingDescribePr),
                 poll_interval_seconds: None,
                 coderabbit_timeout_seconds: None,
                 opencode_session_deadline_seconds: None,
@@ -307,6 +307,7 @@ mod tests {
         assert!(help.contains("--no-opencode-dispatch"));
         assert!(help.contains("waiting_for_coderabbit"));
         assert!(help.contains("dispatching_resolve_pr_comments"));
+        assert!(help.contains("dispatching_describe_pr"));
     }
 
     #[test]
