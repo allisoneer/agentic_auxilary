@@ -51,6 +51,32 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
 }
 
 const ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS: u64 = 5;
+const CLAUDE_TOOL_LSP: &str = "LSP";
+
+fn build_subagent_session_config(
+    query: String,
+    model: claudecode::types::Model,
+    system_prompt: String,
+    builtin_tools: Vec<String>,
+    enabled_tools: Vec<String>,
+    mcp_config: claudecode::config::MCPConfig,
+) -> claudecode::Result<claudecode::config::SessionConfig> {
+    use claudecode::config::SessionConfig;
+    use claudecode::types::OutputFormat;
+    use claudecode::types::PermissionMode;
+
+    SessionConfig::builder(query)
+        .model(model)
+        .output_format(OutputFormat::Text)
+        .permission_mode(PermissionMode::DontAsk)
+        .system_prompt(system_prompt)
+        .tools(builtin_tools)
+        .allowed_tools(enabled_tools)
+        .disallow_tool(CLAUDE_TOOL_LSP)
+        .mcp_config(mcp_config)
+        .strict_mcp_config(true)
+        .build()
+}
 
 async fn wait_for_claude_result<F, C, CFn>(
     ctx: &agentic_tools_core::ToolContext,
@@ -377,11 +403,8 @@ impl CodingAgentTools {
         ctx: &agentic_tools_core::ToolContext,
     ) -> Result<AgentOutput, ToolError> {
         use claudecode::client::Client;
-        use claudecode::config::SessionConfig;
         use claudecode::mcp::validate::ValidateOptions;
         use claudecode::mcp::validate::ensure_valid_mcp_config;
-        use claudecode::types::OutputFormat;
-        use claudecode::types::PermissionMode;
 
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("ask_agent");
@@ -444,18 +467,14 @@ impl CodingAgentTools {
             return Err(ToolError::Internal(error_msg));
         }
 
-        // Build session config
-        let builder = SessionConfig::builder(query)
-            .model(model)
-            .output_format(OutputFormat::Text)
-            .permission_mode(PermissionMode::DontAsk)
-            .system_prompt(system_prompt)
-            .tools(builtin_tools) // controls built-in tools in schema
-            .allowed_tools(enabled_tools.clone()) // auto-approve enabled tools (built-in + MCP)
-            .mcp_config(mcp_config)
-            .strict_mcp_config(true); // prevent inheritance of global MCP tools
-
-        let config = match builder.build() {
+        let config = match build_subagent_session_config(
+            query,
+            model,
+            system_prompt,
+            builtin_tools,
+            enabled_tools.clone(),
+            mcp_config,
+        ) {
             Ok(c) => c,
             Err(e) => {
                 let error_msg = format!("Failed to build session config: {e}");
@@ -1221,6 +1240,70 @@ mod ask_agent_filter_tests {
         };
         // Helper uses trim().is_empty() for emptiness check, but returns original string
         assert_eq!(pick_non_empty_text(&r).as_deref(), Some("  result text  "));
+    }
+
+    #[test]
+    fn ask_agent_config_disallows_lsp_for_analyzer_codebase() {
+        let agent_type = crate::types::AgentType::Analyzer;
+        let location = crate::types::AgentLocation::Codebase;
+        let model = agent::model_for(agent_type, &SubagentsConfig::default());
+        let system_prompt = agent::compose_prompt(agent_type, location);
+        let enabled_tools = agent::enabled_tools_for(agent_type, location);
+        let (builtin_tools, _mcp_tools): (Vec<String>, Vec<String>) = enabled_tools
+            .iter()
+            .cloned()
+            .partition(|tool| !tool.starts_with("mcp__"));
+
+        let config = build_subagent_session_config(
+            "query".to_string(),
+            model,
+            system_prompt,
+            builtin_tools.clone(),
+            enabled_tools.clone(),
+            agent::build_mcp_config(location, &enabled_tools),
+        )
+        .unwrap_or_else(|e| panic!("session config build failed: {e}"));
+
+        assert_eq!(config.tools.as_ref(), Some(&builtin_tools));
+        assert!(
+            config
+                .disallowed_tools
+                .as_ref()
+                .is_some_and(|tools| tools.iter().any(|tool| tool == CLAUDE_TOOL_LSP))
+        );
+    }
+
+    #[test]
+    fn ask_agent_config_disallows_lsp_when_builtin_tools_are_empty() {
+        let agent_type = crate::types::AgentType::Locator;
+        let location = crate::types::AgentLocation::Codebase;
+        let model = agent::model_for(agent_type, &SubagentsConfig::default());
+        let system_prompt = agent::compose_prompt(agent_type, location);
+        let enabled_tools = agent::enabled_tools_for(agent_type, location);
+        let (builtin_tools, _mcp_tools): (Vec<String>, Vec<String>) = enabled_tools
+            .iter()
+            .cloned()
+            .partition(|tool| !tool.starts_with("mcp__"));
+
+        assert!(builtin_tools.is_empty());
+
+        let config = build_subagent_session_config(
+            "query".to_string(),
+            model,
+            system_prompt,
+            builtin_tools,
+            enabled_tools.clone(),
+            agent::build_mcp_config(location, &enabled_tools),
+        )
+        .unwrap_or_else(|e| panic!("session config build failed: {e}"));
+
+        assert!(config.tools.as_ref().is_some_and(Vec::is_empty));
+        assert!(
+            config
+                .disallowed_tools
+                .as_ref()
+                .is_some_and(|tools| tools.iter().any(|tool| tool == CLAUDE_TOOL_LSP))
+        );
     }
 
     #[tokio::test]
