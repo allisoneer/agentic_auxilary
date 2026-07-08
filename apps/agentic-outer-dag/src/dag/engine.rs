@@ -1,4 +1,7 @@
 use crate::dag::stages;
+use crate::github::ci::GhCheck;
+use crate::github::ci::RequiredCiClient;
+use crate::github::ci::RequiredCiPoll;
 use crate::github::coderabbit::CodeRabbitClient;
 use crate::github::coderabbit::CodeRabbitPoll;
 use crate::github::coderabbit::skip_reason_indicates_draft;
@@ -26,7 +29,9 @@ const DETECTING_PR_BACKOFFS: [Duration; 4] = [
 ];
 const DETECTING_PR_MAX_ATTEMPTS: usize = DETECTING_PR_BACKOFFS.len() + 1;
 const SYNC_WITH_MAIN_COMMAND: &str = "sync_with_main_and_resolve_conflicts";
+const RESOLVE_PR_CI_COMMAND: &str = "resolve_pr_ci_failures";
 const REPRESENTATIVE_BOT_THREAD_LIMIT: usize = 5;
+const CI_FAILURE_GRACE_POLLS: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReviewThreadRef {
@@ -133,6 +138,13 @@ enum ResolvePostDispatchAction {
     ManualHandoff { details: String },
     ReadyForHumanReview { details: String },
     LoopAgain { details: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CiFailureFlow {
+    ContinueWaiting,
+    DispatchResolve,
+    StopManualHandoff,
 }
 
 fn decide_resolve_post_dispatch(
@@ -247,6 +259,7 @@ pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
     github: GitHubPrClient,
     coderabbit: CodeRabbitClient,
+    ci: RequiredCiClient,
 }
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
@@ -300,6 +313,14 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
         PlannedAction {
             id: "opencode.run.describe_pr_refresh",
             summary: "Re-check PR head SHA and rerun describe_pr when needed before completion",
+        },
+        PlannedAction {
+            id: "github.ci.wait",
+            summary: "Poll GitHub until required non-CodeRabbit CI completes",
+        },
+        PlannedAction {
+            id: "opencode.run.resolve_pr_ci_failures",
+            summary: "Run resolve_pr_ci_failures when required CI fails",
         },
         PlannedAction {
             id: "stop.ready_for_human_review",
@@ -417,7 +438,7 @@ fn persist_detected_pr(state: &mut RunState, pr: &pr_comments::models::PrRef) {
 }
 
 fn baseline_last_described_head_sha_after_pr_create(state: &mut RunState, head_sha: &str) {
-    if state.counters.ticket_to_pr_runs > 0 && state.pr.last_described_head_sha.is_none() {
+    if state.counters.ticket_to_pr > 0 && state.pr.last_described_head_sha.is_none() {
         state.pr.last_described_head_sha = Some(head_sha.to_string());
     }
 }
@@ -425,6 +446,132 @@ fn baseline_last_described_head_sha_after_pr_create(state: &mut RunState, head_s
 fn transition_to_ready_for_human_review(state: &mut RunState, details: impl Into<String>) {
     state.stage.kind = StageKind::StoppedReadyForHumanReview;
     state.stage.details = Some(details.into());
+}
+
+fn format_ci_checks(checks: &[GhCheck]) -> String {
+    if checks.is_empty() {
+        return "[]".to_string();
+    }
+
+    checks
+        .iter()
+        .map(|check| {
+            let url = check.details_url.as_deref().unwrap_or("");
+            if url.is_empty() {
+                format!("{} ({})", check.name, check.state)
+            } else {
+                format!("{} ({}) {url}", check.name, check.state)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn reset_ci_tracking(state: &mut RunState) {
+    state.ci.last_remediated_head_sha = None;
+    state.ci.last_remediated_fingerprint = None;
+    state.ci.grace_polls_remaining = 0;
+}
+
+fn handle_ci_gate_head_sha_change(
+    state: &mut RunState,
+    previous_head_sha: Option<&str>,
+    refreshed_head_sha: &str,
+) -> bool {
+    let Some(previous_head_sha) = previous_head_sha else {
+        return false;
+    };
+    if previous_head_sha == refreshed_head_sha {
+        return false;
+    }
+
+    reset_ci_tracking(state);
+    state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
+    state.stage.details = Some(format!(
+        "PR head SHA changed during CI gate ({previous_head_sha}→{refreshed_head_sha}); restarting CodeRabbit wait"
+    ));
+    true
+}
+
+fn apply_required_ci_failure(
+    state: &mut RunState,
+    head_sha: &str,
+    fingerprint: &str,
+    failing: &[GhCheck],
+) -> CiFailureFlow {
+    let max_cycles = state.settings.max_review_cycles;
+    if max_cycles == 0 || state.counters.resolve_ci >= max_cycles {
+        state.stage.kind = StageKind::StoppedManualHandoff;
+        state.stage.details = Some(format!(
+            "required CI failing but max_review_cycles exhausted for CI remediation: resolve_ci_runs={}/{max_cycles}; head={head_sha}; failing checks: {}",
+            state.counters.resolve_ci,
+            format_ci_checks(failing),
+        ));
+        return CiFailureFlow::StopManualHandoff;
+    }
+
+    let same_head = state.ci.last_remediated_head_sha.as_deref() == Some(head_sha);
+    let same_fingerprint = state.ci.last_remediated_fingerprint.as_deref() == Some(fingerprint);
+
+    if same_head && same_fingerprint {
+        if state.ci.grace_polls_remaining == 0 {
+            state.stage.kind = StageKind::StoppedManualHandoff;
+            state.stage.details = Some(format!(
+                "required CI still failing with same fingerprint after remediation and grace exhausted; head={head_sha}; fingerprint={fingerprint}; failing checks: {}",
+                format_ci_checks(failing),
+            ));
+            return CiFailureFlow::StopManualHandoff;
+        }
+
+        state.ci.grace_polls_remaining = state.ci.grace_polls_remaining.saturating_sub(1);
+        if state.ci.grace_polls_remaining == 0 {
+            state.stage.kind = StageKind::StoppedManualHandoff;
+            state.stage.details = Some(format!(
+                "required CI still failing with same fingerprint after remediation; grace exhausted on this poll; head={head_sha}; fingerprint={fingerprint}; failing checks: {}",
+                format_ci_checks(failing),
+            ));
+            return CiFailureFlow::StopManualHandoff;
+        }
+
+        state.stage.kind = StageKind::WaitingForCi;
+        state.stage.details = Some(format!(
+            "required CI still failing with same fingerprint after remediation; grace polls remaining={}; head={head_sha}; failing checks: {}",
+            state.ci.grace_polls_remaining,
+            format_ci_checks(failing),
+        ));
+        return CiFailureFlow::ContinueWaiting;
+    }
+
+    state.ci.last_remediated_head_sha = Some(head_sha.to_string());
+    state.ci.last_remediated_fingerprint = Some(fingerprint.to_string());
+    state.ci.grace_polls_remaining = CI_FAILURE_GRACE_POLLS;
+    state.stage.kind = StageKind::DispatchingResolvePrCiFailures;
+    state.stage.details = Some(format!(
+        "required CI failed; dispatching {RESOLVE_PR_CI_COMMAND}; head={head_sha}; resolve_ci_runs={}/{}; failing checks: {}",
+        state.counters.resolve_ci,
+        max_cycles,
+        format_ci_checks(failing),
+    ));
+    CiFailureFlow::DispatchResolve
+}
+
+fn route_after_ci_remediation(
+    state: &mut RunState,
+    remediated_head_sha: &str,
+    redetected_head_sha: &str,
+) {
+    if redetected_head_sha == remediated_head_sha {
+        state.stage.kind = StageKind::WaitingForCi;
+        state.stage.details = Some(format!(
+            "CI remediation completed without changing PR head SHA ({remediated_head_sha}); continuing CI gate"
+        ));
+    } else {
+        reset_ci_tracking(state);
+        state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
+        state.stage.details = Some(format!(
+            "CI remediation changed PR head SHA ({remediated_head_sha}→{redetected_head_sha}); restarting CodeRabbit wait"
+        ));
+    }
 }
 
 enum DescribePrRefreshDecision {
@@ -453,9 +600,10 @@ fn prepare_dispatch_describe_pr_stage(
     persist_detected_pr(state, &pr);
 
     if state.pr.last_described_head_sha.as_deref() == Some(head_sha.as_str()) {
-        transition_to_ready_for_human_review(
-            state,
-            "completed one CodeRabbit resolve cycle; describe_pr already covered current PR head SHA",
+        state.stage.kind = StageKind::WaitingForCi;
+        state.stage.details = Some(
+            "completed one CodeRabbit resolve cycle; describe_pr already covered current PR head SHA; entering CI gate"
+                .to_string(),
         );
         return DescribePrRefreshDecision::Stop;
     }
@@ -473,9 +621,10 @@ fn finish_dispatch_describe_pr_stage_after_rerun(
     }
 
     state.pr.last_described_head_sha = Some(head_sha);
-    transition_to_ready_for_human_review(
-        state,
-        "completed one CodeRabbit resolve cycle and refreshed PR description",
+    state.stage.kind = StageKind::WaitingForCi;
+    state.stage.details = Some(
+        "completed one CodeRabbit resolve cycle, refreshed PR description, and entered CI gate"
+            .to_string(),
     );
     DescribePrRefreshDecision::Stop
 }
@@ -670,6 +819,7 @@ impl DagEngine {
             supervisor: None,
             github: GitHubPrClient::new()?,
             coderabbit: CodeRabbitClient::new()?,
+            ci: RequiredCiClient::new(),
         })
     }
 
@@ -734,7 +884,7 @@ impl DagEngine {
                     }
                     state.stage.kind = StageKind::DetectingPr;
                     state.stage.details = None;
-                    state.counters.ticket_to_pr_runs += 1;
+                    state.counters.ticket_to_pr += 1;
                     ThoughtsStateStore::save(&state)?;
                 }
                 StageKind::DetectingPr => {
@@ -930,7 +1080,7 @@ impl DagEngine {
 
                         match decide_resolve_pre_dispatch(
                             &before,
-                            state.counters.resolve_comments_runs,
+                            state.counters.resolve_comments,
                             max_cycles,
                         ) {
                             ResolvePreDispatchAction::ReadyForHumanReview { details } => {
@@ -985,14 +1135,14 @@ impl DagEngine {
                         );
 
                         if progress.is_progress() {
-                            state.counters.resolve_comments_runs += 1;
+                            state.counters.resolve_comments += 1;
                         }
 
                         match decide_resolve_post_dispatch(
                             &before,
                             &after,
                             progress,
-                            state.counters.resolve_comments_runs,
+                            state.counters.resolve_comments,
                             max_cycles,
                         ) {
                             ResolvePostDispatchAction::ManualHandoff { details } => {
@@ -1032,7 +1182,152 @@ impl DagEngine {
                         }
                     }
                     ThoughtsStateStore::save(&state)?;
-                    return Ok(());
+                }
+                StageKind::WaitingForCi => {
+                    let pr_number = state.pr.number.ok_or_else(|| {
+                        anyhow::anyhow!("missing PR number in state before CI wait")
+                    })?;
+                    let branch = state.worktree.branch.clone();
+                    loop {
+                        let previous_head_sha = state.pr.head_sha.clone();
+                        let lookup = self.github.detect_open_pr_from_branch(&branch).await?;
+                        record_pr_lookup(&mut state, StageKind::WaitingForCi, &lookup);
+                        let Some(pr) = lookup.pr else {
+                            let worktree_branch = state.worktree.branch.clone();
+                            transition_to_stopped_failed(
+                                &mut state,
+                                format!(
+                                    "CI gate could not re-detect an open PR for branch '{worktree_branch}'"
+                                ),
+                            );
+                            ThoughtsStateStore::save(&state)?;
+                            return Ok(());
+                        };
+                        let refreshed_head_sha = pr.head_sha.clone();
+                        persist_detected_pr(&mut state, &pr);
+
+                        if handle_ci_gate_head_sha_change(
+                            &mut state,
+                            previous_head_sha.as_deref(),
+                            &refreshed_head_sha,
+                        ) {
+                            ThoughtsStateStore::save(&state)?;
+                            break;
+                        }
+
+                        match self.ci.poll_once(pr_number)? {
+                            RequiredCiPoll::Waiting {
+                                pending,
+                                fingerprint,
+                            } => {
+                                state.stage.kind = StageKind::WaitingForCi;
+                                state.stage.details = Some(format!(
+                                    "waiting for required CI on head {refreshed_head_sha}; pending checks: {}; fingerprint={fingerprint}",
+                                    format_ci_checks(&pending),
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+                                tokio::time::sleep(poll_interval_sleep_duration(
+                                    state.settings.poll_interval_seconds,
+                                ))
+                                .await;
+                            }
+                            RequiredCiPoll::Passed { fingerprint } => {
+                                reset_ci_tracking(&mut state);
+                                transition_to_ready_for_human_review(
+                                    &mut state,
+                                    format!(
+                                        "required CI passed; head={refreshed_head_sha}; fingerprint={fingerprint}"
+                                    ),
+                                );
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                            RequiredCiPoll::Failed {
+                                failing,
+                                fingerprint,
+                            } => {
+                                match apply_required_ci_failure(
+                                    &mut state,
+                                    &refreshed_head_sha,
+                                    &fingerprint,
+                                    &failing,
+                                ) {
+                                    CiFailureFlow::ContinueWaiting => {
+                                        ThoughtsStateStore::save(&state)?;
+                                        tokio::time::sleep(poll_interval_sleep_duration(
+                                            state.settings.poll_interval_seconds,
+                                        ))
+                                        .await;
+                                    }
+                                    CiFailureFlow::DispatchResolve => {
+                                        ThoughtsStateStore::save(&state)?;
+                                        break;
+                                    }
+                                    CiFailureFlow::StopManualHandoff => {
+                                        let message = persist_stop_state_before_handoff(
+                                            &state,
+                                            ThoughtsStateStore::save,
+                                        )?;
+                                        linear::post_handoff_once(&mut state, &message).await?;
+                                        ThoughtsStateStore::save(&state)?;
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                StageKind::DispatchingResolvePrCiFailures => {
+                    self.run_supervised_command(
+                        &mut state,
+                        StageKind::DispatchingResolvePrCiFailures,
+                        RESOLVE_PR_CI_COMMAND,
+                        None,
+                    )
+                    .await?;
+                    if stages::is_paused(&state.stage.kind)
+                        || matches!(state.stage.kind, StageKind::StoppedFailed)
+                    {
+                        return Ok(());
+                    }
+
+                    state.counters.resolve_ci += 1;
+                    let remediated_head_sha = state
+                        .ci
+                        .last_remediated_head_sha
+                        .clone()
+                        .or_else(|| state.pr.head_sha.clone())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "missing remediated head SHA in state after CI remediation"
+                            )
+                        })?;
+                    let branch = state.worktree.branch.clone();
+                    let lookup = self.github.detect_open_pr_from_branch(&branch).await?;
+                    record_pr_lookup(
+                        &mut state,
+                        StageKind::DispatchingResolvePrCiFailures,
+                        &lookup,
+                    );
+                    let Some(pr) = lookup.pr else {
+                        let worktree_branch = state.worktree.branch.clone();
+                        transition_to_stopped_failed(
+                            &mut state,
+                            format!(
+                                "CI remediation completed but PR could not be re-detected for branch '{worktree_branch}'"
+                            ),
+                        );
+                        ThoughtsStateStore::save(&state)?;
+                        return Ok(());
+                    };
+                    let redetected_head_sha = pr.head_sha.clone();
+                    persist_detected_pr(&mut state, &pr);
+                    route_after_ci_remediation(
+                        &mut state,
+                        &remediated_head_sha,
+                        &redetected_head_sha,
+                    );
+                    ThoughtsStateStore::save(&state)?;
                 }
                 StageKind::Init
                 | StageKind::StoppedPermissionRequired
@@ -1180,6 +1475,7 @@ impl DagEngine {
                 command_name,
                 "linear_ticket_2_pr",
                 "resolve_pr_comments",
+                RESOLVE_PR_CI_COMMAND,
                 SYNC_WITH_MAIN_COMMAND,
             ])
             .await?;
@@ -1297,7 +1593,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::CI_FAILURE_GRACE_POLLS;
     use super::CheckSuite422Recovery;
+    use super::CiFailureFlow;
     use super::DagEngine;
     use super::DescribePrRefreshDecision;
     use super::DraftSkipRecovery;
@@ -1312,6 +1610,7 @@ mod tests {
     use super::detecting_pr_retry_attempt_number;
     use super::ensure_pr_ready_for_review;
     use super::finish_dispatch_describe_pr_stage_after_rerun;
+    use super::handle_ci_gate_head_sha_change;
     use super::is_check_suites_no_commit_found_422;
     use super::persist_stop_state_before_handoff;
     use super::planned_actions_for_start;
@@ -1320,11 +1619,13 @@ mod tests {
     use super::record_pr_lookup;
     use super::recover_from_check_suite_no_commit_found_422;
     use super::recover_from_draft_review_skip;
+    use super::route_after_ci_remediation;
     use super::should_reset_coderabbit_timeout_baseline;
     use super::stage_kind_label;
     use super::transition_to_dispatch_disabled;
     use super::transition_to_stopped_failed;
     use super::transition_to_ticket_to_pr_no_pr_handoff;
+    use crate::github::ci::GhCheck;
     use crate::github::pr::DetectedPrLookup;
     use crate::state::OpenCodeDiagnostics;
     use crate::state::RunState;
@@ -1401,6 +1702,15 @@ mod tests {
             guard_detected: false,
             final_tool_error: None,
             command_transport_error: None,
+        }
+    }
+
+    fn sample_ci_check(name: &str, state: &str) -> GhCheck {
+        GhCheck {
+            name: name.to_string(),
+            state: state.to_string(),
+            conclusion: None,
+            details_url: Some(format!("https://example.invalid/{name}")),
         }
     }
 
@@ -1569,6 +1879,8 @@ mod tests {
                 "github.coderabbit.wait",
                 "opencode.run.resolve_pr_comments",
                 "opencode.run.describe_pr_refresh",
+                "github.ci.wait",
+                "opencode.run.resolve_pr_ci_failures",
                 "stop.ready_for_human_review",
             ]
         );
@@ -1577,7 +1889,7 @@ mod tests {
     #[test]
     fn baseline_last_described_head_sha_sets_once_after_pr_create() {
         let mut state = sample_state();
-        state.counters.ticket_to_pr_runs = 1;
+        state.counters.ticket_to_pr = 1;
 
         baseline_last_described_head_sha_after_pr_create(&mut state, "abc123");
 
@@ -1587,7 +1899,7 @@ mod tests {
     #[test]
     fn baseline_last_described_head_sha_does_not_overwrite_existing_value() {
         let mut state = sample_state();
-        state.counters.ticket_to_pr_runs = 1;
+        state.counters.ticket_to_pr = 1;
         state.pr.last_described_head_sha = Some("already-set".to_string());
 
         baseline_last_described_head_sha_after_pr_create(&mut state, "abc123");
@@ -1617,7 +1929,7 @@ mod tests {
         );
 
         assert!(matches!(decision, DescribePrRefreshDecision::Stop));
-        assert_eq!(state.stage.kind, StageKind::StoppedReadyForHumanReview);
+        assert_eq!(state.stage.kind, StageKind::WaitingForCi);
         assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("abc123"));
     }
 
@@ -1686,7 +1998,7 @@ mod tests {
     }
 
     #[test]
-    fn finish_dispatch_describe_pr_stage_after_rerun_updates_baseline_and_stops_ready() {
+    fn finish_dispatch_describe_pr_stage_after_rerun_updates_baseline_and_enters_ci_gate() {
         let mut state = sample_state();
         state.stage.kind = StageKind::DispatchingDescribePr;
 
@@ -1694,8 +2006,116 @@ mod tests {
             finish_dispatch_describe_pr_stage_after_rerun(&mut state, "new-sha".to_string());
 
         assert!(matches!(decision, DescribePrRefreshDecision::Stop));
-        assert_eq!(state.stage.kind, StageKind::StoppedReadyForHumanReview);
+        assert_eq!(state.stage.kind, StageKind::WaitingForCi);
         assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("new-sha"));
+    }
+
+    #[test]
+    fn ci_failure_dispatches_remediation_with_tracking() {
+        let mut state = sample_state();
+
+        let flow = super::apply_required_ci_failure(
+            &mut state,
+            "abc123",
+            "fp1",
+            &[sample_ci_check("unit", "failure")],
+        );
+
+        assert_eq!(flow, CiFailureFlow::DispatchResolve);
+        assert_eq!(state.stage.kind, StageKind::DispatchingResolvePrCiFailures);
+        assert_eq!(state.ci.last_remediated_head_sha.as_deref(), Some("abc123"));
+        assert_eq!(state.ci.last_remediated_fingerprint.as_deref(), Some("fp1"));
+        assert_eq!(state.ci.grace_polls_remaining, CI_FAILURE_GRACE_POLLS);
+    }
+
+    #[test]
+    fn ci_failure_stops_when_ceiling_reached() {
+        let mut state = sample_state();
+        state.settings.max_review_cycles = 2;
+        state.counters.resolve_ci = 2;
+
+        let flow = super::apply_required_ci_failure(
+            &mut state,
+            "abc123",
+            "fp1",
+            &[sample_ci_check("unit", "failure")],
+        );
+
+        assert_eq!(flow, CiFailureFlow::StopManualHandoff);
+        assert_eq!(state.stage.kind, StageKind::StoppedManualHandoff);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .unwrap()
+                .contains("max_review_cycles exhausted")
+        );
+    }
+
+    #[test]
+    fn ci_failure_stops_after_grace_exhaustion() {
+        let mut state = sample_state();
+        state.ci.last_remediated_head_sha = Some("abc123".to_string());
+        state.ci.last_remediated_fingerprint = Some("fp1".to_string());
+        state.ci.grace_polls_remaining = 1;
+
+        let flow = super::apply_required_ci_failure(
+            &mut state,
+            "abc123",
+            "fp1",
+            &[sample_ci_check("unit", "failure")],
+        );
+
+        assert_eq!(flow, CiFailureFlow::StopManualHandoff);
+        assert_eq!(state.stage.kind, StageKind::StoppedManualHandoff);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .unwrap()
+                .contains("grace exhausted")
+        );
+    }
+
+    #[test]
+    fn ci_head_change_restarts_coderabbit_wait_and_resets_tracking() {
+        let mut state = sample_state();
+        state.stage.kind = StageKind::WaitingForCi;
+        state.ci.last_remediated_head_sha = Some("old".to_string());
+        state.ci.last_remediated_fingerprint = Some("fp1".to_string());
+        state.ci.grace_polls_remaining = 2;
+
+        let changed = handle_ci_gate_head_sha_change(&mut state, Some("old"), "new");
+
+        assert!(changed);
+        assert_eq!(state.stage.kind, StageKind::FreshnessBeforeCoderabbitWait);
+        assert_eq!(state.ci.last_remediated_head_sha, None);
+        assert_eq!(state.ci.last_remediated_fingerprint, None);
+        assert_eq!(state.ci.grace_polls_remaining, 0);
+    }
+
+    #[test]
+    fn ci_same_head_after_remediation_returns_to_ci_wait() {
+        let mut state = sample_state();
+        route_after_ci_remediation(&mut state, "abc123", "abc123");
+        assert_eq!(state.stage.kind, StageKind::WaitingForCi);
+    }
+
+    #[test]
+    fn ci_new_head_after_remediation_restarts_coderabbit_wait() {
+        let mut state = sample_state();
+        state.ci.last_remediated_head_sha = Some("abc123".to_string());
+        state.ci.last_remediated_fingerprint = Some("fp1".to_string());
+        state.ci.grace_polls_remaining = 2;
+
+        route_after_ci_remediation(&mut state, "abc123", "def456");
+
+        assert_eq!(state.stage.kind, StageKind::FreshnessBeforeCoderabbitWait);
+        assert_eq!(state.ci.last_remediated_head_sha, None);
+        assert_eq!(state.ci.last_remediated_fingerprint, None);
+        assert_eq!(state.ci.grace_polls_remaining, 0);
     }
 
     #[test]
