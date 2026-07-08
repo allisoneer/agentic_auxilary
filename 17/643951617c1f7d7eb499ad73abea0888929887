@@ -1,0 +1,49 @@
+crates/infra/thoughts-core/src/git/sync.rs
+  s_59935601fba5e9::t_178bfbffcd2c97 658
+  s_59935601fba5e9::t_30c1fa48df9973 666
+apps/thoughts/Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 51
+crates/infra/thoughts-core/src/git/utils.rs
+  s_59935601fba5e9::t_4c7588c3db1c6b 205
+  s_59935601fba5e9::t_f711591b851bda 140-141,170
+crates/infra/thoughts-core/Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 29
+crates/tools/pr-comments/src/git.rs
+  s_59935601fba5e9::t_9461f324382b07 26
+apps/agentic-outer-dag/src/worktree/mod.rs
+  s_59935601fba5e9::t_62e2917272ccec 273
+crates/infra/gwt-worktree/src/remote.rs
+  s_59935601fba5e9::t_03ffc69541affc 88
+crates/tools/review-tools/Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 24
+crates/infra/gwt-worktree/Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 25
+apps/agentic-outer-dag/Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 27
+Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 74
+crates/infra/gwt-worktree/src/worktree.rs
+  s_59935601fba5e9::t_8c53532f606ff0 38-40,58-60,113,124,136-137,149
+crates/tools/pr-comments/Cargo.toml
+  s_59935601fba5e9::t_be13fb73a0c7b9 43
+crates/infra/gwt-worktree/src/plan/switch.rs
+  s_59935601fba5e9::t_4aa277f83ccb90 67
+Cargo.lock
+  s_59935601fba5e9::t_dadfaeaf1c394c 1303,1305,2145,2147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "17643951617c1f7d7eb499ad73abea0888929887",
+  "prompts": {},
+  "sessions": {
+    "s_59935601fba5e9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bdb265d4ffeFQWUJHHAnWtLYI",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
