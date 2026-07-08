@@ -24,6 +24,25 @@ use std::time::Duration;
 
 const REST_PER_PAGE: usize = 100;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubRestError {
+    pub status: u16,
+    pub url: String,
+    pub body: String,
+}
+
+impl std::fmt::Display for GitHubRestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "GitHub REST request failed: HTTP {} for {}: {}",
+            self.status, self.url, self.body
+        )
+    }
+}
+
+impl std::error::Error for GitHubRestError {}
+
 pub struct GitHubClient {
     client: Octocrab,
     http: reqwest::Client,
@@ -229,12 +248,24 @@ impl GitHubClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?
-            .error_for_status()
             .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?;
-        response
-            .json()
+
+        let status = response.status();
+        let body = response
+            .bytes()
             .await
+            .map_err(|e| anyhow::anyhow!("GitHub REST request failed: {e}"))?;
+
+        if status.is_client_error() || status.is_server_error() {
+            return Err(GitHubRestError {
+                status: status.as_u16(),
+                url,
+                body: String::from_utf8_lossy(&body).to_string(),
+            }
+            .into());
+        }
+
+        serde_json::from_slice(&body)
             .map_err(|e| anyhow::anyhow!("GitHub REST JSON parse failed: {e}"))
     }
 
@@ -782,6 +813,7 @@ fn parse_issue_comments_response(value: serde_json::Value) -> Result<Vec<IssueCo
 #[cfg(test)]
 mod tests {
     use super::GitHubClient;
+    use super::GitHubRestError;
     use super::REST_PER_PAGE;
     use super::parse_open_pr_ref_lookup_response;
     use crate::models::OpenPrRefData;
@@ -974,10 +1006,44 @@ mod tests {
             .await
             .expect_err("http status failure should bubble up");
 
+        let rest = err
+            .downcast_ref::<GitHubRestError>()
+            .expect("typed REST error should be preserved");
+        assert_eq!(rest.status, 500);
+        assert!(rest.url.contains("/commits/missing/check-suites"));
+        assert_eq!(rest.body, "server error");
         assert!(
-            err.to_string().contains("GitHub REST request failed:"),
-            "unexpected error: {err}"
+            rest.to_string()
+                .contains("GitHub REST request failed: HTTP 500")
         );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn rest_get_preserves_422_body_for_check_suites_no_commit_found() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/repos/owner/repo/commits/badsha/check-suites")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("page".into(), "1".into()),
+                Matcher::UrlEncoded("per_page".into(), REST_PER_PAGE.to_string()),
+            ]))
+            .with_status(422)
+            .with_body(r#"{"message":"No commit found for SHA: badsha"}"#)
+            .create_async()
+            .await;
+
+        let err = client(server.url())
+            .list_check_suites_for_ref("badsha")
+            .await
+            .expect_err("422 should fail");
+
+        let rest = err
+            .downcast_ref::<GitHubRestError>()
+            .expect("should surface GitHubRestError");
+        assert_eq!(rest.status, 422);
+        assert!(rest.url.contains("/commits/badsha/check-suites"));
+        assert!(rest.body.contains("No commit found for SHA"));
         mock.assert_async().await;
     }
 

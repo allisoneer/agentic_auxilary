@@ -13,6 +13,7 @@ use crate::state::StageKind;
 use crate::state::store::ThoughtsStateStore;
 use crate::worktree::freshness;
 use anyhow::Result;
+use pr_comments::github::GitHubRestError;
 use std::fmt::Write as _;
 use std::future::Future;
 use std::time::Duration;
@@ -509,9 +510,35 @@ where
     Ok(updated_pr)
 }
 
+#[derive(Debug)]
 enum DraftSkipRecovery {
     ContinueWaiting,
     TerminalStop { message: String },
+}
+
+#[derive(Debug)]
+enum CheckSuite422Recovery {
+    NotApplicable,
+    ContinueWaiting,
+    TerminalStop { message: String },
+}
+
+fn is_check_suites_no_commit_found_422(err: &GitHubRestError, head_sha: &str) -> bool {
+    if err.status != 422 {
+        return false;
+    }
+
+    let expected_path = format!("/commits/{head_sha}/check-suites");
+    if !err.url.contains(&expected_path) {
+        return false;
+    }
+
+    let body = err.body.to_ascii_lowercase();
+    body.contains("no commit found for sha") && body.contains(&head_sha.to_ascii_lowercase())
+}
+
+fn check_suite_422_footer(rest: &GitHubRestError) -> String {
+    format!("\n\nURL: {}\nBody: {}", rest.url, rest.body)
 }
 
 async fn recover_from_draft_review_skip<DetectPr, DetectPrFut, MarkReady, MarkReadyFut>(
@@ -560,6 +587,68 @@ where
             .to_string(),
     );
     Ok(DraftSkipRecovery::ContinueWaiting)
+}
+
+async fn recover_from_check_suite_no_commit_found_422<DetectPr, DetectPrFut>(
+    state: &mut RunState,
+    head_sha: &str,
+    poll_error: &anyhow::Error,
+    detect_pr: DetectPr,
+) -> Result<CheckSuite422Recovery>
+where
+    DetectPr: FnOnce() -> DetectPrFut,
+    DetectPrFut: Future<Output = Result<DetectedPrLookup>>,
+{
+    let Some(rest) = poll_error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<GitHubRestError>())
+        .filter(|rest| is_check_suites_no_commit_found_422(rest, head_sha))
+    else {
+        return Ok(CheckSuite422Recovery::NotApplicable);
+    };
+
+    let branch = state.worktree.branch.clone();
+    let lookup = match detect_pr().await {
+        Ok(lookup) => lookup,
+        Err(error) => {
+            return Ok(CheckSuite422Recovery::TerminalStop {
+                message: format!(
+                    "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}, and PR re-detection failed for branch '{branch}': {error}{}",
+                    check_suite_422_footer(rest)
+                ),
+            });
+        }
+    };
+
+    record_pr_lookup(state, StageKind::WaitingForCoderabbit, &lookup);
+
+    let Some(pr) = lookup.pr else {
+        return Ok(CheckSuite422Recovery::TerminalStop {
+            message: format!(
+                "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}, but no open PR could be re-detected for branch '{branch}'.{}",
+                check_suite_422_footer(rest)
+            ),
+        });
+    };
+
+    if pr.head_sha == head_sha {
+        return Ok(CheckSuite422Recovery::TerminalStop {
+            message: format!(
+                "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}. Re-detected remote PR head is unchanged ({head_sha}); stopping for manual handoff.{}",
+                check_suite_422_footer(rest)
+            ),
+        });
+    }
+
+    let old = head_sha.to_string();
+    let new = pr.head_sha.clone();
+    persist_detected_pr(state, &pr);
+    state.stage.kind = StageKind::WaitingForCoderabbit;
+    state.stage.details = Some(format!(
+        "Recovered from GitHub check-suites 422 (No commit found for SHA) for stale head {old}; remote PR head is now {new}. Updated stored head SHA and continuing to wait."
+    ));
+
+    Ok(CheckSuite422Recovery::ContinueWaiting)
 }
 
 fn persist_stop_state_before_handoff<Save>(state: &RunState, save: Save) -> Result<String>
@@ -697,16 +786,55 @@ impl DagEngine {
                         .pr
                         .number
                         .ok_or_else(|| anyhow::anyhow!("missing PR number in state"))?;
-                    let head_sha = state
-                        .pr
-                        .head_sha
-                        .clone()
-                        .ok_or_else(|| anyhow::anyhow!("missing PR head SHA in state"))?;
                     let mut started_at = chrono::Utc::now();
                     let timeout_seconds = i64::try_from(state.settings.coderabbit_timeout_seconds)
                         .map_err(|_| anyhow::anyhow!("coderabbit timeout exceeds i64 range"))?;
                     loop {
-                        match self.coderabbit.poll_once(pr_number, &head_sha).await? {
+                        let head_sha = state
+                            .pr
+                            .head_sha
+                            .clone()
+                            .ok_or_else(|| anyhow::anyhow!("missing PR head SHA in state"))?;
+                        let poll = match self.coderabbit.poll_once(pr_number, &head_sha).await {
+                            Ok(poll) => poll,
+                            Err(err) => {
+                                let branch = state.worktree.branch.clone();
+                                let github = &self.github;
+
+                                match recover_from_check_suite_no_commit_found_422(
+                                    &mut state,
+                                    &head_sha,
+                                    &err,
+                                    || github.detect_open_pr_from_branch(&branch),
+                                )
+                                .await?
+                                {
+                                    CheckSuite422Recovery::NotApplicable => return Err(err),
+                                    CheckSuite422Recovery::ContinueWaiting => {
+                                        started_at = chrono::Utc::now();
+                                        ThoughtsStateStore::save(&state)?;
+                                        tokio::time::sleep(poll_interval_sleep_duration(
+                                            state.settings.poll_interval_seconds,
+                                        ))
+                                        .await;
+                                        continue;
+                                    }
+                                    CheckSuite422Recovery::TerminalStop { message } => {
+                                        state.stage.kind = StageKind::StoppedManualHandoff;
+                                        state.stage.details = Some(message);
+                                        let message = persist_stop_state_before_handoff(
+                                            &state,
+                                            ThoughtsStateStore::save,
+                                        )?;
+                                        linear::post_handoff_once(&mut state, &message).await?;
+                                        ThoughtsStateStore::save(&state)?;
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                        };
+
+                        match poll {
                             CodeRabbitPoll::Completed => {
                                 state.coderabbit.current_cycle += 1;
                                 state.stage.kind = StageKind::DispatchingResolvePrComments;
@@ -1169,6 +1297,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::CheckSuite422Recovery;
     use super::DagEngine;
     use super::DescribePrRefreshDecision;
     use super::DraftSkipRecovery;
@@ -1183,11 +1312,13 @@ mod tests {
     use super::detecting_pr_retry_attempt_number;
     use super::ensure_pr_ready_for_review;
     use super::finish_dispatch_describe_pr_stage_after_rerun;
+    use super::is_check_suites_no_commit_found_422;
     use super::persist_stop_state_before_handoff;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
     use super::prepare_dispatch_describe_pr_stage;
     use super::record_pr_lookup;
+    use super::recover_from_check_suite_no_commit_found_422;
     use super::recover_from_draft_review_skip;
     use super::should_reset_coderabbit_timeout_baseline;
     use super::stage_kind_label;
@@ -1200,6 +1331,7 @@ mod tests {
     use crate::state::StageKind;
     use crate::test_support::process_state_lock;
     use crate::worktree::TargetWorktree;
+    use pr_comments::github::GitHubRestError;
     use pr_comments::models::PrRef;
     use std::sync::Mutex;
     use std::time::Duration;
@@ -1229,6 +1361,17 @@ mod tests {
             false,
         )
         .expect("sample state builds")
+    }
+
+    fn check_suites_422_error(head_sha: &str) -> anyhow::Error {
+        GitHubRestError {
+            status: 422,
+            url: format!(
+                "https://api.github.com/repos/owner/repo/commits/{head_sha}/check-suites?page=1&per_page=100"
+            ),
+            body: format!("{{\"message\":\"No commit found for SHA: {head_sha}\"}}"),
+        }
+        .into()
     }
 
     fn sample_unresolved_snapshot(
@@ -1957,6 +2100,165 @@ mod tests {
                 .expect("stale detail")
                 .contains("treating it as stale")
         );
+    }
+
+    #[test]
+    fn check_suite_422_classifier_requires_status_url_and_body_match() {
+        let matching = GitHubRestError {
+            status: 422,
+            url: "https://api.github.com/repos/owner/repo/commits/abc123/check-suites?page=1"
+                .to_string(),
+            body: "No commit found for SHA: abc123".to_string(),
+        };
+        assert!(is_check_suites_no_commit_found_422(&matching, "abc123"));
+
+        let wrong_status = GitHubRestError {
+            status: 404,
+            ..matching.clone()
+        };
+        assert!(!is_check_suites_no_commit_found_422(
+            &wrong_status,
+            "abc123"
+        ));
+
+        let wrong_url = GitHubRestError {
+            url: "https://api.github.com/repos/owner/repo/issues/1/comments".to_string(),
+            ..matching.clone()
+        };
+        assert!(!is_check_suites_no_commit_found_422(&wrong_url, "abc123"));
+
+        let wrong_body = GitHubRestError {
+            body: "validation failed".to_string(),
+            ..matching
+        };
+        assert!(!is_check_suites_no_commit_found_422(&wrong_body, "abc123"));
+    }
+
+    #[tokio::test]
+    async fn recover_from_check_suites_422_continues_when_remote_head_changed() {
+        let mut state = sample_state();
+        state.pr.head_sha = Some("abc123".to_string());
+
+        let recovery = recover_from_check_suite_no_commit_found_422(
+            &mut state,
+            "abc123",
+            &check_suites_422_error("abc123"),
+            || async {
+                Ok(DetectedPrLookup {
+                    requested_branch: "feature/eng-992".to_string(),
+                    current_branch: Some("feature/eng-992".to_string()),
+                    repo_owner: "allisoneer".to_string(),
+                    repo_name: "agentic_auxilary".to_string(),
+                    token_source: Some("GH_TOKEN".to_string()),
+                    empty_result_reason: None,
+                    pr: Some(PrRef {
+                        head_sha: "def456".to_string(),
+                        ..sample_pr(false)
+                    }),
+                })
+            },
+        )
+        .await
+        .expect("recovery should succeed");
+
+        assert!(matches!(recovery, CheckSuite422Recovery::ContinueWaiting));
+        assert_eq!(state.pr.head_sha.as_deref(), Some("def456"));
+        assert_eq!(state.pr.last_observed_head_sha.as_deref(), Some("def456"));
+        assert_eq!(state.stage.kind, StageKind::WaitingForCoderabbit);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("recovery detail")
+                .contains("Updated stored head SHA and continuing to wait")
+        );
+    }
+
+    #[tokio::test]
+    async fn recover_from_check_suites_422_stops_when_remote_head_unchanged() {
+        let mut state = sample_state();
+
+        let recovery = recover_from_check_suite_no_commit_found_422(
+            &mut state,
+            "abc123",
+            &check_suites_422_error("abc123"),
+            || async {
+                Ok(DetectedPrLookup {
+                    requested_branch: "feature/eng-992".to_string(),
+                    current_branch: Some("feature/eng-992".to_string()),
+                    repo_owner: "allisoneer".to_string(),
+                    repo_name: "agentic_auxilary".to_string(),
+                    token_source: Some("GH_TOKEN".to_string()),
+                    empty_result_reason: None,
+                    pr: Some(sample_pr(false)),
+                })
+            },
+        )
+        .await
+        .expect("recovery should succeed");
+
+        match recovery {
+            CheckSuite422Recovery::TerminalStop { message } => {
+                assert!(message.contains("Re-detected remote PR head is unchanged (abc123)"));
+                assert!(message.contains("/commits/abc123/check-suites"));
+                assert!(message.contains("No commit found for SHA"));
+            }
+            other => panic!("expected terminal stop, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn recover_from_check_suites_422_stops_when_pr_not_redetected() {
+        let mut state = sample_state();
+
+        let recovery = recover_from_check_suite_no_commit_found_422(
+            &mut state,
+            "abc123",
+            &check_suites_422_error("abc123"),
+            || async {
+                Ok(DetectedPrLookup {
+                    requested_branch: "feature/eng-992".to_string(),
+                    current_branch: Some("feature/eng-992".to_string()),
+                    repo_owner: "allisoneer".to_string(),
+                    repo_name: "agentic_auxilary".to_string(),
+                    token_source: Some("GH_TOKEN".to_string()),
+                    empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
+                    pr: None,
+                })
+            },
+        )
+        .await
+        .expect("recovery should succeed");
+
+        match recovery {
+            CheckSuite422Recovery::TerminalStop { message } => {
+                assert!(message.contains("no open PR could be re-detected"));
+                assert!(message.contains("No commit found for SHA"));
+            }
+            other => panic!("expected terminal stop, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn recover_from_check_suites_422_ignores_non_matching_422() {
+        let mut state = sample_state();
+
+        let err: anyhow::Error = GitHubRestError {
+            status: 422,
+            url: "https://api.github.com/repos/owner/repo/issues/1/comments".to_string(),
+            body: "No commit found for SHA: abc123".to_string(),
+        }
+        .into();
+
+        let recovery =
+            recover_from_check_suite_no_commit_found_422(&mut state, "abc123", &err, || async {
+                panic!("non-matching 422 should not trigger PR re-detection")
+            })
+            .await
+            .expect("classification should succeed");
+
+        assert!(matches!(recovery, CheckSuite422Recovery::NotApplicable));
     }
 
     #[tokio::test]
