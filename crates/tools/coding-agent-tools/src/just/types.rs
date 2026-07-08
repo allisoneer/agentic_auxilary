@@ -25,6 +25,9 @@ pub struct ExecuteParams {
     pub dir: Option<String>,
     /// Arguments keyed by parameter name; star params accept arrays
     pub args: Option<HashMap<String, serde_json::Value>>,
+    /// Force a fresh execution instead of continuing cached transcript paging
+    #[serde(default)]
+    pub rerun: bool,
 }
 
 /// A single search result item.
@@ -93,6 +96,8 @@ pub struct ExecuteOutput {
     pub stdout: String,
     /// Standard error
     pub stderr: String,
+    /// Whether more cached transcript pages remain
+    pub has_more: bool,
 }
 
 impl TextFormat for ExecuteOutput {
@@ -112,6 +117,12 @@ impl TextFormat for ExecuteOutput {
         }
         if !self.stderr.is_empty() {
             let _ = writeln!(out, "\nstderr:\n{}", self.stderr.trim_end());
+        }
+        if self.has_more {
+            let _ = writeln!(
+                out,
+                "\n(more output available — call again with same params for next page, or use rerun=true for a fresh execution)"
+            );
         }
         out.trim_end().to_string()
     }
@@ -168,6 +179,7 @@ mod tests {
             exit_code: Some(0),
             stdout: "All checks passed\n".into(),
             stderr: String::new(),
+            has_more: false,
         };
         let text = output.fmt_text(&TextOptions::default());
         assert!(text.contains("SUCCESS"));
@@ -186,6 +198,7 @@ mod tests {
             exit_code: Some(1),
             stdout: String::new(),
             stderr: "error: compilation failed\n".into(),
+            has_more: false,
         };
         let text = output.fmt_text(&TextOptions::default());
         assert!(text.contains("FAILURE"));
@@ -193,5 +206,32 @@ mod tests {
         assert!(!text.contains("stdout:"));
         assert!(text.contains("stderr:"));
         assert!(text.contains("compilation failed"));
+    }
+
+    #[test]
+    fn execute_output_format_with_more_hint() {
+        let output = ExecuteOutput {
+            dir: "/repo".into(),
+            recipe: "test".into(),
+            success: false,
+            exit_code: Some(1),
+            stdout: "line 1\n".into(),
+            stderr: String::new(),
+            has_more: true,
+        };
+        let text = output.fmt_text(&TextOptions::default());
+        assert!(text.contains("more output available"));
+        assert!(text.contains("rerun=true"));
+        assert!(text.contains("same params for next page"));
+    }
+
+    #[test]
+    fn execute_params_default_rerun_is_false() {
+        let params: ExecuteParams = serde_json::from_value(serde_json::json!({
+            "recipe": "check"
+        }))
+        .unwrap_or_else(|e| panic!("deserialize ExecuteParams failed: {e}"));
+
+        assert!(!params.rerun);
     }
 }

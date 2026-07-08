@@ -23,7 +23,6 @@ use agentic_tools_core::ToolRegistry;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 // ============================================================================
@@ -391,19 +390,6 @@ impl Tool for JustSearchTool {
 // JustExecute Tool
 // ============================================================================
 
-/// Input for the `just_execute` tool.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub struct JustExecuteInput {
-    /// Recipe name (e.g., 'check', 'test', 'build')
-    pub recipe: String,
-    /// Directory containing the justfile (optional; defaults to root if recipe exists there)
-    #[serde(default)]
-    pub dir: Option<String>,
-    /// Arguments keyed by parameter name; star params accept arrays
-    #[serde(default)]
-    pub args: Option<HashMap<String, serde_json::Value>>,
-}
-
 /// Tool for executing justfile recipes.
 #[derive(Clone)]
 pub struct JustExecuteTool {
@@ -417,10 +403,10 @@ impl JustExecuteTool {
 }
 
 impl Tool for JustExecuteTool {
-    type Input = JustExecuteInput;
+    type Input = just::ExecuteParams;
     type Output = just::ExecuteOutput;
     const NAME: &'static str = "cli_just_execute";
-    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Only disambiguate if recipe not in root.";
+    const DESCRIPTION: &'static str = "Execute a just recipe. Defaults to root justfile if no dir specified. Output is paged (default 200 lines/page; configurable via [cli_tools].just_execute_page_lines). If has_more=true, call again with the same params for the next cached page. Set rerun=true to force a fresh run.";
 
     fn call(
         &self,
@@ -431,7 +417,7 @@ impl Tool for JustExecuteTool {
         let ctx = ctx.clone();
         Box::pin(async move {
             tools
-                .just_execute(input.recipe, input.dir, input.args, &ctx)
+                .just_execute(input.recipe, input.dir, input.args, input.rerun, &ctx)
                 .await
         })
     }

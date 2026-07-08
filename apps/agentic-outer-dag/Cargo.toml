@@ -24,7 +24,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["env"] }
-git2 = { version = "0.20", features = ["vendored-openssl", "ssh", "https"] }
+git2 = { workspace = true, features = ["vendored-openssl", "ssh", "https"] }
 gwt-worktree = { workspace = true }
 linear-tools = { workspace = true }
 opencode_rs = { workspace = true, features = ["server"] }

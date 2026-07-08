@@ -85,5 +85,5 @@ fn ensure_remote_exists(repo: &Repository, branch: &BranchName, remote: &str) ->
 
 fn has_remote(repo: &Repository, remote: &str) -> Result<bool> {
     let remotes = repo.remotes()?;
-    Ok(remotes.iter().flatten().any(|name| name == remote))
+    Ok(remotes.iter().flatten().any(|name| name == Some(remote)))
 }

@@ -22,7 +22,7 @@ napi = false
 
 [dependencies]
 dirs = { workspace = true }
-git2 = { version = "0.20", features = ["vendored-openssl", "ssh", "https"] }
+git2 = { workspace = true, features = ["vendored-openssl", "ssh", "https"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 toml = "0.8"

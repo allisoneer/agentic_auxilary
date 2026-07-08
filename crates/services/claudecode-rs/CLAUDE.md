@@ -19,8 +19,8 @@ just fmt-check  # Check formatting
 
 ### Output Variants
 ```bash
-OUTPUT_MODE=normal just test   # Normal output
-OUTPUT_MODE=verbose just test  # Verbose output
+just test                      # Direct output from root justfile
+RUST_LOG=claudecode=debug just test  # Additional logging when needed
 ```
 
 ### Cargo Direct Commands
