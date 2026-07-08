@@ -253,6 +253,10 @@ fn is_check_suites_no_commit_found_422(err: &GitHubRestError, head_sha: &str) ->
     body.contains("no commit found for sha") && body.contains(&head_sha.to_ascii_lowercase())
 }
 
+fn check_suite_422_footer(rest: &GitHubRestError) -> String {
+    format!("\n\nURL: {}\nBody: {}", rest.url, rest.body)
+}
+
 async fn recover_from_draft_review_skip<DetectPr, DetectPrFut, MarkReady, MarkReadyFut>(
     state: &mut RunState,
     reason: &str,
@@ -325,8 +329,8 @@ where
         Err(error) => {
             return Ok(CheckSuite422Recovery::TerminalStop {
                 message: format!(
-                    "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}, and PR re-detection failed for branch '{branch}': {error}\n\nURL: {}\nBody: {}",
-                    rest.url, rest.body
+                    "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}, and PR re-detection failed for branch '{branch}': {error}{}",
+                    check_suite_422_footer(rest)
                 ),
             });
         }
@@ -337,8 +341,8 @@ where
     let Some(pr) = lookup.pr else {
         return Ok(CheckSuite422Recovery::TerminalStop {
             message: format!(
-                "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}, but no open PR could be re-detected for branch '{branch}'.\n\nURL: {}\nBody: {}",
-                rest.url, rest.body
+                "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}, but no open PR could be re-detected for branch '{branch}'.{}",
+                check_suite_422_footer(rest)
             ),
         });
     };
@@ -346,8 +350,8 @@ where
     if pr.head_sha == head_sha {
         return Ok(CheckSuite422Recovery::TerminalStop {
             message: format!(
-                "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}. Re-detected remote PR head is unchanged ({head_sha}); stopping for manual handoff.\n\nURL: {}\nBody: {}",
-                rest.url, rest.body
+                "GitHub check-suites returned 422 (No commit found for SHA) for {head_sha}. Re-detected remote PR head is unchanged ({head_sha}); stopping for manual handoff.{}",
+                check_suite_422_footer(rest)
             ),
         });
     }
