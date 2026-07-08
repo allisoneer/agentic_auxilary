@@ -1,0 +1,20 @@
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_6fbd764b0cfcc1::t_8cf6b6132d7e54 72,1202-1210,1216
+  s_6fbd764b0cfcc1::t_78a808f51dabe5 1200-1201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0ea7dac8dc7740aa9254ac82964bd599f14826b9",
+  "prompts": {},
+  "sessions": {
+    "s_6fbd764b0cfcc1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bd666d3bffeJgo5RjyF0e5oEl",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
