@@ -9,6 +9,7 @@ pub fn is_terminal(kind: &StageKind) -> bool {
         | StageKind::FreshnessBeforeCoderabbitWait
         | StageKind::WaitingForCoderabbit
         | StageKind::DispatchingResolvePrComments
+        | StageKind::DispatchingDescribePr
         | StageKind::StoppedPermissionRequired
         | StageKind::StoppedQuestionRequired => false,
         StageKind::StoppedDirtyTree
@@ -32,6 +33,7 @@ pub fn is_paused(kind: &StageKind) -> bool {
         | StageKind::FreshnessBeforeCoderabbitWait
         | StageKind::WaitingForCoderabbit
         | StageKind::DispatchingResolvePrComments
+        | StageKind::DispatchingDescribePr
         | StageKind::StoppedDirtyTree
         | StageKind::StoppedRebaseConflict
         | StageKind::StoppedManualHandoff
@@ -52,6 +54,7 @@ pub fn sequence_index(kind: &StageKind) -> Option<u8> {
         StageKind::FreshnessBeforeCoderabbitWait => Some(4),
         StageKind::WaitingForCoderabbit => Some(5),
         StageKind::DispatchingResolvePrComments => Some(6),
+        StageKind::DispatchingDescribePr => Some(7),
         StageKind::StoppedPermissionRequired
         | StageKind::StoppedQuestionRequired
         | StageKind::StoppedDirtyTree
@@ -84,12 +87,14 @@ mod tests {
         assert!(is_terminal(&StageKind::StoppedDirtyTree));
         assert!(is_terminal(&StageKind::StoppedRebaseConflict));
         assert!(!is_terminal(&StageKind::WaitingForCoderabbit));
+        assert!(!is_terminal(&StageKind::DispatchingDescribePr));
     }
 
     #[test]
     fn classifies_paused_states() {
         assert!(is_paused(&StageKind::StoppedPermissionRequired));
         assert!(is_paused(&StageKind::StoppedQuestionRequired));
+        assert!(!is_paused(&StageKind::DispatchingDescribePr));
         assert!(!is_paused(&StageKind::StoppedTicketToPrNoPrHandoff));
         assert!(!is_paused(&StageKind::StoppedFailed));
     }
@@ -112,6 +117,7 @@ mod tests {
             sequence_index(&StageKind::DispatchingResolvePrComments),
             Some(6)
         );
+        assert_eq!(sequence_index(&StageKind::DispatchingDescribePr), Some(7));
         assert_eq!(
             sequence_index(&StageKind::StoppedTicketToPrNoPrHandoff),
             None
@@ -121,6 +127,10 @@ mod tests {
 
     #[test]
     fn identifies_when_current_stage_is_beyond_stop_after_ceiling() {
+        assert!(is_beyond_stop_after(
+            &StageKind::DispatchingDescribePr,
+            &StageKind::DispatchingResolvePrComments,
+        ));
         assert!(is_beyond_stop_after(
             &StageKind::DispatchingResolvePrComments,
             &StageKind::WaitingForCoderabbit,
