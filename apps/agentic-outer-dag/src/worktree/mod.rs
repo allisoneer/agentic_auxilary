@@ -270,6 +270,7 @@ fn current_branch(repo: &Repository) -> Result<String> {
     let head = repo.head().context("failed to read HEAD")?;
     let branch = head
         .shorthand()
+        .ok()
         .map(str::to_string)
         .ok_or_else(|| anyhow::anyhow!("repository is detached; branch is required"))?;
     Ok(branch)
