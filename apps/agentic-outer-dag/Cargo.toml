@@ -1,6 +1,6 @@
 [package]
 name = "agentic-outer-dag-bin"
-version = "0.1.4"
+version = "0.1.6"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/allisoneer/agentic_auxilary"
@@ -24,7 +24,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["env"] }
-git2 = { version = "0.20", features = ["vendored-openssl", "ssh", "https"] }
+git2 = { workspace = true, features = ["vendored-openssl", "ssh", "https"] }
 gwt-worktree = { workspace = true }
 linear-tools = { workspace = true }
 opencode_rs = { workspace = true, features = ["server"] }

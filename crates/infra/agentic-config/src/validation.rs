@@ -354,6 +354,13 @@ pub fn validate(cfg: &AgenticConfig) -> Vec<AdvisoryWarning> {
         "cli_tools.just_search_timeout_secs.suspicious",
         &mut warnings,
     );
+    if cfg.cli_tools.just_execute_page_lines == 0 {
+        warnings.push(AdvisoryWarning::new(
+            "cli_tools.just_execute_page_lines.zero",
+            "cli_tools.just_execute_page_lines",
+            "value is 0; runtime will clamp to 1 line per `cli_just_execute` transcript page",
+        ));
+    }
     validate_low_nonzero_timeout(
         cfg.services.linear.connect_timeout_secs,
         1,
@@ -999,5 +1006,22 @@ token_limit = 12345
         ] {
             assert!(warnings.iter().any(|w| w.code == code), "missing {code}");
         }
+    }
+
+    #[test]
+    fn test_zero_just_execute_page_lines_warns() {
+        let mut config = AgenticConfig::default();
+        config.cli_tools.just_execute_page_lines = 0;
+
+        let warnings = validate(&config);
+        let warning = warnings
+            .iter()
+            .find(|w| w.code == "cli_tools.just_execute_page_lines.zero")
+            .unwrap_or_else(|| {
+                panic!("missing just_execute_page_lines zero warning: {warnings:?}")
+            });
+
+        assert_eq!(warning.path, "cli_tools.just_execute_page_lines");
+        assert!(warning.message.contains("clamp to 1"));
     }
 }

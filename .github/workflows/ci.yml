@@ -47,7 +47,6 @@ jobs:
         env:
           SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
-          OUTPUT_MODE: "normal"
         run: just check
 
   test:
@@ -76,15 +75,14 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.10
 
-      # TODO(3): Use `just test` instead of calling nextest directly, so profile
-      # selection is driven by the justfile. Requires splitting mcp-test into
-      # its own CI job (it needs Node.js/npx which this job doesn't install).
+      # Use explicit CI-safe just recipes so the justfile owns nextest routing
+      # and profile selection without adding Node.js/npx to this job.
       - name: Run tests (nextest)
         env:
           SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
           RUST_BACKTRACE: "1"
-        run: cargo nextest run --workspace --profile ci
+        run: just test-ci
 
       # Run thoughts-core integration tests which are #[ignore]d by default.
       # We use --ignored (not --include-ignored) to run ONLY the ignored tests,
@@ -94,7 +92,7 @@ jobs:
           SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
           RUST_BACKTRACE: "1"
-        run: cargo nextest run -p thoughts-tool -p thoughts-bin --profile ci -- --ignored
+        run: just test-thoughts-ignored-ci
 
   audit:
     name: Security Audit (cargo-deny)
@@ -235,4 +233,4 @@ jobs:
           THOUGHTS_INTEGRATION_TESTS: "1"
           THOUGHTS_NETWORK_TESTS: "1"
           RUST_BACKTRACE: "1"
-        run: cargo nextest run --workspace --profile ci
+        run: just test-ci

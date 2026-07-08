@@ -63,6 +63,11 @@ mod tests {
                 .get("just_search_timeout_secs")
                 .is_some()
         );
+        assert!(
+            cli_tools_properties
+                .get("just_execute_page_lines")
+                .is_some()
+        );
 
         let workspace_props = &json["$defs"]["WorkspaceToolsConfig"]["properties"];
         assert!(workspace_props.get("workspace_read").is_some());

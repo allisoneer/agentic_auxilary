@@ -317,12 +317,14 @@ mod tests {
             "recipe": "test",
             "dir": null,
             "args": {"verbose": true},
+            "rerun": false,
         });
 
         assert!(req.get("recipe").is_some(), "Missing recipe");
         assert!(req["recipe"].is_string());
         assert!(req.get("dir").is_some());
         assert!(req.get("args").is_some());
+        assert!(req.get("rerun").is_some());
     }
 
     #[test]
@@ -331,11 +333,13 @@ mod tests {
             "exit_code": 0,
             "stdout_lines": 10,
             "stderr_lines": 0,
+            "has_more": false,
         });
 
         assert!(summary["exit_code"].is_number());
         assert!(summary["stdout_lines"].is_number());
         assert!(summary["stderr_lines"].is_number());
+        assert!(summary["has_more"].is_boolean());
     }
 
     #[test]

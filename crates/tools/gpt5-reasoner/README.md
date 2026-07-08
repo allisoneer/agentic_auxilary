@@ -204,9 +204,8 @@ just test
 # Build
 just build
 
-# Output mode variants
-OUTPUT_MODE=normal just test    # Full cargo output
-OUTPUT_MODE=verbose just test   # Verbose output
+# Root just commands emit direct output
+just test                       # Direct test output
 ```
 
 ## Breaking Changes from 0.1.0

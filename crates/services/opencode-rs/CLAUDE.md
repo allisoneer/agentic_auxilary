@@ -21,8 +21,8 @@ just fmt-check  # Check formatting
 ### Output Variants
 
 ```bash
-OUTPUT_MODE=normal just test   # Normal cargo output
-OUTPUT_MODE=verbose just test  # Verbose output
+just test                      # Direct output from root justfile
+RUST_LOG=opencode_rs=debug just test  # Additional logging when needed
 ```
 
 ### Cargo Direct Commands
@@ -53,7 +53,7 @@ cargo test --features http
 
 ## Notes
 
-- This crate follows the monorepo standard tool Justfile. OUTPUT_MODE controls verbosity via tools/agent-wrap.sh.
+- This crate follows the monorepo standard tool Justfile. Root just commands now emit direct output.
 - Typical workflow: just fmt -> just check -> just test -> just build
 
 <!-- BEGIN:xtask:autogen header -->

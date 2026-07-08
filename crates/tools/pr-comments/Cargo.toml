@@ -1,6 +1,6 @@
 [package]
 name = "pr_comments"
-version = "0.8.7"
+version = "0.8.8"
 edition = "2024"
 authors = ["Allison Durham"]
 description = "Fetch GitHub PR comments via CLI and MCP"
@@ -40,7 +40,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 
 # Git operations
-git2 = { version = "0.20", features = ["vendored-openssl"] }
+git2 = { workspace = true, features = ["vendored-openssl"] }
 
 # Serialization
 serde = { workspace = true }

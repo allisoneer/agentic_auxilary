@@ -35,6 +35,9 @@ pub fn list_worktrees(control_repo: &ControlRepo) -> Result<Vec<WorktreeInfo>> {
 
     let worktrees = repo.worktrees()?;
     for name in (&worktrees).into_iter().flatten() {
+        let Some(name) = name else {
+            continue;
+        };
         let worktree = repo.find_worktree(name)?;
         let locked = !matches!(worktree.is_locked()?, git2::WorktreeLockStatus::Unlocked);
         let prunable = worktree.is_prunable(None)?;
@@ -52,6 +55,9 @@ pub(crate) fn find_worktree_by_path(
 ) -> Result<Option<Worktree>> {
     let worktrees = repo.worktrees()?;
     for name in (&worktrees).into_iter().flatten() {
+        let Some(name) = name else {
+            continue;
+        };
         let worktree = repo.find_worktree(name)?;
         if worktree.path() == target_path {
             return Ok(Some(worktree));
@@ -104,7 +110,7 @@ fn worktree_info_from_linked(
     Ok(WorktreeInfo {
         path,
         head: None,
-        branch: infer_branch_from_worktree_name(worktree.name()),
+        branch: infer_branch_from_worktree_name(worktree.name().ok().flatten()),
         is_main: false,
         locked,
         prunable,
@@ -115,7 +121,7 @@ fn worktree_info_from_linked(
 fn inspect_head(repo: &Repository) -> Result<(Option<String>, Option<String>, bool)> {
     match repo.head() {
         Ok(head) => {
-            let branch = head.shorthand().map(ToOwned::to_owned);
+            let branch = head.shorthand().ok().map(ToOwned::to_owned);
             let detached = !head.is_branch();
             let head = head
                 .peel_to_commit()
@@ -127,6 +133,8 @@ fn inspect_head(repo: &Repository) -> Result<(Option<String>, Option<String>, bo
             let branch = repo
                 .find_reference("HEAD")?
                 .symbolic_target()
+                .ok()
+                .flatten()
                 .map(|name| name.trim_start_matches("refs/heads/").to_owned());
             Ok((None, branch, false))
         }
@@ -138,7 +146,7 @@ fn open_linked_repo_from_private_gitdir(
     control_repo: &Repository,
     worktree: &Worktree,
 ) -> Result<Option<Repository>> {
-    let Some(name) = worktree.name() else {
+    let Some(name) = worktree.name().ok().flatten() else {
         return Ok(None);
     };
     let private_gitdir = control_repo.commondir().join("worktrees").join(name);

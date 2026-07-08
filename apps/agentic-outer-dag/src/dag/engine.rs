@@ -26,6 +26,222 @@ const DETECTING_PR_BACKOFFS: [Duration; 4] = [
 ];
 const DETECTING_PR_MAX_ATTEMPTS: usize = DETECTING_PR_BACKOFFS.len() + 1;
 const SYNC_WITH_MAIN_COMMAND: &str = "sync_with_main_and_resolve_conflicts";
+const REPRESENTATIVE_BOT_THREAD_LIMIT: usize = 5;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReviewThreadRef {
+    comment_id: u64,
+    url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UnresolvedReviewThreadsSnapshot {
+    total_unresolved: usize,
+    bot_unresolved: usize,
+    representative_bot_refs: Vec<ReviewThreadRef>,
+}
+
+impl UnresolvedReviewThreadsSnapshot {
+    fn human_unresolved_threads(&self) -> usize {
+        self.total_unresolved.saturating_sub(self.bot_unresolved)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResolveProgressEvidence {
+    None,
+    AssistantEvidence,
+    UnresolvedThreadsImproved,
+    AssistantAndImproved,
+}
+
+impl ResolveProgressEvidence {
+    fn is_progress(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+fn classify_resolve_progress(
+    before: &UnresolvedReviewThreadsSnapshot,
+    after: &UnresolvedReviewThreadsSnapshot,
+    diagnostics: Option<&crate::state::OpenCodeDiagnostics>,
+) -> ResolveProgressEvidence {
+    let assistant_evidence = diagnostics
+        .and_then(|diagnostics| diagnostics.final_assistant_message_id.as_deref())
+        .is_some();
+
+    let improved = after.bot_unresolved < before.bot_unresolved || after.bot_unresolved == 0;
+
+    match (assistant_evidence, improved) {
+        (true, true) => ResolveProgressEvidence::AssistantAndImproved,
+        (true, false) => ResolveProgressEvidence::AssistantEvidence,
+        (false, true) => ResolveProgressEvidence::UnresolvedThreadsImproved,
+        (false, false) => ResolveProgressEvidence::None,
+    }
+}
+
+fn format_review_thread_refs(review_thread_refs: &[ReviewThreadRef]) -> String {
+    if review_thread_refs.is_empty() {
+        return "[]".to_string();
+    }
+
+    review_thread_refs
+        .iter()
+        .map(|thread| format!("#{} {}", thread.comment_id, thread.url))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ResolvePreDispatchAction {
+    ReadyForHumanReview { details: String },
+    ManualHandoff { details: String },
+    DispatchResolve,
+}
+
+fn decide_resolve_pre_dispatch(
+    before: &UnresolvedReviewThreadsSnapshot,
+    resolve_comments_runs: u32,
+    max_cycles: u32,
+) -> ResolvePreDispatchAction {
+    if before.bot_unresolved == 0 {
+        return ResolvePreDispatchAction::ReadyForHumanReview {
+            details: format!(
+                "no unresolved bot review threads; skipping resolve_pr_comments (total unresolved threads: {}, human unresolved threads: {})",
+                before.total_unresolved,
+                before.human_unresolved_threads()
+            ),
+        };
+    }
+
+    if max_cycles == 0 || resolve_comments_runs >= max_cycles {
+        return ResolvePreDispatchAction::ManualHandoff {
+            details: format!(
+                "max_review_cycles exhausted before resolve_pr_comments: resolve_comments_runs={resolve_comments_runs}/{max_cycles}; unresolved bot threads={}; unresolved human threads={}; representative bot thread parents: {}",
+                before.bot_unresolved,
+                before.human_unresolved_threads(),
+                format_review_thread_refs(&before.representative_bot_refs),
+            ),
+        };
+    }
+
+    ResolvePreDispatchAction::DispatchResolve
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ResolvePostDispatchAction {
+    ManualHandoff { details: String },
+    ReadyForHumanReview { details: String },
+    LoopAgain { details: String },
+}
+
+fn decide_resolve_post_dispatch(
+    before: &UnresolvedReviewThreadsSnapshot,
+    after: &UnresolvedReviewThreadsSnapshot,
+    progress: ResolveProgressEvidence,
+    resolve_comments_runs: u32,
+    max_cycles: u32,
+) -> ResolvePostDispatchAction {
+    if !progress.is_progress() {
+        return ResolvePostDispatchAction::ManualHandoff {
+            details: format!(
+                "resolve_pr_comments completed without progress evidence (no assistant evidence and no unresolved-thread improvement). bot unresolved {}→{}, total unresolved {}→{}, human unresolved {}→{}. Representative bot thread parents: {}",
+                before.bot_unresolved,
+                after.bot_unresolved,
+                before.total_unresolved,
+                after.total_unresolved,
+                before.human_unresolved_threads(),
+                after.human_unresolved_threads(),
+                format_review_thread_refs(&after.representative_bot_refs),
+            ),
+        };
+    }
+
+    if after.bot_unresolved == 0 {
+        return ResolvePostDispatchAction::ReadyForHumanReview {
+            details: format!(
+                "resolved all bot threads after {resolve_comments_runs} evidence-backed resolve cycle(s); remaining unresolved threads total={}; remaining unresolved human threads={}",
+                after.total_unresolved,
+                after.human_unresolved_threads(),
+            ),
+        };
+    }
+
+    if resolve_comments_runs >= max_cycles {
+        return ResolvePostDispatchAction::ManualHandoff {
+            details: format!(
+                "max_review_cycles exhausted: resolve_comments_runs={resolve_comments_runs}/{max_cycles}; unresolved bot threads remaining={}; unresolved human threads remaining={}; representative bot thread parents: {}",
+                after.bot_unresolved,
+                after.human_unresolved_threads(),
+                format_review_thread_refs(&after.representative_bot_refs),
+            ),
+        };
+    }
+
+    ResolvePostDispatchAction::LoopAgain {
+        details: format!(
+            "unresolved bot threads remain ({}); looping resolve_pr_comments cycle {}/{}",
+            after.bot_unresolved,
+            resolve_comments_runs + 1,
+            max_cycles,
+        ),
+    }
+}
+
+async fn fetch_unresolved_review_threads_snapshot(
+    pr_number: u64,
+    representative_limit: usize,
+) -> Result<UnresolvedReviewThreadsSnapshot> {
+    use pr_comments::PrComments;
+    use pr_comments::models::CommentSourceType;
+
+    let pr_comments = PrComments::new()?;
+
+    let mut total_unresolved = None;
+    let mut bot_unresolved = 0usize;
+    let mut representative_bot_refs = Vec::new();
+
+    loop {
+        let page = pr_comments
+            .get_comments(Some(pr_number), Some(CommentSourceType::All), Some(false))
+            .await?;
+
+        total_unresolved.get_or_insert(page.total_threads);
+
+        for parent in page
+            .comments
+            .iter()
+            .filter(|comment| comment.in_reply_to_id.is_none())
+        {
+            if parent.is_bot {
+                bot_unresolved += 1;
+                if representative_bot_refs.len() < representative_limit {
+                    representative_bot_refs.push(ReviewThreadRef {
+                        comment_id: parent.id,
+                        url: parent.html_url.clone(),
+                    });
+                }
+            }
+        }
+
+        if !page.has_more {
+            break;
+        }
+    }
+
+    Ok(UnresolvedReviewThreadsSnapshot {
+        total_unresolved: total_unresolved.unwrap_or(0),
+        bot_unresolved,
+        representative_bot_refs,
+    })
+}
+
+const _: fn(
+    &UnresolvedReviewThreadsSnapshot,
+    &UnresolvedReviewThreadsSnapshot,
+    Option<&crate::state::OpenCodeDiagnostics>,
+) -> ResolveProgressEvidence = classify_resolve_progress;
+const _: fn(ResolveProgressEvidence) -> bool = ResolveProgressEvidence::is_progress;
 
 pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
@@ -80,6 +296,10 @@ pub fn planned_actions_for_start() -> Vec<PlannedAction> {
         PlannedAction {
             id: "opencode.run.resolve_pr_comments",
             summary: "Lazily start OpenCode if needed and run resolve_pr_comments",
+        },
+        PlannedAction {
+            id: "opencode.run.describe_pr_refresh",
+            summary: "Re-check PR head SHA and rerun describe_pr when needed before completion",
         },
         PlannedAction {
             id: "stop.ready_for_human_review",
@@ -194,6 +414,70 @@ fn persist_detected_pr(state: &mut RunState, pr: &pr_comments::models::PrRef) {
     state.pr.head_sha = Some(pr.head_sha.clone());
     state.pr.last_observed_head_sha = Some(pr.head_sha.clone());
     state.pr.is_draft = Some(pr.is_draft);
+}
+
+fn baseline_last_described_head_sha_after_pr_create(state: &mut RunState, head_sha: &str) {
+    if state.counters.ticket_to_pr_runs > 0 && state.pr.last_described_head_sha.is_none() {
+        state.pr.last_described_head_sha = Some(head_sha.to_string());
+    }
+}
+
+fn transition_to_ready_for_human_review(state: &mut RunState, details: impl Into<String>) {
+    state.stage.kind = StageKind::StoppedReadyForHumanReview;
+    state.stage.details = Some(details.into());
+}
+
+enum DescribePrRefreshDecision {
+    Stop,
+    Rerun { head_sha: String },
+}
+
+fn prepare_dispatch_describe_pr_stage(
+    state: &mut RunState,
+    lookup: DetectedPrLookup,
+) -> DescribePrRefreshDecision {
+    record_pr_lookup(state, StageKind::DispatchingDescribePr, &lookup);
+
+    let Some(pr) = lookup.pr else {
+        transition_to_stopped_failed(
+            state,
+            format!(
+                "describe_pr refresh could not re-detect an open PR for branch '{}'",
+                state.worktree.branch
+            ),
+        );
+        return DescribePrRefreshDecision::Stop;
+    };
+
+    let head_sha = pr.head_sha.clone();
+    persist_detected_pr(state, &pr);
+
+    if state.pr.last_described_head_sha.as_deref() == Some(head_sha.as_str()) {
+        transition_to_ready_for_human_review(
+            state,
+            "completed one CodeRabbit resolve cycle; describe_pr already covered current PR head SHA",
+        );
+        return DescribePrRefreshDecision::Stop;
+    }
+
+    DescribePrRefreshDecision::Rerun { head_sha }
+}
+
+fn finish_dispatch_describe_pr_stage_after_rerun(
+    state: &mut RunState,
+    head_sha: String,
+) -> DescribePrRefreshDecision {
+    if stages::is_paused(&state.stage.kind) || matches!(state.stage.kind, StageKind::StoppedFailed)
+    {
+        return DescribePrRefreshDecision::Stop;
+    }
+
+    state.pr.last_described_head_sha = Some(head_sha);
+    transition_to_ready_for_human_review(
+        state,
+        "completed one CodeRabbit resolve cycle and refreshed PR description",
+    );
+    DescribePrRefreshDecision::Stop
 }
 
 async fn ensure_pr_ready_for_review<MarkReady, MarkReadyFut>(
@@ -471,13 +755,14 @@ impl DagEngine {
                     record_pr_lookup(&mut state, StageKind::DetectingPr, &lookup);
                     if let Some(pr) = lookup.pr {
                         let github = &self.github;
-                        ensure_pr_ready_for_review(
+                        let pr = ensure_pr_ready_for_review(
                             &mut state,
                             &pr,
                             "post_ticket_to_pr_detection",
                             |pr| async move { github.mark_ready_for_review(&pr).await },
                         )
                         .await?;
+                        baseline_last_described_head_sha_after_pr_create(&mut state, &pr.head_sha);
                         state.stage.kind = StageKind::FreshnessBeforeCoderabbitWait;
                         state.stage.details = None;
                     } else {
@@ -614,22 +899,138 @@ impl DagEngine {
                     }
                 }
                 StageKind::DispatchingResolvePrComments => {
-                    self.run_supervised_command(
-                        &mut state,
-                        StageKind::DispatchingResolvePrComments,
-                        "resolve_pr_comments",
-                        None,
-                    )
-                    .await?;
-                    if stages::is_paused(&state.stage.kind)
-                        || matches!(state.stage.kind, StageKind::StoppedFailed)
-                    {
+                    let Some(pr_number) = state.pr.number else {
+                        transition_to_stopped_failed(
+                            &mut state,
+                            "missing PR number in state before resolve_pr_comments",
+                        );
+                        ThoughtsStateStore::save(&state)?;
                         return Ok(());
+                    };
+
+                    let max_cycles = state.settings.max_review_cycles;
+
+                    loop {
+                        let before = match fetch_unresolved_review_threads_snapshot(
+                            pr_number,
+                            REPRESENTATIVE_BOT_THREAD_LIMIT,
+                        )
+                        .await
+                        {
+                            Ok(snapshot) => snapshot,
+                            Err(error) => {
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(format!(
+                                    "failed to measure unresolved PR review threads before resolve_pr_comments: {error}"
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                        };
+
+                        match decide_resolve_pre_dispatch(
+                            &before,
+                            state.counters.resolve_comments_runs,
+                            max_cycles,
+                        ) {
+                            ResolvePreDispatchAction::ReadyForHumanReview { details } => {
+                                state.stage.kind = StageKind::DispatchingDescribePr;
+                                state.stage.details = Some(details);
+                                ThoughtsStateStore::save(&state)?;
+                                break;
+                            }
+                            ResolvePreDispatchAction::ManualHandoff { details } => {
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(details);
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                            ResolvePreDispatchAction::DispatchResolve => {}
+                        }
+
+                        self.run_supervised_command(
+                            &mut state,
+                            StageKind::DispatchingResolvePrComments,
+                            "resolve_pr_comments",
+                            None,
+                        )
+                        .await?;
+                        if stages::is_paused(&state.stage.kind)
+                            || matches!(state.stage.kind, StageKind::StoppedFailed)
+                        {
+                            return Ok(());
+                        }
+
+                        let after = match fetch_unresolved_review_threads_snapshot(
+                            pr_number,
+                            REPRESENTATIVE_BOT_THREAD_LIMIT,
+                        )
+                        .await
+                        {
+                            Ok(snapshot) => snapshot,
+                            Err(error) => {
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(format!(
+                                    "failed to measure unresolved PR review threads after resolve_pr_comments: {error}"
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                        };
+
+                        let progress = classify_resolve_progress(
+                            &before,
+                            &after,
+                            state.opencode.last_diagnostics.as_ref(),
+                        );
+
+                        if progress.is_progress() {
+                            state.counters.resolve_comments_runs += 1;
+                        }
+
+                        match decide_resolve_post_dispatch(
+                            &before,
+                            &after,
+                            progress,
+                            state.counters.resolve_comments_runs,
+                            max_cycles,
+                        ) {
+                            ResolvePostDispatchAction::ManualHandoff { details } => {
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(details);
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                            ResolvePostDispatchAction::ReadyForHumanReview { details } => {
+                                state.stage.kind = StageKind::DispatchingDescribePr;
+                                state.stage.details = Some(details);
+                                ThoughtsStateStore::save(&state)?;
+                                break;
+                            }
+                            ResolvePostDispatchAction::LoopAgain { details } => {
+                                state.stage.kind = StageKind::DispatchingResolvePrComments;
+                                state.stage.details = Some(details);
+                                ThoughtsStateStore::save(&state)?;
+                            }
+                        }
                     }
-                    state.counters.resolve_comments_runs += 1;
-                    state.stage.kind = StageKind::StoppedReadyForHumanReview;
-                    state.stage.details =
-                        Some("completed one CodeRabbit resolve cycle".to_string());
+                }
+                StageKind::DispatchingDescribePr => {
+                    let branch = state.worktree.branch.clone();
+                    let lookup = self.github.detect_open_pr_from_branch(&branch).await?;
+                    match prepare_dispatch_describe_pr_stage(&mut state, lookup) {
+                        DescribePrRefreshDecision::Stop => {}
+                        DescribePrRefreshDecision::Rerun { head_sha } => {
+                            self.run_supervised_command(
+                                &mut state,
+                                StageKind::DispatchingDescribePr,
+                                "describe_pr",
+                                None,
+                            )
+                            .await?;
+                            finish_dispatch_describe_pr_stage_after_rerun(&mut state, head_sha);
+                        }
+                    }
                     ThoughtsStateStore::save(&state)?;
                     return Ok(());
                 }
@@ -898,13 +1299,24 @@ where
 mod tests {
     use super::CheckSuite422Recovery;
     use super::DagEngine;
+    use super::DescribePrRefreshDecision;
     use super::DraftSkipRecovery;
+    use super::ResolvePostDispatchAction;
+    use super::ResolvePreDispatchAction;
+    use super::ResolveProgressEvidence;
+    use super::UnresolvedReviewThreadsSnapshot;
+    use super::baseline_last_described_head_sha_after_pr_create;
+    use super::classify_resolve_progress;
+    use super::decide_resolve_post_dispatch;
+    use super::decide_resolve_pre_dispatch;
     use super::detecting_pr_retry_attempt_number;
     use super::ensure_pr_ready_for_review;
+    use super::finish_dispatch_describe_pr_stage_after_rerun;
     use super::is_check_suites_no_commit_found_422;
     use super::persist_stop_state_before_handoff;
     use super::planned_actions_for_start;
     use super::poll_interval_sleep_duration;
+    use super::prepare_dispatch_describe_pr_stage;
     use super::record_pr_lookup;
     use super::recover_from_check_suite_no_commit_found_422;
     use super::recover_from_draft_review_skip;
@@ -914,6 +1326,7 @@ mod tests {
     use super::transition_to_stopped_failed;
     use super::transition_to_ticket_to_pr_no_pr_handoff;
     use crate::github::pr::DetectedPrLookup;
+    use crate::state::OpenCodeDiagnostics;
     use crate::state::RunState;
     use crate::state::StageKind;
     use crate::test_support::process_state_lock;
@@ -924,10 +1337,14 @@ mod tests {
     use std::time::Duration;
 
     fn sample_pr(is_draft: bool) -> PrRef {
+        sample_pr_with_head_sha("abc123", is_draft)
+    }
+
+    fn sample_pr_with_head_sha(head_sha: &str, is_draft: bool) -> PrRef {
         PrRef {
             number: 258,
             url: "https://example.invalid/pr/258".to_string(),
-            head_sha: "abc123".to_string(),
+            head_sha: head_sha.to_string(),
             node_id: "PR_258".to_string(),
             is_draft,
         }
@@ -957,11 +1374,163 @@ mod tests {
         .into()
     }
 
+    fn sample_unresolved_snapshot(
+        total_unresolved_threads: usize,
+        bot_unresolved_threads: usize,
+    ) -> UnresolvedReviewThreadsSnapshot {
+        UnresolvedReviewThreadsSnapshot {
+            total_unresolved: total_unresolved_threads,
+            bot_unresolved: bot_unresolved_threads,
+            representative_bot_refs: Vec::new(),
+        }
+    }
+
+    fn sample_review_thread_ref(comment_id: u64) -> super::ReviewThreadRef {
+        super::ReviewThreadRef {
+            comment_id,
+            url: format!("https://example.invalid/comments/{comment_id}"),
+        }
+    }
+
+    fn sample_diagnostics(final_assistant_message_id: Option<&str>) -> OpenCodeDiagnostics {
+        OpenCodeDiagnostics {
+            checked_at: "2026-01-01T00:00:00Z".to_string(),
+            command_message_id: Some("msg-command".to_string()),
+            final_assistant_message_id: final_assistant_message_id.map(str::to_string),
+            final_finish_reason: None,
+            guard_detected: false,
+            final_tool_error: None,
+            command_transport_error: None,
+        }
+    }
+
     #[test]
     fn poll_interval_sleep_duration_clamps_to_one_second_minimum() {
         assert_eq!(poll_interval_sleep_duration(0), Duration::from_secs(1));
         assert_eq!(poll_interval_sleep_duration(1), Duration::from_secs(1));
         assert_eq!(poll_interval_sleep_duration(5), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn classify_resolve_progress_requires_assistant_or_improvement() {
+        let before = sample_unresolved_snapshot(7, 5);
+        let after = sample_unresolved_snapshot(7, 5);
+
+        assert_eq!(
+            classify_resolve_progress(&before, &after, None),
+            ResolveProgressEvidence::None
+        );
+    }
+
+    #[test]
+    fn classify_resolve_progress_accepts_assistant_evidence() {
+        let before = sample_unresolved_snapshot(7, 5);
+        let after = sample_unresolved_snapshot(7, 5);
+        let diagnostics = sample_diagnostics(Some("msg-assistant"));
+
+        assert_eq!(
+            classify_resolve_progress(&before, &after, Some(&diagnostics)),
+            ResolveProgressEvidence::AssistantEvidence
+        );
+    }
+
+    #[test]
+    fn classify_resolve_progress_accepts_thread_improvement_without_assistant() {
+        let before = sample_unresolved_snapshot(5, 5);
+        let after = sample_unresolved_snapshot(5, 3);
+
+        assert_eq!(
+            classify_resolve_progress(&before, &after, None),
+            ResolveProgressEvidence::UnresolvedThreadsImproved
+        );
+    }
+
+    #[test]
+    fn classify_resolve_progress_ignores_human_only_total_unresolved_drop() {
+        let before = sample_unresolved_snapshot(7, 5);
+        let after = sample_unresolved_snapshot(5, 5);
+
+        assert_eq!(
+            classify_resolve_progress(&before, &after, None),
+            ResolveProgressEvidence::None
+        );
+    }
+
+    #[test]
+    fn unresolved_review_threads_snapshot_reports_human_thread_count() {
+        let snapshot = sample_unresolved_snapshot(7, 5);
+
+        assert_eq!(snapshot.human_unresolved_threads(), 2);
+    }
+
+    #[test]
+    fn resolve_loop_stops_ready_for_human_review_when_no_bot_threads_precheck() {
+        let before = sample_unresolved_snapshot(3, 0);
+
+        let action = decide_resolve_pre_dispatch(&before, 2, 5);
+
+        assert!(matches!(
+            action,
+            ResolvePreDispatchAction::ReadyForHumanReview { .. }
+        ));
+    }
+
+    #[test]
+    fn resolve_loop_stops_manual_handoff_on_no_assistant_and_no_improvement() {
+        let before = UnresolvedReviewThreadsSnapshot {
+            total_unresolved: 4,
+            bot_unresolved: 3,
+            representative_bot_refs: vec![sample_review_thread_ref(101)],
+        };
+        let after = UnresolvedReviewThreadsSnapshot {
+            total_unresolved: 4,
+            bot_unresolved: 3,
+            representative_bot_refs: vec![sample_review_thread_ref(101)],
+        };
+        let progress = classify_resolve_progress(&before, &after, None);
+
+        let action = decide_resolve_post_dispatch(&before, &after, progress, 2, 5);
+
+        let ResolvePostDispatchAction::ManualHandoff { details } = action else {
+            panic!("expected manual handoff");
+        };
+        assert!(details.contains("bot unresolved 3→3"));
+        assert!(details.contains("https://example.invalid/comments/101"));
+    }
+
+    #[test]
+    fn resolve_loop_enforces_max_review_cycles_exhaustion() {
+        let before = UnresolvedReviewThreadsSnapshot {
+            total_unresolved: 4,
+            bot_unresolved: 3,
+            representative_bot_refs: vec![sample_review_thread_ref(202)],
+        };
+
+        let action = decide_resolve_pre_dispatch(&before, 5, 5);
+
+        let ResolvePreDispatchAction::ManualHandoff { details } = action else {
+            panic!("expected manual handoff");
+        };
+        assert!(details.contains("max_review_cycles exhausted"));
+    }
+
+    #[test]
+    fn resolve_loop_continues_when_progress_and_unresolved_remain_and_cycles_left() {
+        let before = sample_unresolved_snapshot(5, 4);
+        let after = sample_unresolved_snapshot(4, 3);
+
+        let action = decide_resolve_post_dispatch(
+            &before,
+            &after,
+            ResolveProgressEvidence::UnresolvedThreadsImproved,
+            2,
+            5,
+        );
+
+        assert!(matches!(
+            action,
+            ResolvePostDispatchAction::LoopAgain { .. }
+        ));
     }
 
     #[test]
@@ -999,8 +1568,162 @@ mod tests {
                 "freshness.before_coderabbit_wait",
                 "github.coderabbit.wait",
                 "opencode.run.resolve_pr_comments",
+                "opencode.run.describe_pr_refresh",
                 "stop.ready_for_human_review",
             ]
+        );
+    }
+
+    #[test]
+    fn baseline_last_described_head_sha_sets_once_after_pr_create() {
+        let mut state = sample_state();
+        state.counters.ticket_to_pr_runs = 1;
+
+        baseline_last_described_head_sha_after_pr_create(&mut state, "abc123");
+
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn baseline_last_described_head_sha_does_not_overwrite_existing_value() {
+        let mut state = sample_state();
+        state.counters.ticket_to_pr_runs = 1;
+        state.pr.last_described_head_sha = Some("already-set".to_string());
+
+        baseline_last_described_head_sha_after_pr_create(&mut state, "abc123");
+
+        assert_eq!(
+            state.pr.last_described_head_sha.as_deref(),
+            Some("already-set")
+        );
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_skips_when_head_sha_matches_baseline() {
+        let mut state = sample_state();
+        state.pr.last_described_head_sha = Some("abc123".to_string());
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr(false)),
+            },
+        );
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedReadyForHumanReview);
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_requests_rerun_when_head_sha_differs() {
+        let mut state = sample_state();
+        state.pr.last_described_head_sha = Some("old-sha".to_string());
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr_with_head_sha("new-sha", false)),
+            },
+        );
+
+        assert!(matches!(
+            decision,
+            DescribePrRefreshDecision::Rerun { ref head_sha } if head_sha == "new-sha"
+        ));
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("old-sha"));
+        assert_eq!(state.pr.head_sha.as_deref(), Some("new-sha"));
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_reruns_when_baseline_is_unknown() {
+        let mut state = sample_state();
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: None,
+                pr: Some(sample_pr_with_head_sha("new-sha", false)),
+            },
+        );
+
+        assert!(matches!(
+            decision,
+            DescribePrRefreshDecision::Rerun { ref head_sha } if head_sha == "new-sha"
+        ));
+        assert_eq!(state.pr.last_described_head_sha, None);
+    }
+
+    #[test]
+    fn finish_dispatch_describe_pr_stage_after_rerun_preserves_stopped_failed() {
+        let mut state = sample_state();
+        state.pr.last_described_head_sha = Some("old-sha".to_string());
+        transition_to_stopped_failed(&mut state, "describe_pr failed");
+
+        let decision =
+            finish_dispatch_describe_pr_stage_after_rerun(&mut state, "new-sha".to_string());
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedFailed);
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("old-sha"));
+    }
+
+    #[test]
+    fn finish_dispatch_describe_pr_stage_after_rerun_updates_baseline_and_stops_ready() {
+        let mut state = sample_state();
+        state.stage.kind = StageKind::DispatchingDescribePr;
+
+        let decision =
+            finish_dispatch_describe_pr_stage_after_rerun(&mut state, "new-sha".to_string());
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedReadyForHumanReview);
+        assert_eq!(state.pr.last_described_head_sha.as_deref(), Some("new-sha"));
+    }
+
+    #[test]
+    fn prepare_dispatch_describe_pr_stage_stops_failed_when_pr_cannot_be_redetected() {
+        let mut state = sample_state();
+
+        let decision = prepare_dispatch_describe_pr_stage(
+            &mut state,
+            DetectedPrLookup {
+                requested_branch: "feature/eng-992".to_string(),
+                current_branch: Some("feature/eng-992".to_string()),
+                repo_owner: "allisoneer".to_string(),
+                repo_name: "agentic_auxilary".to_string(),
+                token_source: Some("GH_TOKEN".to_string()),
+                empty_result_reason: Some("no_open_pull_requests_matched_branch".to_string()),
+                pr: None,
+            },
+        );
+
+        assert!(matches!(decision, DescribePrRefreshDecision::Stop));
+        assert_eq!(state.stage.kind, StageKind::StoppedFailed);
+        assert!(
+            state
+                .stage
+                .details
+                .as_deref()
+                .expect("failure detail should exist")
+                .contains("could not re-detect an open PR")
         );
     }
 
