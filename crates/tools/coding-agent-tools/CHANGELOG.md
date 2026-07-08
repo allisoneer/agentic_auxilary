@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.6.0] - 2026-07-08
+
+### ⛰️  Features
+- *(cli_tools)* Add configurable just_execute page lines
+
+### 🐛 Bug Fixes
+- *(just)* Remove output mode from execute pagination
 ## [0.5.5] - 2026-07-02
 
 ### ⚙️  Miscellaneous
