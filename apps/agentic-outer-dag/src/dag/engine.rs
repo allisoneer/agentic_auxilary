@@ -69,9 +69,7 @@ fn classify_resolve_progress(
         .and_then(|diagnostics| diagnostics.final_assistant_message_id.as_deref())
         .is_some();
 
-    let improved = after.bot_unresolved < before.bot_unresolved
-        || after.total_unresolved < before.total_unresolved
-        || after.bot_unresolved == 0;
+    let improved = after.bot_unresolved < before.bot_unresolved || after.bot_unresolved == 0;
 
     match (assistant_evidence, improved) {
         (true, true) => ResolveProgressEvidence::AssistantAndImproved,
@@ -1199,12 +1197,23 @@ mod tests {
 
     #[test]
     fn classify_resolve_progress_accepts_thread_improvement_without_assistant() {
+        let before = sample_unresolved_snapshot(5, 5);
+        let after = sample_unresolved_snapshot(5, 3);
+
+        assert_eq!(
+            classify_resolve_progress(&before, &after, None),
+            ResolveProgressEvidence::UnresolvedThreadsImproved
+        );
+    }
+
+    #[test]
+    fn classify_resolve_progress_ignores_human_only_total_unresolved_drop() {
         let before = sample_unresolved_snapshot(7, 5);
         let after = sample_unresolved_snapshot(5, 5);
 
         assert_eq!(
             classify_resolve_progress(&before, &after, None),
-            ResolveProgressEvidence::UnresolvedThreadsImproved
+            ResolveProgressEvidence::None
         );
     }
 
