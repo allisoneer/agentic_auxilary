@@ -71,6 +71,7 @@ anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
 schemars = { version = "1", features = ["derive"] }
 dirs = "6"
+git2 = "0.21"
 secrecy = "0.10"
 # TODO(2): Replace atomicwrites with a maintained tempfile-based atomic write helper
 # (and centralize the pattern in a small utility).

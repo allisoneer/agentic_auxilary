@@ -40,7 +40,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 
 # Git operations
-git2 = { version = "0.20", features = ["vendored-openssl"] }
+git2 = { workspace = true, features = ["vendored-openssl"] }
 
 # Serialization
 serde = { workspace = true }

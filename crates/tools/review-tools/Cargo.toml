@@ -21,7 +21,7 @@ agentic-tools-core = { workspace = true }
 agentic-tools-utils = { workspace = true }
 claudecode = { workspace = true }
 futures = "0.3"
-git2 = "0.20"
+git2 = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

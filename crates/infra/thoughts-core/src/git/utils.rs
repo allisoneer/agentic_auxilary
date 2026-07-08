@@ -137,6 +137,8 @@ pub fn get_remote_url(repo_path: &Path) -> Result<String> {
 
     remote
         .url()
+        .ok()
+        .and_then(|url| (!url.is_empty()).then_some(url))
         .ok_or_else(|| anyhow::anyhow!("Remote 'origin' has no URL"))
         .map(std::string::ToString::to_string)
 }
@@ -165,7 +167,7 @@ pub fn try_get_origin_identity(repo_path: &Path) -> Result<Option<RepoIdentity>>
         }
     };
 
-    let Some(url) = remote.url() else {
+    let Some(url) = remote.url().ok().filter(|url| !url.is_empty()) else {
         return Ok(None);
     };
 
@@ -200,7 +202,7 @@ pub fn get_head_state(repo_path: &Path) -> Result<HeadState> {
         Err(e) if e.code() == ErrorCode::UnbornBranch => {
             // Extract branch name from symbolic HEAD
             let head_ref = repo.find_reference("HEAD")?;
-            let name = head_ref.symbolic_target().map_or_else(
+            let name = head_ref.symbolic_target().ok().flatten().map_or_else(
                 || "unknown".to_string(),
                 |s| s.strip_prefix("refs/heads/").unwrap_or(s).to_string(),
             );
