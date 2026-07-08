@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.24] - 2026-07-08
+
+### 🐛 Bug Fixes
+- *(deps)* Update git2 and crossbeam for cargo deny
 ## [0.1.23] - 2026-07-05
 
 ### ⚙️  Miscellaneous

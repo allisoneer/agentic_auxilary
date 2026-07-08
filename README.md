@@ -86,7 +86,7 @@ anthropic-async = "0.5.4"
 <!-- BEGIN:autodeps {"crates":["opencode_rs"], "fence":"toml", "header":"[dependencies]"} -->
 ```toml
 [dependencies]
-opencode_rs = "0.13.2"
+opencode_rs = "0.13.3"
 ```
 <!-- END:autodeps -->
 

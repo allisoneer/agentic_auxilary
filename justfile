@@ -3,22 +3,11 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# CI/output mode detection
-
 ci := env("CI", "false")
-output_mode := env("OUTPUT_MODE", if ci == "true" { "normal" } else { "minimal" })
-
-# Execution wrapper: only wrap in minimal mode
-
-exec := if output_mode == "minimal" { "tools/agent-wrap.sh " } else { "" }
-
-# Nextest args based on mode
-
-nextest_args := if output_mode == "minimal" { "--status-level fail --failure-output immediate --hide-progress-bar" } else if output_mode == "verbose" { "--status-level all --verbose" } else { "" }
-
-# Nextest profile based on mode and CI
-
-nextest_profile := if output_mode == "minimal" { "minimal" } else if ci == "true" { "ci" } else { env("NEXTEST_PROFILE", "default") }
+wrap := "tools/agent-wrap.sh"
+nextest_profile := if ci == "true" { "ci" } else if ci == "1" { "ci" } else { env("NEXTEST_PROFILE", "minimal") }
+nextest_verbose := env("NEXTEST_VERBOSE", "0")
+nextest_args := if nextest_verbose == "1" { "--status-level all --verbose" } else if nextest_verbose == "true" { "--status-level all --verbose" } else { "" }
 
 # BEGIN:xtask:autogen justfile:mcp-servers
 
@@ -32,11 +21,14 @@ help:
     @echo "Workspace commands:"
     @echo "  just check            # fmt-check + clippy for entire workspace"
     @echo "  just fix              # auto-fix clippy warnings for entire workspace"
-    @echo "  just test             # run tests for entire workspace"
+    @echo "  just test             # local: mcp-test + nextest (requires Node/npx)"
+    @echo "  just test-ci          # CI-safe: nextest only (no Node/npx)"
     @echo "  just build            # build entire workspace"
     @echo "  just clean            # clean workspace + vendored Codex artifacts"
     @echo "  just fmt              # format entire workspace"
     @echo "  just fmt-check        # check formatting for entire workspace"
+    @echo "  just test-integration # local: include #[ignore] integration tests"
+    @echo "  just test-thoughts-ignored-ci # CI-safe: ignored-only thoughts tests"
     @echo ""
     @echo "Vendored Codex commands:"
     @echo "  just codex-check      # check vendored Codex workspace"
@@ -55,30 +47,40 @@ help:
     @echo "  just xtask-sync-check # check if sync is needed (for CI)"
     @echo "  just xtask-verify-check # full verification including generated files"
     @echo ""
-    @echo "OUTPUT_MODE: minimal (local default) | normal (CI default) | verbose"
+    @echo "Interactive local root recipes may show wrapper summaries; CI and non-TTY runs pass through raw output."
+    @echo "Repeat the same cli_just_execute call for the next cached page, or use rerun=true for a fresh execution."
+    @echo "Use AGENTIC_WRAP=0 for full local passthrough output."
+    @echo "Use NEXTEST_PROFILE=<profile> or NEXTEST_VERBOSE=1 to adjust local nextest behavior."
 
 # Workspace-wide commands
 
 check: fmt-check-just fmt-check
-    {{ exec }}cargo clippy --workspace --all-targets -- -D warnings
+    AGENTIC_TASK_NAME=check {{ wrap }} cargo clippy --workspace --all-targets -- -D warnings
 
 fix:
-    cargo clippy --workspace --all-targets --fix --allow-dirty
+    AGENTIC_TASK_NAME=fix {{ wrap }} cargo clippy --workspace --all-targets --fix --allow-dirty
 
 test: mcp-test
-    {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
+    AGENTIC_TASK_NAME=test {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
+
+test-ci:
+    AGENTIC_TASK_NAME=test-ci {{ wrap }} cargo nextest run --workspace --profile ci {{ nextest_args }}
 
 # Run integration tests (includes ignored tests that require git setup)
 test-integration: mcp-test
-    THOUGHTS_INTEGRATION_TESTS=1 {{ exec }}cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} -- --include-ignored
+    THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-integration {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} -- --include-ignored
+
+# Run ignored-only thoughts integration tests in CI without duplicating normal runs.
+test-thoughts-ignored-ci:
+    THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-thoughts-ignored-ci {{ wrap }} cargo nextest run -p thoughts-tool -p thoughts-bin --profile ci {{ nextest_args }} -- --ignored
 
 build:
-    {{ exec }}cargo build --workspace
+    AGENTIC_TASK_NAME=build {{ wrap }} cargo build --workspace
 
 clean: clean-workspace clean-codex
 
 clean-workspace:
-    {{ exec }}cargo clean --workspace
+    AGENTIC_TASK_NAME=clean-workspace {{ wrap }} cargo clean --workspace
 
 clean-codex:
     #!/usr/bin/env bash
@@ -86,7 +88,7 @@ clean-codex:
 
     MANIFEST="vendor/codex/codex-rs/Cargo.toml"
     if [ -f "$MANIFEST" ]; then
-      {{ exec }}cargo clean --manifest-path "$MANIFEST"
+      cargo clean --manifest-path "$MANIFEST"
     fi
 
 codex-check:
@@ -102,16 +104,16 @@ codex-run *args:
     cd vendor/codex/codex-rs && cargo run --bin codex -- {{ args }}
 
 fmt:
-    {{ exec }}cargo +nightly fmt --all
-    {{ exec }}taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
+    AGENTIC_TASK_NAME=fmt-rust {{ wrap }} cargo +nightly fmt --all
+    AGENTIC_TASK_NAME=fmt-toml {{ wrap }} taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
 
 fmt-check:
-    {{ exec }}cargo +nightly fmt --all -- --check
-    {{ exec }}taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
+    AGENTIC_TASK_NAME=fmt-check-rust {{ wrap }} cargo +nightly fmt --all -- --check
+    AGENTIC_TASK_NAME=fmt-check-toml {{ wrap }} taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
 
 # Security audit with cargo-deny
 deny:
-    {{ exec }}cargo deny check
+    AGENTIC_TASK_NAME=deny {{ wrap }} cargo deny check
 
 # Check justfile formatting
 fmt-check-just:
@@ -119,14 +121,14 @@ fmt-check-just:
 
 # Per-crate commands
 crate-check crate:
-    {{ exec }}cargo +nightly fmt -p {{ crate }} -- --check
-    {{ exec }}cargo clippy -p {{ crate }} --all-targets -- -D warnings
+    AGENTIC_TASK_NAME=crate-check-fmt {{ wrap }} cargo +nightly fmt -p {{ crate }} -- --check
+    AGENTIC_TASK_NAME=crate-check-clippy {{ wrap }} cargo clippy -p {{ crate }} --all-targets -- -D warnings
 
 crate-test crate:
-    {{ exec }}cargo nextest run --profile {{ nextest_profile }} {{ nextest_args }} -E 'package({{ crate }})'
+    AGENTIC_TASK_NAME=crate-test {{ wrap }} cargo nextest run --profile {{ nextest_profile }} {{ nextest_args }} -E 'package({{ crate }})'
 
 crate-build crate:
-    {{ exec }}cargo build -p {{ crate }}
+    AGENTIC_TASK_NAME=crate-build {{ wrap }} cargo build -p {{ crate }}
 
 crate-run crate:
     cargo run -p {{ crate }}
@@ -134,35 +136,48 @@ crate-run crate:
 # xtask commands
 
 xtask-sync:
-    {{ exec }}cargo run -p xtask -- sync
+    AGENTIC_TASK_NAME=xtask-sync {{ wrap }} cargo run -p xtask -- sync
 
 xtask-verify:
-    {{ exec }}cargo run -p xtask -- verify
+    AGENTIC_TASK_NAME=xtask-verify {{ wrap }} cargo run -p xtask -- verify
 
 xtask-sync-check:
-    {{ exec }}cargo run -p xtask -- sync --check
+    AGENTIC_TASK_NAME=xtask-sync-check {{ wrap }} cargo run -p xtask -- sync --check
 
 xtask-verify-check:
-    {{ exec }}cargo run -p xtask -- verify --check
+    AGENTIC_TASK_NAME=xtask-verify-check {{ wrap }} cargo run -p xtask -- verify --check
 
 # Endpoint coverage commands for opencode-rs SDK
 endpoint-coverage:
-    {{ exec }}cargo run -p xtask -- endpoint-coverage
+    cargo run -p xtask -- endpoint-coverage
 
 endpoint-coverage-check:
-    {{ exec }}cargo run -p xtask -- endpoint-coverage --check
+    AGENTIC_TASK_NAME=endpoint-coverage-check {{ wrap }} cargo run -p xtask -- endpoint-coverage --check
 
 endpoint-coverage-json:
-    {{ exec }}cargo run -p xtask -- endpoint-coverage --json
+    cargo run -p xtask -- endpoint-coverage --json
 
 # Utility commands
 
 thoughts_sync:
-    {{ exec }}thoughts sync
+    AGENTIC_TASK_NAME=thoughts_sync {{ wrap }} thoughts sync
+
+shellcheck:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mapfile -t scripts < <(git ls-files '*.sh' ':!:vendor/**')
+    if [ ${#scripts[@]} -gt 0 ]; then
+      shellcheck "${scripts[@]}"
+    else
+      echo "No .sh files found"
+    fi
+
+actionlint:
+    actionlint -color
 
 # Copy a file
 cp src dst:
-    {{ exec }}cp "{{ src }}" "{{ dst }}"
+    cp "{{ src }}" "{{ dst }}"
 
 # Remove a file
 rm path:
@@ -170,7 +185,7 @@ rm path:
 
 # Create a directory (with parents)
 mkdir path:
-    {{ exec }}mkdir -p "{{ path }}"
+    mkdir -p "{{ path }}"
 
 # Set file executable
 chmod-x path:
@@ -481,7 +496,7 @@ mcp-inspector method="tools/list":
 
 # CI-friendly MCP schema validation (validates all MCP servers in MCP_SERVERS)
 mcp-test:
-    {{ exec }}tools/mcp-validate.sh {{ MCP_SERVERS }}
+    tools/mcp-validate.sh {{ MCP_SERVERS }}
 
 # ------------------------------------------------------------------------------
 # PR Description Management

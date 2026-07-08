@@ -655,9 +655,7 @@ impl GitSync {
         // the target branch name from the symbolic HEAD reference.
         let (refname, is_branch) = match self.repo.head() {
             Ok(head_ref) => {
-                let name = head_ref
-                    .name()
-                    .ok_or_else(|| anyhow::anyhow!("HEAD has no name"))?;
+                let name = head_ref.name()?;
                 (name.to_string(), head_ref.is_branch())
             }
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
@@ -665,7 +663,7 @@ impl GitSync {
                 // that doesn't exist yet (e.g., refs/heads/main). We need to create it.
                 let head_ref = self.repo.find_reference("HEAD")?;
                 let symbolic_target = head_ref
-                    .symbolic_target()
+                    .symbolic_target()?
                     .ok_or_else(|| anyhow::anyhow!("HEAD has no symbolic target"))?;
                 (symbolic_target.to_string(), true)
             }

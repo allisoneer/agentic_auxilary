@@ -21,9 +21,9 @@ just build      # Build the project
 just fmt        # Format code
 just fmt-check  # Check formatting
 
-# Output mode variants
-OUTPUT_MODE=normal just test    # Normal output
-OUTPUT_MODE=verbose just test   # Verbose output
+# Root just commands emit direct output
+just test                       # Direct test output
+RUST_LOG=thoughts_tool=debug just test-integration  # Additional logging when needed
 
 # Specific test types
 just test                       # Unit tests (fast, default)

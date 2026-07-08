@@ -79,8 +79,10 @@ just crate-run <crate>      # Run a crate
 ```bash
 just check             # Check entire workspace (fmt-check + clippy)
 just fix               # Auto-fix clippy warnings across workspace
-just test              # Run tests for entire workspace
-just test-integration  # Run tests including #[ignore] integration tests (sets THOUGHTS_INTEGRATION_TESTS=1)
+just test              # Local: mcp-test + nextest (requires Node/npx)
+just test-ci           # CI-safe: nextest only (no Node/npx)
+just test-integration  # Local: run tests including #[ignore] integration tests
+just test-thoughts-ignored-ci # CI-safe: run ignored-only thoughts tests
 just build             # Build entire workspace
 just fmt               # Format entire workspace
 just fmt-check         # Check formatting across entire workspace
@@ -146,20 +148,26 @@ just codex-run -- <args>  # Run the vendored codex binary
 - `Arc::clone(&x)` is required over `x.clone()` for ref-counted types (`clone_on_ref_ptr = "warn"`).
 - Workspace lint inheritance: add `[lints]` with `workspace = true` when creating or modifying crate `Cargo.toml` files.
 
-## Output Modes
+## cli_just_execute Output Paging
 
-The `tools/agent-wrap.sh` wrapper controls command output:
+Interactive local root `just` recipes may use `tools/agent-wrap.sh` for a single success checkmark or failure smart-tail.
 
-- `minimal` (default locally): print a single success line; failures show a short tail
-- `normal` (default in CI): show full command output
-- `verbose`: show direct command output with extra nextest verbosity
+The wrapper auto-disables in CI and when stdout is not a TTY, so tooling such as `cli_just_execute` still receives raw output suitable for paging.
+
+`cli_just_execute` returns stdout/stderr in pages (default 200 lines per page; configurable via `[cli_tools].just_execute_page_lines`).
+
+- If `has_more=true`, call `cli_just_execute` again with the exact same params for the next cached page.
+- Use `rerun=true` to force a fresh execution.
+- Set `AGENTIC_WRAP=0` to force full passthrough output locally.
 
 Examples:
 
 ```bash
 just test
-OUTPUT_MODE=normal just test
-OUTPUT_MODE=verbose just test
+just test-ci
+just check
+cli_just_execute recipe=test
+AGENTIC_WRAP=0 just check
 RUST_LOG=gpt5_reasoner=debug just test
 ```
 

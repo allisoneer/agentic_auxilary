@@ -210,6 +210,7 @@ pub async fn execute_recipe(
         exit_code: status.code(),
         stdout: String::from_utf8_lossy(&stdout).to_string(),
         stderr: String::from_utf8_lossy(&stderr).to_string(),
+        has_more: false,
     })
 }
 
@@ -231,6 +232,7 @@ mod tests {
     use agentic_tools_core::ToolContext;
     use serde_json::json;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     /// Skip test if `just` command is not available
@@ -596,5 +598,31 @@ mod tests {
 
         assert!(result.success);
         assert!(result.stdout.contains("done"));
+    }
+
+    #[tokio::test]
+    async fn root_mkdir_recipe_runs_directly_without_wrapper() {
+        skip_if_just_unavailable!();
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let repo_justfile = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../justfile");
+        fs::copy(&repo_justfile, root.join("justfile")).unwrap();
+
+        let registry = JustRegistry::new();
+        let output = execute_recipe(
+            &registry,
+            "mkdir",
+            None,
+            Some(HashMap::from([("path".to_string(), json!("nested/child"))])),
+            root.to_str().unwrap(),
+            0,
+            &ToolContext::default(),
+        )
+        .await
+        .unwrap();
+
+        assert!(output.success);
+        assert!(root.join("nested/child").is_dir());
     }
 }

@@ -64,7 +64,7 @@ pub fn plan_switch(
     let main_branch = repo
         .head()
         .ok()
-        .and_then(|head| head.shorthand().map(ToOwned::to_owned));
+        .and_then(|head| head.shorthand().ok().map(ToOwned::to_owned));
     if main_branch.as_deref() == Some(request.branch.as_str())
         && control_repo.main_workdir.is_some()
     {
