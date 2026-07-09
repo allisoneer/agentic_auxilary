@@ -1,0 +1,19 @@
+apps/agentic-outer-dag/src/github/ci.rs
+  s_9dc4356ae2bf31::t_3c478de38cccd8 101-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ac6794209f319a660bf4f3f18766ce791f24100b",
+  "prompts": {},
+  "sessions": {
+    "s_9dc4356ae2bf31": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b8486e7bffeEP8Da4QiBBxn7x",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
