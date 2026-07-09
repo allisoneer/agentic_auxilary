@@ -31,6 +31,17 @@ enum Commands {
         #[command(subcommand)]
         command: commands::config::ConfigCommands,
     },
+
+    /// Install `OpenCode` configuration assets into the containing git repository
+    Install {
+        /// Path inside the target repo (defaults to current directory)
+        #[arg(long)]
+        path: Option<std::path::PathBuf>,
+
+        /// Overwrite existing managed files
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -52,5 +63,6 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Config { command } => commands::config::execute(command),
+        Commands::Install { path, force } => commands::install::execute(path, force),
     }
 }

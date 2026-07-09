@@ -59,6 +59,14 @@ Check configuration for errors and warnings without modifying.
 - Shows advisory warnings for deprecated keys, invalid values, etc.
 - Exit code 0 even with warnings (non-fatal)
 
+### `install [--path PATH] [--force]`
+Install `OpenCode` configuration assets into the containing git repository root.
+- Installs managed `.opencode/**` assets first, then `opencode.json` last
+- Fails if any managed destination exists unless `--force` is supplied
+- With `--force`, overwrites managed files only and never deletes unrelated `.opencode` content
+- Requires running inside a git repository, or passing `--path` inside one
+- Does not install `.mcp.json`, Claude settings, or binaries
+
 ## How Config Loading Works
 
 The CLI uses `agentic_config::loader::load_merged()` which:
@@ -111,6 +119,8 @@ export AGENTIC_REASONING_OPTIMIZER_MODEL=anthropic/claude-sonnet-4.6
 ## Module Structure
 
 - `commands/config.rs`: All config subcommand implementations
+- `commands/install.rs`: `agentic install` implementation
+- `commands/install_manifest.rs`: Embedded install-managed `OpenCode` assets
 - `commands/mod.rs`: Command routing
 - `main.rs`: CLI entry point with clap
 

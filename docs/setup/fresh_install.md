@@ -62,6 +62,22 @@ cargo binstall opencode-orchestrator-mcp
 
 If you prefer prebuilt binaries, this repo publishes release artifacts. Grab the right one for your platform and put it somewhere on `PATH`.
 
+## Install OpenCode config (repo-local)
+
+Once `agentic` is on `PATH`, install the repo-local `OpenCode` config surface with:
+
+```bash
+agentic install
+# or from elsewhere:
+agentic install --path /path/to/repo
+```
+
+Notes:
+- The target must be inside a git repository; installation resolves to the repo root
+- It installs managed `.opencode/**` assets plus root `opencode.json`
+- Use `--force` to overwrite managed files only; unrelated `.opencode` files are preserved
+- It does not install binaries, so `opencode`, `agentic-mcp`, and `opencode-orchestrator-mcp` must already be on `PATH`
+
 ## Log into Claude Code and OpenCode
 
 Do this before you start blaming MCP wiring.
