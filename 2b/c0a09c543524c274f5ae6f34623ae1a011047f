@@ -1,0 +1,27 @@
+apps/agentic/CLAUDE.md
+  s_313e02cd9ad3d2::t_700fde93dd6ff5 63
+apps/agentic/src/commands/install.rs
+  s_313e02cd9ad3d2::t_700fde93dd6ff5 7,89-91,155-157,173-178
+  s_313e02cd9ad3d2::t_1e7af6f045c186 179-180
+apps/agentic/tests/install_command.rs
+  s_313e02cd9ad3d2::t_0e34688d8f9d54 169,171
+  s_313e02cd9ad3d2::t_6646490ba8b114 177-182
+  s_313e02cd9ad3d2::t_700fde93dd6ff5 5-6,143-168,170,172-176,183
+  s_313e02cd9ad3d2::t_efc1dcb846eadc 184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2bc0a09c543524c274f5ae6f34623ae1a011047f",
+  "prompts": {},
+  "sessions": {
+    "s_313e02cd9ad3d2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b7988898ffe0e8kKRIsMmZocd",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
