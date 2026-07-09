@@ -4,6 +4,7 @@ use anyhow::Result;
 use atomicwrites::AtomicFile;
 use atomicwrites::OverwriteBehavior;
 use colored::Colorize;
+use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Component;
 use std::path::Path;
@@ -85,11 +86,9 @@ fn preflight(repo_root: &Path, force: bool) -> Result<()> {
             })?;
         }
 
-        if dst.exists() {
-            let meta = std::fs::symlink_metadata(&dst).with_context(|| {
-                format!("Failed to read metadata for managed path {}", dst.display())
-            })?;
-
+        if let Some(meta) = symlink_metadata_if_present(&dst).with_context(|| {
+            format!("Failed to read metadata for managed path {}", dst.display())
+        })? {
             if meta.file_type().is_symlink() {
                 fatal_conflicts.push(format!("{} (refusing to write to symlink)", asset.rel_path));
                 continue;
@@ -153,9 +152,9 @@ fn preflight_parent_dirs(repo_root: &Path, parent: &Path) -> Result<()> {
 
     for component in rel_parent.components() {
         current.push(component);
-        if current.exists() {
-            let meta = std::fs::symlink_metadata(&current)
-                .with_context(|| format!("Failed to inspect {}", current.display()))?;
+        if let Some(meta) = symlink_metadata_if_present(&current)
+            .with_context(|| format!("Failed to inspect {}", current.display()))?
+        {
             if meta.file_type().is_symlink() {
                 anyhow::bail!(
                     "refusing to traverse symlink directory: {}",
@@ -169,6 +168,14 @@ fn preflight_parent_dirs(repo_root: &Path, parent: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn symlink_metadata_if_present(path: &Path) -> Result<Option<std::fs::Metadata>, std::io::Error> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) => Ok(Some(meta)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 fn ensure_parent_dir(path: &Path) -> Result<()> {

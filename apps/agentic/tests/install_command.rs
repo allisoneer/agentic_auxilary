@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use serde_json::Value;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 use tempfile::TempDir;
 
 fn agentic_cmd() -> Command {
@@ -136,6 +138,48 @@ fn install_force_overwrites_managed_preserves_unmanaged() {
     let new_managed = std::fs::read_to_string(&managed).unwrap();
     assert!(new_managed.contains("# Agent System Prompt"));
     assert_eq!(std::fs::read_to_string(&unmanaged).unwrap(), "keep me");
+}
+
+#[cfg(unix)]
+#[test]
+fn install_refuses_dangling_symlink_at_managed_destination() {
+    let temp = TempDir::new().unwrap();
+    init_fake_git_repo(temp.path());
+
+    std::fs::create_dir_all(temp.path().join(".opencode")).unwrap();
+    symlink(
+        temp.path().join("missing-target.md"),
+        temp.path().join(".opencode/sysprompt.md"),
+    )
+    .unwrap();
+
+    let mut cmd = agentic_cmd();
+    cmd.args(["install", "--path", temp.path().to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("refusing to write to symlink"))
+        .stderr(predicate::str::contains(".opencode/sysprompt.md"));
+}
+
+#[cfg(unix)]
+#[test]
+fn install_refuses_dangling_symlink_in_parent_directory() {
+    let temp = TempDir::new().unwrap();
+    init_fake_git_repo(temp.path());
+    let symlink_path = temp.path().join(".opencode");
+
+    symlink(temp.path().join("missing-dir"), &symlink_path).unwrap();
+
+    let mut cmd = agentic_cmd();
+    cmd.args(["install", "--path", temp.path().to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "refusing to traverse symlink directory",
+        ))
+        .stderr(predicate::str::contains(
+            symlink_path.to_string_lossy().as_ref(),
+        ));
 }
 
 fn assert_installed_file_refs_resolve(repo_root: &std::path::Path) {

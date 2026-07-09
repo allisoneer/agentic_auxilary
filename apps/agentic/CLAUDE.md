@@ -60,6 +60,7 @@ Check configuration for errors and warnings without modifying.
 - Exit code 0 even with warnings (non-fatal)
 
 ### `install [--path PATH] [--force]`
+
 Install `OpenCode` configuration assets into the containing git repository root.
 - Installs managed `.opencode/**` assets first, then `opencode.json` last
 - Fails if any managed destination exists unless `--force` is supplied
