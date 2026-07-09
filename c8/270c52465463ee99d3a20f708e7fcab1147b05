@@ -1,0 +1,42 @@
+apps/agentic/src/main.rs
+  s_e8bbaeb86c4e89::t_d22666b36430a5 34,36-44,66
+  s_e8bbaeb86c4e89::t_2955ed9c329ead 35
+apps/agentic/src/commands/mod.rs
+  s_e8bbaeb86c4e89::t_d22666b36430a5 4-5
+apps/agentic/src/commands/install_manifest.rs
+  s_e8bbaeb86c4e89::t_765007fb4439a0 131-149,155-210
+  s_e8bbaeb86c4e89::t_edf10e08090013 150-154
+  s_e8bbaeb86c4e89::t_d22666b36430a5 1-130
+apps/agentic/tests/install_command.rs
+  s_e8bbaeb86c4e89::t_25db5edf948d2c 12,142-149
+  s_e8bbaeb86c4e89::t_ebf658a680ce93 85-88,127-134
+  s_e8bbaeb86c4e89::t_819da45f300122 1-11,13-84,89-126,135-141,150-180
+docs/setup/fresh_install.md
+  s_e8bbaeb86c4e89::t_f553e4ecad8e2a 65-80
+apps/agentic/src/commands/install.rs
+  s_e8bbaeb86c4e89::t_c4ab16f71d0f77 2,4-9,12-82,86-93,95-159,164-194
+  s_e8bbaeb86c4e89::t_edf10e08090013 83-85,94,160-163
+  s_e8bbaeb86c4e89::t_968dd220b388e2 1
+  s_e8bbaeb86c4e89::t_d22666b36430a5 3,10-11,195
+apps/agentic/tests/config_commands.rs
+  s_e8bbaeb86c4e89::t_803e172ec854eb 235,239-246
+  s_e8bbaeb86c4e89::t_3abab69cc7ccb1 247-248
+apps/agentic/CLAUDE.md
+  s_e8bbaeb86c4e89::t_f553e4ecad8e2a 62-69,122-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c8270c52465463ee99d3a20f708e7fcab1147b05",
+  "prompts": {},
+  "sessions": {
+    "s_e8bbaeb86c4e89": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b7f2e230ffeeAo6LrcLlDLfMa",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
