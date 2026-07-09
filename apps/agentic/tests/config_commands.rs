@@ -232,7 +232,18 @@ fn test_help_flag() {
         .assert()
         .success()
         .stdout(predicate::str::contains("config"))
+        .stdout(predicate::str::contains("install"))
         .stdout(predicate::str::contains("Configuration"));
+}
+
+#[test]
+fn test_install_help_flag() {
+    let mut cmd = agentic_cmd();
+    cmd.args(["install", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--path"))
+        .stdout(predicate::str::contains("--force"));
 }
 
 #[test]
