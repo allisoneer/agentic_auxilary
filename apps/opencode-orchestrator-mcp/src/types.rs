@@ -3,6 +3,7 @@
 use agentic_tools_core::fmt::TextFormat;
 use agentic_tools_core::fmt::TextOptions;
 use schemars::JsonSchema;
+use schemars::Schema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt::Write;
@@ -520,6 +521,7 @@ pub struct RespondPermissionInput {
     pub permission_request_id: Option<String>,
 
     /// How to respond: "once", "always", or "reject"
+    #[schemars(schema_with = "permission_reply_inline_schema")]
     pub reply: PermissionReply,
 
     /// Optional message to include with reply
@@ -537,6 +539,18 @@ pub enum PermissionReply {
     Always,
     /// Deny the request
     Reject,
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "Schema is a known-valid literal; failure indicates a bug in schemars."
+)]
+fn permission_reply_inline_schema(_gen: &mut schemars::generate::SchemaGenerator) -> Schema {
+    Schema::try_from(serde_json::json!({
+        "type": "string",
+        "enum": ["once", "always", "reject"]
+    }))
+    .expect("valid inline PermissionReply schema")
 }
 
 /// Response from permission reply - same as run output since we continue monitoring.

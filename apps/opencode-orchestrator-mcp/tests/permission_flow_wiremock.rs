@@ -370,6 +370,124 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
     );
 }
 
+#[tokio::test]
+async fn it_respond_permission_always_sends_always_on_wire_and_completes() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let respond_tool = RespondPermissionTool::new(Arc::clone(&server));
+    let sid = "s-always";
+    let perm_id = "perm-always";
+
+    Mock::given(method("GET"))
+        .and(path("/session/s-always"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    let status_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_seq)
+        .mount(&mock)
+        .await;
+
+    let perm_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            &["/tmp/out.txt"],
+        )])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(perm_seq)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path_regex(r"/permission/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/s-always/message"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(messages_fixture(sid, Some("ALWAYS_PERMISSION_RESPONSE"))),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(10),
+        respond_tool.call(
+            RespondPermissionInput {
+                session_id: sid.into(),
+                permission_request_id: None,
+                reply: PermissionReply::Always,
+                message: Some("persist for matching patterns".into()),
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("timed out")
+    .expect("tool error");
+
+    assert!(
+        matches!(result.status, RunStatus::Completed),
+        "expected Completed status, got {:?}",
+        result.status
+    );
+    assert_eq!(
+        result.response.as_deref(),
+        Some("ALWAYS_PERMISSION_RESPONSE")
+    );
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    let reply_request = requests
+        .iter()
+        .find(|request| {
+            request.method.as_str() == "POST"
+                && request.url.path() == format!("/permission/{perm_id}/reply")
+        })
+        .expect("reply request should be sent");
+    let body: serde_json::Value = serde_json::from_slice(&reply_request.body)
+        .expect("reply request body should be valid json");
+
+    assert_eq!(body["reply"], serde_json::json!("always"));
+    assert_eq!(
+        body["message"],
+        serde_json::json!("persist for matching patterns")
+    );
+}
+
 /// IT-BUG5: `respond_permission` should not return stale pre-permission text.
 ///
 /// Pre-fix behavior: Returns `PRE_PERMISSION_TEXT` due to post-subscribe early-exit (#2).
