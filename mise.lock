@@ -99,23 +99,6 @@ version = "0.1.14"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-bin.options]
-version_prefix = "agentic-bin-v"
-
-[tools.agentic-bin."platforms.windows-x64"]
-checksum = "sha256:8a113b5716d3bfa1fd9195a27f213572e6cd4cd5bb3262e5512d8f3cb9f5bdea"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607367"
-
-[tools.agentic-bin."platforms.windows-x64-baseline"]
-checksum = "sha256:8a113b5716d3bfa1fd9195a27f213572e6cd4cd5bb3262e5512d8f3cb9f5bdea"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607367"
-
-[[tools.agentic-bin]]
-version = "0.1.14"
-backend = "github:allisoneer/agentic_auxilary"
-
-[tools.agentic-bin.options]
 asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz"
 version_prefix = "agentic-bin-v"
 
@@ -141,6 +124,23 @@ url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/ass
 checksum = "sha256:68ec71118b15b243ae7289826a9c997783cb627c3c3aa006d36b5cb340fa75d5"
 url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-apple-darwin.tar.xz"
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607334"
+
+[[tools.agentic-bin]]
+version = "0.1.14"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.agentic-bin.options]
+version_prefix = "agentic-bin-v"
+
+[tools.agentic-bin."platforms.windows-x64"]
+checksum = "sha256:8a113b5716d3bfa1fd9195a27f213572e6cd4cd5bb3262e5512d8f3cb9f5bdea"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607367"
+
+[tools.agentic-bin."platforms.windows-x64-baseline"]
+checksum = "sha256:8a113b5716d3bfa1fd9195a27f213572e6cd4cd5bb3262e5512d8f3cb9f5bdea"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607367"
 
 [[tools.agentic-mcp]]
 version = "0.2.42"
@@ -1135,19 +1135,6 @@ version = "0.1.24"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.thoughts-bin.options]
-asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz"
-version_prefix = "thoughts-bin-v"
-
-[tools.thoughts-bin."platforms.macos-arm64"]
-checksum = "sha256:7f784e584909700be24ec76629e4e78f7bd09dd036602014f5c19e886e16e96c"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616223"
-
-[[tools.thoughts-bin]]
-version = "0.1.24"
-backend = "github:allisoneer/agentic_auxilary"
-
-[tools.thoughts-bin.options]
 asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz"
 version_prefix = "thoughts-bin-v"
 
@@ -1160,6 +1147,19 @@ url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/ass
 checksum = "sha256:41ea58d040c137ea4dec24856d123ea68f1bf5a489df481e04baae695f91d58e"
 url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-apple-darwin.tar.xz"
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616250"
+
+[[tools.thoughts-bin]]
+version = "0.1.24"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.thoughts-bin.options]
+asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz"
+version_prefix = "thoughts-bin-v"
+
+[tools.thoughts-bin."platforms.macos-arm64"]
+checksum = "sha256:7f784e584909700be24ec76629e4e78f7bd09dd036602014f5c19e886e16e96c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616223"
 
 [[tools.thoughts-bin]]
 version = "0.1.24"

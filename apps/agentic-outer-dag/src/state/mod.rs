@@ -31,6 +31,8 @@ pub struct RunState {
     pub pr: PrState,
     pub freshness: FreshnessState,
     pub coderabbit: CodeRabbitState,
+    #[serde(default)]
+    pub ci: CiState,
     pub handoff: HandoffState,
     pub counters: Counters,
     pub last_error: Option<String>,
@@ -83,6 +85,8 @@ pub enum StageKind {
     WaitingForCoderabbit,
     DispatchingResolvePrComments,
     DispatchingDescribePr,
+    WaitingForCi,
+    DispatchingResolvePrCiFailures,
     StoppedPermissionRequired,
     StoppedQuestionRequired,
     StoppedDirtyTree,
@@ -93,6 +97,16 @@ pub enum StageKind {
     StoppedReadyForHumanReview,
     StoppedTicketToPrNoPrHandoff,
     StoppedFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CiState {
+    #[serde(default)]
+    pub last_remediated_head_sha: Option<String>,
+    #[serde(default)]
+    pub last_remediated_fingerprint: Option<String>,
+    #[serde(default)]
+    pub grace_polls_remaining: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -223,8 +237,13 @@ pub struct HandoffState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Counters {
-    pub ticket_to_pr_runs: u32,
-    pub resolve_comments_runs: u32,
+    #[serde(rename = "ticket_to_pr_runs")]
+    pub ticket_to_pr: u32,
+    #[serde(rename = "resolve_comments_runs")]
+    pub resolve_comments: u32,
+    #[serde(default)]
+    #[serde(rename = "resolve_ci_runs")]
+    pub resolve_ci: u32,
 }
 
 impl RunState {
@@ -262,6 +281,7 @@ impl RunState {
             pr: PrState::default(),
             freshness: FreshnessState::default(),
             coderabbit: CodeRabbitState::default(),
+            ci: CiState::default(),
             handoff: HandoffState::default(),
             counters: Counters::default(),
             last_error: None,
@@ -313,6 +333,8 @@ mod tests {
             StageKind::WaitingForCoderabbit,
             StageKind::DispatchingResolvePrComments,
             StageKind::DispatchingDescribePr,
+            StageKind::WaitingForCi,
+            StageKind::DispatchingResolvePrCiFailures,
             StageKind::StoppedPermissionRequired,
             StageKind::StoppedQuestionRequired,
             StageKind::StoppedDirtyTree,
@@ -456,6 +478,11 @@ mod tests {
                 "current_cycle": 0,
                 "cycles": []
             },
+            "ci": {
+                "last_remediated_head_sha": null,
+                "last_remediated_fingerprint": null,
+                "grace_polls_remaining": 0
+            },
             "handoff": {
                 "linear_comment_posted": false,
                 "linear_comment_body_sha256": null,
@@ -463,7 +490,8 @@ mod tests {
             },
             "counters": {
                 "ticket_to_pr_runs": 0,
-                "resolve_comments_runs": 0
+                "resolve_comments_runs": 0,
+                "resolve_ci_runs": 0
             },
             "last_error": null
         });
@@ -484,6 +512,10 @@ mod tests {
         assert_eq!(roundtrip.pr.last_described_head_sha, None);
         assert_eq!(roundtrip.pr.is_draft, None);
         assert_eq!(roundtrip.pr.ready_for_review.attempts, 0);
+        assert_eq!(roundtrip.ci.last_remediated_head_sha, None);
+        assert_eq!(roundtrip.ci.last_remediated_fingerprint, None);
+        assert_eq!(roundtrip.ci.grace_polls_remaining, 0);
+        assert_eq!(roundtrip.counters.resolve_ci, 0);
         assert!(
             !roundtrip
                 .pr

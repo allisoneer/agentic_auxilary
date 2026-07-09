@@ -351,8 +351,10 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
         "opencode_session_id": state.opencode.active_session_id,
         "opencode_last_command": state.opencode.last_command,
         "opencode_last_diagnostics": state.opencode.last_diagnostics,
-        "ticket_to_pr_runs": state.counters.ticket_to_pr_runs,
-        "resolve_comments_runs": state.counters.resolve_comments_runs,
+        "ticket_to_pr_runs": state.counters.ticket_to_pr,
+        "resolve_comments_runs": state.counters.resolve_comments,
+        "resolve_ci_runs": state.counters.resolve_ci,
+        "ci": state.ci,
         "opencode_dispatch_enabled": state.settings.opencode_dispatch_enabled,
         "opencode_session_deadline_seconds": state.settings.opencode_session_deadline_seconds,
         "opencode_inactivity_timeout_seconds": state.settings.opencode_inactivity_timeout_seconds,
@@ -512,8 +514,12 @@ mod tests {
             }),
             command_transport_error: None,
         });
-        state.counters.ticket_to_pr_runs = 1;
-        state.counters.resolve_comments_runs = 0;
+        state.counters.ticket_to_pr = 1;
+        state.counters.resolve_comments = 0;
+        state.counters.resolve_ci = 2;
+        state.ci.last_remediated_head_sha = Some("deadbeef".to_string());
+        state.ci.last_remediated_fingerprint = Some("fingerprint-1".to_string());
+        state.ci.grace_polls_remaining = 1;
         state.settings.opencode_dispatch_enabled = false;
         state.pr.last_lookup = Some(state::PrLookupDiagnostics {
             checked_at: "2026-01-01T00:00:00Z".to_string(),
@@ -560,6 +566,8 @@ mod tests {
             "opencode_last_diagnostics",
             "ticket_to_pr_runs",
             "resolve_comments_runs",
+            "resolve_ci_runs",
+            "ci",
             "opencode_dispatch_enabled",
             "opencode_session_deadline_seconds",
             "opencode_inactivity_timeout_seconds",
@@ -615,6 +623,16 @@ mod tests {
             Some(&Value::Number(258_u64.into()))
         );
         assert_eq!(payload.get("pr_is_draft"), Some(&Value::Bool(false)));
+        assert_eq!(
+            payload.get("resolve_ci_runs"),
+            Some(&Value::Number(2_u64.into()))
+        );
+        assert_eq!(
+            payload
+                .get("ci")
+                .and_then(|ci| ci.get("last_remediated_head_sha")),
+            Some(&Value::String("deadbeef".to_string()))
+        );
         assert_eq!(
             payload
                 .get("pr_lookup")
