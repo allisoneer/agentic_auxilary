@@ -98,6 +98,9 @@ pub fn required_ci_fingerprint(required_checks: &[GhCheck]) -> String {
 }
 
 fn list_pr_checks(gh_binary: &str, pr_number: u64) -> Result<Vec<GhCheck>> {
+    // TODO(2): If slow or hung `gh pr checks` invocations prove to block outer-dag
+    // responsiveness, move this polling off the async executor and/or add a subprocess
+    // timeout (for example via `spawn_blocking` or `tokio::process::Command` with timeout).
     let output = Command::new(gh_binary)
         .args([
             "pr",
