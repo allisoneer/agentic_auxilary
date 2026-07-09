@@ -145,6 +145,7 @@ This repo's Claude settings are intentionally narrow. The point is to allow only
       "Edit",
       "Glob",
       "Grep",
+      "LSP",
       "Agent",
       "Skill",
       "EnterWorktree",

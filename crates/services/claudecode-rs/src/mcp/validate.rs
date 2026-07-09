@@ -277,6 +277,7 @@ pub const KNOWN_BUILTIN_TOOLS: &[&str] = &[
     "KillShell",
     "SlashCommand",
     "LS",
+    "LSP",
     "AskUserQuestion",
     "Skill",
 ];
@@ -755,6 +756,7 @@ mod tests {
         assert!(KNOWN_BUILTIN_TOOLS.contains(&"WebSearch"));
         assert!(KNOWN_BUILTIN_TOOLS.contains(&"TodoWrite"));
         assert!(KNOWN_BUILTIN_TOOLS.contains(&"Task"));
+        assert!(KNOWN_BUILTIN_TOOLS.contains(&"LSP"));
     }
 
     #[test]

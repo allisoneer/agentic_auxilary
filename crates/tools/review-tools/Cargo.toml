@@ -1,6 +1,6 @@
 [package]
 name = "review_tools"
-version = "0.4.5"
+version = "0.4.6"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/allisoneer/agentic_auxilary"
@@ -31,7 +31,11 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "test-util",
+] }
 
 [lints]
 workspace = true

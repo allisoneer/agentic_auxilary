@@ -22,6 +22,7 @@ use crate::types::ReviewLens;
 
 /// Reviewer sub-agent builtin tools (Claude Code native).
 pub const REVIEWER_BUILTIN_TOOLS: [&str; 1] = ["Read"];
+const CLAUDE_TOOL_LSP: &str = "LSP";
 
 /// Reviewer capability profile for a lens-specific reviewer session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,6 +195,25 @@ impl ClaudeCliRunner {
             mcp_servers: servers,
         }
     }
+
+    fn build_session_config(
+        profile: ReviewerCapabilityProfile,
+        system_prompt: String,
+        user_prompt: String,
+    ) -> Result<SessionConfig, ToolError> {
+        SessionConfig::builder(user_prompt)
+            .model(Model::Opus)
+            .output_format(OutputFormat::Text)
+            .permission_mode(PermissionMode::DontAsk)
+            .system_prompt(system_prompt)
+            .tools(Self::builtin_tools())
+            .allowed_tools(Self::all_tools(profile))
+            .disallow_tool(CLAUDE_TOOL_LSP)
+            .mcp_config(Self::mcp_config(profile))
+            .strict_mcp_config(true)
+            .build()
+            .map_err(|e| ToolError::Internal(format!("Failed to build session config: {e}")))
+    }
 }
 
 impl Default for ClaudeCliRunner {
@@ -212,9 +232,6 @@ impl ReviewerRunner for ClaudeCliRunner {
     ) -> BoxFuture<'static, Result<String, ToolError>> {
         let semaphore = Arc::clone(&self.semaphore);
         let run_timeout_secs = self.config.run_timeout_secs;
-        let builtin_tools = Self::builtin_tools();
-        let all_tools = Self::all_tools(profile);
-        let mcp_config = Self::mcp_config(profile);
 
         Box::pin(async move {
             // Acquire semaphore permit
@@ -224,17 +241,7 @@ impl ReviewerRunner for ClaudeCliRunner {
                 .map_err(|_| ToolError::Internal("Semaphore closed".into()))?;
 
             // Build session config
-            let cfg = SessionConfig::builder(user_prompt)
-                .model(Model::Opus)
-                .output_format(OutputFormat::Text)
-                .permission_mode(PermissionMode::DontAsk)
-                .system_prompt(system_prompt)
-                .tools(builtin_tools)
-                .allowed_tools(all_tools)
-                .mcp_config(mcp_config)
-                .strict_mcp_config(true)
-                .build()
-                .map_err(|e| ToolError::Internal(format!("Failed to build session config: {e}")))?;
+            let cfg = Self::build_session_config(profile, system_prompt, user_prompt)?;
 
             let result = run_with_optional_timeout(run_timeout_secs, async {
                 let client = Client::new()
@@ -401,6 +408,26 @@ mod tests {
                 Duration::from_secs(1)
             ]
         );
+    }
+
+    #[test]
+    fn reviewer_session_config_disallows_lsp_for_all_profiles() {
+        for profile in [
+            ReviewerCapabilityProfile::Narrow,
+            ReviewerCapabilityProfile::Completeness,
+        ] {
+            let config =
+                ClaudeCliRunner::build_session_config(profile, "system".into(), "user".into())
+                    .unwrap_or_else(|e| panic!("session config build failed: {e}"));
+
+            assert!(
+                config
+                    .disallowed_tools
+                    .as_ref()
+                    .is_some_and(|tools| tools.iter().any(|tool| tool == CLAUDE_TOOL_LSP)),
+                "missing LSP disallow for {profile:?}"
+            );
+        }
     }
 
     #[tokio::test]
