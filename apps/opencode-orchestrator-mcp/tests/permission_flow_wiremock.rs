@@ -41,6 +41,58 @@ use support::status_v2_idle;
 use support::status_v2_retry;
 use support::test_orchestrator_server;
 
+async fn mount_permission_reply_prerequisites(
+    mock: &MockServer,
+    sid: &str,
+    perm_id: &str,
+    permission_patterns: &[&str],
+) {
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(mock)
+        .await;
+
+    let perm_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            permission_patterns,
+        )])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(perm_seq)
+        .mount(mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path_regex(r"/permission/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .mount(mock)
+        .await;
+}
+
+async fn mount_delayed_event_stream(mock: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(mock)
+        .await;
+}
+
 /// IT-BUG1: Completion should retry message extraction when first attempt returns no assistant text.
 ///
 /// Pre-fix behavior: Single `messages.list` call returns None -> response is empty.
@@ -168,13 +220,6 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
     let sid = "s2";
     let perm_id = "perm-123";
 
-    // GET /session/s2
-    Mock::given(method("GET"))
-        .and(path("/session/s2"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
-        .mount(&mock)
-        .await;
-
     // GET /session/status - idle after rejection
     Mock::given(method("GET"))
         .and(path("/session/status"))
@@ -182,34 +227,7 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
         .mount(&mock)
         .await;
 
-    // GET /permission - has pending permission before reply, empty after
-    let perm_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-            perm_id,
-            sid,
-            "file.write",
-            &["/tmp/test.txt"]
-        )])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-    ]);
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(perm_seq)
-        .mount(&mock)
-        .await;
-
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-
-    // POST /permission/{id}/reply - accept the rejection
-    Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .mount(&mock)
-        .await;
+    mount_permission_reply_prerequisites(&mock, sid, perm_id, &["/tmp/test.txt"]).await;
 
     // GET /session/s2/message - returns STALE pre-rejection text (baseline and final same)
     Mock::given(method("GET"))
@@ -273,13 +291,6 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
     let sid = "s3";
     let perm_id = "perm-456";
 
-    // GET /session/s3
-    Mock::given(method("GET"))
-        .and(path("/session/s3"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
-        .mount(&mock)
-        .await;
-
     // GET /session/status - starts idle (pre-fix early-exit #1), then busy, then idle.
     let status_seq = SequenceResponder::new(vec![
         ResponseTemplate::new(200).set_body_json(status_v2_idle()), // initial check: idle
@@ -293,34 +304,7 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         .mount(&mock)
         .await;
 
-    // GET /permission - has pending permission before reply
-    let perm_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-            perm_id,
-            sid,
-            "file.write",
-            &["/tmp/out.txt"]
-        )])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-    ]);
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(perm_seq)
-        .mount(&mock)
-        .await;
-
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-
-    // POST /permission/{id}/reply
-    Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .mount(&mock)
-        .await;
+    mount_permission_reply_prerequisites(&mock, sid, perm_id, &["/tmp/out.txt"]).await;
 
     // Message endpoint: if we finalize after only one status call, no assistant message yet.
     // After additional status polls (fixed path), return final assistant text.
@@ -378,12 +362,6 @@ async fn it_respond_permission_always_sends_always_on_wire_and_completes() {
     let sid = "s-always";
     let perm_id = "perm-always";
 
-    Mock::given(method("GET"))
-        .and(path("/session/s-always"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
-        .mount(&mock)
-        .await;
-
     let status_seq = SequenceResponder::new(vec![
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
@@ -395,32 +373,7 @@ async fn it_respond_permission_always_sends_always_on_wire_and_completes() {
         .mount(&mock)
         .await;
 
-    let perm_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-            perm_id,
-            sid,
-            "file.write",
-            &["/tmp/out.txt"],
-        )])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-    ]);
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(perm_seq)
-        .mount(&mock)
-        .await;
-
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .mount(&mock)
-        .await;
+    mount_permission_reply_prerequisites(&mock, sid, perm_id, &["/tmp/out.txt"]).await;
 
     Mock::given(method("GET"))
         .and(path("/session/s-always/message"))
@@ -431,15 +384,7 @@ async fn it_respond_permission_always_sends_always_on_wire_and_completes() {
         .mount(&mock)
         .await;
 
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
-        .mount(&mock)
-        .await;
+    mount_delayed_event_stream(&mock).await;
 
     let result = timeout(
         Duration::from_secs(10),
@@ -500,41 +445,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     let sid = "s5";
     let perm_id = "perm-999";
 
-    // GET /session/s5
-    Mock::given(method("GET"))
-        .and(path("/session/s5"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
-        .mount(&mock)
-        .await;
-
-    // GET /permission - pending permission before reply, then empty after
-    let perm_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-            perm_id,
-            sid,
-            "file.write",
-            &["/tmp/out.txt"],
-        )])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-    ]);
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(perm_seq)
-        .mount(&mock)
-        .await;
-
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-
-    // POST /permission/{id}/reply
-    Mock::given(method("POST"))
-        .and(path_regex(r"/permission/.*/reply"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .mount(&mock)
-        .await;
+    mount_permission_reply_prerequisites(&mock, sid, perm_id, &["/tmp/out.txt"]).await;
 
     // GET /session/status
     // 1) busy  (avoid early-exit #1)
@@ -573,15 +484,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         .await;
 
     // GET /event - delay SSE so polling drives completion
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
-        .mount(&mock)
-        .await;
+    mount_delayed_event_stream(&mock).await;
 
     // Act
     let result = timeout(

@@ -541,16 +541,31 @@ pub enum PermissionReply {
     Reject,
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "Schema is a known-valid literal; failure indicates a bug in schemars."
-)]
+impl PermissionReply {
+    const fn wire_value(self) -> &'static str {
+        match self {
+            Self::Once => "once",
+            Self::Always => "always",
+            Self::Reject => "reject",
+        }
+    }
+}
+
+fn permission_reply_wire_values() -> [&'static str; 3] {
+    [
+        PermissionReply::Once.wire_value(),
+        PermissionReply::Always.wire_value(),
+        PermissionReply::Reject.wire_value(),
+    ]
+}
+
 fn permission_reply_inline_schema(_gen: &mut schemars::generate::SchemaGenerator) -> Schema {
-    Schema::try_from(serde_json::json!({
+    let enum_values = permission_reply_wire_values();
+
+    schemars::json_schema!({
         "type": "string",
-        "enum": ["once", "always", "reject"]
-    }))
-    .expect("valid inline PermissionReply schema")
+        "enum": enum_values,
+    })
 }
 
 /// Response from permission reply - same as run output since we continue monitoring.
@@ -601,6 +616,21 @@ fn format_time_ago(unix_ts: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn permission_reply_inline_schema_matches_wire_values() {
+        let schema =
+            permission_reply_inline_schema(&mut schemars::generate::SchemaGenerator::default());
+        let schema_value = serde_json::to_value(schema).expect("schema should serialize");
+
+        assert_eq!(
+            schema_value,
+            serde_json::json!({
+                "type": "string",
+                "enum": ["once", "always", "reject"]
+            })
+        );
+    }
 
     #[test]
     fn run_output_text_format_completed() {
