@@ -10,6 +10,7 @@ use agentic_tools_core::ToolError;
 use opencode_orchestrator_mcp::config::OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS;
 use opencode_orchestrator_mcp::tools::OrchestratorRunTool;
 use opencode_orchestrator_mcp::tools::RespondPermissionTool;
+use opencode_orchestrator_mcp::tools::build_registry;
 use opencode_orchestrator_mcp::types::OrchestratorRunInput;
 use opencode_orchestrator_mcp::types::PermissionReply;
 use opencode_orchestrator_mcp::types::RespondPermissionInput;
@@ -305,6 +306,92 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
 
     assert!(matches!(result.status, RunStatus::Completed));
     assert_eq!(result.response.as_deref(), Some("RESUME_DONE"));
+}
+
+#[tokio::test]
+async fn run_dispatch_json_accepts_wait_for_activity_and_subscribes_sse() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "0") };
+
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let registry = build_registry(&server);
+    let sid = "legacy-wait-wire";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("OK"))))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(2),
+        registry.dispatch_json(
+            "run",
+            serde_json::json!({
+                "session_id": sid,
+                "wait_for_activity": true,
+            }),
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("dispatch_json should not hang")
+    .expect("run should succeed");
+
+    assert_eq!(result["status"], serde_json::json!("completed"));
+    assert_eq!(result["response"], serde_json::json!("OK"));
+
+    let requests = mock
+        .received_requests()
+        .await
+        .expect("wiremock should capture requests");
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.url.path() == "/event"),
+        "expected SSE subscription (/event) when wait_for_activity=true; got paths: {:?}",
+        requests
+            .iter()
+            .map(|request| request.url.path().to_string())
+            .collect::<Vec<_>>()
+    );
 }
 
 #[tokio::test]

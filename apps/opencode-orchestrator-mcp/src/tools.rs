@@ -1159,7 +1159,7 @@ Examples:
 - New session with prompt and agent: run(message="explain this code", agent="Plan")
 - New session with command: run(command="research", message="caching strategies")
 - Resume session: run(session_id="...", message="continue")
-- Check status: run(session_id="...")"#;
+- Check status (snapshot; returns immediately if already idle): run(session_id="...")"#;
 
     fn call(
         &self,

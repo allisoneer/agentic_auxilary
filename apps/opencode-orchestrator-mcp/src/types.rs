@@ -34,9 +34,10 @@ pub struct OrchestratorRunInput {
     #[serde(default)]
     pub message: Option<String>,
 
-    /// When true, do not early-exit simply because the session is currently idle.
-    /// Used by permission replies to wait for post-permission activity.
+    /// Internal continuation flag used by interruption replies.
+    /// Not part of the public MCP contract; still accepted for backward compatibility.
     #[serde(default)]
+    #[schemars(skip)]
     pub wait_for_activity: Option<bool>,
 }
 
