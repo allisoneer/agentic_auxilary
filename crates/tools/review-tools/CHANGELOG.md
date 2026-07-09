@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.4.6] - 2026-07-09
+
+### 🐛 Bug Fixes
+- *(subagents)* Explicitly disallow claude lsp tool
 ## [0.4.5] - 2026-07-08
 
 ### 🐛 Bug Fixes
