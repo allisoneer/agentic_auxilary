@@ -1,0 +1,19 @@
+apps/agentic/src/commands/install_manifest_generated.rs
+  s_9a164a5c20ce72::t_d768d9cedb88cf 2359-2360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "4a6023919247cedbeb8f496da2e574b97fa11ea3",
+  "prompts": {},
+  "sessions": {
+    "s_9a164a5c20ce72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c237574-68b2-4566-8bd7-4eff118240ac",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
