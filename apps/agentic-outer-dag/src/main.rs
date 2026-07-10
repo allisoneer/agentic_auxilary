@@ -243,11 +243,32 @@ fn apply_settings_overrides(
         || overrides.opencode_dispatch_enabled.is_some())
 }
 
+async fn resolve_start_effective_branch(
+    ticket: &str,
+    branch: Option<&str>,
+    worktree_path: Option<&Path>,
+) -> Result<Option<String>> {
+    if worktree_path.is_some() {
+        return Ok(branch.map(str::to_string));
+    }
+
+    if let Some(branch) = branch {
+        return Ok(Some(branch.to_string()));
+    }
+
+    Ok(Some(
+        crate::linear::require_issue_branch_name_for_start(ticket).await?,
+    ))
+}
+
 async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
+    let effective_branch =
+        resolve_start_effective_branch(ticket, options.branch, options.worktree_path).await?;
+
     if options.dry_run {
         let plan = preview::build_dry_run_start_preview(
             ticket,
-            options.branch,
+            effective_branch.as_deref(),
             options.worktree_path,
             options.force,
         )?;
@@ -255,7 +276,7 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
         return Ok(());
     }
 
-    let target = worktree::resolve(options.branch, options.worktree_path, true)?;
+    let target = worktree::resolve(effective_branch.as_deref(), options.worktree_path, true)?;
     worktree::chdir_to(&target)?;
 
     if state::store::ThoughtsStateStore::load()?.is_some() && !options.force {
@@ -472,14 +493,30 @@ fn handle_reset(yes: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::SettingsOverrides;
+    use super::StartOptions;
     use super::apply_settings_overrides;
     use super::compact_status_payload;
     use super::ensure_supported_dry_run_usage;
+    use super::handle_start;
     use super::require_actionable_resume_stage;
+    use super::resolve_start_effective_branch;
     use super::state;
     use crate::cli;
+    use crate::test_support::CwdGuard;
+    use crate::test_support::EnvVarGuard;
+    use crate::test_support::process_state_lock;
+    use crate::test_support::run_git;
     use crate::worktree::TargetWorktree;
+    use anyhow::Result;
     use serde_json::Value;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     fn sample_state() -> state::RunState {
         let mut state = state::RunState::for_start(
@@ -801,5 +838,273 @@ mod tests {
             require_actionable_resume_stage(&state).unwrap(),
             state::StageKind::DispatchingResolvePrComments
         );
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn resolve_start_effective_branch_prefers_explicit_branch_and_skips_linear() {
+        let _guard = process_state_lock().lock().unwrap();
+        let _linear_api_key = EnvVarGuard::remove("LINEAR_API_KEY");
+
+        let branch = resolve_start_effective_branch("ENG-123", Some("feature/manual"), None)
+            .await
+            .unwrap();
+
+        assert_eq!(branch, Some("feature/manual".to_string()));
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn resolve_start_effective_branch_skips_linear_when_worktree_path_provided_without_branch()
+     {
+        let _guard = process_state_lock().lock().unwrap();
+        let temp = TempDir::new().unwrap();
+        let _linear_api_key = EnvVarGuard::remove("LINEAR_API_KEY");
+
+        let branch = resolve_start_effective_branch("ENG-123", None, Some(temp.path()))
+            .await
+            .unwrap();
+
+        assert_eq!(branch, None);
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn start_dry_run_without_branch_requires_linear_and_fails_without_api_key() {
+        let _guard = process_state_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
+        let _linear_api_key = EnvVarGuard::remove("LINEAR_API_KEY");
+        let _linear_url = EnvVarGuard::remove("LINEAR_GRAPHQL_URL");
+
+        let err = handle_start(
+            "ENG-123",
+            StartOptions {
+                branch: None,
+                worktree_path: None,
+                dry_run: true,
+                force: false,
+                no_linear_handoff: false,
+                no_opencode_dispatch: false,
+                stop_after: None,
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
+            },
+        )
+        .await
+        .expect_err("branch-omitted dry-run should require Linear");
+
+        let message = err.to_string();
+        assert!(message.contains("--branch omitted"));
+        assert!(message.contains("LINEAR_API_KEY"));
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn start_dry_run_with_explicit_branch_does_not_require_linear() {
+        let _guard = process_state_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        let _cwd = CwdGuard::pushd(&fixture.repo).unwrap();
+        let _linear_api_key = EnvVarGuard::remove("LINEAR_API_KEY");
+
+        handle_start(
+            "ENG-123",
+            StartOptions {
+                branch: Some("feature/manual"),
+                worktree_path: None,
+                dry_run: true,
+                force: false,
+                no_linear_handoff: false,
+                no_opencode_dispatch: false,
+                stop_after: None,
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn start_dry_run_with_worktree_path_does_not_require_linear() {
+        let _guard = process_state_lock().lock().unwrap();
+        let fixture = GitFixture::new().unwrap();
+        let _linear_api_key = EnvVarGuard::remove("LINEAR_API_KEY");
+
+        handle_start(
+            "ENG-123",
+            StartOptions {
+                branch: None,
+                worktree_path: Some(&fixture.repo),
+                dry_run: true,
+                force: false,
+                no_linear_handoff: false,
+                no_opencode_dispatch: false,
+                stop_after: None,
+                poll_interval_seconds: None,
+                coderabbit_timeout_seconds: None,
+                opencode_session_deadline_seconds: None,
+                opencode_inactivity_timeout_seconds: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn resolve_start_effective_branch_auto_selects_from_linear_branch_name() {
+        let _guard = process_state_lock().lock().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "issues": {
+                        "nodes": [{
+                            "id": "uuid-1",
+                            "identifier": "ENG-123",
+                            "branchName": "feature/eng-123"
+                        }],
+                        "pageInfo": {
+                            "hasNextPage": false,
+                            "endCursor": null
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+        let _linear_api_key = EnvVarGuard::set("LINEAR_API_KEY", "test");
+        let _linear_url =
+            EnvVarGuard::set("LINEAR_GRAPHQL_URL", format!("{}/graphql", server.uri()));
+
+        let branch = resolve_start_effective_branch("ENG-123", None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(branch, Some("feature/eng-123".to_string()));
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn resolve_start_effective_branch_errors_on_main_or_master_from_linear() {
+        let _guard = process_state_lock().lock().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "issues": {
+                        "nodes": [{
+                            "id": "uuid-1",
+                            "identifier": "ENG-123",
+                            "branchName": "main"
+                        }],
+                        "pageInfo": {
+                            "hasNextPage": false,
+                            "endCursor": null
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+        let _linear_api_key = EnvVarGuard::set("LINEAR_API_KEY", "test");
+        let _linear_url =
+            EnvVarGuard::set("LINEAR_GRAPHQL_URL", format!("{}/graphql", server.uri()));
+
+        let err = resolve_start_effective_branch("ENG-123", None, None)
+            .await
+            .expect_err("main branch names should be rejected");
+
+        let message = err.to_string();
+        assert!(message.contains("not allowed"));
+        assert!(message.contains("pass --branch to override"));
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "tests intentionally serialize process-wide env/cwd mutation across async work"
+    )]
+    async fn resolve_start_effective_branch_errors_when_linear_issue_not_found() {
+        let _guard = process_state_lock().lock().unwrap();
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "issues": {
+                        "nodes": [],
+                        "pageInfo": {
+                            "hasNextPage": false,
+                            "endCursor": null
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+        let _linear_api_key = EnvVarGuard::set("LINEAR_API_KEY", "test");
+        let _linear_url =
+            EnvVarGuard::set("LINEAR_GRAPHQL_URL", format!("{}/graphql", server.uri()));
+
+        let err = resolve_start_effective_branch("ENG-123", None, None)
+            .await
+            .expect_err("missing issue should error");
+
+        let message = format!("{err:#}");
+        assert!(message.contains("--branch omitted"));
+        assert!(message.contains("not found"));
+    }
+
+    struct GitFixture {
+        _temp: TempDir,
+        repo: PathBuf,
+    }
+
+    impl GitFixture {
+        fn new() -> Result<Self> {
+            let temp = TempDir::new()?;
+            let repo = temp.path().join("repo");
+
+            run_git(temp.path(), ["init", repo.to_str().unwrap()])?;
+            run_git(&repo, ["config", "user.name", "Test User"])?;
+            run_git(&repo, ["config", "user.email", "test@example.com"])?;
+            fs::write(repo.join("README.md"), "base\n")?;
+            run_git(&repo, ["add", "README.md"])?;
+            run_git(&repo, ["commit", "-m", "initial"])?;
+
+            Ok(Self { _temp: temp, repo })
+        }
     }
 }

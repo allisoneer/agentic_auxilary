@@ -38,48 +38,51 @@ OpenCode's local MCP server entries support an `environment` map. That map is ap
 
 The important bit is the `environment` object, not the exact set of keys above. Put the credentials there for whichever tools you actually enabled.
 
-### Claude Code per-server MCP env
+## Claude Code state still matters for Claude-backed paths
 
-Claude Code's MCP config supports an `env` object on each `mcpServers` entry.
+OpenCode is the primary day-to-day path in this repo, but Claude Code auth state is still relevant when a workflow uses Claude-backed sub-agents or when you intentionally use the Claude Code orchestration path instead.
+
+- Make sure Claude Code is installed and logged in on the same machine for those flows.
+- Keep the existing env-var injection pattern above for tool credentials; Claude Code login state is separate from those MCP subprocess env vars.
+
+Claude Code can pass env vars either per MCP server or at the session level. The important bit is still that the spawned MCP process receives the secrets it needs.
+
+**Server-scoped env (only for this MCP server):**
 
 ```json
 {
   "mcpServers": {
-    "agentic-tools": {
+    "tools": {
+      "type": "stdio",
       "command": "agentic-mcp",
-      "args": [],
       "env": {
-        "GH_TOKEN": "${GH_TOKEN}",
-        "EXA_API_KEY": "${EXA_API_KEY}",
-        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}"
+        "GH_TOKEN": "set-me-here",
+        "OPENROUTER_API_KEY": "set-me-here",
+        "EXA_API_KEY": "set-me-here"
       }
     }
   }
 }
 ```
 
-Claude Code also supports `${VAR}` expansion in that file, so you can keep the real secrets in your shell/session environment and pass them through cleanly.
-
-### Claude Code session-level settings env
-
-If you want variables applied to the whole Claude Code session instead of one MCP server, `settings.json` has a top-level `env` key too.
+**Session-scoped env (top-level `env` for the whole Claude Code session):**
 
 ```json
 {
   "env": {
-    "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}",
-    "EXA_API_KEY": "${EXA_API_KEY}"
+    "EXA_API_KEY": "set-me-here"
   }
 }
 ```
 
-That is broader than the per-server `env` block, so I would only use it when that scope is what you actually intend.
+Use `mcpServers.<name>.env` when only one MCP server should see a secret, and top-level `env` when the whole Claude Code session should inherit it.
 
 ## Notes
 
 - `agentic.toml` intentionally does not store API keys.
 - `pr_comments` checks `GH_TOKEN` before `GITHUB_TOKEN`, then falls back to gh CLI auth state.
 - `gpt5_reasoner` currently uses OpenRouter-only auth and hardcodes the OpenRouter base URL.
-- Claude Code and OpenCode keep their own login/account state; this repo mostly consumes that state rather than replacing it.
+- OpenCode keeps its own login/account state; this repo mostly consumes that state rather than replacing it.
+- Claude-backed sub-agents still depend on local Claude Code auth state when that path is selected.
 
 If you are still in initial setup mode, go back to [`./setup/README.md`](./setup/README.md). If auth looks fine but tools still fail, the next stop is [`./troubleshooting.md`](./troubleshooting.md).

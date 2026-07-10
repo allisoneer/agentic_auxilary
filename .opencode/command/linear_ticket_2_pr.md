@@ -1,6 +1,6 @@
 ---
 description: Drive a Linear ticket from grounded intake through implementation and PR creation (first-pass orchestrator workflow)
-agent: OrchestratorOpenAI
+agent: Orchestrator
 ---
 
 <task>

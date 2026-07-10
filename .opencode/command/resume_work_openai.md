@@ -1,6 +1,6 @@
 ---
 description: Resume work from a structured OpenAI handoff artifact
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

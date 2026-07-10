@@ -5,6 +5,8 @@ use crate::filters::TeamFilter;
 use crate::filters::UserFilter;
 use crate::filters::WorkflowStateFilter;
 use crate::types::Issue;
+use crate::types::IssueBranchName;
+use crate::types::IssueBranchNameConnection;
 use crate::types::IssueCommentConnection;
 use crate::types::IssueConnection;
 use crate::types::IssueLabelConnection;
@@ -47,6 +49,33 @@ pub struct IssueByIdArguments {
 pub struct IssueByIdQuery {
     #[arguments(id: $id)]
     pub issue: Option<Issue>,
+}
+
+#[derive(cynic::QueryVariables, Debug, Clone)]
+pub struct IssueBranchNameByIdArguments {
+    pub id: String,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    graphql_type = "Query",
+    schema = "linear",
+    variables = "IssueBranchNameByIdArguments"
+)]
+pub struct IssueBranchNameByIdQuery {
+    #[arguments(id: $id)]
+    pub issue: Option<IssueBranchName>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    graphql_type = "Query",
+    schema = "linear",
+    variables = "IssuesArguments"
+)]
+pub struct IssuesBranchNameQuery {
+    #[arguments(first: $first, after: $after, filter: $filter)]
+    pub issues: IssueBranchNameConnection,
 }
 
 #[derive(cynic::QueryVariables, Debug, Clone)]

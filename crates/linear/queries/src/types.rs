@@ -98,6 +98,23 @@ pub struct IssueConnection {
     pub page_info: PageInfo,
 }
 
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "Issue")]
+pub struct IssueBranchName {
+    pub id: cynic::Id,
+    pub identifier: String,
+    #[cynic(rename = "branchName")]
+    pub branch_name: String,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "IssueConnection")]
+pub struct IssueBranchNameConnection {
+    pub nodes: Vec<IssueBranchName>,
+    #[cynic(rename = "pageInfo")]
+    pub page_info: PageInfo,
+}
+
 /// `IssueSearchResult` from searchIssues query - has issue fields directly.
 /// NOTE: Duplicates subset of Issue fields; keep in sync.
 /// Nullability differs (e.g., state is non-null here).

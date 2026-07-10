@@ -31,8 +31,6 @@ Do these in this order. It saves a little backtracking later.
     bun install -g opencode-ai@1.17.4
    ```
 
-6. Install **Claude Code** with whatever install method you already trust. The official docs are here: <https://code.claude.com/docs/en/authentication.md>.
-
 ## Install the Rust binaries
 
 There are four binaries in the usual setup story here: `thoughts`, `agentic-mcp`, `opencode-orchestrator-mcp`, and `agentic`.
@@ -78,12 +76,13 @@ Notes:
 - Use `--force` to overwrite managed files only; unrelated `.opencode` files are preserved
 - It does not install binaries, so `opencode`, `agentic-mcp`, and `opencode-orchestrator-mcp` must already be on `PATH`
 
-## Log into Claude Code and OpenCode
+## Log into OpenCode
 
 Do this before you start blaming MCP wiring.
 
-- **Claude Code:** launch `claude` and complete auth with your preferred method. The documented first-run path opens a browser login and can fall back to a pasted code flow. On macOS, credentials live in Keychain; on Linux they live in `~/.claude/.credentials.json`.
-- **OpenCode:** launch `opencode` and make sure the providers you plan to use are authenticated there. OpenCode keeps config under `~/.config/opencode/`; provider auth state lives in its `auth.json` data file.
+- Day to day, most people here use `Orchestrator` in OpenCode, so start with the normal OpenCode login flow.
+- **OpenCode:** launch `opencode` and make sure the providers you plan to use are authenticated there. OpenCode keeps config under `~/.config/opencode/`; provider auth state lives in OpenCode's data-dir auth file, commonly `~/.local/share/opencode/auth.json`.
+- **Claude Code alternative:** if you use Claude-backed sub-agents or the Claude orchestration path, install Claude Code and log into it on the same machine as well. That state is still required for those flows.
 
 ## OpenCode version pin (orchestrator)
 
@@ -123,9 +122,15 @@ This is the same `mcp` block shape used in this repo, just lifted as a standalon
 
 `mcp.tools` runs `agentic-mcp`, `mcp.orchestrator` runs `opencode-orchestrator-mcp`, and `type: "local"` tells OpenCode to launch each one as a local subprocess.
 
-### Minimal stdio MCP config (`.mcp.json`)
+### Claude Code alternative
 
-If you want the smallest possible stdio example, this repo also includes one:
+Most day-to-day usage here stays on `Orchestrator` in OpenCode, but the Claude path is still a supported alternative for Claude-backed sub-agents or for people explicitly using the Claude orchestrator version.
+
+1. Install Claude Code and complete its login flow on the machine that will run the agents.
+2. Reuse the same local MCP binaries described above; the Claude path still needs `agentic-mcp` and related tooling installed and on `PATH`.
+3. If you mirror the MCP setup in Claude Code config, keep the same command paths and permissions you would use in OpenCode, including any required local MCP or filesystem access approvals.
+
+Minimal `.mcp.json` example:
 
 ```json
 {
@@ -138,11 +143,7 @@ If you want the smallest possible stdio example, this repo also includes one:
 }
 ```
 
-That is just a named server map plus the binary to execute. Good enough for sanity-checking a client before you layer on more config.
-
-### Claude Code permissions example (`.claude/settings.json`)
-
-This repo's Claude settings are intentionally narrow. The point is to allow only the orchestrator tools and deny a pile of built-ins.
+Concise Claude Code permissions example:
 
 ```json
 {
@@ -150,48 +151,17 @@ This repo's Claude settings are intentionally narrow. The point is to allow only
     "allow": [
       "mcp__orchestrator__run",
       "mcp__orchestrator__list_sessions",
-      "mcp__orchestrator__list_commands",
       "mcp__orchestrator__get_session_state",
       "mcp__orchestrator__respond_permission",
-      "mcp__orchestrator__respond_question"
+      "mcp__orchestrator__respond_question",
+      "mcp__orchestrator__list_agents"
     ],
-    "deny": [
-      "Bash",
-      "Write",
-      "Edit",
-      "Glob",
-      "Grep",
-      "LSP",
-      "Agent",
-      "Skill",
-      "EnterWorktree",
-      "ExitWorktree",
-      "CronDelete",
-      "CronList",
-      "CronCreate",
-      "ScheduleWakeup",
-      "Monitor",
-      "TaskStop",
-      "WebSearch",
-      "WebFetch",
-      "NotebookEdit",
-      "RemoteTrigger",
-      "PushNotification",
-      "ToolSearch",
-      "TaskCreate",
-      "TaskGet",
-      "TaskList",
-      "TaskOutput",
-      "TaskUpdate",
-      "EnterPlanMode",
-      "ExitPlanMode",
-      "AskUserQuestion"
-    ]
+    "deny": ["Bash", "Write", "Edit", "WebSearch", "WebFetch"]
   }
 }
 ```
 
-If you use Claude Code this way, the interesting bit is `permissions.allow`: it whitelists the orchestrator namespace explicitly instead of letting the session wander into everything else.
+The intent is narrow orchestrator-MCP access plus broad denial of built-in direct execution/edit tools.
 
 ## Quick verification
 
