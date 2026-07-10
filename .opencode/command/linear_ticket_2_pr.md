@@ -213,8 +213,8 @@ $ARGUMENTS
    - identify the ENG team `team_id`
    - identify the ENG-team `Triage` state `state_id`
    - do not assume names map directly to IDs
-4. Search for an existing follow-up issue first; if one already exists, add a comment or link update instead of creating a duplicate.
-5. Otherwise create the follow-up issue with `linear_create_issue(team_id, title, description, state_id=triage)` and include links back to the original ticket and PR.
+4. Search for an existing follow-up issue first, but reuse one only when you can establish a stable match: the issue must reference the original ticket key and/or URL and also match the canonical follow-up marker/title for this work. If that stable match is not found, do not update a possibly unrelated issue.
+5. Otherwise create the follow-up issue with `linear_create_issue(team_id, title, description, state_id=triage)` and include the canonical follow-up marker/title plus links back to the original ticket and PR.
 6. If an obvious review/done-adjacent status exists and changing it is clearly appropriate, use judgment; otherwise leave status as-is rather than inventing a workflow state.
 7. Return a final summary that includes:
     - ticket key and URL
