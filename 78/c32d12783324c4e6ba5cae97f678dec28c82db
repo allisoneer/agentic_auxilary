@@ -1,0 +1,42 @@
+apps/agentic/tests/install_command.rs
+  s_bf21da3d3a063d::t_9c8dcd900e747a 40
+crates/meta/xtask/src/verify.rs
+  s_bf21da3d3a063d::t_42a23d7c8c42b9 375
+crates/meta/xtask/src/release_plz_preflight.rs
+  s_bf21da3d3a063d::t_42a23d7c8c42b9 9-10,158-180,195,198
+.github/workflows/readme-sync.yml
+  s_bf21da3d3a063d::t_42a23d7c8c42b9 64
+crates/meta/xtask/src/lib.rs
+  s_bf21da3d3a063d::t_9c8dcd900e747a 6
+tools/policy.toml
+  s_bf21da3d3a063d::t_0aa3f7c01dfdf3 107-108
+  s_bf21da3d3a063d::t_5a73f5545dfb6f 104-106
+  s_bf21da3d3a063d::t_4a81e14e658ab8 109-110
+crates/meta/xtask/src/sync.rs
+  s_bf21da3d3a063d::t_9c8dcd900e747a 7,71-78,92
+crates/meta/xtask/src/install_manifest.rs
+  s_bf21da3d3a063d::t_9c8dcd900e747a 1-3,5-56,58-98,100-131,133-138,141-149,151-166,171,178-179
+  s_bf21da3d3a063d::t_8ead54e751eab2 132,139-140,150,172-177
+  s_bf21da3d3a063d::t_88c043ce098085 57,167-170
+  s_bf21da3d3a063d::t_bf4f5699185a56 4,99
+apps/agentic/src/commands/install_manifest.rs
+  s_bf21da3d3a063d::t_9c8dcd900e747a 7-12
+crates/meta/xtask/src/main.rs
+  s_bf21da3d3a063d::t_9c8dcd900e747a 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "78c32d12783324c4e6ba5cae97f678dec28c82db",
+  "prompts": {},
+  "sessions": {
+    "s_bf21da3d3a063d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b68c7062ffeXUcSnjpaKjKUkw",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
