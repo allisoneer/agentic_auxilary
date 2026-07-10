@@ -35,6 +35,7 @@ const EXPECTED_FILES: &[&str] = &[
     ".opencode/command/openai.md",
     ".opencode/command/playwright.md",
     ".opencode/command/research.md",
+    ".opencode/command/resolve_pr_ci_failures.md",
     ".opencode/command/resolve_pr_comments.md",
     ".opencode/command/resume_work_openai.md",
     ".opencode/command/review.md",

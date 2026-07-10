@@ -49,25 +49,7 @@ checksum = "sha256:7c8b10a93723838bc3533f6e1886d868fdbb109b81606ebe6d1a533d11d8e
 url = "https://github.com/rhysd/actionlint/releases/download/v1.7.9/actionlint_1.7.9_windows_amd64.zip"
 
 [[tools.agentic-bin]]
-version = "0.1.14"
-backend = "github:allisoneer/agentic_auxilary"
-
-[tools.agentic-bin.options]
-asset_pattern = "agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
-version_prefix = "agentic-bin-v"
-
-[tools.agentic-bin."platforms.linux-arm64"]
-checksum = "sha256:384e04d9fbb908c90e51ecd5c966b909a66422e2d30345a91ed8fa681ea9fb4c"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607326"
-
-[tools.agentic-bin."platforms.linux-arm64-musl"]
-checksum = "sha256:384e04d9fbb908c90e51ecd5c966b909a66422e2d30345a91ed8fa681ea9fb4c"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607326"
-
-[[tools.agentic-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-bin.options]
@@ -75,45 +57,45 @@ asset_pattern = "agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin."platforms.linux-x64"]
-checksum = "sha256:397b3d195dfc6e7412058f4ccb624e5d21d9ad85dd45a780cb3bcfb4d7201847"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607353"
+checksum = "sha256:5a296a039a5c8595eb922e62222751a7eb6b9a2c4c1183af9d3127452a1c6285"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620193"
 
 [tools.agentic-bin."platforms.linux-x64-baseline"]
-checksum = "sha256:397b3d195dfc6e7412058f4ccb624e5d21d9ad85dd45a780cb3bcfb4d7201847"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607353"
+checksum = "sha256:5a296a039a5c8595eb922e62222751a7eb6b9a2c4c1183af9d3127452a1c6285"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620193"
 
 [tools.agentic-bin."platforms.linux-x64-musl"]
-checksum = "sha256:397b3d195dfc6e7412058f4ccb624e5d21d9ad85dd45a780cb3bcfb4d7201847"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607353"
+checksum = "sha256:5a296a039a5c8595eb922e62222751a7eb6b9a2c4c1183af9d3127452a1c6285"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620193"
 
 [tools.agentic-bin."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:397b3d195dfc6e7412058f4ccb624e5d21d9ad85dd45a780cb3bcfb4d7201847"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607353"
+checksum = "sha256:5a296a039a5c8595eb922e62222751a7eb6b9a2c4c1183af9d3127452a1c6285"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620193"
 
 [[tools.agentic-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-bin.options]
-asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz"
+asset_pattern = "agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
 version_prefix = "agentic-bin-v"
 
-[tools.agentic-bin."platforms.macos-x64"]
-checksum = "sha256:68ec71118b15b243ae7289826a9c997783cb627c3c3aa006d36b5cb340fa75d5"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607334"
+[tools.agentic-bin."platforms.linux-arm64"]
+checksum = "sha256:0ca38a4a1fc0ee41c6c35e47b94aa01f80f971b21524779a7fb0ccedc98305b2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620187"
 
-[tools.agentic-bin."platforms.macos-x64-baseline"]
-checksum = "sha256:68ec71118b15b243ae7289826a9c997783cb627c3c3aa006d36b5cb340fa75d5"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607334"
+[tools.agentic-bin."platforms.linux-arm64-musl"]
+checksum = "sha256:0ca38a4a1fc0ee41c6c35e47b94aa01f80f971b21524779a7fb0ccedc98305b2"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620187"
 
 [[tools.agentic-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-bin.options]
@@ -121,26 +103,44 @@ asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz"
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin."platforms.macos-arm64"]
-checksum = "sha256:8faa7d2f93b2a5b74da73cf91252d1a7246e16799bd9ee39cf181f42b349d755"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/agentic-bin-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607319"
+checksum = "sha256:3377b728cee413a8760eaf0e0db2dce64156c44706783d2844e032330e6e7629"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620188"
 
 [[tools.agentic-bin]]
-version = "0.1.14"
+version = "0.1.15"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.agentic-bin.options]
+asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz"
+version_prefix = "agentic-bin-v"
+
+[tools.agentic-bin."platforms.macos-x64"]
+checksum = "sha256:e78cc47b5170b04cfa2304291af2b365dc76fdb9d26ee89b259d648e544c9daf"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620192"
+
+[tools.agentic-bin."platforms.macos-x64-baseline"]
+checksum = "sha256:e78cc47b5170b04cfa2304291af2b365dc76fdb9d26ee89b259d648e544c9daf"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/agentic-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620192"
+
+[[tools.agentic-bin]]
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-bin.options]
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin."platforms.windows-x64"]
-checksum = "sha256:8a113b5716d3bfa1fd9195a27f213572e6cd4cd5bb3262e5512d8f3cb9f5bdea"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607367"
+checksum = "sha256:2b69e680dc9334b0f29a41edd450756e2c2e77578811739ef3eff30fd87bb426"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620201"
 
 [tools.agentic-bin."platforms.windows-x64-baseline"]
-checksum = "sha256:8a113b5716d3bfa1fd9195a27f213572e6cd4cd5bb3262e5512d8f3cb9f5bdea"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.14/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470607367"
+checksum = "sha256:2b69e680dc9334b0f29a41edd450756e2c2e77578811739ef3eff30fd87bb426"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-bin-v0.1.15/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/472620201"
 
 [[tools.agentic-mcp]]
 version = "0.2.42"
