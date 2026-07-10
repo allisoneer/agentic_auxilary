@@ -1,0 +1,158 @@
+name: Published Versions Sync
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: published-versions-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync-published-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: main
+
+      - name: Generate GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.96.1
+          cache: true
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Sync published-version contract, mise.toml, and mise.lock
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          EVENT_PRERELEASE: ${{ github.event.release.prerelease || false }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$TAG" ]; then
+            echo "::error::No release tag was provided."
+            exit 1
+          fi
+
+          plan_json="$RUNNER_TEMP/published-versions-plan.json"
+          cargo run -p xtask -- published-versions --tag "$TAG" --json --dry-run > "$plan_json"
+          cat "$plan_json"
+
+          managed="$(jq -r '.managed' "$plan_json")"
+          if [ "$managed" != "true" ]; then
+            echo "Tag $TAG is unmanaged; no-op for published-version sync."
+            exit 0
+          fi
+
+          prerelease="$(jq -r '.is_prerelease' "$plan_json")"
+          if [ "$EVENT_PRERELEASE" = "true" ] || [ "$prerelease" = "true" ]; then
+            echo "Prerelease detected; no-op for published-version sync."
+            exit 0
+          fi
+
+          mapfile -t required_assets < <(jq -r '.required_asset_names[]' "$plan_json")
+          if [ "${#required_assets[@]}" -eq 0 ]; then
+            echo "::error::Managed tag $TAG resolved to no required assets."
+            exit 1
+          fi
+
+          release_json="$RUNNER_TEMP/release.json"
+          found_assets="false"
+          for attempt in 1 2 3 4 5; do
+            if gh release view "$TAG" --json isPrerelease,assets > "$release_json"; then
+              if [ "$(jq -r '.isPrerelease' "$release_json")" = "true" ]; then
+                echo "Prerelease GitHub release detected; no-op for published-version sync."
+                exit 0
+              fi
+
+              missing_assets=()
+              for asset in "${required_assets[@]}"; do
+                if ! jq -e --arg asset "$asset" '.assets[] | select(.name == $asset)' "$release_json" > /dev/null; then
+                  missing_assets+=("$asset")
+                fi
+              done
+
+              if [ "${#missing_assets[@]}" -eq 0 ]; then
+                found_assets="true"
+                break
+              fi
+
+              echo "Attempt $attempt: waiting for required release assets to appear for $TAG"
+              printf 'Missing assets:\n%s\n' "${missing_assets[*]}"
+            else
+              echo "Attempt $attempt: failed to read GitHub release for $TAG"
+            fi
+
+            sleep 15
+          done
+
+          if [ "$found_assets" != "true" ]; then
+            echo "::error::Required assets for $TAG did not appear after retries."
+            exit 1
+          fi
+
+          cargo run -p xtask -- published-versions --tag "$TAG"
+          cargo run -p xtask -- sync
+          MISE_LOCKED=0 mise lock
+          cargo run -p xtask -- verify --check
+
+          changed_files="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort -u)"
+          if [ -z "$changed_files" ]; then
+            echo "No repository changes were required after processing $TAG."
+            exit 0
+          fi
+
+          allowed_re='^(tools/published-versions\.toml|mise\.toml|mise\.lock)$'
+          bad="$(printf '%s\n' "$changed_files" | grep -Ev "$allowed_re" || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::published-versions sync modified unexpected files; refusing to commit"
+            echo "$bad"
+            exit 1
+          fi
+
+          git config user.name "published-versions-sync[bot]"
+          git config user.email "published-versions-sync[bot]@users.noreply.github.com"
+          while IFS= read -r path; do
+            git add -- "$path"
+          done <<< "$changed_files"
+          git commit -m "chore(published-versions): sync $TAG [skip ci]"
+
+          for attempt in 1 2 3 4 5; do
+            if git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:main"; then
+              exit 0
+            fi
+
+            git fetch origin main
+            if ! git rebase origin/main; then
+              echo "::error::Failed to rebase published-versions sync commit onto origin/main."
+              exit 1
+            fi
+          done
+
+          echo "::error::Failed to push to main after retries. Likely branch protection or missing permissions."
+          exit 1

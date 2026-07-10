@@ -97,13 +97,20 @@ just xtask-sync-check   # Check if sync is needed (for CI)
 just xtask-verify-check # Full verification including generated files
 ```
 
-`xtask-sync` updates generated repo metadata such as root/per-crate `CLAUDE.md`, `release-plz.toml`, `mise.toml`, `README.md`, `justfile`, and `agentic.schema.json`. It does not manage `mise.lock`; keep that manual.
+`xtask-sync` updates generated repo metadata such as root/per-crate `CLAUDE.md`, `release-plz.toml`, `mise.toml`, `README.md`, `justfile`, and `agentic.schema.json`. Managed internal tool versions in `mise.toml` are sourced from `tools/published-versions.toml`.
 
 Release PRs labeled `release` trigger `.github/workflows/readme-sync.yml`, which runs full `cargo run -p xtask -- sync` on same-repo PR heads and auto-commits only xtask-managed generated outputs when they are stale.
 
 `cargo run -p xtask -- release-plz-preflight` is the release-plz-only first-publish guard. It checks crates configured to publish by `tools/policy.toml` against crates.io before the release-plz action runs. If it fails, either first-publish the missing crate locally with `cargo publish -p <crate>` or mark it unpublished in `tools/policy.toml` and rerun `cargo run -p xtask -- sync`.
 
-`mise.lock` stays operator-managed because it depends on GitHub Release assets that do not exist until after tag-driven release automation finishes. After those releases complete, regenerate it with `MISE_LOCKED=0 mise lock` and commit the resulting `mise.lock`.
+`tools/published-versions.toml` is the source of truth for the last fully published managed internal binary versions. `xtask verify --check` enforces coherence between that contract, generated `mise.toml`, and `mise.lock`.
+
+`mise.lock` should stay coherent with `tools/published-versions.toml`. On `main`, post-publication automation is intended to update the contract, regenerate `mise.toml`, and refresh `mise.lock` together after stable GitHub Release assets exist. For local/manual contract edits, regenerate it with `MISE_LOCKED=0 mise lock`.
+
+Workflow: `.github/workflows/published-versions-sync.yml`
+- Trigger: stable GitHub Release published, plus manual `workflow_dispatch`
+- Behavior: verifies required assets, updates `tools/published-versions.toml`, regenerates `mise.toml` and `mise.lock`, and pushes directly to `main`
+- If it fails due to permissions, branch protection, or asset/lock issues, fix the reported cause, rerun the workflow or apply the same sequence locally (`cargo run -p xtask -- published-versions --tag <tag>`, `cargo run -p xtask -- sync`, `MISE_LOCKED=0 mise lock`), then push the resulting three-file update
 
 Release policy is conservative by default: libraries publishable to crates.io do not get GitHub-release-facing tags unless explicitly allowlisted in `tools/policy.toml`. The intended tagged packages are the distributed apps, while `message-optimizer-bin` remains an intentional outlier: it keeps release-plz tagging enabled but is not being normalized into the broader shipped-app or `mise` workflows in this task.
 
