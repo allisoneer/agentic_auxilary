@@ -154,7 +154,7 @@ Request-scoped MCP cancellation now flows through `ToolContext`, so long-running
 
 ## Level 2: Sub-Agent Tools
 
-Each "primary session" also has sub agents. I did not want the parent session getting lost deciding "which sub agent to use," nor did I want sub agents having the ability to make edits. So my sub agents are defined into an 8-way matrix that simplifies down to 2 enum params.
+Each "primary session" also has sub-agents. I did not want the parent session getting lost deciding "which sub-agent to use," nor did I want sub-agents having the ability to make edits. So my sub-agents are defined into an 8-way matrix that simplifies down to 2 enum params.
 
 ### `ask_agent` Tool Matrix
 

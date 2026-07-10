@@ -80,7 +80,9 @@ Notes:
 
 Do this before you start blaming MCP wiring.
 
-- **OpenCode:** launch `opencode` and make sure the providers you plan to use are authenticated there. OpenCode keeps config under `~/.config/opencode/`; provider auth state lives in its `auth.json` data file.
+- Day to day, most people here use `OrchestratorOpenAI` in OpenCode, so start with the normal OpenCode login flow.
+- **OpenCode:** launch `opencode` and make sure the providers you plan to use are authenticated there. OpenCode keeps config under `~/.config/opencode/`; provider auth state lives in OpenCode's data-dir auth file, commonly `~/.local/share/opencode/auth.json`.
+- **Claude Code alternative:** if you use Claude-backed sub-agents or the Claude orchestration path, install Claude Code and log into it on the same machine as well. That state is still required for those flows.
 
 ## OpenCode version pin (orchestrator)
 
@@ -119,6 +121,47 @@ This is the same `mcp` block shape used in this repo, just lifted as a standalon
 ```
 
 `mcp.tools` runs `agentic-mcp`, `mcp.orchestrator` runs `opencode-orchestrator-mcp`, and `type: "local"` tells OpenCode to launch each one as a local subprocess.
+
+### Claude Code alternative
+
+Most day-to-day usage here stays on `OrchestratorOpenAI` in OpenCode, but the Claude path is still a supported alternative for Claude-backed sub-agents or for people explicitly using the Claude orchestrator version.
+
+1. Install Claude Code and complete its login flow on the machine that will run the agents.
+2. Reuse the same local MCP binaries described above; the Claude path still needs `agentic-mcp` and related tooling installed and on `PATH`.
+3. If you mirror the MCP setup in Claude Code config, keep the same command paths and permissions you would use in OpenCode, including any required local MCP or filesystem access approvals.
+
+Minimal `.mcp.json` example:
+
+```json
+{
+  "mcpServers": {
+    "orchestrator": {
+      "type": "stdio",
+      "command": "opencode-orchestrator-mcp"
+    }
+  }
+}
+```
+
+Concise Claude Code permissions example:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__orchestrator__run",
+      "mcp__orchestrator__list_sessions",
+      "mcp__orchestrator__get_session_state",
+      "mcp__orchestrator__respond_permission",
+      "mcp__orchestrator__respond_question",
+      "mcp__orchestrator__list_agents"
+    ],
+    "deny": ["Bash", "Write", "Edit", "WebSearch", "WebFetch"]
+  }
+}
+```
+
+The intent is narrow orchestrator-MCP access plus broad denial of built-in direct execution/edit tools.
 
 ## Quick verification
 
