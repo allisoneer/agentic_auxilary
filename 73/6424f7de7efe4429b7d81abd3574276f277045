@@ -1,0 +1,23 @@
+CLAUDE.md
+  s_dfee2036831476::t_c0f35461f39ae5 100,106-108
+  s_dfee2036831476::t_6d8985b0ddee36 110-113
+  s_dfee2036831476::t_ebed4778a0f062 109
+.github/workflows/published-versions-sync.yml
+  s_dfee2036831476::t_84eba0c7268702 1-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "736424f7de7efe4429b7d81abd3574276f277045",
+  "prompts": {},
+  "sessions": {
+    "s_dfee2036831476": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b2eabbcdffeCLUwTqAcb52Uo0",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
