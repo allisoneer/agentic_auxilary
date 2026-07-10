@@ -58,6 +58,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let should_hang_on_term = query.contains("[hang]");
 
+    let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
+    let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())?;
+
     let child = Command::new("sh")
         .arg("-c")
         .arg("trap '' TERM INT; while :; do sleep 1; done")
@@ -79,8 +82,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     emit_output(&output_format).await?;
 
-    let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
-    let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())?;
     loop {
         tokio::select! {
             _ = sigterm.recv() => {
