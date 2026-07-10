@@ -66,7 +66,7 @@ Install `OpenCode` configuration assets into the containing git repository root.
 - Fails if any managed destination exists unless `--force` is supplied
 - With `--force`, overwrites managed files only and never deletes unrelated `.opencode` content
 - Requires running inside a git repository, or passing `--path` inside one
-- Does not install `.mcp.json`, Claude settings, or binaries
+- Does not install MCP client config files or binaries; it only installs repo-local OpenCode assets (`.opencode/**` and `opencode.json`)
 
 ## How Config Loading Works
 
