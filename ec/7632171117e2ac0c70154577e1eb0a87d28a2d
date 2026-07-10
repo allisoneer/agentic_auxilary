@@ -1,0 +1,26 @@
+docs/setup/fresh_install.md
+  s_77788508e383d5::t_20aa51f8846bd4 84,132-164
+  s_77788508e383d5::t_ee20204e10af0f 83,85,125-131
+  s_77788508e383d5::t_88633614d19b56 165
+docs/auth.md
+  s_77788508e383d5::t_ee20204e10af0f 41-47,76
+  s_77788508e383d5::t_20aa51f8846bd4 48-69
+workflow.md
+  s_77788508e383d5::t_ee20204e10af0f 157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "ec7632171117e2ac0c70154577e1eb0a87d28a2d",
+  "prompts": {},
+  "sessions": {
+    "s_77788508e383d5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b3548333ffe9pgoJmKp4kC5v1",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
