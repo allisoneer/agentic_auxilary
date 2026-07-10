@@ -294,6 +294,7 @@ mod tests {
     use super::*;
     use crate::test_support::CwdGuard;
     use crate::test_support::process_state_lock;
+    use crate::test_support::run_git;
     use anyhow::Result;
     use std::env;
     use std::ffi::OsString;
@@ -533,18 +534,5 @@ mod tests {
             .lines()
             .filter_map(|line| line.strip_prefix("worktree ").map(str::to_string))
             .collect())
-    }
-
-    fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) -> Result<()> {
-        let output = Command::new("git").current_dir(cwd).args(args).output()?;
-        if output.status.success() {
-            Ok(())
-        } else {
-            anyhow::bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-        }
     }
 }

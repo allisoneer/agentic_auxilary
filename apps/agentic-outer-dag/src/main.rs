@@ -505,11 +505,11 @@ mod tests {
     use crate::test_support::CwdGuard;
     use crate::test_support::EnvVarGuard;
     use crate::test_support::process_state_lock;
+    use crate::test_support::run_git;
     use crate::worktree::TargetWorktree;
     use anyhow::Result;
     use serde_json::Value;
     use std::fs;
-    use std::path::Path;
     use std::path::PathBuf;
     use tempfile::TempDir;
     use wiremock::Mock;
@@ -1105,22 +1105,6 @@ mod tests {
             run_git(&repo, ["commit", "-m", "initial"])?;
 
             Ok(Self { _temp: temp, repo })
-        }
-    }
-
-    fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) -> Result<()> {
-        let output = std::process::Command::new("git")
-            .current_dir(cwd)
-            .args(args)
-            .output()?;
-        if output.status.success() {
-            Ok(())
-        } else {
-            anyhow::bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
         }
     }
 }

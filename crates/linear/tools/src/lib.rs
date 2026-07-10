@@ -76,6 +76,23 @@ fn parse_identifier(input: &str) -> Option<(String, i32)> {
     None
 }
 
+fn issue_filter_for_team_number(team_key: String, number: i32) -> IssueFilter {
+    IssueFilter {
+        team: Some(TeamFilter {
+            key: Some(StringComparator {
+                eq: Some(team_key),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        number: Some(NumberComparator {
+            eq: Some(f64::from(number)),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
 const COMMENTS_PAGE_SIZE: usize = 10;
 const ISSUE_COMMENTS_FETCH_PAGE_SIZE: i32 = 50;
 const ISSUE_COMMENTS_MAX_PAGES: usize = 100;
@@ -126,20 +143,7 @@ impl LinearTools {
             IssueIdentifier::Identifier(ident) => {
                 let (team_key, number) = parse_identifier(&ident)
                     .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
-                let filter = IssueFilter {
-                    team: Some(TeamFilter {
-                        key: Some(StringComparator {
-                            eq: Some(team_key),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
-                    number: Some(NumberComparator {
-                        eq: Some(f64::from(number)),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
+                let filter = issue_filter_for_team_number(team_key, number);
                 let op = IssuesQuery::build(IssuesArguments {
                     first: Some(1),
                     after: None,
@@ -294,20 +298,7 @@ impl LinearTools {
                 let (team_key, number) = parse_identifier(&ident)
                     .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
 
-                let filter = IssueFilter {
-                    team: Some(TeamFilter {
-                        key: Some(StringComparator {
-                            eq: Some(team_key),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
-                    number: Some(NumberComparator {
-                        eq: Some(f64::from(number)),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
+                let filter = issue_filter_for_team_number(team_key, number);
 
                 let op = IssuesBranchNameQuery::build(IssuesArguments {
                     first: Some(1),
@@ -484,20 +475,7 @@ impl LinearTools {
                 // Use server-side filtering by team.key + number
                 let (team_key, number) = parse_identifier(&ident)
                     .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
-                let filter = IssueFilter {
-                    team: Some(TeamFilter {
-                        key: Some(StringComparator {
-                            eq: Some(team_key),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
-                    number: Some(NumberComparator {
-                        eq: Some(f64::from(number)),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
+                let filter = issue_filter_for_team_number(team_key, number);
                 let op = IssuesQuery::build(IssuesArguments {
                     first: Some(1),
                     after: None,

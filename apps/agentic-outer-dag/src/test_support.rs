@@ -10,6 +10,23 @@ pub fn process_state_lock() -> &'static Mutex<()> {
     PROCESS_STATE_LOCK.get_or_init(|| Mutex::new(()))
 }
 
+#[cfg(test)]
+pub fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) -> anyhow::Result<()> {
+    let output = std::process::Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+    }
+}
+
 pub struct CwdGuard {
     previous: PathBuf,
 }
