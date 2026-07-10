@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-bin"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "agentic-config",
  "agentic-tools-utils",
