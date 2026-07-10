@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.10] - 2026-07-10
+
+### ⛰️  Features
+- *(agentic-outer-dag-bin)* Auto-select start branch from linear
+
+### 🐛 Bug Fixes
+- Apply bounded PR review fixes
 ## [0.1.9] - 2026-07-09
 
 ### ⛰️  Features

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.24] - 2026-07-10
+
+### 🐛 Bug Fixes
+- *(claudecode_rs)* Register signals before pid readiness
 ## [0.1.23] - 2026-07-09
 
 ### 🐛 Bug Fixes
