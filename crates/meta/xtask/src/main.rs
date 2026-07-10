@@ -9,6 +9,7 @@ use std::path::PathBuf;
 pub mod autogen;
 pub mod claude;
 pub mod endpoint_coverage;
+pub mod install_manifest;
 pub mod justfile;
 pub mod marker;
 pub mod mise;
