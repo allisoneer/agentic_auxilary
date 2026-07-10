@@ -1,0 +1,19 @@
+mise.toml
+  s_536c21d86442e0::t_2b7b3ee98b809b 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a30f5d17b709cd59b0ee22801ae5f52e815f858e",
+  "prompts": {},
+  "sessions": {
+    "s_536c21d86442e0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b6a48789ffeZ4TSGOf7rIwMD0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
