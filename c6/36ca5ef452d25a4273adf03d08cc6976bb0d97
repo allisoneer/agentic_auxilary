@@ -1,0 +1,59 @@
+opencode.json
+  s_cc4e60a6e5f7df::t_6e239550d0498a 4,26,32,44
+.opencode/command/decide_findings_openai.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3,138
+.opencode/command/resolve_pr_ci_failures.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/linear_ticket_design_brief.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3,78,96
+.opencode/command/sync_with_main_and_resolve_conflicts.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+workflow.md
+  s_cc4e60a6e5f7df::t_e7dcfd86ca1ac5 237
+.opencode/command/openai.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 2-3
+CLAUDE.md
+  s_cc4e60a6e5f7df::t_e7dcfd86ca1ac5 264
+.opencode/command/review_pr_comments.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/linear_ticket_2_pr.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+docs/setup/fresh_install.md
+  s_cc4e60a6e5f7df::t_e7dcfd86ca1ac5 83,127
+.opencode/command/implement_plan.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/create_plan_final.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/create_plan_init.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/review.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+docs/auth.md
+  s_cc4e60a6e5f7df::t_d87a70051896da 50-51,60-61,64-71,78
+.opencode/command/capture_pr_comments_openai.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/research.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/resume_work_openai.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/unwind_openai.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3
+.opencode/command/resolve_pr_comments.md
+  s_cc4e60a6e5f7df::t_f220b8a369bba8 3,124,133,137,145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "c636ca5ef452d25a4273adf03d08cc6976bb0d97",
+  "prompts": {},
+  "sessions": {
+    "s_cc4e60a6e5f7df": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b2f9bf03ffeKk0C6UhSigX4ul",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
