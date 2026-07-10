@@ -1,0 +1,20 @@
+.opencode/command/resolve_pr_comments.md
+  s_5f0550b4388db8::t_56b7e0d8caff5e 129-131
+  s_5f0550b4388db8::t_719bc916798599 133,137,145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "aa35cf79e76be24aef6559dfb694bb401a36526f",
+  "prompts": {},
+  "sessions": {
+    "s_5f0550b4388db8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b2e7ade8ffe0c2BsPztbJ6eYO",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
