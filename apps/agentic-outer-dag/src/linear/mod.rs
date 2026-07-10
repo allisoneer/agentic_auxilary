@@ -1,8 +1,48 @@
 use crate::state::RunState;
+use anyhow::Context;
 use anyhow::Result;
+use gwt_worktree::types::BranchName;
 use linear_tools::LinearTools;
 use sha2::Digest;
 use sha2::Sha256;
+
+pub async fn require_issue_branch_name_for_start(ticket: &str) -> Result<String> {
+    let tools = LinearTools::new();
+
+    let branch = tools
+        .read_issue_branch_name(ticket.to_string())
+        .await
+        .with_context(|| {
+            format!(
+                "--branch omitted: failed to read Linear Issue.branchName for ticket '{ticket}'. Set LINEAR_API_KEY (and optionally LINEAR_GRAPHQL_URL) or rerun with --branch <branch> / --worktree <path>."
+            )
+        })?;
+
+    validate_linear_branch_name(ticket, &branch)
+}
+
+fn validate_linear_branch_name(ticket: &str, branch: &str) -> Result<String> {
+    let branch = branch.trim();
+
+    anyhow::ensure!(
+        !branch.is_empty(),
+        "Linear Issue.branchName for ticket '{ticket}' is empty; set the issue's branch name in Linear or pass --branch explicitly"
+    );
+
+    let lower = branch.to_ascii_lowercase();
+    anyhow::ensure!(
+        lower != "main" && lower != "master",
+        "Linear Issue.branchName for ticket '{ticket}' resolved to '{branch}', which is not allowed. Update the Linear issue branch name or pass --branch to override."
+    );
+
+    BranchName::new(branch.to_string()).map_err(|err| {
+        anyhow::anyhow!(
+            "Linear Issue.branchName '{branch}' for ticket '{ticket}' is not a valid git branch name: {err}"
+        )
+    })?;
+
+    Ok(branch.to_string())
+}
 
 pub async fn post_handoff_once(state: &mut RunState, message: &str) -> Result<()> {
     if !state.settings.linear_handoff_enabled {
@@ -44,6 +84,28 @@ fn should_skip_handoff(state: &RunState, digest: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validate_linear_branch_name_rejects_empty_and_main_like_values() {
+        let empty = validate_linear_branch_name("ENG-992", "   ")
+            .expect_err("empty branch names should be rejected");
+        assert!(empty.to_string().contains("is empty"));
+
+        let main = validate_linear_branch_name("ENG-992", "main")
+            .expect_err("main branch names should be rejected");
+        assert!(main.to_string().contains("not allowed"));
+
+        let master = validate_linear_branch_name("ENG-992", "MASTER")
+            .expect_err("master branch names should be rejected");
+        assert!(master.to_string().contains("not allowed"));
+    }
+
+    #[test]
+    fn validate_linear_branch_name_rejects_invalid_git_branch_names() {
+        let err = validate_linear_branch_name("ENG-992", "feature/../bad")
+            .expect_err("invalid git branch names should be rejected");
+        assert!(err.to_string().contains("is not a valid git branch name"));
+    }
 
     #[test]
     fn handoff_skips_when_same_digest_was_already_posted() {

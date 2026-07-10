@@ -250,6 +250,26 @@ mod tests {
     }
 
     #[test]
+    fn parses_start_without_branch_or_worktree() {
+        let cli = Cli::try_parse_from(["agentic-outer-dag", "start", "--ticket", "ENG-123"])
+            .expect("cli parse should succeed");
+
+        match cli.command {
+            Commands::Start {
+                ticket,
+                branch,
+                worktree,
+                ..
+            } => {
+                assert_eq!(ticket, "ENG-123");
+                assert!(branch.is_none());
+                assert!(worktree.is_none());
+            }
+            other => panic!("expected start command, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn resume_accepts_valid_stop_after_stage() {
         let cli = Cli::try_parse_from([
             "agentic-outer-dag",

@@ -21,6 +21,8 @@ use linear_queries::DateComparator;
 use linear_queries::IdComparator;
 use linear_queries::IssueArchiveArguments;
 use linear_queries::IssueArchiveMutation;
+use linear_queries::IssueBranchNameByIdArguments;
+use linear_queries::IssueBranchNameByIdQuery;
 use linear_queries::IssueByIdArguments;
 use linear_queries::IssueByIdQuery;
 use linear_queries::IssueCommentsArguments;
@@ -41,6 +43,7 @@ use linear_queries::IssueUpdateArguments;
 use linear_queries::IssueUpdateInput;
 use linear_queries::IssueUpdateMutation;
 use linear_queries::IssuesArguments;
+use linear_queries::IssuesBranchNameQuery;
 use linear_queries::IssuesQuery;
 use linear_queries::NullableNumberComparator;
 use linear_queries::NullableProjectFilter;
@@ -273,6 +276,59 @@ impl From<linear_queries::IssueSearchResult> for models::IssueSummary {
 
 // Removed universal-tool-core macros; Tool impls live in tools.rs
 impl LinearTools {
+    /// Fetch Linear Issue.branchName (UUID, ENG-123, or Linear issue URL).
+    pub async fn read_issue_branch_name(&self, issue: String) -> Result<String> {
+        let client = self.client()?;
+
+        match Self::resolve_issue_id(&issue) {
+            IssueIdentifier::Id(id) => {
+                let op = IssueBranchNameByIdQuery::build(IssueBranchNameByIdArguments { id });
+                let resp = client.run(op).await?;
+                let data = http::extract_data(resp)?;
+                let issue = data
+                    .issue
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue not found"))?;
+                Ok(issue.branch_name)
+            }
+            IssueIdentifier::Identifier(ident) => {
+                let (team_key, number) = parse_identifier(&ident)
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
+
+                let filter = IssueFilter {
+                    team: Some(TeamFilter {
+                        key: Some(StringComparator {
+                            eq: Some(team_key),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
+                    number: Some(NumberComparator {
+                        eq: Some(f64::from(number)),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
+
+                let op = IssuesBranchNameQuery::build(IssuesArguments {
+                    first: Some(1),
+                    after: None,
+                    filter: Some(filter),
+                });
+
+                let resp = client.run(op).await?;
+                let data = http::extract_data(resp)?;
+                let issue = data
+                    .issues
+                    .nodes
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("not found: Issue {ident} not found"))?;
+
+                Ok(issue.branch_name)
+            }
+        }
+    }
+
     /// Search Linear issues with full-text search or filters
     #[expect(clippy::too_many_arguments)]
     pub async fn search_issues(
