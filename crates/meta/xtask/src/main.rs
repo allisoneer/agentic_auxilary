@@ -5,21 +5,12 @@ use clap::Parser;
 use clap::Subcommand;
 use std::path::Path;
 use std::path::PathBuf;
-
-pub mod autogen;
-pub mod claude;
-pub mod endpoint_coverage;
-pub mod install_manifest;
-pub mod justfile;
-pub mod marker;
-pub mod mise;
-pub mod policy;
-pub mod readme;
-pub mod release_plz;
-pub mod release_plz_preflight;
-pub mod schema;
-pub mod sync;
-pub mod verify;
+use xtask::endpoint_coverage;
+use xtask::published_versions;
+use xtask::readme;
+use xtask::release_plz_preflight;
+use xtask::sync;
+use xtask::verify;
 
 #[derive(Parser, Debug)]
 #[command(name = "xtask", about = "Repo maintenance tasks")]
@@ -68,6 +59,15 @@ enum Cmd {
     },
     /// Fail if publishable crates are missing from crates.io
     ReleasePlzPreflight,
+    /// Inspect or update the published-versions contract from a release tag
+    PublishedVersions {
+        #[arg(long)]
+        tag: String,
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
 }
 
 fn strict_mode() -> bool {
@@ -86,6 +86,9 @@ fn main() -> Result<()> {
         Cmd::Verify { check } => verify::run(check),
         Cmd::EndpointCoverage { json, check } => endpoint_coverage::run(json, check),
         Cmd::ReleasePlzPreflight => release_plz_preflight::run(),
+        Cmd::PublishedVersions { tag, dry_run, json } => {
+            published_versions::run(&tag, dry_run, json)
+        }
     }
 }
 

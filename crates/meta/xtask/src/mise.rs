@@ -1,44 +1,17 @@
 //! mise.toml managed block rendering and sync.
 
 use crate::autogen::replace_named_block_toml;
+use crate::managed_mise::BINARY_SPECS;
+use crate::managed_mise::PLATFORM_TARGETS;
+use crate::published_versions::PublishedVersions;
 use anyhow::Context;
 use anyhow::Result;
-use cargo_metadata::Metadata;
 use std::fmt::Write as _;
 use std::fs;
 
 pub(crate) const MISE_PATH: &str = "mise.toml";
 
 const TOOL_PINS_BLOCK: &str = "claude = \"2.1.175\"\n\"github:anomalyco/opencode\" = \"1.17.4\"";
-
-const PLATFORM_TARGETS: [(&str, &str); 4] = [
-    ("linux-x64", "x86_64-unknown-linux-gnu"),
-    ("linux-arm64", "aarch64-unknown-linux-gnu"),
-    ("macos-x64", "x86_64-apple-darwin"),
-    ("macos-arm64", "aarch64-apple-darwin"),
-];
-
-const BINARY_SPECS: [BinarySpec; 4] = [
-    BinarySpec::new("thoughts-bin", "thoughts-bin-v"),
-    BinarySpec::new("agentic-bin", "agentic-bin-v"),
-    BinarySpec::new("agentic-mcp", "agentic-mcp-v"),
-    BinarySpec::new("opencode-orchestrator-mcp", "opencode-orchestrator-mcp-v"),
-];
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct BinarySpec {
-    tool_name: &'static str,
-    version_prefix: &'static str,
-}
-
-impl BinarySpec {
-    const fn new(tool_name: &'static str, version_prefix: &'static str) -> Self {
-        Self {
-            tool_name,
-            version_prefix,
-        }
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResolvedBinarySpec {
@@ -51,20 +24,14 @@ pub fn render_tool_pins() -> &'static str {
     TOOL_PINS_BLOCK
 }
 
-fn resolve_binary_specs(metadata: &Metadata) -> Result<Vec<ResolvedBinarySpec>> {
+fn resolve_binary_specs(published: &PublishedVersions) -> Result<Vec<ResolvedBinarySpec>> {
     BINARY_SPECS
         .iter()
         .map(|spec| {
-            let pkg = metadata
-                .packages
-                .iter()
-                .find(|pkg| pkg.name == spec.tool_name)
-                .with_context(|| format!("Failed to find workspace package {}", spec.tool_name))?;
-
             Ok(ResolvedBinarySpec {
                 tool_name: spec.tool_name,
                 version_prefix: spec.version_prefix,
-                version: pkg.version.to_string(),
+                version: published.version_for(spec.tool_name)?.to_string(),
             })
         })
         .collect()
@@ -99,24 +66,25 @@ fn render_agentic_binaries_from_specs(specs: &[ResolvedBinarySpec]) -> String {
     out
 }
 
-pub fn render_agentic_binaries(metadata: &Metadata) -> Result<String> {
-    let specs = resolve_binary_specs(metadata)?;
+pub fn render_agentic_binaries() -> Result<String> {
+    let published = PublishedVersions::load()?;
+    let specs = resolve_binary_specs(&published)?;
     Ok(render_agentic_binaries_from_specs(&specs))
 }
 
-fn render_updated_mise(original: &str, metadata: &Metadata) -> Result<(String, bool)> {
+fn render_updated_mise(original: &str) -> Result<(String, bool)> {
     let (updated, tool_pins_changed) =
         replace_named_block_toml(original, "mise:tool-pins", render_tool_pins())?;
-    let binaries = render_agentic_binaries(metadata)?;
+    let binaries = render_agentic_binaries()?;
     let (updated, agentic_binaries_changed) =
         replace_named_block_toml(&updated, "mise:agentic-binaries", &binaries)?;
 
     Ok((updated, tool_pins_changed || agentic_binaries_changed))
 }
 
-pub fn sync_mise(path: &str, metadata: &Metadata, dry_run: bool, check: bool) -> Result<bool> {
+pub fn sync_mise(path: &str, dry_run: bool, check: bool) -> Result<bool> {
     let original = fs::read_to_string(path).with_context(|| format!("Failed to read {path}"))?;
-    let (updated, changed) = render_updated_mise(&original, metadata)?;
+    let (updated, changed) = render_updated_mise(&original)?;
 
     if changed {
         if check {
@@ -142,7 +110,7 @@ mod tests {
 
     fn expected_agentic_binaries() -> &'static str {
         r#"[tools.thoughts-bin]
-version = "0.1.16"
+version = "0.1.24"
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin.platforms]
@@ -152,7 +120,7 @@ macos-x64 = { asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-bin]
-version = "0.1.4"
+version = "0.1.15"
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin.platforms]
@@ -162,7 +130,7 @@ macos-x64 = { asset_pattern = "agentic-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-mcp]
-version = "0.2.15"
+version = "0.2.42"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp.platforms]
@@ -172,7 +140,7 @@ macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
 [tools.opencode-orchestrator-mcp]
-version = "0.5.0"
+version = "0.7.9"
 version_prefix = "opencode-orchestrator-mcp-v"
 
 [tools.opencode-orchestrator-mcp.platforms]
@@ -188,22 +156,22 @@ macos-arm64 = { asset_pattern = "opencode-orchestrator-mcp-aarch64-apple-darwin.
             ResolvedBinarySpec {
                 tool_name: "thoughts-bin",
                 version_prefix: "thoughts-bin-v",
-                version: "0.1.16".to_string(),
+                version: "0.1.24".to_string(),
             },
             ResolvedBinarySpec {
                 tool_name: "agentic-bin",
                 version_prefix: "agentic-bin-v",
-                version: "0.1.4".to_string(),
+                version: "0.1.15".to_string(),
             },
             ResolvedBinarySpec {
                 tool_name: "agentic-mcp",
                 version_prefix: "agentic-mcp-v",
-                version: "0.2.15".to_string(),
+                version: "0.2.42".to_string(),
             },
             ResolvedBinarySpec {
                 tool_name: "opencode-orchestrator-mcp",
                 version_prefix: "opencode-orchestrator-mcp-v",
-                version: "0.5.0".to_string(),
+                version: "0.7.9".to_string(),
             },
         ]
     }
@@ -285,5 +253,25 @@ _.path = ["tools/bin"]
     #[test]
     fn sync_target_constant_is_root_mise_toml() {
         assert_eq!(MISE_PATH, "mise.toml");
+    }
+
+    #[test]
+    fn resolves_binary_specs_from_published_versions() {
+        let published = PublishedVersions::parse(
+            r#"schema_version = 1
+
+[binaries]
+agentic-bin = "0.1.15"
+agentic-mcp = "0.2.42"
+opencode-orchestrator-mcp = "0.7.9"
+thoughts-bin = "0.1.24"
+"#,
+        )
+        .expect("published versions parse");
+
+        assert_eq!(
+            resolve_binary_specs(&published).expect("resolve"),
+            sample_resolved_specs()
+        );
     }
 }

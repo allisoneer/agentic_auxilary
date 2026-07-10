@@ -2,9 +2,12 @@
 //!
 //! Validates metadata, policy rules, and generated file freshness.
 
+use crate::managed_mise::BINARY_SPECS;
 use crate::policy::IntegrationRule;
 use crate::policy::Policy;
 use crate::policy::TodoPolicy;
+use crate::published_versions::PUBLISHED_VERSIONS_PATH;
+use crate::published_versions::PublishedVersions;
 use crate::sync;
 use anyhow::Context;
 use anyhow::Result;
@@ -20,6 +23,7 @@ use std::io::BufReader;
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
+use toml::Value;
 
 /// Check if a package has a dependency (direct or renamed).
 fn has_dep(pkg: &Package, needle: &str) -> bool {
@@ -394,6 +398,134 @@ fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
     paths
 }
 
+fn check_published_versions_coherence() -> Result<()> {
+    let published = PublishedVersions::load()?;
+    check_mise_toml_matches(&published)?;
+    check_mise_lock_matches(&published)?;
+    check_generated_not_gitignored(&[PUBLISHED_VERSIONS_PATH, "mise.lock"])?;
+    Ok(())
+}
+
+fn check_mise_toml_matches(published: &PublishedVersions) -> Result<()> {
+    let contents = std::fs::read_to_string("mise.toml").context("Failed to read mise.toml")?;
+    check_mise_toml_matches_contents(&contents, published)
+}
+
+fn check_mise_toml_matches_contents(contents: &str, published: &PublishedVersions) -> Result<()> {
+    let parsed: Value = toml::from_str(contents).context("Failed to parse mise.toml")?;
+    let tools = parsed
+        .get("tools")
+        .and_then(Value::as_table)
+        .context("mise.toml is missing [tools] table")?;
+
+    for spec in &BINARY_SPECS {
+        let tool = tools
+            .get(spec.tool_name)
+            .and_then(Value::as_table)
+            .with_context(|| format!("mise.toml is missing [tools.{}]", spec.tool_name))?;
+        let version = tool
+            .get("version")
+            .and_then(Value::as_str)
+            .with_context(|| format!("mise.toml is missing version for {}", spec.tool_name))?;
+        let version_prefix = tool
+            .get("version_prefix")
+            .and_then(Value::as_str)
+            .with_context(|| {
+                format!("mise.toml is missing version_prefix for {}", spec.tool_name)
+            })?;
+        let expected = published.version_for(spec.tool_name)?;
+
+        if version != expected {
+            bail!(
+                "mise.toml version drift for {}: expected {} from {}, found {}. Run `cargo run -p xtask -- sync`.",
+                spec.tool_name,
+                expected,
+                PUBLISHED_VERSIONS_PATH,
+                version
+            );
+        }
+        if version_prefix != spec.version_prefix {
+            bail!(
+                "mise.toml version_prefix drift for {}: expected {}, found {}. Run `cargo run -p xtask -- sync`.",
+                spec.tool_name,
+                spec.version_prefix,
+                version_prefix
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn check_mise_lock_matches(published: &PublishedVersions) -> Result<()> {
+    let contents = std::fs::read_to_string("mise.lock").context("Failed to read mise.lock")?;
+    check_mise_lock_matches_contents(&contents, published)
+}
+
+fn check_mise_lock_matches_contents(contents: &str, published: &PublishedVersions) -> Result<()> {
+    let parsed: Value = toml::from_str(contents).context("Failed to parse mise.lock")?;
+    let tools = parsed
+        .get("tools")
+        .and_then(Value::as_table)
+        .context("mise.lock is missing [tools] table")?;
+
+    for spec in &BINARY_SPECS {
+        let entries = tools
+            .get(spec.tool_name)
+            .and_then(Value::as_array)
+            .with_context(|| {
+                format!("mise.lock is missing [[tools.{}]] entries", spec.tool_name)
+            })?;
+        if entries.is_empty() {
+            bail!("mise.lock has no [[tools.{}]] entries", spec.tool_name);
+        }
+
+        let expected = published.version_for(spec.tool_name)?;
+        for entry in entries {
+            let table = entry.as_table().with_context(|| {
+                format!("mise.lock entry for {} is not a table", spec.tool_name)
+            })?;
+            let version = table
+                .get("version")
+                .and_then(Value::as_str)
+                .with_context(|| {
+                    format!("mise.lock entry for {} is missing version", spec.tool_name)
+                })?;
+            if version != expected {
+                bail!(
+                    "mise.lock version drift for {}: expected {} from {}, found {}. Regenerate with `MISE_LOCKED=0 mise lock`.",
+                    spec.tool_name,
+                    expected,
+                    PUBLISHED_VERSIONS_PATH,
+                    version
+                );
+            }
+
+            let version_prefix = table
+                .get("options")
+                .and_then(Value::as_table)
+                .and_then(|options| options.get("version_prefix"))
+                .and_then(Value::as_str)
+                .with_context(|| {
+                    format!(
+                        "mise.lock entry for {} is missing options.version_prefix",
+                        spec.tool_name
+                    )
+                })?;
+            if version_prefix != spec.version_prefix {
+                bail!(
+                    "mise.lock version_prefix drift for {}: expected {}, found {}. Regenerate with `MISE_LOCKED=0 mise lock`.",
+                    spec.tool_name,
+                    spec.version_prefix,
+                    version_prefix
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Run the verify command.
 pub fn run(check: bool) -> Result<()> {
     eprintln!("[verify] Loading workspace metadata...");
@@ -421,14 +553,18 @@ pub fn run(check: bool) -> Result<()> {
     eprintln!("[verify] Checking TODO annotations...");
     check_todo_annotations(metadata.workspace_root.as_std_path(), &policy.todos)?;
 
-    // 5) Generated files freshness
+    // 5) Published-version coherence
+    eprintln!("[verify] Checking published-version contract coherence...");
+    check_published_versions_coherence()?;
+
+    // 6) Generated files freshness
     if check {
         eprintln!("[verify] Checking generated files are up to date...");
         // This will fail if any files need updating
         sync::run(true, true)?;
     }
 
-    // 6) Generated files not gitignored
+    // 7) Generated files not gitignored
     eprintln!("[verify] Checking generated files are not gitignored...");
     let gen_paths = collect_generated_paths(&metadata);
     let gen_path_refs: Vec<&str> = gen_paths.iter().map(std::string::String::as_str).collect();
@@ -514,6 +650,141 @@ mod tests {
             "expected format violation, got: {err}"
         );
         assert!(err.contains("a.rs:1"), "expected file:line ref, got: {err}");
+    }
+
+    fn sample_published_versions() -> PublishedVersions {
+        PublishedVersions::parse(
+            r#"schema_version = 1
+
+[binaries]
+agentic-bin = "0.1.15"
+agentic-mcp = "0.2.42"
+opencode-orchestrator-mcp = "0.7.9"
+thoughts-bin = "0.1.24"
+"#,
+        )
+        .expect("valid published versions")
+    }
+
+    #[test]
+    fn accepts_matching_mise_toml_versions() {
+        check_mise_toml_matches_contents(
+            r#"[tools]
+
+[tools.thoughts-bin]
+version = "0.1.24"
+version_prefix = "thoughts-bin-v"
+
+[tools.agentic-bin]
+version = "0.1.15"
+version_prefix = "agentic-bin-v"
+
+[tools.agentic-mcp]
+version = "0.2.42"
+version_prefix = "agentic-mcp-v"
+
+[tools.opencode-orchestrator-mcp]
+version = "0.7.9"
+version_prefix = "opencode-orchestrator-mcp-v"
+"#,
+            &sample_published_versions(),
+        )
+        .expect("matching mise.toml should pass");
+    }
+
+    #[test]
+    fn rejects_mise_toml_version_drift() {
+        let err = check_mise_toml_matches_contents(
+            r#"[tools]
+
+[tools.thoughts-bin]
+version = "0.1.25"
+version_prefix = "thoughts-bin-v"
+
+[tools.agentic-bin]
+version = "0.1.15"
+version_prefix = "agentic-bin-v"
+
+[tools.agentic-mcp]
+version = "0.2.42"
+version_prefix = "agentic-mcp-v"
+
+[tools.opencode-orchestrator-mcp]
+version = "0.7.9"
+version_prefix = "opencode-orchestrator-mcp-v"
+"#,
+            &sample_published_versions(),
+        )
+        .expect_err("drift should fail")
+        .to_string();
+        assert!(err.contains("mise.toml version drift for thoughts-bin"));
+    }
+
+    #[test]
+    fn accepts_matching_mise_lock_versions() {
+        check_mise_lock_matches_contents(
+            r#"[[tools.thoughts-bin]]
+version = "0.1.24"
+
+[tools.thoughts-bin.options]
+version_prefix = "thoughts-bin-v"
+
+[[tools.agentic-bin]]
+version = "0.1.15"
+
+[tools.agentic-bin.options]
+version_prefix = "agentic-bin-v"
+
+[[tools.agentic-mcp]]
+version = "0.2.42"
+
+[tools.agentic-mcp.options]
+version_prefix = "agentic-mcp-v"
+
+[[tools.opencode-orchestrator-mcp]]
+version = "0.7.9"
+
+[tools.opencode-orchestrator-mcp.options]
+version_prefix = "opencode-orchestrator-mcp-v"
+"#,
+            &sample_published_versions(),
+        )
+        .expect("matching mise.lock should pass");
+    }
+
+    #[test]
+    fn rejects_mise_lock_version_drift_with_remediation() {
+        let err = check_mise_lock_matches_contents(
+            r#"[[tools.thoughts-bin]]
+version = "0.1.23"
+
+[tools.thoughts-bin.options]
+version_prefix = "thoughts-bin-v"
+
+[[tools.agentic-bin]]
+version = "0.1.15"
+
+[tools.agentic-bin.options]
+version_prefix = "agentic-bin-v"
+
+[[tools.agentic-mcp]]
+version = "0.2.42"
+
+[tools.agentic-mcp.options]
+version_prefix = "agentic-mcp-v"
+
+[[tools.opencode-orchestrator-mcp]]
+version = "0.7.9"
+
+[tools.opencode-orchestrator-mcp.options]
+version_prefix = "opencode-orchestrator-mcp-v"
+"#,
+            &sample_published_versions(),
+        )
+        .expect_err("drift should fail")
+        .to_string();
+        assert!(err.contains("mise.lock version drift for thoughts-bin"));
+        assert!(err.contains("MISE_LOCKED=0 mise lock"));
     }
 
     #[test]

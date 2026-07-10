@@ -1,0 +1,7 @@
+schema_version = 1
+
+[binaries]
+thoughts-bin = "0.1.24"
+agentic-bin = "0.1.15"
+agentic-mcp = "0.2.42"
+opencode-orchestrator-mcp = "0.7.9"
