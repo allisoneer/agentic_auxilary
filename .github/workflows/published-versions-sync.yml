@@ -141,7 +141,7 @@ jobs:
 
           git config user.name "published-versions-sync[bot]"
           git config user.email "published-versions-sync[bot]@users.noreply.github.com"
-          git config --local credential.helper '!f() { if [ "$1" = get ]; then echo "username=x-access-token"; echo "password=${GITHUB_TOKEN}"; fi; }; f'
+          git config --local credential.helper "!f() { if [ \"\$1\" = get ]; then echo \"username=x-access-token\"; echo \"password=\${GITHUB_TOKEN}\"; fi; }; f"
           while IFS= read -r path; do
             git add -- "$path"
           done <<< "$changed_files"
