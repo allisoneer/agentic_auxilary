@@ -13,9 +13,12 @@ Read one Linear ticket and its full comment history, persist a ticket corpus art
 3. Treat `<userMessage>` as loose natural language with no first-pass flags or modifiers.
 4. Require exactly one Linear ticket reference; ask and stop if it is missing or ambiguous.
 5. Full ticket read means `linear_read_issue` plus repeated `linear_get_issue_comments` until `has_more=false`; stop fetching comments immediately after `has_more=false` and do not call again.
-6. Persist the authoritative ticket corpus artifact before posting to Linear, and run `thoughts_sync` after each artifact write.
+6. Persist the authoritative ticket corpus artifact before posting to Linear using the shared contract:
+   - filename: `linear-{lowercase-key}-ticket.md`
+   - body includes `Ticket corpus schema: linear-ticket-corpus@v1` + snapshot timestamp + explicit snapshot disclaimer
+   - run `thoughts_sync` after each artifact write
 7. This command is strictly Linear comment-only: post exactly one final Linear comment with `linear_add_comment`, and do not mutate Linear issue fields or perform any other external workflow mutations such as creating plans, implementing code, committing, pushing, or creating/updating PRs.
-8. Duplicate runs may append fresh comments and create fresh artifacts; do not attempt comment updates or deduplication.
+8. Duplicate runs may append fresh comments and create fresh design/scoping brief artifacts; the ticket corpus artifact should be refreshed by overwriting the stable `linear-{lowercase-key}-ticket.md` file.
 9. Bounded research is allowed only when needed to avoid guessing.
 10. Hard stop immediately after posting the Linear comment and returning the compact summary.
 </workflow_contract>
@@ -75,17 +78,23 @@ $ARGUMENTS
 
 ## Step 4: Persist the Authoritative Ticket Corpus Artifact
 
-1. Spawn a bounded `Normal` child session whose only job is to write the ticket corpus artifact under thoughts and sync it.
-2. Provide that child the full ticket output from Step 3 and require an artifact that includes:
-   - ticket identifier
-   - ticket title
-   - ticket URL and current status if available
-   - full description
-   - full comments with authorship and timestamps when available
-   - a note that it is the authoritative ticket corpus for this run
-3. Require the child to run `thoughts_sync` with `tools_cli_just_execute` after writing.
-4. Read the produced artifact back in the orchestrator session before proceeding.
-5. Do not begin synthesis or Linear posting until this artifact exists.
+1. Persist the ticket corpus artifact using the shared contract:
+   - Stable filename: `linear-{lowercase-key}-ticket.md`
+   - Schema marker: `Ticket corpus schema: linear-ticket-corpus@v1`
+   - Snapshot timestamp + disclaimer: point-in-time snapshot; may be stale
+2. Because the orchestrator cannot write artifacts directly, persist via a child session:
+   - Preferred: resume the same Linear child session from Step 3 and have it write the artifact via `thoughts_write_document(doc_type="artifact", filename=...)`, then run `thoughts_sync` via `tools_cli_just_execute`, and return the artifact path.
+   - Fallback: if required thoughts/just tools are unavailable in that Linear child configuration, spawn a bounded Normal child whose only job is to write the artifact + run `thoughts_sync`.
+3. Provide that child the full ticket output from Step 3 and require an artifact that includes:
+    - ticket identifier
+    - ticket title
+    - ticket URL and current status if available
+    - full description
+    - full comments with authorship and timestamps when available
+    - a note that it is the authoritative ticket corpus for this run
+4. Require `thoughts_sync` immediately after writing (preferred in the same Linear child; otherwise in the fallback writer child).
+5. Read the produced artifact back in the orchestrator session before proceeding.
+6. Do not begin synthesis or Linear posting until this artifact exists.
 
 </step_4>
 
