@@ -22,11 +22,12 @@ The goal is to end in one of these grounded states:
 4. Require a Linear ticket key, Linear URL, or other identifiable Linear issue reference. If none is present, ask the user for one and stop.
 5. Do not create or switch branches. Assume the user already started this command on the correct branch.
 6. At every major stage, return control to the orchestrator for the next DAG decision. Child sessions execute bounded work; they do not autonomously continue into later stages.
-7. Before downstream codebase work:
-   - read the full ticket description and comments (`linear_read_issue` + repeat `linear_get_issue_comments` until `has_more=false`; stop immediately and do not call again)
+7. Before downstream codebase work, delegate full ticket intake and corpus export to a bounded Linear-capable child session. That delegated intake/export must:
+   - resolve the ticket, read the full ticket description, and paginate comments until the complete corpus is captured
    - ensure the ticket is `In Progress` if it is not already
    - persist the full corpus using the shared ticket-corpus artifact contract (stable filename + schema marker + snapshot disclaimer)
-   - run `thoughts_sync` immediately after writing the corpus artifact
+   - run `thoughts_sync` immediately after writing the corpus artifact when that child has the required thoughts/just tools, otherwise return a clear missing-tools handoff for the fallback path
+   - return artifact metadata to the orchestrator, including the saved artifact path and enough ticket identifiers to continue the workflow groundedly
 8. Use a two-layer gate before planning or implementation:
    - first a task-clarity gate
    - then a feasibility-reconnaissance gate when codebase context is still needed
@@ -78,13 +79,13 @@ $ARGUMENTS
 ## Step 3: Read and Normalize Linear Ticket State
 
 1. Spawn a bounded Linear-capable child session.
-2. In that child session:
+2. In the prompt you send to that child session, instruct it to:
     - resolve the ticket reference
-    - call `linear_read_issue` to read issue details + description
-    - call `linear_get_issue_comments` repeatedly with the same issue until `has_more=false`
-    - stop immediately once `has_more=false`; do not issue another identical comments call
+    - read issue details + description and paginate comments until `has_more=false`, stopping immediately once `has_more=false` and not issuing another identical comments call
     - ensure the ticket status is `In Progress` if it is not already
-    - return the canonical ticket identifier, ticket URL, current status, full description text, full comment corpus, and any obviously relevant linked context it could read directly from Linear
+    - write the ticket corpus artifact itself using the Step 4 contract when its tool access allows that path
+    - run `thoughts_sync` immediately after writing the artifact when its tool access allows that path
+    - return the canonical ticket identifier, ticket URL, current status, saved artifact path, and any obviously relevant linked context it could read directly from Linear
 3. Do not let the Linear child proceed into codebase research, planning, or implementation.
 4. If the ticket cannot be resolved responsibly, return to the user with the specific blocker and stop.
 
@@ -94,24 +95,23 @@ $ARGUMENTS
 
 ## Step 4: Persist the Ticket Corpus as a Thoughts Artifact
 
-1. Persist the full ticket corpus snapshot as a thoughts artifact using the shared contract:
+1. The ticket corpus artifact produced by the Linear child should use this shared contract:
    - Stable filename: `linear-{lowercase-key}-ticket.md` (example: `linear-eng-869-ticket.md`)
    - Schema marker (required): `Ticket corpus schema: linear-ticket-corpus@v1`
    - Snapshot timestamp + disclaimer (required): explicitly state this is a point-in-time snapshot and may be stale
    - Include: canonical issue fields, full description, and full comments with authorship and timestamps when available
    - Overwrite the same filename on reruns to refresh the snapshot
-2. Because the orchestrator cannot write artifacts directly, persist via a child session:
-   - Preferred: have the same Linear child session from Step 3 write the artifact via `thoughts_write_document(doc_type="artifact", filename=...)`, then run `thoughts_sync` via `tools_cli_just_execute`, and return the saved artifact path.
-   - Fallback: if required thoughts/just tools are unavailable in that Linear child configuration, hand off the full corpus to a bounded Normal child whose only job is to write the artifact + run `thoughts_sync`.
-3. The artifact should capture at minimum:
+2. Preferred path: the same bounded Linear-capable child from Step 3 should perform the write + sync and return the saved artifact path.
+3. Fallback caveat: if thoughts/just availability is not actually present in that Linear child configuration, use a separate bounded child session whose only job is to write the artifact with this contract, run `thoughts_sync`, and return the saved artifact path.
+4. The artifact should capture at minimum:
     - ticket key and URL
     - current Linear status
     - ticket title
     - full description
     - full comments with authorship and timestamps when available
     - a short note that the artifact is the authoritative ticket corpus for this run
-4. Read the produced artifact back in the orchestrator session before proceeding.
-5. Do not begin codebase research or planning until this artifact exists.
+5. Read the produced artifact back in the orchestrator session before proceeding.
+6. Do not begin codebase research or planning until this artifact exists.
 
 </step_4>
 
@@ -206,17 +206,18 @@ $ARGUMENTS
 
 ## Step 10: Update Linear and Return the Final Summary
 
-1. Spawn a bounded Linear-capable child session to comment on the ticket with the PR link once the PR is created.
-2. Follow-up ticket requirement: If the current ticket's definition of done requires a follow-up Linear issue for automatic downloading/updating of Linear tickets + comments outside agent scope, do it here only after successful implementation/PR creation.
-3. Before any `linear_create_issue` call or state targeting for that follow-up work:
-   - call `linear_get_metadata` to resolve the UUIDs you need
-   - identify the ENG team `team_id`
-   - identify the ENG-team `Triage` state `state_id`
-   - do not assume names map directly to IDs
-4. Search for an existing follow-up issue first, but reuse one only when you can establish a stable match: the issue must reference the original ticket key and/or URL and also match the canonical follow-up marker/title for this work. If that stable match is not found, do not update a possibly unrelated issue.
-5. Otherwise create the follow-up issue with `linear_create_issue(team_id, title, description, state_id=triage)` and include the canonical follow-up marker/title plus links back to the original ticket and PR.
-6. If an obvious review/done-adjacent status exists and changing it is clearly appropriate, use judgment; otherwise leave status as-is rather than inventing a workflow state.
-7. Return a final summary that includes:
+1. Spawn a bounded Linear-capable child session for the final Linear work once the PR is created.
+2. In the prompt you send to that child session, instruct it to comment on the ticket with the PR link.
+3. Follow-up ticket requirement: If the current ticket's definition of done requires a follow-up Linear issue for automatic downloading/updating of Linear tickets + comments outside agent scope, instruct that same Linear child session to handle it only after successful implementation/PR creation.
+4. In those child-session instructions, require that before any follow-up issue creation or state targeting:
+   - it resolves the metadata UUIDs it needs
+   - it identifies the ENG team `team_id`
+   - it identifies the ENG-team `Triage` state `state_id`
+   - it does not assume names map directly to IDs
+5. In those child-session instructions, require it to search for an existing follow-up issue first, but reuse one only when it can establish a stable match: the issue must reference the original ticket key and/or URL and also match the canonical follow-up marker/title for this work. If that stable match is not found, do not update a possibly unrelated issue.
+6. Otherwise instruct that Linear child session to create the follow-up issue and include the canonical follow-up marker/title plus links back to the original ticket and PR.
+7. If an obvious review/done-adjacent status exists and changing it is clearly appropriate, instruct the Linear child to use judgment; otherwise leave status as-is rather than inventing a workflow state.
+8. Return a final summary that includes:
     - ticket key and URL
     - thoughts artifact path for the ticket corpus
     - reconnaissance doc path if one was created
@@ -228,7 +229,7 @@ $ARGUMENTS
    - PR URL
    - Linear comment/update status
    - any blockers, caveats, or remaining manual follow-up
-8. If the workflow stopped early, say exactly where and why.
+9. If the workflow stopped early, say exactly where and why.
 
 </step_10>
 
