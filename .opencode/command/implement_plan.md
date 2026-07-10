@@ -1,6 +1,6 @@
 ---
 description: Implement an approved technical plan phase by phase (GPT-5.4 optimized)
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

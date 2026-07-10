@@ -1,6 +1,6 @@
 ---
 description: Research the codebase, references, or anything else (GPT-5.4 optimized)
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

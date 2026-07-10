@@ -1,6 +1,6 @@
 ---
 description: Sync current branch with origin/main via merge and resolve bounded mechanical conflicts (no force-push)
-agent: OrchestratorOpenAI
+agent: Orchestrator
 ---
 
 <task>

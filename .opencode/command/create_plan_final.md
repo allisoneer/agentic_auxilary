@@ -1,6 +1,6 @@
 ---
 description: Finalize plan creation by writing requirements and generating the implementation plan (GPT-5.4 optimized)
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

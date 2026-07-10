@@ -1,6 +1,6 @@
 ---
 description: Review PR comments with triage, analysis, and artifact output (GPT-5.4 optimized)
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

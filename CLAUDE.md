@@ -261,7 +261,7 @@ These files contain important project-level context that should be read and kept
 
 See `workflow.md` -> "Code Review (/review)" for:
 
-- Dedicated Review agents (ReviewClaude/ReviewOpenAI)
+- Dedicated Review agent (`Review`)
 - Tool isolation rules for `review_*`
 - End-to-end `/review` usage
 

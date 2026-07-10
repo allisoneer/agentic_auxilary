@@ -1,6 +1,6 @@
 ---
 description: Begin plan creation with grounded investigation and interactive question resolution (GPT-5.4 optimized)
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

@@ -1,6 +1,6 @@
 ---
 description: Capture PR review comments and code snapshots into a normalized artifact (GPT-5.4 optimized)
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

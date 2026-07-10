@@ -154,7 +154,7 @@ Request-scoped MCP cancellation now flows through `ToolContext`, so long-running
 
 ## Level 2: Sub-Agent Tools
 
-Each "primary session" also has sub agents! I didn't like the way Claude Code would get lost deciding "which sub agent to use", nor did I like sub agents having the ability to make edits. So my sub agents are defined into an 8-way matrix, that simplifies down to 2 enum params.
+Each "primary session" also has sub-agents. I did not want the parent session getting lost deciding "which sub-agent to use," nor did I want sub-agents having the ability to make edits. So my sub-agents are defined into an 8-way matrix that simplifies down to 2 enum params.
 
 ### `ask_agent` Tool Matrix
 
@@ -234,7 +234,7 @@ Need to do something?
 
 ## Code Review (/review)
 
-- `/review` runs under the dedicated `ReviewClaude` agent.
+- `/review` runs under the dedicated `Review` agent.
 - Review tools (`review_*`) are **not available** to the Normal agent.
 - Workflow (fileless, cache-based):
   1. `review_diff_snapshot` generates a paginated git diff via pure git2, caches it server-side, and returns a `diff_handle`
