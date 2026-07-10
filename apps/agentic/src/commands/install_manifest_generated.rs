@@ -3008,15 +3008,15 @@ $ARGUMENTS
     - drafts and posts the grounded reply/question,
     - reports the exact comment IDs handled.
 2. For `research` clusters:
-   - run `research` on only the disputed threads or related code/contract area,
-   - read the resulting research doc,
-   - then reclassify the cluster.
+    - run `research` on only the disputed threads or related code/contract area,
+    - read the resulting research doc,
+    - then reclassify the cluster.
 3. For `bounded_change` clusters:
-     - spawn a bounded Normal session to make the change directly,
+    - spawn a bounded Normal session to make the change directly,
     - verify with the strongest appropriate checks and at minimum `just check` plus `just test`,
     - create an atomic commit for the addressed batch,
     - push that commit,
-     - only then post grounded replies in a follow-up bounded Normal session.
+    - only then post grounded replies in a follow-up bounded Normal session.
 4. For `planned_change` clusters:
     - run `create_plan_init`,
     - then `create_plan_final`,
@@ -3024,7 +3024,7 @@ $ARGUMENTS
     - ensure the resulting implementation verification includes `just check` and `just test` or a stronger justified equivalent,
     - create an atomic commit,
     - push it,
-     - only then run a bounded Normal session to post final replies.
+    - only then run a bounded Normal session to post final replies.
 5. For `out_of_scope` clusters:
     - post a reply only if the autonomy bounds allow replies,
     - otherwise record the rationale in your final summary.
