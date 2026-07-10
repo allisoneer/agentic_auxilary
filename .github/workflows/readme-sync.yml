@@ -61,7 +61,7 @@ jobs:
             exit 0
           fi
 
-          allowed_re='^(CLAUDE\.md|README\.md|release-plz\.toml|mise\.toml|justfile|agentic\.schema\.json|apps/.*/CLAUDE\.md|crates/.*/CLAUDE\.md|bindings/.*/CLAUDE\.md)$'
+          allowed_re='^(CLAUDE\.md|README\.md|release-plz\.toml|mise\.toml|justfile|agentic\.schema\.json|apps/.*/CLAUDE\.md|crates/.*/CLAUDE\.md|bindings/.*/CLAUDE\.md|apps/agentic/src/commands/install_manifest_generated\.rs)$'
           bad="$(printf '%s\n' "$changed_files" | grep -Ev "$allowed_re" || true)"
           if [ -n "$bad" ]; then
             echo "::error::xtask sync modified unexpected files; refusing to auto-commit"

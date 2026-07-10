@@ -6,6 +6,8 @@ use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use reqwest::StatusCode;
 use std::collections::BTreeSet;
+use std::path::Path;
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -153,6 +155,29 @@ fn ensure_no_missing_crates(missing: &[String]) -> Result<()> {
     );
 }
 
+fn verify_agentic_bin_packages(ws_root: &Path) -> Result<()> {
+    eprintln!(
+        "[release-plz-preflight] Verifying agentic-bin package boundary via `cargo package`..."
+    );
+
+    let output = Command::new("cargo")
+        .args(["package", "-p", "agentic-bin", "--allow-dirty"])
+        .current_dir(ws_root)
+        .output()
+        .context("Failed to run `cargo package -p agentic-bin --allow-dirty`")?;
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!(
+            "`cargo package -p agentic-bin --allow-dirty` failed with {status}:\n{stderr}\n{stdout}",
+            status = output.status
+        );
+    }
+
+    Ok(())
+}
+
 pub fn run() -> Result<()> {
     eprintln!("[release-plz-preflight] Loading workspace metadata...");
     let metadata = MetadataCommand::new()
@@ -167,8 +192,10 @@ pub fn run() -> Result<()> {
     let mut pacer = FixedIntervalPacer::new(CRATES_IO_PACE_INTERVAL);
     let missing = missing_publishable_crates(&client, &crate_names, &mut pacer)?;
     ensure_no_missing_crates(&missing)?;
+    verify_agentic_bin_packages(metadata.workspace_root.as_std_path())?;
 
     eprintln!("[release-plz-preflight] All publishable crates exist on crates.io.");
+    eprintln!("[release-plz-preflight] agentic-bin packages cleanly.");
     Ok(())
 }
 

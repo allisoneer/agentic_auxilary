@@ -4,6 +4,7 @@
 //! mise.toml, and agentic.schema.json.
 
 use crate::claude;
+use crate::install_manifest;
 use crate::justfile;
 use crate::mise;
 use crate::policy::Policy;
@@ -67,6 +68,14 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
     eprintln!("[sync] Syncing justfile...");
     let justfile_changed = justfile::sync_justfile("justfile", &metadata, dry_run, check)?;
 
+    // agentic-bin install manifest embedded assets
+    eprintln!("[sync] Syncing agentic-bin install manifest embedded assets...");
+    let install_manifest_changed = install_manifest::sync_install_manifest_generated(
+        metadata.workspace_root.as_std_path(),
+        dry_run,
+        check,
+    )?;
+
     // agentic.schema.json (6th target)
     // Note: agentic.toml.example is intentionally not auto-synced here and must
     // be updated manually when the modeled config surface changes.
@@ -80,6 +89,7 @@ pub fn run(dry_run: bool, check: bool) -> Result<()> {
         + usize::from(mise_changed)
         + usize::from(readme_changed)
         + usize::from(justfile_changed)
+        + usize::from(install_manifest_changed)
         + usize::from(schema_changed);
     if total_changes == 0 {
         eprintln!("[sync] No changes needed.");
