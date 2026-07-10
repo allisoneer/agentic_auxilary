@@ -80,7 +80,7 @@ Notes:
 
 Do this before you start blaming MCP wiring.
 
-- Day to day, most people here use `OrchestratorOpenAI` in OpenCode, so start with the normal OpenCode login flow.
+- Day to day, most people here use `Orchestrator` in OpenCode, so start with the normal OpenCode login flow.
 - **OpenCode:** launch `opencode` and make sure the providers you plan to use are authenticated there. OpenCode keeps config under `~/.config/opencode/`; provider auth state lives in OpenCode's data-dir auth file, commonly `~/.local/share/opencode/auth.json`.
 - **Claude Code alternative:** if you use Claude-backed sub-agents or the Claude orchestration path, install Claude Code and log into it on the same machine as well. That state is still required for those flows.
 
@@ -124,7 +124,7 @@ This is the same `mcp` block shape used in this repo, just lifted as a standalon
 
 ### Claude Code alternative
 
-Most day-to-day usage here stays on `OrchestratorOpenAI` in OpenCode, but the Claude path is still a supported alternative for Claude-backed sub-agents or for people explicitly using the Claude orchestrator version.
+Most day-to-day usage here stays on `Orchestrator` in OpenCode, but the Claude path is still a supported alternative for Claude-backed sub-agents or for people explicitly using the Claude orchestrator version.
 
 1. Install Claude Code and complete its login flow on the machine that will run the agents.
 2. Reuse the same local MCP binaries described above; the Claude path still needs `agentic-mcp` and related tooling installed and on `PATH`.

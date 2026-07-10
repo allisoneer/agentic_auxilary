@@ -1,6 +1,6 @@
 ---
 description: Post a structured design/scoping brief and questions to a Linear ticket, then stop
-agent: OrchestratorOpenAI
+agent: Orchestrator
 ---
 
 <task>
@@ -75,7 +75,7 @@ $ARGUMENTS
 
 ## Step 4: Persist the Authoritative Ticket Corpus Artifact
 
-1. Spawn a bounded `NormalOpenAI` child session whose only job is to write the ticket corpus artifact under thoughts and sync it.
+1. Spawn a bounded `Normal` child session whose only job is to write the ticket corpus artifact under thoughts and sync it.
 2. Provide that child the full ticket output from Step 3 and require an artifact that includes:
    - ticket identifier
    - ticket title
@@ -93,7 +93,7 @@ $ARGUMENTS
 
 ## Step 5: Create the Design/Scoping Brief Artifact and Exact Comment Body
 
-1. Spawn a bounded `NormalOpenAI` child session.
+1. Spawn a bounded `Normal` child session.
 2. Give it the ticket corpus artifact path plus the original ticket intake.
 3. Its only responsibilities are:
    - synthesize the current understanding grounded in the ticket corpus

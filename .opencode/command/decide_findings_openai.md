@@ -1,6 +1,6 @@
 ---
 description: Autonomously drive findings resolution from the orchestrator layer (GPT-5.4 optimized)
-agent: OrchestratorOpenAI
+agent: Orchestrator
 ---
 
 <task>
@@ -135,7 +135,7 @@ $ARGUMENTS
 ## Step 5: Execute Each Route with Bounded Child Sessions
 
 1. For `cleanup_now` clusters:
-   - Spawn a bounded NormalOpenAI session that:
+    - Spawn a bounded Normal session that:
      - Reads the relevant file(s) and finding context
      - Applies the fix
      - Verifies with `just check` and `just test`

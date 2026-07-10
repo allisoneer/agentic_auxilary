@@ -47,6 +47,8 @@ OpenCode is the primary day-to-day path in this repo, but Claude Code auth state
 
 Claude Code can pass env vars either per MCP server or at the session level. The important bit is still that the spawned MCP process receives the secrets it needs.
 
+**Server-scoped env (only for this MCP server):**
+
 ```json
 {
   "mcpServers": {
@@ -55,17 +57,25 @@ Claude Code can pass env vars either per MCP server or at the session level. The
       "command": "agentic-mcp",
       "env": {
         "GH_TOKEN": "set-me-here",
-        "OPENROUTER_API_KEY": "set-me-here"
+        "OPENROUTER_API_KEY": "set-me-here",
+        "EXA_API_KEY": "set-me-here"
       }
     }
-  },
+  }
+}
+```
+
+**Session-scoped env (top-level `env` for the whole Claude Code session):**
+
+```json
+{
   "env": {
     "EXA_API_KEY": "set-me-here"
   }
 }
 ```
 
-Use either `mcpServers.<name>.env`, top-level `env`, or both, depending on how narrowly you want to scope the variables.
+Use `mcpServers.<name>.env` when only one MCP server should see a secret, and top-level `env` when the whole Claude Code session should inherit it.
 
 ## Notes
 

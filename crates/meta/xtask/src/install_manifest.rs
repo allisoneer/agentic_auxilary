@@ -12,9 +12,7 @@ pub const GENERATED_PATH: &str = "apps/agentic/src/commands/install_manifest_gen
 const ASSET_PATHS: &[&str] = &[
     ".opencode/sysprompt.md",
     ".opencode/sysprompt_gpt54.md",
-    ".opencode/orchestrator_sysprompt.md",
     ".opencode/orchestrator_sysprompt_gpt54.md",
-    ".opencode/review_sysprompt.md",
     ".opencode/review_sysprompt_gpt54.md",
     ".opencode/command/bash.md",
     ".opencode/command/capture_pr_comments_openai.md",

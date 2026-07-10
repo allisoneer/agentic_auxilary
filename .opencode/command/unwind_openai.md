@@ -1,6 +1,6 @@
 ---
 description: Capture a structured OpenAI handoff artifact for later resumption
-agent: NormalOpenAI
+agent: Normal
 ---
 
 <task>

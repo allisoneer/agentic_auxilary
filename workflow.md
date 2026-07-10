@@ -234,7 +234,7 @@ Need to do something?
 
 ## Code Review (/review)
 
-- `/review` runs under the dedicated `ReviewOpenAI` agent.
+- `/review` runs under the dedicated `Review` agent.
 - Review tools (`review_*`) are **not available** to the Normal agent.
 - Workflow (fileless, cache-based):
   1. `review_diff_snapshot` generates a paginated git diff via pure git2, caches it server-side, and returns a `diff_handle`

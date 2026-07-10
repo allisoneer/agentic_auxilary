@@ -1,7 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": false,
-  "default_agent": "NormalOpenAI",
+  "default_agent": "Normal",
   "permission": {
     "edit": "ask",
     "write": "ask",
@@ -23,13 +23,13 @@
     "tools_review_*": false
   },
   "agent": {
-    "NormalOpenAI": {
+    "Normal": {
       "description": "OpenAI-backed general-purpose primary session for repo research, planning, and implementation workflows.",
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
       "model": "openai/gpt-5.4",
       "mode": "primary"
     },
-    "OrchestratorOpenAI": {
+    "Orchestrator": {
       "description": "OpenAI orchestration-only agent for routing, coordination, and todowrite/read state management without direct code execution.",
       "prompt": "{file:./.opencode/orchestrator_sysprompt_gpt54.md}",
       "model": "openai/gpt-5.5",
@@ -41,7 +41,7 @@
         "todowrite": "allow"
       }
     },
-    "ReviewOpenAI": {
+    "Review": {
       "description": "OpenAI adversarial review agent for evidence-grounded change review using review tools and read-only discovery surfaces.",
       "prompt": "{file:./.opencode/review_sysprompt_gpt54.md}",
       "model": "openai/gpt-5.5",

@@ -1,6 +1,6 @@
 ---
 description: Triage and remediate PR CI failures; capture evidence and write an artifact
-agent: OrchestratorOpenAI
+agent: Orchestrator
 ---
 
 <task>
