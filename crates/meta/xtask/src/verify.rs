@@ -372,6 +372,7 @@ fn collect_generated_paths(metadata: &Metadata) -> Vec<String> {
         "README.md".to_string(),
         "justfile".to_string(),
         "agentic.schema.json".to_string(),
+        "apps/agentic/src/commands/install_manifest_generated.rs".to_string(),
     ];
     let ws_root = metadata.workspace_root.as_std_path();
 

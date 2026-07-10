@@ -3,131 +3,13 @@ pub struct InstallAsset {
     pub contents: &'static str,
 }
 
-macro_rules! include_repo_str {
-    ($path:literal) => {
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../", $path))
-    };
-}
-
 // Order matters: .opencode assets first, opencode.json last.
-pub const INSTALL_MANIFEST: &[InstallAsset] = &[
-    InstallAsset {
-        rel_path: ".opencode/sysprompt.md",
-        contents: include_repo_str!(".opencode/sysprompt.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/sysprompt_gpt54.md",
-        contents: include_repo_str!(".opencode/sysprompt_gpt54.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/orchestrator_sysprompt.md",
-        contents: include_repo_str!(".opencode/orchestrator_sysprompt.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/orchestrator_sysprompt_gpt54.md",
-        contents: include_repo_str!(".opencode/orchestrator_sysprompt_gpt54.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/review_sysprompt.md",
-        contents: include_repo_str!(".opencode/review_sysprompt.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/review_sysprompt_gpt54.md",
-        contents: include_repo_str!(".opencode/review_sysprompt_gpt54.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/bash.md",
-        contents: include_repo_str!(".opencode/command/bash.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/capture_pr_comments_openai.md",
-        contents: include_repo_str!(".opencode/command/capture_pr_comments_openai.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/commit.md",
-        contents: include_repo_str!(".opencode/command/commit.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/create_plan_final.md",
-        contents: include_repo_str!(".opencode/command/create_plan_final.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/create_plan_init.md",
-        contents: include_repo_str!(".opencode/command/create_plan_init.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/decide_findings_openai.md",
-        contents: include_repo_str!(".opencode/command/decide_findings_openai.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/describe_pr.md",
-        contents: include_repo_str!(".opencode/command/describe_pr.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/discord.md",
-        contents: include_repo_str!(".opencode/command/discord.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/frame_openai.md",
-        contents: include_repo_str!(".opencode/command/frame_openai.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/implement_plan.md",
-        contents: include_repo_str!(".opencode/command/implement_plan.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/linear.md",
-        contents: include_repo_str!(".opencode/command/linear.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/linear_ticket_2_pr.md",
-        contents: include_repo_str!(".opencode/command/linear_ticket_2_pr.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/linear_ticket_design_brief.md",
-        contents: include_repo_str!(".opencode/command/linear_ticket_design_brief.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/openai.md",
-        contents: include_repo_str!(".opencode/command/openai.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/playwright.md",
-        contents: include_repo_str!(".opencode/command/playwright.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/research.md",
-        contents: include_repo_str!(".opencode/command/research.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/resolve_pr_comments.md",
-        contents: include_repo_str!(".opencode/command/resolve_pr_comments.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/resume_work_openai.md",
-        contents: include_repo_str!(".opencode/command/resume_work_openai.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/review.md",
-        contents: include_repo_str!(".opencode/command/review.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/review_pr_comments.md",
-        contents: include_repo_str!(".opencode/command/review_pr_comments.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/sync_with_main_and_resolve_conflicts.md",
-        contents: include_repo_str!(".opencode/command/sync_with_main_and_resolve_conflicts.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/command/unwind_openai.md",
-        contents: include_repo_str!(".opencode/command/unwind_openai.md"),
-    },
-    InstallAsset {
-        rel_path: "opencode.json",
-        contents: include_repo_str!("opencode.json"),
-    },
-];
+// Embedded contents live in `install_manifest_generated.rs` (generated by xtask sync)
+// from repo-root `.opencode/**` and `opencode.json`.
+#[path = "install_manifest_generated.rs"]
+mod install_manifest_generated;
+
+pub use install_manifest_generated::INSTALL_MANIFEST;
 
 #[cfg(test)]
 mod tests {
