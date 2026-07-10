@@ -17,9 +17,7 @@ fn init_fake_git_repo(dir: &std::path::Path) {
 const EXPECTED_FILES: &[&str] = &[
     ".opencode/sysprompt.md",
     ".opencode/sysprompt_gpt54.md",
-    ".opencode/orchestrator_sysprompt.md",
     ".opencode/orchestrator_sysprompt_gpt54.md",
-    ".opencode/review_sysprompt.md",
     ".opencode/review_sysprompt_gpt54.md",
     ".opencode/command/bash.md",
     ".opencode/command/capture_pr_comments_openai.md",

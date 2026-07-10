@@ -23,28 +23,11 @@
     "tools_review_*": false
   },
   "agent": {
-    "Normal": {
-      "description": "General-purpose primary session for repo coding and research with the standard non-shell toolset.",
-      "prompt": "{file:./.opencode/sysprompt.md}",
-      "mode": "primary"
-    },
     "NormalOpenAI": {
       "description": "OpenAI-backed general-purpose primary session for repo research, planning, and implementation workflows.",
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
       "model": "openai/gpt-5.4",
       "mode": "primary"
-    },
-    "OrchestratorClaude": {
-      "description": "Claude orchestration-only agent for routing, coordination, and todowrite/read state management without direct code execution.",
-      "prompt": "{file:./.opencode/orchestrator_sysprompt.md}",
-      "model": "anthropic/claude-opus-4-5",
-      "mode": "primary",
-      "permission": {
-        "*": "deny",
-        "orchestrator_*": "allow",
-        "read": "allow",
-        "todowrite": "allow"
-      }
     },
     "OrchestratorOpenAI": {
       "description": "OpenAI orchestration-only agent for routing, coordination, and todowrite/read state management without direct code execution.",
@@ -56,23 +39,6 @@
         "orchestrator_*": "allow",
         "read": "allow",
         "todowrite": "allow"
-      }
-    },
-    "ReviewClaude": {
-      "description": "Claude adversarial review agent for evidence-grounded change review using review tools and read-only discovery surfaces.",
-      "prompt": "{file:./.opencode/review_sysprompt.md}",
-      "model": "anthropic/claude-opus-4-5",
-      "mode": "primary",
-      "permission": {
-        "*": "deny",
-        "tools_review_*": "allow",
-        "read": "allow",
-        "tools_cli_just_execute": "allow",
-        "tools_cli_ls": "allow",
-        "tools_cli_grep": "allow",
-        "tools_cli_glob": "allow",
-        "tools_thoughts_write_document": "allow",
-        "tools_ask_reasoning_model": "allow"
       }
     },
     "ReviewOpenAI": {
@@ -203,76 +169,6 @@
         "@playwright/mcp@latest"
       ],
       "enabled": true
-    }
-  },
-  "provider": {
-    "anthropic": {
-      "models": {
-        "claude-opus-4-5": {
-          "options": {
-            "thinking": {
-              "type": "enabled",
-              "budgetTokens": 32000
-            }
-          },
-          "variants": {
-            "high": {
-              "thinking": {
-                "type": "enabled",
-                "budgetTokens": 48000
-              }
-            },
-            "max": {
-              "thinking": {
-                "type": "enabled",
-                "budgetTokens": 64000
-              }
-            }
-          }
-        },
-        "claude-opus-4-5-20251101": {
-          "options": {
-            "thinking": {
-              "type": "enabled",
-              "budgetTokens": 32000
-            }
-          },
-          "variants": {
-            "high": {
-              "thinking": {
-                "type": "enabled",
-                "budgetTokens": 48000
-              }
-            },
-            "max": {
-              "thinking": {
-                "type": "enabled",
-                "budgetTokens": 64000
-              }
-            }
-          }
-        }
-      }
-    },
-    "github-copilot": {
-      "models": {
-        "claude-opus-4.5": {
-          "options": {
-            "thinking_budget": 31999
-          },
-          "variants": {
-            "thinking": {
-              "disabled": true
-            },
-            "medium": {
-              "thinking_budget": 16000
-            },
-            "max": {
-              "thinking_budget": 31999
-            }
-          }
-        }
-      }
     }
   },
   "snapshot": false,

@@ -20,16 +20,8 @@ pub const INSTALL_MANIFEST: &[InstallAsset] = &[
         contents: include_repo_str!(".opencode/sysprompt_gpt54.md"),
     },
     InstallAsset {
-        rel_path: ".opencode/orchestrator_sysprompt.md",
-        contents: include_repo_str!(".opencode/orchestrator_sysprompt.md"),
-    },
-    InstallAsset {
         rel_path: ".opencode/orchestrator_sysprompt_gpt54.md",
         contents: include_repo_str!(".opencode/orchestrator_sysprompt_gpt54.md"),
-    },
-    InstallAsset {
-        rel_path: ".opencode/review_sysprompt.md",
-        contents: include_repo_str!(".opencode/review_sysprompt.md"),
     },
     InstallAsset {
         rel_path: ".opencode/review_sysprompt_gpt54.md",
