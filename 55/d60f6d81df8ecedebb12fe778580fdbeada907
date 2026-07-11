@@ -1,0 +1,37 @@
+.opencode/command/describe_pr.md
+  s_73573862597c46::t_6a267f8511162e 63-67,70-74
+.opencode/command/create_plan_init.md
+  s_73573862597c46::t_a2972b02a84497 99
+.opencode/command/capture_pr_comments_openai.md
+  s_73573862597c46::t_3c911dfbd4d94b 163-164
+.opencode/command/research.md
+  s_73573862597c46::t_a2972b02a84497 56
+.opencode/command/commit.md
+  s_73573862597c46::t_34b217436dc187 39-40,57-61
+.opencode/command/resolve_pr_ci_failures.md
+  s_73573862597c46::t_fffb673ba952af 7-9,18,67
+.opencode/command/decide_findings_openai.md
+  s_73573862597c46::t_3c911dfbd4d94b 148,155-157
+.opencode/command/resume_work_openai.md
+  s_73573862597c46::t_2c63f81acc3415 19,62,81,105,121
+.opencode/sysprompt_gpt54.md
+  s_73573862597c46::t_c7ec097638732c 51
+.opencode/command/unwind_openai.md
+  s_73573862597c46::t_2c63f81acc3415 17,61,73,80,143,162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "55d60f6d81df8ecedebb12fe778580fdbeada907",
+  "prompts": {},
+  "sessions": {
+    "s_73573862597c46": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b158f9dcffeHtEDsNTNQI5gaK",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
