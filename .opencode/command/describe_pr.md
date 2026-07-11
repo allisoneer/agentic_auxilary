@@ -60,18 +60,18 @@ You are tasked with generating a comprehensive pull request description followin
    - Ensure all checklist items are addressed (checked or explained)
 
 8. **Save and sync the description (MCP):**
-   - Call `tools_thoughts_write_document`:
-     - `doc_type`: "artifact"
-     - `filename`: `pr_{number}_description.md`
-     - `content`: completed description from template
-   - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_cli_just_execute`
+    - Call `tools_thoughts_write_document`:
+      - `doc_type`: "artifact"
+      - `filename`: `pr_{number}_description.md`
+      - `content`: completed description from template
+    - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_cli_just_execute`
 
 9. **Update the PR:**
-   - After thoughts sync, the file will be at a path in thoughts/active/{branch}/artifacts/
-   - Execute the "pr-update-autogen" recipe using `tools_cli_just_execute` with the PR number and artifact path as arguments
-   - This preserves any human notes outside the autogen markers
-   - Confirm update successful
-   - If any verification steps remain unchecked, remind user to complete them before merging
+    - Use the artifact path returned by `tools_thoughts_write_document` (typically under `thoughts/{branch}/artifacts/` after sync)
+    - Execute the "pr-update-autogen" recipe using `tools_cli_just_execute` with the PR number and artifact path as arguments
+    - This preserves any human notes outside the autogen markers
+    - Confirm update successful
+    - If any verification steps remain unchecked, remind user to complete them before merging
 
 ## Important notes:
 - This command works across different repositories - always read the local template

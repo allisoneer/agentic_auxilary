@@ -4,7 +4,9 @@ agent: Orchestrator
 ---
 
 <task>
-Inspect PR CI for the current PR head SHA, excluding CodeRabbit checks and ignoring only skipped/neutral.
+Inspect PR CI for the current PR head SHA, ignoring only skipped/neutral.
+
+Non-blocking bot-review or advisory checks should not block remediation unless they surface actionable failures.
 
 Gather GitHub Actions failure evidence via Bash+gh, attempt only safe grounded remediation, verify any claimed fix, and write a durable artifact.
 </task>
@@ -13,7 +15,7 @@ Gather GitHub Actions failure evidence via Bash+gh, attempt only safe grounded r
 1. Follow all steps in order.
 2. Use `todowrite` and keep exactly one todo `in_progress`.
 3. Create the artifact early and keep updating it with evidence, decisions, actions, and verification.
-4. Treat v1 required CI as all visible non-CodeRabbit checks for the current PR head SHA, ignoring only `skipped` and `neutral`.
+4. Treat v1 required CI as all visible non-skipped, non-neutral checks for the current PR head SHA, except clearly non-blocking bot-review or advisory signals.
 5. Use Bash+`gh` for raw CI evidence when current Rust/MCP GitHub surfaces are insufficient.
 6. Attempt remediation only when the failure cause and the fix are both grounded and bounded.
 7. If remediation is unsafe, ambiguous, or inconclusive, stop with explicit handoff details in the artifact.
@@ -62,6 +64,7 @@ In bounded Bash child work, gather best-effort evidence for the current PR head 
 Artifact requirements for this step:
 - raw or normalized check rows
 - required-check interpretation for the current head SHA
+- any non-blocking bot-review or advisory checks recorded separately
 - failing check URLs and any mapped run/job URLs
 - best-effort failed log snippets or an explicit note that logs were unavailable
 

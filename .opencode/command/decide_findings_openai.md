@@ -145,16 +145,16 @@ $ARGUMENTS
    - Mark findings as `resolved_cleanup` after push confirmation.
 
 2. For `research` clusters:
-   - Run `research_openai` scoped to only the disputed findings or related code area.
+   - Run `research` scoped to only the disputed findings or related code area.
    - Read the resulting research document.
    - Reclassify the cluster based on new evidence.
    - If research resolves ambiguity, assign a new route and continue.
    - If research introduces new questions, document them and either iterate or mark as `research_pending`.
 
 3. For `plan_and_implement` clusters:
-   - Run `create_plan_init_openai` with the cluster's findings as input.
-   - Run `create_plan_final_openai` to complete the plan.
-   - Run `implement_plan_openai` to execute the plan.
+   - Run `create_plan_init` with the cluster's findings as input.
+   - Run `create_plan_final` to complete the plan.
+   - Run `implement_plan` to execute the plan.
    - Ensure implementation verification includes `just check` and `just test`.
    - Create an atomic commit.
    - Push it.
