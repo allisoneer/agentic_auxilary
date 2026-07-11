@@ -1,0 +1,20 @@
+.opencode/command/linear_ticket_2_pr.md
+  s_1f689f9cdc49ed::t_6ff48810d13c0e 19,25,27,31,38,67,80,82,86,88-93,95,98-99,103,106-110,112,114,116,130,132-134,151,153,155,169,171,173,181,183,185,200,202,204,231
+  s_1f689f9cdc49ed::t_e7ccfd45ffeeab 238-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "54421316e4a5d05c578c4382882872bee6eaa478",
+  "prompts": {},
+  "sessions": {
+    "s_1f689f9cdc49ed": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b1682858ffeYxbaLOA8YNLOYI",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
