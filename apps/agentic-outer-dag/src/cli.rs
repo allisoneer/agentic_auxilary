@@ -15,9 +15,13 @@ pub struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
 
-    /// Suppress output except errors
+    /// Reduce log output to errors only (does not suppress final status output)
     #[arg(short, long)]
     pub quiet: bool,
+
+    /// Suppress live progress output; print only final status
+    #[arg(long)]
+    pub final_only: bool,
 
     /// Do not run side-effecting operations.
     #[arg(long)]
@@ -142,6 +146,7 @@ mod tests {
             "handoff",
             "reset",
             "--dry-run",
+            "--final-only",
             "--quiet",
             "--verbose",
         ] {
@@ -220,6 +225,20 @@ mod tests {
                 ..
             } if ticket == "ENG-992" && branch == "feature/eng-992"
         ));
+    }
+
+    #[test]
+    fn parses_final_only_flag_before_subcommand() {
+        let cli = Cli::try_parse_from([
+            "agentic-outer-dag",
+            "--final-only",
+            "start",
+            "--ticket",
+            "ENG-992",
+        ])
+        .expect("final-only should parse");
+
+        assert!(cli.final_only);
     }
 
     #[test]

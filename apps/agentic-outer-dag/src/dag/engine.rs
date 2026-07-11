@@ -333,6 +333,20 @@ fn poll_interval_sleep_duration(poll_interval_seconds: u64) -> std::time::Durati
     std::time::Duration::from_secs(poll_interval_seconds.max(1))
 }
 
+fn coderabbit_waiting_details(
+    pr_number: u64,
+    head_sha: &str,
+    cycle: u32,
+    elapsed_seconds: i64,
+    timeout_seconds: i64,
+    poll_interval_seconds: u64,
+) -> String {
+    let remaining = (timeout_seconds - elapsed_seconds).max(0);
+    format!(
+        "waiting for CodeRabbit completion (cycle={cycle}, pr=#{pr_number}, head={head_sha}); elapsed={elapsed_seconds}s; timeout_in={remaining}s; next_poll_in={poll_interval_seconds}s"
+    )
+}
+
 fn should_reset_coderabbit_timeout_baseline(was_recovered: bool, now_recovered: bool) -> bool {
     !was_recovered && now_recovered
 }
@@ -1030,9 +1044,10 @@ impl DagEngine {
                                 }
                             }
                             CodeRabbitPoll::Waiting => {
-                                if (chrono::Utc::now() - started_at).num_seconds()
-                                    >= timeout_seconds
-                                {
+                                let elapsed_seconds =
+                                    (chrono::Utc::now() - started_at).num_seconds().max(0);
+
+                                if elapsed_seconds >= timeout_seconds {
                                     state.stage.kind = StageKind::StoppedTimedOut;
                                     state.stage.details = Some(
                                         "timed out waiting for CodeRabbit completion".to_string(),
@@ -1040,6 +1055,18 @@ impl DagEngine {
                                     ThoughtsStateStore::save(&state)?;
                                     return Ok(());
                                 }
+
+                                state.stage.kind = StageKind::WaitingForCoderabbit;
+                                state.stage.details = Some(coderabbit_waiting_details(
+                                    pr_number,
+                                    &head_sha,
+                                    state.coderabbit.current_cycle,
+                                    elapsed_seconds,
+                                    timeout_seconds,
+                                    state.settings.poll_interval_seconds,
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+
                                 tokio::time::sleep(poll_interval_sleep_duration(
                                     state.settings.poll_interval_seconds,
                                 ))
@@ -1605,6 +1632,7 @@ mod tests {
     use super::UnresolvedReviewThreadsSnapshot;
     use super::baseline_last_described_head_sha_after_pr_create;
     use super::classify_resolve_progress;
+    use super::coderabbit_waiting_details;
     use super::decide_resolve_post_dispatch;
     use super::decide_resolve_pre_dispatch;
     use super::detecting_pr_retry_attempt_number;
@@ -1856,6 +1884,18 @@ mod tests {
         assert_eq!(detecting_pr_retry_attempt_number(0), 2);
         assert_eq!(detecting_pr_retry_attempt_number(1), 3);
         assert_eq!(detecting_pr_retry_attempt_number(3), 5);
+    }
+
+    #[test]
+    fn coderabbit_waiting_details_includes_required_context() {
+        let details = coderabbit_waiting_details(42, "abc123", 3, 120, 600, 30);
+
+        assert!(details.contains("cycle=3"));
+        assert!(details.contains("pr=#42"));
+        assert!(details.contains("head=abc123"));
+        assert!(details.contains("elapsed=120s"));
+        assert!(details.contains("timeout_in=480s"));
+        assert!(details.contains("next_poll_in=30s"));
     }
 
     #[test]
