@@ -1,0 +1,46 @@
+apps/agentic-outer-dag/Cargo.toml
+  s_4663f66d29d0f3::t_3651c18ef0c2a8 19-24
+crates/meta/xtask/src/published_versions.rs
+  s_4663f66d29d0f3::t_1b2540c4e9994c 241,298,330-343
+  s_4663f66d29d0f3::t_7810d8bcce662a 269
+  s_4663f66d29d0f3::t_29de581f422069 344
+mise.toml
+  s_4663f66d29d0f3::t_422325756763f0 16
+crates/meta/xtask/src/verify.rs
+  s_4663f66d29d0f3::t_1b2540c4e9994c 662,687-690,717-720,753-758,791-795
+  s_4663f66d29d0f3::t_37ea6e51ec3b96 796
+crates/meta/xtask/src/managed_mise.rs
+  s_4663f66d29d0f3::t_422325756763f0 25,29
+tools/published-versions.toml
+  s_4663f66d29d0f3::t_422325756763f0 6
+tools/policy.toml
+  s_4663f66d29d0f3::t_c7fc981f950de1 139-141
+crates/meta/xtask/src/mise.rs
+  s_4663f66d29d0f3::t_1b2540c4e9994c 142-151,181-185,281
+mise.lock
+  s_18802ef15483cd::t_c2678af06265d5 239-332
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "4d98411e5765e5467fa9f3a509200be9436f02ae",
+  "prompts": {},
+  "sessions": {
+    "s_18802ef15483cd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b13b242bffeqaHS5hPuIK25dZ",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_4663f66d29d0f3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b149926cffeteyabJnMCC2H95",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
