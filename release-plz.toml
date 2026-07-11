@@ -76,7 +76,7 @@ release = true
 name = "agentic-outer-dag-bin"
 changelog_path = "apps/agentic-outer-dag/CHANGELOG.md"
 git_tag_name = "agentic-outer-dag-bin-v{{ version }}"
-git_tag_enable = false
+git_tag_enable = true
 release = true
 
 [[package]]

@@ -659,6 +659,7 @@ mod tests {
 [binaries]
 agentic-bin = "0.1.15"
 agentic-mcp = "0.2.42"
+agentic-outer-dag-bin = "0.1.0"
 opencode-orchestrator-mcp = "0.7.9"
 thoughts-bin = "0.1.24"
 "#,
@@ -682,6 +683,10 @@ version_prefix = "agentic-bin-v"
 [tools.agentic-mcp]
 version = "0.2.42"
 version_prefix = "agentic-mcp-v"
+
+[tools.agentic-outer-dag-bin]
+version = "0.1.0"
+version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.opencode-orchestrator-mcp]
 version = "0.7.9"
@@ -708,6 +713,10 @@ version_prefix = "agentic-bin-v"
 [tools.agentic-mcp]
 version = "0.2.42"
 version_prefix = "agentic-mcp-v"
+
+[tools.agentic-outer-dag-bin]
+version = "0.1.0"
+version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.opencode-orchestrator-mcp]
 version = "0.7.9"
@@ -741,6 +750,12 @@ version = "0.2.42"
 [tools.agentic-mcp.options]
 version_prefix = "agentic-mcp-v"
 
+[[tools.agentic-outer-dag-bin]]
+version = "0.1.0"
+
+[tools.agentic-outer-dag-bin.options]
+version_prefix = "agentic-outer-dag-bin-v"
+
 [[tools.opencode-orchestrator-mcp]]
 version = "0.7.9"
 
@@ -772,6 +787,12 @@ version = "0.2.42"
 
 [tools.agentic-mcp.options]
 version_prefix = "agentic-mcp-v"
+
+[[tools.agentic-outer-dag-bin]]
+version = "0.1.0"
+
+[tools.agentic-outer-dag-bin.options]
+version_prefix = "agentic-outer-dag-bin-v"
 
 [[tools.opencode-orchestrator-mcp]]
 version = "0.7.9"
