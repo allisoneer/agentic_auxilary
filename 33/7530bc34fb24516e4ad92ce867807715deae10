@@ -1,0 +1,19 @@
+.opencode/command/linear_ticket_2_pr.md
+  s_14efc9c14c15ed::t_aa76f214c8b37b 29,86-87,99-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "337530bc34fb24516e4ad92ce867807715deae10",
+  "prompts": {},
+  "sessions": {
+    "s_14efc9c14c15ed": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b1738815ffeH16qalhaLL3opE",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
