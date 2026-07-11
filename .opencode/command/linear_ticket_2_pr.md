@@ -26,7 +26,7 @@ The goal is to end in one of these grounded states:
    - resolve the ticket, read the full ticket description, and paginate comments until the complete corpus is captured
    - ensure the ticket is `In Progress` if it is not already
    - persist the full corpus using the shared ticket-corpus artifact contract (stable filename + schema marker + snapshot disclaimer)
-   - run `thoughts_sync` immediately after writing the corpus artifact when that child has the required thoughts/just tools, otherwise return a clear missing-tools handoff for the fallback path
+   - run `thoughts_sync` immediately after writing the corpus artifact
    - return artifact metadata to the orchestrator, including the saved artifact path and enough ticket identifiers to continue the workflow groundedly
 8. Use a two-layer gate before planning or implementation:
    - first a task-clarity gate
@@ -83,8 +83,8 @@ $ARGUMENTS
     - resolve the ticket reference
     - read issue details + description and paginate comments until `has_more=false`, stopping immediately once `has_more=false` and not issuing another identical comments call
     - ensure the ticket status is `In Progress` if it is not already
-    - write the ticket corpus artifact itself using the Step 4 contract when its tool access allows that path
-    - run `thoughts_sync` immediately after writing the artifact when its tool access allows that path
+    - write the ticket corpus artifact itself using the Step 4 contract
+    - run `thoughts_sync` immediately after writing the artifact
     - return the canonical ticket identifier, ticket URL, current status, saved artifact path, and any obviously relevant linked context it could read directly from Linear
 3. Do not let the Linear child proceed into codebase research, planning, or implementation.
 4. If the ticket cannot be resolved responsibly, return to the user with the specific blocker and stop.
@@ -96,22 +96,30 @@ $ARGUMENTS
 ## Step 4: Persist the Ticket Corpus as a Thoughts Artifact
 
 1. The ticket corpus artifact produced by the Linear child should use this shared contract:
-   - Stable filename: `linear-{lowercase-key}-ticket.md` (example: `linear-eng-869-ticket.md`)
-   - Schema marker (required): `Ticket corpus schema: linear-ticket-corpus@v1`
-   - Snapshot timestamp + disclaimer (required): explicitly state this is a point-in-time snapshot and may be stale
-   - Include: canonical issue fields, full description, and full comments with authorship and timestamps when available
-   - Overwrite the same filename on reruns to refresh the snapshot
-2. Preferred path: the same bounded Linear-capable child from Step 3 should perform the write + sync and return the saved artifact path.
-3. Fallback caveat: if thoughts/just availability is not actually present in that Linear child configuration, use a separate bounded child session whose only job is to write the artifact with this contract, run `thoughts_sync`, and return the saved artifact path.
-4. The artifact should capture at minimum:
-    - ticket key and URL
-    - current Linear status
-    - ticket title
-    - full description
-    - full comments with authorship and timestamps when available
-    - a short note that the artifact is the authoritative ticket corpus for this run
-5. Read the produced artifact back in the orchestrator session before proceeding.
-6. Do not begin codebase research or planning until this artifact exists.
+    - Stable filename: `linear-{lowercase-key}-ticket.md` (example: `linear-eng-869-ticket.md`)
+    - Schema marker (required): `Ticket corpus schema: linear-ticket-corpus@v1`
+    - Snapshot timestamp + disclaimer (required): explicitly state this is a point-in-time snapshot and may be stale
+    - Include: canonical issue fields, full description, and full comments with authorship and timestamps when available
+    - Overwrite the same filename on reruns to refresh the snapshot
+2. The same bounded Linear-capable child from Step 3 should perform the write + sync and return the saved artifact path.
+3. The artifact should capture at minimum:
+     - ticket key and URL
+     - current Linear status
+     - ticket title
+     - full description
+     - full comments with authorship and timestamps when available
+     - a short note that the artifact is the authoritative ticket corpus for this run
+4. Read the produced artifact back in the orchestrator session before proceeding.
+5. Treat that read-back as a validation gate. Before any codebase research, reconnaissance, or planning can proceed, validate that the artifact contains all of the following:
+    - the required schema marker
+    - the canonical ticket key and URL
+    - the snapshot timestamp and point-in-time disclaimer
+    - the current Linear status
+    - the ticket title
+    - the full description
+    - the full comments/corpus, with enough completeness evidence from the delegated read to justify that the captured comments are complete for this snapshot
+6. If that validation fails, do not continue downstream. Return to a bounded Linear-capable child session to refresh or fix the artifact, then read it back and validate again.
+7. Do not begin codebase research or planning until this artifact exists and passes validation.
 
 </step_4>
 
