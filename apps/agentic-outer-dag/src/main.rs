@@ -5,6 +5,10 @@ use anyhow::Result;
 use clap::Parser;
 use serde_json::json;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use tracing::debug;
 use tracing::info;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -15,6 +19,7 @@ mod github;
 mod linear;
 mod opencode;
 mod preview;
+mod progress;
 mod state;
 #[cfg(test)]
 mod test_support;
@@ -32,6 +37,7 @@ struct StartOptions<'a> {
     coderabbit_timeout_seconds: Option<u64>,
     opencode_session_deadline_seconds: Option<u64>,
     opencode_inactivity_timeout_seconds: Option<u64>,
+    final_only: bool,
 }
 
 struct ResumeOptions<'a> {
@@ -44,6 +50,7 @@ struct ResumeOptions<'a> {
     coderabbit_timeout_seconds: Option<u64>,
     opencode_session_deadline_seconds: Option<u64>,
     opencode_inactivity_timeout_seconds: Option<u64>,
+    final_only: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -96,6 +103,7 @@ async fn main() -> Result<()> {
 
     let cli = cli::Cli::parse();
     let dry_run = cli.dry_run;
+    let final_only = cli.final_only;
     let command = cli.command;
     ensure_supported_dry_run_usage(dry_run, &command)?;
 
@@ -152,6 +160,7 @@ async fn main() -> Result<()> {
                     coderabbit_timeout_seconds,
                     opencode_session_deadline_seconds,
                     opencode_inactivity_timeout_seconds,
+                    final_only,
                 },
             )
             .await
@@ -177,17 +186,54 @@ async fn main() -> Result<()> {
                 coderabbit_timeout_seconds,
                 opencode_session_deadline_seconds,
                 opencode_inactivity_timeout_seconds,
+                final_only,
             })
             .await
         }
         cli::Commands::Status { json } => handle_status(json),
         cli::Commands::RespondPermission { allow, deny } => {
-            handle_respond_permission(allow, deny).await
+            handle_respond_permission(allow, deny, final_only).await
         }
-        cli::Commands::RespondQuestion { answer } => handle_respond_question(&answer).await,
+        cli::Commands::RespondQuestion { answer } => {
+            handle_respond_question(&answer, final_only).await
+        }
         cli::Commands::Handoff { message } => handle_handoff(message.as_deref()).await,
         cli::Commands::Reset { yes } => handle_reset(yes),
     }
+}
+
+async fn run_engine_until_stop_with_progress(
+    engine: &mut dag::engine::DagEngine,
+    stop_after: Option<state::StageKind>,
+    final_only: bool,
+) -> Result<()> {
+    if final_only {
+        return engine.run_until_stop(stop_after).await;
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let progress_stop = Arc::clone(&stop);
+    let progress_task = tokio::spawn(async move {
+        let mut renderer = crate::progress::ProgressRenderer::new();
+        renderer.tick_best_effort();
+
+        let mut ticker = tokio::time::interval(crate::progress::ProgressRenderer::poll_interval());
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        while !progress_stop.load(Ordering::Relaxed) {
+            ticker.tick().await;
+            renderer.tick_best_effort();
+        }
+
+        renderer.tick_best_effort();
+    });
+
+    let result = engine.run_until_stop(stop_after).await;
+    stop.store(true, Ordering::Relaxed);
+    if let Err(err) = progress_task.await {
+        debug!(error = %err, "progress renderer task ended abnormally");
+    }
+    result
 }
 
 fn apply_settings_overrides(
@@ -301,7 +347,8 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
     state::store::ThoughtsStateStore::save(&state)?;
 
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    engine.run_until_stop(options.stop_after).await?;
+    run_engine_until_stop_with_progress(&mut engine, options.stop_after, options.final_only)
+        .await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after start"))?;
     print_status(&state, false)
@@ -328,7 +375,8 @@ async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
         state::store::ThoughtsStateStore::save(&state)?;
     }
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    engine.run_until_stop(options.stop_after).await?;
+    run_engine_until_stop_with_progress(&mut engine, options.stop_after, options.final_only)
+        .await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after resume"))?;
     print_status(&state, false)
@@ -388,7 +436,7 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
     })
 }
 
-async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
+async fn handle_respond_permission(allow: bool, deny: bool, final_only: bool) -> Result<()> {
     anyhow::ensure!(allow ^ deny, "exactly one of --allow or --deny is required");
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
@@ -426,13 +474,13 @@ async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
     state::store::ThoughtsStateStore::save(&state)?;
 
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    engine.run_until_stop(None).await?;
+    run_engine_until_stop_with_progress(&mut engine, None, final_only).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after responding"))?;
     print_status(&state, false)
 }
 
-async fn handle_respond_question(answer: &str) -> Result<()> {
+async fn handle_respond_question(answer: &str, final_only: bool) -> Result<()> {
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
     anyhow::ensure!(
@@ -466,7 +514,7 @@ async fn handle_respond_question(answer: &str) -> Result<()> {
     state::store::ThoughtsStateStore::save(&state)?;
 
     let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    engine.run_until_stop(None).await?;
+    run_engine_until_stop_with_progress(&mut engine, None, final_only).await?;
     let state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after responding"))?;
     print_status(&state, false)
@@ -900,6 +948,7 @@ mod tests {
                 coderabbit_timeout_seconds: None,
                 opencode_session_deadline_seconds: None,
                 opencode_inactivity_timeout_seconds: None,
+                final_only: false,
             },
         )
         .await
@@ -935,6 +984,7 @@ mod tests {
                 coderabbit_timeout_seconds: None,
                 opencode_session_deadline_seconds: None,
                 opencode_inactivity_timeout_seconds: None,
+                final_only: false,
             },
         )
         .await
@@ -965,6 +1015,7 @@ mod tests {
                 coderabbit_timeout_seconds: None,
                 opencode_session_deadline_seconds: None,
                 opencode_inactivity_timeout_seconds: None,
+                final_only: false,
             },
         )
         .await
