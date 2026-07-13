@@ -14,7 +14,7 @@ Create a self-contained handoff artifact for a future GPT-5.4 session. Keep work
 4. If you can identify the current workflow command, record it explicitly and re-read that command file before writing the artifact.
 5. The artifact must be sufficient for a fresh session that knows only the repo, system prompts, and this artifact.
 6. Validation claims must be labeled `confirmed`, `inferred`, or `unconfirmed`.
-7. If workflow prompt files or `AGENTS.md` changed in this session, record whether a post-write comparison pass already happened or is still required.
+7. If workflow prompt files or `opencode.json` changed in this session, record whether a post-write comparison pass already happened or is still required.
 8. If uncertainty remains, label it explicitly instead of smoothing it over.
 </workflow_contract>
 
@@ -58,7 +58,7 @@ $ARGUMENTS
    - verification status
    - meaningful divergences from the original plan
 4. For research or planning work, make sure you know the latest research, open questions, and recommended next command.
-5. If the current session edited `.opencode/command/*.md` workflow files or `AGENTS.md`, re-read those changed files and note whether they already received a post-write comparison or external review.
+5. If the current session edited `.opencode/command/*.md` workflow files or `opencode.json`, re-read those changed files and note whether they already received a post-write comparison or external review.
 6. Do not do a broad new investigation here. Reload only the files and documents needed for an accurate handoff.
 
 </step_2>
@@ -70,14 +70,14 @@ $ARGUMENTS
 1. Capture the goal and success condition.
 2. Capture the current state of the work.
 3. Capture completed work.
-4. Capture files changed, explicitly marking workflow prompt files and `AGENTS.md` when they are part of the change set.
+4. Capture files changed, explicitly marking workflow prompt files and `opencode.json` when they are part of the change set.
 5. Capture files researched or anchor documents.
 6. Capture settled decisions and why they were made.
 7. Capture open questions, risks, and tentative areas.
 8. Capture remaining work in priority order.
 9. Capture validation status and unfinished verification, labeling each item as `confirmed`, `inferred`, or `unconfirmed`.
 10. Capture failed paths or things already tried.
-11. Capture the exact first actions the next session should take, including any required post-write comparison pass for workflow prompt files or `AGENTS.md`.
+11. Capture the exact first actions the next session should take, including any required post-write comparison pass for workflow prompt files or `opencode.json`.
 
 </step_3>
 
@@ -140,7 +140,7 @@ $ARGUMENTS
     - a fresh session can tell what to do next
     - workflow instructions and carried-forward context are clearly separated
 3. If the work is implement_plan-like, verify that the artifact explicitly names the source plan files, current phase or next unfinished item, and outstanding verification.
-4. If workflow prompt files or `AGENTS.md` changed, verify the artifact says whether post-write comparison already happened or is still required next session.
+4. If workflow prompt files or `opencode.json` changed, verify the artifact says whether post-write comparison already happened or is still required next session.
 5. If anything is uncertain, label it inside the artifact instead of pretending it is settled.
 
 </step_5>
@@ -159,5 +159,5 @@ $ARGUMENTS
 </process>
 
 <completion_gate>
-You are done only when the handoff artifact is written, synced, verified as self-contained, any workflow prompt-file or `AGENTS.md` comparison status is recorded, and the user has the saved path plus the recommended resume command.
+You are done only when the handoff artifact is written, synced, verified as self-contained, any workflow prompt-file or `opencode.json` comparison status is recorded, and the user has the saved path plus the recommended resume command.
 </completion_gate>

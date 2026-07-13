@@ -96,7 +96,7 @@ Good descriptions are 1-2 sentences and mention:
 Examples:
 - `frontend/src/features/payments/CheckoutForm.tsx` - `Main payment form component that will need new validation logic for subscription upgrades`
 - `rust/server/src/services/payments/` - `Payment service layer with strict idempotency requirements; includes PaymentProvider trait`
-- `references/allisoneer/payments_integration/README.md` - `Example of similar payment gateway integration with retry/backoff patterns`
+- `references/<org>/<repo>/README.md` - `Example of similar integration with retry/backoff patterns`
 
 Use directories when many related files exist; set `extensions`, `recursive`, and `max_files` appropriately.
 

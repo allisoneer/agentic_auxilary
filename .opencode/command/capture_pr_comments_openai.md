@@ -160,8 +160,8 @@ For each thread:
 If multiple threads share the same anchor window, reuse the same snippet block or reference it clearly rather than duplicating it unnecessarily.
 
 ### Footer
-- concise next-step suggestions such as:
-  - `run resolve_pr_comments_openai on this PR`
+  - concise next-step suggestions such as:
+    - `run resolve_pr_comments on this PR`
   - `research thread X`
   - `reply manually to thread X`
 
