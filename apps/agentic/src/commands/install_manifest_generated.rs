@@ -174,7 +174,7 @@ Continue calling tools until the task is complete and verified. Do NOT stop when
 <tool_selection>
 Prefer specialized tools over bash commands:
 1. Use read instead of cat/head/tail
-2. Use edit instead of sed/awk
+2. Use apply_patch instead of sed/awk
 3. Use write instead of echo/heredoc
 4. Use tools_cli_grep instead of grep command
 5. Use tools_cli_glob instead of find command
