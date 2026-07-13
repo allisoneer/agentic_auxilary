@@ -1,0 +1,21 @@
+CLAUDE.md
+  s_5dba4f09fa5f7a::t_a46ed407dc29dd 115-116
+.github/workflows/release.yml
+  s_5dba4f09fa5f7a::t_3e1b8bfa921a79 15-21,280-289,292-293
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "972faaf3d9e18d30b175ab9abc6e322261252c71",
+  "prompts": {},
+  "sessions": {
+    "s_5dba4f09fa5f7a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a37d390affeZ5aRlluZTOtuw5",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
