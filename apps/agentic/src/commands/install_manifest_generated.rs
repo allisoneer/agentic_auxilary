@@ -2156,19 +2156,26 @@ The goal is to end in one of these grounded states:
 </task>
 
 <workflow_contract>
-1. Follow all 10 steps in order.
+1. Follow all 9 steps in order.
 2. Use `todowrite` starting in Step 2 and keep exactly one task `in_progress` at a time.
 3. Treat `<userMessage>` as loose natural language. In this first pass, support no modifiers or flags.
 4. Require a Linear ticket key, Linear URL, or other identifiable Linear issue reference. If none is present, ask the user for one and stop.
 5. Do not create or switch branches. Assume the user already started this command on the correct branch.
 6. At every major stage, return control to the orchestrator for the next DAG decision. Child sessions execute bounded work; they do not autonomously continue into later stages.
-7. Before downstream codebase work, read the full ticket description and comments, ensure the ticket is `In Progress`, and persist that full corpus to a thoughts artifact.
+7. Before downstream codebase work, delegate full ticket intake, corpus export, and artifact-grounding handoff to a bounded Linear-capable child session. That delegated intake/export must:
+   - resolve the ticket, read the full ticket description, and paginate comments until the complete corpus is captured
+   - record explicit pagination-completion evidence, including how many comment pages were fetched and the terminal `has_more=false` result
+   - ensure the ticket is `In Progress` if it is not already
+   - persist the full corpus using the shared ticket-corpus artifact contract (stable filename + schema marker + snapshot disclaimer)
+   - run `thoughts_sync` immediately after writing the corpus artifact
+   - return artifact metadata to the orchestrator, including the saved artifact path, exact current status, pagination-completion evidence, and enough ticket identifiers to continue the workflow groundedly
 8. Use a two-layer gate before planning or implementation:
    - first a task-clarity gate
    - then a feasibility-reconnaissance gate when codebase context is still needed
 9. If code changes are made, require appropriate verification before claiming completion. At minimum run `just check` and `just test` unless a stronger or more targeted command set is clearly warranted.
 10. The commit and PR phase must respect the agent-reset caveat: use `commit`, then re-enter a bash-capable session for the actual git commit/push execution and initial PR creation or update, then use `describe_pr`, then use bash/gh tooling for any final PR update if needed.
 11. Linear updates are required when stopping for insufficient scope and when a PR is created. Set the ticket to `In Progress` at the start; at the end, use judgment about any obvious next status, but do not invent statuses.
+12. The ticket-artifact validation stage gets one bounded refresh/fix retry. If the artifact still fails validation after that retry, stop and report the exact validation failure instead of looping.
 </workflow_contract>
 
 <userMessage>
@@ -2197,8 +2204,7 @@ $ARGUMENTS
 ## Step 2: Build the Orchestrator Todo List
 
 1. Create concrete todos for:
-   - ticket intake and Linear state sync
-   - ticket artifact persistence
+   - ticket intake, artifact persistence, and validation
    - task-clarity gate
    - feasibility reconnaissance if needed
    - research / plan / implementation pipeline
@@ -2211,43 +2217,43 @@ $ARGUMENTS
 
 <step_3>
 
-## Step 3: Read and Normalize Linear Ticket State
+## Step 3: Read, Persist, and Validate Linear Ticket State
 
-1. Spawn a bounded Linear-capable child session.
-2. In that child session:
-   - resolve the ticket reference
-   - read the full issue description
-   - read all issue comments, following pagination until complete
-   - ensure the ticket status is `In Progress` if it is not already
-   - return the canonical ticket identifier, ticket URL, current status, full description text, full comment corpus, and any obviously relevant linked context it could read directly from Linear
+1. Spawn one bounded Linear-capable child session for the initial ticket intake/export pass.
+2. In the prompt you send to that child session, instruct it to:
+    - resolve the ticket reference
+    - read issue details + description and paginate comments until `has_more=false`, stopping immediately once `has_more=false` and not issuing another identical comments call
+    - record comment-pagination completion evidence, including the number of comment pages fetched and confirmation that the terminal page returned `has_more=false`
+    - ensure the ticket status is `In Progress` if it is not already
+    - write the ticket corpus artifact itself using this shared contract:
+        - Stable filename: `linear-{lowercase-key}-ticket.md` (example: `linear-eng-869-ticket.md`)
+        - Schema marker (required): `Ticket corpus schema: linear-ticket-corpus@v1`
+        - Snapshot timestamp + disclaimer (required): explicitly state this is a point-in-time snapshot and may be stale
+        - Include: canonical issue fields, exact current Linear status, pagination-completion metadata, full description, and full comments with authorship and timestamps when available
+        - Overwrite the same filename on reruns to refresh the snapshot
+    - run `thoughts_sync` immediately after writing the artifact
+    - return the canonical ticket identifier, ticket URL, exact current status, saved artifact path, comment page count, terminal `has_more=false` confirmation, and any obviously relevant linked context it could read directly from Linear
 3. Do not let the Linear child proceed into codebase research, planning, or implementation.
 4. If the ticket cannot be resolved responsibly, return to the user with the specific blocker and stop.
+5. Read the produced artifact back in the orchestrator session before proceeding.
+6. Treat that read-back as a validation gate. Before any codebase research, reconnaissance, or planning can proceed, validate that the artifact contains all of the following:
+    - the required schema marker
+    - the canonical ticket key and URL
+    - the snapshot timestamp and point-in-time disclaimer
+    - the exact current Linear status, and that it is exactly `In Progress`
+    - the ticket title
+    - the full description
+    - the full comments/corpus
+    - explicit pagination-completion evidence, including the number of comment pages fetched and terminal `has_more=false`
+7. If that validation fails, do not continue downstream. Allow exactly one bounded refresh/fix retry: send one more bounded Linear-capable child session to refresh or repair the artifact, then read it back and validate again.
+8. If the artifact still fails validation after that single retry, stop and report the exact Step 3 validation failure instead of looping.
+9. Do not begin codebase research or planning until this artifact exists and passes validation.
 
 </step_3>
 
 <step_4>
 
-## Step 4: Persist the Ticket Corpus as a Thoughts Artifact
-
-1. Because the orchestrator cannot write artifacts directly, persist the corpus via a child session:
-   - Preferred: have the same Linear child session from Step 3 write the thoughts artifact directly and return the artifact path.
-   - Fallback: if thoughts tools are unavailable in that Linear child configuration, hand off the full corpus to a normal or research-capable child whose bounded task is to write the artifact.
-   - If it is cleaner, fold this into creation of a research-style artifact, but the full ticket description and comments must still be preserved verbatim enough for downstream reuse.
-2. The artifact should capture at minimum:
-   - ticket key and URL
-   - current Linear status
-   - ticket title
-   - full description
-   - full comments with authorship and timestamps when available
-   - a short note that the artifact is the authoritative ticket corpus for this run
-3. Read the produced artifact back in the orchestrator session before proceeding.
-4. Do not begin codebase research or planning until this artifact exists.
-
-</step_4>
-
-<step_5>
-
-## Step 5: Run the Task-Clarity Gate
+## Step 4: Run the Task-Clarity Gate
 
 1. From the ticket corpus artifact, decide whether the requested outcome is actionable enough to know what should be built or changed.
 2. Look for:
@@ -2260,11 +2266,12 @@ $ARGUMENTS
    - return a concise summary to the user and stop
 4. If the intended outcome is clear enough to proceed, record that decision and continue.
 
-</step_5>
 
-<step_6>
+</step_4>
 
-## Step 6: Run the Feasibility-Reconnaissance Gate
+<step_5>
+
+## Step 5: Run the Feasibility-Reconnaissance Gate
 
 1. Decide whether implementation confidence is already high enough to enter the normal pipeline directly, or whether codebase context is still required first.
 2. If feasibility is already clear from existing context, you may skip the reconnaissance session and state why.
@@ -2281,11 +2288,11 @@ $ARGUMENTS
    - stop and report the blocker clearly to the user
 6. If reconnaissance indicates the task is understandable and feasible enough to proceed, continue into the standard workflow.
 
-</step_6>
+</step_5>
 
-<step_7>
+<step_6>
 
-## Step 7: Run the Standard Research and Planning Pipeline
+## Step 6: Run the Standard Research and Planning Pipeline
 
 1. Route through the normal pipeline in this order:
    - `research`
@@ -2299,11 +2306,11 @@ $ARGUMENTS
    - stop instead of forcing assumptions
 5. Do not skip `create_plan_init` or `create_plan_final` for non-trivial work in this command.
 
-</step_7>
+</step_6>
 
-<step_8>
+<step_7>
 
-## Step 8: Verify the Implemented Change
+## Step 7: Verify the Implemented Change
 
 1. After `implement_plan`, review the implementation result and verification evidence.
 2. Require the strongest appropriate checks for the touched surface area.
@@ -2311,11 +2318,11 @@ $ARGUMENTS
 4. If verification fails, route back through bounded implementation follow-up until the result is either passing or blocked by a real external constraint.
 5. Do not proceed to commit or PR creation while verification is still failing.
 
-</step_8>
+</step_7>
 
-<step_9>
+<step_8>
 
-## Step 9: Commit, Describe, Push, and Create the PR
+## Step 8: Commit, Describe, Push, and Create the PR
 
 1. Once implementation is verified, run `commit` to prepare the commit plan.
 2. Respect the agent-reset caveat: after `commit`, re-enter a bash-capable child session to perform the actual git commands.
@@ -2330,18 +2337,27 @@ $ARGUMENTS
 5. If needed, use a follow-up bash-capable child session to apply any final `gh` update steps after `describe_pr` completes.
 6. Capture the commit hash or hashes and the final PR URL for the orchestrator summary.
 
-</step_9>
+</step_8>
 
-<step_10>
+<step_9>
 
-## Step 10: Update Linear and Return the Final Summary
+## Step 9: Update Linear and Return the Final Summary
 
-1. Spawn a bounded Linear-capable child session to comment on the ticket with the PR link once the PR is created.
-2. If an obvious review/done-adjacent status exists and changing it is clearly appropriate, use judgment; otherwise leave status as-is rather than inventing a workflow state.
-3. Return a final summary that includes:
-   - ticket key and URL
-   - thoughts artifact path for the ticket corpus
-   - reconnaissance doc path if one was created
+1. Spawn a bounded Linear-capable child session for the final Linear work once the PR is created.
+2. In the prompt you send to that child session, instruct it to comment on the ticket with the PR link.
+3. Follow-up ticket requirement: If the current ticket's definition of done requires a follow-up Linear issue for automatic downloading/updating of Linear tickets + comments outside agent scope, instruct that same Linear child session to handle it only after successful implementation/PR creation.
+4. In those child-session instructions, require that before any follow-up issue creation or state targeting:
+   - it resolves the metadata UUIDs it needs
+   - it identifies the ENG team `team_id`
+   - it identifies the ENG-team `Triage` state `state_id`
+   - it does not assume names map directly to IDs
+5. In those child-session instructions, require it to search for an existing follow-up issue first, but reuse one only when it can establish a stable match: the issue must reference the original ticket key and/or URL and also match the canonical follow-up marker/title for this work. If that stable match is not found, do not update a possibly unrelated issue.
+6. Otherwise instruct that Linear child session to create the follow-up issue and include the canonical follow-up marker/title plus links back to the original ticket and PR.
+7. If an obvious review/done-adjacent status exists and changing it is clearly appropriate, instruct the Linear child to use judgment; otherwise leave status as-is rather than inventing a workflow state.
+8. Return a final summary that includes:
+    - ticket key and URL
+    - thoughts artifact path for the ticket corpus
+    - reconnaissance doc path if one was created
    - research doc path
    - plan doc paths
    - implementation result summary
@@ -2350,25 +2366,26 @@ $ARGUMENTS
    - PR URL
    - Linear comment/update status
    - any blockers, caveats, or remaining manual follow-up
-4. If the workflow stopped early, say exactly where and why.
+9. If the workflow stopped early, say exactly where and why.
 
-</step_10>
+</step_9>
 
 </process>
 
 <completion_gate>
 You are done only when one of these is true:
 1. You stopped immediately because no responsible Linear ticket reference could be determined from `<userMessage>`.
-2. You read the ticket, persisted the corpus artifact, determined the task was not actionable enough, posted precise clarification questions on Linear, completed the relevant todos, and returned a grounded stop summary.
-3. You read the ticket, persisted the corpus artifact, completed feasibility reconnaissance, found blocking ambiguity, posted precise clarification questions on Linear, completed the relevant todos, and returned a grounded stop summary.
-4. You completed the full workflow through research, planning, implementation, verification, commit, push, PR creation, Linear PR-link update, and a final summary containing all required paths and outputs.
-5. If code changes were made in this run, do not declare completion unless verification status, commit status, and PR status are all reported explicitly.
+2. You stopped in Step 3 because the ticket corpus artifact failed validation, exhausted its single refresh/fix retry, completed the relevant todos, and returned the exact validation failure.
+3. You read the ticket, persisted the corpus artifact, determined the task was not actionable enough, posted precise clarification questions on Linear, completed the relevant todos, and returned a grounded stop summary.
+4. You read the ticket, persisted the corpus artifact, completed feasibility reconnaissance, found blocking ambiguity, posted precise clarification questions on Linear, completed the relevant todos, and returned a grounded stop summary.
+5. You completed the full workflow through research, planning, implementation, verification, commit, push, PR creation, Linear PR-link update, and a final summary containing all required paths and outputs.
+6. If code changes were made in this run, do not declare completion unless verification status, commit status, and PR status are all reported explicitly.
 </completion_gate>
 ",
     },
     InstallAsset {
         rel_path: ".opencode/command/linear_ticket_design_brief.md",
-        contents: r"---
+        contents: r#"---
 description: Post a structured design/scoping brief and questions to a Linear ticket, then stop
 agent: Orchestrator
 ---
@@ -2378,14 +2395,19 @@ Read one Linear ticket and its full comment history, persist a ticket corpus art
 </task>
 
 <workflow_contract>
-1. Follow all 7 steps in order.
+1. Follow all 6 steps in order.
 2. Use `todowrite` in Step 2 and keep exactly one todo `in_progress` at a time.
 3. Treat `<userMessage>` as loose natural language with no first-pass flags or modifiers.
 4. Require exactly one Linear ticket reference; ask and stop if it is missing or ambiguous.
 5. Full ticket read means `linear_read_issue` plus repeated `linear_get_issue_comments` until `has_more=false`; stop fetching comments immediately after `has_more=false` and do not call again.
-6. Persist the authoritative ticket corpus artifact before posting to Linear, and run `thoughts_sync` after each artifact write.
+6. Before any synthesis or Linear posting, delegate full ticket intake, corpus export, and artifact-grounding handoff to one bounded Linear-capable child session. That delegated intake/export must:
+   - filename: `linear-{lowercase-key}-ticket.md`
+   - body includes `Ticket corpus schema: linear-ticket-corpus@v1` + snapshot timestamp + explicit snapshot disclaimer
+   - include full ticket description plus full comment history with authorship and timestamps when available
+   - write the artifact itself and run `thoughts_sync` immediately afterward
+   - return enough grounded ticket identifiers plus the saved artifact path for the orchestrator to continue
 7. This command is strictly Linear comment-only: post exactly one final Linear comment with `linear_add_comment`, and do not mutate Linear issue fields or perform any other external workflow mutations such as creating plans, implementing code, committing, pushing, or creating/updating PRs.
-8. Duplicate runs may append fresh comments and create fresh artifacts; do not attempt comment updates or deduplication.
+8. Duplicate runs may append fresh comments and create fresh design/scoping brief artifacts; the ticket corpus artifact should be refreshed by overwriting the stable `linear-{lowercase-key}-ticket.md` file.
 9. Bounded research is allowed only when needed to avoid guessing.
 10. Hard stop immediately after posting the Linear comment and returning the compact summary.
 </workflow_contract>
@@ -2415,8 +2437,7 @@ $ARGUMENTS
 ## Step 2: Build the Orchestrator Todo List
 
 1. Create concrete todos for:
-   - ticket intake
-   - ticket corpus artifact persistence and sync
+   - ticket intake, corpus artifact persistence, and validation
    - design/scoping brief artifact creation and sync
    - bounded research if needed
    - final Linear comment posting
@@ -2427,41 +2448,38 @@ $ARGUMENTS
 
 <step_3>
 
-## Step 3: Read the Full Ticket and Comment History
+## Step 3: Read, Persist, and Validate the Full Ticket Corpus
 
-1. Spawn a bounded Linear child session.
+1. Spawn one bounded Linear child session for ticket intake/export.
 2. In that child session:
    - resolve the ticket reference
    - call `linear_read_issue` to read the issue details and description
    - call `linear_get_issue_comments` repeatedly with the same issue until `has_more=false`
    - stop immediately once `has_more=false`; do not issue another identical comments call
-   - return the canonical ticket identifier, title, URL if available, current status if available, full description text, and full comment corpus with authorship and timestamps when available
+   - write the ticket corpus artifact itself via `thoughts_write_document(doc_type="artifact", filename=...)` using this shared contract:
+     - Stable filename: `linear-{lowercase-key}-ticket.md`
+     - Schema marker: `Ticket corpus schema: linear-ticket-corpus@v1`
+     - Snapshot timestamp + disclaimer: point-in-time snapshot; may be stale
+     - Include: ticket identifier, ticket title, ticket URL and current status if available, full description, full comments with authorship and timestamps when available, and a note that it is the authoritative ticket corpus for this run
+   - run `thoughts_sync` immediately after writing
+   - return the canonical ticket identifier, title, URL if available, current status if available, the saved artifact path, full description text, and confirmation that the full comment corpus was captured
 3. Do not let the Linear child proceed into codebase research, planning, implementation, status changes, or comment posting.
 4. If the ticket cannot be resolved responsibly, return the specific blocker to the user and stop.
+5. Read the produced artifact back in the orchestrator session before proceeding.
+6. Treat that read-back as a validation gate. Confirm the artifact contains:
+   - the required schema marker
+   - the ticket identifier and title
+   - the ticket URL and current status if available
+   - the snapshot timestamp and point-in-time disclaimer
+   - the full description
+   - the full comments/corpus with authorship and timestamps when available
+7. Do not begin synthesis or Linear posting until this artifact exists and passes validation.
 
 </step_3>
 
 <step_4>
 
-## Step 4: Persist the Authoritative Ticket Corpus Artifact
-
-1. Spawn a bounded `Normal` child session whose only job is to write the ticket corpus artifact under thoughts and sync it.
-2. Provide that child the full ticket output from Step 3 and require an artifact that includes:
-   - ticket identifier
-   - ticket title
-   - ticket URL and current status if available
-   - full description
-   - full comments with authorship and timestamps when available
-   - a note that it is the authoritative ticket corpus for this run
-3. Require the child to run `thoughts_sync` with `tools_cli_just_execute` after writing.
-4. Read the produced artifact back in the orchestrator session before proceeding.
-5. Do not begin synthesis or Linear posting until this artifact exists.
-
-</step_4>
-
-<step_5>
-
-## Step 5: Create the Design/Scoping Brief Artifact and Exact Comment Body
+## Step 4: Create the Design/Scoping Brief Artifact and Exact Comment Body
 
 1. Spawn a bounded `Normal` child session.
 2. Give it the ticket corpus artifact path plus the original ticket intake.
@@ -2488,14 +2506,14 @@ $ARGUMENTS
 7. Read the resulting brief artifact in the orchestrator session and extract the exact final Linear comment body from it.
 8. Do not create or invoke planning, implementation, commit, or PR workflows.
 
-</step_5>
+</step_4>
 
-<step_6>
+<step_5>
 
-## Step 6: Post Exactly One Structured Linear Comment
+## Step 5: Post Exactly One Structured Linear Comment
 
 1. Spawn a bounded Linear child session.
-2. In that child session, post exactly one comment with `linear_add_comment` using the exact comment body prepared in Step 5.
+2. In that child session, post exactly one comment with `linear_add_comment` using the exact comment body prepared in Step 4.
 3. The comment should be structured for the ticket author and include, in concise form:
    - Current understanding
    - Why the ticket is underspecified
@@ -2507,11 +2525,11 @@ $ARGUMENTS
 4. Do not call `linear_update_issue`, do not edit prior comments, and do not perform any other Linear mutation.
 5. If posting fails, return the exact blocker and stop without attempting alternate mutations.
 
-</step_6>
+</step_5>
 
-<step_7>
+<step_6>
 
-## Step 7: Return a Compact Summary and Stop
+## Step 6: Return a Compact Summary and Stop
 
 1. Return a compact summary that includes:
    - resolved ticket identifier
@@ -2524,7 +2542,7 @@ $ARGUMENTS
 2. State clearly that the workflow stopped after posting the comment.
 3. Do not continue into planning, implementation, verification, commit, push, PR creation, or any other downstream workflow.
 
-</step_7>
+</step_6>
 
 </process>
 
@@ -2532,10 +2550,10 @@ $ARGUMENTS
 You are done only when one of these is true:
 1. You stopped immediately because no responsible Linear ticket reference could be determined from `<userMessage>`.
 2. You stopped because the ticket reference was ambiguous and you asked one concise clarification question.
-3. You read the ticket, persisted the authoritative ticket corpus artifact, created and synced the design/scoping brief artifact, posted exactly one Linear comment, and returned a grounded summary with both artifact paths.
+3. You completed Step 3 ticket intake/export validation, created and synced the design/scoping brief artifact, posted exactly one Linear comment, and returned a grounded summary with both artifact paths.
 4. If the workflow stopped early due to a blocker, say exactly where it stopped and why.
 </completion_gate>
-",
+"#,
     },
     InstallAsset {
         rel_path: ".opencode/command/openai.md",
