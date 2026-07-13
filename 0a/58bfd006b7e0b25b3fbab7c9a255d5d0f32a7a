@@ -1,0 +1,20 @@
+.opencode/command/linear_ticket_design_brief.md
+  s_65a96ffc931ef8::t_f32484d1f74371 11,16,19-21,64,66,72-78,81-89,95,122,124,126,129,141,143,145,158,166
+  s_65a96ffc931ef8::t_44ce4821f096ce 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "0a58bfd006b7e0b25b3fbab7c9a255d5d0f32a7a",
+  "prompts": {},
+  "sessions": {
+    "s_65a96ffc931ef8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a3fc4feaffeTIy3MTxyL7OrfI",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
