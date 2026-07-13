@@ -30,6 +30,12 @@ pub struct ProgressRenderer {
     warned_load_error: bool,
 }
 
+impl Default for ProgressRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProgressRenderer {
     pub fn new() -> Self {
         let actions_vec = planned_actions_for_start();
@@ -136,13 +142,14 @@ impl ProgressRenderer {
     }
 
     fn render_opencode_line_if_needed(&self, snap: &ProgressSnapshot) {
-        let Some(last) = self.last.as_ref() else {
-            return;
+        let changed = match self.last.as_ref() {
+            Some(last) => {
+                last.opencode_dispatch_attempt != snap.opencode_dispatch_attempt
+                    || last.opencode_last_command != snap.opencode_last_command
+            }
+            None => snap.opencode_last_command.is_some(),
         };
-
-        let dispatch_changed = last.opencode_dispatch_attempt != snap.opencode_dispatch_attempt;
-        let command_changed = last.opencode_last_command != snap.opencode_last_command;
-        if !(dispatch_changed || command_changed) {
+        if !changed {
             return;
         }
 
@@ -352,5 +359,35 @@ mod tests {
             Some("https://example.invalid/pr/1")
         );
         assert_eq!(snapshot.updated_at, "2026-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn progress_renderer_default_matches_new() {
+        let renderer = super::ProgressRenderer::new();
+        let default_renderer = super::ProgressRenderer::default();
+
+        assert_eq!(renderer.actions, default_renderer.actions);
+        assert_eq!(renderer.total_actions, default_renderer.total_actions);
+        assert_eq!(renderer.last, default_renderer.last);
+        assert_eq!(
+            renderer.warned_load_error,
+            default_renderer.warned_load_error
+        );
+    }
+
+    #[test]
+    fn resumed_snapshot_with_existing_opencode_command_counts_as_changed() {
+        let renderer = super::ProgressRenderer::new();
+        let snapshot = ProgressSnapshot::from_state(&sample_state());
+
+        let changed = match renderer.last.as_ref() {
+            Some(last) => {
+                last.opencode_dispatch_attempt != snapshot.opencode_dispatch_attempt
+                    || last.opencode_last_command != snapshot.opencode_last_command
+            }
+            None => snapshot.opencode_last_command.is_some(),
+        };
+
+        assert!(changed);
     }
 }

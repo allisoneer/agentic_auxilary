@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use tracing::debug;
 use tracing::info;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -229,7 +230,9 @@ async fn run_engine_until_stop_with_progress(
 
     let result = engine.run_until_stop(stop_after).await;
     stop.store(true, Ordering::Relaxed);
-    let _ = progress_task.await;
+    if let Err(err) = progress_task.await {
+        debug!(error = %err, "progress renderer task ended abnormally");
+    }
     result
 }
 
