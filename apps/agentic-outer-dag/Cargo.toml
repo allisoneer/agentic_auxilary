@@ -16,6 +16,12 @@ mcp = false
 logging = false
 napi = false
 
+[package.metadata.binstall]
+pkg-url = "{repo}/releases/download/{name}-v{version}/{name}-{target}.tar.xz"
+pkg-fmt = "txz"
+bin-dir = "{name}-{target}/{bin}{binary-ext}"
+disabled-strategies = ["quick-install", "compile"]
+
 [[bin]]
 name = "agentic-outer-dag"
 path = "src/main.rs"

@@ -136,6 +136,9 @@ git_tag_enable = true
 [release_plz.overrides.opencode-orchestrator-mcp]
 git_tag_enable = true
 
+[release_plz.overrides.agentic-outer-dag-bin]
+git_tag_enable = true
+
 # Per-crate overrides to match current practices
 [release_plz.overrides.universal-tool-core]
 git_tag_enable = false

@@ -13,6 +13,7 @@ diesel = "cargo:diesel_cli"
 thoughts-bin = "github:allisoneer/agentic_auxilary"
 agentic-bin = "github:allisoneer/agentic_auxilary"
 agentic-mcp = "github:allisoneer/agentic_auxilary"
+agentic-outer-dag-bin = "github:allisoneer/agentic_auxilary"
 opencode-orchestrator-mcp = "github:allisoneer/agentic_auxilary"
 
 [settings]
@@ -90,6 +91,16 @@ linux-x64 = { asset_pattern = "agentic-mcp-x86_64-unknown-linux-gnu.tar.xz" }
 linux-arm64 = { asset_pattern = "agentic-mcp-aarch64-unknown-linux-gnu.tar.xz" }
 macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
+
+[tools.agentic-outer-dag-bin]
+version = "0.1.0"
+version_prefix = "agentic-outer-dag-bin-v"
+
+[tools.agentic-outer-dag-bin.platforms]
+linux-x64 = { asset_pattern = "agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz" }
+linux-arm64 = { asset_pattern = "agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz" }
+macos-x64 = { asset_pattern = "agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz" }
+macos-arm64 = { asset_pattern = "agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.opencode-orchestrator-mcp]
 version = "0.7.9"

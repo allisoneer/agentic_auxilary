@@ -238,6 +238,7 @@ mod tests {
 [binaries]
 agentic-bin = "0.1.15"
 agentic-mcp = "0.2.42"
+agentic-outer-dag-bin = "0.1.0"
 opencode-orchestrator-mcp = "0.7.9"
 thoughts-bin = "0.1.24"
 "#
@@ -265,7 +266,7 @@ opencode-orchestrator-mcp = "0.7.9"
         )
         .expect_err("missing key should fail")
         .to_string();
-        assert!(err.contains("Missing required managed binary `thoughts-bin`"));
+        assert!(err.contains("Missing required managed binary `agentic-outer-dag-bin`"));
     }
 
     #[test]
@@ -294,6 +295,7 @@ thoughts-bin = "0.1.24"
 [binaries]
 agentic-bin = "not-semver"
 agentic-mcp = "0.2.42"
+agentic-outer-dag-bin = "0.1.0"
 opencode-orchestrator-mcp = "0.7.9"
 thoughts-bin = "0.1.24"
 "#,
@@ -324,6 +326,21 @@ thoughts-bin = "0.1.24"
         assert_eq!(
             parse_managed_tag("message-optimizer-bin-v0.1.0").expect("parse"),
             None
+        );
+
+        let outer_dag = parse_managed_tag("agentic-outer-dag-bin-v0.1.0")
+            .expect("tag parse")
+            .expect("managed tag");
+        assert_eq!(outer_dag.tool_name, "agentic-outer-dag-bin");
+        assert_eq!(outer_dag.version, "0.1.0");
+        assert_eq!(
+            outer_dag.required_asset_names,
+            vec![
+                "agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz",
+                "agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz",
+                "agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz",
+                "agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz",
+            ]
         );
     }
 
