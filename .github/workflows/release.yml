@@ -12,6 +12,13 @@
 #
 # Note that the GitHub Release will be created with a generated
 # title/body based on your changelogs.
+#
+# MANUAL PATCH: cargo-dist generates this workflow, but the host job below must
+# create GitHub Releases with the RELEASE_PLZ GitHub App token instead of the
+# default GITHUB_TOKEN. Releases created by GITHUB_TOKEN do not trigger the
+# release.published event used by Published Versions Sync. If cargo-dist
+# regenerates this file, preserve the Generate GitHub token step and GH_TOKEN /
+# GITHUB_TOKEN overrides in the host job.
 
 name: Release
 permissions:
@@ -270,8 +277,20 @@ jobs:
         run: |
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
+      # MANUAL PATCH: use a GitHub App token so release.published triggers
+      # .github/workflows/published-versions-sync.yml. The default GITHUB_TOKEN
+      # suppresses downstream workflow runs for events it creates.
+      - name: Generate GitHub token
+        id: generate-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: Create GitHub Release
         env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
