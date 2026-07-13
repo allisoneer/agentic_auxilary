@@ -1,0 +1,19 @@
+apps/agentic-outer-dag/src/progress.rs
+  s_2c24b91787ab20::t_419e464a0339bf 145,258-267,272,387
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "0c80d3f98d94b043c95f6ab9213e012522db7b22",
+  "prompts": {},
+  "sessions": {
+    "s_2c24b91787ab20": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a3c3ace4ffe4MIjUBZvely99k",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
