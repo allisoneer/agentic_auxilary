@@ -1,0 +1,23 @@
+mise.toml
+  s_5dba4f09fa5f7a::t_c39fa7732fd91f 76,86,96
+tools/published-versions.toml
+  s_5dba4f09fa5f7a::t_c39fa7732fd91f 4-6
+mise.lock
+  s_5dba4f09fa5f7a::t_20269e16a6e258 52,60-62,65-67,70,78-80,83-85,88-90,93-95,98,106-108,111,119-121,124-126,129,136-138,141-143,146,150,153-156,158-171,174,178,181-184,186-189,192,200-202,205,213-215,218-220,223,230-232,235-237,240,248-250,253-255,258,266-268,271-273,276-278,281-283,286,294-296,299,305-308,310-313,316,320,323-326,328-331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "df80a181123031e7f39662005f4d13a0cf0b5660",
+  "prompts": {},
+  "sessions": {
+    "s_5dba4f09fa5f7a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a37d390affeZ5aRlluZTOtuw5",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
