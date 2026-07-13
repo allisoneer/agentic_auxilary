@@ -139,6 +139,16 @@ linux-arm64 = { asset_pattern = "agentic-mcp-aarch64-unknown-linux-gnu.tar.xz" }
 macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
+[tools.agentic-outer-dag-bin]
+version = "0.1.0"
+version_prefix = "agentic-outer-dag-bin-v"
+
+[tools.agentic-outer-dag-bin.platforms]
+linux-x64 = { asset_pattern = "agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz" }
+linux-arm64 = { asset_pattern = "agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz" }
+macos-x64 = { asset_pattern = "agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz" }
+macos-arm64 = { asset_pattern = "agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz" }
+
 [tools.opencode-orchestrator-mcp]
 version = "0.7.9"
 version_prefix = "opencode-orchestrator-mcp-v"
@@ -167,6 +177,11 @@ macos-arm64 = { asset_pattern = "opencode-orchestrator-mcp-aarch64-apple-darwin.
                 tool_name: "agentic-mcp",
                 version_prefix: "agentic-mcp-v",
                 version: "0.2.42".to_string(),
+            },
+            ResolvedBinarySpec {
+                tool_name: "agentic-outer-dag-bin",
+                version_prefix: "agentic-outer-dag-bin-v",
+                version: "0.1.0".to_string(),
             },
             ResolvedBinarySpec {
                 tool_name: "opencode-orchestrator-mcp",
@@ -263,6 +278,7 @@ _.path = ["tools/bin"]
 [binaries]
 agentic-bin = "0.1.15"
 agentic-mcp = "0.2.42"
+agentic-outer-dag-bin = "0.1.0"
 opencode-orchestrator-mcp = "0.7.9"
 thoughts-bin = "0.1.24"
 "#,

@@ -174,7 +174,7 @@ Continue calling tools until the task is complete and verified. Do NOT stop when
 <tool_selection>
 Prefer specialized tools over bash commands:
 1. Use read instead of cat/head/tail
-2. Use apply_patch instead of sed/awk
+2. Use edit instead of sed/awk
 3. Use write instead of echo/heredoc
 4. Use tools_cli_grep instead of grep command
 5. Use tools_cli_glob instead of find command
@@ -914,8 +914,8 @@ For each thread:
 If multiple threads share the same anchor window, reuse the same snippet block or reference it clearly rather than duplicating it unnecessarily.
 
 ### Footer
-- concise next-step suggestions such as:
-  - `run resolve_pr_comments_openai on this PR`
+  - concise next-step suggestions such as:
+    - `run resolve_pr_comments on this PR`
   - `research thread X`
   - `reply manually to thread X`
 
@@ -993,10 +993,8 @@ You are tasked with creating git commits for the changes made during this sessio
    
    [optional footer(s)]
    ```
-   - Scope is optional and cosmetic—it appears in changelogs for readability but doesn't affect routing
-   - Changelog entries are routed to packages based on file paths changed, not the scope value
-   - For tool-specific changes, use the directory name as scope (e.g., `thoughts_tool`, `gpt5_reasoner`)
-   - For cross-cutting changes, use generic scopes like `build`, `deps`, `ci`, or omit the scope entirely
+    - Scope is optional—use a short component, package, or directory name when it adds clarity
+    - For cross-cutting changes, use generic scopes like `build`, `deps`, `ci`, or omit the scope entirely
    - Description should be imperative mood, lowercase, no period
    - Body explains WHY, not what (the diff shows what)
    - Footer can include `BREAKING CHANGE:` for major version bumps
@@ -1013,11 +1011,11 @@ You are tasked with creating git commits for the changes made during this sessio
 
 ## Examples:
 
-- `feat(thoughts_tool): add SSH authentication callbacks for sync operations`
-- `fix(universal_tool): respect configured sync values in mount operations`
-- `refactor(claudecode_rs): extract common parsing logic into shared module`
-- `docs: update README with new CI/CD workflow information`
-- `chore(deps): update tokio to 1.40 across all packages`
+- `feat(auth): add oauth callback handler`
+- `fix(cli): handle missing config file gracefully`
+- `refactor(api): extract common request parsing`
+- `docs: document local dev setup`
+- `chore(deps): bump tokio to 1.40`
 
 ## Important:
 - **NEVER add co-author information or Claude attribution**
@@ -1041,7 +1039,6 @@ Consumers must update their parsing logic.
 - Group related changes together
 - Keep commits focused and atomic when possible
 - Use conventional commits to enable automated versioning
-- For tool-specific scopes, use directory names (e.g., `thoughts_tool`); file paths determine changelog routing
 "#,
     },
     InstallAsset {
@@ -1281,7 +1278,7 @@ Good descriptions are 1-2 sentences and mention:
 Examples:
 - `frontend/src/features/payments/CheckoutForm.tsx` - `Main payment form component that will need new validation logic for subscription upgrades`
 - `rust/server/src/services/payments/` - `Payment service layer with strict idempotency requirements; includes PaymentProvider trait`
-- `references/allisoneer/payments_integration/README.md` - `Example of similar payment gateway integration with retry/backoff patterns`
+- `references/<org>/<repo>/README.md` - `Example of similar integration with retry/backoff patterns`
 
 Use directories when many related files exist; set `extensions`, `recursive`, and `max_files` appropriately.
 
@@ -1475,16 +1472,16 @@ $ARGUMENTS
    - Mark findings as `resolved_cleanup` after push confirmation.
 
 2. For `research` clusters:
-   - Run `research_openai` scoped to only the disputed findings or related code area.
+   - Run `research` scoped to only the disputed findings or related code area.
    - Read the resulting research document.
    - Reclassify the cluster based on new evidence.
    - If research resolves ambiguity, assign a new route and continue.
    - If research introduces new questions, document them and either iterate or mark as `research_pending`.
 
 3. For `plan_and_implement` clusters:
-   - Run `create_plan_init_openai` with the cluster's findings as input.
-   - Run `create_plan_final_openai` to complete the plan.
-   - Run `implement_plan_openai` to execute the plan.
+   - Run `create_plan_init` with the cluster's findings as input.
+   - Run `create_plan_final` to complete the plan.
+   - Run `implement_plan` to execute the plan.
    - Ensure implementation verification includes `just check` and `just test`.
    - Create an atomic commit.
    - Push it.
@@ -1761,18 +1758,18 @@ You are tasked with generating a comprehensive pull request description followin
    - Ensure all checklist items are addressed (checked or explained)
 
 8. **Save and sync the description (MCP):**
-   - Call `tools_thoughts_write_document`:
-     - `doc_type`: "artifact"
-     - `filename`: `pr_{number}_description.md`
-     - `content`: completed description from template
-   - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_cli_just_execute`
+    - Call `tools_thoughts_write_document`:
+      - `doc_type`: "artifact"
+      - `filename`: `pr_{number}_description.md`
+      - `content`: completed description from template
+    - Sync via Just tools: execute the "thoughts_sync" recipe using `tools_cli_just_execute`
 
 9. **Update the PR:**
-   - After thoughts sync, the file will be at a path in thoughts/active/{branch}/artifacts/
-   - Execute the "pr-update-autogen" recipe using `tools_cli_just_execute` with the PR number and artifact path as arguments
-   - This preserves any human notes outside the autogen markers
-   - Confirm update successful
-   - If any verification steps remain unchecked, remind user to complete them before merging
+    - Use the artifact path returned by `tools_thoughts_write_document` (typically under `thoughts/{branch}/artifacts/` after sync)
+    - Execute the "pr-update-autogen" recipe using `tools_cli_just_execute` with the PR number and artifact path as arguments
+    - This preserves any human notes outside the autogen markers
+    - Confirm update successful
+    - If any verification steps remain unchecked, remind user to complete them before merging
 
 ## Important notes:
 - This command works across different repositories - always read the local template
@@ -2635,7 +2632,7 @@ $ARGUMENTS
 **Good todo examples:**
 - `Spawn locator for authentication-related files in src/`
 - `Spawn analyzer for rate limiting flow across middleware and config`
-- `Spawn reference analyzer on references/openai/codex for command prompt patterns`
+- `Spawn reference analyzer on references/<org>/<repo> for prompt or workflow patterns`
 - `Reflect on returned findings and decide whether another research pass is needed`
 - `Write research artifact and sync it`
 
@@ -2750,7 +2747,9 @@ agent: Orchestrator
 ---
 
 <task>
-Inspect PR CI for the current PR head SHA, excluding CodeRabbit checks and ignoring only skipped/neutral.
+Inspect PR CI for the current PR head SHA, ignoring only skipped/neutral.
+
+Non-blocking bot-review or advisory checks should not block remediation unless they surface actionable failures.
 
 Gather GitHub Actions failure evidence via Bash+gh, attempt only safe grounded remediation, verify any claimed fix, and write a durable artifact.
 </task>
@@ -2759,7 +2758,7 @@ Gather GitHub Actions failure evidence via Bash+gh, attempt only safe grounded r
 1. Follow all steps in order.
 2. Use `todowrite` and keep exactly one todo `in_progress`.
 3. Create the artifact early and keep updating it with evidence, decisions, actions, and verification.
-4. Treat v1 required CI as all visible non-CodeRabbit checks for the current PR head SHA, ignoring only `skipped` and `neutral`.
+4. Treat v1 required CI as all visible non-skipped, non-neutral checks for the current PR head SHA, except clearly non-blocking bot-review or advisory signals.
 5. Use Bash+`gh` for raw CI evidence when current Rust/MCP GitHub surfaces are insufficient.
 6. Attempt remediation only when the failure cause and the fix are both grounded and bounded.
 7. If remediation is unsafe, ambiguous, or inconclusive, stop with explicit handoff details in the artifact.
@@ -2808,6 +2807,7 @@ In bounded Bash child work, gather best-effort evidence for the current PR head 
 Artifact requirements for this step:
 - raw or normalized check rows
 - required-check interpretation for the current head SHA
+- any non-blocking bot-review or advisory checks recorded separately
 - failing check URLs and any mapped run/job URLs
 - best-effort failed log snippets or an explicit note that logs were unavailable
 
@@ -3144,7 +3144,7 @@ Resume interrupted work from a structured handoff artifact. Re-apply the correct
 6. Do not redo completed work unless the artifact or current files show contradiction or drift.
 7. If the artifact contains unresolved blockers that require the user, stop and ask instead of guessing.
 8. Treat `confirmed`, `inferred`, and `unconfirmed` validation claims differently; only `confirmed` means verified work.
-9. If you create or edit workflow prompt files or `AGENTS.md`, do a post-write comparison pass before treating that work as complete.
+9. If you create or edit workflow prompt files (for example `.opencode/**`) or `opencode.json`, do a post-write comparison pass before treating that work as complete.
 </workflow_contract>
 
 <userMessage>
@@ -3187,7 +3187,7 @@ $ARGUMENTS
 6. Treat the handoff artifact as the carried-forward state and progress context.
 7. Treat any current-session overrides from `<userMessage>` as higher priority than the artifact.
 8. If the artifact's `## Validation Status` includes `inferred` or `unconfirmed` items, treat those as needing fresh verification rather than as proven completion.
-9. If the artifact's `## Files Changed` or remaining work includes `.opencode/command/*.md` workflow files or `AGENTS.md`, plan an independent comparison pass before considering prompt-file edits complete.
+9. If the artifact's `## Files Changed` or remaining work includes `.opencode/command/*.md` workflow files or `opencode.json`, plan an independent comparison pass before considering prompt-file edits complete.
 10. Compare the artifact against the current repo and document state. If a meaningful contradiction exists, report it before continuing.
 
 </step_2>
@@ -3206,7 +3206,7 @@ $ARGUMENTS
 3. Preserve exactly one `in_progress` item.
 4. Carry forward the artifact's `Do Not Redo` items as explicit constraints.
 5. If the source workflow is implement_plan-like, break remaining work into granular implementation and verification todos rather than generic phase labels.
-6. If the resumed work touches workflow prompt files or `AGENTS.md`, include explicit verification todos for read-back comparison and independent audit.
+6. If the resumed work touches workflow prompt files or `opencode.json`, include explicit verification todos for read-back comparison and independent audit.
 7. Before major tool work, tell the user:
    - what task you believe you are resuming
    - what is already done
@@ -3230,7 +3230,7 @@ $ARGUMENTS
 
 1. Use the artifact's remaining work and first actions as the primary task list.
 2. Keep the GPT system prompt's verification and completeness rules in force.
-3. If the generic work includes workflow prompt files or `AGENTS.md`, require a post-write comparison pass before closing the task.
+3. If the generic work includes workflow prompt files or `opencode.json`, require a post-write comparison pass before closing the task.
 
 ### If `resume_mode` is `ask_user_first`
 
@@ -3246,7 +3246,7 @@ $ARGUMENTS
 1. Continue with the first unfinished high-priority item.
 2. Do not reopen settled decisions unless current files contradict them.
 3. Do not retry failed paths unless you have a concrete new reason.
-4. If you create or edit workflow prompt files or `AGENTS.md`, run a post-write comparison pass using subagents in parallel; if important ambiguity remains, use `tools_ask_reasoning_model` before declaring completion.
+4. If you create or edit workflow prompt files or `opencode.json`, run a post-write comparison pass using subagents in parallel; if important ambiguity remains, use `tools_ask_reasoning_model` before declaring completion.
 5. Update `todowrite` as you go.
 
 </step_5>
@@ -3985,7 +3985,7 @@ Create a self-contained handoff artifact for a future GPT-5.4 session. Keep work
 4. If you can identify the current workflow command, record it explicitly and re-read that command file before writing the artifact.
 5. The artifact must be sufficient for a fresh session that knows only the repo, system prompts, and this artifact.
 6. Validation claims must be labeled `confirmed`, `inferred`, or `unconfirmed`.
-7. If workflow prompt files or `AGENTS.md` changed in this session, record whether a post-write comparison pass already happened or is still required.
+7. If workflow prompt files or `opencode.json` changed in this session, record whether a post-write comparison pass already happened or is still required.
 8. If uncertainty remains, label it explicitly instead of smoothing it over.
 </workflow_contract>
 
@@ -4029,7 +4029,7 @@ $ARGUMENTS
    - verification status
    - meaningful divergences from the original plan
 4. For research or planning work, make sure you know the latest research, open questions, and recommended next command.
-5. If the current session edited `.opencode/command/*.md` workflow files or `AGENTS.md`, re-read those changed files and note whether they already received a post-write comparison or external review.
+5. If the current session edited `.opencode/command/*.md` workflow files or `opencode.json`, re-read those changed files and note whether they already received a post-write comparison or external review.
 6. Do not do a broad new investigation here. Reload only the files and documents needed for an accurate handoff.
 
 </step_2>
@@ -4041,14 +4041,14 @@ $ARGUMENTS
 1. Capture the goal and success condition.
 2. Capture the current state of the work.
 3. Capture completed work.
-4. Capture files changed, explicitly marking workflow prompt files and `AGENTS.md` when they are part of the change set.
+4. Capture files changed, explicitly marking workflow prompt files and `opencode.json` when they are part of the change set.
 5. Capture files researched or anchor documents.
 6. Capture settled decisions and why they were made.
 7. Capture open questions, risks, and tentative areas.
 8. Capture remaining work in priority order.
 9. Capture validation status and unfinished verification, labeling each item as `confirmed`, `inferred`, or `unconfirmed`.
 10. Capture failed paths or things already tried.
-11. Capture the exact first actions the next session should take, including any required post-write comparison pass for workflow prompt files or `AGENTS.md`.
+11. Capture the exact first actions the next session should take, including any required post-write comparison pass for workflow prompt files or `opencode.json`.
 
 </step_3>
 
@@ -4111,7 +4111,7 @@ $ARGUMENTS
     - a fresh session can tell what to do next
     - workflow instructions and carried-forward context are clearly separated
 3. If the work is implement_plan-like, verify that the artifact explicitly names the source plan files, current phase or next unfinished item, and outstanding verification.
-4. If workflow prompt files or `AGENTS.md` changed, verify the artifact says whether post-write comparison already happened or is still required next session.
+4. If workflow prompt files or `opencode.json` changed, verify the artifact says whether post-write comparison already happened or is still required next session.
 5. If anything is uncertain, label it inside the artifact instead of pretending it is settled.
 
 </step_5>
@@ -4130,7 +4130,7 @@ $ARGUMENTS
 </process>
 
 <completion_gate>
-You are done only when the handoff artifact is written, synced, verified as self-contained, any workflow prompt-file or `AGENTS.md` comparison status is recorded, and the user has the saved path plus the recommended resume command.
+You are done only when the handoff artifact is written, synced, verified as self-contained, any workflow prompt-file or `opencode.json` comparison status is recorded, and the user has the saved path plus the recommended resume command.
 </completion_gate>
 "#,
     },

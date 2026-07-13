@@ -16,7 +16,7 @@ Resume interrupted work from a structured handoff artifact. Re-apply the correct
 6. Do not redo completed work unless the artifact or current files show contradiction or drift.
 7. If the artifact contains unresolved blockers that require the user, stop and ask instead of guessing.
 8. Treat `confirmed`, `inferred`, and `unconfirmed` validation claims differently; only `confirmed` means verified work.
-9. If you create or edit workflow prompt files or `AGENTS.md`, do a post-write comparison pass before treating that work as complete.
+9. If you create or edit workflow prompt files (for example `.opencode/**`) or `opencode.json`, do a post-write comparison pass before treating that work as complete.
 </workflow_contract>
 
 <userMessage>
@@ -59,7 +59,7 @@ $ARGUMENTS
 6. Treat the handoff artifact as the carried-forward state and progress context.
 7. Treat any current-session overrides from `<userMessage>` as higher priority than the artifact.
 8. If the artifact's `## Validation Status` includes `inferred` or `unconfirmed` items, treat those as needing fresh verification rather than as proven completion.
-9. If the artifact's `## Files Changed` or remaining work includes `.opencode/command/*.md` workflow files or `AGENTS.md`, plan an independent comparison pass before considering prompt-file edits complete.
+9. If the artifact's `## Files Changed` or remaining work includes `.opencode/command/*.md` workflow files or `opencode.json`, plan an independent comparison pass before considering prompt-file edits complete.
 10. Compare the artifact against the current repo and document state. If a meaningful contradiction exists, report it before continuing.
 
 </step_2>
@@ -78,7 +78,7 @@ $ARGUMENTS
 3. Preserve exactly one `in_progress` item.
 4. Carry forward the artifact's `Do Not Redo` items as explicit constraints.
 5. If the source workflow is implement_plan-like, break remaining work into granular implementation and verification todos rather than generic phase labels.
-6. If the resumed work touches workflow prompt files or `AGENTS.md`, include explicit verification todos for read-back comparison and independent audit.
+6. If the resumed work touches workflow prompt files or `opencode.json`, include explicit verification todos for read-back comparison and independent audit.
 7. Before major tool work, tell the user:
    - what task you believe you are resuming
    - what is already done
@@ -102,7 +102,7 @@ $ARGUMENTS
 
 1. Use the artifact's remaining work and first actions as the primary task list.
 2. Keep the GPT system prompt's verification and completeness rules in force.
-3. If the generic work includes workflow prompt files or `AGENTS.md`, require a post-write comparison pass before closing the task.
+3. If the generic work includes workflow prompt files or `opencode.json`, require a post-write comparison pass before closing the task.
 
 ### If `resume_mode` is `ask_user_first`
 
@@ -118,7 +118,7 @@ $ARGUMENTS
 1. Continue with the first unfinished high-priority item.
 2. Do not reopen settled decisions unless current files contradict them.
 3. Do not retry failed paths unless you have a concrete new reason.
-4. If you create or edit workflow prompt files or `AGENTS.md`, run a post-write comparison pass using subagents in parallel; if important ambiguity remains, use `tools_ask_reasoning_model` before declaring completion.
+4. If you create or edit workflow prompt files or `opencode.json`, run a post-write comparison pass using subagents in parallel; if important ambiguity remains, use `tools_ask_reasoning_model` before declaring completion.
 5. Update `todowrite` as you go.
 
 </step_5>

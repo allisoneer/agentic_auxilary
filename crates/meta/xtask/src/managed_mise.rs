@@ -22,10 +22,11 @@ pub const PLATFORM_TARGETS: [(&str, &str); 4] = [
     ("macos-arm64", "aarch64-apple-darwin"),
 ];
 
-pub const BINARY_SPECS: [BinarySpec; 4] = [
+pub const BINARY_SPECS: [BinarySpec; 5] = [
     BinarySpec::new("thoughts-bin", "thoughts-bin-v"),
     BinarySpec::new("agentic-bin", "agentic-bin-v"),
     BinarySpec::new("agentic-mcp", "agentic-mcp-v"),
+    BinarySpec::new("agentic-outer-dag-bin", "agentic-outer-dag-bin-v"),
     BinarySpec::new("opencode-orchestrator-mcp", "opencode-orchestrator-mcp-v"),
 ];
 

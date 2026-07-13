@@ -36,10 +36,8 @@ You are tasked with creating git commits for the changes made during this sessio
    
    [optional footer(s)]
    ```
-   - Scope is optional and cosmetic—it appears in changelogs for readability but doesn't affect routing
-   - Changelog entries are routed to packages based on file paths changed, not the scope value
-   - For tool-specific changes, use the directory name as scope (e.g., `thoughts_tool`, `gpt5_reasoner`)
-   - For cross-cutting changes, use generic scopes like `build`, `deps`, `ci`, or omit the scope entirely
+    - Scope is optional—use a short component, package, or directory name when it adds clarity
+    - For cross-cutting changes, use generic scopes like `build`, `deps`, `ci`, or omit the scope entirely
    - Description should be imperative mood, lowercase, no period
    - Body explains WHY, not what (the diff shows what)
    - Footer can include `BREAKING CHANGE:` for major version bumps
@@ -56,11 +54,11 @@ You are tasked with creating git commits for the changes made during this sessio
 
 ## Examples:
 
-- `feat(thoughts_tool): add SSH authentication callbacks for sync operations`
-- `fix(universal_tool): respect configured sync values in mount operations`
-- `refactor(claudecode_rs): extract common parsing logic into shared module`
-- `docs: update README with new CI/CD workflow information`
-- `chore(deps): update tokio to 1.40 across all packages`
+- `feat(auth): add oauth callback handler`
+- `fix(cli): handle missing config file gracefully`
+- `refactor(api): extract common request parsing`
+- `docs: document local dev setup`
+- `chore(deps): bump tokio to 1.40`
 
 ## Important:
 - **NEVER add co-author information or Claude attribution**
@@ -84,4 +82,3 @@ Consumers must update their parsing logic.
 - Group related changes together
 - Keep commits focused and atomic when possible
 - Use conventional commits to enable automated versioning
-- For tool-specific scopes, use directory names (e.g., `thoughts_tool`); file paths determine changelog routing

@@ -53,7 +53,7 @@ $ARGUMENTS
 **Good todo examples:**
 - `Spawn locator for authentication-related files in src/`
 - `Spawn analyzer for rate limiting flow across middleware and config`
-- `Spawn reference analyzer on references/openai/codex for command prompt patterns`
+- `Spawn reference analyzer on references/<org>/<repo> for prompt or workflow patterns`
 - `Reflect on returned findings and decide whether another research pass is needed`
 - `Write research artifact and sync it`
 
