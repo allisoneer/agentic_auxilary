@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-bin"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "agentic-config",
  "agentic-tools-utils",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-outer-dag-bin"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "chrono",

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.12] - 2026-07-13
+
+### ⛰️  Features
+- *(agentic-outer-dag)* Stream live progress during outer-dag runs
+
+### 🐛 Bug Fixes
+- *(agentic-outer-dag)* Tighten progress renderer resume behavior
+
+### 🚜 Refactor
+- *(agentic-outer-dag)* Share opencode progress change predicate
+
+### 🧪 Testing
+- *(agentic-outer-dag)* Cover progress output channel behavior
 ## [0.1.11] - 2026-07-13
 
 ### ⛰️  Features
