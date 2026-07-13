@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # needed to commit/push regenerated published-version metadata
+      pull-requests: write # needed to open a fallback PR if main is ruleset-protected
     steps:
       - name: Checkout main
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -36,6 +37,7 @@ jobs:
           app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
           permission-contents: write
+          permission-pull-requests: write
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
@@ -159,5 +161,20 @@ jobs:
             fi
           done
 
-          echo "::error::Failed to push to main after retries. Likely branch protection or missing permissions."
-          exit 1
+          echo "Direct push to main failed after retries; opening a fallback PR."
+          sync_branch="published-versions-sync/${TAG}-${GITHUB_RUN_ID}"
+          git push "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${sync_branch}"
+
+          pr_body="$RUNNER_TEMP/published-versions-pr-body.md"
+          cat > "$pr_body" <<EOF
+          Automated published-version sync for \`$TAG\`.
+
+          Direct push to \`main\` was blocked by repository rules, so this workflow opened a PR instead.
+          EOF
+
+          pr_url="$(gh pr create \
+            --base main \
+            --head "$sync_branch" \
+            --title "chore(published-versions): sync $TAG" \
+            --body-file "$pr_body")"
+          echo "Opened fallback PR: $pr_url"
