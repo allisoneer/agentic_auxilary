@@ -142,14 +142,7 @@ impl ProgressRenderer {
     }
 
     fn render_opencode_line_if_needed(&self, snap: &ProgressSnapshot) {
-        let changed = match self.last.as_ref() {
-            Some(last) => {
-                last.opencode_dispatch_attempt != snap.opencode_dispatch_attempt
-                    || last.opencode_last_command != snap.opencode_last_command
-            }
-            None => snap.opencode_last_command.is_some(),
-        };
-        if !changed {
+        if !opencode_line_changed(self.last.as_ref(), snap) {
             return;
         }
 
@@ -262,10 +255,21 @@ fn planned_action_id_for_command(command: &str) -> Option<&'static str> {
     }
 }
 
+fn opencode_line_changed(last: Option<&ProgressSnapshot>, snap: &ProgressSnapshot) -> bool {
+    match last {
+        Some(last) => {
+            last.opencode_dispatch_attempt != snap.opencode_dispatch_attempt
+                || last.opencode_last_command != snap.opencode_last_command
+        }
+        None => snap.opencode_last_command.is_some(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::ProgressSnapshot;
     use super::normalize_details;
+    use super::opencode_line_changed;
     use super::planned_action_id_for_command;
     use super::planned_action_id_for_stage;
     use super::stage_kind_label;
@@ -380,14 +384,6 @@ mod tests {
         let renderer = super::ProgressRenderer::new();
         let snapshot = ProgressSnapshot::from_state(&sample_state());
 
-        let changed = match renderer.last.as_ref() {
-            Some(last) => {
-                last.opencode_dispatch_attempt != snapshot.opencode_dispatch_attempt
-                    || last.opencode_last_command != snapshot.opencode_last_command
-            }
-            None => snapshot.opencode_last_command.is_some(),
-        };
-
-        assert!(changed);
+        assert!(opencode_line_changed(renderer.last.as_ref(), &snapshot));
     }
 }
