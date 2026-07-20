@@ -1,0 +1,19 @@
+opencode.json
+  s_b2f94e68020acf::t_c4277909bfe1eb 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "a65d79f30baaa2a26a8a82f90032dbd4f37c3319",
+  "prompts": {},
+  "sessions": {
+    "s_b2f94e68020acf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fffbff12-5add-4d01-ace7-f2489a1bfeb5",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
