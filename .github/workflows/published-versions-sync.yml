@@ -46,7 +46,7 @@ jobs:
           cache: false
 
       - name: Install mise
-        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
         with:
           github_token: ${{ steps.generate-token.outputs.token }}
           cache: false
