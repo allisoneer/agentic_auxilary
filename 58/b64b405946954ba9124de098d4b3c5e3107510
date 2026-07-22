@@ -1,0 +1,19 @@
+.thoughts/config.json
+  s_23f58bbbab1994::t_256c41a13452cd 377-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "58b64b405946954ba9124de098d4b3c5e3107510",
+  "prompts": {},
+  "sessions": {
+    "s_23f58bbbab1994": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11b7d2c7-0bf7-4020-a40e-cc5473de81ca",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
