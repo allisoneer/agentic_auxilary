@@ -374,6 +374,58 @@
       "remote": "https://github.com/twilight-rs/twilight.git",
       "description": "Rust Discord HTTP client candidate for ENG-392 Discord search integration research",
       "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/tauri-apps/tauri",
+      "description": "Reference implementation for Tauri’s Rust-based cross-platform application framework, including architecture, APIs, tooling, examples, and platform integrations."
+    },
+    {
+      "remote": "https://github.com/transact-rs/sqlx",
+      "description": "Reference implementation for the transact-rs SQLx async Rust SQL toolkit, including database drivers, compile-time checked queries, connection pooling, migrations, APIs, tests, and usage examples."
+    },
+    {
+      "remote": "https://github.com/cloudevents/spec",
+      "description": "CloudEvents normative event envelope and provenance metadata reference for ENG-1110"
+    },
+    {
+      "remote": "https://github.com/prometheus/alertmanager",
+      "description": "Prometheus Alertmanager alert lifecycle, grouping, silencing, and receiver-boundary reference for ENG-1110"
+    },
+    {
+      "remote": "https://github.com/binwiederhier/ntfy",
+      "description": "ntfy minimal self-hosted notification server and HTTP/WebSocket delivery reference for ENG-1110"
+    },
+    {
+      "remote": "https://github.com/GothenburgBitFactory/taskwarrior",
+      "description": "Taskwarrior lean task lifecycle and recurrence model reference for ENG-1110"
+    },
+    {
+      "remote": "https://github.com/w3c/activitystreams",
+      "description": "W3C ActivityStreams vocabulary and activity/history model source reference for ENG-1110"
+    },
+    {
+      "remote": "https://github.com/paritytech/jsonrpsee",
+      "description": "Typed JSON-RPC generation, subscription limits, ping, and dispatcher patterns for deciding dependency versus reference status"
+    },
+    {
+      "remote": "https://github.com/tokio-rs/axum",
+      "description": "Canonical Rust WebSocket server upgrade, state, limits, graceful shutdown, and testing patterns"
+    },
+    {
+      "remote": "https://github.com/snapview/tokio-tungstenite",
+      "description": "Canonical Rust WebSocket client transport, frame limits, ping/pong, close handling, and TLS behavior"
+    },
+    {
+      "remote": "https://github.com/tauri-apps/create-tauri-app",
+      "description": "Canonical Tauri React/Vite scaffold structure and package-manager configuration"
+    },
+    {
+      "remote": "https://github.com/sqlite/sqlite",
+      "description": "Official SQLite source and documentation mirror for WAL, busy handling, transactions, and operational guarantees"
+    },
+    {
+      "remote": "https://github.com/effect-ts/effect",
+      "description": "Reference implementation and documentation for Effect, a TypeScript library providing typed functional effects, structured concurrency, resource management, error handling, and composable application architecture."
     }
   ]
 }
