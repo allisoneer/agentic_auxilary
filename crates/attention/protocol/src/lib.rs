@@ -1,3 +1,9 @@
+//! Domain-neutral wire-format types for the Attention JSON-RPC protocol.
+//!
+//! Use [`RpcRequest`], [`RpcNotification`], and [`RpcResponse`] for JSON-RPC envelopes,
+//! [`HelloRequest`] and [`HelloResult`] for `rpc.hello` negotiation, and the crate-root
+//! identifier, version, and [`WireTimestamp`] types for protocol values.
+
 mod envelope;
 mod error;
 mod hello;

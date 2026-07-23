@@ -26,8 +26,10 @@ struct IdFixture {
 #[test]
 fn distinct_opaque_id_wrappers_round_trip_structurally() {
     assert_structural_round_trip::<IdFixture>("ids/distinct_ids.json");
-    let ids: IdFixture =
-        serde_json::from_str(&fixture_text("ids/distinct_ids.json")).expect("distinct IDs fixture");
+    let ids: IdFixture = match serde_json::from_str(&fixture_text("ids/distinct_ids.json")) {
+        Ok(value) => value,
+        Err(error) => panic!("distinct IDs fixture: {error}"),
+    };
     assert_eq!(ids.request_id, RequestId(String::new()));
     assert_eq!(ids.response_null, ResponseId::Null);
 }

@@ -171,6 +171,14 @@ where
     serde_json::from_value(value).map_err(E::custom)
 }
 
+fn validate_success_id(id: &ResponseId) -> Result<(), &'static str> {
+    if matches!(id, ResponseId::Null) {
+        Err("success responses require a string ID")
+    } else {
+        Ok(())
+    }
+}
+
 impl<P> Serialize for RpcRequest<P>
 where
     P: Serialize,
@@ -379,10 +387,8 @@ where
     where
         S: Serializer,
     {
-        if matches!(self.payload, RpcResponsePayload::Success(_))
-            && matches!(self.id, ResponseId::Null)
-        {
-            return Err(ser::Error::custom("success responses require a string ID"));
+        if matches!(self.payload, RpcResponsePayload::Success(_)) {
+            validate_success_id(&self.id).map_err(ser::Error::custom)?;
         }
 
         let mut state = serializer.serialize_struct("RpcResponse", 3)?;
@@ -467,9 +473,7 @@ where
                 let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
                 let payload = match (result, error) {
                     (Some(result), None) => {
-                        if matches!(id, ResponseId::Null) {
-                            return Err(de::Error::custom("success responses require a string ID"));
-                        }
+                        validate_success_id(&id).map_err(de::Error::custom)?;
                         RpcResponsePayload::Success(result)
                     }
                     (None, Some(error)) => RpcResponsePayload::Error(error),

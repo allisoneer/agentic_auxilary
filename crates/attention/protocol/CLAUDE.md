@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+`attention-protocol` defines strict Serde wire DTOs for the domain-neutral Attention JSON-RPC foundation. Use crate-root `RpcRequest`, `RpcNotification`, and `RpcResponse` types for envelopes; `HelloRequest` and `HelloResult` for `rpc.hello` negotiation; and the exported ID, version, and `WireTimestamp` types for protocol values.
 
 ## Quick Commands
 

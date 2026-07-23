@@ -123,7 +123,7 @@ opencode_rs = "0.13.3"
 
 ### attention
 
-- [`attention-protocol`](crates/attention/protocol) - Domain-neutral wire protocol foundation for the Attention family
+- [`attention-protocol`](crates/attention/protocol) - Strict Attention JSON-RPC wire types; use crate-root DTOs for envelopes, hello negotiation, IDs, versions, and canonical timestamps
 
 ### infra
 

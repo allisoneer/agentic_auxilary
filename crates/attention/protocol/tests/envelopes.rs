@@ -32,11 +32,25 @@ fn valid_response_fixtures_round_trip_structurally() {
 }
 
 #[test]
-fn additive_unknown_fields_are_accepted_without_becoming_contract_state() {
-    let request = fixture_text("envelopes/request_additive_field.json");
-    assert!(serde_json::from_str::<RpcRequest<Value>>(&request).is_ok());
-    let response = fixture_text("envelopes/response_additive_field.json");
-    assert!(serde_json::from_str::<RpcResponse<Value>>(&response).is_ok());
+fn additive_unknown_fields_are_accepted_without_becoming_contract_state()
+-> Result<(), serde_json::Error> {
+    let request: RpcRequest<Value> =
+        serde_json::from_str(&fixture_text("envelopes/request_additive_field.json"))?;
+    let request = serde_json::to_value(request)?;
+    assert!(request.get("future").is_none());
+    for required in ["jsonrpc", "id", "method"] {
+        assert!(request.get(required).is_some(), "missing {required}");
+    }
+
+    let response: RpcResponse<Value> =
+        serde_json::from_str(&fixture_text("envelopes/response_additive_field.json"))?;
+    let response = serde_json::to_value(response)?;
+    assert!(response.get("future").is_none());
+    for required in ["jsonrpc", "id", "result"] {
+        assert!(response.get(required).is_some(), "missing {required}");
+    }
+
+    Ok(())
 }
 
 #[test]
