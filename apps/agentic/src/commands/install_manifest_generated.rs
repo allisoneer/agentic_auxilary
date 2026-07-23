@@ -4164,13 +4164,13 @@ You are done only when the handoff artifact is written, synced, verified as self
     "Normal": {
       "description": "OpenAI-backed general-purpose primary session for repo research, planning, and implementation workflows.",
       "prompt": "{file:./.opencode/sysprompt_gpt54.md}",
-      "model": "openai/gpt-5.4",
+      "model": "openai/gpt-5.6-sol",
       "mode": "primary"
     },
     "Orchestrator": {
       "description": "OpenAI orchestration-only agent for routing, coordination, and todowrite/read state management without direct code execution.",
       "prompt": "{file:./.opencode/orchestrator_sysprompt_gpt54.md}",
-      "model": "openai/gpt-5.5",
+      "model": "openai/gpt-5.6-sol",
       "mode": "primary",
       "permission": {
         "*": "deny",
@@ -4182,7 +4182,7 @@ You are done only when the handoff artifact is written, synced, verified as self
     "Review": {
       "description": "OpenAI adversarial review agent for evidence-grounded change review using review tools and read-only discovery surfaces.",
       "prompt": "{file:./.opencode/review_sysprompt_gpt54.md}",
-      "model": "openai/gpt-5.5",
+      "model": "openai/gpt-5.6-sol",
       "mode": "primary",
       "permission": {
         "*": "deny",

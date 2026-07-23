@@ -1,0 +1,44 @@
+//! Domain-neutral wire-format types for the Attention JSON-RPC protocol.
+//!
+//! Use [`RpcRequest`], [`RpcNotification`], and [`RpcResponse`] for JSON-RPC envelopes,
+//! [`HelloRequest`] and [`HelloResult`] for `rpc.hello` negotiation, and the crate-root
+//! identifier, version, and [`WireTimestamp`] types for protocol values.
+
+mod envelope;
+mod error;
+mod hello;
+mod id;
+mod time;
+mod version;
+
+pub use envelope::JsonRpcVersion;
+pub use envelope::RpcNotification;
+pub use envelope::RpcRequest;
+pub use envelope::RpcResponse;
+pub use envelope::RpcResponsePayload;
+pub use error::ErrorCode;
+pub use error::HELLO_REQUIRED;
+pub use error::INTERNAL_ERROR;
+pub use error::INVALID_PARAMS;
+pub use error::INVALID_REQUEST;
+pub use error::METHOD_NOT_FOUND;
+pub use error::PARSE_ERROR;
+pub use error::ProtocolError;
+pub use error::RpcError;
+pub use error::UNSUPPORTED_PROTOCOL_VERSION;
+pub use hello::ClientIdentity;
+pub use hello::HelloLimits;
+pub use hello::HelloRequest;
+pub use hello::HelloResult;
+pub use hello::RPC_HELLO_METHOD;
+pub use hello::SubscriptionRequest;
+pub use hello::SubscriptionResult;
+pub use id::BootId;
+pub use id::Cursor;
+pub use id::RequestId;
+pub use id::ResponseId;
+pub use id::ServerId;
+pub use id::StreamId;
+pub use time::WireTimestamp;
+pub use version::PROTOCOL_V1;
+pub use version::ProtocolVersion;
