@@ -121,6 +121,10 @@ opencode_rs = "0.13.3"
 - [`agentic-tools-registry`](crates/agentic-tools/registry) - Unified tool registry aggregating all agentic-tools domain registries
 - [`agentic-tools-utils`](crates/agentic-tools/utils) - Shared utilities for agentic-tools ecosystem: pagination, http, secrets, cli
 
+### attention
+
+- [`attention-protocol`](crates/attention/protocol) - Domain-neutral wire protocol foundation for the Attention family
+
 ### infra
 
 - [`agentic-config`](crates/infra/agentic-config) - Unified configuration system for agentic tools ecosystem

@@ -1,0 +1,48 @@
+[package]
+name = "attention-protocol"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Domain-neutral wire protocol foundation for the Attention family"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+autotests = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+[[test]]
+name = "envelopes"
+path = "tests/envelopes.rs"
+
+[[test]]
+name = "hello"
+path = "tests/hello.rs"
+
+[[test]]
+name = "errors"
+path = "tests/errors.rs"
+
+[[test]]
+name = "ids"
+path = "tests/ids.rs"
+
+[[test]]
+name = "time"
+path = "tests/time.rs"
+
+[lints]
+workspace = true
+
+[package.metadata.repo]
+role = "lib"
+family = "attention"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

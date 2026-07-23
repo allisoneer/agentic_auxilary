@@ -16,6 +16,10 @@ Canonical repository guidance for AI-assisted work in this repository. Keep repo
 - `agentic-tools-napi` (binding) - `bindings/node/agentic-tools-napi/`
 - `agentic-tools-macros` (lib) - `crates/agentic-tools/macros/`
 
+### attention
+
+- `attention-protocol` (lib) - `crates/attention/protocol/`
+
 ### infra
 
 - `agentic-config` (lib) - `crates/infra/agentic-config/`

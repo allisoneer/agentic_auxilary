@@ -6,6 +6,7 @@
 role = ["app", "lib", "tool-lib", "binding", "legacy", "xtask"]
 family = [
   "agentic-tools",
+  "attention",
   "linear",
   "services",
   "tools",
@@ -26,6 +27,7 @@ role = """
 """
 family = """
 - agentic-tools: Core framework crates (core, macros, mcp, napi)
+- attention: Attention protocol, kernel, client, storage, server, and desktop crates
 - linear: Linear.app integration crates (schema, queries, tools)
 - services: External service SDKs (anthropic_async, claudecode_rs, opencode_rs)
 - tools: Domain-specific tool crates (pr_comments, gpt5_reasoner, coding_agent_tools, thoughts)
@@ -43,8 +45,7 @@ readme_tier = """
 expansion_process = """
 To add a new enum value:
 1) Append to the appropriate list (role/family) in this file with documentation.
-2) Update xtask/src/policy.rs validation to recognize the new value.
-3) Run: cargo run -p xtask -- verify --check
+2) Run: cargo run -p xtask -- verify --check
 """
 
 # `integrations.mcp` semantics:
@@ -71,10 +72,14 @@ enforce = false
 allow = [
   # Apps
   "apps/*",
+  # Future Attention desktop Cargo package
+  "apps/attention-desktop/src-tauri",
   # Bindings
   "bindings/node/*",
   # Agentic-tools family
   "crates/agentic-tools/*",
+  # Attention family
+  "crates/attention/*",
   # Linear family
   "crates/linear/*",
   # Services family
@@ -175,3 +180,21 @@ git_tag_enable = false
 
 [release_plz.overrides.opencode_rs]
 git_tag_enable = false
+
+[release_plz.overrides.attention-kernel]
+publish = false
+
+[release_plz.overrides.attention-protocol]
+publish = false
+
+[release_plz.overrides.attention-client]
+publish = false
+
+[release_plz.overrides.attention-sqlite]
+publish = false
+
+[release_plz.overrides.attention-server]
+publish = false
+
+[release_plz.overrides.attention-desktop]
+publish = false
