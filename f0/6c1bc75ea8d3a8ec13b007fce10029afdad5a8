@@ -1,0 +1,29 @@
+crates/attention/protocol/src/lib.rs
+  s_bf0a64e2025fbe::t_37311cfa07588d 1-6
+crates/attention/protocol/Cargo.toml
+  s_bf0a64e2025fbe::t_37311cfa07588d 6
+crates/attention/protocol/CLAUDE.md
+  s_bf0a64e2025fbe::t_37311cfa07588d 13
+crates/attention/protocol/src/envelope.rs
+  s_bf0a64e2025fbe::t_9ee2f5ef0dc429 174-181,390-391,476
+crates/attention/protocol/tests/envelopes.rs
+  s_bf0a64e2025fbe::t_0bf5f2ae734ccb 35-53
+crates/attention/protocol/tests/ids.rs
+  s_bf0a64e2025fbe::t_0bf5f2ae734ccb 29-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f06c1bc75ea8d3a8ec13b007fce10029afdad5a8",
+  "prompts": {},
+  "sessions": {
+    "s_bf0a64e2025fbe": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0703e0a54ffexC5wTriXrSc13Z",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
