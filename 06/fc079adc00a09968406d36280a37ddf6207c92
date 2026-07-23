@@ -1,0 +1,206 @@
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_params_scalar.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/errors.rs
+  s_a6b6b74fa8c3a8::t_b72a88f561047c 20-21,50-51
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1-12,15-19,22-49,52-55,61
+  s_a6b6b74fa8c3a8::t_f90dee536523f2 13,56-60
+  s_a6b6b74fa8c3a8::t_30acf30096e124 14
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_missing_jsonrpc.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_notification_result_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/src/lib.rs
+  s_a6b6b74fa8c3a8::t_bac0ee4ad5b285 23-29
+  s_a6b6b74fa8c3a8::t_c364f3c91a72ef 7-8,13-22,30-38
+  s_a6b6b74fa8c3a8::t_d8aafa907120d7 9-12
+  s_a6b6b74fa8c3a8::t_fcfaa7762d047d 1-6
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_neither.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/errors/named_codes.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/hello/request_resume.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_result_unknown_mode.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/ids.rs
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1-28,31-39
+  s_a6b6b74fa8c3a8::t_b72a88f561047c 29-30
+crates/attention/protocol/src/error.rs
+  s_a6b6b74fa8c3a8::t_71bce685e134dc 30
+  s_a6b6b74fa8c3a8::t_23ce44b896c1e0 43,120-123
+  s_a6b6b74fa8c3a8::t_bac0ee4ad5b285 113-119,124
+  s_a6b6b74fa8c3a8::t_c364f3c91a72ef 2-5,7-29,31-38,50-112,125
+  s_a6b6b74fa8c3a8::t_5d3a184b7ad181 6,39-42,44-49
+  s_a6b6b74fa8c3a8::t_2cc7ad29fd4934 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_duplicate_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_params_null.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/src/hello.rs
+  s_a6b6b74fa8c3a8::t_5d3a184b7ad181 3,51-96
+  s_a6b6b74fa8c3a8::t_23ce44b896c1e0 198,200
+  s_a6b6b74fa8c3a8::t_1faa4fa66e8554 2,4-50,97-99
+  s_a6b6b74fa8c3a8::t_2cc7ad29fd4934 1
+  s_a6b6b74fa8c3a8::t_bac0ee4ad5b285 100-197,199,201-211
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_correlated_error.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/request_without_params.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_result_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/hello/result_resume.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_response_numeric.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/time/canonical.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/src/time.rs
+  s_a6b6b74fa8c3a8::t_2cc7ad29fd4934 1
+  s_a6b6b74fa8c3a8::t_264792870aaf3b 92
+  s_a6b6b74fa8c3a8::t_53a97b726db549 2-91,93-116
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_invalid_request_null_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/errors/unknown_code.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_lowercase_z.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/CHANGELOG.md
+  s_a6b6b74fa8c3a8::t_fcfaa7762d047d 1-11
+crates/attention/protocol/src/id.rs
+  s_a6b6b74fa8c3a8::t_264792870aaf3b 116,130
+  s_a6b6b74fa8c3a8::t_2cc7ad29fd4934 1
+  s_a6b6b74fa8c3a8::t_71bce685e134dc 68
+  s_a6b6b74fa8c3a8::t_242859fb6d9124 2-67,69-115,117-129,131-136
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_additive_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_null_jsonrpc.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/hello/unsupported_version_error.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/notification.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/time.rs
+  s_a6b6b74fa8c3a8::t_b72a88f561047c 14-19
+  s_a6b6b74fa8c3a8::t_f90dee536523f2 7,12
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1-6,8-11,13,20-44
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_notification_error_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+tools/policy.toml
+  s_a6b6b74fa8c3a8::t_af2304b39dd519 9,30,48,75-76,81-82,183-200
+crates/attention/protocol/tests/fixtures/v1/hello/request_snapshot.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_duplicate_jsonrpc.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_no_fraction.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_both.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/Cargo.toml
+  s_a6b6b74fa8c3a8::t_fcfaa7762d047d 1-9,11-16,37-48
+  s_a6b6b74fa8c3a8::t_f90dee536523f2 10,17-36
+crates/attention/protocol/tests/envelopes.rs
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1-7,9-31,40-86
+  s_a6b6b74fa8c3a8::t_b77ce175face82 8,32-39
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_null_success_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/errors/data_absent.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/ids/distinct_ids.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixture_helpers.rs
+  s_a6b6b74fa8c3a8::t_f90dee536523f2 21-32
+  s_a6b6b74fa8c3a8::t_7b97904d734af3 1-20,33-45
+crates/attention/protocol/tests/fixtures/v1/time/invalid_offset.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_parse_error_null_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/request_with_params.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_wrong_jsonrpc.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_params_array.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_notification_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_numeric_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_request_duplicate_protocol_version.json
+  s_a6b6b74fa8c3a8::t_a3a39641c7670a 1
+crates/attention/protocol/tests/fixtures/v1/errors/invalid_string_code.json
+  s_a6b6b74fa8c3a8::t_f90dee536523f2 1
+crates/attention/protocol/tests/fixtures/v1/hello/result_none.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_numeric_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/errors/unsupported_version.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_duplicate_result.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/src/version.rs
+  s_a6b6b74fa8c3a8::t_2cc7ad29fd4934 1
+  s_a6b6b74fa8c3a8::t_7e4fd414ae4a25 2-12
+crates/attention/protocol/tests/fixtures/v1/hello/request_none.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/request_additive_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/hello/result_snapshot.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+Cargo.toml
+  s_a6b6b74fa8c3a8::t_af2304b39dd519 15-17
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_request_unknown_mode.json
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1
+crates/attention/protocol/tests/fixtures/v1/time/submicro_constructor.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_error_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_result_duplicate_limits.json
+  s_a6b6b74fa8c3a8::t_a3a39641c7670a 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_request_duplicate_mode.json
+  s_a6b6b74fa8c3a8::t_a3a39641c7670a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_method_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_missing_z.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/errors/data_present.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_params_field.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_missing_id.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/src/envelope.rs
+  s_a6b6b74fa8c3a8::t_d8aafa907120d7 4-5,85-104,371-495,506
+  s_a6b6b74fa8c3a8::t_5cda86d022e233 511-520,534-649
+  s_a6b6b74fa8c3a8::t_7e4fd414ae4a25 2,6-10,15,17-59,507-510,521-524,526-529,532-533,650-651
+  s_a6b6b74fa8c3a8::t_c3f594ceedc027 3,11-14,16,60-84,105-181,184-282,285-370,501-505
+  s_a6b6b74fa8c3a8::t_bfc654511736c6 182-183,283-284,496-500
+  s_a6b6b74fa8c3a8::t_264792870aaf3b 525,530-531
+  s_a6b6b74fa8c3a8::t_2cc7ad29fd4934 1
+crates/attention/protocol/tests/hello.rs
+  s_a6b6b74fa8c3a8::t_a3a39641c7670a 62-68
+  s_a6b6b74fa8c3a8::t_9964abf698368b 1-38,43-61,69-79
+  s_a6b6b74fa8c3a8::t_b72a88f561047c 39-42
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_success.json
+  s_a6b6b74fa8c3a8::t_3c40c62f818d4a 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_nanoseconds.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_request_numeric.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_milliseconds.json
+  s_a6b6b74fa8c3a8::t_e09b2f9679a5f1 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "06fc079adc00a09968406d36280a37ddf6207c92",
+  "prompts": {},
+  "sessions": {
+    "s_a6b6b74fa8c3a8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_073afa62effeuGUIAmKG6V1j2t",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
