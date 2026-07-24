@@ -1,0 +1,43 @@
+[package]
+name = "attention-kernel"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Native Attention identities, roots, lifecycle invariants, reminders, and derived Inbox projections"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+autotests = false
+
+[dependencies]
+chrono = { workspace = true }
+thiserror = { workspace = true }
+uuid = { version = "1", features = ["v7"] }
+
+[[test]]
+name = "ids"
+path = "tests/ids.rs"
+
+[[test]]
+name = "invariants"
+path = "tests/invariants.rs"
+
+[[test]]
+name = "inbox"
+path = "tests/inbox.rs"
+
+[[test]]
+name = "scenarios"
+path = "tests/scenarios.rs"
+
+[lints]
+workspace = true
+
+[package.metadata.repo]
+role = "lib"
+family = "attention"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

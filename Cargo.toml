@@ -13,6 +13,7 @@ members = [
   "bindings/node/agentic-tools-napi",
 
   # Attention family
+  "crates/attention/kernel",
   "crates/attention/protocol",
 
   # Agentic-tools family
