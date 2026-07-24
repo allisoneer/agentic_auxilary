@@ -46,6 +46,11 @@ impl SourceComparatorDomain {
                 value: "source comparator domain",
             });
         }
+        if value.trim() != value {
+            return Err(InvariantError::SurroundingWhitespace {
+                value: "source comparator domain",
+            });
+        }
         Ok(Self(value))
     }
 
@@ -181,6 +186,7 @@ impl ClaimLimit {
 
 #[cfg(test)]
 mod tests {
+    use super::InvariantError;
     use super::NormalizedSourceOrder;
     use super::SourceComparatorDomain;
     use super::SourceOrderComparison;
@@ -207,6 +213,31 @@ mod tests {
         assert_eq!(
             SourceOrderMode::Unordered.compare_to(&SourceOrderMode::Unordered),
             SourceOrderComparison::Incomparable
+        );
+    }
+
+    #[test]
+    fn comparator_domain_rejects_surrounding_whitespace_without_normalizing_identity() {
+        for value in [" sequence", "sequence "] {
+            assert_eq!(
+                SourceComparatorDomain::new(value),
+                Err(InvariantError::SurroundingWhitespace {
+                    value: "source comparator domain",
+                })
+            );
+        }
+        assert_eq!(
+            SourceComparatorDomain::new(" \t\n"),
+            Err(InvariantError::EmptyValue {
+                value: "source comparator domain",
+            })
+        );
+
+        let domain = SourceComparatorDomain::new("sequence").expect("clean domain");
+        assert_eq!(domain.as_str(), "sequence");
+        assert_eq!(
+            ordered(domain.as_str(), &[2]).compare_to(&ordered("sequence", &[1])),
+            SourceOrderComparison::Newer
         );
     }
 

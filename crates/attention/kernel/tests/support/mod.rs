@@ -678,22 +678,29 @@ impl ReminderSchedulePort for MemoryAdapter {
     ) -> BoxFuture<'_, Result<Vec<DueReminderFire>, PortError<Self::Error>>> {
         Box::pin(async move {
             let state = self.state.lock().expect("state lock");
-            let mut due = Vec::new();
-            for reminder in state.reminders.values() {
-                for fire in reminder.fires() {
-                    if fire.state() == ReminderFireState::Scheduled
-                        && fire.trigger_at() <= query.due_at_or_before()
-                        && due.len() < query.limit().value()
-                    {
-                        due.push(DueReminderFire::new(
-                            reminder.id(),
-                            fire.id(),
-                            reminder.revision(),
-                            *fire.trigger_at(),
-                        ));
-                    }
-                }
-            }
+            let mut due: Vec<_> = state
+                .reminders
+                .values()
+                .flat_map(|reminder| {
+                    reminder
+                        .fires()
+                        .iter()
+                        .filter(|fire| {
+                            fire.state() == ReminderFireState::Scheduled
+                                && fire.trigger_at() <= query.due_at_or_before()
+                        })
+                        .map(|fire| {
+                            DueReminderFire::new(
+                                reminder.id(),
+                                fire.id(),
+                                reminder.revision(),
+                                *fire.trigger_at(),
+                            )
+                        })
+                })
+                .collect();
+            due.sort_by_key(|fire| (*fire.trigger_at(), fire.fire_id(), fire.reminder_id()));
+            due.truncate(query.limit().value());
             Ok(due)
         })
     }
@@ -708,27 +715,36 @@ impl DeliveryPort for MemoryAdapter {
     ) -> BoxFuture<'_, Result<Vec<DeliveryClaim>, PortError<Self::Error>>> {
         Box::pin(async move {
             let mut state = self.state.lock().expect("state lock");
-            let eligible: Vec<_> = state
+            let mut eligible: Vec<_> = state
                 .deliveries
                 .iter()
-                .filter_map(|(id, delivery)| match delivery.status() {
-                    DeliveryStatus::Pending => Some(*id),
-                    DeliveryStatus::Retryable { next_retry_at, .. }
-                        if next_retry_at <= query.eligible_at() =>
-                    {
-                        Some(*id)
+                .filter_map(|(id, delivery)| {
+                    let is_eligible = match delivery.status() {
+                        DeliveryStatus::Pending => true,
+                        DeliveryStatus::Retryable { next_retry_at, .. }
+                            if next_retry_at <= query.eligible_at() =>
+                        {
+                            true
+                        }
+                        DeliveryStatus::Leased { expires_at, .. }
+                            if expires_at <= query.eligible_at() =>
+                        {
+                            true
+                        }
+                        _ => false,
+                    };
+                    if is_eligible {
+                        let intent = state.outbox.get(id).expect("delivery has outbox intent");
+                        Some((*intent.created_at(), *id))
+                    } else {
+                        None
                     }
-                    DeliveryStatus::Leased { expires_at, .. }
-                        if expires_at <= query.eligible_at() =>
-                    {
-                        Some(*id)
-                    }
-                    _ => None,
                 })
-                .take(query.limit().value())
                 .collect();
+            eligible.sort_unstable();
+            eligible.truncate(query.limit().value());
             let mut claims = Vec::new();
-            for id in eligible {
+            for (_, id) in eligible {
                 state.token_counter += 1;
                 let mut bytes = [0; 32];
                 bytes[24..].copy_from_slice(&state.token_counter.to_be_bytes());

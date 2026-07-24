@@ -24,6 +24,11 @@ impl OutboxDeduplicationKey {
                 value: "outbox deduplication key",
             });
         }
+        if value.trim() != value {
+            return Err(InvariantError::SurroundingWhitespace {
+                value: "outbox deduplication key",
+            });
+        }
         if value.len() > maximum_length {
             return Err(InvariantError::BoundExceeded {
                 value: "outbox deduplication key",
@@ -42,6 +47,43 @@ impl OutboxDeduplicationKey {
 
     pub fn for_reminder_fire(id: ReminderFireId) -> Self {
         Self(id.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AttentionSignalId;
+    use super::InvariantError;
+    use super::OutboxDeduplicationKey;
+
+    #[test]
+    fn deduplication_key_rejects_surrounding_whitespace_without_normalizing_identity() {
+        for value in [" key", "key "] {
+            assert_eq!(
+                OutboxDeduplicationKey::new(value, 16),
+                Err(InvariantError::SurroundingWhitespace {
+                    value: "outbox deduplication key",
+                })
+            );
+        }
+        assert_eq!(
+            OutboxDeduplicationKey::new(" \t\n", 16),
+            Err(InvariantError::EmptyValue {
+                value: "outbox deduplication key",
+            })
+        );
+
+        let key = OutboxDeduplicationKey::new("signal:key", 16).expect("clean key");
+        assert_eq!(key.as_str(), "signal:key");
+    }
+
+    #[test]
+    fn generated_deduplication_keys_remain_stable() {
+        let id = AttentionSignalId::new();
+        let first = OutboxDeduplicationKey::for_attention_signal(id);
+        let second = OutboxDeduplicationKey::for_attention_signal(id);
+        assert_eq!(first, second);
+        assert_eq!(first.as_str(), id.to_string());
     }
 }
 

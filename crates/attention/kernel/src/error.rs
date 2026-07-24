@@ -25,6 +25,8 @@ pub enum InvariantError {
     SourceStateVersionOverflow,
     #[error("{value} cannot be empty")]
     EmptyValue { value: &'static str },
+    #[error("{value} cannot contain leading or trailing whitespace")]
+    SurroundingWhitespace { value: &'static str },
     #[error("{value} cannot be zero")]
     ZeroBound { value: &'static str },
     #[error("{value} exceeds its caller-supplied bound")]

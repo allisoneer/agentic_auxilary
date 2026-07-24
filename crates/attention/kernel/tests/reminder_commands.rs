@@ -1,13 +1,19 @@
+mod support;
+
 use attention_kernel::AcknowledgeReminderFire;
+use attention_kernel::AttentionCommitPort;
 use attention_kernel::ChangeEventId;
 use attention_kernel::CreateReminder;
+use attention_kernel::DueReminderFiresQuery;
 use attention_kernel::EvaluationContext;
 use attention_kernel::FireReminder;
 use attention_kernel::MutationIdempotencyKey;
 use attention_kernel::OutboxIntentId;
+use attention_kernel::QueryLimit;
 use attention_kernel::ReminderFireId;
 use attention_kernel::ReminderFireState;
 use attention_kernel::ReminderId;
+use attention_kernel::ReminderSchedulePort;
 use attention_kernel::ReminderTarget;
 use attention_kernel::SnoozeReminderFire;
 use attention_kernel::WorkItemId;
@@ -17,6 +23,8 @@ use attention_kernel::evaluate_fire_reminder;
 use attention_kernel::evaluate_snooze_reminder_fire;
 use chrono::DateTime;
 use chrono::Utc;
+use futures::executor::block_on;
+use support::MemoryAdapter;
 
 #[expect(clippy::expect_used, reason = "fixed reminder fixtures")]
 fn at(hour: u32) -> DateTime<Utc> {
@@ -31,6 +39,71 @@ fn context(intent: bool) -> EvaluationContext {
         intent.then(OutboxIntentId::new),
         at(12),
     )
+}
+
+#[expect(clippy::expect_used, reason = "fixed reminder adapter fixture")]
+fn insert_reminder(
+    adapter: &MemoryAdapter,
+    reminder_id: ReminderId,
+    fire_id: ReminderFireId,
+    trigger_at: DateTime<Utc>,
+) {
+    let bundle = evaluate_create_reminder(
+        &CreateReminder::new(
+            reminder_id,
+            fire_id,
+            ReminderTarget::WorkItem(WorkItemId::new()),
+            trigger_at,
+            MutationIdempotencyKey::new(),
+        ),
+        context(false),
+    );
+    block_on(adapter.commit_create_reminder(bundle)).expect("commit reminder");
+}
+
+#[test]
+fn due_reminder_fires_are_oldest_first_before_applying_limit() {
+    let adapter = MemoryAdapter::new();
+    let oldest_reminder_id = ReminderId::new();
+    let same_trigger_reminder_ids = [ReminderId::new(), ReminderId::new()];
+    let newest_reminder_id = ReminderId::new();
+    let oldest_fire_id = ReminderFireId::new();
+    let shared_tie_fire_id = ReminderFireId::new();
+    let newest_fire_id = ReminderFireId::new();
+
+    insert_reminder(&adapter, newest_reminder_id, newest_fire_id, at(12));
+    insert_reminder(
+        &adapter,
+        same_trigger_reminder_ids[1],
+        shared_tie_fire_id,
+        at(11),
+    );
+    insert_reminder(&adapter, oldest_reminder_id, oldest_fire_id, at(10));
+    insert_reminder(
+        &adapter,
+        same_trigger_reminder_ids[0],
+        shared_tie_fire_id,
+        at(11),
+    );
+
+    let due = block_on(adapter.due_reminder_fires(DueReminderFiresQuery::new(
+        at(12),
+        QueryLimit::try_from(3).expect("query limit"),
+    )))
+    .expect("ordered due fires");
+    let mut tie_reminder_ids = same_trigger_reminder_ids;
+    tie_reminder_ids.sort_unstable();
+    assert_eq!(
+        due.iter()
+            .map(|fire| (fire.fire_id(), fire.reminder_id()))
+            .collect::<Vec<_>>(),
+        vec![
+            (oldest_fire_id, oldest_reminder_id),
+            (shared_tie_fire_id, tie_reminder_ids[0]),
+            (shared_tie_fire_id, tie_reminder_ids[1]),
+        ]
+    );
+    assert!(!due.iter().any(|fire| fire.fire_id() == newest_fire_id));
 }
 
 #[test]

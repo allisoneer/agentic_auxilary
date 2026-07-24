@@ -144,6 +144,8 @@ pub trait AttentionCommitPort: Send + Sync {
 pub trait ReminderSchedulePort: Send + Sync {
     type Error: Error + Send + Sync + 'static;
 
+    /// Returns due scheduled fires oldest-first by `(trigger_at, fire_id, reminder_id)`, applying
+    /// the query limit after due-state filtering and ordering.
     fn due_reminder_fires(
         &self,
         query: DueReminderFiresQuery,
@@ -153,6 +155,11 @@ pub trait ReminderSchedulePort: Send + Sync {
 pub trait DeliveryPort: Send + Sync {
     type Error: Error + Send + Sync + 'static;
 
+    /// Atomically selects eligible deliveries and transitions them to fresh leases.
+    ///
+    /// Eligible deliveries are `Pending`, or `Leased`/`Retryable` when their expiration/retry time
+    /// is at or before `query.eligible_at()`. Results are oldest-first by the intent's
+    /// `(created_at, intent_id)`, with the limit applied after eligibility filtering and ordering.
     fn claim(
         &self,
         query: DeliveryClaimQuery,

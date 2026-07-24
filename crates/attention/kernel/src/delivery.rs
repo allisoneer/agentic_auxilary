@@ -124,6 +124,11 @@ impl DeliveryState {
         &self.status
     }
 
+    /// Transitions an eligible delivery into a fresh lease.
+    ///
+    /// Callers must invoke this only for `Pending` deliveries or for `Leased` and `Retryable`
+    /// deliveries whose expiration or retry time has elapsed. This method performs no eligibility
+    /// time check and overwrites any non-terminal status.
     pub fn claim(&mut self, token: DeliveryLeaseToken, expires_at: DateTime<Utc>) -> ClaimOutcome {
         if self.status.is_terminal() {
             return ClaimOutcome::Terminal;
