@@ -1,0 +1,59 @@
+crates/attention/kernel/src/revision.rs
+  s_74650cdc35d165::t_77a2bf38310f69 1-34
+crates/attention/kernel/src/inbox.rs
+  s_74650cdc35d165::t_1d47e8d04f2017 1-60
+crates/attention/kernel/src/id.rs
+  s_74650cdc35d165::t_77a2bf38310f69 1-69
+crates/attention/kernel/src/lib.rs
+  s_74650cdc35d165::t_c59e3da81897ae 1-3
+  s_74650cdc35d165::t_8015ee2fc7af8e 4-42
+crates/attention/kernel/tests/ids.rs
+  s_74650cdc35d165::t_4210ebb3441d2e 1-89
+crates/attention/kernel/tests/scenarios.rs
+  s_74650cdc35d165::t_151028c1d965dd 173
+  s_74650cdc35d165::t_4210ebb3441d2e 1-32,34-39,41-172,174-209
+  s_74650cdc35d165::t_44672b75429d18 33,40
+crates/attention/kernel/src/work_item.rs
+  s_74650cdc35d165::t_0eb0131b881ba9 1-129
+crates/attention/kernel/src/signal.rs
+  s_74650cdc35d165::t_0eb0131b881ba9 1-129,131-142
+  s_74650cdc35d165::t_8bfe9693b9f6b8 130
+Cargo.toml
+  s_74650cdc35d165::t_24b4e88cb4f925 16
+crates/attention/kernel/Cargo.toml
+  s_74650cdc35d165::t_e0f4dc76e5adc6 1-16,33-43
+  s_74650cdc35d165::t_93af82232be152 17-32
+crates/attention/kernel/src/error.rs
+  s_74650cdc35d165::t_8015ee2fc7af8e 1-38
+crates/attention/kernel/src/reminder.rs
+  s_74650cdc35d165::t_8bfe9693b9f6b8 147-151,160-164
+  s_74650cdc35d165::t_1d47e8d04f2017 1-146,152-159,165-245
+crates/attention/kernel/tests/inbox.rs
+  s_74650cdc35d165::t_44672b75429d18 17
+  s_74650cdc35d165::t_4210ebb3441d2e 1-16,18-31,39-94
+  s_74650cdc35d165::t_151028c1d965dd 32-38
+crates/attention/kernel/tests/invariants.rs
+  s_74650cdc35d165::t_151028c1d965dd 37-40,90,156-158,161-164,176-178
+  s_74650cdc35d165::t_44672b75429d18 21,28
+  s_74650cdc35d165::t_4210ebb3441d2e 1-20,22-27,29-36,41-89,91-155,159-160,165-175,179-213
+crates/attention/kernel/src/source.rs
+  s_74650cdc35d165::t_1a2ffa74f2c99e 1-169
+crates/attention/kernel/CHANGELOG.md
+  s_74650cdc35d165::t_c59e3da81897ae 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e606fd519adfb42ed09a9a5fc381c9b9699372c7",
+  "prompts": {},
+  "sessions": {
+    "s_74650cdc35d165": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06e817891ffef0xJs2LiNDLUj5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
