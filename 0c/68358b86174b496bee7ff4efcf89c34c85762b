@@ -1,0 +1,19 @@
+crates/attention/kernel/CLAUDE.md
+  s_3978a6982ec983::t_e4dd334330f68b 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0c68358b86174b496bee7ff4efcf89c34c85762b",
+  "prompts": {},
+  "sessions": {
+    "s_3978a6982ec983": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06b3deccaffeDBnbecNPSzixMU",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
