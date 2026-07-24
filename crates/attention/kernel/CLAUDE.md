@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Defines transport- and persistence-independent Attention domain types and invariants for identities, source records, work items, signals, reminders, lifecycle transitions, and default Inbox projections. Use the exported types to construct or reconstruct validated domain state, apply lifecycle methods, and derive Inbox membership with `is_in_default_inbox` or `inbox_entry`; keep I/O, scheduling, and protocol concerns in higher layers.
 
 ## Quick Commands
 
