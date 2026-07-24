@@ -1,0 +1,137 @@
+crates/attention/kernel/tests/support/mod.rs
+  s_ab5af6e7ebe5c1::t_5ccddb2e0aec1e 1-7
+  s_ab5af6e7ebe5c1::t_3c7b68987f45c2 296-298,300
+  s_ab5af6e7ebe5c1::t_86e70538cfae45 31,58,429
+  s_ab5af6e7ebe5c1::t_879862b6efc45d 9-30,32-57,59-118,120-231,233-234,236-242,247-295,299,301-426,433-448,452-638,640-777,779,781-907
+  s_ab5af6e7ebe5c1::t_65c1e3be5c5985 246,427,430-432,449-451
+  s_742caa5036e78b::t_04cec3e68bf549 8,119,232,235,243-245,428,639,778,780
+crates/attention/kernel/src/idempotency.rs
+  s_ab5af6e7ebe5c1::t_fd59724766853e 138-156,159-166
+  s_ab5af6e7ebe5c1::t_6eb08d976b5176 74,102-103,105,111,115,119,129,157-158
+  s_ab5af6e7ebe5c1::t_114d1db872b5ea 1-73,75-96,98-101,104,106-110,112-114,116-118,120-128,130-137
+  s_ab5af6e7ebe5c1::t_ab08e6e778df48 97
+crates/attention/kernel/src/error.rs
+  s_ab5af6e7ebe5c1::t_e9d727e8405b25 20-31
+  s_ab5af6e7ebe5c1::t_72fbb1f0568d0d 32-33
+crates/attention/kernel/tests/idempotency.rs
+  s_ab5af6e7ebe5c1::t_dd73d1ab6c2d62 1-22,24-26,28-37
+  s_ab5af6e7ebe5c1::t_65c1e3be5c5985 27
+  s_742caa5036e78b::t_42b9d455b83aaf 23,38-42
+crates/attention/kernel/tests/commits.rs
+  s_ab5af6e7ebe5c1::t_dd73d1ab6c2d62 1-49
+  s_ab5af6e7ebe5c1::t_57f83de34a3ae7 50-52
+crates/attention/kernel/tests/delivery.rs
+  s_ab5af6e7ebe5c1::t_dd73d1ab6c2d62 1-36,38-80
+  s_ab5af6e7ebe5c1::t_3c7b68987f45c2 37
+crates/attention/kernel/src/lib.rs
+  s_ab5af6e7ebe5c1::t_04d63f76912006 6-7,10,18,36-37,49,73
+  s_ab5af6e7ebe5c1::t_fd59724766853e 5,8,12,20,23,43,58-60,75-77,89-96
+  s_ab5af6e7ebe5c1::t_63521776a0733f 15-16,66-67
+  s_ab5af6e7ebe5c1::t_806b3a7d77c7b0 14,26-35,38-42,44-47,62-65
+crates/attention/kernel/tests/source_ingress.rs
+  s_ab5af6e7ebe5c1::t_9e40228165be9e 3,5-11,13,16,19-27,30-31,37-44,46-51,53-73,93-94,98-101,103-110,112-121,191
+  s_ab5af6e7ebe5c1::t_40aec635559055 28-29,75-92,122-146,151-190,192
+  s_ab5af6e7ebe5c1::t_30b405e97fed08 17,32-36,45,52,95-97,102,111
+  s_ab5af6e7ebe5c1::t_f3bf5c25587847 2,15
+  s_ab5af6e7ebe5c1::t_4b46f9f4dc31f0 18
+  s_ab5af6e7ebe5c1::t_d82cd27833dd7a 74
+  s_ab5af6e7ebe5c1::t_7c1ba5635f12b6 1,12,14
+  s_ab5af6e7ebe5c1::t_f7aad64bf0819a 4
+  s_ab5af6e7ebe5c1::t_34acc92fc062a6 147-150
+crates/attention/kernel/tests/changes.rs
+  s_ab5af6e7ebe5c1::t_dd73d1ab6c2d62 1-48
+crates/attention/kernel/src/source_order.rs
+  s_ab5af6e7ebe5c1::t_114d1db872b5ea 1-180
+  s_ab5af6e7ebe5c1::t_fd59724766853e 181-223
+crates/attention/kernel/src/result.rs
+  s_ab5af6e7ebe5c1::t_0ec98aba31c684 1-64,68,74-76,78-187
+  s_ab5af6e7ebe5c1::t_1cb33d4ba02e1d 66
+  s_ab5af6e7ebe5c1::t_91db95dda23a7d 65
+  s_ab5af6e7ebe5c1::t_887563da6ca8c2 67
+  s_ab5af6e7ebe5c1::t_4e420303056e9d 69-73
+  s_ab5af6e7ebe5c1::t_08c3729e2d541b 77
+crates/attention/kernel/src/delivery.rs
+  s_ab5af6e7ebe5c1::t_96ef1bcb6dbb57 3-8,18-41,43-329
+  s_ab5af6e7ebe5c1::t_114d1db872b5ea 1-2,9-17,42,330-331
+  s_ab5af6e7ebe5c1::t_fd59724766853e 332-337
+crates/attention/kernel/src/source.rs
+  s_ab5af6e7ebe5c1::t_ab08e6e778df48 5,7,9,110-111,121-122,130-131,149-156,170-172,179-181,183-189,199-232
+crates/attention/kernel/tests/scenarios.rs
+  s_ab5af6e7ebe5c1::t_806b3a7d77c7b0 9,26,29,102-103,108-115,163-170
+crates/attention/kernel/src/command.rs
+  s_ab5af6e7ebe5c1::t_1d7b5d53de4f2c 586
+  s_ab5af6e7ebe5c1::t_bb9ca8c7738019 25,88-91,141-144,274-277,348-351,400-403,459-462,529-532
+  s_ab5af6e7ebe5c1::t_ad2c1d132a86d9 1-24,26-87,92-140,145-273,278-347,352-399,404-458,463-528,533-585,587-602
+crates/attention/kernel/tests/invariants.rs
+  s_ab5af6e7ebe5c1::t_806b3a7d77c7b0 102-127
+  s_ab5af6e7ebe5c1::t_ee4cd188c76e9a 101
+crates/attention/kernel/src/signal.rs
+  s_ab5af6e7ebe5c1::t_a4fc541ef7238f 130-147
+crates/attention/kernel/src/outbox.rs
+  s_ab5af6e7ebe5c1::t_bb9ca8c7738019 38-45
+  s_ab5af6e7ebe5c1::t_bb07ad85b6ac8f 1-37,46-112
+crates/attention/kernel/src/change.rs
+  s_ab5af6e7ebe5c1::t_114d1db872b5ea 1-2,7,16-34
+  s_ab5af6e7ebe5c1::t_bb07ad85b6ac8f 3-6,8-15,35-264
+crates/attention/kernel/src/commit.rs
+  s_ab5af6e7ebe5c1::t_0ec98aba31c684 1-387
+  s_ab5af6e7ebe5c1::t_f25c0230f805b7 388-390
+crates/attention/kernel/src/evaluate.rs
+  s_ab5af6e7ebe5c1::t_42ede8e6734b4a 148
+  s_ab5af6e7ebe5c1::t_bb9ca8c7738019 506,673,690
+  s_ab5af6e7ebe5c1::t_1d7b5d53de4f2c 286
+  s_ab5af6e7ebe5c1::t_c5c420300210e2 1-147,149-262,269-285,287-323,325-415,417-505,507-598,602-672,674-689,691-710
+  s_ab5af6e7ebe5c1::t_72fbb1f0568d0d 263-268
+  s_ab5af6e7ebe5c1::t_5ff3cca60a7eac 324
+  s_ab5af6e7ebe5c1::t_c179944debc325 416
+  s_ab5af6e7ebe5c1::t_b75a6359daf353 599-601
+crates/attention/kernel/tests/reminder_commands.rs
+  s_ab5af6e7ebe5c1::t_9e40228165be9e 1-104
+  s_ab5af6e7ebe5c1::t_be7503f145c4cc 105-107
+crates/attention/kernel/Cargo.toml
+  s_ab5af6e7ebe5c1::t_71587838782226 14-15
+  s_ab5af6e7ebe5c1::t_9e40228165be9e 35-46
+  s_ab5af6e7ebe5c1::t_435f25d106733e 47-62
+crates/attention/kernel/tests/commands.rs
+  s_ab5af6e7ebe5c1::t_9e40228165be9e 1-106
+  s_ab5af6e7ebe5c1::t_909e70a0af3b9f 107-109
+crates/attention/kernel/src/query.rs
+  s_ab5af6e7ebe5c1::t_1cb33d4ba02e1d 43
+  s_ab5af6e7ebe5c1::t_06e8a71fd5efa0 8
+  s_ab5af6e7ebe5c1::t_a0c24714738031 1-7,9-41,61-63,65-287
+  s_ab5af6e7ebe5c1::t_f7aad64bf0819a 60
+  s_ab5af6e7ebe5c1::t_b2042821ccb9ae 42
+  s_ab5af6e7ebe5c1::t_ddd88a20f40409 44-46,57-59
+  s_ab5af6e7ebe5c1::t_ec6a979363cad8 64
+crates/attention/kernel/src/port.rs
+  s_ab5af6e7ebe5c1::t_4d1efdae9c3905 8-53
+  s_ab5af6e7ebe5c1::t_796d67fcc74fbf 1-7,54-76,78-79,81-249
+  s_ab5af6e7ebe5c1::t_1c2583f5d8524b 77
+  s_ab5af6e7ebe5c1::t_668500e3f410c0 80
+crates/attention/kernel/src/semantic_error.rs
+  s_ab5af6e7ebe5c1::t_e9d727e8405b25 1-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b1b76fd22bec00e3acbcc1ebcdbf4e858dff70a4",
+  "prompts": {},
+  "sessions": {
+    "s_742caa5036e78b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06a960923ffeLi4QrxRfm3fbW8",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_ab5af6e7ebe5c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06abafac0ffeD7zhKGlOFDgN8u",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
