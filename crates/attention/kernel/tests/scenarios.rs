@@ -6,6 +6,7 @@
 
 use attention_kernel::AttentionSignal;
 use attention_kernel::AttentionSignalId;
+use attention_kernel::CanonicalFingerprint;
 use attention_kernel::ExternalEntityId;
 use attention_kernel::OccurrenceId;
 use attention_kernel::OccurrenceKey;
@@ -22,8 +23,10 @@ use attention_kernel::SourceEntityId;
 use attention_kernel::SourceEntityKey;
 use attention_kernel::SourceInstance;
 use attention_kernel::SourceKind;
+use attention_kernel::SourceOrderMode;
 use attention_kernel::SourceReceipt;
 use attention_kernel::SourceReceiptId;
+use attention_kernel::SourceStateVersion;
 use attention_kernel::WorkItem;
 use attention_kernel::WorkItemId;
 use attention_kernel::WorkItemLifecycle;
@@ -96,11 +99,20 @@ fn scenario_04_resolved_unread_signal_is_valid_and_visible() {
         receipt_id,
         occurrence_key,
         Some(entity_key.clone()),
+        CanonicalFingerprint::reconstruct([1; 32]),
+        SourceOrderMode::Unordered,
         at("2026-07-23T11:00:00Z"),
         at("2026-07-23T12:00:00Z"),
     )
     .expect("receipt permits independent clocks");
-    SourceEntity::reconstruct(entity_id, entity_key).expect("source entity");
+    SourceEntity::reconstruct(
+        entity_id,
+        entity_key,
+        SourceStateVersion::initial(),
+        receipt_id,
+        SourceOrderMode::Unordered,
+    )
+    .expect("source entity");
     let signal = AttentionSignal::reconstruct(
         AttentionSignalId::new(),
         Revision::initial(),
@@ -148,7 +160,14 @@ fn scenario_06_new_receipt_can_share_entity_and_signal_identity() {
         Some(entity_id),
     )
     .expect("updated signal view");
-    SourceEntity::reconstruct(entity_id, entity_key).expect("shared entity");
+    SourceEntity::reconstruct(
+        entity_id,
+        entity_key,
+        SourceStateVersion::initial(),
+        second_receipt,
+        SourceOrderMode::Unordered,
+    )
+    .expect("shared entity");
     assert_eq!(first.id(), second.id());
     assert_eq!(first.source_entity_id(), second.source_entity_id());
     assert_ne!(first.source_receipt_id(), second.source_receipt_id());

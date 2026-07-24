@@ -11,6 +11,8 @@ autotests = false
 
 [dependencies]
 chrono = { workspace = true }
+futures = "0.3"
+sha2 = "0.10"
 thiserror = { workspace = true }
 uuid = { version = "1", features = ["v7"] }
 
@@ -29,6 +31,34 @@ path = "tests/inbox.rs"
 [[test]]
 name = "scenarios"
 path = "tests/scenarios.rs"
+
+[[test]]
+name = "commands"
+path = "tests/commands.rs"
+
+[[test]]
+name = "source_ingress"
+path = "tests/source_ingress.rs"
+
+[[test]]
+name = "reminder_commands"
+path = "tests/reminder_commands.rs"
+
+[[test]]
+name = "idempotency"
+path = "tests/idempotency.rs"
+
+[[test]]
+name = "commits"
+path = "tests/commits.rs"
+
+[[test]]
+name = "changes"
+path = "tests/changes.rs"
+
+[[test]]
+name = "delivery"
+path = "tests/delivery.rs"
 
 [lints]
 workspace = true

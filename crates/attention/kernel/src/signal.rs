@@ -127,6 +127,24 @@ impl AttentionSignal {
         Ok(())
     }
 
+    pub fn advance_source(
+        &mut self,
+        source_receipt_id: SourceReceiptId,
+        source_entity_id: Option<SourceEntityId>,
+        source_lifecycle: SignalSourceLifecycle,
+        fresh_attention: bool,
+    ) -> Result<(), InvariantError> {
+        let revision = self.revision.checked_increment()?;
+        self.source_receipt_id = source_receipt_id;
+        self.source_entity_id = source_entity_id;
+        self.source_lifecycle = source_lifecycle;
+        if fresh_attention {
+            self.attention_state = SignalAttentionState::Unread;
+        }
+        self.revision = revision;
+        Ok(())
+    }
+
     fn transition_source_to(&mut self, next: SignalSourceLifecycle) -> Result<(), InvariantError> {
         if self.source_lifecycle != SignalSourceLifecycle::Active {
             return Err(InvariantError::InvalidTransition {

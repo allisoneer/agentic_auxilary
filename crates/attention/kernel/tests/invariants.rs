@@ -99,6 +99,33 @@ fn signal_transitions_are_independent_and_increment_once() {
 }
 
 #[test]
+fn source_advancement_preserves_acknowledgement_unless_explicitly_fresh() {
+    let mut signal = AttentionSignal::new(AttentionSignalId::new(), SourceReceiptId::new(), None);
+    signal.acknowledge().expect("acknowledge signal");
+    signal
+        .advance_source(
+            SourceReceiptId::new(),
+            None,
+            SignalSourceLifecycle::Resolved,
+            false,
+        )
+        .expect("routine source advancement");
+    assert_eq!(signal.attention_state(), SignalAttentionState::Acknowledged);
+    assert_eq!(signal.revision().value(), 3);
+
+    signal
+        .advance_source(
+            SourceReceiptId::new(),
+            None,
+            SignalSourceLifecycle::Active,
+            true,
+        )
+        .expect("fresh attention source advancement");
+    assert_eq!(signal.attention_state(), SignalAttentionState::Unread);
+    assert_eq!(signal.revision().value(), 4);
+}
+
+#[test]
 fn reminder_reconstruction_rejects_invalid_child_collections() {
     let target = ReminderTarget::WorkItem(WorkItemId::new());
     assert!(matches!(

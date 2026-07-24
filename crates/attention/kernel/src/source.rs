@@ -1,8 +1,12 @@
 //! Immutable source provenance values.
 
+use crate::CanonicalFingerprint;
 use crate::InvariantError;
+use crate::ObservedSourceAuthority;
 use crate::SourceEntityId;
+use crate::SourceOrderMode;
 use crate::SourceReceiptId;
+use crate::SourceStateVersion;
 use chrono::DateTime;
 use chrono::Utc;
 
@@ -103,6 +107,8 @@ pub struct SourceReceipt {
     id: SourceReceiptId,
     occurrence_key: OccurrenceKey,
     source_entity_key: Option<SourceEntityKey>,
+    fingerprint: CanonicalFingerprint,
+    source_order: SourceOrderMode,
     occurred_at: DateTime<Utc>,
     ingested_at: DateTime<Utc>,
 }
@@ -112,6 +118,8 @@ impl SourceReceipt {
         id: SourceReceiptId,
         occurrence_key: OccurrenceKey,
         source_entity_key: Option<SourceEntityKey>,
+        fingerprint: CanonicalFingerprint,
+        source_order: SourceOrderMode,
         occurred_at: DateTime<Utc>,
         ingested_at: DateTime<Utc>,
     ) -> Result<Self, InvariantError> {
@@ -119,6 +127,8 @@ impl SourceReceipt {
             id,
             occurrence_key,
             source_entity_key,
+            fingerprint,
+            source_order,
             occurred_at,
             ingested_at,
         })
@@ -136,6 +146,14 @@ impl SourceReceipt {
         self.source_entity_key.as_ref()
     }
 
+    pub const fn fingerprint(&self) -> CanonicalFingerprint {
+        self.fingerprint
+    }
+
+    pub const fn source_order(&self) -> &SourceOrderMode {
+        &self.source_order
+    }
+
     pub const fn occurred_at(&self) -> &DateTime<Utc> {
         &self.occurred_at
     }
@@ -149,14 +167,26 @@ impl SourceReceipt {
 pub struct SourceEntity {
     id: SourceEntityId,
     key: SourceEntityKey,
+    version: SourceStateVersion,
+    latest_receipt_id: SourceReceiptId,
+    order: SourceOrderMode,
 }
 
 impl SourceEntity {
     pub const fn reconstruct(
         id: SourceEntityId,
         key: SourceEntityKey,
+        version: SourceStateVersion,
+        latest_receipt_id: SourceReceiptId,
+        order: SourceOrderMode,
     ) -> Result<Self, InvariantError> {
-        Ok(Self { id, key })
+        Ok(Self {
+            id,
+            key,
+            version,
+            latest_receipt_id,
+            order,
+        })
     }
 
     pub const fn id(&self) -> SourceEntityId {
@@ -165,5 +195,39 @@ impl SourceEntity {
 
     pub const fn key(&self) -> &SourceEntityKey {
         &self.key
+    }
+
+    pub const fn version(&self) -> SourceStateVersion {
+        self.version
+    }
+
+    pub const fn latest_receipt_id(&self) -> SourceReceiptId {
+        self.latest_receipt_id
+    }
+
+    pub const fn order(&self) -> &SourceOrderMode {
+        &self.order
+    }
+
+    pub fn advance(
+        &self,
+        latest_receipt_id: SourceReceiptId,
+        order: SourceOrderMode,
+    ) -> Result<Self, InvariantError> {
+        Ok(Self {
+            id: self.id,
+            key: self.key.clone(),
+            version: self.version.checked_increment()?,
+            latest_receipt_id,
+            order,
+        })
+    }
+
+    pub fn observed_authority(&self) -> ObservedSourceAuthority {
+        ObservedSourceAuthority::Present {
+            version: self.version,
+            latest_receipt_id: self.latest_receipt_id,
+            order: self.order.clone(),
+        }
     }
 }
