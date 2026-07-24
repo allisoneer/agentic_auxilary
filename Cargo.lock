@@ -608,6 +608,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "attention-kernel"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "attention-protocol"
 version = "0.1.0"
 dependencies = [

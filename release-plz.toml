@@ -270,6 +270,14 @@ release = false
 publish = false
 
 [[package]]
+name = "attention-kernel"
+changelog_path = "crates/attention/kernel/CHANGELOG.md"
+git_tag_name = "attention-kernel-v{{ version }}"
+git_tag_enable = false
+release = false
+publish = false
+
+[[package]]
 name = "attention-protocol"
 changelog_path = "crates/attention/protocol/CHANGELOG.md"
 git_tag_name = "attention-protocol-v{{ version }}"
