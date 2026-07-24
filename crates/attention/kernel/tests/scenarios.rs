@@ -105,7 +105,7 @@ fn scenario_04_resolved_unread_signal_is_valid_and_visible() {
         at("2026-07-23T12:00:00Z"),
     )
     .expect("receipt permits independent clocks");
-    SourceEntity::reconstruct(
+    let entity = SourceEntity::reconstruct(
         entity_id,
         entity_key,
         SourceStateVersion::initial(),
@@ -122,6 +122,8 @@ fn scenario_04_resolved_unread_signal_is_valid_and_visible() {
         Some(entity_id),
     )
     .expect("resolved unread signal");
+    assert_eq!(entity.latest_receipt_id(), receipt_id);
+    assert_eq!(entity.version(), SourceStateVersion::initial());
     assert!(signal.is_in_default_inbox());
     assert_ne!(receipt_id.to_string(), entity_id.to_string());
 }
@@ -160,7 +162,7 @@ fn scenario_06_new_receipt_can_share_entity_and_signal_identity() {
         Some(entity_id),
     )
     .expect("updated signal view");
-    SourceEntity::reconstruct(
+    let entity = SourceEntity::reconstruct(
         entity_id,
         entity_key,
         SourceStateVersion::initial(),
@@ -168,6 +170,8 @@ fn scenario_06_new_receipt_can_share_entity_and_signal_identity() {
         SourceOrderMode::Unordered,
     )
     .expect("shared entity");
+    assert_eq!(entity.latest_receipt_id(), second_receipt);
+    assert_eq!(entity.version(), SourceStateVersion::initial());
     assert_eq!(first.id(), second.id());
     assert_eq!(first.source_entity_id(), second.source_entity_id());
     assert_ne!(first.source_receipt_id(), second.source_receipt_id());

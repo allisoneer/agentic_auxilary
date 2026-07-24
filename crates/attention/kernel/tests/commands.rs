@@ -9,6 +9,7 @@ use attention_kernel::CreateWorkItem;
 use attention_kernel::EvaluationContext;
 use attention_kernel::EvaluationError;
 use attention_kernel::MutationIdempotencyKey;
+use attention_kernel::OutboxIntentId;
 use attention_kernel::Revision;
 use attention_kernel::SourceReceiptId;
 use attention_kernel::WorkItem;
@@ -108,7 +109,14 @@ fn semantic_fields_change_fingerprints_but_generated_context_does_not_participat
     );
 
     let first_bundle = evaluate_create_work_item(&first, context());
-    let second_bundle = evaluate_create_work_item(&first, context());
+    let second_bundle = evaluate_create_work_item(
+        &first,
+        EvaluationContext::new(
+            ChangeEventId::new(),
+            Some(OutboxIntentId::new()),
+            now() + chrono::TimeDelta::seconds(1),
+        ),
+    );
     assert_eq!(
         first_bundle.idempotency().fingerprint(),
         second_bundle.idempotency().fingerprint()

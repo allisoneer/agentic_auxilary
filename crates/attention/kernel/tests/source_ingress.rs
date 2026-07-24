@@ -1,3 +1,5 @@
+mod support;
+
 use attention_kernel::AttentionCommitPort;
 use attention_kernel::AttentionSignalId;
 use attention_kernel::ChangeEventId;
@@ -189,4 +191,3 @@ fn occurrence_dedupe_and_source_version_races_are_transaction_local() {
         ))
     ));
 }
-mod support;

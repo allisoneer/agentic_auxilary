@@ -337,7 +337,7 @@ impl AttentionCommitPort for MemoryAdapter {
         &self,
         bundle: CompleteWorkItemBundle,
     ) -> BoxFuture<'_, Result<CompleteWorkItemResult, PortError<Self::Error>>> {
-        self.commit_work_item_mutation(bundle, true)
+        self.commit_work_item_mutation(bundle)
     }
 
     fn commit_cancel_work_item(
@@ -494,7 +494,7 @@ impl AttentionCommitPort for MemoryAdapter {
         &self,
         bundle: FireReminderBundle,
     ) -> BoxFuture<'_, Result<FireReminderResult, PortError<Self::Error>>> {
-        Box::pin(async move { self.commit_reminder_fire(bundle, 0).await })
+        self.commit_reminder_fire(bundle)
     }
 
     fn commit_acknowledge_reminder_fire(
@@ -554,7 +554,6 @@ impl MemoryAdapter {
     fn commit_work_item_mutation(
         &self,
         bundle: CompleteWorkItemBundle,
-        _complete: bool,
     ) -> BoxFuture<'_, Result<CompleteWorkItemResult, PortError<Infallible>>> {
         Box::pin(async move {
             let mut state = self.state.lock().expect("state lock");
@@ -581,7 +580,6 @@ impl MemoryAdapter {
     fn commit_reminder_fire(
         &self,
         bundle: FireReminderBundle,
-        _kind: u8,
     ) -> BoxFuture<'_, Result<FireReminderResult, PortError<Infallible>>> {
         Box::pin(async move {
             let mut state = self.state.lock().expect("state lock");
