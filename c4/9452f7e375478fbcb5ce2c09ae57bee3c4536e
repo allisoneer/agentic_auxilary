@@ -1,0 +1,47 @@
+crates/attention/kernel/src/outbox.rs
+  s_99c66c4c535cce::t_ffd54198884ed5 27-31,53-87
+  s_922b34c07dcbbd::t_9cddd31dd92160 88-89
+crates/attention/kernel/src/source_order.rs
+  s_99c66c4c535cce::t_ffd54198884ed5 49-53,189,219-241
+  s_922b34c07dcbbd::t_4bea45ffb6064f 242-243
+crates/attention/kernel/tests/support/mod.rs
+  s_99c66c4c535cce::t_0087404c1d7636 685-692,736,738-740
+  s_99c66c4c535cce::t_ffd54198884ed5 681-684,693-703,718,721-735,737,744-745,747
+crates/attention/kernel/tests/delivery.rs
+  s_99c66c4c535cce::t_b0d7eb97e04b87 16-122,124-125,127,129-135,137-148
+  s_99c66c4c535cce::t_0087404c1d7636 123,126,128,136
+crates/attention/kernel/src/delivery.rs
+  s_99c66c4c535cce::t_ffd54198884ed5 127-131
+crates/attention/kernel/src/error.rs
+  s_99c66c4c535cce::t_ffd54198884ed5 28-29
+crates/attention/kernel/tests/reminder_commands.rs
+  s_99c66c4c535cce::t_0087404c1d7636 44,68,75-80,82-87,94
+  s_99c66c4c535cce::t_b0d7eb97e04b87 1-2,4,7,12,16,26-27,45-67,69-74,81,88-93,95-107
+  s_99c66c4c535cce::t_cb0d7fb108139f 108
+crates/attention/kernel/src/port.rs
+  s_99c66c4c535cce::t_ffd54198884ed5 147-148,158-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c49452f7e375478fbcb5ce2c09ae57bee3c4536e",
+  "prompts": {},
+  "sessions": {
+    "s_922b34c07dcbbd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06a68c744ffejGZMb4HlnR8EeS",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_99c66c4c535cce": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_06a6a6d04ffe9WLzk55Ujon16q",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
