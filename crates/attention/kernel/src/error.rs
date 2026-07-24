@@ -17,6 +17,22 @@ pub enum InvariantError {
     RevisionZero,
     #[error("revision overflow")]
     RevisionOverflow,
+    #[error("commit cursor cannot be zero")]
+    CommitCursorZero,
+    #[error("source state version cannot be zero")]
+    SourceStateVersionZero,
+    #[error("source state version overflow")]
+    SourceStateVersionOverflow,
+    #[error("{value} cannot be empty")]
+    EmptyValue { value: &'static str },
+    #[error("{value} cannot contain leading or trailing whitespace")]
+    SurroundingWhitespace { value: &'static str },
+    #[error("{value} cannot be zero")]
+    ZeroBound { value: &'static str },
+    #[error("{value} exceeds its caller-supplied bound")]
+    BoundExceeded { value: &'static str },
+    #[error("fresh attention requires a preallocated Outbox intent identity")]
+    MissingOutboxIntentId,
     #[error("invalid {entity} transition from {from} to {to}")]
     InvalidTransition {
         entity: &'static str,

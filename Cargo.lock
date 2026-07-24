@@ -612,6 +612,8 @@ name = "attention-kernel"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures",
+ "sha2",
  "thiserror 2.0.18",
  "uuid",
 ]
