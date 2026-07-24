@@ -98,6 +98,9 @@ pub enum SubscriptionResult<S> {
     },
 }
 
+/// Concrete v1 hello result for the Attention state model.
+pub type AttentionHelloResult = HelloResult<crate::AttentionSnapshot>;
+
 #[cfg(test)]
 mod tests {
     use super::ClientIdentity;

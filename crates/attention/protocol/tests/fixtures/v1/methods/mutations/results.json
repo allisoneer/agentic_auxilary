@@ -1,0 +1,1 @@
+[{"disposition":"applied","value":{"id":"work-1"},"cursor":"cursor-1","change_event_id":"change-1","outbox_intent_id":"intent-1"},{"disposition":"replayed","value":{"id":"work-1"},"cursor":"cursor-1","change_event_id":"change-1"}]

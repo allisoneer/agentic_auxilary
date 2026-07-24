@@ -35,6 +35,38 @@ path = "tests/ids.rs"
 name = "time"
 path = "tests/time.rs"
 
+[[test]]
+name = "values"
+path = "tests/values.rs"
+
+[[test]]
+name = "resources"
+path = "tests/resources.rs"
+
+[[test]]
+name = "mutations"
+path = "tests/mutations.rs"
+
+[[test]]
+name = "sync"
+path = "tests/sync.rs"
+
+[[test]]
+name = "events"
+path = "tests/events.rs"
+
+[[test]]
+name = "methods"
+path = "tests/methods.rs"
+
+[[test]]
+name = "workers"
+path = "tests/workers.rs"
+
+[[test]]
+name = "compatibility"
+path = "tests/compatibility.rs"
+
 [lints]
 workspace = true
 

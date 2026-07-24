@@ -1,0 +1,1 @@
+{"intent":{"id":"intent-2","subject":{"kind":"reminder_fire","reminder_fire_id":"fire-2"},"originating_change_event_id":"change-2","created_at":"2026-07-22T14:00:00.000000Z","purpose":"reminder_fired"},"state":{"status":"skipped","reason":"synthetic internal skip","skipped_at":"2026-07-22T14:02:00.000000Z"}}

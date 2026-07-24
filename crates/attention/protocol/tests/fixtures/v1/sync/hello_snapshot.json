@@ -1,0 +1,1 @@
+{"protocol_version":1,"server_id":"server-1","boot_id":"boot-1","stream_id":"stream-1","subscription_result":{"mode":"snapshot","state":{"work_items":[],"attention_signals":[],"reminders":[],"inbox":[]},"after_cursor":"cursor-1"},"limits":{"max_message_bytes":1048576,"max_in_flight":32}}
