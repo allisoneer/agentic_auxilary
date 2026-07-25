@@ -10,7 +10,7 @@ use serde::de;
 macro_rules! decimal_string {
     ($(#[$meta:meta])* $name:ident, $label:literal) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         pub struct $name(String);
 
         impl $name {
@@ -29,6 +29,21 @@ macro_rules! decimal_string {
             /// Returns the canonical decimal representation.
             pub fn as_str(&self) -> &str {
                 &self.0
+            }
+        }
+
+        impl PartialOrd for $name {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl Ord for $name {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.0
+                    .len()
+                    .cmp(&other.0.len())
+                    .then_with(|| self.0.cmp(&other.0))
             }
         }
 
@@ -196,6 +211,22 @@ mod tests {
                 .as_str(),
             "18446744073709551615"
         );
+    }
+
+    #[test]
+    fn revisions_order_numerically_across_digit_boundaries() {
+        let nine = Revision::parse("9").expect("revision");
+        let ten = Revision::parse("10").expect("revision");
+
+        assert!(nine < ten);
+    }
+
+    #[test]
+    fn source_state_versions_order_numerically_across_digit_boundaries() {
+        let ninety_nine = SourceStateVersion::parse("99").expect("source state version");
+        let one_hundred = SourceStateVersion::parse("100").expect("source state version");
+
+        assert!(ninety_nine < one_hundred);
     }
 
     #[test]

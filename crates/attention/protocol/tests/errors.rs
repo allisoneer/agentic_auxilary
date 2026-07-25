@@ -19,11 +19,13 @@ use attention_protocol::ResourceRef;
 use attention_protocol::RpcError;
 use attention_protocol::SOURCE_VERSION_CONFLICT;
 use attention_protocol::UNSUPPORTED_PROTOCOL_VERSION;
+use attention_protocol::V1_ERROR_CODES;
 use attention_protocol::V1Error;
 use fixture_helpers::assert_raw_invalid;
 use fixture_helpers::assert_structural_round_trip;
 use fixture_helpers::fixture_text;
 use serde_json::Value;
+use std::collections::HashSet;
 
 #[test]
 fn all_named_error_codes_match_the_v1_fixture() {
@@ -89,6 +91,12 @@ fn all_known_v1_errors_round_trip_through_typed_conversion() {
     assert_structural_round_trip::<Vec<ResourceRef>>("errors/resource_refs.json");
     let errors: Vec<RpcError> =
         serde_json::from_str(&fixture_text("errors/v1_known.json")).expect("known errors fixture");
+    let fixture_codes = errors
+        .iter()
+        .map(|error| error.code)
+        .collect::<HashSet<_>>();
+    let catalog_codes = V1_ERROR_CODES.iter().copied().collect::<HashSet<_>>();
+    assert_eq!(fixture_codes, catalog_codes);
     for error in errors {
         let typed = V1Error::try_from(error.clone()).expect("typed known error");
         let round_trip = RpcError::try_from(typed).expect("serialize typed error");

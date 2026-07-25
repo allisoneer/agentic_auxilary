@@ -56,6 +56,7 @@ where
 fn all_six_worker_requests_use_typed_catalog_bindings() {
     let requests: Vec<Value> =
         serde_json::from_str(&fixture_text("workers/requests.json")).expect("worker requests");
+    assert_eq!(requests.len(), 6, "worker fixture request count");
     assert_request::<DeliveryClaim>(&requests[0]);
     assert_request::<DeliveryInspect>(&requests[1]);
     assert_request::<DeliveryRenew>(&requests[2]);
