@@ -13,6 +13,13 @@ macro_rules! string_id {
         #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
         #[serde(transparent)]
         pub struct $name(pub String);
+
+        impl $name {
+            /// Returns the opaque wire value.
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
     };
 }
 
@@ -35,6 +42,46 @@ string_id!(
 string_id!(
     /// An opaque stream cursor.
     Cursor
+);
+string_id!(
+    /// An opaque `WorkItem` identity.
+    WorkItemId
+);
+string_id!(
+    /// An opaque `AttentionSignal` identity.
+    AttentionSignalId
+);
+string_id!(
+    /// An opaque Reminder identity.
+    ReminderId
+);
+string_id!(
+    /// An opaque globally unique `ReminderFire` identity.
+    ReminderFireId
+);
+string_id!(
+    /// An opaque `SourceReceipt` identity.
+    SourceReceiptId
+);
+string_id!(
+    /// An opaque `SourceEntity` identity.
+    SourceEntityId
+);
+string_id!(
+    /// An opaque `ChangeEvent` identity.
+    ChangeEventId
+);
+string_id!(
+    /// An opaque Outbox intent identity.
+    OutboxIntentId
+);
+string_id!(
+    /// An opaque mutation idempotency key.
+    MutationIdempotencyKey
+);
+string_id!(
+    /// An opaque provider-assigned message identity.
+    ProviderMessageId
 );
 
 /// A required JSON-RPC response ID, which may be null for uncorrelatable errors.
