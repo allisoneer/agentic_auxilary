@@ -190,7 +190,7 @@ publish = false
 [release_plz.overrides.attention-client]
 publish = false
 
-[release_plz.overrides.attention-sqlite]
+[release_plz.overrides.attention-turso]
 publish = false
 
 [release_plz.overrides.attention-server]

@@ -20,6 +20,7 @@ Canonical repository guidance for AI-assisted work in this repository. Keep repo
 
 - `attention-kernel` (lib) - `crates/attention/kernel/`
 - `attention-protocol` (lib) - `crates/attention/protocol/`
+- `attention-turso` (lib) - `crates/attention/turso/`
 
 ### infra
 

@@ -125,6 +125,7 @@ opencode_rs = "0.13.3"
 
 - [`attention-kernel`](crates/attention/kernel) - Native Attention identities, roots, lifecycle invariants, reminders, and derived Inbox projections
 - [`attention-protocol`](crates/attention/protocol) - Strict Attention JSON-RPC wire types; use crate-root DTOs for envelopes, hello negotiation, IDs, versions, and canonical timestamps
+- [`attention-turso`](crates/attention/turso) - Native local Turso storage foundation for Attention
 
 ### infra
 
