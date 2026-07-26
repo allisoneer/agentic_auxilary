@@ -19,6 +19,8 @@ use std::path::Path;
 const FORMAT_VERSION: u32 = 1;
 const MANIFEST_FILE: &str = "manifest.json";
 const LOCK_FILE: &str = ".attention-turso.lock";
+const BACKUP_STAGING_CLEANUP_INCOMPLETE: &str =
+    "backup failed and staging directory could not be cleaned up; manual removal required";
 const RESTORE_RECOVERY_INCOMPLETE: &str =
     "restore recovery is incomplete; database and staging directories were preserved";
 
@@ -119,16 +121,22 @@ fn create_with_operations(
     let manifest = match create_staged(config.database_directory().as_path(), &staging) {
         Ok(manifest) => manifest,
         Err(error) => {
-            let _ = operations.remove_dir_all(&staging);
+            if operations.remove_dir_all(&staging).is_err() {
+                return Err(Error::Backup(BACKUP_STAGING_CLEANUP_INCOMPLETE));
+            }
             return Err(error);
         }
     };
     if let Err(error) = operations.sync_directory(&staging) {
-        let _ = operations.remove_dir_all(&staging);
+        if operations.remove_dir_all(&staging).is_err() {
+            return Err(Error::Backup(BACKUP_STAGING_CLEANUP_INCOMPLETE));
+        }
         return Err(Error::BackupIo(error));
     }
     if let Err(error) = operations.rename(&staging, &final_path) {
-        let _ = operations.remove_dir_all(&staging);
+        if operations.remove_dir_all(&staging).is_err() {
+            return Err(Error::Backup(BACKUP_STAGING_CLEANUP_INCOMPLETE));
+        }
         return Err(Error::BackupIo(error));
     }
     operations
@@ -548,6 +556,49 @@ mod tests {
         ));
         assert!(!backup_staging(&config, "published").exists());
         assert!(config.backup_root().as_path().join("published").is_dir());
+        Ok(())
+    }
+
+    #[test]
+    fn backup_cleanup_failure_preserves_staging_and_reports_recovery() -> TestResult {
+        let (_root, config) = prepared_source(&["alpha"])?;
+        fs::create_dir_all(config.database_directory().as_path().join("unexpected"))?;
+        let mut operations = ScriptedOperations {
+            fail_remove_dir_alls: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            create_with_operations(&config, "staged-copy", &mut operations),
+            Err(Error::Backup(BACKUP_STAGING_CLEANUP_INCOMPLETE))
+        ));
+        assert!(backup_staging(&config, "staged-copy").is_dir());
+        assert!(!config.backup_root().as_path().join("staged-copy").exists());
+
+        let (_root, config) = prepared_source(&["alpha"])?;
+        let mut operations = ScriptedOperations {
+            fail_remove_dir_alls: vec![1],
+            fail_syncs: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            create_with_operations(&config, "staging-sync", &mut operations),
+            Err(Error::Backup(BACKUP_STAGING_CLEANUP_INCOMPLETE))
+        ));
+        assert!(backup_staging(&config, "staging-sync").is_dir());
+        assert!(!config.backup_root().as_path().join("staging-sync").exists());
+
+        let (_root, config) = prepared_source(&["alpha"])?;
+        let mut operations = ScriptedOperations {
+            fail_remove_dir_alls: vec![1],
+            fail_renames: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            create_with_operations(&config, "rename", &mut operations),
+            Err(Error::Backup(BACKUP_STAGING_CLEANUP_INCOMPLETE))
+        ));
+        assert!(backup_staging(&config, "rename").is_dir());
+        assert!(!config.backup_root().as_path().join("rename").exists());
         Ok(())
     }
 
