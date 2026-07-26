@@ -1,0 +1,26 @@
+crates/attention/turso/tests/support/mod.rs
+  s_a309686a321768::t_92f17d14ca5644 1-2
+  s_a309686a321768::t_4e751678d37885 7-8,60-80
+crates/attention/turso/tests/crash.rs
+  s_a309686a321768::t_4e751678d37885 1-2,14-15
+crates/attention/turso/tests/migrations.rs
+  s_a309686a321768::t_4e751678d37885 1-2,14-15
+crates/attention/turso/tests/wal.rs
+  s_a309686a321768::t_4e751678d37885 1-2,6-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a49791bf29a6023bed8ac45dd0be0b58939d74cb",
+  "prompts": {},
+  "sessions": {
+    "s_a309686a321768": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_05f3ba48cffetsxW3mvE6HHvEn",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
