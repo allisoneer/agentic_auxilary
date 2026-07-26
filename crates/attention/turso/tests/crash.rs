@@ -1,17 +1,18 @@
+mod support;
+
 use attention_turso::AttentionDatabase;
 use attention_turso::Config;
 use attention_turso::ProbeResolution;
 use attention_turso::ProbeWriteOutcome;
 use std::error::Error as StdError;
-use std::fs::File;
 use std::future::Future;
-use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::task::Poll;
 use std::time::Duration;
-use std::time::Instant;
+use support::pause_at;
+use support::wait_for_file;
 use turso_db::Builder;
 use turso_db::params;
 use turso_db::transaction::TransactionBehavior;
@@ -136,22 +137,4 @@ async fn crash_worker() -> TestResult {
     transaction.commit().await?;
     pause_at(&barrier).await?;
     Ok(())
-}
-
-fn wait_for_file(path: &Path, timeout: Duration) -> TestResult {
-    let started = Instant::now();
-    while !path.exists() {
-        if started.elapsed() >= timeout {
-            return Err(format!("child did not reach barrier at {}", path.display()).into());
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    Ok(())
-}
-
-async fn pause_at(path: &Path) -> TestResult {
-    File::create(path)?;
-    loop {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
 }

@@ -1,9 +1,10 @@
+mod support;
+
 use attention_turso::WAL_OPERATIONAL_LIMIT_BYTES;
 use std::error::Error;
 use std::fs;
-use std::path::Path;
-use turso_db::Builder;
-use turso_db::Database;
+use support::open_database;
+use support::regular_file_inventory;
 use turso_db::params;
 use turso_db::transaction::TransactionBehavior;
 
@@ -85,26 +86,4 @@ async fn sustained_writes_with_long_reader_have_bounded_complete_inventory() -> 
         assert_eq!(row.get::<i64>(0)?, 513);
     }
     Ok(())
-}
-
-async fn open_database(path: &Path) -> TestResult<Database> {
-    let path = path
-        .to_str()
-        .ok_or("temporary database path is not UTF-8")?;
-    Ok(Builder::new_local(path).build().await?)
-}
-
-fn regular_file_inventory(root: &Path) -> TestResult<Vec<(String, u64)>> {
-    let mut inventory = Vec::new();
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            inventory.push((
-                entry.file_name().to_string_lossy().into_owned(),
-                entry.metadata()?.len(),
-            ));
-        }
-    }
-    inventory.sort_unstable();
-    Ok(inventory)
 }

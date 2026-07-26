@@ -1,7 +1,11 @@
+#![expect(dead_code)]
+
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
+use std::time::Instant;
 use tempfile::TempDir;
 use turso_db::Builder;
 use turso_db::Database;
@@ -52,4 +56,25 @@ pub fn regular_file_inventory(root: &Path) -> TestResult<Vec<(String, u64)>> {
     }
     inventory.sort_unstable();
     Ok(inventory)
+}
+
+pub fn wait_for_file(path: &Path, timeout: Duration) -> TestResult {
+    let started = Instant::now();
+    while !path.exists() {
+        if started.elapsed() >= timeout {
+            return Err(format!("child did not reach barrier at {}", path.display()).into());
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    Ok(())
+}
+
+pub async fn pause_at(path: &Path) -> TestResult {
+    fs::File::create(path)?;
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if fs::metadata(path).is_err() {
+            return Ok(());
+        }
+    }
 }
