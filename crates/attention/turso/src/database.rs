@@ -247,6 +247,7 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use tokio::sync::Notify;
+    use turso_db::params;
 
     async fn database(
         reader_count: usize,
@@ -289,6 +290,7 @@ mod tests {
                 .await
         });
         entered.notified().await;
+        assert_eq!(writer.phase(), CommitPhase::BeforeCommit);
         let second_database = database.clone();
         let second = tokio::spawn(async move {
             second_database
@@ -307,6 +309,43 @@ mod tests {
             .map_err(|error| Error::Engine(Box::new(error)))??;
         assert!(database.read_qualification_probe("first").await?.is_none());
         assert!(database.read_qualification_probe("second").await?.is_some());
+        database.close().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn replay_decode_failure_preserves_error_and_writer_progress() -> Result<(), Error> {
+        let (_root, database) = database(1).await?;
+        let malformed = database
+            .inner
+            .engine
+            .lock()
+            .await
+            .as_ref()
+            .ok_or(Error::Shutdown)?
+            .connect()
+            .map_err(Error::from_connect)?;
+        malformed
+            .execute(
+                "INSERT INTO __attention_probe (operation_id, fingerprint, value) VALUES (?1, ?2, ?3)",
+                params!["malformed", "not-a-blob", b"value".to_vec()],
+            )
+            .await?;
+        drop(malformed);
+
+        assert!(matches!(
+            database
+                .write_qualification_probe("malformed", b"fingerprint", b"value")
+                .await,
+            Err(Error::Decode(_))
+        ));
+        assert_eq!(
+            database
+                .write_qualification_probe("after-decode", b"fingerprint", b"value")
+                .await?,
+            ProbeWriteOutcome::Applied
+        );
+
         database.close().await?;
         Ok(())
     }

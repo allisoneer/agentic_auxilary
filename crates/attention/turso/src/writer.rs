@@ -103,28 +103,35 @@ impl Writer {
             }
         };
         let outcome = if affected == 0 {
-            let mut rows = transaction
-                .query(sql::SELECT_QUALIFICATION_PROBE, params![operation_id])
-                .await?;
-            let row = rows.next().await?.ok_or(Error::ProbeIdentityConflict)?;
-            let stored_fingerprint = decode::blob(&row, 0)?;
-            let stored_value = decode::blob(&row, 1)?;
-            if stored_fingerprint != fingerprint || stored_value != value {
-                drop(rows);
-                let _ = transaction.rollback().await;
-                self.return_if_clean(connection).await;
-                return Err(Error::ProbeIdentityConflict);
+            let replay: Result<ProbeWriteOutcome, Error> = async {
+                let mut rows = transaction
+                    .query(sql::SELECT_QUALIFICATION_PROBE, params![operation_id])
+                    .await?;
+                let row = rows.next().await?.ok_or(Error::ProbeIdentityConflict)?;
+                let stored_fingerprint = decode::blob(&row, 0)?;
+                let stored_value = decode::blob(&row, 1)?;
+                if stored_fingerprint != fingerprint || stored_value != value {
+                    return Err(Error::ProbeIdentityConflict);
+                }
+                Ok(ProbeWriteOutcome::Replayed)
             }
-            drop(rows);
-            ProbeWriteOutcome::Replayed
+            .await;
+            match replay {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let _ = transaction.rollback().await;
+                    self.return_if_clean(connection).await;
+                    return Err(error);
+                }
+            }
         } else {
             ProbeWriteOutcome::Applied
         };
+        self.set_phase(CommitPhase::BeforeCommit);
         if let Some((entered, release)) = pause_after_effect {
             entered.notify_one();
             release.notified().await;
         }
-        self.set_phase(CommitPhase::BeforeCommit);
         self.set_phase(CommitPhase::CommitInvoked);
         if transaction.commit().await.is_err() {
             return Err(Error::CommitOutcomeUnknown);
