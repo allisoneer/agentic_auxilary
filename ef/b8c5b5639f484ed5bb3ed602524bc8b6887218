@@ -1,0 +1,21 @@
+crates/attention/turso/src/backup.rs
+  s_3b256034a75c69::t_d5802713f112a7 22-23,124-126,131-133,137-139
+  s_3b256034a75c69::t_866309f3bf9900 563-604
+  s_3b256034a75c69::t_bfb5439ba352c5 562
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "efb8c5b5639f484ed5bb3ed602524bc8b6887218",
+  "prompts": {},
+  "sessions": {
+    "s_3b256034a75c69": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_05f4c34ecffe1Ir74FiYFWbm6k",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
