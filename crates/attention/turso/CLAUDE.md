@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+`attention-turso` provides Attention's exact-pinned native local Turso storage foundation, including lifecycle, migration, commit-outcome, WAL, and stopped backup/restore behavior. Use it for qualified local Turso storage; see [README.md](README.md) for the full supported contract and limitations.
 
 ## Quick Commands
 
