@@ -19,6 +19,35 @@ use std::path::Path;
 const FORMAT_VERSION: u32 = 1;
 const MANIFEST_FILE: &str = "manifest.json";
 const LOCK_FILE: &str = ".attention-turso.lock";
+const RESTORE_RECOVERY_INCOMPLETE: &str =
+    "restore recovery is incomplete; database and staging directories were preserved";
+
+trait FileOperations {
+    fn rename(&mut self, source: &Path, destination: &Path) -> std::io::Result<()>;
+    fn remove_dir(&mut self, path: &Path) -> std::io::Result<()>;
+    fn remove_dir_all(&mut self, path: &Path) -> std::io::Result<()>;
+    fn sync_directory(&mut self, path: &Path) -> std::io::Result<()>;
+}
+
+struct RealFileOperations;
+
+impl FileOperations for RealFileOperations {
+    fn rename(&mut self, source: &Path, destination: &Path) -> std::io::Result<()> {
+        fs::rename(source, destination)
+    }
+
+    fn remove_dir(&mut self, path: &Path) -> std::io::Result<()> {
+        fs::remove_dir(path)
+    }
+
+    fn remove_dir_all(&mut self, path: &Path) -> std::io::Result<()> {
+        fs::remove_dir_all(path)
+    }
+
+    fn sync_directory(&mut self, path: &Path) -> std::io::Result<()> {
+        sync_directory(path)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BackupEntry {
@@ -62,6 +91,14 @@ impl BackupManifest {
 }
 
 pub fn create(config: &Config, name: &str) -> Result<BackupManifest, Error> {
+    create_with_operations(config, name, &mut RealFileOperations)
+}
+
+fn create_with_operations(
+    config: &Config,
+    name: &str,
+    operations: &mut impl FileOperations,
+) -> Result<BackupManifest, Error> {
     validate_name(name)?;
     let _ownership = config
         .database_directory()
@@ -79,22 +116,36 @@ pub fn create(config: &Config, name: &str) -> Result<BackupManifest, Error> {
         return Err(Error::Backup("backup staging destination already exists"));
     }
     create_private_directory(&staging)?;
-    let result = create_staged(config.database_directory().as_path(), &staging);
-    match result {
-        Ok(manifest) => {
-            sync_directory(&staging)?;
-            fs::rename(&staging, &final_path).map_err(Error::BackupIo)?;
-            sync_directory(config.backup_root().as_path())?;
-            Ok(manifest)
-        }
+    let manifest = match create_staged(config.database_directory().as_path(), &staging) {
+        Ok(manifest) => manifest,
         Err(error) => {
-            let _ = fs::remove_dir_all(&staging);
-            Err(error)
+            let _ = operations.remove_dir_all(&staging);
+            return Err(error);
         }
+    };
+    if let Err(error) = operations.sync_directory(&staging) {
+        let _ = operations.remove_dir_all(&staging);
+        return Err(Error::BackupIo(error));
     }
+    if let Err(error) = operations.rename(&staging, &final_path) {
+        let _ = operations.remove_dir_all(&staging);
+        return Err(Error::BackupIo(error));
+    }
+    operations
+        .sync_directory(config.backup_root().as_path())
+        .map_err(Error::BackupIo)?;
+    Ok(manifest)
 }
 
 pub fn restore_files(config: &Config, name: &str) -> Result<BackupManifest, Error> {
+    restore_files_with_operations(config, name, &mut RealFileOperations)
+}
+
+fn restore_files_with_operations(
+    config: &Config,
+    name: &str,
+    operations: &mut impl FileOperations,
+) -> Result<BackupManifest, Error> {
     validate_name(name)?;
     let ownership = config
         .database_directory()
@@ -116,20 +167,43 @@ pub fn restore_files(config: &Config, name: &str) -> Result<BackupManifest, Erro
         .as_path()
         .join(".attention-turso-restore-stage");
     create_private_directory(&staging)?;
-    let result = restore_staged(&backup, &staging, &manifest);
+    let result = restore_staged(&backup, &staging, &manifest, operations);
     if let Err(error) = result {
-        let _ = fs::remove_dir_all(&staging);
+        if operations.remove_dir_all(&staging).is_err() {
+            return Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE));
+        }
         return Err(error);
     }
+    let mut moved = Vec::with_capacity(manifest.files.len());
     for entry in &manifest.files {
-        fs::rename(
-            staging.join(&entry.path),
-            config.database_directory().as_path().join(&entry.path),
-        )
-        .map_err(Error::BackupIo)?;
+        let source = staging.join(&entry.path);
+        let destination = config.database_directory().as_path().join(&entry.path);
+        if let Err(error) = operations.rename(&source, &destination) {
+            let mut rollback_complete = true;
+            for path in moved.iter().rev() {
+                if operations
+                    .rename(
+                        &config.database_directory().as_path().join(path),
+                        &staging.join(path),
+                    )
+                    .is_err()
+                {
+                    rollback_complete = false;
+                }
+            }
+            if !rollback_complete || operations.remove_dir_all(&staging).is_err() {
+                return Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE));
+            }
+            return Err(Error::BackupIo(error));
+        }
+        moved.push(entry.path.as_str());
     }
-    fs::remove_dir(&staging).map_err(Error::BackupIo)?;
-    sync_directory(config.database_directory().as_path())?;
+    if operations.remove_dir(&staging).is_err() {
+        return Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE));
+    }
+    operations
+        .sync_directory(config.database_directory().as_path())
+        .map_err(Error::BackupIo)?;
     drop(ownership);
     Ok(manifest)
 }
@@ -172,7 +246,12 @@ fn create_staged(source: &Path, staging: &Path) -> Result<BackupManifest, Error>
     Ok(manifest)
 }
 
-fn restore_staged(backup: &Path, staging: &Path, manifest: &BackupManifest) -> Result<(), Error> {
+fn restore_staged(
+    backup: &Path,
+    staging: &Path,
+    manifest: &BackupManifest,
+    operations: &mut impl FileOperations,
+) -> Result<(), Error> {
     for entry in &manifest.files {
         let source = backup.join(&entry.path);
         let destination = staging.join(&entry.path);
@@ -181,7 +260,7 @@ fn restore_staged(backup: &Path, staging: &Path, manifest: &BackupManifest) -> R
             return Err(Error::Backup("backup changed while restoring"));
         }
     }
-    sync_directory(staging)
+    operations.sync_directory(staging).map_err(Error::BackupIo)
 }
 
 fn read_manifest(backup: &Path) -> Result<BackupManifest, Error> {
@@ -356,9 +435,274 @@ fn open_nofollow(path: &Path) -> Result<File, Error> {
     Ok(File::from(descriptor))
 }
 
-fn sync_directory(path: &Path) -> Result<(), Error> {
-    File::open(path)
-        .and_then(|directory| directory.sync_all())
-        .map_err(Error::BackupIo)?;
-    Ok(())
+fn sync_directory(path: &Path) -> std::io::Result<()> {
+    File::open(path).and_then(|directory| directory.sync_all())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error as StdError;
+    use std::io;
+    use std::path::PathBuf;
+
+    type TestResult<T = ()> = Result<T, Box<dyn StdError + Send + Sync>>;
+
+    #[derive(Default)]
+    struct ScriptedOperations {
+        fail_renames: Vec<usize>,
+        fail_remove_dirs: Vec<usize>,
+        fail_remove_dir_alls: Vec<usize>,
+        fail_syncs: Vec<usize>,
+        rename_calls: usize,
+        remove_dir_calls: usize,
+        remove_dir_all_calls: usize,
+        sync_calls: usize,
+        rename_sources: Vec<PathBuf>,
+    }
+
+    impl ScriptedOperations {
+        fn injected_error() -> io::Error {
+            io::Error::other("injected filesystem failure")
+        }
+    }
+
+    impl FileOperations for ScriptedOperations {
+        fn rename(&mut self, source: &Path, destination: &Path) -> io::Result<()> {
+            self.rename_calls += 1;
+            self.rename_sources.push(source.to_path_buf());
+            if self.fail_renames.contains(&self.rename_calls) {
+                return Err(Self::injected_error());
+            }
+            fs::rename(source, destination)
+        }
+
+        fn remove_dir(&mut self, path: &Path) -> io::Result<()> {
+            self.remove_dir_calls += 1;
+            if self.fail_remove_dirs.contains(&self.remove_dir_calls) {
+                return Err(Self::injected_error());
+            }
+            fs::remove_dir(path)
+        }
+
+        fn remove_dir_all(&mut self, path: &Path) -> io::Result<()> {
+            self.remove_dir_all_calls += 1;
+            if self
+                .fail_remove_dir_alls
+                .contains(&self.remove_dir_all_calls)
+            {
+                return Err(Self::injected_error());
+            }
+            fs::remove_dir_all(path)
+        }
+
+        fn sync_directory(&mut self, path: &Path) -> io::Result<()> {
+            self.sync_calls += 1;
+            if self.fail_syncs.contains(&self.sync_calls) {
+                return Err(Self::injected_error());
+            }
+            sync_directory(path)
+        }
+    }
+
+    #[test]
+    fn backup_cleans_staging_before_publication_and_preserves_published_backup() -> TestResult {
+        let (root, config) = prepared_source(&["alpha"])?;
+        fs::create_dir_all(config.database_directory().as_path().join("unexpected"))?;
+        assert!(create(&config, "staged-copy").is_err());
+        assert!(!backup_staging(&config, "staged-copy").exists());
+        drop(root);
+
+        let (_root, config) = prepared_source(&["alpha"])?;
+        let mut operations = ScriptedOperations {
+            fail_syncs: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            create_with_operations(&config, "staging-sync", &mut operations),
+            Err(Error::BackupIo(_))
+        ));
+        assert!(!backup_staging(&config, "staging-sync").exists());
+        assert!(!config.backup_root().as_path().join("staging-sync").exists());
+
+        let (_root, config) = prepared_source(&["alpha"])?;
+        let mut operations = ScriptedOperations {
+            fail_renames: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            create_with_operations(&config, "rename", &mut operations),
+            Err(Error::BackupIo(_))
+        ));
+        assert!(!backup_staging(&config, "rename").exists());
+        assert!(!config.backup_root().as_path().join("rename").exists());
+
+        let (_root, config) = prepared_source(&["alpha"])?;
+        let mut operations = ScriptedOperations {
+            fail_syncs: vec![2],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            create_with_operations(&config, "published", &mut operations),
+            Err(Error::BackupIo(_))
+        ));
+        assert!(!backup_staging(&config, "published").exists());
+        assert!(config.backup_root().as_path().join("published").is_dir());
+        Ok(())
+    }
+
+    #[test]
+    fn restore_forward_failure_rolls_back_in_reverse_and_allows_retry() -> TestResult {
+        let (_root, config) = prepared_restore()?;
+        let mut operations = ScriptedOperations {
+            fail_renames: vec![3],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            restore_files_with_operations(&config, "complete", &mut operations),
+            Err(Error::BackupIo(_))
+        ));
+        assert_eq!(
+            file_names(&operations.rename_sources[3..]),
+            ["beta", "alpha"]
+        );
+        assert!(!restore_staging(&config).exists());
+        assert!(!config.database_directory().as_path().join("alpha").exists());
+        assert!(!config.database_directory().as_path().join("beta").exists());
+
+        let manifest = restore_files(&config, "complete")?;
+        assert_eq!(manifest.files().len(), 3);
+        assert_eq!(
+            fs::read(config.database_directory().as_path().join("alpha"))?,
+            b"alpha"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn restore_incomplete_rollback_preserves_both_directories() -> TestResult {
+        let (_root, config) = prepared_restore()?;
+        let mut operations = ScriptedOperations {
+            fail_renames: vec![3, 4],
+            ..ScriptedOperations::default()
+        };
+        let error = restore_files_with_operations(&config, "complete", &mut operations);
+        assert!(matches!(
+            error,
+            Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE))
+        ));
+        assert_eq!(
+            file_names(&operations.rename_sources[3..]),
+            ["beta", "alpha"]
+        );
+        assert_eq!(operations.remove_dir_all_calls, 0);
+        assert!(config.database_directory().as_path().join("beta").is_file());
+        let staging = restore_staging(&config);
+        assert!(staging.is_dir());
+        assert!(staging.join("alpha").is_file());
+        assert!(staging.join("gamma").is_file());
+        Ok(())
+    }
+
+    #[test]
+    fn restore_staging_failure_cleanup_allows_retry() -> TestResult {
+        let (_root, config) = prepared_restore()?;
+        let mut operations = ScriptedOperations {
+            fail_syncs: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            restore_files_with_operations(&config, "complete", &mut operations),
+            Err(Error::BackupIo(_))
+        ));
+        assert!(!restore_staging(&config).exists());
+        restore_files(&config, "complete")?;
+        Ok(())
+    }
+
+    #[test]
+    fn restore_cleanup_failure_preserves_recovery_directories() -> TestResult {
+        let (_root, config) = prepared_restore()?;
+        let mut operations = ScriptedOperations {
+            fail_renames: vec![3],
+            fail_remove_dir_alls: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            restore_files_with_operations(&config, "complete", &mut operations),
+            Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE))
+        ));
+        assert!(restore_staging(&config).is_dir());
+        assert!(!config.database_directory().as_path().join("alpha").exists());
+        assert!(!config.database_directory().as_path().join("beta").exists());
+
+        let (_root, config) = prepared_restore()?;
+        let mut operations = ScriptedOperations {
+            fail_syncs: vec![1],
+            fail_remove_dir_alls: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            restore_files_with_operations(&config, "complete", &mut operations),
+            Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE))
+        ));
+        assert!(restore_staging(&config).is_dir());
+        assert!(!config.database_directory().as_path().join("alpha").exists());
+
+        let (_root, config) = prepared_restore()?;
+        let mut operations = ScriptedOperations {
+            fail_remove_dirs: vec![1],
+            ..ScriptedOperations::default()
+        };
+        assert!(matches!(
+            restore_files_with_operations(&config, "complete", &mut operations),
+            Err(Error::Backup(RESTORE_RECOVERY_INCOMPLETE))
+        ));
+        assert!(restore_staging(&config).is_dir());
+        assert!(
+            config
+                .database_directory()
+                .as_path()
+                .join("alpha")
+                .is_file()
+        );
+        Ok(())
+    }
+
+    fn prepared_source(files: &[&str]) -> TestResult<(tempfile::TempDir, Config)> {
+        let root = tempfile::tempdir()?;
+        let config = Config::new(root.path().join("database"), root.path().join("backups"))?;
+        for file in files {
+            fs::write(config.database_directory().as_path().join(file), file)?;
+        }
+        Ok((root, config))
+    }
+
+    fn prepared_restore() -> TestResult<(tempfile::TempDir, Config)> {
+        let (root, source) = prepared_source(&["alpha", "beta", "gamma"])?;
+        create(&source, "complete")?;
+        let restore = Config::new(root.path().join("restore"), source.backup_root().as_path())?;
+        Ok((root, restore))
+    }
+
+    fn backup_staging(config: &Config, name: &str) -> PathBuf {
+        config.backup_root().as_path().join(format!(
+            ".attention-turso-stage-{}-{name}",
+            std::process::id()
+        ))
+    }
+
+    fn restore_staging(config: &Config) -> PathBuf {
+        config
+            .database_directory()
+            .as_path()
+            .join(".attention-turso-restore-stage")
+    }
+
+    fn file_names(paths: &[PathBuf]) -> Vec<&str> {
+        paths
+            .iter()
+            .map(|path| path.file_name().and_then(|name| name.to_str()).unwrap())
+            .collect()
+    }
 }
