@@ -33,18 +33,7 @@ impl ReaderPool {
         engine: &Mutex<Option<Database>>,
         operation_id: &str,
     ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error> {
-        let _permit = Arc::clone(&self.permits)
-            .acquire_owned()
-            .await
-            .map_err(|_| Error::Shutdown)?;
-        let mut connection = self.take_or_connect(engine).await?;
-        let result = self
-            .read_probe_with_connection(&mut connection, operation_id)
-            .await;
-        if sanitize(&connection).await.is_ok() {
-            self.connections.lock().await.push(connection);
-        }
-        result
+        self.read_probe_inner(engine, operation_id, None).await
     }
 
     #[cfg(test)]
@@ -55,36 +44,35 @@ impl ReaderPool {
         entered: Arc<tokio::sync::Notify>,
         release: Arc<tokio::sync::Notify>,
     ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error> {
+        self.read_probe_inner(engine, operation_id, Some((entered, release)))
+            .await
+    }
+
+    async fn read_probe_inner(
+        &self,
+        engine: &Mutex<Option<Database>>,
+        operation_id: &str,
+        pause_before_rollback: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error> {
         let _permit = Arc::clone(&self.permits)
             .acquire_owned()
             .await
             .map_err(|_| Error::Shutdown)?;
         let mut connection = self.take_or_connect(engine).await?;
-        let transaction = connection
-            .transaction_with_behavior(TransactionBehavior::Deferred)
-            .await?;
-        let mut rows = transaction
-            .query(sql::SELECT_QUALIFICATION_PROBE, params![operation_id])
-            .await?;
-        let value = if let Some(row) = rows.next().await? {
-            Some((decode::blob(&row, 0)?, decode::blob(&row, 1)?))
-        } else {
-            None
-        };
-        drop(rows);
-        entered.notify_one();
-        release.notified().await;
-        transaction.rollback().await?;
+        let result = self
+            .read_probe_with_connection(&mut connection, operation_id, pause_before_rollback)
+            .await;
         if sanitize(&connection).await.is_ok() {
             self.connections.lock().await.push(connection);
         }
-        Ok(value)
+        result
     }
 
     async fn read_probe_with_connection(
         &self,
         connection: &mut Connection,
         operation_id: &str,
+        pause_before_rollback: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
     ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error> {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Deferred)
@@ -98,6 +86,10 @@ impl ReaderPool {
             None
         };
         drop(rows);
+        if let Some((entered, release)) = pause_before_rollback {
+            entered.notify_one();
+            release.notified().await;
+        }
         transaction.rollback().await?;
         Ok(value)
     }
@@ -117,10 +109,6 @@ impl ReaderPool {
     }
 
     pub(crate) async fn close(&self) {
-        let permits = self.permits.available_permits();
-        if permits > 0 {
-            self.permits.forget_permits(permits);
-        }
         self.permits.close();
         self.connections.lock().await.clear();
     }
