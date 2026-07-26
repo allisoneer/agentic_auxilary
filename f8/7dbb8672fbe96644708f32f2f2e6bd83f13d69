@@ -1,0 +1,19 @@
+crates/attention/turso/src/reader.rs
+  s_08279f6e2398de::t_b1df2fda3818a7 36,46-55,62-64,68,75,89-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f87dbb8672fbe96644708f32f2f2e6bd83f13d69",
+  "prompts": {},
+  "sessions": {
+    "s_08279f6e2398de": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_05f43f5c1ffeubMmCf2dcbkbgn",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
