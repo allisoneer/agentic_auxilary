@@ -3,6 +3,11 @@
 //! Turso engine types and SQL remain private to this crate. Production Attention
 //! domain persistence is intentionally outside this foundation package.
 
+#[cfg(not(unix))]
+compile_error!(
+    "attention-turso requires a Unix target; qualification coverage is limited to Linux and macOS"
+);
+
 mod backup;
 mod config;
 mod database;

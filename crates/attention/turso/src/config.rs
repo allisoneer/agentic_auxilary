@@ -1,6 +1,7 @@
 use crate::path::BackupRoot;
 use crate::path::DatabaseDirectory;
 use crate::path::PathError;
+use crate::path::validate_path_encoding;
 use std::path::Path;
 use std::time::Duration;
 
@@ -40,6 +41,8 @@ impl Config {
         database_directory: impl AsRef<Path>,
         backup_root: impl AsRef<Path>,
     ) -> Result<Self, PathError> {
+        validate_path_encoding(database_directory.as_ref())?;
+        validate_path_encoding(backup_root.as_ref())?;
         let database_directory = DatabaseDirectory::new(database_directory)?;
         let backup_root = BackupRoot::new(backup_root)?;
         if paths_overlap(database_directory.as_path(), backup_root.as_path()) {

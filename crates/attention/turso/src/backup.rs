@@ -338,42 +338,25 @@ fn validate_relative(path: &str) -> Result<(), Error> {
 }
 
 fn create_private_directory(path: &Path) -> Result<(), Error> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        let mut builder = fs::DirBuilder::new();
-        builder.mode(0o700).create(path).map_err(Error::BackupIo)?;
-    }
-    #[cfg(not(unix))]
-    fs::create_dir(path).map_err(Error::BackupIo)?;
+    use std::os::unix::fs::DirBuilderExt;
+    let mut builder = fs::DirBuilder::new();
+    builder.mode(0o700).create(path).map_err(Error::BackupIo)?;
     Ok(())
 }
 
 fn open_nofollow(path: &Path) -> Result<File, Error> {
-    #[cfg(unix)]
-    {
-        use rustix::fs::Mode;
-        use rustix::fs::OFlags;
-        let descriptor = rustix::fs::open(
-            path,
-            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
-            Mode::empty(),
-        )
-        .map_err(|error| Error::BackupIo(std::io::Error::from(error)))?;
-        Ok(File::from(descriptor))
-    }
-    #[cfg(not(unix))]
-    {
-        let metadata = fs::symlink_metadata(path).map_err(Error::BackupIo)?;
-        if metadata.file_type().is_symlink() {
-            return Err(Error::Backup("symbolic-link backup entry rejected"));
-        }
-        File::open(path).map_err(Error::BackupIo)
-    }
+    use rustix::fs::Mode;
+    use rustix::fs::OFlags;
+    let descriptor = rustix::fs::open(
+        path,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+        Mode::empty(),
+    )
+    .map_err(|error| Error::BackupIo(std::io::Error::from(error)))?;
+    Ok(File::from(descriptor))
 }
 
 fn sync_directory(path: &Path) -> Result<(), Error> {
-    #[cfg(unix)]
     File::open(path)
         .and_then(|directory| directory.sync_all())
         .map_err(Error::BackupIo)?;

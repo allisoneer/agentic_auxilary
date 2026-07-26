@@ -2,6 +2,7 @@ use fs2::FileExt;
 use std::fs;
 use std::fs::File;
 use std::io;
+use std::os::unix::fs::MetadataExt;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -118,6 +119,7 @@ impl Drop for DirectoryOwnership {
 }
 
 fn validate_directory(path: &Path) -> Result<ValidatedDirectory, PathError> {
+    validate_path_encoding(path)?;
     let normalized = normalize_absolute(path)?;
     let descriptor = walk_directory(&normalized)?;
     validate_storage_directory_descriptor(&descriptor)?;
@@ -125,6 +127,13 @@ fn validate_directory(path: &Path) -> Result<ValidatedDirectory, PathError> {
         path: normalized,
         descriptor: Arc::new(descriptor),
     })
+}
+
+pub fn validate_path_encoding(path: &Path) -> Result<(), PathError> {
+    if path.to_str().is_none() {
+        return Err(PathError::NonUtf8);
+    }
+    Ok(())
 }
 
 fn normalize_absolute(path: &Path) -> Result<PathBuf, PathError> {
@@ -260,12 +269,8 @@ pub fn validate_directory_metadata(path: &Path) -> Result<(), PathError> {
     if !metadata.is_dir() {
         return Err(PathError::NotDirectory);
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        if metadata.mode() & 0o077 != 0 || metadata.uid() != rustix::process::getuid().as_raw() {
-            return Err(PathError::UnsafePermissions);
-        }
+    if metadata.mode() & 0o077 != 0 || metadata.uid() != rustix::process::getuid().as_raw() {
+        return Err(PathError::UnsafePermissions);
     }
     Ok(())
 }
