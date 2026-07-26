@@ -1,0 +1,31 @@
+crates/attention/turso/README.md
+  s_6a1184dc8d1238::t_3e5b9db7b92426 8,27-28
+crates/attention/turso/src/path.rs
+  s_6a1184dc8d1238::t_f6501047562294 195,197,201-205,207-224
+  s_6a1184dc8d1238::t_91591b99aa3fa1 100
+  s_6a1184dc8d1238::t_806cc5ae8348e4 272,274-276,280-304,397-398,410
+  s_6a1184dc8d1238::t_29c74f2c38c37f 273
+  s_6a1184dc8d1238::t_add885819f6e0e 399-409
+  s_6a1184dc8d1238::t_32cd8841df8739 167-174,183,277-278,305-334,336-352,354,366-368,370-382,384-387,389-396
+  s_6a1184dc8d1238::t_f31d927bb435ed 279,353,355-365
+  s_6a1184dc8d1238::t_fc57382d964c83 8,44-49,51,55,59,63,72,76,80,91-99,101-102,120-127,130,134-141,143,146-150,152-166,175-182,184-194,198-200,206,225-238,243-250,252-253
+  s_6a1184dc8d1238::t_68cdfa29d1ef0c 335,369,383,388
+crates/attention/turso/tests/ownership.rs
+  s_6a1184dc8d1238::t_cc977524a240d1 9-15,55-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f10b6344b3e65f62bd5fb4eaf4a468f4648ea255",
+  "prompts": {},
+  "sessions": {
+    "s_6a1184dc8d1238": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_05f8bb127ffeuXjCKKHaJG8uT8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
