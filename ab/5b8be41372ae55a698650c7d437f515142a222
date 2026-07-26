@@ -1,0 +1,21 @@
+crates/attention/turso/CLAUDE.md
+  s_1eb0f91d76d4e0::t_873cc9581486a7 13
+crates/attention/turso/README.md
+  s_1eb0f91d76d4e0::t_873cc9581486a7 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "ab5b8be41372ae55a698650c7d437f515142a222",
+  "prompts": {},
+  "sessions": {
+    "s_1eb0f91d76d4e0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_05f542c3bffeGeKIxZKQym5WCU",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
