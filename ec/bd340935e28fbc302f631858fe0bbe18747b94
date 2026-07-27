@@ -1,0 +1,48 @@
+crates/attention/kernel/tests/commands.rs
+  s_c57b12794f7738::t_860dc37347f180 44-47
+  s_c57b12794f7738::t_b9970dcf5d0152 2,8,48-53,63-72,95-101,103-106,121-130
+crates/attention/kernel/src/change.rs
+  s_c57b12794f7738::t_90edc1e7e36810 8-9,47
+  s_c57b12794f7738::t_990371b5894de6 49-53
+crates/attention/kernel/src/evaluate.rs
+  s_c57b12794f7738::t_b2cf37baaedaba 579-581
+  s_c57b12794f7738::t_c2dff0d73a551f 145,234,563
+  s_c57b12794f7738::t_2dc0c637f8abee 278-286,318-319,321-328
+crates/attention/kernel/tests/source_ingress.rs
+  s_c57b12794f7738::t_70bcee96b87914 3,5,8,79,89-92,94-112,140-157,167-180,191-196,200-219,228,233-240,363
+  s_c57b12794f7738::t_2fd0fcb3ae423e 80-88,93,297-307,309-313,317-333,337-362
+  s_c57b12794f7738::t_860dc37347f180 308,314-316,334-336
+crates/attention/kernel/tests/changes.rs
+  s_c57b12794f7738::t_39afe1aafa2c17 4,9-68,110-113,117-155,159-179,183-256,259-291,293-306,309-322,327-332
+  s_c57b12794f7738::t_860dc37347f180 114-116,156-158,180-182,257-258,292,307-308,323-326
+crates/attention/kernel/tests/reminder_commands.rs
+  s_c57b12794f7738::t_a32a4920df2755 4,7,127-128,133-138,143-144,146-152,172-183,218-223,225-239
+  s_c57b12794f7738::t_860dc37347f180 129-132
+crates/attention/kernel/src/port.rs
+  s_c57b12794f7738::t_294a28813b7884 52-53,84-87
+  s_c57b12794f7738::t_5eb5840a9302ae 88
+crates/attention/kernel/tests/support/mod.rs
+  s_c57b12794f7738::t_0e171bbd34468c 31,59,258-267
+  s_c57b12794f7738::t_e08f96c0950322 458-467,473-475
+  s_c57b12794f7738::t_95a55ed5f6741a 457
+  s_c57b12794f7738::t_0ab50487d6f1e6 92-100,270
+  s_c57b12794f7738::t_4a9c484179f913 268-269
+  s_c57b12794f7738::t_1535b867192aa4 271
+  s_c57b12794f7738::t_bf35425c79ab26 476
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "ecbd340935e28fbc302f631858fe0bbe18747b94",
+  "prompts": {},
+  "sessions": {
+    "s_c57b12794f7738": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_05b007b92ffeANOAXo4qJQ0yLd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
