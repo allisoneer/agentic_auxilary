@@ -28,6 +28,7 @@ struct State {
     reminders: HashMap<ReminderId, Reminder>,
     source_entities: HashMap<SourceEntityKey, SourceEntity>,
     receipts: HashMap<OccurrenceKey, SourceReceipt>,
+    receipt_occurrences: HashMap<SourceReceiptId, OccurrenceKey>,
     receipt_outcomes: HashMap<OccurrenceKey, IngestSourceOccurrenceResult>,
     idempotency: HashMap<MutationIdempotencyKey, StoredOutcome>,
     events: Vec<ChangeEvent>,
@@ -55,6 +56,7 @@ impl Default for State {
             reminders: HashMap::new(),
             source_entities: HashMap::new(),
             receipts: HashMap::new(),
+            receipt_occurrences: HashMap::new(),
             receipt_outcomes: HashMap::new(),
             idempotency: HashMap::new(),
             events: Vec::new(),
@@ -85,6 +87,15 @@ impl MemoryAdapter {
 
     pub fn inbox(&self) -> HashSet<InboxEntry> {
         self.state.lock().expect("state lock").inbox.clone()
+    }
+
+    pub fn receipt_for_occurrence(&self, key: &OccurrenceKey) -> Option<SourceReceipt> {
+        self.state
+            .lock()
+            .expect("state lock")
+            .receipts
+            .get(key)
+            .cloned()
     }
 
     pub fn set_retention_floor(&self, floor: CommitCursor) {
@@ -240,6 +251,20 @@ impl AttentionReadPort for MemoryAdapter {
                 .expect("state lock")
                 .source_entities
                 .get(query.key())
+                .cloned())
+        })
+    }
+
+    fn source_receipt(
+        &self,
+        id: SourceReceiptId,
+    ) -> BoxFuture<'_, Result<Option<SourceReceipt>, PortError<Self::Error>>> {
+        Box::pin(async move {
+            let state = self.state.lock().expect("state lock");
+            Ok(state
+                .receipt_occurrences
+                .get(&id)
+                .and_then(|key| state.receipts.get(key))
                 .cloned())
         })
     }
@@ -429,10 +454,25 @@ impl AttentionCommitPort for MemoryAdapter {
                 ));
             }
             check_source_authority(&state, bundle.authority_guard())?;
+            if let Some(existing_occurrence) = state.receipt_occurrences.get(&bundle.receipt().id())
+                && existing_occurrence != bundle.occurrence_guard().key()
+            {
+                let receipt_id = bundle.receipt().id();
+                let existing_occurrence = existing_occurrence.clone();
+                let proposed_occurrence = bundle.occurrence_guard().key().clone();
+                drop(state);
+                panic!(
+                    "source receipt ID index collision: {receipt_id} maps to {existing_occurrence:?}, attempted {proposed_occurrence:?}"
+                );
+            }
             let (cursor, event_id) = apply_effects(&mut state, bundle.effects());
             state.receipts.insert(
                 bundle.receipt().occurrence_key().clone(),
                 bundle.receipt().clone(),
+            );
+            state.receipt_occurrences.insert(
+                bundle.receipt().id(),
+                bundle.receipt().occurrence_key().clone(),
             );
             if let Some(entity) = bundle.entity() {
                 state

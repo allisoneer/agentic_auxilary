@@ -1,8 +1,10 @@
 mod support;
 
 use attention_kernel::AcknowledgeReminderFire;
+use attention_kernel::AffectedView;
 use attention_kernel::AttentionCommitPort;
 use attention_kernel::ChangeEventId;
+use attention_kernel::ChangeKind;
 use attention_kernel::CreateReminder;
 use attention_kernel::DueReminderFiresQuery;
 use attention_kernel::EvaluationContext;
@@ -122,11 +124,32 @@ fn reminder_create_fire_acknowledge_and_snooze_are_complete_atomic_bundles() {
         created.root().fires()[0].state(),
         ReminderFireState::Scheduled
     );
+    assert_eq!(created.root().fires()[0].id(), fire_id);
+    assert_eq!(created.root().fires()[0].trigger_at(), &at(12));
+    assert_eq!(
+        created.effects().change().kind(),
+        ChangeKind::ReminderCreated
+    );
+    assert_eq!(
+        created.effects().change().affected_views(),
+        &[AffectedView::Reminder {
+            reminder: created.root().clone(),
+        }]
+    );
 
     let fire = FireReminder::new(reminder_id, fire_id, MutationIdempotencyKey::new());
     let fired = evaluate_fire_reminder(&fire, created.root(), context(true))
         .expect("fire scheduled reminder");
+    assert_eq!(fired.root().fires()[0].id(), fire_id);
+    assert_eq!(fired.root().fires()[0].trigger_at(), &at(12));
     assert_eq!(fired.root().fires()[0].state(), ReminderFireState::Fired);
+    assert_eq!(fired.effects().change().kind(), ChangeKind::ReminderFired);
+    assert_eq!(
+        fired.effects().change().affected_views(),
+        &[AffectedView::Reminder {
+            reminder: fired.root().clone(),
+        }]
+    );
     assert!(fired.effects().outbox_intent().is_some());
     assert_eq!(
         fired.effects().change().inbox_effects().additions().len(),
@@ -145,6 +168,18 @@ fn reminder_create_fire_acknowledge_and_snooze_are_complete_atomic_bundles() {
     assert_eq!(
         acknowledged.root().fires()[0].state(),
         ReminderFireState::Acknowledged
+    );
+    assert_eq!(acknowledged.root().fires()[0].id(), fire_id);
+    assert_eq!(acknowledged.root().fires()[0].trigger_at(), &at(12));
+    assert_eq!(
+        acknowledged.effects().change().kind(),
+        ChangeKind::ReminderFireAcknowledged
+    );
+    assert_eq!(
+        acknowledged.effects().change().affected_views(),
+        &[AffectedView::Reminder {
+            reminder: acknowledged.root().clone(),
+        }]
     );
 
     let second_reminder = evaluate_create_reminder(
@@ -180,5 +215,26 @@ fn reminder_create_fire_acknowledge_and_snooze_are_complete_atomic_bundles() {
     let snoozed = evaluate_snooze_reminder_fire(&snooze, second_fired.root(), context(false))
         .expect("snooze fired reminder");
     assert_eq!(snoozed.root().fires().len(), 2);
+    assert_eq!(snoozed.root().fires()[0].id(), second_fire_id);
+    assert_eq!(snoozed.root().fires()[0].trigger_at(), &at(12));
+    assert_eq!(
+        snoozed.root().fires()[0].state(),
+        ReminderFireState::Snoozed
+    );
     assert_eq!(snoozed.root().fires()[1].id(), replacement);
+    assert_eq!(snoozed.root().fires()[1].trigger_at(), &at(13));
+    assert_eq!(
+        snoozed.root().fires()[1].state(),
+        ReminderFireState::Scheduled
+    );
+    assert_eq!(
+        snoozed.effects().change().kind(),
+        ChangeKind::ReminderFireSnoozed
+    );
+    assert_eq!(
+        snoozed.effects().change().affected_views(),
+        &[AffectedView::Reminder {
+            reminder: snoozed.root().clone(),
+        }]
+    );
 }

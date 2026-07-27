@@ -49,6 +49,8 @@ use crate::SnoozeReminderFireBundle;
 use crate::SnoozeReminderFireResult;
 use crate::SourceAuthorityQuery;
 use crate::SourceEntity;
+use crate::SourceReceipt;
+use crate::SourceReceiptId;
 use crate::WorkItem;
 use crate::WorkItemId;
 use chrono::DateTime;
@@ -78,6 +80,11 @@ pub trait AttentionReadPort: Send + Sync {
         &self,
         query: SourceAuthorityQuery,
     ) -> BoxFuture<'_, Result<Option<SourceEntity>, PortError<Self::Error>>>;
+
+    fn source_receipt(
+        &self,
+        id: SourceReceiptId,
+    ) -> BoxFuture<'_, Result<Option<SourceReceipt>, PortError<Self::Error>>>;
 
     fn prior_outcome(
         &self,

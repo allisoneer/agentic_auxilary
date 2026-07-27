@@ -1,9 +1,11 @@
 use attention_kernel::AcknowledgeAttentionSignal;
+use attention_kernel::AffectedView;
 use attention_kernel::AttentionSignal;
 use attention_kernel::AttentionSignalId;
 use attention_kernel::CancelWorkItem;
 use attention_kernel::CanonicalCommand;
 use attention_kernel::ChangeEventId;
+use attention_kernel::ChangeKind;
 use attention_kernel::CompleteWorkItem;
 use attention_kernel::CreateWorkItem;
 use attention_kernel::EvaluationContext;
@@ -39,7 +41,16 @@ fn work_item_evaluators_build_complete_root_event_and_inbox_effects() {
     let create = CreateWorkItem::new(id, None, None, None, None, MutationIdempotencyKey::new());
     let created = evaluate_create_work_item(&create, context());
     assert_eq!(created.root().revision(), Revision::initial());
-    assert_eq!(created.effects().change().affected_views().len(), 1);
+    assert_eq!(
+        created.effects().change().kind(),
+        ChangeKind::WorkItemCreated
+    );
+    assert_eq!(
+        created.effects().change().affected_views(),
+        &[AffectedView::WorkItem {
+            work_item: created.root().clone(),
+        }]
+    );
     assert_eq!(
         created.effects().change().inbox_effects().additions().len(),
         1
@@ -49,6 +60,16 @@ fn work_item_evaluators_build_complete_root_event_and_inbox_effects() {
     let completed = evaluate_complete_work_item(&complete, created.root(), context())
         .expect("complete open item");
     assert_eq!(completed.root().lifecycle(), WorkItemLifecycle::Completed);
+    assert_eq!(
+        completed.effects().change().kind(),
+        ChangeKind::WorkItemCompleted
+    );
+    assert_eq!(
+        completed.effects().change().affected_views(),
+        &[AffectedView::WorkItem {
+            work_item: completed.root().clone(),
+        }]
+    );
     assert_eq!(
         completed
             .effects()
@@ -71,12 +92,18 @@ fn work_item_evaluators_build_complete_root_event_and_inbox_effects() {
         Revision::initial(),
         MutationIdempotencyKey::new(),
     );
+    let cancelled =
+        evaluate_cancel_work_item(&cancel, &separate, context()).expect("cancel open item");
+    assert_eq!(cancelled.root().lifecycle(), WorkItemLifecycle::Cancelled);
     assert_eq!(
-        evaluate_cancel_work_item(&cancel, &separate, context())
-            .expect("cancel open item")
-            .root()
-            .lifecycle(),
-        WorkItemLifecycle::Cancelled
+        cancelled.effects().change().kind(),
+        ChangeKind::WorkItemCancelled
+    );
+    assert_eq!(
+        cancelled.effects().change().affected_views(),
+        &[AffectedView::WorkItem {
+            work_item: cancelled.root().clone(),
+        }]
     );
 }
 
@@ -91,6 +118,16 @@ fn signal_acknowledgement_is_revision_guarded_and_removes_inbox_entry() {
     let bundle = evaluate_acknowledge_attention_signal(&command, &signal, context())
         .expect("acknowledge unread signal");
     assert_eq!(bundle.root().revision().value(), 2);
+    assert_eq!(
+        bundle.effects().change().kind(),
+        ChangeKind::AttentionSignalAcknowledged
+    );
+    assert_eq!(
+        bundle.effects().change().affected_views(),
+        &[AffectedView::AttentionSignal {
+            attention_signal: bundle.root().clone(),
+        }]
+    );
     assert_eq!(
         bundle.effects().change().inbox_effects().removals().len(),
         1
