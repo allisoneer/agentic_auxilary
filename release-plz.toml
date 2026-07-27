@@ -286,6 +286,14 @@ release = false
 publish = false
 
 [[package]]
+name = "attention-turso"
+changelog_path = "crates/attention/turso/CHANGELOG.md"
+git_tag_name = "attention-turso-v{{ version }}"
+git_tag_enable = false
+release = false
+publish = false
+
+[[package]]
 name = "agentic-tools-macros"
 changelog_path = "crates/agentic-tools/macros/CHANGELOG.md"
 git_tag_name = "agentic-tools-macros-v{{ version }}"

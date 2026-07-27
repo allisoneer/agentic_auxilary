@@ -1,0 +1,69 @@
+[package]
+name = "attention-turso"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Native local Turso storage foundation for Attention"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+autotests = false
+
+[dependencies]
+attention-kernel = { version = "0.1.0", path = "../kernel" }
+fs2 = "0.4"
+rustix = { version = "1", features = ["process"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10"
+thiserror = { workspace = true }
+tokio = { workspace = true }
+turso-db = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true }
+
+[[test]]
+name = "conformance"
+path = "tests/conformance.rs"
+
+[[test]]
+name = "ownership"
+path = "tests/ownership.rs"
+
+[[test]]
+name = "path_security"
+path = "tests/path_security.rs"
+
+[[test]]
+name = "migrations"
+path = "tests/migrations.rs"
+
+[[test]]
+name = "crash"
+path = "tests/crash.rs"
+
+[[test]]
+name = "errors"
+path = "tests/errors.rs"
+
+[[test]]
+name = "wal"
+path = "tests/wal.rs"
+
+[[test]]
+name = "backup"
+path = "tests/backup.rs"
+
+[lints]
+workspace = true
+
+[package.metadata.repo]
+role = "lib"
+family = "attention"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false
