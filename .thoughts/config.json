@@ -426,6 +426,31 @@
     {
       "remote": "https://github.com/effect-ts/effect",
       "description": "Reference implementation and documentation for Effect, a TypeScript library providing typed functional effects, structured concurrency, resource management, error handling, and composable application architecture."
+    },
+    {
+      "remote": "https://github.com/rust-lang/rust-clippy",
+      "description": "Official Clippy stable source used to verify allow-expect-in-tests helper-function semantics for pinned Rust 1.96.1.",
+      "ref": "refs/heads/stable"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/turso",
+      "description": "Official Turso database repository containing the current Rust SDK and documentation",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/libsql",
+      "description": "Official legacy libSQL repository for migration and SDK status comparison",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/tursodatabase/turso",
+      "description": "Exact pinned upstream Turso source for ENG-1149 feasibility verification",
+      "ref": "refs/tags/v0.8.0-pre.1"
+    },
+    {
+      "remote": "https://github.com/bytecodealliance/rustix",
+      "description": "Exact rustix 1.1.4 source for descriptor-relative filesystem API and Linux/macOS portability evidence",
+      "ref": "refs/tags/v1.1.4"
     }
   ]
 }
