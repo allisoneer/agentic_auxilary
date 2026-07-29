@@ -18,6 +18,7 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
+use support::SequenceResponder;
 use support::session_fixture;
 use support::status_v2_busy;
 use support::status_v2_idle;
@@ -50,21 +51,8 @@ async fn test_orchestrator_server_with_long_timeout(
     ))
 }
 
-async fn wait_for_request_path(mock: &MockServer, expected_path: &str) {
-    for _ in 0..200 {
-        if let Some(requests) = mock.received_requests().await
-            && requests.iter().any(|req| req.url.path() == expected_path)
-        {
-            return;
-        }
-        tokio::task::yield_now().await;
-    }
-
-    panic!("timed out waiting for request path: {expected_path}");
-}
-
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-#[ignore = "tokio paused time + reqwest/wiremock interactions are flaky in this harness"]
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "exercised by the ignored integration-test lane"]
 async fn it_times_out_after_5_min_inactivity() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server_with_long_timeout(&mock).await;
@@ -77,17 +65,26 @@ async fn it_times_out_after_5_min_inactivity() {
         .mount(&mock)
         .await;
 
-    // Prompt dispatch succeeds immediately
+    // Prompt dispatch succeeds immediately. The call counter provides a
+    // deterministic synchronization point without polling the mock server.
+    let prompt_responder = SequenceResponder::new(vec![ResponseTemplate::new(204)]);
+    let prompt_calls = prompt_responder.call_counter();
     Mock::given(method("POST"))
         .and(path("/session/s1/prompt_async"))
-        .respond_with(ResponseTemplate::new(204))
+        .respond_with(prompt_responder)
         .mount(&mock)
         .await;
 
-    // Status always idle -> no activity
+    // The preflight status succeeds, then polling cannot observe any activity.
+    // Returning idle forever would now complete through the bounded idle grace.
+    let status_responder = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ResponseTemplate::new(500),
+    ]);
+    let status_calls = status_responder.call_counter();
     Mock::given(method("GET"))
         .and(path("/session/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_idle()))
+        .respond_with(status_responder)
         .mount(&mock)
         .await;
 
@@ -130,9 +127,10 @@ async fn it_times_out_after_5_min_inactivity() {
             .await
     });
 
-    wait_for_request_path(&mock, "/session/s1").await;
+    prompt_calls.wait_for(1).await;
+    status_calls.wait_for(2).await;
+    tokio::time::pause();
     advance(Duration::from_secs(301)).await;
-    tokio::task::yield_now().await;
 
     let result = handle.await.unwrap();
     assert!(result.is_err(), "expected inactivity timeout error");
@@ -143,8 +141,8 @@ async fn it_times_out_after_5_min_inactivity() {
     );
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-#[ignore = "tokio paused time + reqwest/wiremock interactions are flaky in this harness"]
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "exercised by the ignored integration-test lane"]
 async fn it_does_not_timeout_while_busy() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server_with_long_timeout(&mock).await;
@@ -157,17 +155,24 @@ async fn it_does_not_timeout_while_busy() {
         .mount(&mock)
         .await;
 
-    // Prompt dispatch succeeds immediately
+    // Prompt dispatch succeeds immediately. The call counter provides a
+    // deterministic synchronization point without polling the mock server.
+    let prompt_responder = SequenceResponder::new(vec![ResponseTemplate::new(204)]);
+    let prompt_calls = prompt_responder.call_counter();
     Mock::given(method("POST"))
         .and(path("/session/s1/prompt_async"))
-        .respond_with(ResponseTemplate::new(204))
+        .respond_with(prompt_responder)
         .mount(&mock)
         .await;
 
     // Status always busy -> should keep resetting activity timer
+    let status_responder = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy("s1")),
+    ]);
+    let status_calls = status_responder.call_counter();
     Mock::given(method("GET"))
         .and(path("/session/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy("s1")))
+        .respond_with(status_responder)
         .mount(&mock)
         .await;
 
@@ -195,7 +200,7 @@ async fn it_does_not_timeout_while_busy() {
         .mount(&mock)
         .await;
 
-    let handle = tokio::spawn(async move {
+    let mut handle = tokio::spawn(async move {
         run_tool
             .call(
                 OrchestratorRunInput {
@@ -210,13 +215,16 @@ async fn it_does_not_timeout_while_busy() {
             .await
     });
 
-    wait_for_request_path(&mock, "/session/s1").await;
+    prompt_calls.wait_for(1).await;
+    status_calls.wait_for(2).await;
+    tokio::time::pause();
     advance(Duration::from_secs(301)).await;
-    tokio::task::yield_now().await;
 
-    if handle.is_finished() {
-        let result = handle.await.unwrap();
-        panic!("expected task to still be running while busy, got: {result:?}");
+    tokio::select! {
+        result = &mut handle => {
+            panic!("expected task to still be running while busy, got: {:?}", result.unwrap());
+        }
+        () = status_calls.wait_for(4) => {}
     }
 
     handle.abort();

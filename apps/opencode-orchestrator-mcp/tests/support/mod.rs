@@ -14,6 +14,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use tokio::sync::Notify;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::Request;
@@ -113,6 +114,7 @@ fn build_test_client(base_url: &str, timeout_secs: u64) -> opencode_rs::Client {
 pub struct SequenceResponder {
     responders: Vec<ResponseTemplate>,
     calls: Arc<AtomicUsize>,
+    notify: Arc<Notify>,
 }
 
 impl SequenceResponder {
@@ -126,6 +128,7 @@ impl SequenceResponder {
         Self {
             responders,
             calls: Arc::new(AtomicUsize::new(0)),
+            notify: Arc::new(Notify::new()),
         }
     }
 
@@ -135,6 +138,7 @@ impl SequenceResponder {
     pub fn call_counter(&self) -> CallCounter {
         CallCounter {
             inner: Arc::clone(&self.calls),
+            notify: Arc::clone(&self.notify),
         }
     }
 }
@@ -143,12 +147,24 @@ impl SequenceResponder {
 #[derive(Clone)]
 pub struct CallCounter {
     inner: Arc<AtomicUsize>,
+    notify: Arc<Notify>,
 }
 
 impl CallCounter {
     /// Get the current call count.
     pub fn get(&self) -> usize {
         self.inner.load(Ordering::SeqCst)
+    }
+
+    /// Wait until the responder has handled at least `minimum` calls.
+    pub async fn wait_for(&self, minimum: usize) {
+        loop {
+            let notified = self.notify.notified();
+            if self.get() >= minimum {
+                return;
+            }
+            notified.await;
+        }
     }
 }
 
@@ -191,6 +207,7 @@ impl Respond for SwitchAfterCallsResponder {
 impl Respond for SequenceResponder {
     fn respond(&self, _req: &Request) -> ResponseTemplate {
         let idx = self.calls.fetch_add(1, Ordering::SeqCst);
+        self.notify.notify_waiters();
         self.responders
             .get(idx)
             .cloned()
