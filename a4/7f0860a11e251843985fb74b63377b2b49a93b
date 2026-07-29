@@ -1,0 +1,19 @@
+crates/attention/turso/src/path.rs
+  s_a577e81cb44c69::t_e50a7a4362d4e8 397,399-402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a47f0860a11e251843985fb74b63377b2b49a93b",
+  "prompts": {},
+  "sessions": {
+    "s_a577e81cb44c69": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_056840f14fferCiLt15SwEw7m5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
