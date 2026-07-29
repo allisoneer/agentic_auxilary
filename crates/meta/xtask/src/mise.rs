@@ -11,7 +11,7 @@ use std::fs;
 
 pub(crate) const MISE_PATH: &str = "mise.toml";
 
-const TOOL_PINS_BLOCK: &str = "claude = \"2.1.175\"\n\"github:anomalyco/opencode\" = \"1.17.4\"";
+const TOOL_PINS_BLOCK: &str = "claude = \"2.1.220\"\n\"github:anomalyco/opencode\" = \"1.17.4\"";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResolvedBinarySpec {
