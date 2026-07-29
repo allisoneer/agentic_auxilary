@@ -4,7 +4,12 @@
 //! Claude Code subagents with specific behaviors based on type and location.
 
 pub mod config;
+pub mod evidence;
+pub mod guidance;
 pub mod prompts;
+
+#[cfg(test)]
+mod live_tests;
 
 pub use config::build_mcp_config;
 pub use config::compose_prompt;

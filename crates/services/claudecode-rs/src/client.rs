@@ -1,11 +1,14 @@
 use crate::config::MCPConfig;
 use crate::config::SessionConfig;
+use crate::config::serialize_mcp_config;
 use crate::error::ClaudeError;
 use crate::error::Result;
 use crate::process::ProcessHandle;
 use crate::process::expand_tilde;
 use crate::process::find_claude_in_path;
+use crate::process::redact_argv;
 use crate::session::Session;
+use crate::types::InvocationMetadata;
 use crate::types::Result as ClaudeResult;
 use std::path::Path;
 use std::path::PathBuf;
@@ -43,24 +46,45 @@ impl Client {
         config.validate()?;
 
         let (args, mcp_file) = self.build_args(&config).await?;
-        debug!("Launching claude with args: {:?}", args);
+        let redacted_args = redact_argv(&args);
+        debug!("Launching claude with args: {:?}", redacted_args);
 
-        // Prepare working directory
-        let working_dir = config
-            .working_dir
-            .as_ref()
-            .map(|dir| expand_tilde(dir.to_str().unwrap_or("")));
+        let working_dir = resolve_working_dir(config.working_dir.as_deref()).await?;
+        let invocation = InvocationMetadata {
+            sdk_version: crate::VERSION.to_string(),
+            claude_version: self.claude_version().await,
+            argv: redacted_args,
+            working_dir: Some(working_dir.clone()),
+            setting_sources: config.setting_sources.clone(),
+            environment_keys: config
+                .env
+                .as_ref()
+                .map(|env| {
+                    let mut keys = env.keys().cloned().collect::<Vec<_>>();
+                    keys.sort();
+                    keys
+                })
+                .unwrap_or_default(),
+            mcp_config: config.mcp_config.as_ref().and_then(|mcp| {
+                serialize_mcp_config(mcp, &config.mcp_server_load_policy)
+                    .ok()
+                    .map(|mut value| {
+                        redact_json(&mut value);
+                        value
+                    })
+            }),
+        };
 
         let process = ProcessHandle::spawn(
             &self.claude_path,
             args,
-            working_dir.as_deref(),
+            Some(&working_dir),
             config.env.as_ref(),
         )
         .await?;
 
         // Store the temp file in the session to keep it alive
-        let mut session = Session::new(config, process).await?;
+        let mut session = Session::new_with_invocation(config, process, invocation).await?;
         if let Some(temp_file) = mcp_file {
             session.set_mcp_temp_file(temp_file);
         }
@@ -89,6 +113,17 @@ impl Client {
     /// ```
     pub async fn probe_cli(&self) -> Result<crate::probe::CliCapabilities> {
         crate::probe::probe_cli(&self.claude_path).await
+    }
+
+    async fn claude_version(&self) -> Option<String> {
+        tokio::process::Command::new(&self.claude_path)
+            .arg("--version")
+            .output()
+            .await
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|value| value.trim().chars().take(256).collect())
     }
 
     async fn build_args(
@@ -121,7 +156,9 @@ impl Client {
 
         // MCP config
         if let Some(ref mcp) = config.mcp_config {
-            let temp_file = self.write_mcp_config(mcp).await?;
+            let temp_file = self
+                .write_mcp_config(mcp, &config.mcp_server_load_policy)
+                .await?;
             args.push("--mcp-config".to_string());
             args.push(temp_file.path().to_string_lossy().to_string());
             mcp_file = Some(temp_file);
@@ -245,11 +282,61 @@ impl Client {
         Ok((args, mcp_file))
     }
 
-    async fn write_mcp_config(&self, config: &MCPConfig) -> Result<NamedTempFile> {
+    async fn write_mcp_config(
+        &self,
+        config: &MCPConfig,
+        policy: &crate::config::MCPServerLoadPolicy,
+    ) -> Result<NamedTempFile> {
         let temp_file = NamedTempFile::new()?;
-        let json = serde_json::to_string_pretty(config)?;
+        let json = serde_json::to_string_pretty(&serialize_mcp_config(config, policy)?)?;
         fs::write(temp_file.path(), json).await?;
         Ok(temp_file)
+    }
+}
+
+async fn resolve_working_dir(path: Option<&Path>) -> Result<PathBuf> {
+    let expanded = match path {
+        Some(path) => expand_tilde(path.to_string_lossy().as_ref()),
+        None => std::env::current_dir()?,
+    };
+    let canonical =
+        fs::canonicalize(&expanded)
+            .await
+            .map_err(|error| ClaudeError::InvalidConfiguration {
+                message: format!(
+                    "Working directory {} is invalid: {error}",
+                    expanded.display()
+                ),
+            })?;
+    let metadata = fs::metadata(&canonical).await?;
+    if !metadata.is_dir() {
+        return Err(ClaudeError::InvalidConfiguration {
+            message: format!(
+                "Working directory {} is not a directory",
+                canonical.display()
+            ),
+        });
+    }
+    Ok(canonical)
+}
+
+fn redact_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map {
+                let key = key.to_ascii_lowercase();
+                if ["key", "token", "secret", "password", "authorization"]
+                    .iter()
+                    .any(|needle| key.contains(needle))
+                {
+                    *child = serde_json::Value::String("<redacted>".to_string());
+                } else {
+                    redact_json(child);
+                }
+            }
+        }
+        serde_json::Value::Array(values) => values.iter_mut().for_each(redact_json),
+        _ => {}
     }
 }
 
@@ -362,6 +449,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn empty_tools_and_setting_sources_emit_explicit_empty_arguments() {
+        let client = create_test_client();
+        let config = SessionConfig::builder("test")
+            .tools(vec![])
+            .setting_sources(vec![])
+            .output_format(OutputFormat::Text)
+            .build()
+            .unwrap();
+
+        let (args, _) = client.build_args(&config).await.unwrap();
+        let tools_pos = args.iter().position(|arg| arg == "--tools").unwrap();
+        let sources_pos = args
+            .iter()
+            .position(|arg| arg == "--setting-sources")
+            .unwrap();
+
+        assert_eq!(args.get(tools_pos + 1).map(String::as_str), Some(""));
+        assert_eq!(args.get(sources_pos + 1).map(String::as_str), Some(""));
+    }
+
+    #[tokio::test]
     async fn test_build_args_with_session_semantics() {
         let client = create_test_client();
 
@@ -408,7 +516,7 @@ mod tests {
     async fn test_build_args_with_input_format() {
         let client = create_test_client();
         let config = SessionConfig::builder("test")
-            .input_format(InputFormat::StreamJson)
+            .input_format(InputFormat::Text)
             .output_format(OutputFormat::Text)
             .build()
             .unwrap();
@@ -416,7 +524,7 @@ mod tests {
         let (args, _) = client.build_args(&config).await.unwrap();
 
         let input_pos = args.iter().position(|a| a == "--input-format").unwrap();
-        assert_eq!(args[input_pos + 1], "stream-json");
+        assert_eq!(args[input_pos + 1], "text");
     }
 
     #[tokio::test]
@@ -425,7 +533,7 @@ mod tests {
         let config = SessionConfig::builder("test")
             .json_schema(r#"{"type":"object"}"#)
             .include_partial_messages(true)
-            .replay_user_messages(true)
+            .replay_user_messages(false)
             .output_format(OutputFormat::Text)
             .build()
             .unwrap();
@@ -435,7 +543,7 @@ mod tests {
         let schema_pos = args.iter().position(|a| a == "--json-schema").unwrap();
         assert_eq!(args[schema_pos + 1], r#"{"type":"object"}"#);
         assert!(args.contains(&"--include-partial-messages".to_string()));
-        assert!(args.contains(&"--replay-user-messages".to_string()));
+        assert!(!args.contains(&"--replay-user-messages".to_string()));
     }
 
     #[tokio::test]
@@ -489,5 +597,70 @@ mod tests {
             .unwrap();
         let (args, _) = client.build_args(&config).await.unwrap();
         assert!(args.contains(&"--verbose".to_string()));
+    }
+
+    #[test]
+    fn invocation_redaction_hides_prompts_settings_and_query() {
+        let args = vec![
+            "--system-prompt".to_string(),
+            "secret prompt".to_string(),
+            "--settings".to_string(),
+            "{\"token\":\"secret\"}".to_string(),
+            "--agents".to_string(),
+            "{\"reviewer\":\"agent secret\"}".to_string(),
+            "--".to_string(),
+            "secret query".to_string(),
+        ];
+        let redacted = redact_argv(&args);
+        assert_eq!(redacted[1], "<redacted>");
+        assert_eq!(redacted[3], "<redacted>");
+        assert_eq!(redacted[5], "<redacted>");
+        assert_eq!(redacted[7], "<redacted>");
+        assert!(!redacted.join(" ").contains("secret"));
+    }
+
+    #[test]
+    fn invocation_redaction_hides_inline_agents_json() {
+        let redacted = redact_argv(&["--agents={\"token\":\"agent secret\"}".to_string()]);
+        assert_eq!(redacted, ["--agents=<redacted>"]);
+        assert!(!redacted.join(" ").contains("agent secret"));
+    }
+
+    #[test]
+    fn recursive_json_redaction_hides_credential_values() {
+        let mut value = serde_json::json!({
+            "headers": {"Authorization": "Bearer secret"},
+            "env": {"API_TOKEN": "secret", "SAFE": "visible"}
+        });
+        redact_json(&mut value);
+        let rendered = value.to_string();
+        assert!(!rendered.contains("Bearer secret"));
+        assert!(!rendered.contains("\"secret\""));
+        assert!(rendered.contains("visible"));
+    }
+
+    #[tokio::test]
+    async fn working_directory_is_canonicalized_and_must_be_a_directory() {
+        let directory = tempfile::TempDir::new().unwrap();
+        let canonical = fs::canonicalize(directory.path()).await.unwrap();
+        assert_eq!(
+            resolve_working_dir(Some(directory.path())).await.unwrap(),
+            canonical
+        );
+
+        assert_eq!(
+            resolve_working_dir(None).await.unwrap(),
+            fs::canonicalize(std::env::current_dir().unwrap())
+                .await
+                .unwrap()
+        );
+
+        let file = tempfile::NamedTempFile::new().unwrap();
+        assert!(resolve_working_dir(Some(file.path())).await.is_err());
+        assert!(
+            resolve_working_dir(Some(Path::new("/definitely/missing/claude-cwd")))
+                .await
+                .is_err()
+        );
     }
 }

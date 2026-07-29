@@ -27,6 +27,7 @@ agentic-config = { workspace = true }
 agentic-tools-core = { workspace = true }
 agentic-tools-mcp = { workspace = true }
 agentic-tools-registry = { workspace = true }
+thoughts-tool = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }
 serde = { workspace = true }
@@ -42,6 +43,9 @@ anyhow = { workspace = true }
 rustls = { version = "0.23", default-features = false, features = [
   "aws_lc_rs",
 ] }
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true

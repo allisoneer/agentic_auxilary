@@ -429,7 +429,17 @@ impl Tool for JustExecuteTool {
 
 /// Build a `ToolRegistry` containing all `coding_agent_tools`.
 pub fn build_registry(subagents: SubagentsConfig, cli_tools: CliToolsConfig) -> ToolRegistry {
-    let tools = Arc::new(CodingAgentTools::with_config(subagents, cli_tools));
+    build_registry_with_roots(subagents, cli_tools, None)
+}
+
+pub fn build_registry_with_roots(
+    subagents: SubagentsConfig,
+    cli_tools: CliToolsConfig,
+    cli_roots: Option<Vec<std::path::PathBuf>>,
+) -> ToolRegistry {
+    let tools = Arc::new(CodingAgentTools::with_config_and_roots(
+        subagents, cli_tools, cli_roots,
+    ));
     ToolRegistry::builder()
         .register::<LsTool, ()>(LsTool::new(Arc::clone(&tools)))
         .register::<AskAgentTool, ()>(AskAgentTool::new(Arc::clone(&tools)))

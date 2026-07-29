@@ -44,6 +44,7 @@ fn run_grep(
         include_binary,
         head_limit,
         offset,
+        allowed_roots: None,
     };
     coding_agent_tools::grep::run(cfg)
 }

@@ -18,6 +18,45 @@ use which::which;
 
 pub(crate) const KILL_GRACE: Duration = Duration::from_millis(250);
 
+pub(crate) fn redact_argv(args: &[String]) -> Vec<String> {
+    const SENSITIVE_VALUE_FLAGS: &[&str] = &[
+        "--system-prompt",
+        "--append-system-prompt",
+        "--settings",
+        "--agents",
+    ];
+    let mut redacted = Vec::with_capacity(args.len());
+    let mut redact_next = false;
+    let mut redact_query = false;
+
+    for value in args {
+        if redact_next || redact_query {
+            redacted.push("<redacted>".to_string());
+            redact_next = false;
+            continue;
+        }
+        if value == "--" {
+            redacted.push(value.clone());
+            redact_query = true;
+            continue;
+        }
+        if SENSITIVE_VALUE_FLAGS.contains(&value.as_str()) {
+            redacted.push(value.clone());
+            redact_next = true;
+            continue;
+        }
+        if let Some((flag, _)) = value.split_once('=')
+            && SENSITIVE_VALUE_FLAGS.contains(&flag)
+        {
+            redacted.push(format!("{flag}=<redacted>"));
+            continue;
+        }
+        redacted.push(value.clone());
+    }
+
+    redacted
+}
+
 pub struct ProcessHandle {
     child: Arc<Mutex<Child>>,
     stdout_reader: Option<BufReader<tokio::process::ChildStdout>>,
@@ -83,9 +122,10 @@ impl ProcessHandle {
             }
         }
 
+        let diagnostic_args = redact_argv(&args);
         let mut child = cmd.spawn().map_err(|e| ClaudeError::SpawnError {
             command: claude_path.display().to_string(),
-            args,
+            args: diagnostic_args,
             source: e,
         })?;
 
@@ -250,6 +290,60 @@ mod tests {
             let expanded = expand_tilde("~/some/path");
             assert_eq!(expanded, home.join("some/path"));
         }
+    }
+
+    #[test]
+    fn argv_redaction_covers_separate_inline_and_query_values() {
+        let args = vec![
+            "--system-prompt".to_string(),
+            "system secret".to_string(),
+            "--settings={\"token\":\"inline secret\"}".to_string(),
+            "--agents".to_string(),
+            "separate agent secret".to_string(),
+            "--agents={\"reviewer\":\"inline agent secret\"}".to_string(),
+            "--".to_string(),
+            "query secret".to_string(),
+        ];
+
+        let rendered = format!("{:?}", redact_argv(&args));
+        assert!(!rendered.contains("system secret"));
+        assert!(!rendered.contains("inline secret"));
+        assert!(!rendered.contains("separate agent secret"));
+        assert!(!rendered.contains("inline agent secret"));
+        assert!(!rendered.contains("query secret"));
+        assert!(rendered.contains("--settings=<redacted>"));
+        assert!(rendered.contains("--agents=<redacted>"));
+    }
+
+    #[tokio::test]
+    async fn spawn_error_contains_only_redacted_argv() {
+        let Err(error) = ProcessHandle::spawn(
+            Path::new("/definitely/missing/fake-claude"),
+            vec![
+                "--system-prompt".to_string(),
+                "system secret".to_string(),
+                "--settings={\"secret\":\"settings secret\"}".to_string(),
+                "--agents".to_string(),
+                "agents secret".to_string(),
+                "--".to_string(),
+                "query secret".to_string(),
+            ],
+            None,
+            None,
+        )
+        .await
+        else {
+            panic!("missing executable unexpectedly spawned");
+        };
+
+        let ClaudeError::SpawnError { args, .. } = error else {
+            panic!("expected spawn error");
+        };
+        let rendered = format!("{args:?}");
+        assert!(!rendered.contains("system secret"));
+        assert!(!rendered.contains("settings secret"));
+        assert!(!rendered.contains("agents secret"));
+        assert!(!rendered.contains("query secret"));
     }
 
     #[tokio::test]

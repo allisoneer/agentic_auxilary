@@ -79,23 +79,27 @@ cargo run --example streaming_debug
 
 1. **Client** (`src/client.rs`): Main entry point for launching Claude sessions. Handles finding the claude executable and spawning processes.
 
-2. **Session** (`src/session.rs`): Manages running Claude processes and handles different output formats (Text, JSON, StreamingJSON). Implements automatic resource cleanup.
+2. **Session** (`src/session.rs`): Manages processes and returns a single ordered `SessionOutcome` containing the normalized result, raw-preserving transcript, exit status, bounded stdout/stderr diagnostics, and redacted invocation metadata.
 
 3. **Configuration** (`src/config.rs`): 
    - `SessionConfig`: Builder pattern for session configuration
    - `MCPConfig`: Model Context Protocol server configuration
-   - Supports resume sessions, max turns, custom prompts, tool filtering
+   - `MCPServer` retains its 0.1.24 shapes; `SessionConfigBuilder::mcp_server_always_load` applies omitted-by-default `alwaysLoad` during full MCP JSON serialization
+   - Stream-JSON input and message replay are rejected until stdin control support exists; stream-JSON output remains supported
 
 4. **Type System** (`src/types.rs`):
    - `Model` enum: Sonnet, Opus, Haiku
    - `OutputFormat` enum: Text, Json, StreamingJson
-   - Event types for streaming: Assistant, System, Result, Error
+   - Raw-preserving System, Assistant, User, Result, Error, and unknown events
+   - Flexible tool-result content, `parent_tool_use_id`, and init `mcp_server_errors`
    - Strongly-typed message and content structures
 
 5. **Stream Parsing** (`src/stream.rs`): Format-specific parsers:
    - `JsonStreamParser`: NDJSON event streaming
    - `SingleJsonParser`: Complete JSON responses
-   - `TextParser`: Plain text output
+   - `TextParser`: Plain text output with stderr retained as diagnostics
+
+Successful exit/result status determines success; warning-only stderr does not. Invocation diagnostics retain version, canonical CWD, redacted argv/config, setting sources, and environment key names, never credential values. Known configured secret values are also replaced before retaining generic stdout, stderr, terminal-result, raw/parsed transcript, tool-result, or failure-diagnostic strings.
 
 ### Key Design Patterns
 

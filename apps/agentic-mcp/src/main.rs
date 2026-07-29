@@ -14,13 +14,17 @@ use agentic_tools_mcp::OutputMode;
 use agentic_tools_mcp::RegistryServer;
 use agentic_tools_mcp::ServiceExt;
 use agentic_tools_mcp::stdio;
+use agentic_tools_registry::AgenticRuntimeConfig;
 use agentic_tools_registry::AgenticTools;
 use agentic_tools_registry::AgenticToolsConfig;
 use clap::Parser;
+use clap::ValueEnum;
 use colored::Colorize;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
@@ -46,6 +50,10 @@ struct Args {
     /// Suppress search reminder footer in grep/glob text output.
     #[arg(long)]
     suppress_search_reminder: bool,
+
+    /// Runtime-only least-privilege profile for nested `ask_agent` servers.
+    #[arg(long, value_enum)]
+    nested_profile: Option<NestedProfile>,
 
     // Convenience flags for individual tool filtering
     // TODO(3): Probably don't need these convenience flags. They are kinda archaic for the old
@@ -73,6 +81,14 @@ struct Args {
     /// Enable `cli_just_execute` tool
     #[arg(long)]
     cli_just_execute: bool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum NestedProfile {
+    Codebase,
+    Thoughts,
+    References,
+    Web,
 }
 
 #[derive(Deserialize)]
@@ -147,6 +163,151 @@ fn parse_config(args: &Args) -> (AgenticToolsConfig, Option<String>) {
     )
 }
 
+fn canonical_safe_root(path: &Path, label: &str) -> anyhow::Result<PathBuf> {
+    let root = fs::canonicalize(path)
+        .map_err(|error| anyhow::anyhow!("Failed to canonicalize {label} root: {error}"))?;
+    if !root.is_dir() || root == Path::new("/") {
+        anyhow::bail!("{label} root must be an existing non-root directory");
+    }
+    Ok(root)
+}
+
+fn references_root(cwd: &Path) -> anyhow::Result<PathBuf> {
+    canonical_safe_root(
+        &thoughts_tool::workspace::resolve_references_base_read_only(cwd)?,
+        "References",
+    )
+}
+
+fn allow_has(allowlist: Option<&HashSet<String>>, name: &str) -> bool {
+    allowlist.is_some_and(|allow| allow.contains(name))
+}
+
+fn nested_profile_names(profile: NestedProfile) -> &'static [&'static str] {
+    match profile {
+        NestedProfile::Codebase => &[
+            "cli_ls",
+            "cli_grep",
+            "cli_glob",
+            "workspace_read",
+            "workspace_todowrite",
+        ],
+        NestedProfile::Thoughts => &[
+            "cli_ls",
+            "cli_grep",
+            "cli_glob",
+            "thoughts_list_documents",
+            "thoughts_read_document",
+        ],
+        NestedProfile::References => &[
+            "cli_ls",
+            "cli_grep",
+            "cli_glob",
+            "thoughts_list_references",
+            "thoughts_read_reference",
+            "workspace_todowrite",
+        ],
+        NestedProfile::Web => &["web_search", "web_fetch", "workspace_todowrite"],
+    }
+}
+
+fn restrict_nested_allowlist(
+    profile: NestedProfile,
+    requested: Option<HashSet<String>>,
+) -> HashSet<String> {
+    let allowed = nested_profile_names(profile)
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let mut restricted = requested
+        .filter(|requested| {
+            !requested.is_empty() && requested.iter().all(|name| allowed.contains(name.as_str()))
+        })
+        .unwrap_or_default();
+    if restricted.is_empty() {
+        restricted.insert("__nested_profile_no_tools__".to_string());
+    }
+    restricted
+}
+
+fn exact_nested_cli_allowlist(profile: NestedProfile, raw: &str) -> Option<HashSet<String>> {
+    let allowed = nested_profile_names(profile)
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let mut requested = HashSet::new();
+    for name in raw.split(',') {
+        if name.is_empty()
+            || name.trim() != name
+            || !allowed.contains(name)
+            || !requested.insert(name.to_string())
+        {
+            return None;
+        }
+    }
+    (!requested.is_empty()).then_some(requested)
+}
+
+fn nested_runtime(
+    profile: NestedProfile,
+    cwd: &Path,
+    allowlist: Option<&HashSet<String>>,
+) -> anyhow::Result<AgenticRuntimeConfig> {
+    let worktree = thoughts_tool::git::utils::find_repo_root(cwd)?;
+    let worktree = canonical_safe_root(&worktree, "worktree")?;
+    let location_root = match profile {
+        NestedProfile::Thoughts => Some(canonical_safe_root(
+            &thoughts_tool::workspace::resolve_active_work_base_read_only(cwd)?,
+            "Thoughts",
+        )?),
+        NestedProfile::References => Some(references_root(cwd)?),
+        NestedProfile::Codebase | NestedProfile::Web => None,
+    };
+    Ok(nested_runtime_from_roots(
+        profile,
+        worktree,
+        location_root,
+        allowlist,
+    ))
+}
+
+fn nested_runtime_from_roots(
+    profile: NestedProfile,
+    worktree: PathBuf,
+    location_root: Option<PathBuf>,
+    allowlist: Option<&HashSet<String>>,
+) -> AgenticRuntimeConfig {
+    let mut roots = vec![worktree];
+    if let Some(root) = location_root
+        && !roots.contains(&root)
+    {
+        roots.push(root);
+    }
+
+    AgenticRuntimeConfig {
+        thoughts_read_document: matches!(profile, NestedProfile::Thoughts)
+            && allow_has(allowlist, "thoughts_read_document"),
+        thoughts_read_reference: matches!(profile, NestedProfile::References)
+            && allow_has(allowlist, "thoughts_read_reference"),
+        thoughts_read_only_nested: matches!(
+            profile,
+            NestedProfile::Thoughts | NestedProfile::References
+        ),
+        workspace_tools: Some(agentic_config::types::WorkspaceToolsConfig {
+            workspace_read: allow_has(allowlist, "workspace_read")
+                && matches!(profile, NestedProfile::Codebase),
+            workspace_todowrite: allow_has(allowlist, "workspace_todowrite")
+                && matches!(
+                    profile,
+                    NestedProfile::Codebase | NestedProfile::References | NestedProfile::Web
+                ),
+            workspace_edit: false,
+            workspace_apply_patch: false,
+        }),
+        cli_roots: Some(roots),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -184,6 +345,14 @@ async fn main() -> anyhow::Result<()> {
     reg_cfg.discord = loaded.config.services.discord.clone();
     reg_cfg.review = loaded.config.review.clone();
     reg_cfg.thoughts = loaded.config.thoughts.clone();
+    if let Some(profile) = args.nested_profile {
+        let requested = args
+            .allow
+            .as_deref()
+            .and_then(|raw| exact_nested_cli_allowlist(profile, raw));
+        reg_cfg.allowlist = Some(restrict_nested_allowlist(profile, requested));
+        reg_cfg.runtime = nested_runtime(profile, &cwd, reg_cfg.allowlist.as_ref())?;
+    }
 
     let reg = AgenticTools::new(reg_cfg);
 
@@ -219,4 +388,234 @@ async fn main() -> anyhow::Result<()> {
     service.waiting().await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_safe_root_rejects_files_and_filesystem_root() {
+        let temp = tempfile::TempDir::new().expect("temporary directory");
+        let file = temp.path().join("file");
+        std::fs::write(&file, "x").expect("write fixture");
+        assert!(canonical_safe_root(&file, "fixture").is_err());
+        assert!(canonical_safe_root(Path::new("/"), "fixture").is_err());
+        assert!(canonical_safe_root(&temp.path().join("missing"), "fixture").is_err());
+    }
+
+    #[test]
+    fn web_runtime_never_enables_workspace_read_or_edit() {
+        let allow = HashSet::from([
+            "workspace_read".to_string(),
+            "workspace_todowrite".to_string(),
+            "workspace_edit".to_string(),
+        ]);
+        let runtime = nested_runtime(
+            NestedProfile::Web,
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+            Some(&allow),
+        )
+        .expect("web runtime");
+        let workspace = runtime.workspace_tools.expect("workspace override");
+        assert!(!workspace.workspace_read);
+        assert!(workspace.workspace_todowrite);
+        assert!(!workspace.workspace_edit);
+        assert!(!workspace.workspace_apply_patch);
+    }
+
+    #[test]
+    fn nested_profile_allowlists_match_location_boundaries() {
+        let cases = [
+            (
+                NestedProfile::Codebase,
+                [
+                    "cli_ls",
+                    "cli_grep",
+                    "cli_glob",
+                    "workspace_read",
+                    "workspace_todowrite",
+                ]
+                .as_slice(),
+            ),
+            (
+                NestedProfile::Thoughts,
+                [
+                    "cli_ls",
+                    "cli_grep",
+                    "cli_glob",
+                    "thoughts_list_documents",
+                    "thoughts_read_document",
+                ]
+                .as_slice(),
+            ),
+            (
+                NestedProfile::References,
+                [
+                    "cli_ls",
+                    "cli_grep",
+                    "cli_glob",
+                    "thoughts_list_references",
+                    "thoughts_read_reference",
+                    "workspace_todowrite",
+                ]
+                .as_slice(),
+            ),
+            (
+                NestedProfile::Web,
+                ["web_search", "web_fetch", "workspace_todowrite"].as_slice(),
+            ),
+        ];
+        for (profile, expected) in cases {
+            let expected = expected
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect::<HashSet<_>>();
+            let actual = restrict_nested_allowlist(profile, Some(expected.clone()));
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn malformed_nested_allowlists_fail_closed() {
+        for raw in [
+            "CLI_LS",
+            " cli_ls",
+            "cli_ls ",
+            "mcp__agentic-mcp__cli_ls",
+            "prefix_cli_ls",
+            "cli_ls_suffix",
+            "unknown",
+            "cli_ls,cli_ls",
+            "",
+        ] {
+            assert!(
+                exact_nested_cli_allowlist(NestedProfile::Codebase, raw).is_none(),
+                "unexpectedly accepted {raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn nested_profile_without_allowlist_publishes_no_tools() {
+        for profile in [
+            NestedProfile::Codebase,
+            NestedProfile::Thoughts,
+            NestedProfile::References,
+            NestedProfile::Web,
+        ] {
+            assert_eq!(
+                restrict_nested_allowlist(profile, None),
+                HashSet::from(["__nested_profile_no_tools__".to_string()])
+            );
+        }
+    }
+
+    #[test]
+    fn nested_runtime_without_allowlist_enables_no_runtime_capabilities() {
+        let worktree = tempfile::TempDir::new().expect("worktree fixture");
+        let location = tempfile::TempDir::new().expect("location fixture");
+        for profile in [
+            NestedProfile::Codebase,
+            NestedProfile::Thoughts,
+            NestedProfile::References,
+            NestedProfile::Web,
+        ] {
+            let runtime = nested_runtime_from_roots(
+                profile,
+                worktree.path().to_path_buf(),
+                Some(location.path().to_path_buf()),
+                None,
+            );
+            assert!(!runtime.thoughts_read_document);
+            assert!(!runtime.thoughts_read_reference);
+            let workspace = runtime.workspace_tools.expect("workspace policy");
+            assert!(!workspace.workspace_read);
+            assert!(!workspace.workspace_todowrite);
+            assert!(!workspace.workspace_edit);
+            assert!(!workspace.workspace_apply_patch);
+        }
+    }
+
+    #[test]
+    fn every_nested_profile_derives_exact_runtime_gates_and_roots() {
+        let worktree = tempfile::TempDir::new().expect("worktree fixture");
+        let location = tempfile::TempDir::new().expect("location fixture");
+        let worktree = std::fs::canonicalize(worktree.path()).expect("canonical worktree");
+        let location = std::fs::canonicalize(location.path()).expect("canonical location");
+        let allow = HashSet::from([
+            "workspace_read".to_string(),
+            "workspace_todowrite".to_string(),
+            "thoughts_read_document".to_string(),
+            "thoughts_read_reference".to_string(),
+        ]);
+
+        for profile in [
+            NestedProfile::Codebase,
+            NestedProfile::Thoughts,
+            NestedProfile::References,
+            NestedProfile::Web,
+        ] {
+            let extra = matches!(profile, NestedProfile::Thoughts | NestedProfile::References)
+                .then(|| location.clone());
+            let runtime = nested_runtime_from_roots(profile, worktree.clone(), extra, Some(&allow));
+            let workspace = runtime.workspace_tools.expect("workspace policy");
+            assert!(!workspace.workspace_edit);
+            assert!(!workspace.workspace_apply_patch);
+            assert_eq!(
+                workspace.workspace_read,
+                matches!(profile, NestedProfile::Codebase)
+            );
+            assert_eq!(
+                workspace.workspace_todowrite,
+                matches!(
+                    profile,
+                    NestedProfile::Codebase | NestedProfile::References | NestedProfile::Web
+                )
+            );
+            assert_eq!(
+                runtime.thoughts_read_document,
+                matches!(profile, NestedProfile::Thoughts)
+            );
+            assert_eq!(
+                runtime.thoughts_read_reference,
+                matches!(profile, NestedProfile::References)
+            );
+            assert_eq!(
+                runtime.thoughts_read_only_nested,
+                matches!(profile, NestedProfile::Thoughts | NestedProfile::References)
+            );
+            let roots = runtime.cli_roots.expect("CLI roots");
+            assert_eq!(roots[0], worktree);
+            assert!(roots.contains(&worktree));
+            assert_eq!(
+                roots.contains(&location),
+                matches!(profile, NestedProfile::Thoughts | NestedProfile::References)
+            );
+        }
+    }
+
+    #[test]
+    fn worktree_remains_first_root_and_following_mounts_are_deduplicated() {
+        let base = tempfile::TempDir::new().expect("root fixture");
+        let worktree = base.path().join("z-worktree");
+        let location = base.path().join("a-location");
+        std::fs::create_dir_all(&worktree).expect("worktree root");
+        std::fs::create_dir_all(&location).expect("location root");
+        let runtime = nested_runtime_from_roots(
+            NestedProfile::Thoughts,
+            worktree.clone(),
+            Some(location.clone()),
+            None,
+        );
+        assert_eq!(runtime.cli_roots, Some(vec![worktree.clone(), location]));
+
+        let duplicate = nested_runtime_from_roots(
+            NestedProfile::Thoughts,
+            worktree.clone(),
+            Some(worktree.clone()),
+            None,
+        );
+        assert_eq!(duplicate.cli_roots, Some(vec![worktree]));
+    }
 }

@@ -24,12 +24,18 @@ use crate::patch::apply_chunks;
 use crate::patch::parse_patch;
 use crate::paths::resolve_workspace_path;
 use crate::service::TodoItem;
+#[cfg(test)]
+use crate::service::TodoPriority;
+#[cfg(test)]
+use crate::service::TodoStatus;
 use crate::service::WorkspaceRuntime;
 
 const DEFAULT_READ_LIMIT: usize = 2000;
 const MAX_LINE_LENGTH: usize = 2000;
 const TRUNCATION_SUFFIX: &str = "... (line truncated to 2000 chars)";
 const BINARY_SAMPLE_BYTES: usize = 4096;
+pub const MAX_READ_BYTES: u64 = 20 * 1024 * 1024;
+pub const MAX_READ_LIMIT: usize = 10_000;
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct WorkspaceReadInput {
@@ -183,32 +189,54 @@ fn workspace_read(
 ) -> Result<String, ToolError> {
     let tools = runtime.tools()?;
     let resolved = resolve_workspace_path(tools.root(), &input.file_path)?;
-    let metadata = fs::metadata(&resolved.absolute_path).map_err(|error| match error.kind() {
-        ErrorKind::NotFound => ToolError::NotFound(format!(
-            "Path `{}` was not found. Use workspace-relative paths such as `src/main.rs`.",
-            resolved.display_path
-        )),
-        _ => ToolError::Internal(format!(
-            "Failed to inspect {}: {error}",
-            resolved.display_path
-        )),
-    })?;
-
-    if metadata.is_dir() {
-        return render_directory(
-            &resolved.absolute_path,
-            &resolved.display_path,
-            input.offset,
-            input.limit,
-        );
-    }
-
-    render_file(
+    render_bounded_path(
         &resolved.absolute_path,
         &resolved.display_path,
         input.offset,
         input.limit,
     )
+}
+
+pub fn render_bounded_path(
+    path: &Path,
+    display_path: &str,
+    offset: Option<usize>,
+    limit: Option<usize>,
+) -> Result<String, ToolError> {
+    let metadata = fs::metadata(path).map_err(|error| match error.kind() {
+        ErrorKind::NotFound => ToolError::NotFound(format!(
+            "Path `{display_path}` was not found. Use workspace-relative paths such as `src/main.rs`."
+        )),
+        _ => ToolError::Internal(format!("Failed to inspect {display_path}: {error}")),
+    })?;
+
+    validate_page(offset, limit)?;
+
+    if metadata.is_dir() {
+        return render_directory(path, display_path, offset, limit);
+    }
+
+    if metadata.len() > MAX_READ_BYTES {
+        return Err(ToolError::InvalidInput(format!(
+            "`{display_path}` is larger than the 20 MiB read limit."
+        )));
+    }
+
+    render_file(path, display_path, offset, limit)
+}
+
+fn validate_page(offset: Option<usize>, limit: Option<usize>) -> Result<(), ToolError> {
+    let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
+    if limit > MAX_READ_LIMIT {
+        return Err(ToolError::InvalidInput(format!(
+            "limit must not exceed {MAX_READ_LIMIT}."
+        )));
+    }
+    let start = offset.unwrap_or(1).max(1) - 1;
+    start.checked_add(limit).ok_or_else(|| {
+        ToolError::InvalidInput("offset plus limit exceeds the supported range.".to_string())
+    })?;
+    Ok(())
 }
 
 fn workspace_todowrite(
@@ -474,8 +502,15 @@ fn render_directory(
 ) -> Result<String, ToolError> {
     let mut entries = fs::read_dir(path)
         .map_err(|error| ToolError::Internal(format!("Failed to read {display_path}: {error}")))?
+        .take(MAX_READ_LIMIT + 1)
         .map(|entry| entry.map_err(|error| ToolError::Internal(error.to_string())))
         .collect::<Result<Vec<_>, _>>()?;
+
+    if entries.len() > MAX_READ_LIMIT {
+        return Err(ToolError::InvalidInput(format!(
+            "Directory `{display_path}` contains more than {MAX_READ_LIMIT} entries."
+        )));
+    }
 
     entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_lowercase());
 
@@ -495,7 +530,7 @@ fn render_directory(
 
     let offset = offset.unwrap_or(1).max(1);
     let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
-    let start = offset.saturating_sub(1);
+    let start = offset - 1;
     let sliced = names
         .iter()
         .skip(start)
@@ -534,8 +569,10 @@ fn render_file(
     let mut reader = BufReader::new(cursor.chain(file));
     let offset = offset.unwrap_or(1).max(1);
     let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
-    let start = offset.saturating_sub(1);
-    let end = start.saturating_add(limit);
+    let start = offset - 1;
+    let end = start.checked_add(limit).ok_or_else(|| {
+        ToolError::InvalidInput("offset plus limit exceeds the supported range.".to_string())
+    })?;
     let mut numbered_lines = Vec::new();
     let mut buf = String::new();
     let mut line_no = 0_usize;
@@ -865,6 +902,65 @@ mod tests {
     }
 
     #[test]
+    fn workspace_read_rejects_oversized_files_before_reading() {
+        let dir = TestDir::new("workspace-read-");
+        let file = std::fs::File::create(dir.path.join("large.txt")).unwrap();
+        file.set_len(MAX_READ_BYTES + 1).unwrap();
+        let runtime = runtime_for(&dir);
+
+        let error = workspace_read(
+            &runtime,
+            &WorkspaceReadInput {
+                file_path: String::from("large.txt"),
+                offset: None,
+                limit: None,
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("20 MiB"));
+    }
+
+    #[test]
+    fn workspace_read_rejects_excessive_and_overflowing_pages() {
+        let dir = TestDir::new("workspace-read-");
+        std::fs::write(dir.path.join("notes.txt"), "ok\n").unwrap();
+        let runtime = runtime_for(&dir);
+
+        for (offset, limit, expected) in [
+            (None, Some(MAX_READ_LIMIT + 1), "limit"),
+            (Some(usize::MAX), Some(2), "exceeds"),
+        ] {
+            let error = workspace_read(
+                &runtime,
+                &WorkspaceReadInput {
+                    file_path: String::from("notes.txt"),
+                    offset,
+                    limit,
+                },
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains(expected));
+        }
+    }
+
+    #[test]
+    fn workspace_read_rejects_excessive_directory_limit() {
+        let dir = TestDir::new("workspace-read-");
+        std::fs::create_dir_all(dir.path.join("entries")).unwrap();
+        let runtime = runtime_for(&dir);
+        let error = workspace_read(
+            &runtime,
+            &WorkspaceReadInput {
+                file_path: String::from("entries"),
+                offset: None,
+                limit: Some(MAX_READ_LIMIT + 1),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("limit"));
+    }
+
+    #[test]
     fn workspace_todowrite_replaces_entire_list() {
         let dir = TestDir::new("workspace-todo-");
         let runtime = runtime_for(&dir);
@@ -874,8 +970,8 @@ mod tests {
             WorkspaceTodoWriteInput {
                 todos: vec![TodoItem {
                     content: String::from("one"),
-                    status: String::from("pending"),
-                    priority: String::from("high"),
+                    status: TodoStatus::Pending,
+                    priority: TodoPriority::High,
                 }],
             },
         )
@@ -887,8 +983,8 @@ mod tests {
             WorkspaceTodoWriteInput {
                 todos: vec![TodoItem {
                     content: String::from("two"),
-                    status: String::from("completed"),
-                    priority: String::from("low"),
+                    status: TodoStatus::Completed,
+                    priority: TodoPriority::Low,
                 }],
             },
         )
@@ -899,6 +995,52 @@ mod tests {
         let stored = runtime.tools().unwrap().read_todos().unwrap();
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].content, "two");
+    }
+
+    fn todo(content: impl Into<String>) -> TodoItem {
+        TodoItem {
+            content: content.into(),
+            status: TodoStatus::Pending,
+            priority: TodoPriority::Medium,
+        }
+    }
+
+    #[test]
+    fn workspace_todowrite_validates_count_content_and_duplicates() {
+        let dir = TestDir::new("workspace-todo-");
+        let runtime = runtime_for(&dir);
+        let cases = [
+            vec![todo("")],
+            vec![todo("x".repeat(4097))],
+            vec![todo("same"), todo("same")],
+            (0..101)
+                .map(|index| todo(format!("todo-{index}")))
+                .collect(),
+        ];
+        for todos in cases {
+            assert!(workspace_todowrite(&runtime, WorkspaceTodoWriteInput { todos }).is_err());
+        }
+    }
+
+    #[test]
+    fn workspace_todowrite_state_resets_with_new_runtime() {
+        let dir = TestDir::new("workspace-todo-");
+        let first = runtime_for(&dir);
+        workspace_todowrite(
+            &first,
+            WorkspaceTodoWriteInput {
+                todos: vec![todo("ephemeral")],
+            },
+        )
+        .unwrap();
+        let restarted = runtime_for(&dir);
+        assert!(restarted.tools().unwrap().read_todos().unwrap().is_empty());
+    }
+
+    #[test]
+    fn todo_enums_reject_unknown_values() {
+        let json = r#"{"content":"x","status":"blocked","priority":"urgent"}"#;
+        assert!(serde_json::from_str::<TodoItem>(json).is_err());
     }
 
     #[tokio::test]

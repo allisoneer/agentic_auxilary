@@ -11,6 +11,8 @@ use agentic_tools_core::ToolError;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::path::Path;
+use std::path::PathBuf;
 
 use thoughts_tool::config::RepoConfigManager;
 use thoughts_tool::config::extract_org_repo_from_url;
@@ -33,6 +35,113 @@ use thoughts_tool::mount::MountSpace;
 use thoughts_tool::utils::logging::log_tool_call;
 
 use crate::readiness::ThoughtsMcpReadinessGate;
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct ThoughtsReadInput {
+    #[serde(rename = "filePath")]
+    pub file_path: String,
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Clone)]
+pub struct ReadDocumentTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
+
+#[derive(Clone)]
+pub struct ReadReferenceTool {
+    pub(crate) readiness: ThoughtsMcpReadinessGate,
+}
+
+impl Tool for ReadDocumentTool {
+    type Input = ThoughtsReadInput;
+    type Output = String;
+    const NAME: &'static str = "thoughts_read_document";
+    const DESCRIPTION: &'static str =
+        "Read a bounded text file or directory inside the active Thoughts work directory.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
+        Box::pin(async move {
+            ensure_ready(&readiness).await?;
+            let cwd =
+                std::env::current_dir().map_err(|error| ToolError::Internal(error.to_string()))?;
+            let base = thoughts_tool::workspace::resolve_active_work_base_read_only(&cwd)
+                .map_err(|error| ToolError::Internal(error.to_string()))?;
+            read_from_base(&base, &input)
+        })
+    }
+}
+
+impl Tool for ReadReferenceTool {
+    type Input = ThoughtsReadInput;
+    type Output = String;
+    const NAME: &'static str = "thoughts_read_reference";
+    const DESCRIPTION: &'static str =
+        "Read a bounded text file or directory inside the configured References mount.";
+
+    fn call(
+        &self,
+        input: Self::Input,
+        _ctx: &ToolContext,
+    ) -> BoxFuture<'static, Result<Self::Output, ToolError>> {
+        let readiness = self.readiness.clone();
+        Box::pin(async move {
+            ensure_ready(&readiness).await?;
+            let base = references_base()?;
+            read_from_base(&base, &input)
+        })
+    }
+}
+
+fn references_base() -> Result<PathBuf, ToolError> {
+    let cwd = std::env::current_dir().map_err(|error| ToolError::Internal(error.to_string()))?;
+    let base = thoughts_tool::workspace::resolve_references_base_read_only(&cwd)
+        .map_err(|error| ToolError::Internal(error.to_string()))?;
+    std::fs::canonicalize(base)
+        .map_err(|error| ToolError::Internal(format!("Failed to resolve References base: {error}")))
+}
+
+fn read_from_base(base: &Path, input: &ThoughtsReadInput) -> Result<String, ToolError> {
+    if input.file_path.trim().is_empty() {
+        return Err(ToolError::InvalidInput("filePath is required.".to_string()));
+    }
+    let base = std::fs::canonicalize(base)
+        .map_err(|error| ToolError::Internal(format!("Failed to resolve read base: {error}")))?;
+    let requested = PathBuf::from(&input.file_path);
+    let joined = if requested.is_absolute() {
+        requested
+    } else {
+        base.join(requested)
+    };
+    let canonical = std::fs::canonicalize(&joined).map_err(|error| {
+        ToolError::InvalidInput(format!("Failed to resolve `{}`: {error}", input.file_path))
+    })?;
+    if !canonical.starts_with(&base) {
+        return Err(ToolError::InvalidInput(format!(
+            "`{}` resolves outside the configured read base.",
+            input.file_path
+        )));
+    }
+    let display = canonical
+        .strip_prefix(&base)
+        .map_err(|error| ToolError::Internal(error.to_string()))?
+        .to_string_lossy()
+        .replace('\\', "/");
+    workspace_tools::tools::render_bounded_path(
+        &canonical,
+        if display.is_empty() { "." } else { &display },
+        input.offset,
+        input.limit,
+    )
+}
 
 /// Map `anyhow::Error` to `agentic_tools_core::ToolError`.
 ///
@@ -578,6 +687,69 @@ impl Tool for GetTemplateTool {
 mod tests {
     use super::*;
     use agentic_tools_core::Tool;
+    use tempfile::TempDir;
+
+    fn read_input(path: impl Into<String>) -> ThoughtsReadInput {
+        ThoughtsReadInput {
+            file_path: path.into(),
+            offset: None,
+            limit: None,
+        }
+    }
+
+    #[test]
+    fn specialized_read_supports_files_directories_and_external_bases() {
+        let base = TempDir::new().unwrap();
+        std::fs::create_dir_all(base.path().join("plans")).unwrap();
+        std::fs::write(base.path().join("plans/approved.md"), "approved\n").unwrap();
+
+        let file = read_from_base(base.path(), &read_input("plans/approved.md")).unwrap();
+        assert!(file.contains("1: approved"));
+        let directory = read_from_base(base.path(), &read_input("plans")).unwrap();
+        assert!(directory.contains("approved.md"));
+    }
+
+    #[test]
+    fn specialized_read_rejects_absolute_and_traversal_escape() {
+        let base = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        std::fs::write(outside.path().join("secret.txt"), "secret").unwrap();
+        for path in [
+            outside.path().join("secret.txt").display().to_string(),
+            String::from("../secret.txt"),
+        ] {
+            assert!(read_from_base(base.path(), &read_input(path)).is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn specialized_read_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let base = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        std::fs::write(outside.path().join("secret.txt"), "secret").unwrap();
+        symlink(
+            outside.path().join("secret.txt"),
+            base.path().join("link.txt"),
+        )
+        .unwrap();
+        assert!(read_from_base(base.path(), &read_input("link.txt")).is_err());
+    }
+
+    #[test]
+    fn specialized_read_reuses_size_and_utf8_bounds() {
+        let base = TempDir::new().unwrap();
+        let large = std::fs::File::create(base.path().join("large.txt")).unwrap();
+        large
+            .set_len(workspace_tools::tools::MAX_READ_BYTES + 1)
+            .unwrap();
+        assert!(read_from_base(base.path(), &read_input("large.txt")).is_err());
+
+        std::fs::write(base.path().join("invalid.txt"), [0xFF]).unwrap();
+        assert!(read_from_base(base.path(), &read_input("invalid.txt")).is_err());
+    }
 
     #[tokio::test]
     async fn get_template_fails_when_readiness_fails() {

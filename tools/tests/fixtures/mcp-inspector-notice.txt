@@ -1,0 +1,1 @@
+npm notice inspector requested tools/list

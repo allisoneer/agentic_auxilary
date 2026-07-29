@@ -3,6 +3,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,9 +14,28 @@ use tokio::sync::Mutex as AsyncMutex;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct TodoItem {
     pub content: String,
-    pub status: String,
-    pub priority: String,
+    pub status: TodoStatus,
+    pub priority: TodoPriority,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TodoStatus {
+    Pending,
+    InProgress,
+    Completed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TodoPriority {
+    Low,
+    Medium,
+    High,
+}
+
+const MAX_TODOS: usize = 100;
+const MAX_TODO_CONTENT_BYTES: usize = 4096;
 
 #[derive(Clone)]
 pub struct WorkspaceRuntime {
@@ -78,6 +98,30 @@ impl WorkspaceTools {
     }
 
     pub fn replace_todos(&self, todos: Vec<TodoItem>) -> Result<Vec<TodoItem>, ToolError> {
+        if todos.len() > MAX_TODOS {
+            return Err(ToolError::InvalidInput(format!(
+                "A todo list may contain at most {MAX_TODOS} items."
+            )));
+        }
+        let mut unique = HashSet::with_capacity(todos.len());
+        for todo in &todos {
+            if todo.content.trim().is_empty() {
+                return Err(ToolError::InvalidInput(
+                    "Todo content must not be empty.".to_string(),
+                ));
+            }
+            if todo.content.len() > MAX_TODO_CONTENT_BYTES {
+                return Err(ToolError::InvalidInput(format!(
+                    "Todo content must not exceed {MAX_TODO_CONTENT_BYTES} UTF-8 bytes."
+                )));
+            }
+            if !unique.insert(todo.content.as_str()) {
+                return Err(ToolError::InvalidInput(format!(
+                    "Duplicate todo content is not allowed: `{}`.",
+                    todo.content
+                )));
+            }
+        }
         let mut guard = self
             .todos
             .write()

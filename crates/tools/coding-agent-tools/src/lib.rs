@@ -20,8 +20,8 @@ use agentic_config::types::CliToolsConfig;
 use agentic_config::types::SubagentsConfig;
 use agentic_tools_core::ToolError;
 use agentic_tools_utils::pagination::paginate_slice;
-use claudecode::types::Result as ClaudeResult;
 use std::future::Future;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use types::AgentOutput;
@@ -35,6 +35,7 @@ use types::SortOrder;
 
 /// Select the first non-empty (after trimming) text from result.result or result.content.
 /// Prefers `result.result` over `result.content`, but rejects empty/whitespace-only strings.
+#[cfg(test)]
 fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
     result
         .result
@@ -51,15 +52,42 @@ fn pick_non_empty_text(result: &claudecode::types::Result) -> Option<String> {
 }
 
 const ASK_AGENT_TIMEOUT_CLEANUP_TIMEOUT_SECS: u64 = 5;
-const CLAUDE_TOOL_LSP: &str = "LSP";
+
+pub(crate) struct AgentRunOutcome {
+    pub outcome: claudecode::SessionOutcome,
+    pub enabled_tools: Vec<String>,
+    pub model: claudecode::Model,
+}
+
+fn redact_diagnostic_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map {
+                let key = key.to_ascii_lowercase();
+                if ["key", "token", "secret", "password", "authorization"]
+                    .iter()
+                    .any(|needle| key.contains(needle))
+                {
+                    *child = serde_json::Value::String("<redacted>".to_string());
+                } else {
+                    redact_diagnostic_value(child);
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            values.iter_mut().for_each(redact_diagnostic_value);
+        }
+        _ => {}
+    }
+}
 
 fn build_subagent_session_config(
     query: String,
     model: claudecode::types::Model,
     system_prompt: String,
-    builtin_tools: Vec<String>,
     enabled_tools: Vec<String>,
     mcp_config: claudecode::config::MCPConfig,
+    working_dir: PathBuf,
 ) -> claudecode::Result<claudecode::config::SessionConfig> {
     use claudecode::config::SessionConfig;
     use claudecode::types::OutputFormat;
@@ -67,24 +95,27 @@ fn build_subagent_session_config(
 
     SessionConfig::builder(query)
         .model(model)
-        .output_format(OutputFormat::Text)
+        .output_format(OutputFormat::StreamingJson)
         .permission_mode(PermissionMode::DontAsk)
         .system_prompt(system_prompt)
-        .tools(builtin_tools)
+        .tools(Vec::new())
         .allowed_tools(enabled_tools)
-        .disallow_tool(CLAUDE_TOOL_LSP)
+        .setting_sources(Vec::new())
+        .working_dir(working_dir)
         .mcp_config(mcp_config)
+        .mcp_server_always_load("agentic-mcp", true)
         .strict_mcp_config(true)
         .build()
 }
 
-async fn wait_for_claude_result<F, C, CFn>(
+async fn wait_for_claude_result<T, F, C, CFn>(
     ctx: &agentic_tools_core::ToolContext,
     wait_fut: F,
     cancel_fn: CFn,
-) -> Result<ClaudeResult, ToolError>
+) -> Result<T, ToolError>
 where
-    F: Future<Output = claudecode::Result<ClaudeResult>> + Send,
+    T: Send,
+    F: Future<Output = claudecode::Result<T>> + Send,
     C: Future<Output = claudecode::Result<()>> + Send,
     CFn: Fn() -> C + Send + Sync,
 {
@@ -101,14 +132,15 @@ where
     }
 }
 
-async fn wait_for_claude_result_with_timeout<F, C, CFn>(
+async fn wait_for_claude_result_with_timeout<T, F, C, CFn>(
     ctx: &agentic_tools_core::ToolContext,
     wait_fut: F,
     cancel_fn: CFn,
     timeout_secs: u64,
-) -> Result<ClaudeResult, ToolError>
+) -> Result<T, ToolError>
 where
-    F: Future<Output = claudecode::Result<ClaudeResult>> + Send,
+    T: Send,
+    F: Future<Output = claudecode::Result<T>> + Send,
     C: Future<Output = claudecode::Result<()>> + Send,
     CFn: Fn() -> C + Send + Sync,
 {
@@ -194,6 +226,8 @@ pub struct CodingAgentTools {
     just_execute_pager: Arc<just::execute_pager::ExecuteTranscriptCache>,
     /// Single-flight locks for just execute transcript state
     just_execute_singleflight: Arc<just::execute_pager::SingleFlight>,
+    /// Canonical process-local roots for nested read-only CLI discovery.
+    cli_roots: Option<Arc<Vec<PathBuf>>>,
 }
 
 impl Default for CodingAgentTools {
@@ -208,6 +242,14 @@ impl CodingAgentTools {
     }
 
     pub fn with_config(subagents: SubagentsConfig, cli_tools: CliToolsConfig) -> Self {
+        Self::with_config_and_roots(subagents, cli_tools, None)
+    }
+
+    pub fn with_config_and_roots(
+        subagents: SubagentsConfig,
+        cli_tools: CliToolsConfig,
+        cli_roots: Option<Vec<PathBuf>>,
+    ) -> Self {
         Self {
             subagents,
             cli_tools,
@@ -216,12 +258,103 @@ impl CodingAgentTools {
             just_pager: Arc::new(just::pager::PaginationCache::new()),
             just_execute_pager: Arc::new(just::execute_pager::ExecuteTranscriptCache::new()),
             just_execute_singleflight: Arc::new(just::execute_pager::SingleFlight::new()),
+            cli_roots: cli_roots.map(Arc::new),
         }
+    }
+
+    fn resolve_cli_path(&self, path: &str) -> Result<String, String> {
+        self.cli_roots.as_deref().map_or_else(
+            || paths::to_abs_string(path),
+            |roots| paths::to_abs_string_in_roots(path, roots),
+        )
     }
 }
 
 // Removed universal-tool-core macros; Tool impls live in tools.rs
 impl CodingAgentTools {
+    pub(crate) async fn run_agent_outcome(
+        &self,
+        agent_type: types::AgentType,
+        location: types::AgentLocation,
+        query: String,
+        ctx: &agentic_tools_core::ToolContext,
+    ) -> Result<AgentRunOutcome, ToolError> {
+        use claudecode::client::Client;
+        use claudecode::mcp::validate::ValidateOptions;
+        use claudecode::mcp::validate::ensure_valid_mcp_config;
+        use std::collections::HashMap;
+        use std::collections::HashSet;
+
+        if query.trim().is_empty() {
+            return Err(ToolError::InvalidInput("Query cannot be empty".into()));
+        }
+        let model =
+            agent::model_for(agent_type, &self.subagents).map_err(ToolError::InvalidInput)?;
+        let cwd =
+            std::env::current_dir().map_err(|error| ToolError::Internal(error.to_string()))?;
+        let worktree = thoughts_tool::git::utils::find_repo_root(&cwd)
+            .and_then(|root| std::fs::canonicalize(root).map_err(anyhow::Error::from))
+            .map_err(|error| {
+                ToolError::Internal(format!("Failed to resolve current worktree: {error}"))
+            })?;
+        let guidance = agent::guidance::tracked_guidance(&worktree).map_err(|error| {
+            ToolError::Internal(format!("Failed to load tracked guidance: {error}"))
+        })?;
+        let system_prompt =
+            agent::config::compose_prompt_with_guidance(agent_type, location, &guidance);
+        let enabled_tools = agent::enabled_tools_for(agent_type, location);
+        let mcp_config = agent::build_mcp_config(location, &enabled_tools);
+        let expected_bare = agent::config::agentic_mcp_allowlist_from(&enabled_tools);
+        let opts = ValidateOptions {
+            working_dir: Some(worktree.clone()),
+            expected_tools: HashMap::from([(
+                "agentic-mcp".to_string(),
+                expected_bare.into_iter().collect::<HashSet<_>>(),
+            )]),
+            ..Default::default()
+        };
+        if let Err(error) = ensure_valid_mcp_config(&mcp_config, &opts).await {
+            use std::fmt::Write;
+            let mut details = String::new();
+            for (name, error) in &error.errors {
+                let _ = writeln!(details, "  {name}: {error}");
+            }
+            return Err(ToolError::Internal(format!(
+                "ask_agent unavailable: MCP config validation failed.\n{details}"
+            )));
+        }
+
+        let config = build_subagent_session_config(
+            query,
+            model,
+            system_prompt,
+            enabled_tools.clone(),
+            mcp_config,
+            worktree,
+        )
+        .map_err(|error| ToolError::Internal(format!("Failed to build session config: {error}")))?;
+        let client = Client::new().await.map_err(|error| {
+            ToolError::Internal(format!(
+                "Claude CLI not found or not runnable: {error}. Ensure 'claude' is installed and available in PATH."
+            ))
+        })?;
+        let session = client.launch(config).await.map_err(|error| {
+            ToolError::Internal(format!("Failed to start Claude session: {error}"))
+        })?;
+        let outcome = wait_for_claude_result_with_timeout(
+            ctx,
+            session.complete(),
+            || session.cancel(),
+            self.subagents.runtime_timeout_secs,
+        )
+        .await?;
+        Ok(AgentRunOutcome {
+            outcome,
+            enabled_tools,
+            model,
+        })
+    }
+
     /// List files and directories (gitignore-aware)
     #[expect(
         clippy::unused_async,
@@ -250,7 +383,7 @@ impl CodingAgentTools {
 
         // Resolve path
         let path_str = path.unwrap_or_else(|| ".".into());
-        let abs_root = match paths::to_abs_string(&path_str) {
+        let abs_root = match self.resolve_cli_path(&path_str) {
             Ok(s) => s,
             Err(msg) => {
                 log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
@@ -331,7 +464,7 @@ impl CodingAgentTools {
 
             // Fill cache if empty or expired
             if st.is_empty() || st.is_expired() {
-                match walker::list(&cfg) {
+                match walker::list_with_roots(&cfg, self.cli_roots.as_deref().map(Vec::as_slice)) {
                     Ok(result) => st.reset(result.entries, result.warnings, page_size),
                     Err(e) => {
                         drop(st);
@@ -402,10 +535,6 @@ impl CodingAgentTools {
         query: String,
         ctx: &agentic_tools_core::ToolContext,
     ) -> Result<AgentOutput, ToolError> {
-        use claudecode::client::Client;
-        use claudecode::mcp::validate::ValidateOptions;
-        use claudecode::mcp::validate::ensure_valid_mcp_config;
-
         // Start logging context
         let log_ctx = logging::ToolLogCtx::start("ask_agent");
         let agent_type = agent_type.unwrap_or_default();
@@ -414,7 +543,8 @@ impl CodingAgentTools {
         let req_json = serde_json::json!({
             "agent_type": format!("{agent_type:?}").to_lowercase(),
             "location": format!("{location:?}").to_lowercase(),
-            "query": &query,
+            "query": "<redacted>",
+            "query_bytes": query.len(),
             "runtime_timeout_secs": self.subagents.runtime_timeout_secs,
         });
 
@@ -431,112 +561,11 @@ impl CodingAgentTools {
             return Err(ToolError::InvalidInput("Query cannot be empty".into()));
         }
 
-        // Compose configuration
-        let model = agent::model_for(agent_type, &self.subagents);
-        let system_prompt = agent::compose_prompt(agent_type, location);
-        let enabled_tools = agent::enabled_tools_for(agent_type, location);
-
-        // Split enabled tools into built-in vs MCP
-        let (builtin_tools, _mcp_tools): (Vec<String>, Vec<String>) = enabled_tools
-            .iter()
-            .cloned()
-            .partition(|t| !t.starts_with("mcp__"));
-
-        // Build MCP config with --allow flag for tool filtering
-        let mcp_config = agent::build_mcp_config(location, &enabled_tools);
-
-        // Validate MCP servers before launching (spawn, handshake, tools/list)
-        let opts = ValidateOptions::default();
-        if let Err(e) = ensure_valid_mcp_config(&mcp_config, &opts).await {
-            use std::fmt::Write;
-            let mut details = String::new();
-            for (name, err) in &e.errors {
-                let _ = writeln!(details, "  {name}: {err}");
-            }
-            let error_msg =
-                format!("ask_agent unavailable: MCP config validation failed.\n{details}");
-            log_ctx.finish(
-                req_json,
-                None,
-                false,
-                Some(error_msg.clone()),
-                None,
-                Some(model.to_string()),
-                None,
-            );
-            return Err(ToolError::Internal(error_msg));
-        }
-
-        let config = match build_subagent_session_config(
-            query,
-            model,
-            system_prompt,
-            builtin_tools,
-            enabled_tools.clone(),
-            mcp_config,
-        ) {
-            Ok(c) => c,
-            Err(e) => {
-                let error_msg = format!("Failed to build session config: {e}");
-                log_ctx.finish(
-                    req_json,
-                    None,
-                    false,
-                    Some(error_msg.clone()),
-                    None,
-                    Some(model.to_string()),
-                    None,
-                );
-                return Err(ToolError::Internal(error_msg));
-            }
-        };
-
-        // Ensure 'claude' binary exists
-        let client = match Client::new().await {
-            Ok(c) => c,
-            Err(e) => {
-                let error_msg = format!(
-                    "Claude CLI not found or not runnable: {e}. Ensure 'claude' is installed and available in PATH."
-                );
-                log_ctx.finish(
-                    req_json,
-                    None,
-                    false,
-                    Some(error_msg.clone()),
-                    None,
-                    Some(model.to_string()),
-                    None,
-                );
-                return Err(ToolError::Internal(error_msg));
-            }
-        };
-
-        let session = match client.launch(config).await {
-            Ok(session) => session,
-            Err(e) => {
-                let error_msg = format!("Failed to start Claude session: {e}");
-                log_ctx.finish(
-                    req_json,
-                    None,
-                    false,
-                    Some(error_msg.clone()),
-                    None,
-                    Some(model.to_string()),
-                    None,
-                );
-                return Err(ToolError::Internal(error_msg));
-            }
-        };
-
-        let result = match wait_for_claude_result_with_timeout(
-            ctx,
-            session.wait(),
-            || session.cancel(),
-            self.subagents.runtime_timeout_secs,
-        )
-        .await
+        let run = match self
+            .run_agent_outcome(agent_type, location, query, ctx)
+            .await
         {
-            Ok(result) => result,
+            Ok(run) => run,
             Err(ToolError::Cancelled { .. }) => {
                 log_ctx.finish(
                     req_json,
@@ -544,70 +573,55 @@ impl CodingAgentTools {
                     false,
                     Some("Request cancelled".into()),
                     None,
-                    Some(model.to_string()),
+                    None,
                     None,
                 );
                 return Err(ToolError::cancelled(None));
             }
             Err(e) => {
-                log_ctx.finish(
-                    req_json,
-                    None,
-                    false,
-                    Some(e.to_string()),
-                    None,
-                    Some(model.to_string()),
-                    None,
-                );
+                log_ctx.finish(req_json, None, false, Some(e.to_string()), None, None, None);
                 return Err(e);
             }
         };
 
-        if result.is_error {
-            let error_msg = result
-                .error
-                .unwrap_or_else(|| "Claude session returned an error".into());
-            log_ctx.finish(
-                req_json,
-                None,
-                false,
-                Some(error_msg.clone()),
-                None,
-                Some(model.to_string()),
-                None,
-            );
-            return Err(ToolError::Internal(error_msg));
-        }
-
-        // Return plain text output (reject empty/whitespace-only strings)
-        if let Some(text) = pick_non_empty_text(&result) {
-            // Write markdown response file and capture timestamp for consistent logging
-            let (response_file, completed_at) = log_ctx
-                .write_markdown_response(&text)
-                .map_or((None, None), |(f, ts)| (Some(f), Some(ts)));
-            log_ctx.finish(
-                req_json,
-                response_file,
-                true,
-                None,
-                None,
-                Some(model.to_string()),
-                completed_at,
-            );
-            return Ok(AgentOutput::new(text));
-        }
-
-        let error_msg = "Claude session produced no text output (empty or whitespace-only)";
+        let mut summary = serde_json::json!({
+            "exit_code": run.outcome.exit_code,
+            "stderr": &run.outcome.stderr,
+            "raw_stdout": &run.outcome.raw_stdout,
+            "transcript": run.outcome.transcript.iter().map(|event| &event.raw).collect::<Vec<_>>(),
+            "invocation": &run.outcome.invocation,
+        });
+        redact_diagnostic_value(&mut summary);
+        let text = match agent::evidence::validate_outcome(&run.outcome, &run.enabled_tools) {
+            Ok(text) => text,
+            Err(error_msg) => {
+                log_ctx.finish(
+                    req_json,
+                    None,
+                    false,
+                    Some(error_msg.clone()),
+                    Some(summary),
+                    Some(run.model.to_string()),
+                    None,
+                );
+                return Err(ToolError::Internal(error_msg));
+            }
+        };
+        let (response_file, completed_at) = log_ctx
+            .write_markdown_response(&text)
+            .map_or((None, None), |(file, timestamp)| {
+                (Some(file), Some(timestamp))
+            });
         log_ctx.finish(
             req_json,
+            response_file,
+            true,
             None,
-            false,
-            Some(error_msg.into()),
-            None,
-            Some(model.to_string()),
-            None,
+            Some(summary),
+            Some(run.model.to_string()),
+            completed_at,
         );
-        Err(ToolError::Internal(error_msg.to_string()))
+        Ok(AgentOutput::new(text))
     }
 
     /// Search the codebase using a regex pattern (gitignore-aware).
@@ -661,7 +675,7 @@ impl CodingAgentTools {
         });
 
         let path_str = path.unwrap_or_else(|| ".".into());
-        let abs_root = match paths::to_abs_string(&path_str) {
+        let abs_root = match self.resolve_cli_path(&path_str) {
             Ok(s) => s,
             Err(msg) => {
                 log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
@@ -691,6 +705,7 @@ impl CodingAgentTools {
             include_binary: include_binary.unwrap_or(false),
             head_limit: head_limit.unwrap_or(self.cli_tools.grep_default_limit as usize),
             offset: offset.unwrap_or(0),
+            allowed_roots: self.cli_roots.as_deref().cloned(),
         };
 
         match grep::run(cfg) {
@@ -741,7 +756,7 @@ impl CodingAgentTools {
         });
 
         let path_str = path.unwrap_or_else(|| ".".into());
-        let abs_root = match paths::to_abs_string(&path_str) {
+        let abs_root = match self.resolve_cli_path(&path_str) {
             Ok(s) => s,
             Err(msg) => {
                 log_ctx.finish(req_json, None, false, Some(msg.clone()), None, None, None);
@@ -763,6 +778,7 @@ impl CodingAgentTools {
             sort: sort.unwrap_or_default(),
             head_limit: head_limit.unwrap_or(self.cli_tools.glob_default_limit as usize),
             offset: offset.unwrap_or(0),
+            allowed_roots: self.cli_roots.as_deref().cloned(),
         };
 
         match glob::run(cfg) {
@@ -1132,6 +1148,10 @@ impl CodingAgentTools {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "tests should fail immediately on fixture and assertion errors"
+)]
 mod ask_agent_filter_tests {
     use super::*;
     use agentic_config::types::CliToolsConfig;
@@ -1243,67 +1263,39 @@ mod ask_agent_filter_tests {
     }
 
     #[test]
-    fn ask_agent_config_disallows_lsp_for_analyzer_codebase() {
+    fn ask_agent_config_is_hermetic_and_zero_builtin() {
         let agent_type = crate::types::AgentType::Analyzer;
         let location = crate::types::AgentLocation::Codebase;
-        let model = agent::model_for(agent_type, &SubagentsConfig::default());
+        let model = agent::model_for(agent_type, &SubagentsConfig::default()).unwrap();
         let system_prompt = agent::compose_prompt(agent_type, location);
         let enabled_tools = agent::enabled_tools_for(agent_type, location);
-        let (builtin_tools, _mcp_tools): (Vec<String>, Vec<String>) = enabled_tools
-            .iter()
-            .cloned()
-            .partition(|tool| !tool.starts_with("mcp__"));
+        let working_dir = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
 
         let config = build_subagent_session_config(
             "query".to_string(),
             model,
             system_prompt,
-            builtin_tools.clone(),
             enabled_tools.clone(),
             agent::build_mcp_config(location, &enabled_tools),
-        )
-        .unwrap_or_else(|e| panic!("session config build failed: {e}"));
-
-        assert_eq!(config.tools.as_ref(), Some(&builtin_tools));
-        assert!(
-            config
-                .disallowed_tools
-                .as_ref()
-                .is_some_and(|tools| tools.iter().any(|tool| tool == CLAUDE_TOOL_LSP))
-        );
-    }
-
-    #[test]
-    fn ask_agent_config_disallows_lsp_when_builtin_tools_are_empty() {
-        let agent_type = crate::types::AgentType::Locator;
-        let location = crate::types::AgentLocation::Codebase;
-        let model = agent::model_for(agent_type, &SubagentsConfig::default());
-        let system_prompt = agent::compose_prompt(agent_type, location);
-        let enabled_tools = agent::enabled_tools_for(agent_type, location);
-        let (builtin_tools, _mcp_tools): (Vec<String>, Vec<String>) = enabled_tools
-            .iter()
-            .cloned()
-            .partition(|tool| !tool.starts_with("mcp__"));
-
-        assert!(builtin_tools.is_empty());
-
-        let config = build_subagent_session_config(
-            "query".to_string(),
-            model,
-            system_prompt,
-            builtin_tools,
-            enabled_tools.clone(),
-            agent::build_mcp_config(location, &enabled_tools),
+            working_dir.clone(),
         )
         .unwrap_or_else(|e| panic!("session config build failed: {e}"));
 
         assert!(config.tools.as_ref().is_some_and(Vec::is_empty));
-        assert!(
-            config
-                .disallowed_tools
-                .as_ref()
-                .is_some_and(|tools| tools.iter().any(|tool| tool == CLAUDE_TOOL_LSP))
+        assert!(config.setting_sources.as_ref().is_some_and(Vec::is_empty));
+        assert_eq!(config.allowed_tools.as_ref(), Some(&enabled_tools));
+        assert_eq!(
+            config.output_format,
+            claudecode::OutputFormat::StreamingJson
         );
+        assert_eq!(
+            config.permission_mode,
+            Some(claudecode::PermissionMode::DontAsk)
+        );
+        assert!(config.strict_mcp_config);
+        assert!(config.mcp_server_load_policy.always_load("agentic-mcp"));
+        assert_eq!(config.working_dir.as_ref(), Some(&working_dir));
+        assert!(config.disallowed_tools.is_none());
     }
 
     #[tokio::test]

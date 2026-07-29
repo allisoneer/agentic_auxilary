@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -81,8 +82,7 @@ impl fmt::Display for InputFormat {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum Content {
     Text {
         text: String,
@@ -96,6 +96,121 @@ pub enum Content {
         tool_use_id: String,
         content: String,
     },
+    /// Tool use whose input is not representable by the legacy object field shape.
+    StructuredToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    /// Tool result carrying structured content or explicit error state.
+    StructuredToolResult {
+        tool_use_id: String,
+        content: serde_json::Value,
+        is_error: bool,
+    },
+    Unknown(serde_json::Value),
+}
+
+impl<'de> Deserialize<'de> for Content {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let kind = value.get("type").and_then(serde_json::Value::as_str);
+        match kind {
+            Some("text") => Ok(Self::Text {
+                text: required_string::<D::Error>(&value, "text")?,
+            }),
+            Some("tool_use") => {
+                let id = required_string::<D::Error>(&value, "id")?;
+                let name = required_string::<D::Error>(&value, "name")?;
+                let input = value
+                    .get("input")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                match input {
+                    serde_json::Value::Object(input) => Ok(Self::ToolUse {
+                        id,
+                        name,
+                        input: input.into_iter().collect(),
+                    }),
+                    input => Ok(Self::StructuredToolUse { id, name, input }),
+                }
+            }
+            Some("tool_result") => {
+                let tool_use_id = required_string::<D::Error>(&value, "tool_use_id")?;
+                let content = value
+                    .get("content")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                let is_error = value
+                    .get("is_error")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+                match content {
+                    serde_json::Value::String(content) if !is_error => Ok(Self::ToolResult {
+                        tool_use_id,
+                        content,
+                    }),
+                    content => Ok(Self::StructuredToolResult {
+                        tool_use_id,
+                        content,
+                        is_error,
+                    }),
+                }
+            }
+            _ => Ok(Self::Unknown(value)),
+        }
+    }
+}
+
+fn required_string<E: serde::de::Error>(
+    value: &serde_json::Value,
+    key: &str,
+) -> std::result::Result<String, E> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| serde::de::Error::custom(format!("missing string field `{key}`")))
+}
+
+impl Serialize for Content {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let value = match self {
+            Self::Text { text } => serde_json::json!({"type": "text", "text": text}),
+            Self::ToolUse { id, name, input } => {
+                serde_json::json!({"type": "tool_use", "id": id, "name": name, "input": input})
+            }
+            Self::ToolResult {
+                tool_use_id,
+                content,
+            } => serde_json::json!({
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": content,
+            }),
+            Self::StructuredToolUse { id, name, input } => {
+                serde_json::json!({"type": "tool_use", "id": id, "name": name, "input": input})
+            }
+            Self::StructuredToolResult {
+                tool_use_id,
+                content,
+                is_error,
+            } => serde_json::json!({
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": content,
+                "is_error": is_error,
+            }),
+            Self::Unknown(raw) => raw.clone(),
+        };
+        value.serialize(serializer)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,12 +314,59 @@ pub enum Event {
     System(SystemEvent),
     #[serde(rename = "assistant")]
     Assistant(AssistantEvent),
+    #[serde(rename = "user")]
+    User(UserEvent),
     #[serde(rename = "result")]
     Result(ResultEvent),
     #[serde(rename = "error")]
     Error(ErrorEvent),
     #[serde(other)]
     Unknown,
+}
+
+/// One parsed event together with its exact original JSON payload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawEvent {
+    pub raw: serde_json::Value,
+    pub event: Event,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InvocationMetadata {
+    pub sdk_version: String,
+    pub claude_version: Option<String>,
+    pub argv: Vec<String>,
+    pub working_dir: Option<PathBuf>,
+    pub setting_sources: Option<Vec<String>>,
+    pub environment_keys: Vec<String>,
+    pub mcp_config: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionOutcome {
+    pub result: Result,
+    pub transcript: Vec<RawEvent>,
+    pub exit_code: Option<i32>,
+    pub raw_stdout: String,
+    pub stderr: String,
+    pub invocation: InvocationMetadata,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionFailure {
+    pub message: String,
+    pub transcript: Vec<RawEvent>,
+    pub exit_code: Option<i32>,
+    pub raw_stdout: String,
+    pub stderr: String,
+    pub invocation: InvocationMetadata,
+}
+
+impl RawEvent {
+    pub fn from_value(raw: serde_json::Value) -> serde_json::Result<Self> {
+        let event = serde_json::from_value(raw.clone())?;
+        Ok(Self { raw, event })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -234,17 +396,33 @@ pub struct SystemEvent {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<Vec<MCPStatus>>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_server_errors: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssistantEvent {
     pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_tool_use_id: Option<String>,
+    pub message: Message,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserEvent {
+    pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_tool_use_id: Option<String>,
     pub message: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultEvent {
     pub session_id: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtype: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
@@ -286,6 +464,25 @@ impl Content {
     pub fn get_text(&self) -> Option<&str> {
         match self {
             Self::Text { text } => Some(text.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn tool_result(&self) -> Option<(&str, serde_json::Value, bool)> {
+        match self {
+            Self::ToolResult {
+                tool_use_id,
+                content,
+            } => Some((
+                tool_use_id,
+                serde_json::Value::String(content.clone()),
+                false,
+            )),
+            Self::StructuredToolResult {
+                tool_use_id,
+                content,
+                is_error,
+            } => Some((tool_use_id, content.clone(), *is_error)),
             _ => None,
         }
     }
@@ -373,6 +570,22 @@ mod tests {
             _ => panic!("Expected Assistant event"),
         }
 
+        // Test user tool-result event
+        let json = r#"{"type":"user","session_id":"123","parent_tool_use_id":"parent-1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":{"nonce":"ok"},"is_error":false}]}}"#;
+        let event: Event = serde_json::from_str(json).unwrap();
+        match event {
+            Event::User(user) => {
+                assert_eq!(user.session_id, "123");
+                assert_eq!(user.parent_tool_use_id.as_deref(), Some("parent-1"));
+                let (tool_use_id, content, is_error) =
+                    user.message.content[0].tool_result().unwrap();
+                assert_eq!(tool_use_id, "call-1");
+                assert_eq!(content, serde_json::json!({"nonce": "ok"}));
+                assert!(!is_error);
+            }
+            _ => panic!("Expected User event"),
+        }
+
         // Test result event
         let json = r#"{"type":"result","session_id":"123","total_cost_usd":0.05,"num_turns":2}"#;
         let event: Event = serde_json::from_str(json).unwrap();
@@ -401,6 +614,57 @@ mod tests {
         let json = r#"{"type":"unknown_type","session_id":"123"}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(matches!(event, Event::Unknown));
+    }
+
+    #[test]
+    fn raw_event_preserves_unknown_top_level_payload() {
+        let raw = serde_json::json!({"type": "future", "nonce": 42});
+        let envelope = RawEvent::from_value(raw.clone()).unwrap();
+        assert!(matches!(envelope.event, Event::Unknown));
+        assert_eq!(envelope.raw, raw);
+    }
+
+    #[test]
+    fn init_preserves_nonempty_mcp_server_errors() {
+        let raw = serde_json::json!({
+            "type": "system",
+            "subtype": "init",
+            "session_id": "s",
+            "mcp_server_errors": [{"server": "nested", "error": "failed"}]
+        });
+        let envelope = RawEvent::from_value(raw.clone()).unwrap();
+        let Event::System(system) = envelope.event else {
+            panic!("expected system event");
+        };
+        assert_eq!(
+            system.mcp_server_errors,
+            vec![raw["mcp_server_errors"][0].clone()]
+        );
+    }
+
+    #[test]
+    fn tool_result_accepts_string_and_structured_content() {
+        for (json, expected) in [
+            (
+                r#"{"type":"tool_result","tool_use_id":"call-1","content":"ok"}"#,
+                serde_json::json!("ok"),
+            ),
+            (
+                r#"{"type":"tool_result","tool_use_id":"call-1","content":[{"type":"text","text":"ok"}],"is_error":true}"#,
+                serde_json::json!([{"type":"text","text":"ok"}]),
+            ),
+        ] {
+            let content: Content = serde_json::from_str(json).unwrap();
+            let (_, actual, _) = content.tool_result().unwrap();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn unknown_content_block_preserves_raw_payload() {
+        let raw = serde_json::json!({"type": "future_block", "nonce": 7});
+        let content: Content = serde_json::from_value(raw.clone()).unwrap();
+        assert!(matches!(content, Content::Unknown(value) if value == raw));
     }
 
     #[test]

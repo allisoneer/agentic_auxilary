@@ -213,6 +213,13 @@ git_tag_enable = false
 release = true
 
 [[package]]
+name = "agentic-workspace-tools"
+changelog_path = "crates/tools/workspace-tools/CHANGELOG.md"
+git_tag_name = "agentic-workspace-tools-v{{ version }}"
+git_tag_enable = false
+release = true
+
+[[package]]
 name = "web-retrieval"
 changelog_path = "crates/tools/web-retrieval/CHANGELOG.md"
 git_tag_name = "web-retrieval-v{{ version }}"
@@ -230,13 +237,6 @@ release = true
 name = "exa-async"
 changelog_path = "crates/services/exa-async/CHANGELOG.md"
 git_tag_name = "exa-async-v{{ version }}"
-git_tag_enable = false
-release = true
-
-[[package]]
-name = "agentic-workspace-tools"
-changelog_path = "crates/tools/workspace-tools/CHANGELOG.md"
-git_tag_name = "agentic-workspace-tools-v{{ version }}"
 git_tag_enable = false
 release = true
 

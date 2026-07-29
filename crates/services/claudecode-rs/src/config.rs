@@ -7,6 +7,7 @@ use crate::types::PermissionMode;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 /// MCP Server configuration - supports both stdio (subprocess) and HTTP server types
@@ -76,6 +77,49 @@ pub struct MCPConfig {
     pub mcp_servers: HashMap<String, MCPServer>,
 }
 
+/// Additive serialization policy for MCP server loading behavior.
+#[derive(Debug, Clone, Default)]
+pub struct MCPServerLoadPolicy {
+    eager_servers: HashSet<String>,
+}
+
+impl MCPServerLoadPolicy {
+    #[must_use]
+    pub fn with_always_load(mut self, server_name: impl Into<String>, value: bool) -> Self {
+        let server_name = server_name.into();
+        if value {
+            self.eager_servers.insert(server_name);
+        } else {
+            self.eager_servers.remove(&server_name);
+        }
+        self
+    }
+
+    pub fn always_load(&self, server_name: &str) -> bool {
+        self.eager_servers.contains(server_name)
+    }
+}
+
+pub(crate) fn serialize_mcp_config(
+    config: &MCPConfig,
+    policy: &MCPServerLoadPolicy,
+) -> serde_json::Result<serde_json::Value> {
+    let mut value = serde_json::to_value(config)?;
+    if let Some(servers) = value
+        .get_mut("mcpServers")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for (name, server) in servers {
+            if policy.always_load(name)
+                && let Some(server) = server.as_object_mut()
+            {
+                server.insert("alwaysLoad".to_string(), serde_json::Value::Bool(true));
+            }
+        }
+    }
+    Ok(value)
+}
+
 /// Configuration for a Claude CLI session
 #[derive(Debug, Clone, Default)]
 pub struct SessionConfig {
@@ -109,6 +153,8 @@ pub struct SessionConfig {
     pub mcp_config: Option<MCPConfig>,
     /// Strict MCP config validation (maps to --strict-mcp-config)
     pub strict_mcp_config: bool,
+    /// Per-server eager loading policy applied only when MCP JSON is serialized.
+    pub mcp_server_load_policy: MCPServerLoadPolicy,
 
     // Permissions
     /// Permission mode (maps to --permission-mode)
@@ -204,6 +250,18 @@ impl SessionConfig {
             });
         }
 
+        if self.input_format == Some(InputFormat::StreamJson) {
+            return Err(ClaudeError::InvalidConfiguration {
+                message: "Stream JSON input is unsupported because stdin writer/control support is not implemented; use text input instead".to_string(),
+            });
+        }
+
+        if self.replay_user_messages {
+            return Err(ClaudeError::InvalidConfiguration {
+                message: "replay_user_messages is unsupported because stream-input stdin writer/control support is not implemented".to_string(),
+            });
+        }
+
         Ok(())
     }
 }
@@ -295,6 +353,16 @@ impl SessionConfigBuilder {
     #[must_use]
     pub fn strict_mcp_config(mut self, yes: bool) -> Self {
         self.config.strict_mcp_config = yes;
+        self
+    }
+
+    /// Configure whether one named MCP server should be eagerly loaded.
+    #[must_use]
+    pub fn mcp_server_always_load(mut self, server_name: impl Into<String>, value: bool) -> Self {
+        self.config.mcp_server_load_policy = self
+            .config
+            .mcp_server_load_policy
+            .with_always_load(server_name, value);
         self
     }
 
@@ -612,12 +680,12 @@ mod tests {
     fn test_session_config_builder_new_fields() {
         let config = SessionConfig::builder("query")
             .fallback_model(Model::Haiku)
-            .input_format(InputFormat::StreamJson)
+            .input_format(InputFormat::Text)
             .permission_mode(PermissionMode::AcceptEdits)
             .strict_mcp_config(true)
             .json_schema(r#"{"type":"object"}"#)
             .include_partial_messages(true)
-            .replay_user_messages(true)
+            .replay_user_messages(false)
             .tools(vec!["Read".to_string(), "Write".to_string()])
             .settings(r#"{"key":"value"}"#)
             .setting_sources(vec!["source1".to_string()])
@@ -633,12 +701,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(config.fallback_model, Some(Model::Haiku));
-        assert_eq!(config.input_format, Some(InputFormat::StreamJson));
+        assert_eq!(config.input_format, Some(InputFormat::Text));
         assert_eq!(config.permission_mode, Some(PermissionMode::AcceptEdits));
         assert!(config.strict_mcp_config);
         assert_eq!(config.json_schema.as_deref(), Some(r#"{"type":"object"}"#));
         assert!(config.include_partial_messages);
-        assert!(config.replay_user_messages);
+        assert!(!config.replay_user_messages);
         assert_eq!(
             config.tools,
             Some(vec!["Read".to_string(), "Write".to_string()])
@@ -753,5 +821,72 @@ mod tests {
             &deserialized.mcp_servers["http-server"],
             MCPServer::Http { .. }
         ));
+    }
+
+    #[test]
+    fn mcp_always_load_is_omitted_without_policy() {
+        let config = MCPConfig {
+            mcp_servers: HashMap::from([
+                ("stdio".to_string(), MCPServer::stdio("cmd", vec![])),
+                (
+                    "http".to_string(),
+                    MCPServer::http("https://example.com/mcp"),
+                ),
+            ]),
+        };
+        let json = serialize_mcp_config(&config, &MCPServerLoadPolicy::default()).unwrap();
+        assert!(json["mcpServers"]["stdio"].get("alwaysLoad").is_none());
+        assert!(json["mcpServers"]["http"].get("alwaysLoad").is_none());
+    }
+
+    #[test]
+    fn mcp_always_load_policy_applies_during_full_config_serialization() {
+        let config = MCPConfig {
+            mcp_servers: HashMap::from([
+                ("stdio".to_string(), MCPServer::stdio("cmd", vec![])),
+                (
+                    "http".to_string(),
+                    MCPServer::http("https://example.com/mcp"),
+                ),
+            ]),
+        };
+        let policy = MCPServerLoadPolicy::default()
+            .with_always_load("stdio", true)
+            .with_always_load("http", true);
+        let json = serialize_mcp_config(&config, &policy).unwrap();
+        assert_eq!(json["mcpServers"]["stdio"]["alwaysLoad"], true);
+        assert_eq!(json["mcpServers"]["http"]["alwaysLoad"], true);
+        assert_eq!(config.mcp_servers.len(), 2);
+    }
+
+    #[test]
+    fn mcp_server_still_deserializes_json_without_policy_fields() {
+        for json in [
+            r#"{"type":"stdio","command":"cmd","args":[]}"#,
+            r#"{"type":"http","url":"https://example.com/mcp"}"#,
+        ] {
+            let server: MCPServer = serde_json::from_str(json).unwrap();
+            match server {
+                MCPServer::Stdio { .. } | MCPServer::Http { .. } => {}
+            }
+        }
+    }
+
+    #[test]
+    fn stream_json_input_is_rejected() {
+        let error = SessionConfig::builder("query")
+            .input_format(InputFormat::StreamJson)
+            .build()
+            .unwrap_err();
+        assert!(error.to_string().contains("stdin writer/control support"));
+    }
+
+    #[test]
+    fn replay_user_messages_is_rejected() {
+        let error = SessionConfig::builder("query")
+            .replay_user_messages(true)
+            .build()
+            .unwrap_err();
+        assert!(error.to_string().contains("stdin writer/control support"));
     }
 }

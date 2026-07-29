@@ -1,0 +1,1 @@
+Inspector warning: failed before JSON; diagnostics mention "tools" and tools/list anyway.

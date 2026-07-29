@@ -107,6 +107,7 @@ pub fn build_search_walker(
     include_hidden: bool,
     include_ignored: bool,
     ignore_globs: &[String],
+    allowed_roots: Option<&[std::path::PathBuf]>,
 ) -> Result<WalkBuilder, ToolError> {
     let ignore_globset = if include_ignored {
         build_user_ignore_globset(ignore_globs)?
@@ -125,7 +126,14 @@ pub fn build_search_walker(
     builder.follow_links(false);
 
     let root = root.to_path_buf();
+    let allowed_roots = allowed_roots.map(<[std::path::PathBuf]>::to_vec);
     builder.filter_entry(move |entry| {
+        if allowed_roots
+            .as_deref()
+            .is_some_and(|roots| !crate::paths::path_is_allowed(entry.path(), roots))
+        {
+            return false;
+        }
         let rel = entry
             .path()
             .strip_prefix(&root)
@@ -157,6 +165,13 @@ pub struct WalkResult {
 
 /// List directory contents according to configuration.
 pub fn list(cfg: &WalkConfig<'_>) -> Result<WalkResult, ToolError> {
+    list_with_roots(cfg, None)
+}
+
+pub fn list_with_roots(
+    cfg: &WalkConfig<'_>,
+    allowed_roots: Option<&[std::path::PathBuf]>,
+) -> Result<WalkResult, ToolError> {
     // Depth 0 = header only, no entries
     if cfg.depth == 0 {
         return Ok(WalkResult {
@@ -208,6 +223,13 @@ pub fn list(cfg: &WalkConfig<'_>) -> Result<WalkResult, ToolError> {
                     .strip_prefix(cfg.root)
                     .map(|p| p.to_string_lossy().replace('\\', "/"))
                     .unwrap_or_default();
+
+                if allowed_roots
+                    .is_some_and(|roots| !crate::paths::path_is_allowed(entry.path(), roots))
+                {
+                    warnings.push(format!("Skipping unsafe traversal entry: {rel}"));
+                    continue;
+                }
 
                 // Double-check against globset (filter_entry might miss some)
                 if globset.is_match(&rel) {

@@ -63,8 +63,8 @@ Canonical repository guidance for AI-assisted work in this repository. Keep repo
 - `gpt5_reasoner` (tool-lib) - `crates/tools/gpt5-reasoner/`
 - `review_tools` (tool-lib) - `crates/tools/review-tools/`
 - `thoughts-mcp-tools` (tool-lib) - `crates/tools/thoughts-mcp-tools/`
-- `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
 - `agentic-workspace-tools` (tool-lib) - `crates/tools/workspace-tools/`
+- `web-retrieval` (tool-lib) - `crates/tools/web-retrieval/`
 - `message-optimizer-bin` (app) - `apps/message-optimizer/`
 - `message_optimizer` (tool-lib) - `crates/tools/message-optimizer/`
 <!-- END:xtask:autogen -->

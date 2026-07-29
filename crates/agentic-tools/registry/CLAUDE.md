@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Builds the unified tool registry used by `agentic-mcp`, applying serialized defaults, allowlist intersection, and runtime-only nested-subagent policy.
 
 ## Quick Commands
 
@@ -29,4 +29,6 @@ just crate-build agentic-tools-registry
 
 ## Notes
 
-Add any human-authored notes below. Content outside autogen blocks is preserved by xtask sync.
+- Plain/default construction preserves the parent OpenCode surface: workspace tools and specialized Thoughts/References readers remain disabled.
+- `AgenticRuntimeConfig` is non-serialized and used only by explicit nested profiles to gate workspace read/todo, specialized readers, and canonical CLI sandbox roots.
+- Nested policy never enables workspace edit or apply-patch; the exact process allowlist remains an independent publication boundary.

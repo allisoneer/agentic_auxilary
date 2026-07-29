@@ -43,6 +43,7 @@ use agentic_tools_core::ToolRegistry;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -102,9 +103,22 @@ pub struct AgenticToolsConfig {
     #[serde(default)]
     pub thoughts: ThoughtsConfig,
 
+    /// Process-local capability gates used only by explicitly nested servers.
+    #[serde(skip)]
+    pub runtime: AgenticRuntimeConfig,
+
     /// Reserved for future use (e.g., schema strictness, patches).
     #[serde(default)]
     pub extras: serde_json::Value,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AgenticRuntimeConfig {
+    pub thoughts_read_document: bool,
+    pub thoughts_read_reference: bool,
+    pub thoughts_read_only_nested: bool,
+    pub workspace_tools: Option<WorkspaceToolsConfig>,
+    pub cli_roots: Option<Vec<PathBuf>>,
 }
 
 /// Unified `AgenticTools` entrypoint.
@@ -147,6 +161,8 @@ const THOUGHTS_NAMES: &[&str] = &[
     "thoughts_get_template",
 ];
 
+const THOUGHTS_READER_NAMES: &[&str] = &["thoughts_read_document", "thoughts_read_reference"];
+
 const WEB_NAMES: &[&str] = &["web_fetch", "web_search"];
 
 const REVIEW_NAMES: &[&str] = &["review_diff_snapshot", "review_diff_page", "review_run"];
@@ -183,9 +199,10 @@ impl AgenticTools {
 
         // coding_agent_tools (6 tools)
         if domain_wanted(CODING_NAMES) {
-            regs.push(coding_agent_tools::build_registry(
+            regs.push(coding_agent_tools::tools::build_registry_with_roots(
                 config.subagents.clone(),
                 config.cli_tools.clone(),
+                config.runtime.cli_roots.clone(),
             ));
         }
 
@@ -231,8 +248,15 @@ impl AgenticTools {
         }
 
         // thoughts-mcp-tools (6 tools)
-        if domain_wanted(THOUGHTS_NAMES) {
-            regs.push(thoughts_mcp_tools::build_registry(config.thoughts.clone()));
+        if domain_wanted(THOUGHTS_NAMES) || domain_wanted(THOUGHTS_READER_NAMES) {
+            regs.push(thoughts_mcp_tools::build_registry_with_options(
+                config.thoughts.clone(),
+                thoughts_mcp_tools::ThoughtsRuntimeOptions {
+                    read_document: config.runtime.thoughts_read_document,
+                    read_reference: config.runtime.thoughts_read_reference,
+                    read_only_nested: config.runtime.thoughts_read_only_nested,
+                },
+            ));
         }
 
         // web-retrieval (2 tools)
@@ -251,8 +275,13 @@ impl AgenticTools {
             regs.push(review_tools::build_registry(svc));
         }
 
-        if workspace_tools_enabled(&config.workspace_tools) && domain_wanted(WORKSPACE_NAMES) {
-            regs.push(workspace_tools::build_registry(&config.workspace_tools));
+        let workspace_config = config
+            .runtime
+            .workspace_tools
+            .as_ref()
+            .unwrap_or(&config.workspace_tools);
+        if workspace_tools_enabled(workspace_config) && domain_wanted(WORKSPACE_NAMES) {
+            regs.push(workspace_tools::build_registry(workspace_config));
         }
 
         let merged = ToolRegistry::merge_all(regs);
@@ -404,6 +433,8 @@ mod tests {
         assert!(!reg.contains("workspace_todowrite"));
         assert!(!reg.contains("workspace_edit"));
         assert!(!reg.contains("workspace_apply_patch"));
+        assert!(!reg.contains("thoughts_read_document"));
+        assert!(!reg.contains("thoughts_read_reference"));
     }
 
     #[test]
@@ -601,5 +632,23 @@ mod tests {
         assert!(reg.contains("workspace_edit"));
         assert!(!reg.contains("workspace_todowrite"));
         assert!(!reg.contains("workspace_apply_patch"));
+    }
+
+    #[test]
+    fn specialized_readers_require_runtime_gate_and_allowlist() {
+        let reg = AgenticTools::new(AgenticToolsConfig {
+            allowlist: Some(HashSet::from([
+                "thoughts_read_document".to_string(),
+                "thoughts_read_reference".to_string(),
+            ])),
+            runtime: AgenticRuntimeConfig {
+                thoughts_read_document: true,
+                thoughts_read_reference: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        assert!(reg.contains("thoughts_read_document"));
+        assert!(!reg.contains("thoughts_read_reference"));
     }
 }

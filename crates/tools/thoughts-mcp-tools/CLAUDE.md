@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Thoughts and References MCP tools, including runtime-only bounded specialized readers for nested subagents.
 
 ## Quick Commands
 
@@ -29,4 +29,6 @@ just crate-build thoughts-mcp-tools
 
 ## Notes
 
-Add any human-authored notes below. Content outside autogen blocks is preserved by xtask sync.
+- `thoughts_read_document` and `thoughts_read_reference` are absent by default and enabled independently only by nested runtime policy.
+- Readers canonicalize against resolved active-work or References bases, reject traversal/symlink escape, and share workspace read bounds/rendering.
+- Nested read-only mode skips environment synchronization to avoid side effects; the caller validates canonical roots before serving.

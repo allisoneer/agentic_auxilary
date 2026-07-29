@@ -106,6 +106,8 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "tempfile",
+ "thoughts-tool",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1300,6 +1302,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 name = "claudecode"
 version = "0.1.24"
 dependencies = [
+ "aho-corasick",
  "chrono",
  "dirs",
  "futures",
@@ -1354,6 +1357,7 @@ dependencies = [
  "dirs",
  "filetime",
  "futures",
+ "git2",
  "globset",
  "ignore",
  "once_cell",
@@ -7147,6 +7151,7 @@ version = "0.3.5"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
+ "agentic-workspace-tools",
  "agentic_logging",
  "anyhow",
  "chrono",
@@ -7154,6 +7159,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "thoughts-tool",
  "tokio",

@@ -67,6 +67,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     "  Content[{i}]: ToolResult tool_use_id={tool_use_id}, content={content}"
                                 );
                             }
+                            claudecode::Content::StructuredToolUse { id, name, input } => {
+                                println!(
+                                    "  Content[{i}]: StructuredToolUse name={name}, id={id}, input={input}"
+                                );
+                            }
+                            claudecode::Content::StructuredToolResult {
+                                tool_use_id,
+                                content,
+                                is_error,
+                            } => {
+                                println!(
+                                    "  Content[{i}]: StructuredToolResult tool_use_id={tool_use_id}, content={content}, is_error={is_error}"
+                                );
+                            }
+                            claudecode::Content::Unknown(raw) => {
+                                println!("  Content[{i}]: Unknown = {raw}");
+                            }
                         }
                     }
                 }
@@ -87,6 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Error event!");
                     println!("  Session ID: {}", err.session_id);
                     println!("  Error: {}", err.error);
+                }
+                Event::User(user) => {
+                    println!("User event for session {}", user.session_id);
                 }
                 Event::Unknown => {
                     println!("Unknown event type (forward compatibility)");

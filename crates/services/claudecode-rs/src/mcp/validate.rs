@@ -12,6 +12,7 @@ use rmcp::service::ServiceExt;
 use rmcp::transport::child_process::TokioChildProcess;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,6 +40,10 @@ pub struct ValidateOptions {
     pub capture_stderr: bool,
     /// Max bytes to capture from stderr (default: 64KB)
     pub max_stderr_bytes: usize,
+    /// Working directory used for stdio preflight processes.
+    pub working_dir: Option<PathBuf>,
+    /// Exact expected bare tool names keyed by MCP server name.
+    pub expected_tools: HashMap<String, HashSet<String>>,
 }
 
 impl Default for ValidateOptions {
@@ -50,6 +55,8 @@ impl Default for ValidateOptions {
             parallelism: std::cmp::max(1, num_cpus::get() / 2),
             capture_stderr: true,
             max_stderr_bytes: 64 * 1024,
+            working_dir: None,
+            expected_tools: HashMap::new(),
         }
     }
 }
@@ -103,6 +110,11 @@ pub enum McpServerValidationError {
     MissingRequiredTools {
         expected: Vec<String>,
         found: Vec<String>,
+    },
+    #[error("Exact tool publication mismatch: missing {missing:?}, unexpected {unexpected:?}")]
+    ToolSetMismatch {
+        missing: Vec<String>,
+        unexpected: Vec<String>,
     },
     #[error("Server not configured: {0}")]
     ServerNotConfigured(String),
@@ -513,18 +525,18 @@ fn levenshtein(a: &str, b: &str) -> usize {
 
 /// Validate a single MCP server.
 async fn validate_single_server(
-    _name: &str,
+    name: &str,
     server: &MCPServer,
     opts: &ValidateOptions,
 ) -> McpServerResult {
     match server {
-        MCPServer::Stdio { command, args, env } => {
-            match validate_stdio_server(command, args, env.as_ref(), opts).await {
-                Ok(success) => McpServerResult::Ok(Box::new(success)),
-                Err(e) => McpServerResult::Err(e),
-            }
-        }
-        MCPServer::Http { url, headers } => {
+        MCPServer::Stdio {
+            command, args, env, ..
+        } => match validate_stdio_server(name, command, args, env.as_ref(), opts).await {
+            Ok(success) => McpServerResult::Ok(Box::new(success)),
+            Err(e) => McpServerResult::Err(e),
+        },
+        MCPServer::Http { url, headers, .. } => {
             match validate_http_server(url, headers.as_ref(), opts).await {
                 Ok(success) => McpServerResult::Ok(Box::new(success)),
                 Err(e) => McpServerResult::Err(e),
@@ -548,6 +560,7 @@ async fn snapshot_tail(buf: Option<&Arc<Mutex<Vec<u8>>>>) -> Option<String> {
 }
 
 async fn validate_stdio_server(
+    name: &str,
     command: &str,
     args: &[String],
     env: Option<&HashMap<String, String>>,
@@ -563,6 +576,9 @@ async fn validate_stdio_server(
     // Build the command
     let mut cmd = Command::new(command);
     cmd.args(args).kill_on_drop(true);
+    if let Some(working_dir) = &opts.working_dir {
+        cmd.current_dir(working_dir);
+    }
 
     if let Some(env_vars) = env {
         for (k, v) in env_vars {
@@ -669,6 +685,23 @@ async fn validate_stdio_server(
                 Ok(Err(e)) => return Err(McpServerValidationError::ToolsListError(format!("{e}"))),
             };
             let tools_list_ms = tools_start.elapsed().as_millis() as u64;
+
+            if let Some(expected) = opts.expected_tools.get(name) {
+                let actual = tools
+                    .iter()
+                    .map(|tool| tool.name.to_string())
+                    .collect::<HashSet<_>>();
+                if &actual != expected {
+                    let mut missing = expected.difference(&actual).cloned().collect::<Vec<_>>();
+                    let mut unexpected = actual.difference(expected).cloned().collect::<Vec<_>>();
+                    missing.sort();
+                    unexpected.sort();
+                    return Err(McpServerValidationError::ToolSetMismatch {
+                        missing,
+                        unexpected,
+                    });
+                }
+            }
 
             // Cleanup: gracefully close transport
             let _ = handshake_result.close().await;

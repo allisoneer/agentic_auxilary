@@ -62,6 +62,13 @@ impl DesiredState {
             .join(".thoughts-data")
             .join(space.relative_path(&self.mount_dirs))
     }
+
+    /// Get the configured root containing all mounted references.
+    pub fn get_references_target(&self, repo_root: &Path) -> PathBuf {
+        repo_root
+            .join(".thoughts-data")
+            .join(&self.mount_dirs.references)
+    }
 }
 
 pub struct RepoConfigManager {
@@ -69,6 +76,45 @@ pub struct RepoConfigManager {
 }
 
 impl RepoConfigManager {
+    fn validate_mount_dirs(mount_dirs: &MountDirsV2) -> Result<()> {
+        for (name, value) in [
+            ("thoughts", &mount_dirs.thoughts),
+            ("context", &mount_dirs.context),
+            ("references", &mount_dirs.references),
+        ] {
+            if value.trim().is_empty() {
+                anyhow::bail!("Mount directory '{name}' cannot be empty");
+            }
+            if !value.is_ascii() {
+                anyhow::bail!("Mount directory '{name}' must contain only ASCII characters");
+            }
+            if value.eq_ignore_ascii_case(".thoughts-data") {
+                anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
+            }
+            if value == "." || value == ".." {
+                anyhow::bail!("Mount directory '{name}' cannot be '.' or '..'");
+            }
+            if value.contains('/') || value.contains('\\') {
+                anyhow::bail!(
+                    "Mount directory '{name}' must be a single path segment (got {value})"
+                );
+            }
+        }
+        if mount_dirs
+            .thoughts
+            .eq_ignore_ascii_case(&mount_dirs.context)
+            || mount_dirs
+                .thoughts
+                .eq_ignore_ascii_case(&mount_dirs.references)
+            || mount_dirs
+                .context
+                .eq_ignore_ascii_case(&mount_dirs.references)
+        {
+            anyhow::bail!("Mount directories must be distinct (thoughts/context/references)");
+        }
+        Ok(())
+    }
+
     #[expect(
         clippy::expect_used,
         reason = "current_dir failure indicates a fatal system state; panicking is appropriate"
@@ -100,6 +146,7 @@ impl RepoConfigManager {
 
         if version == "2.0" {
             let v2: RepoConfigV2 = serde_json::from_str(&raw)?;
+            Self::validate_mount_dirs(&v2.mount_dirs)?;
             // Normalize ReferenceEntry to ReferenceMount
             let refs = v2
                 .references
@@ -260,35 +307,8 @@ impl RepoConfigManager {
             anyhow::bail!("Unsupported configuration version: {}", cfg.version);
         }
 
-        // mount_dirs: non-empty and distinct
         let m = &cfg.mount_dirs;
-        for (name, val) in [
-            ("thoughts", &m.thoughts),
-            ("context", &m.context),
-            ("references", &m.references),
-        ] {
-            if val.trim().is_empty() {
-                anyhow::bail!("Mount directory '{name}' cannot be empty");
-            }
-            if !val.is_ascii() {
-                anyhow::bail!("Mount directory '{name}' must contain only ASCII characters");
-            }
-            if val.eq_ignore_ascii_case(".thoughts-data") {
-                anyhow::bail!("Mount directory '{name}' cannot be named '.thoughts-data'");
-            }
-            if val == "." || val == ".." {
-                anyhow::bail!("Mount directory '{name}' cannot be '.' or '..'");
-            }
-            if val.contains('/') || val.contains('\\') {
-                anyhow::bail!("Mount directory '{name}' must be a single path segment (got {val})");
-            }
-        }
-        if m.thoughts.eq_ignore_ascii_case(&m.context)
-            || m.thoughts.eq_ignore_ascii_case(&m.references)
-            || m.context.eq_ignore_ascii_case(&m.references)
-        {
-            anyhow::bail!("Mount directories must be distinct (thoughts/context/references)");
-        }
+        Self::validate_mount_dirs(m)?;
 
         // thoughts_mount remote validation
         if let Some(tm) = &cfg.thoughts_mount {
@@ -401,6 +421,37 @@ mod tests {
         let result = manager.load_desired_state();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("v1"));
+    }
+
+    #[test]
+    fn test_load_desired_state_rejects_unsafe_mount_directories() {
+        for references in ["/etc", "..", "nested/references"] {
+            let temp_dir = TempDir::new().unwrap();
+            let manager = RepoConfigManager::new(temp_dir.path().to_path_buf());
+            let config_path = paths::get_repo_config_path(temp_dir.path());
+            std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+            std::fs::write(
+                &config_path,
+                serde_json::json!({
+                    "version": "2.0",
+                    "mount_dirs": {
+                        "thoughts": "thoughts",
+                        "context": "context",
+                        "references": references,
+                    },
+                    "context_mounts": [],
+                    "references": [],
+                })
+                .to_string(),
+            )
+            .unwrap();
+
+            let error = manager.load_desired_state().unwrap_err().to_string();
+            assert!(
+                error.contains("Mount directory 'references'"),
+                "unexpected error for {references}: {error}"
+            );
+        }
     }
 
     #[test]

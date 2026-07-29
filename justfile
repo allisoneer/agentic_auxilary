@@ -15,6 +15,8 @@ MCP_SERVERS := "agentic-mcp opencode-orchestrator-mcp"
 
 # END:xtask:autogen
 
+MCP_INSPECTOR_PACKAGE := "@modelcontextprotocol/inspector@0.18.0"
+
 default: help
 
 help:
@@ -68,7 +70,7 @@ test-ci:
 
 # Run integration tests (includes ignored tests that require git setup)
 test-integration: mcp-test
-    THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-integration {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} -- --include-ignored
+    THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-integration {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }} --run-ignored all --no-fail-fast
 
 # Run ignored-only thoughts integration tests in CI without duplicating normal runs.
 test-thoughts-ignored-ci:
@@ -492,11 +494,16 @@ mcp-inspector method="tools/list":
       exit 1
     fi
     echo "Launching MCP Inspector with method: {{ method }}"
-    npx -y @modelcontextprotocol/inspector --cli --transport stdio --method "{{ method }}" "$BIN"
+    # Inspector 0.18.0 requires the stdio target immediately after --cli.
+    npx -y {{ MCP_INSPECTOR_PACKAGE }} --cli "$BIN" --method "{{ method }}"
+
+# Validate mcp-validate.sh parsing against deterministic Inspector fixtures
+mcp-validate-script-test:
+    bash tools/tests/mcp-validate-test.sh
 
 # CI-friendly MCP schema validation (validates all MCP servers in MCP_SERVERS)
-mcp-test:
-    tools/mcp-validate.sh {{ MCP_SERVERS }}
+mcp-test: mcp-validate-script-test
+    MCP_INSPECTOR_PACKAGE={{ MCP_INSPECTOR_PACKAGE }} tools/mcp-validate.sh {{ MCP_SERVERS }}
 
 # ------------------------------------------------------------------------------
 # PR Description Management

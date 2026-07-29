@@ -31,6 +31,7 @@ fn run_glob(
         sort,
         head_limit,
         offset,
+        allowed_roots: None,
     };
     coding_agent_tools::glob::run(cfg)
 }

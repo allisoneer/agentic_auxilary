@@ -105,6 +105,77 @@ pub const GUARDRAILS_SHARED: &str = r#"
 - Keep outputs structured and concise. Prefer relative paths from repo root or references/ base.
 "#;
 
+fn direct_tool_guidance(agent_type: AgentType, location: AgentLocation) -> String {
+    let tools: &[&str] = match (agent_type, location) {
+        (AgentType::Locator, AgentLocation::Codebase) => &[
+            "mcp__agentic-mcp__cli_ls",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
+        ],
+        (AgentType::Locator, AgentLocation::Thoughts) => &[
+            "mcp__agentic-mcp__cli_ls",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
+            "mcp__agentic-mcp__thoughts_list_documents",
+        ],
+        (AgentType::Locator, AgentLocation::References) => &[
+            "mcp__agentic-mcp__cli_ls",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
+            "mcp__agentic-mcp__thoughts_list_references",
+        ],
+        (AgentType::Locator, AgentLocation::Web) => &[
+            "mcp__agentic-mcp__web_search",
+            "mcp__agentic-mcp__web_fetch",
+        ],
+        (AgentType::Analyzer, AgentLocation::Codebase) => &[
+            "mcp__agentic-mcp__workspace_read",
+            "mcp__agentic-mcp__cli_ls",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
+            "mcp__agentic-mcp__workspace_todowrite",
+        ],
+        (AgentType::Analyzer, AgentLocation::Thoughts) => &[
+            "mcp__agentic-mcp__thoughts_read_document",
+            "mcp__agentic-mcp__cli_ls",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
+            "mcp__agentic-mcp__thoughts_list_documents",
+        ],
+        (AgentType::Analyzer, AgentLocation::References) => &[
+            "mcp__agentic-mcp__thoughts_read_reference",
+            "mcp__agentic-mcp__cli_ls",
+            "mcp__agentic-mcp__cli_grep",
+            "mcp__agentic-mcp__cli_glob",
+            "mcp__agentic-mcp__thoughts_list_references",
+            "mcp__agentic-mcp__workspace_todowrite",
+        ],
+        (AgentType::Analyzer, AgentLocation::Web) => &[
+            "mcp__agentic-mcp__web_search",
+            "mcp__agentic-mcp__web_fetch",
+            "mcp__agentic-mcp__workspace_todowrite",
+        ],
+    };
+    let mut guidance = format!(
+        "## Direct tool contract\nCall only these tools directly:\n{}\nNo Claude built-in tools are available. Report a tool failure instead of inventing evidence.",
+        tools
+            .iter()
+            .map(|tool| format!("- `{tool}`"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    if tools
+        .iter()
+        .any(|tool| tool.ends_with("workspace_todowrite"))
+    {
+        guidance.push_str("\n`workspace_todowrite` replaces the complete process-local list; it resets when this nested MCP server exits.");
+    }
+    if matches!(location, AgentLocation::Web) {
+        guidance.push_str("\nThis Web agent has no local filesystem discovery or read access. Never claim to have inspected local files.");
+    }
+    guidance
+}
+
 pub const CITATIONS_ANALYZER: &str = r#"
 ## Citations
 - Codebase: `path/to/file.ext:line-start-line-end`
@@ -588,6 +659,7 @@ pub fn compose_prompt_impl(agent_type: AgentType, location: AgentLocation) -> St
         (AgentType::Analyzer, AgentLocation::Web) => TEMPLATE_ANALYZER_WEB,
     };
 
+    let direct_tools = direct_tool_guidance(agent_type, location);
     let mut parts = vec![base, overlay, strategy, template, GUARDRAILS_SHARED];
     if matches!(agent_type, AgentType::Analyzer) {
         parts.push(CITATIONS_ANALYZER);
@@ -595,7 +667,10 @@ pub fn compose_prompt_impl(agent_type: AgentType, location: AgentLocation) -> St
             parts.push(QUALITY_FILTERS_ANALYZER_THOUGHTS);
         }
     }
-    parts.join("\n\n")
+    let mut prompt = parts.join("\n\n");
+    prompt.push_str("\n\n");
+    prompt.push_str(&direct_tools);
+    prompt
 }
 
 #[cfg(test)]

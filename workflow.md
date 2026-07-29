@@ -158,16 +158,20 @@ Each "primary session" also has sub-agents. I did not want the parent session ge
 
 ### `ask_agent` Tool Matrix
 
-| Agent Type   | Location   | Tools Available                                              | Model  |
-|--------------|------------|--------------------------------------------------------------|--------|
-| **Locator**  | Codebase   | ls, grep, glob                                               | Haiku  |
-| **Locator**  | Thoughts   | + thoughts_list_documents                                    | Haiku  |
-| **Locator**  | References | + thoughts_list_references                                   | Haiku  |
-| **Locator**  | Web        | web_search, web_fetch                                        | Haiku  |
-| **Analyzer** | Codebase   | read, ls, grep, glob, todowrite                              | Sonnet |
-| **Analyzer** | Thoughts   | read, ls, grep, glob, thoughts_list_documents                | Sonnet |
-| **Analyzer** | References | read, ls, grep, glob, todowrite, thoughts_list_references    | Sonnet |
-| **Analyzer** | Web        | All 7: web_search, web_fetch, read, grep, glob, ls, todowrite | Sonnet |
+| Agent Type   | Location   | Exact eager `agentic-mcp` subset | Model  |
+|--------------|------------|----------------------------------|--------|
+| **Locator**  | Codebase   | `cli_ls`, `cli_grep`, `cli_glob` | Haiku |
+| **Locator**  | Thoughts   | `cli_ls`, `cli_grep`, `cli_glob`, `thoughts_list_documents` | Haiku |
+| **Locator**  | References | `cli_ls`, `cli_grep`, `cli_glob`, `thoughts_list_references` | Haiku |
+| **Locator**  | Web        | `web_search`, `web_fetch` | Haiku |
+| **Analyzer** | Codebase   | `workspace_read`, `cli_ls`, `cli_grep`, `cli_glob`, `workspace_todowrite` | Sonnet |
+| **Analyzer** | Thoughts   | `thoughts_read_document`, `cli_ls`, `cli_grep`, `cli_glob`, `thoughts_list_documents` | Sonnet |
+| **Analyzer** | References | `thoughts_read_reference`, `cli_ls`, `cli_grep`, `cli_glob`, `thoughts_list_references`, `workspace_todowrite` | Sonnet |
+| **Analyzer** | Web        | `web_search`, `web_fetch`, `workspace_todowrite` | Sonnet |
+
+Every name is published to Claude as `mcp__agentic-mcp__<name>`. Spawned cells receive zero Claude built-ins, empty setting sources, one strict server with `alwaysLoad: true`, and an exact `--nested-profile`/`--allow` boundary. Codebase discovery is confined to the current canonical worktree; Thoughts and References add only their resolved read-only roots; Web receives no local filesystem capability. `workspace_edit` and `workspace_apply_patch` are never enabled.
+
+Tracked, regular, worktree-contained `CLAUDE.md` guidance is injected explicitly because ambient settings and memory are disabled. `workspace_todowrite` replaces the complete list in one nested MCP process and resets when that process exits. A session succeeds only when its raw transcript has exact init tools, no MCP initialization errors, and a successful allowed non-todo call/result pair. Warning stderr is retained as bounded redacted diagnostics rather than treated as failure.
 
 ---
 

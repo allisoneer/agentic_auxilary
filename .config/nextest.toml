@@ -4,6 +4,9 @@
 [store]
 dir = "target/nextest"
 
+[test-groups.authenticated-claude]
+max-threads = 1
+
 [profile.default]
 retries = { backoff = "exponential", count = 2, delay = "1s", max-delay = "10s" }
 slow-timeout = { period = "30s", terminate-after = 2 }
@@ -12,6 +15,12 @@ failure-output = "immediate"
 success-output = "never"
 status-level = "fail"
 default-filter = 'not kind(bench)'
+
+[[profile.default.overrides]]
+# Nextest runs each test in its own process, so serial_test cannot prevent these
+# authenticated sessions from contending for Claude's shared HOME and API quota.
+filter = '(package(coding_agent_tools) & test(agent::live_tests::live_)) | (package(claudecode) & binary(integration) & (test(test_simple_query) | test(test_session_cancellation) | test(test_haiku_model)))'
+test-group = "authenticated-claude"
 
 [profile.default.junit]
 path = "target/nextest/junit.xml"
@@ -26,6 +35,10 @@ status-level = "fail"
 final-status-level = "fail"
 default-filter = 'not kind(bench)'
 
+[[profile.minimal.overrides]]
+filter = '(package(coding_agent_tools) & test(agent::live_tests::live_)) | (package(claudecode) & binary(integration) & (test(test_simple_query) | test(test_session_cancellation) | test(test_haiku_model)))'
+test-group = "authenticated-claude"
+
 [profile.ci]
 retries = 0
 slow-timeout = { period = "60s", terminate-after = 1 }
@@ -35,6 +48,10 @@ success-output = "final"
 fail-fast = false
 status-level = "fail"
 default-filter = 'not kind(bench)'
+
+[[profile.ci.overrides]]
+filter = '(package(coding_agent_tools) & test(agent::live_tests::live_)) | (package(claudecode) & binary(integration) & (test(test_simple_query) | test(test_session_cancellation) | test(test_haiku_model)))'
+test-group = "authenticated-claude"
 
 [profile.ci.junit]
 path = "target/nextest/junit.xml"

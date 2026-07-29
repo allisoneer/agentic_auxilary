@@ -13,7 +13,16 @@ pub use tools::GetRepoRefsTool;
 pub use tools::GetTemplateTool;
 pub use tools::ListActiveDocumentsTool;
 pub use tools::ListReferencesTool;
+pub use tools::ReadDocumentTool;
+pub use tools::ReadReferenceTool;
 pub use tools::WriteDocumentTool;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ThoughtsRuntimeOptions {
+    pub read_document: bool,
+    pub read_reference: bool,
+    pub read_only_nested: bool,
+}
 
 use agentic_config::types::ThoughtsConfig;
 use agentic_tools_core::ToolRegistry;
@@ -23,9 +32,20 @@ use agentic_tools_core::ToolRegistry;
 /// This registry can be merged with other domain registries in Plan 4
 /// to create a unified agentic-mcp binary.
 pub fn build_registry(thoughts: ThoughtsConfig) -> ToolRegistry {
-    let readiness = ThoughtsMcpReadinessGate::new();
+    build_registry_with_options(thoughts, ThoughtsRuntimeOptions::default())
+}
 
-    ToolRegistry::builder()
+pub fn build_registry_with_options(
+    thoughts: ThoughtsConfig,
+    options: ThoughtsRuntimeOptions,
+) -> ToolRegistry {
+    let readiness = if options.read_only_nested {
+        ThoughtsMcpReadinessGate::new_with_check(|| Box::pin(async { Ok(()) }))
+    } else {
+        ThoughtsMcpReadinessGate::new()
+    };
+
+    let mut builder = ToolRegistry::builder()
         .register::<WriteDocumentTool, ()>(WriteDocumentTool {
             readiness: readiness.clone(),
         })
@@ -42,6 +62,39 @@ pub fn build_registry(thoughts: ThoughtsConfig) -> ToolRegistry {
             thoughts,
             readiness: readiness.clone(),
         })
-        .register::<GetTemplateTool, ()>(GetTemplateTool { readiness })
-        .finish()
+        .register::<GetTemplateTool, ()>(GetTemplateTool {
+            readiness: readiness.clone(),
+        });
+    if options.read_document {
+        builder = builder.register::<ReadDocumentTool, ()>(ReadDocumentTool {
+            readiness: readiness.clone(),
+        });
+    }
+    if options.read_reference {
+        builder = builder.register::<ReadReferenceTool, ()>(ReadReferenceTool { readiness });
+    }
+    builder.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn specialized_readers_are_default_disabled_and_independently_gated() {
+        let default = build_registry(ThoughtsConfig::default());
+        assert!(!default.contains("thoughts_read_document"));
+        assert!(!default.contains("thoughts_read_reference"));
+
+        let documents = build_registry_with_options(
+            ThoughtsConfig::default(),
+            ThoughtsRuntimeOptions {
+                read_document: true,
+                read_reference: false,
+                read_only_nested: true,
+            },
+        );
+        assert!(documents.contains("thoughts_read_document"));
+        assert!(!documents.contains("thoughts_read_reference"));
+    }
 }

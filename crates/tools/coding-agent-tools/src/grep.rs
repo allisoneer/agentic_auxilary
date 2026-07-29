@@ -50,6 +50,7 @@ pub struct GrepConfig {
     pub head_limit: usize,
     /// Skip the first N results
     pub offset: usize,
+    pub allowed_roots: Option<Vec<std::path::PathBuf>>,
 }
 
 /// Maximum allowed `head_limit` to prevent context bloat.
@@ -273,12 +274,22 @@ pub fn run(cfg: GrepConfig) -> Result<GrepOutput, ToolError> {
             cfg.include_hidden,
             cfg.include_ignored,
             &cfg.ignore_globs,
+            cfg.allowed_roots.as_deref(),
         )?;
 
         for result in builder.build() {
             match result {
                 Ok(entry) => {
                     let path = entry.path();
+
+                    if cfg
+                        .allowed_roots
+                        .as_deref()
+                        .is_some_and(|roots| !crate::paths::path_is_allowed(path, roots))
+                    {
+                        warnings.push("Skipping unsafe traversal entry".to_string());
+                        continue;
+                    }
 
                     // Skip directories
                     if path.is_dir() {

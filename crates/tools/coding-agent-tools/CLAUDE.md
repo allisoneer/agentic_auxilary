@@ -1,7 +1,7 @@
 # CLAUDE.md - coding_agent_tools
 
 ## Purpose
-CLI + MCP tools for coding assistants. Currently implements `ls` tool for gitignore-aware directory listing.
+CLI/MCP discovery tools plus hermetic Claude subagent orchestration.
 
 ## Quick Commands
 ```bash
@@ -12,8 +12,11 @@ just fmt          # Format code
 ```
 
 ## Architecture
-- `src/main.rs` - CLI entry point with clap subcommands (ls, mcp)
-- `src/lib.rs` - Tool router with universal_tool macros
+- `src/lib.rs` - Tool implementations, sandboxed path routing, and the internal `SessionOutcome` runner
+- `src/agent/config.rs` - strict model aliases and exact eight-cell eager MCP matrix
+- `src/agent/guidance.rs` - bounded Git-index-tracked repository guidance
+- `src/agent/evidence.rs` - raw init/tool-call/tool-result success gate
+- `src/agent/live_tests.rs` - ignored Claude 2.1.220 nonce matrix and eager/deferred controls
 - `src/types.rs` - Depth, Show, LsOutput, LsEntry types
 - `src/paths.rs` - Path normalization utilities
 - `src/walker.rs` - Directory traversal with ignore/globset
@@ -24,6 +27,12 @@ just fmt          # Format code
 - `globset` for custom ignore patterns (not `add_ignore()`)
 - Pagination state in struct; CLI creates fresh instance (no pagination), MCP reuses Arc-wrapped instance
 - McpFormatter for token-efficient text output
+- Spawned agents use no Claude built-ins or inherited setting sources. One eager strict `agentic-mcp --nested-profile ... --allow ...` server supplies the exact cell surface.
+- Nested CLI roots are canonical and read-only. Web cells have no local tools; no cell receives edit or apply-patch.
+- Todo state is complete-list replacement scoped to one nested MCP process.
+- Public `AgentOutput` remains text, but production accepts it only after structured transcript evidence succeeds.
+- Evidence requires assistant `tool_use` followed by a matching successful user `tool_result`; wrong roles, reversed order, errors, and todo-only activity fail closed. Live nonces must originate in a paired expected tool result and remain absent from both the query and complete composed system prompt; tracked-guidance sentinels are distinct values.
+- Nested diagnostics rely on SDK value-based redaction so known configured credentials cannot persist in generic stdout, stderr, transcript, or tool-result strings.
 
 ## Search Ignore Policy
 

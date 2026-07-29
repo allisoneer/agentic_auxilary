@@ -1,3 +1,4 @@
+use crate::types::SessionFailure;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -23,12 +24,18 @@ pub enum ClaudeError {
     #[error("Process exited with code {code}: {stderr}")]
     ProcessFailed { code: i32, stderr: String },
 
+    #[error("Claude session failed: {}", .failure.message)]
+    ExecutionFailed { failure: Box<SessionFailure> },
+
     #[error("Failed to parse JSON: {source}")]
     JsonParseError {
         #[source]
         source: serde_json::Error,
         line: Option<String>,
     },
+
+    #[error("Claude event exceeded the {limit}-byte line limit")]
+    EventLineTooLong { limit: usize, tail: String },
 
     #[error("Stream closed unexpectedly")]
     StreamClosed,

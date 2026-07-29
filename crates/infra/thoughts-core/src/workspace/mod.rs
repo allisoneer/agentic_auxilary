@@ -22,6 +22,7 @@ use crate::git::utils::get_current_branch;
 use crate::git::utils::get_head_state;
 use crate::git::utils::get_remote_url;
 use crate::mount::MountResolver;
+use crate::mount::MountSpace;
 
 // Centralized main/master detection
 fn is_main_like(branch: &str) -> bool {
@@ -237,6 +238,59 @@ pub fn check_branch_allowed() -> Result<()> {
         return Err(main_branch_lockout_error(&branch));
     }
     Ok(())
+}
+
+/// Resolve the current branch's mounted Thoughts directory without mutating it.
+pub fn resolve_active_work_base_read_only(cwd: &Path) -> Result<PathBuf> {
+    let control_root = get_control_repo_root(cwd)?;
+    let desired = RepoConfigManager::new(control_root.clone())
+        .load_desired_state()?
+        .ok_or_else(|| {
+            anyhow::anyhow!("No repository configuration found. Run 'thoughts init'.")
+        })?;
+    let code_root = find_repo_root(cwd)?;
+    let branch = get_current_branch(&code_root)?;
+    if is_main_like(&branch) {
+        return Err(main_branch_lockout_error(&branch));
+    }
+    let mounted_root = canonical_read_only_root(
+        &desired.get_mount_target(&MountSpace::Thoughts, &control_root),
+        "Thoughts mount",
+    )?;
+    let branch_base = mounted_root.join(&branch);
+    let metadata = fs::symlink_metadata(&branch_base)
+        .with_context(|| format!("Failed to inspect active Thoughts work for branch '{branch}'"))?;
+    if metadata.file_type().is_symlink() {
+        anyhow::bail!("Active Thoughts work for branch '{branch}' must not be a symlink");
+    }
+    let branch_base = canonical_read_only_root(&branch_base, "active Thoughts work")?;
+    if !branch_base.starts_with(&mounted_root) {
+        anyhow::bail!("Active Thoughts work resolves outside the configured Thoughts mount");
+    }
+    Ok(branch_base)
+}
+
+/// Resolve the configured mounted References directory without mutating it.
+pub fn resolve_references_base_read_only(cwd: &Path) -> Result<PathBuf> {
+    let control_root = get_control_repo_root(cwd)?;
+    let desired = RepoConfigManager::new(control_root.clone())
+        .load_desired_state()?
+        .ok_or_else(|| {
+            anyhow::anyhow!("No repository configuration found. Run 'thoughts init'.")
+        })?;
+    canonical_read_only_root(
+        &desired.get_references_target(&control_root),
+        "References mount",
+    )
+}
+
+fn canonical_read_only_root(path: &Path, label: &str) -> Result<PathBuf> {
+    let canonical = fs::canonicalize(path)
+        .with_context(|| format!("Failed to resolve {label} at {}", path.display()))?;
+    if !canonical.is_dir() || canonical == Path::new("/") {
+        anyhow::bail!("{label} must be an existing non-root directory");
+    }
+    Ok(canonical)
 }
 
 /// Ensure active work directory exists with subdirs and manifest.

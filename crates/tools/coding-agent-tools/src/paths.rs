@@ -1,5 +1,7 @@
 //! Path normalization utilities for the ls tool.
 
+use std::path::Component;
+use std::path::Path;
 use std::path::PathBuf;
 
 const HOME_ERR: &str = "Could not determine home directory. Ensure the HOME environment variable is set or the system can resolve the user's home directory.";
@@ -61,6 +63,38 @@ pub fn to_abs_string(p: &str) -> Result<String, String> {
             .unwrap_or(expanded)
     };
     Ok(abs.to_string_lossy().to_string())
+}
+
+pub fn to_abs_string_in_roots(p: &str, roots: &[PathBuf]) -> Result<String, String> {
+    if roots.is_empty() {
+        return Err("CLI sandbox requires at least one canonical root.".to_string());
+    }
+    let raw = Path::new(p);
+    if raw
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err(format!("Path `{p}` contains forbidden `..` traversal."));
+    }
+    let expanded = expand_tilde(p)?;
+    let candidate = if expanded.is_absolute() {
+        expanded
+    } else {
+        roots[0].join(expanded)
+    };
+    let canonical = std::fs::canonicalize(&candidate)
+        .map_err(|error| format!("Failed to canonicalize {}: {error}", candidate.display()))?;
+    if !path_is_allowed(&canonical, roots) {
+        return Err(format!(
+            "Path `{p}` resolves outside the allowed CLI roots."
+        ));
+    }
+    Ok(canonical.to_string_lossy().to_string())
+}
+
+pub fn path_is_allowed(path: &Path, roots: &[PathBuf]) -> bool {
+    std::fs::canonicalize(path)
+        .is_ok_and(|canonical| roots.iter().any(|root| canonical.starts_with(root)))
 }
 
 #[cfg(test)]
@@ -170,5 +204,42 @@ mod tests {
         unsafe {
             std::env::remove_var("__CAT_FORCE_HOME_NONE");
         }
+    }
+
+    #[test]
+    fn sandbox_accepts_multiple_roots_and_rejects_escape() {
+        let first = tempfile::TempDir::new().unwrap();
+        let second = tempfile::TempDir::new().unwrap();
+        std::fs::write(second.path().join("allowed.txt"), "ok").unwrap();
+        let roots = vec![
+            std::fs::canonicalize(first.path()).unwrap(),
+            std::fs::canonicalize(second.path()).unwrap(),
+        ];
+        let allowed = to_abs_string_in_roots(
+            second.path().join("allowed.txt").to_string_lossy().as_ref(),
+            &roots,
+        )
+        .unwrap();
+        assert!(allowed.ends_with("allowed.txt"));
+        assert!(to_abs_string_in_roots("../escape", &roots).is_err());
+        assert!(to_abs_string_in_roots("/", &roots).is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn sandbox_rejects_tilde_expanding_outside_roots() {
+        let root = tempfile::TempDir::new().unwrap();
+        let outside = tempfile::TempDir::new().unwrap();
+        // SAFETY: serial test uses a test-only environment key and restores it below.
+        unsafe {
+            std::env::set_var("__CAT_HOME_FOR_TESTS", outside.path());
+        }
+        let roots = vec![std::fs::canonicalize(root.path()).unwrap()];
+        let result = to_abs_string_in_roots("~", &roots);
+        // SAFETY: restores the test-only environment key before returning.
+        unsafe {
+            std::env::remove_var("__CAT_HOME_FOR_TESTS");
+        }
+        assert!(result.is_err());
     }
 }

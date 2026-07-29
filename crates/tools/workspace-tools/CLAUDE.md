@@ -10,7 +10,7 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Repository-owned workspace read, ephemeral todo, edit, and apply-patch tools. All are independently disabled by default.
 
 ## Quick Commands
 
@@ -29,4 +29,6 @@ just crate-build agentic-workspace-tools
 
 ## Notes
 
-Add any human-authored notes below. Content outside autogen blocks is preserved by xtask sync.
+- `workspace_read` is workspace-contained, rejects symlink/traversal escapes, files over 20 MiB, page limits over 10,000, binary/invalid UTF-8 data, and truncates rendered lines to 2,000 characters.
+- `workspace_todowrite` replaces one process-local list. It accepts at most 100 unique nonempty items, with typed status/priority and 4,096 UTF-8 bytes per content string. State resets when the MCP process exits.
+- Nested subagent profiles may enable read or todo only. They never enable edit or apply-patch.

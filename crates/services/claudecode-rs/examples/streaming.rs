@@ -29,7 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             claudecode::Content::ToolUse { name, .. } => {
                                 println!("[Tool use: {name}]");
                             }
-                            claudecode::Content::ToolResult { .. } => {}
+                            claudecode::Content::ToolResult { .. }
+                            | claudecode::Content::StructuredToolUse { .. }
+                            | claudecode::Content::StructuredToolResult { .. }
+                            | claudecode::Content::Unknown(_) => {}
                         }
                     }
                 }
@@ -48,9 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("Initialized with model: {:?}", sys.model);
                     }
                 }
-                Event::Unknown => {
-                    // Forward compatibility
-                }
+                Event::User(_) | Event::Unknown => {}
             }
         }
         println!("No more events received");
