@@ -1,0 +1,19 @@
+crates/meta/xtask/src/mise.rs
+  s_7ce21d89244442::t_091a65b648cada 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "19a513c5f9941dbc547fc0d6f55e65c3eea296b0",
+  "prompts": {},
+  "sessions": {
+    "s_7ce21d89244442": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_055f8d712ffenb1Hd8buSPzA3X",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
