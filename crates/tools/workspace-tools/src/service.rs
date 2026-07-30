@@ -105,7 +105,8 @@ impl WorkspaceTools {
         }
         let mut unique = HashSet::with_capacity(todos.len());
         for todo in &todos {
-            if todo.content.trim().is_empty() {
+            let content = todo.content.trim();
+            if content.is_empty() {
                 return Err(ToolError::InvalidInput(
                     "Todo content must not be empty.".to_string(),
                 ));
@@ -115,7 +116,7 @@ impl WorkspaceTools {
                     "Todo content must not exceed {MAX_TODO_CONTENT_BYTES} UTF-8 bytes."
                 )));
             }
-            if !unique.insert(todo.content.as_str()) {
+            if !unique.insert(content) {
                 return Err(ToolError::InvalidInput(format!(
                     "Duplicate todo content is not allowed: `{}`.",
                     todo.content

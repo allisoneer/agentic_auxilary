@@ -210,10 +210,10 @@ pub fn render_bounded_path(
         _ => ToolError::Internal(format!("Failed to inspect {display_path}: {error}")),
     })?;
 
-    validate_page(offset, limit)?;
+    let (start, end) = resolve_page(offset, limit)?;
 
     if metadata.is_dir() {
-        return render_directory(path, display_path, offset, limit);
+        return render_directory(path, display_path, start, end);
     }
 
     if metadata.len() > MAX_READ_BYTES {
@@ -222,10 +222,10 @@ pub fn render_bounded_path(
         )));
     }
 
-    render_file(path, display_path, offset, limit)
+    render_file(path, display_path, start, end)
 }
 
-fn validate_page(offset: Option<usize>, limit: Option<usize>) -> Result<(), ToolError> {
+fn resolve_page(offset: Option<usize>, limit: Option<usize>) -> Result<(usize, usize), ToolError> {
     let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
     if limit > MAX_READ_LIMIT {
         return Err(ToolError::InvalidInput(format!(
@@ -233,10 +233,10 @@ fn validate_page(offset: Option<usize>, limit: Option<usize>) -> Result<(), Tool
         )));
     }
     let start = offset.unwrap_or(1).max(1) - 1;
-    start.checked_add(limit).ok_or_else(|| {
+    let end = start.checked_add(limit).ok_or_else(|| {
         ToolError::InvalidInput("offset plus limit exceeds the supported range.".to_string())
     })?;
-    Ok(())
+    Ok((start, end))
 }
 
 fn workspace_todowrite(
@@ -497,8 +497,8 @@ async fn workspace_apply_patch(
 fn render_directory(
     path: &Path,
     display_path: &str,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    start: usize,
+    end: usize,
 ) -> Result<String, ToolError> {
     let mut entries = fs::read_dir(path)
         .map_err(|error| ToolError::Internal(format!("Failed to read {display_path}: {error}")))?
@@ -528,13 +528,10 @@ fn render_directory(
         names.push(if is_dir { format!("{name}/") } else { name });
     }
 
-    let offset = offset.unwrap_or(1).max(1);
-    let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
-    let start = offset - 1;
     let sliced = names
         .iter()
         .skip(start)
-        .take(limit)
+        .take(end - start)
         .cloned()
         .collect::<Vec<_>>();
 
@@ -547,8 +544,8 @@ fn render_directory(
 fn render_file(
     path: &Path,
     display_path: &str,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    start: usize,
+    end: usize,
 ) -> Result<String, ToolError> {
     let mut file = std::fs::File::open(path)
         .map_err(|error| ToolError::Internal(format!("Failed to read {display_path}: {error}")))?;
@@ -567,12 +564,6 @@ fn render_file(
 
     let cursor = std::io::Cursor::new(sample);
     let mut reader = BufReader::new(cursor.chain(file));
-    let offset = offset.unwrap_or(1).max(1);
-    let limit = limit.unwrap_or(DEFAULT_READ_LIMIT);
-    let start = offset - 1;
-    let end = start.checked_add(limit).ok_or_else(|| {
-        ToolError::InvalidInput("offset plus limit exceeds the supported range.".to_string())
-    })?;
     let mut numbered_lines = Vec::new();
     let mut buf = String::new();
     let mut line_no = 0_usize;
@@ -1010,16 +1001,39 @@ mod tests {
         let dir = TestDir::new("workspace-todo-");
         let runtime = runtime_for(&dir);
         let cases = [
-            vec![todo("")],
-            vec![todo("x".repeat(4097))],
-            vec![todo("same"), todo("same")],
-            (0..101)
-                .map(|index| todo(format!("todo-{index}")))
-                .collect(),
+            (vec![todo("")], "must not be empty"),
+            (vec![todo("x".repeat(4097))], "4096 UTF-8 bytes"),
+            (vec![todo("same"), todo("same ")], "Duplicate todo content"),
+            (
+                (0..101)
+                    .map(|index| todo(format!("todo-{index}")))
+                    .collect(),
+                "at most 100 items",
+            ),
         ];
-        for todos in cases {
-            assert!(workspace_todowrite(&runtime, WorkspaceTodoWriteInput { todos }).is_err());
+        for (todos, expected) in cases {
+            let error = workspace_todowrite(&runtime, WorkspaceTodoWriteInput { todos })
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(expected), "unexpected error: {error}");
         }
+    }
+
+    #[test]
+    fn workspace_todowrite_preserves_content_whitespace() {
+        let dir = TestDir::new("workspace-todo-");
+        let runtime = runtime_for(&dir);
+
+        workspace_todowrite(
+            &runtime,
+            WorkspaceTodoWriteInput {
+                todos: vec![todo(" task ")],
+            },
+        )
+        .unwrap();
+
+        let stored = runtime.tools().unwrap().read_todos().unwrap();
+        assert_eq!(stored[0].content, " task ");
     }
 
     #[test]
