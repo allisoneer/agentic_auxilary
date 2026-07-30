@@ -142,8 +142,7 @@ pub fn evaluate_create_work_item(
         context.occurred_at,
         ChangeKind::WorkItemCreated,
         vec![AffectedView::WorkItem {
-            id: root.id(),
-            revision: root.revision(),
+            work_item: root.clone(),
         }],
         InboxEffects::new(vec![crate::InboxEntry::WorkItem(root.id())], Vec::new()),
     );
@@ -232,8 +231,7 @@ pub fn evaluate_acknowledge_attention_signal(
         context.occurred_at,
         ChangeKind::AttentionSignalAcknowledged,
         vec![AffectedView::AttentionSignal {
-            id: root.id(),
-            revision: root.revision(),
+            attention_signal: root.clone(),
         }],
         InboxEffects::new(Vec::new(), current.inbox_entry().into_iter().collect()),
     );
@@ -277,9 +275,15 @@ pub fn evaluate_ingest_source_occurrence(
     )?;
 
     let (entity, signal, inbox_effects, affected_views, intent) = match decision {
-        SourceIngestionDecision::ReceiptOnly(_) => {
-            (None, None, InboxEffects::default(), Vec::new(), None)
-        }
+        SourceIngestionDecision::ReceiptOnly(_) => (
+            None,
+            None,
+            InboxEffects::default(),
+            vec![AffectedView::SourceReceipt {
+                source_receipt: receipt.clone(),
+            }],
+            None,
+        ),
         SourceIngestionDecision::Advanced => {
             let entity = next_entity(command, current_entity)?;
             let entity_id = entity.as_ref().map(SourceEntity::id);
@@ -311,10 +315,17 @@ pub fn evaluate_ingest_source_occurrence(
             let before = current_signal.and_then(AttentionSignal::inbox_entry);
             let after = signal.inbox_entry();
             let inbox_effects = inbox_delta(before, after);
-            let affected_views = vec![AffectedView::AttentionSignal {
-                id: signal.id(),
-                revision: signal.revision(),
+            let mut affected_views = vec![AffectedView::SourceReceipt {
+                source_receipt: receipt.clone(),
             }];
+            if let Some(source_entity) = &entity {
+                affected_views.push(AffectedView::SourceEntity {
+                    source_entity: source_entity.clone(),
+                });
+            }
+            affected_views.push(AffectedView::AttentionSignal {
+                attention_signal: signal.clone(),
+            });
             let intent = if command.fresh_attention() {
                 context.outbox_intent_id.map(|id| {
                     fresh_attention_intent(
@@ -365,7 +376,6 @@ pub fn evaluate_create_reminder(
     );
     let change = reminder_change(
         &root,
-        command.initial_fire_id(),
         context,
         ChangeKind::ReminderCreated,
         InboxEffects::default(),
@@ -408,7 +418,6 @@ pub fn evaluate_fire_reminder(
         AtomicEffects::new(
             reminder_change(
                 &root,
-                command.fire_id(),
                 context,
                 ChangeKind::ReminderFired,
                 InboxEffects::new(
@@ -446,7 +455,6 @@ pub fn evaluate_acknowledge_reminder_fire(
         AtomicEffects::new(
             reminder_change(
                 &root,
-                command.fire_id(),
                 context,
                 ChangeKind::ReminderFireAcknowledged,
                 InboxEffects::new(
@@ -488,7 +496,6 @@ pub fn evaluate_snooze_reminder_fire(
         AtomicEffects::new(
             reminder_change(
                 &root,
-                command.replacement_fire_id(),
                 context,
                 ChangeKind::ReminderFireSnoozed,
                 InboxEffects::new(
@@ -553,8 +560,7 @@ fn work_item_change(
         context.occurred_at,
         kind,
         vec![AffectedView::WorkItem {
-            id: root.id(),
-            revision: root.revision(),
+            work_item: root.clone(),
         }],
         effects,
     )
@@ -562,7 +568,6 @@ fn work_item_change(
 
 fn reminder_change(
     root: &Reminder,
-    fire_id: crate::ReminderFireId,
     context: EvaluationContext,
     kind: ChangeKind,
     effects: InboxEffects,
@@ -571,17 +576,9 @@ fn reminder_change(
         context.change_event_id,
         context.occurred_at,
         kind,
-        vec![
-            AffectedView::Reminder {
-                id: root.id(),
-                revision: root.revision(),
-            },
-            AffectedView::ReminderFire {
-                reminder_id: root.id(),
-                fire_id,
-                reminder_revision: root.revision(),
-            },
-        ],
+        vec![AffectedView::Reminder {
+            reminder: root.clone(),
+        }],
         effects,
     )
 }

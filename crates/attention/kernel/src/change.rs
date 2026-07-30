@@ -1,16 +1,13 @@
 //! Native semantic change and synchronization contracts.
 
 use crate::AttentionSignal;
-use crate::AttentionSignalId;
 use crate::ChangeEventId;
 use crate::InboxEntry;
 use crate::InvariantError;
 use crate::Reminder;
-use crate::ReminderFireId;
-use crate::ReminderId;
-use crate::Revision;
+use crate::SourceEntity;
+use crate::SourceReceipt;
 use crate::WorkItem;
-use crate::WorkItemId;
 use chrono::DateTime;
 use chrono::Utc;
 
@@ -47,25 +44,13 @@ pub enum ChangeKind {
     ReminderFireSnoozed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AffectedView {
-    WorkItem {
-        id: WorkItemId,
-        revision: Revision,
-    },
-    AttentionSignal {
-        id: AttentionSignalId,
-        revision: Revision,
-    },
-    Reminder {
-        id: ReminderId,
-        revision: Revision,
-    },
-    ReminderFire {
-        reminder_id: ReminderId,
-        fire_id: ReminderFireId,
-        reminder_revision: Revision,
-    },
+    WorkItem { work_item: WorkItem },
+    AttentionSignal { attention_signal: AttentionSignal },
+    Reminder { reminder: Reminder },
+    SourceReceipt { source_receipt: SourceReceipt },
+    SourceEntity { source_entity: SourceEntity },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

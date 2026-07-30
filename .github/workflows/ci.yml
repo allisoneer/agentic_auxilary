@@ -82,6 +82,8 @@ jobs:
           SCCACHE_GHA_ENABLED: "on"
           RUSTC_WRAPPER: "sccache"
           RUST_BACKTRACE: "1"
+          # macOS temp paths may cross a symlink; attention-turso validates with NOFOLLOW.
+          TMPDIR: ${{ runner.temp }}
         run: just test-ci
 
       # Run thoughts-core integration tests which are #[ignore]d by default.
@@ -233,4 +235,6 @@ jobs:
           THOUGHTS_INTEGRATION_TESTS: "1"
           THOUGHTS_NETWORK_TESTS: "1"
           RUST_BACKTRACE: "1"
+          # macOS temp paths may cross a symlink; attention-turso validates with NOFOLLOW.
+          TMPDIR: ${{ runner.temp }}
         run: just test-ci

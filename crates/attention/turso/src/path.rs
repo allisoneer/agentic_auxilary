@@ -394,11 +394,12 @@ mod tests {
         let child = open_or_create_directory(&parent, OsStr::new("child"))?;
 
         assert!(!original.join("child").exists());
-        let child_metadata = rustix::fs::fstat(&child)?;
+        let child_metadata = child.metadata()?;
         let renamed_child_metadata = fs::metadata(renamed.join("child"))?;
-        assert_eq!(child_metadata.st_dev, renamed_child_metadata.dev());
-        assert_eq!(child_metadata.st_ino, renamed_child_metadata.ino());
-        assert_eq!(child_metadata.st_mode & 0o077, 0);
+        assert_eq!(child_metadata.dev(), renamed_child_metadata.dev());
+        assert_eq!(child_metadata.ino(), renamed_child_metadata.ino());
+        assert_eq!(child_metadata.mode(), renamed_child_metadata.mode());
+        assert_eq!(child_metadata.mode() & 0o077, 0);
         Ok(())
     }
 
