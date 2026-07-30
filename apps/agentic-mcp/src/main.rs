@@ -346,10 +346,13 @@ async fn main() -> anyhow::Result<()> {
     reg_cfg.review = loaded.config.review.clone();
     reg_cfg.thoughts = loaded.config.thoughts.clone();
     if let Some(profile) = args.nested_profile {
-        let requested = args
-            .allow
-            .as_deref()
-            .and_then(|raw| exact_nested_cli_allowlist(profile, raw));
+        let requested = args.allow.as_deref().and_then(|raw| {
+            let requested = exact_nested_cli_allowlist(profile, raw);
+            if requested.is_none() {
+                eprintln!("Rejected explicit nested --allow value; publishing zero tools");
+            }
+            requested
+        });
         reg_cfg.allowlist = Some(restrict_nested_allowlist(profile, requested));
         reg_cfg.runtime = nested_runtime(profile, &cwd, reg_cfg.allowlist.as_ref())?;
     }

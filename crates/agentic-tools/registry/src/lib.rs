@@ -275,13 +275,17 @@ impl AgenticTools {
             regs.push(review_tools::build_registry(svc));
         }
 
-        let workspace_config = config
-            .runtime
-            .workspace_tools
-            .as_ref()
-            .unwrap_or(&config.workspace_tools);
-        if workspace_tools_enabled(workspace_config) && domain_wanted(WORKSPACE_NAMES) {
-            regs.push(workspace_tools::build_registry(workspace_config));
+        let workspace_config = match &config.runtime.workspace_tools {
+            Some(runtime) => WorkspaceToolsConfig {
+                workspace_read: runtime.workspace_read,
+                workspace_todowrite: runtime.workspace_todowrite,
+                workspace_edit: false,
+                workspace_apply_patch: false,
+            },
+            None => config.workspace_tools.clone(),
+        };
+        if workspace_tools_enabled(&workspace_config) && domain_wanted(WORKSPACE_NAMES) {
+            regs.push(workspace_tools::build_registry(&workspace_config));
         }
 
         let merged = ToolRegistry::merge_all(regs);
@@ -631,6 +635,33 @@ mod tests {
         assert!(reg.contains("workspace_read"));
         assert!(reg.contains("workspace_edit"));
         assert!(!reg.contains("workspace_todowrite"));
+        assert!(!reg.contains("workspace_apply_patch"));
+    }
+
+    #[test]
+    fn runtime_workspace_tools_cannot_publish_write_capabilities() {
+        let reg = AgenticTools::new(AgenticToolsConfig {
+            allowlist: Some(HashSet::from([
+                String::from("workspace_read"),
+                String::from("workspace_todowrite"),
+                String::from("workspace_edit"),
+                String::from("workspace_apply_patch"),
+            ])),
+            runtime: AgenticRuntimeConfig {
+                workspace_tools: Some(WorkspaceToolsConfig {
+                    workspace_read: true,
+                    workspace_todowrite: true,
+                    workspace_edit: true,
+                    workspace_apply_patch: true,
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        assert!(reg.contains("workspace_read"));
+        assert!(reg.contains("workspace_todowrite"));
+        assert!(!reg.contains("workspace_edit"));
         assert!(!reg.contains("workspace_apply_patch"));
     }
 

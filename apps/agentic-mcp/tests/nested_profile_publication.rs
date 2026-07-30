@@ -84,6 +84,9 @@ fn assert_no_published_tools(output: &std::process::Output, context: &str) {
     assert!(output.stdout.is_empty(), "{context}: stdout was not empty");
 }
 
+const REJECTED_NESTED_ALLOW_DIAGNOSTIC: &str =
+    "Rejected explicit nested --allow value; publishing zero tools";
+
 #[test]
 fn default_parent_does_not_publish_runtime_only_tools() {
     let (_home, mut command) = isolated_command();
@@ -294,10 +297,11 @@ fn nested_profile_without_allowlist_publishes_nothing() {
         .output()
         .expect("run nested agentic-mcp");
     assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Available tools (0)"), "{stderr}");
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("Available tools (0)"),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+        !stderr.contains(REJECTED_NESTED_ALLOW_DIAGNOSTIC),
+        "{stderr}"
     );
     assert!(output.stdout.is_empty());
 }
@@ -383,6 +387,10 @@ fn dangerous_nested_allowlist_names_publish_exactly_nothing() {
             "input {raw:?} failed to fail closed"
         );
         let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(REJECTED_NESTED_ALLOW_DIAGNOSTIC),
+            "input {raw:?}: {stderr}"
+        );
         assert!(
             stderr.contains("Available tools (0):"),
             "input {raw:?}: {stderr}"
