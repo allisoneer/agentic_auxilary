@@ -1,0 +1,33 @@
+crates/tools/coding-agent-tools/src/agent/config.rs
+  s_7b7442cf1bf2c4::t_13480c3abec7a6 594
+  s_7b7442cf1bf2c4::t_d20b7daabada37 39-42,593,595-604
+crates/tools/coding-agent-tools/src/agent/evidence.rs
+  s_7b7442cf1bf2c4::t_401daeb6b2477e 23
+  s_7b7442cf1bf2c4::t_edf058d683207f 16,18-22,24,41,55,61,75-143,180-185,187-189,445-504
+crates/tools/coding-agent-tools/src/agent/prompts.rs
+  s_7b7442cf1bf2c4::t_d20b7daabada37 109,657-663,667-670
+  s_7b7442cf1bf2c4::t_21aae978e14df3 664-666
+  s_7b7442cf1bf2c4::t_06c8db308e3259 671-672
+crates/tools/coding-agent-tools/src/agent/mod.rs
+  s_7b7442cf1bf2c4::t_d20b7daabada37 14-109,122-123
+  s_7b7442cf1bf2c4::t_ec0c46e6b3b91b 110-121
+crates/tools/coding-agent-tools/src/agent/live_tests.rs
+  s_7b7442cf1bf2c4::t_94fafb536eb733 752-777,788-791,794-795,806-808,820-839
+  s_7b7442cf1bf2c4::t_2b829904b890d7 840
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.17",
+  "base_commit_sha": "7d72cf916e3cc40104ef022161481e3c017869f4",
+  "prompts": {},
+  "sessions": {
+    "s_7b7442cf1bf2c4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_04fae5765ffeD3XpmwteFS2eWE",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
