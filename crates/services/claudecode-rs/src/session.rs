@@ -3,6 +3,7 @@ use crate::error::ClaudeError;
 use crate::error::Result;
 use crate::process::KillHandle;
 use crate::process::ProcessHandle;
+use crate::process::is_sensitive_key;
 use crate::stream::DIAGNOSTIC_BYTE_LIMIT;
 use crate::stream::JsonStreamParser;
 use crate::stream::SingleJsonParser;
@@ -48,26 +49,12 @@ struct SecretRedactor {
 
 impl SecretRedactor {
     fn from_config(config: &SessionConfig) -> Result<Self> {
-        fn sensitive(key: &str) -> bool {
-            let key = key.to_ascii_lowercase();
-            [
-                "key",
-                "token",
-                "secret",
-                "password",
-                "authorization",
-                "credential",
-            ]
-            .iter()
-            .any(|needle| key.contains(needle))
-        }
-
         let mut values = Vec::new();
         let mut collect = |entries: &std::collections::HashMap<String, String>| {
             values.extend(
                 entries
                     .iter()
-                    .filter(|(key, value)| sensitive(key) && !value.is_empty())
+                    .filter(|(key, value)| is_sensitive_key(key) && !value.is_empty())
                     .map(|(_, value)| value.clone()),
             );
         };
@@ -87,7 +74,7 @@ impl SecretRedactor {
             }
         }
         for (key, value) in std::env::vars() {
-            if sensitive(&key) && !value.is_empty() {
+            if is_sensitive_key(&key) && !value.is_empty() {
                 values.push(value);
             }
         }

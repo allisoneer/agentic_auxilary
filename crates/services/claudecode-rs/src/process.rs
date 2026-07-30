@@ -18,6 +18,20 @@ use which::which;
 
 pub(crate) const KILL_GRACE: Duration = Duration::from_millis(250);
 
+pub(crate) fn is_sensitive_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    [
+        "key",
+        "token",
+        "secret",
+        "password",
+        "authorization",
+        "credential",
+    ]
+    .iter()
+    .any(|needle| key.contains(needle))
+}
+
 pub(crate) fn redact_argv(args: &[String]) -> Vec<String> {
     const SENSITIVE_VALUE_FLAGS: &[&str] = &[
         "--system-prompt",

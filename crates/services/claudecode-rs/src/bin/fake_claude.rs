@@ -21,6 +21,17 @@ fn run_lifecycle_fixture(pid_file: &str) {
         .spawn()
         .unwrap_or_else(|error| panic!("failed to spawn lifecycle helper: {error}"));
     let child_pid = child.id();
+    // SAFETY: record_termination is an async-signal-safe handler that only stores an atomic bool.
+    unsafe {
+        libc::signal(
+            libc::SIGTERM,
+            record_termination as *const () as libc::sighandler_t,
+        );
+        libc::signal(
+            libc::SIGINT,
+            record_termination as *const () as libc::sighandler_t,
+        );
+    }
     let pid_bytes = serde_json::to_vec(&json!({
         "parent_pid": std::process::id(),
         "child_pid": child_pid,
@@ -39,17 +50,6 @@ fn run_lifecycle_fixture(pid_file: &str) {
         std::process::exit(1);
     }
 
-    // SAFETY: record_termination is an async-signal-safe handler that only stores an atomic bool.
-    unsafe {
-        libc::signal(
-            libc::SIGTERM,
-            record_termination as *const () as libc::sighandler_t,
-        );
-        libc::signal(
-            libc::SIGINT,
-            record_termination as *const () as libc::sighandler_t,
-        );
-    }
     while !TERMINATED.load(Ordering::SeqCst) {
         std::thread::sleep(Duration::from_millis(10));
     }
@@ -148,6 +148,18 @@ fn invoke_configured_mcp(args: &[String], nonce: &str) -> Option<String> {
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     if args.iter().any(|arg| arg == "--version") {
+        if args
+            .first()
+            .and_then(|path| std::path::Path::new(path).file_name())
+            .is_some_and(|name| name == "fake_claude_hanging_version")
+        {
+            let pid_file = std::path::Path::new(&args[0]).with_extension("pid");
+            std::fs::write(pid_file, std::process::id().to_string())
+                .unwrap_or_else(|error| panic!("failed to write version probe pid: {error}"));
+            loop {
+                std::thread::sleep(Duration::from_mins(1));
+            }
+        }
         println!("2.1.220 (fake)");
         return;
     }

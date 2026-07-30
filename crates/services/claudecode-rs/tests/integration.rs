@@ -9,6 +9,8 @@ use std::collections::HashSet;
 use std::io::BufRead;
 use std::io::Write;
 use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
 
 #[tokio::test]
 async fn test_client_creation() {
@@ -319,22 +321,77 @@ async fn fake_claude_retains_raw_transcript_and_warning_diagnostics() {
 }
 
 #[tokio::test]
-async fn fake_claude_invocation_metadata_lists_env_keys_and_redacts_mcp_secrets() {
+async fn hanging_version_probe_is_killed_and_launch_continues_without_version_metadata() {
+    let directory = tempfile::TempDir::new().unwrap();
+    let hanging_claude = directory.path().join("fake_claude_hanging_version");
+    std::fs::copy(env!("CARGO_BIN_EXE_fake_claude"), &hanging_claude).unwrap();
+    let probe_pid_file = hanging_claude.with_extension("pid");
+    let client = Client::with_path(&hanging_claude).await.unwrap();
+    let config = SessionConfig::builder("fixture")
+        .output_format(OutputFormat::StreamingJson)
+        .build()
+        .unwrap();
+
+    let started = Instant::now();
+    let session = tokio::time::timeout(Duration::from_secs(10), client.launch(config))
+        .await
+        .expect("launch remained blocked after version probe timeout")
+        .unwrap();
+    assert!(started.elapsed() >= Duration::from_secs(5));
+    let outcome = session.complete().await.unwrap();
+    assert_eq!(outcome.result.content.as_deref(), Some("fixture complete"));
+    assert_eq!(outcome.invocation.claude_version, None);
+
+    let probe_pid = std::fs::read_to_string(probe_pid_file)
+        .unwrap()
+        .parse::<i32>()
+        .unwrap();
+    for _ in 0..100 {
+        if matches!(
+            nix::sys::signal::kill(nix::unistd::Pid::from_raw(probe_pid), None),
+            Err(nix::errno::Errno::ESRCH)
+        ) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("timed-out version probe process {probe_pid} remained alive");
+}
+
+#[tokio::test]
+async fn fake_claude_invocation_metadata_redacts_credential_only_mcp_values() {
     let client = Client::with_path(env!("CARGO_BIN_EXE_fake_claude"))
         .await
         .unwrap();
+    let stdio_credential = "stdio-credential-value";
+    let http_credential = "http-credential-value";
     let mcp_config = MCPConfig {
-        mcp_servers: HashMap::from([(
-            "nonce".to_string(),
-            MCPServer::stdio_with_env(
-                env!("CARGO_BIN_EXE_fake_mcp_server"),
-                vec![],
-                HashMap::from([
-                    ("API_TOKEN".to_string(), "mcp-super-secret".to_string()),
-                    ("VISIBLE_MODE".to_string(), "fixture".to_string()),
-                ]),
+        mcp_servers: HashMap::from([
+            (
+                "nonce".to_string(),
+                MCPServer::stdio_with_env(
+                    env!("CARGO_BIN_EXE_fake_mcp_server"),
+                    vec![],
+                    HashMap::from([
+                        (
+                            "SERVICE_CREDENTIAL".to_string(),
+                            stdio_credential.to_string(),
+                        ),
+                        ("VISIBLE_MODE".to_string(), "fixture".to_string()),
+                    ]),
+                ),
             ),
-        )]),
+            (
+                "remote".to_string(),
+                MCPServer::http_with_headers(
+                    "https://example.invalid/mcp",
+                    HashMap::from([
+                        ("X-Credential".to_string(), http_credential.to_string()),
+                        ("X-Visible".to_string(), "retained".to_string()),
+                    ]),
+                ),
+            ),
+        ]),
     };
     let config = SessionConfig::builder("fixture")
         .output_format(OutputFormat::StreamingJson)
@@ -358,7 +415,9 @@ async fn fake_claude_invocation_metadata_lists_env_keys_and_redacts_mcp_secrets(
     let rendered = outcome.invocation.mcp_config.unwrap().to_string();
     assert!(rendered.contains("<redacted>"), "{rendered}");
     assert!(rendered.contains("fixture"), "{rendered}");
-    assert!(!rendered.contains("mcp-super-secret"), "{rendered}");
+    assert!(rendered.contains("retained"), "{rendered}");
+    assert!(!rendered.contains(stdio_credential), "{rendered}");
+    assert!(!rendered.contains(http_credential), "{rendered}");
     assert!(!rendered.contains("session-super-secret"), "{rendered}");
 }
 
@@ -405,15 +464,9 @@ async fn fake_claude_redacts_configured_secrets_from_tool_results_and_stderr() {
 
 #[tokio::test]
 async fn fake_claude_empty_setting_sources_exclude_user_home_ambient_state() {
-    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .unwrap();
-    let fixture_root = workspace.join("target/claudecode-hermetic-fixtures");
-    std::fs::create_dir_all(&fixture_root).unwrap();
     let home = tempfile::Builder::new()
         .prefix("home-")
-        .tempdir_in(fixture_root)
+        .tempdir_in(env!("CARGO_TARGET_TMPDIR"))
         .unwrap();
     let sentinels = [
         (

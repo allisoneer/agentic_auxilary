@@ -6,15 +6,19 @@ use crate::error::Result;
 use crate::process::ProcessHandle;
 use crate::process::expand_tilde;
 use crate::process::find_claude_in_path;
+use crate::process::is_sensitive_key;
 use crate::process::redact_argv;
 use crate::session::Session;
 use crate::types::InvocationMetadata;
 use crate::types::Result as ClaudeResult;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 use tempfile::NamedTempFile;
 use tokio::fs;
 use tracing::debug;
+
+const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -116,11 +120,12 @@ impl Client {
     }
 
     async fn claude_version(&self) -> Option<String> {
-        tokio::process::Command::new(&self.claude_path)
-            .arg("--version")
-            .output()
+        let mut command = tokio::process::Command::new(&self.claude_path);
+        command.arg("--version").kill_on_drop(true);
+        tokio::time::timeout(VERSION_PROBE_TIMEOUT, command.output())
             .await
             .ok()
+            .and_then(std::result::Result::ok)
             .filter(|output| output.status.success())
             .and_then(|output| String::from_utf8(output.stdout).ok())
             .map(|value| value.trim().chars().take(256).collect())
@@ -324,11 +329,7 @@ fn redact_json(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Object(map) => {
             for (key, child) in map {
-                let key = key.to_ascii_lowercase();
-                if ["key", "token", "secret", "password", "authorization"]
-                    .iter()
-                    .any(|needle| key.contains(needle))
-                {
+                if is_sensitive_key(key) {
                     *child = serde_json::Value::String("<redacted>".to_string());
                 } else {
                     redact_json(child);
@@ -630,7 +631,7 @@ mod tests {
     fn recursive_json_redaction_hides_credential_values() {
         let mut value = serde_json::json!({
             "headers": {"Authorization": "Bearer secret"},
-            "env": {"API_TOKEN": "secret", "SAFE": "visible"}
+            "env": {"service_credential": "secret", "SAFE": "visible"}
         });
         redact_json(&mut value);
         let rendered = value.to_string();
