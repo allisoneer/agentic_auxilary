@@ -122,7 +122,12 @@ fn read_from_base(base: &Path, input: &ThoughtsReadInput) -> Result<String, Tool
         base.join(requested)
     };
     let canonical = std::fs::canonicalize(&joined).map_err(|error| {
-        ToolError::InvalidInput(format!("Failed to resolve `{}`: {error}", input.file_path))
+        let message = format!("Failed to resolve `{}`: {error}", input.file_path);
+        if error.kind() == std::io::ErrorKind::NotFound {
+            ToolError::NotFound(message)
+        } else {
+            ToolError::InvalidInput(message)
+        }
     })?;
     if !canonical.starts_with(&base) {
         return Err(ToolError::InvalidInput(format!(
@@ -698,7 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn specialized_read_supports_files_directories_and_external_bases() {
+    fn specialized_read_supports_files_and_directories() {
         let base = TempDir::new().unwrap();
         std::fs::create_dir_all(base.path().join("plans")).unwrap();
         std::fs::write(base.path().join("plans/approved.md"), "approved\n").unwrap();
@@ -707,6 +712,15 @@ mod tests {
         assert!(file.contains("1: approved"));
         let directory = read_from_base(base.path(), &read_input("plans")).unwrap();
         assert!(directory.contains("approved.md"));
+    }
+
+    #[test]
+    fn specialized_read_reports_missing_paths_as_not_found() {
+        let base = TempDir::new().unwrap();
+
+        let error = read_from_base(base.path(), &read_input("missing.md")).unwrap_err();
+
+        assert!(matches!(error, ToolError::NotFound(_)));
     }
 
     #[test]
