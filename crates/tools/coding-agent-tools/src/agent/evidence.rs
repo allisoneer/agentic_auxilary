@@ -13,6 +13,68 @@ fn tool_use(block: &Content) -> Option<(&str, &str)> {
     }
 }
 
+fn walk_transcript_pairs<U, P>(
+    outcome: &SessionOutcome,
+    mut on_tool_use: U,
+    mut on_pair: P,
+) -> Result<(), String>
+where
+    U: FnMut(&str, &str) -> Result<(), String>,
+    P: FnMut(&str, &str, serde_json::Value, bool) -> Result<(), String>,
+{
+    let mut uses = HashMap::<String, String>::new();
+    for envelope in &outcome.transcript {
+        match &envelope.event {
+            Event::Assistant(event) => {
+                if event.message.role != "assistant" {
+                    return Err(
+                        "Assistant event contained a non-assistant message role".to_string()
+                    );
+                }
+                for block in &event.message.content {
+                    let Some((id, name)) = tool_use(block) else {
+                        if block.tool_result().is_some() {
+                            return Err("Tool result appeared outside a user event".to_string());
+                        }
+                        continue;
+                    };
+                    on_tool_use(id, name)?;
+                    if uses.insert(id.to_string(), name.to_string()).is_some() {
+                        return Err(format!("Transcript reused tool-use ID `{id}`"));
+                    }
+                }
+            }
+            Event::User(event) => {
+                if event.message.role != "user" {
+                    return Err("User event contained a non-user message role".to_string());
+                }
+                for block in &event.message.content {
+                    if tool_use(block).is_some() {
+                        return Err("Tool use appeared outside an assistant event".to_string());
+                    }
+                    if let Some((tool_use_id, content, is_error)) = block.tool_result() {
+                        let Some(name) = uses.remove(tool_use_id) else {
+                            return Err(format!(
+                                "Tool result `{tool_use_id}` did not follow a matching assistant tool use"
+                            ));
+                        };
+                        on_pair(tool_use_id, &name, content, is_error)?;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !uses.is_empty() {
+        let mut ids = uses.into_keys().collect::<Vec<_>>();
+        ids.sort();
+        return Err(format!(
+            "Claude transcript contained unpaired assistant tool uses: {ids:?}"
+        ));
+    }
+    Ok(())
+}
+
 pub fn validate_outcome(
     outcome: &SessionOutcome,
     allowed_tools: &[String],
@@ -58,66 +120,27 @@ pub fn validate_outcome(
         ));
     }
 
-    let mut uses = HashMap::<String, String>::new();
     let mut has_evidence = false;
-    for envelope in &outcome.transcript {
-        match &envelope.event {
-            Event::Assistant(event) => {
-                if event.message.role != "assistant" {
-                    return Err(
-                        "Assistant event contained a non-assistant message role".to_string()
-                    );
-                }
-                for block in &event.message.content {
-                    let Some((id, name)) = tool_use(block) else {
-                        if block.tool_result().is_some() {
-                            return Err("Tool result appeared outside a user event".to_string());
-                        }
-                        continue;
-                    };
-                    if !allowed.contains(name) {
-                        return Err(format!("Transcript called disallowed tool `{name}`"));
-                    }
-                    if uses.insert(id.to_string(), name.to_string()).is_some() {
-                        return Err(format!("Transcript reused tool-use ID `{id}`"));
-                    }
-                }
+    walk_transcript_pairs(
+        outcome,
+        |_, name| {
+            if !allowed.contains(name) {
+                return Err(format!("Transcript called disallowed tool `{name}`"));
             }
-            Event::User(event) => {
-                if event.message.role != "user" {
-                    return Err("User event contained a non-user message role".to_string());
-                }
-                for block in &event.message.content {
-                    if tool_use(block).is_some() {
-                        return Err("Tool use appeared outside an assistant event".to_string());
-                    }
-                    if let Some((tool_use_id, _, is_error)) = block.tool_result() {
-                        let Some(name) = uses.remove(tool_use_id) else {
-                            return Err(format!(
-                                "Tool result `{tool_use_id}` did not follow a matching assistant tool use"
-                            ));
-                        };
-                        if is_error {
-                            return Err(format!(
-                                "Tool result `{tool_use_id}` for `{name}` reported an error"
-                            ));
-                        }
-                        if name != "mcp__agentic-mcp__workspace_todowrite" {
-                            has_evidence = true;
-                        }
-                    }
-                }
+            Ok(())
+        },
+        |tool_use_id, name, _, is_error| {
+            if is_error {
+                return Err(format!(
+                    "Tool result `{tool_use_id}` for `{name}` reported an error"
+                ));
             }
-            _ => {}
-        }
-    }
-    if !uses.is_empty() {
-        let mut ids = uses.into_keys().collect::<Vec<_>>();
-        ids.sort();
-        return Err(format!(
-            "Claude transcript contained unpaired assistant tool uses: {ids:?}"
-        ));
-    }
+            if name != "mcp__agentic-mcp__workspace_todowrite" {
+                has_evidence = true;
+            }
+            Ok(())
+        },
+    )?;
     if !has_evidence {
         return Err(
             "Claude transcript contained no allowed non-todo tool use with a matching successful result"
@@ -153,47 +176,17 @@ pub fn validate_nonce_provenance(
     if expected.is_empty() {
         return Err("Expected evidence tool list must not be empty".to_string());
     }
-    let mut uses = HashMap::<String, String>::new();
     let mut found = false;
-    for envelope in &outcome.transcript {
-        match &envelope.event {
-            Event::Assistant(event) => {
-                if event.message.role != "assistant" {
-                    return Err(
-                        "Assistant event contained a non-assistant message role".to_string()
-                    );
-                }
-                for block in &event.message.content {
-                    if let Some((id, name)) = tool_use(block)
-                        && uses.insert(id.to_string(), name.to_string()).is_some()
-                    {
-                        return Err(format!("Transcript reused tool-use ID `{id}`"));
-                    }
-                }
+    walk_transcript_pairs(
+        outcome,
+        |_, _| Ok(()),
+        |_, name, content, is_error| {
+            if !is_error && expected.contains(name) && content.to_string().contains(nonce) {
+                found = true;
             }
-            Event::User(event) => {
-                if event.message.role != "user" {
-                    return Err("User event contained a non-user message role".to_string());
-                }
-                for block in &event.message.content {
-                    if let Some((tool_use_id, content, is_error)) = block.tool_result() {
-                        let Some(name) = uses.remove(tool_use_id) else {
-                            return Err(format!(
-                                "Tool result `{tool_use_id}` did not follow a matching assistant tool use"
-                            ));
-                        };
-                        if !is_error
-                            && expected.contains(name.as_str())
-                            && content.to_string().contains(nonce)
-                        {
-                            found = true;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
+            Ok(())
+        },
+    )?;
     if found {
         Ok(())
     } else {
@@ -443,6 +436,66 @@ mod tests {
         assert!(
             validate_nonce_provenance(
                 &duplicate,
+                std::slice::from_ref(&tool),
+                &["find marker"],
+                "nonce-123"
+            )
+            .is_err()
+        );
+
+        let mut wrong_use = valid.clone();
+        wrong_use.transcript[1] = claudecode::RawEvent::from_value(serde_json::json!({
+            "type": "user", "session_id": "s", "message": {
+                "role": "user", "content": [{
+                    "type": "tool_use", "id": "call-1", "name": tool, "input": {}
+                }]
+            }
+        }))
+        .unwrap();
+        assert!(
+            validate_nonce_provenance(
+                &wrong_use,
+                std::slice::from_ref(&tool),
+                &["find marker"],
+                "nonce-123"
+            )
+            .is_err()
+        );
+
+        let mut wrong_result = valid.clone();
+        wrong_result.transcript[2] = claudecode::RawEvent::from_value(serde_json::json!({
+            "type": "assistant", "session_id": "s", "message": {
+                "role": "assistant", "content": [{
+                    "type": "tool_result", "tool_use_id": "call-1", "content": "nonce-123",
+                    "is_error": false
+                }]
+            }
+        }))
+        .unwrap();
+        assert!(
+            validate_nonce_provenance(
+                &wrong_result,
+                std::slice::from_ref(&tool),
+                &["find marker"],
+                "nonce-123"
+            )
+            .is_err()
+        );
+
+        let mut leftover = valid.clone();
+        leftover.transcript.push(
+            claudecode::RawEvent::from_value(serde_json::json!({
+                "type": "assistant", "session_id": "s", "message": {
+                    "role": "assistant", "content": [{
+                        "type": "tool_use", "id": "call-2", "name": tool, "input": {}
+                    }]
+                }
+            }))
+            .unwrap(),
+        );
+        assert!(
+            validate_nonce_provenance(
+                &leftover,
                 std::slice::from_ref(&tool),
                 &["find marker"],
                 "nonce-123"

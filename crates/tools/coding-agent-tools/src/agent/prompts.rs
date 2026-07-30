@@ -106,56 +106,7 @@ pub const GUARDRAILS_SHARED: &str = r#"
 "#;
 
 fn direct_tool_guidance(agent_type: AgentType, location: AgentLocation) -> String {
-    let tools: &[&str] = match (agent_type, location) {
-        (AgentType::Locator, AgentLocation::Codebase) => &[
-            "mcp__agentic-mcp__cli_ls",
-            "mcp__agentic-mcp__cli_grep",
-            "mcp__agentic-mcp__cli_glob",
-        ],
-        (AgentType::Locator, AgentLocation::Thoughts) => &[
-            "mcp__agentic-mcp__cli_ls",
-            "mcp__agentic-mcp__cli_grep",
-            "mcp__agentic-mcp__cli_glob",
-            "mcp__agentic-mcp__thoughts_list_documents",
-        ],
-        (AgentType::Locator, AgentLocation::References) => &[
-            "mcp__agentic-mcp__cli_ls",
-            "mcp__agentic-mcp__cli_grep",
-            "mcp__agentic-mcp__cli_glob",
-            "mcp__agentic-mcp__thoughts_list_references",
-        ],
-        (AgentType::Locator, AgentLocation::Web) => &[
-            "mcp__agentic-mcp__web_search",
-            "mcp__agentic-mcp__web_fetch",
-        ],
-        (AgentType::Analyzer, AgentLocation::Codebase) => &[
-            "mcp__agentic-mcp__workspace_read",
-            "mcp__agentic-mcp__cli_ls",
-            "mcp__agentic-mcp__cli_grep",
-            "mcp__agentic-mcp__cli_glob",
-            "mcp__agentic-mcp__workspace_todowrite",
-        ],
-        (AgentType::Analyzer, AgentLocation::Thoughts) => &[
-            "mcp__agentic-mcp__thoughts_read_document",
-            "mcp__agentic-mcp__cli_ls",
-            "mcp__agentic-mcp__cli_grep",
-            "mcp__agentic-mcp__cli_glob",
-            "mcp__agentic-mcp__thoughts_list_documents",
-        ],
-        (AgentType::Analyzer, AgentLocation::References) => &[
-            "mcp__agentic-mcp__thoughts_read_reference",
-            "mcp__agentic-mcp__cli_ls",
-            "mcp__agentic-mcp__cli_grep",
-            "mcp__agentic-mcp__cli_glob",
-            "mcp__agentic-mcp__thoughts_list_references",
-            "mcp__agentic-mcp__workspace_todowrite",
-        ],
-        (AgentType::Analyzer, AgentLocation::Web) => &[
-            "mcp__agentic-mcp__web_search",
-            "mcp__agentic-mcp__web_fetch",
-            "mcp__agentic-mcp__workspace_todowrite",
-        ],
-    };
+    let tools = super::tool_ids_for(agent_type, location);
     let mut guidance = format!(
         "## Direct tool contract\nCall only these tools directly:\n{}\nNo Claude built-in tools are available. Report a tool failure instead of inventing evidence.",
         tools
@@ -701,6 +652,22 @@ mod tests {
         let prompt = compose_prompt_impl(AgentType::Analyzer, AgentLocation::Web);
         assert!(prompt.contains(ANALYZER_BASE_PROMPT.trim()));
         assert!(prompt.contains("web_fetch"));
+    }
+
+    #[test]
+    fn direct_tool_guidance_uses_canonical_matrix_order() {
+        for cell in &super::super::TOOL_MATRIX {
+            let guidance = direct_tool_guidance(cell.agent_type, cell.location);
+            let mut previous_end = 0;
+            for tool in cell.tools {
+                let needle = format!("- `{tool}`");
+                let Some(position) = guidance.find(&needle) else {
+                    panic!("missing canonical tool guidance for {tool}");
+                };
+                assert!(position >= previous_end);
+                previous_end = position + needle.len();
+            }
+        }
     }
 
     #[test]

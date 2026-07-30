@@ -749,6 +749,32 @@ impl Drop for MockWebServer {
     }
 }
 
+const MAX_MOCK_HTTP_HEADER_BYTES: usize = 16 * 1024;
+
+async fn read_mock_http_headers<R>(reader: &mut R) -> Option<Vec<u8>>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut headers = Vec::with_capacity(1024);
+    while headers.len() < MAX_MOCK_HTTP_HEADER_BYTES {
+        let mut chunk = [0_u8; 1024];
+        let remaining = MAX_MOCK_HTTP_HEADER_BYTES - headers.len();
+        let chunk_len = remaining.min(chunk.len());
+        let read = tokio::io::AsyncReadExt::read(reader, &mut chunk[..chunk_len])
+            .await
+            .ok()?;
+        if read == 0 {
+            return None;
+        }
+        headers.extend_from_slice(&chunk[..read]);
+        if let Some(end) = headers.windows(4).position(|window| window == b"\r\n\r\n") {
+            headers.truncate(end + 4);
+            return Some(headers);
+        }
+    }
+    None
+}
+
 async fn start_web_mock(value: String) -> MockWebServer {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -759,13 +785,14 @@ async fn start_web_mock(value: String) -> MockWebServer {
             let Ok((mut stream, _)) = listener.accept().await else {
                 break;
             };
-            let mut buffer = vec![0_u8; 16 * 1024];
-            let Ok(read) = tokio::io::AsyncReadExt::read(&mut stream, &mut buffer).await else {
+            let Some(headers) = read_mock_http_headers(&mut stream).await else {
                 continue;
             };
-            let request = String::from_utf8_lossy(&buffer[..read]);
-            let (content_type, body) = if request.starts_with("POST /search ") {
-                (
+            let Some(line_end) = headers.windows(2).position(|window| window == b"\r\n") else {
+                continue;
+            };
+            let (content_type, body) = match &headers[..line_end] {
+                b"POST /search HTTP/1.1" => (
                     "application/json",
                     serde_json::json!({
                         "results": [{
@@ -776,9 +803,9 @@ async fn start_web_mock(value: String) -> MockWebServer {
                         }]
                     })
                     .to_string(),
-                )
-            } else {
-                ("text/plain", format!("WEB_NONCE={value}"))
+                ),
+                b"GET /page HTTP/1.1" => ("text/plain", format!("WEB_NONCE={value}")),
+                _ => continue,
             };
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -788,6 +815,27 @@ async fn start_web_mock(value: String) -> MockWebServer {
         }
     });
     MockWebServer { base_url, task }
+}
+
+#[tokio::test]
+async fn web_mock_reads_fragmented_complete_headers_before_classification() {
+    let (mut client, mut server) = tokio::io::duplex(256);
+    let writer = tokio::spawn(async move {
+        tokio::io::AsyncWriteExt::write_all(&mut client, b"POST /sea")
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+        tokio::io::AsyncWriteExt::write_all(
+            &mut client,
+            b"rch HTTP/1.1\r\nHost: fixture\r\n\r\nrequest-body",
+        )
+        .await
+        .unwrap();
+    });
+
+    let headers = read_mock_http_headers(&mut server).await.unwrap();
+    writer.await.unwrap();
+    assert_eq!(headers, b"POST /search HTTP/1.1\r\nHost: fixture\r\n\r\n");
 }
 
 async fn run_web_cell(agent_type: AgentType) {

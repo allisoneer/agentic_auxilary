@@ -33,68 +33,13 @@ pub fn model_for(agent_type: AgentType, cfg: &SubagentsConfig) -> Result<Model, 
     }
 }
 
-// TODO(2): Intentional explicit match for clarity and compile-time exhaustiveness.
-// We keep the hardcoded mapping to avoid accidental tool exposure and ensure deterministic tests.
 /// Get the enabled tools for a given type × location combination.
 /// Every entry is an eagerly published qualified MCP tool; Claude built-ins are forbidden.
 pub fn enabled_tools_for(agent_type: AgentType, location: AgentLocation) -> Vec<String> {
-    use AgentLocation::Codebase;
-    use AgentLocation::References;
-    use AgentLocation::Thoughts;
-    use AgentLocation::Web;
-    use AgentType::Analyzer;
-    use AgentType::Locator;
-
-    match (agent_type, location) {
-        (Locator, Codebase) => vec![
-            "mcp__agentic-mcp__cli_ls".into(),
-            "mcp__agentic-mcp__cli_grep".into(),
-            "mcp__agentic-mcp__cli_glob".into(),
-        ],
-        (Locator, Thoughts) => vec![
-            "mcp__agentic-mcp__cli_ls".into(),
-            "mcp__agentic-mcp__thoughts_list_documents".into(),
-            "mcp__agentic-mcp__cli_grep".into(),
-            "mcp__agentic-mcp__cli_glob".into(),
-        ],
-        (Locator, References) => vec![
-            "mcp__agentic-mcp__cli_ls".into(),
-            "mcp__agentic-mcp__thoughts_list_references".into(),
-            "mcp__agentic-mcp__cli_grep".into(),
-            "mcp__agentic-mcp__cli_glob".into(),
-        ],
-        (Locator, Web) => vec![
-            "mcp__agentic-mcp__web_search".into(),
-            "mcp__agentic-mcp__web_fetch".into(),
-        ],
-        (Analyzer, Codebase) => vec![
-            "mcp__agentic-mcp__workspace_read".into(),
-            "mcp__agentic-mcp__cli_ls".into(),
-            "mcp__agentic-mcp__cli_grep".into(),
-            "mcp__agentic-mcp__cli_glob".into(),
-            "mcp__agentic-mcp__workspace_todowrite".into(),
-        ],
-        (Analyzer, Thoughts) => vec![
-            "mcp__agentic-mcp__thoughts_read_document".into(),
-            "mcp__agentic-mcp__cli_ls".into(),
-            "mcp__agentic-mcp__thoughts_list_documents".into(),
-            "mcp__agentic-mcp__cli_grep".into(),
-            "mcp__agentic-mcp__cli_glob".into(),
-        ],
-        (Analyzer, References) => vec![
-            "mcp__agentic-mcp__thoughts_read_reference".into(),
-            "mcp__agentic-mcp__cli_ls".into(),
-            "mcp__agentic-mcp__thoughts_list_references".into(),
-            "mcp__agentic-mcp__cli_grep".into(),
-            "mcp__agentic-mcp__cli_glob".into(),
-            "mcp__agentic-mcp__workspace_todowrite".into(),
-        ],
-        (Analyzer, Web) => vec![
-            "mcp__agentic-mcp__web_search".into(),
-            "mcp__agentic-mcp__web_fetch".into(),
-            "mcp__agentic-mcp__workspace_todowrite".into(),
-        ],
-    }
+    super::tool_ids_for(agent_type, location)
+        .iter()
+        .map(|tool| (*tool).to_string())
+        .collect()
 }
 
 /// Compose the system prompt for a given type × location combination.
@@ -645,7 +590,18 @@ mod tests {
                 vec!["web_search", "web_fetch", "workspace_todowrite"],
             ),
         ];
-        for (agent_type, location, expected) in cases {
+        assert_eq!(super::super::TOOL_MATRIX.len(), cases.len());
+        for (cell, (agent_type, location, expected)) in super::super::TOOL_MATRIX.iter().zip(cases)
+        {
+            assert_eq!(cell.agent_type, agent_type);
+            assert_eq!(cell.location, location);
+            assert_eq!(
+                cell.tools
+                    .iter()
+                    .map(|tool| tool.strip_prefix("mcp__agentic-mcp__").unwrap())
+                    .collect::<Vec<_>>(),
+                expected
+            );
             assert_eq!(
                 enabled_tools_for(agent_type, location),
                 expected
