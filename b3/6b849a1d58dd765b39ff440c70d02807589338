@@ -1,0 +1,25 @@
+crates/agentic-tools/registry/src/lib.rs
+  s_c324caa7378914::t_1e25e77f7850c1 278-288,641-664
+  s_c324caa7378914::t_89ca427a4c1eed 665-667
+apps/agentic-mcp/src/main.rs
+  s_c324caa7378914::t_8540254b034fbd 349-355
+apps/agentic-mcp/tests/nested_profile_publication.rs
+  s_c324caa7378914::t_7388f9079caffe 303-304
+  s_c324caa7378914::t_8540254b034fbd 87-89,300-301,390-393
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.17",
+  "base_commit_sha": "b36b849a1d58dd765b39ff440c70d02807589338",
+  "prompts": {},
+  "sessions": {
+    "s_c324caa7378914": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_04fbe7f23ffe7kNseKYCA7duLG",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
