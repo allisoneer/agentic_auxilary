@@ -1,0 +1,20 @@
+crates/tools/thoughts-mcp-tools/src/tools.rs
+  s_f24fac0d09eb06::t_b2e77449175658 125-130,706,717-723
+  s_f24fac0d09eb06::t_69c570575a2016 724-725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.17",
+  "base_commit_sha": "767dd33b3a56e98d92431a015f6cf5b5661ef80b",
+  "prompts": {},
+  "sessions": {
+    "s_f24fac0d09eb06": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_04fbabd6cffevlzdmXjO6gQWox",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
