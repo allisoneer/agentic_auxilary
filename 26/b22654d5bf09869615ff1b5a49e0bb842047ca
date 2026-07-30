@@ -1,0 +1,34 @@
+crates/services/claudecode-rs/src/bin/fake_claude.rs
+  s_d6bee53486b8f4::t_41783939bd4a30 160
+  s_d6bee53486b8f4::t_1941084a78fb25 151-159,161-162
+  s_d6bee53486b8f4::t_af4f7445234f87 24-34
+crates/services/claudecode-rs/src/session.rs
+  s_d6bee53486b8f4::t_874f6f28b1705c 6,57,77
+crates/services/claudecode-rs/tests/integration.rs
+  s_d6bee53486b8f4::t_874f6f28b1705c 362,366-367,369-382,384-394,418-420
+  s_d6bee53486b8f4::t_886ab3ba2f1924 469
+  s_d6bee53486b8f4::t_1941084a78fb25 12-13,324-335,337-358
+  s_d6bee53486b8f4::t_b814cbc125e765 336
+  s_d6bee53486b8f4::t_3d490a41042867 359-361
+crates/services/claudecode-rs/src/process.rs
+  s_d6bee53486b8f4::t_874f6f28b1705c 21-34
+crates/services/claudecode-rs/src/client.rs
+  s_d6bee53486b8f4::t_1941084a78fb25 16,21-22,123-125,128
+  s_d6bee53486b8f4::t_874f6f28b1705c 9,332,634
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.17",
+  "base_commit_sha": "26b22654d5bf09869615ff1b5a49e0bb842047ca",
+  "prompts": {},
+  "sessions": {
+    "s_d6bee53486b8f4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_04fb8a242ffeZkKlDzYuyQIJDk",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
