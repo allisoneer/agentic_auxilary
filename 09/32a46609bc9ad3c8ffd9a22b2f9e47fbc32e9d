@@ -1,0 +1,23 @@
+crates/tools/workspace-tools/src/service.rs
+  s_442e0cd724dbe7::t_080ac5a6c540f1 108-109,119
+crates/tools/workspace-tools/src/tools.rs
+  s_442e0cd724dbe7::t_9c460b67c43f7f 213,216,225,236,239,500-501,534,547-548,1004-1005,1007-1012,1014-1018,1022-1036
+  s_442e0cd724dbe7::t_ecc01e9a0e0244 228,1006
+  s_442e0cd724dbe7::t_ebcd73341db996 1037-1038
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.17",
+  "base_commit_sha": "0932a46609bc9ad3c8ffd9a22b2f9e47fbc32e9d",
+  "prompts": {},
+  "sessions": {
+    "s_442e0cd724dbe7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_04fc269a3ffepSiNlRyfxpvrYu",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
