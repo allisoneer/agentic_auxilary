@@ -41,7 +41,7 @@ for pkg in "${pkgs[@]}"; do
 	echo "Validating MCP schemas: ${pkg}" >&2
 
 	set +e
-	output="$(npx -y @modelcontextprotocol/inspector --cli --transport stdio --method tools/list "$bin" 2>&1)"
+	output="$(npx -y @modelcontextprotocol/inspector --cli "$bin" --transport stdio --method tools/list 2>&1)"
 	code=$?
 	set -e
 
