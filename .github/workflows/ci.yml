@@ -33,7 +33,7 @@ jobs:
           cache: true
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Install tools
         uses: taiki-e/install-action@v2
@@ -73,7 +73,7 @@ jobs:
           tool: nextest@0.9.72,just
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Use explicit CI-safe just recipes so the justfile owns nextest routing
       # and profile selection without adding Node.js/npx to this job.
@@ -226,7 +226,7 @@ jobs:
           tool: nextest@0.9.72,just
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Run network-enabled tests (nextest)
         env:
