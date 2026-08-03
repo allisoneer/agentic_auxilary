@@ -3,12 +3,14 @@ use crate::Error;
 use crate::decode;
 use crate::sql;
 use crate::writer::sanitize;
+use futures::future::BoxFuture;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 use turso_db::Connection;
 use turso_db::Database;
 use turso_db::params;
+use turso_db::transaction::Transaction;
 use turso_db::transaction::TransactionBehavior;
 
 #[derive(Debug)]
@@ -68,6 +70,69 @@ impl ReaderPool {
         result
     }
 
+    pub(crate) async fn with_snapshot<T, F>(
+        &self,
+        engine: &Mutex<Option<Database>>,
+        operation: F,
+    ) -> Result<T, Error>
+    where
+        F: for<'transaction, 'connection> Fn(
+            &'transaction Transaction<'connection>,
+        ) -> BoxFuture<'transaction, Result<T, Error>>,
+    {
+        let _permit = Arc::clone(&self.permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| Error::Shutdown)?;
+        let mut connection = self.take_or_connect(engine).await?;
+        let mut final_result = None;
+        for delay_ms in [0, 10, 50] {
+            if delay_ms != 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            }
+            let transaction = match connection
+                .transaction_with_behavior(TransactionBehavior::Deferred)
+                .await
+            {
+                Ok(transaction) => transaction,
+                Err(error) => {
+                    let error = Error::from(error);
+                    if matches!(error, Error::BusySnapshot(_)) {
+                        final_result = Some(Err(error));
+                        continue;
+                    }
+                    final_result = Some(Err(error));
+                    break;
+                }
+            };
+            let result = operation(&transaction).await;
+            let rollback = transaction.rollback().await.map_err(Error::from);
+            if let Err(error) = rollback {
+                final_result = Some(Err(error));
+                break;
+            }
+            match result {
+                Ok(value) => {
+                    final_result = Some(Ok(value));
+                    break;
+                }
+                Err(error @ Error::BusySnapshot(_)) => {
+                    final_result = Some(Err(error));
+                }
+                Err(error) => {
+                    final_result = Some(Err(error));
+                    break;
+                }
+            }
+        }
+        if sanitize(&connection).await.is_ok() {
+            self.connections.lock().await.push(connection);
+        }
+        final_result.ok_or(Error::BusySnapshot(Box::new(std::io::Error::other(
+            "snapshot attempts exhausted",
+        ))))?
+    }
+
     async fn read_probe_with_connection(
         &self,
         connection: &mut Connection,
@@ -102,14 +167,33 @@ impl ReaderPool {
         let guard = engine.lock().await;
         let database = guard.as_ref().ok_or(Error::Shutdown)?;
         let connection = database.connect().map_err(Error::from_connect)?;
-        connection
-            .busy_timeout(self.busy_timeout.duration())
-            .map_err(Error::from)?;
+        sql::configure_connection(&connection, self.busy_timeout).await?;
         Ok(connection)
     }
 
     pub(crate) async fn close(&self) {
         self.permits.close();
         self.connections.lock().await.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn foreign_keys_enabled(
+        &self,
+        engine: &Mutex<Option<Database>>,
+        recreate: bool,
+    ) -> Result<bool, Error> {
+        let _permit = Arc::clone(&self.permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| Error::Shutdown)?;
+        if recreate {
+            self.connections.lock().await.clear();
+        }
+        let connection = self.take_or_connect(engine).await?;
+        let enabled = sql::foreign_keys_enforced(&connection).await?;
+        if sanitize(&connection).await.is_ok() {
+            self.connections.lock().await.push(connection);
+        }
+        Ok(enabled)
     }
 }

@@ -35,6 +35,18 @@ pub enum Error {
     Corrupt(#[source] BoxError),
     #[error("database value decode failed")]
     Decode(#[source] BoxError),
+    #[error("persisted {record} codec version {version} is unsupported ({byte_length} bytes)")]
+    UnsupportedCodec {
+        record: &'static str,
+        version: i64,
+        byte_length: usize,
+    },
+    #[error("persisted {record} codec version {version} is malformed ({byte_length} bytes)")]
+    MalformedCodec {
+        record: &'static str,
+        version: i64,
+        byte_length: usize,
+    },
     #[error("migration integrity check failed: {0}")]
     MigrationIntegrity(&'static str),
     #[error("backup or restore failed: {0}")]

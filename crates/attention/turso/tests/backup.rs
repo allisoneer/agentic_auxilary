@@ -82,6 +82,29 @@ async fn every_missing_or_changed_required_file_is_rejected() -> TestResult {
 }
 
 #[tokio::test]
+async fn migration_head_and_checksum_manifest_drift_are_rejected() -> TestResult {
+    let (_root, source, _manifest) = source_database().await?;
+    let complete = source.backup_root().as_path().join("complete");
+    for (name, field, value) in [
+        ("wrong-head", "migration_head", serde_json::json!(1)),
+        (
+            "wrong-migration-checksum",
+            "migration_checksum",
+            serde_json::json!([0, 1, 2]),
+        ),
+    ] {
+        let changed = source.backup_root().as_path().join(name);
+        copy_directory(&complete, &changed)?;
+        let manifest_path = changed.join("manifest.json");
+        let mut manifest: serde_json::Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+        manifest[field] = value;
+        fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
+        assert_restore_rejected(&source, name).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn partial_manifest_traversal_unexpected_symlink_and_nonempty_targets_are_rejected()
 -> TestResult {
     let (_root, source, _manifest) = source_database().await?;

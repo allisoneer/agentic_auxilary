@@ -20,6 +20,7 @@ use turso_db::transaction::TransactionBehavior;
 type TestResult<T = ()> = Result<T, Box<dyn StdError + Send + Sync>>;
 
 const MIGRATION_SQL: &str = include_str!("../migrations/0001_foundation.sql");
+const CORE_MIGRATION_SQL: &str = include_str!("../migrations/0002_attention_core.sql");
 
 fn config(root: &Path) -> Result<Config, attention_turso::PathError> {
     Config::new(root.join("database"), root.join("backups"))
@@ -35,8 +36,8 @@ async fn empty_to_head_rerun_reopen_and_checksum_drift_refusal() -> TestResult {
     let config = config(root.path())?;
     let database = AttentionDatabase::open(config.clone()).await?;
     let first = database.run_startup_migrations().await?;
-    assert_eq!(first.applied(), 1);
-    assert_eq!(first.head(), 1);
+    assert_eq!(first.applied(), 2);
+    assert_eq!(first.head(), 2);
     assert_eq!(database.run_startup_migrations().await?.applied(), 0);
     database
         .write_qualification_probe("migration", b"fingerprint", b"value")
@@ -51,6 +52,35 @@ async fn empty_to_head_rerun_reopen_and_checksum_drift_refusal() -> TestResult {
             .is_some()
     );
     database.close().await?;
+    let raw = Builder::new_local(
+        config
+            .database_directory()
+            .database_file()
+            .to_str()
+            .ok_or("database path is not UTF-8")?,
+    )
+    .build()
+    .await?;
+    let connection = raw.connect()?;
+    let mut rows = connection
+        .query(
+            "SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name IN (\
+             'attention_stream_state', 'work_items', 'source_receipts', 'source_entities', \
+             'attention_signals', 'reminders', 'reminder_fires', 'mutation_outcomes', \
+             'change_events', 'outbox_intents')",
+            (),
+        )
+        .await?;
+    assert_eq!(
+        rows.next()
+            .await?
+            .ok_or("schema count missing")?
+            .get::<i64>(0)?,
+        10
+    );
+    drop(rows);
+    drop(connection);
+    drop(raw);
 
     let path = config.database_directory().database_file();
     let path = path.to_str().ok_or("database path is not UTF-8")?;
@@ -77,6 +107,7 @@ async fn malformed_duplicate_unknown_and_too_new_ledgers_are_refused() -> TestRe
         vec![(1_i64, "foundation"), (1_i64, "foundation")],
         vec![(1_i64, "unknown")],
         vec![(2_i64, "future")],
+        vec![(3_i64, "future")],
     ] {
         let root = tempfile::tempdir()?;
         let config = config(root.path())?;
@@ -105,6 +136,33 @@ async fn malformed_duplicate_unknown_and_too_new_ledgers_are_refused() -> TestRe
             Err(Error::MigrationIntegrity(_))
         ));
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn released_head_one_fixture_upgrades_to_head_two() -> TestResult {
+    let root = tempfile::tempdir()?;
+    let config = config(root.path())?;
+    let path = config.database_directory().database_file();
+    let path = path.to_str().ok_or("database path is not UTF-8")?;
+    let raw = Builder::new_local(path).build().await?;
+    let connection = raw.connect()?;
+    connection.execute_batch(MIGRATION_SQL).await?;
+    connection
+        .execute(
+            "INSERT INTO __attention_migrations (version, name, checksum) VALUES (?1, ?2, ?3)",
+            params![1_i64, "foundation", checksum()],
+        )
+        .await?;
+    drop(connection);
+    drop(raw);
+
+    let database = AttentionDatabase::open(config).await?;
+    let report = database.run_startup_migrations().await?;
+    assert_eq!(report.applied(), 1);
+    assert_eq!(report.head(), 2);
+    assert_eq!(database.run_startup_migrations().await?.applied(), 0);
+    database.close().await?;
     Ok(())
 }
 
@@ -139,7 +197,7 @@ async fn child_process_interruption_never_splits_ddl_and_ledger() -> TestResult 
 
         let database = AttentionDatabase::open(config).await?;
         let report = database.run_startup_migrations().await?;
-        let expected = usize::from(boundary != "after-commit");
+        let expected = if boundary == "after-commit" { 1 } else { 2 };
         assert_eq!(report.applied(), expected, "boundary {boundary}");
         assert_eq!(database.run_startup_migrations().await?.applied(), 0);
         database.close().await?;
@@ -182,4 +240,10 @@ async fn child_migration_worker() -> TestResult {
     transaction.commit().await?;
     pause_at(&barrier).await?;
     Ok(())
+}
+
+#[test]
+fn core_migration_is_nonempty_and_foundation_bytes_remain_separate() {
+    assert!(!CORE_MIGRATION_SQL.is_empty());
+    assert!(!MIGRATION_SQL.contains("attention_stream_state"));
 }

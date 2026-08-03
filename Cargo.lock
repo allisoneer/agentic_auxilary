@@ -715,7 +715,9 @@ name = "attention-turso"
 version = "0.1.0"
 dependencies = [
  "attention-kernel",
+ "chrono",
  "fs2",
+ "futures",
  "rustix 1.1.4",
  "serde",
  "serde_json",

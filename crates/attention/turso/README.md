@@ -1,6 +1,6 @@
 # attention-turso
 
-`attention-turso` is the exact-pinned native local Turso foundation for Attention. It qualifies and owns local engine lifecycle, connection ownership, migrations, commit ambiguity, WAL/file behavior, and stopped backup/restore. It intentionally contains no production Attention domain schema or kernel port implementation.
+`attention-turso` is the exact-pinned native local Turso adapter for Attention. It owns local engine lifecycle, connection ownership, migrations, commit ambiguity, WAL/file behavior, stopped backup/restore, and the T05 production implementation of `AttentionReadPort` and `AttentionCommitPort`.
 
 ## Supported contract
 
@@ -12,6 +12,10 @@
 - A dropped writer or reader future removes its connection from the reusable set. Later work independently reconnects. Sanitation drives exact-tag deferred rollback cleanup with a query and proves a new transaction can begin and roll back before reuse.
 - Bundled startup-only migrations are forward-only. The ledger records immutable version, name, and SHA-256 checksum. Open/reopen rejects duplicate, unknown, too-new, renamed, or drifted state; migration DDL and ledger insertion share one immediate transaction.
 - A failure after commit invocation without a definite result is `CommitOutcomeUnknown`. It is never replayed automatically. Reopen resolves the stable qualification identity as matching committed value, definitely absent, identity conflict, or a terminal read/integrity error. Only definitely absent permits a separately evaluated new attempt.
+- T05 persists authoritative WorkItems, signals, Reminders with complete fire history, SourceReceipts, SourceEntities, mutation outcomes, immutable versioned ChangeEvents, stream head/floor, Inbox effects, and optional base Outbox intents. Every semantic mutation uses one serialized immediate transaction; failed guards write nothing.
+- Point reads, snapshots, and changes-after use independent configured reader connections. Snapshot roots and cursor share one deferred transaction. Changes-after classifies Future, Expired, or valid pages from floor, head, and rows in one deferred transaction.
+- ChangeEvent and prior-outcome JSON bytes are adapter-owned and versioned. Unknown or malformed versions fail closed, historical views are decoded from original stored bytes, and diagnostics report only record kind, version, and byte length.
+- Delivery leases, delivery state/checkpoints, scheduler behavior, and workers remain T06 scope. Protocol DTOs, opaque cursor parsing, native-to-wire mapping, and server synchronization remain T08 scope. Startup composition and migration invocation remain T09 scope.
 
 ## WAL and stopped operations
 
