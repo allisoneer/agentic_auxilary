@@ -220,26 +220,16 @@ impl ChangePage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ChangeGap {
-    requested_after: CommitCursor,
-    earliest_available: CommitCursor,
-}
-
-impl ChangeGap {
-    pub const fn new(requested_after: CommitCursor, earliest_available: CommitCursor) -> Self {
-        Self {
-            requested_after,
-            earliest_available,
-        }
-    }
-
-    pub const fn requested_after(self) -> CommitCursor {
-        self.requested_after
-    }
-
-    pub const fn earliest_available(self) -> CommitCursor {
-        self.earliest_available
-    }
+pub enum ChangeGap {
+    Expired {
+        requested_after: CommitCursor,
+        earliest_available: CommitCursor,
+        latest_available: CommitCursor,
+    },
+    Future {
+        requested_after: CommitCursor,
+        latest_available: CommitCursor,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

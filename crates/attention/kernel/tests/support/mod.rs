@@ -302,15 +302,27 @@ impl AttentionReadPort for MemoryAdapter {
     ) -> BoxFuture<'_, Result<ChangesAfterResult, PortError<Self::Error>>> {
         Box::pin(async move {
             let state = self.state.lock().expect("state lock");
-            if let Some(floor) = state.retention_floor
-                && query.after() < floor
-            {
-                return Ok(ChangesResult::Gap(ChangeGap::new(query.after(), floor)));
+            let head = CommitCursor::try_from(state.cursor).expect("nonzero cursor");
+            let floor = state
+                .retention_floor
+                .unwrap_or_else(|| CommitCursor::try_from(1).expect("nonzero genesis cursor"));
+            if query.after() < floor {
+                return Ok(ChangesResult::Gap(ChangeGap::Expired {
+                    requested_after: query.after(),
+                    earliest_available: floor,
+                    latest_available: head,
+                }));
+            }
+            if query.after() > head {
+                return Ok(ChangesResult::Gap(ChangeGap::Future {
+                    requested_after: query.after(),
+                    latest_available: head,
+                }));
             }
             let mut matching: Vec<_> = state
                 .events
                 .iter()
-                .filter(|event| event.cursor() > query.after())
+                .filter(|event| event.cursor() > query.after() && event.cursor() <= head)
                 .cloned()
                 .collect();
             let has_more = matching.len() > query.limit().value();
