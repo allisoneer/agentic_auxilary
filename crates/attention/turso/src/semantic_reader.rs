@@ -99,15 +99,25 @@ async fn reminder_in(
     else {
         return Ok(None);
     };
+    reminder_from_header(transaction, &header).await.map(Some)
+}
+
+async fn reminder_from_header(
+    transaction: &Transaction<'_>,
+    header: &mapping::ReminderHeader,
+) -> Result<Reminder, Error> {
     let mut rows = transaction
-        .query(domain_sql::SELECT_REMINDER_FIRES, params![mapping::id(id)])
+        .query(
+            domain_sql::SELECT_REMINDER_FIRES,
+            params![mapping::id(header.id)],
+        )
         .await?;
     let mut fires = Vec::new();
     while let Some(row) = rows.next().await? {
         fires.push(mapping::reminder_fire(&row)?);
     }
     drop(rows);
-    Ok(Some(mapping::reminder(&header, fires)?))
+    mapping::reminder(header, fires)
 }
 
 pub async fn reminder(
@@ -317,19 +327,14 @@ async fn all_signals(transaction: &Transaction<'_>) -> Result<Vec<AttentionSigna
 
 async fn all_reminders(transaction: &Transaction<'_>) -> Result<Vec<Reminder>, Error> {
     let mut rows = transaction.query(domain_sql::SELECT_REMINDERS, ()).await?;
-    let mut ids = Vec::new();
+    let mut headers = Vec::new();
     while let Some(row) = rows.next().await? {
-        ids.push(mapping::reminder_header(&row)?.id);
+        headers.push(mapping::reminder_header(&row)?);
     }
     drop(rows);
-    let mut reminders = Vec::with_capacity(ids.len());
-    for id in ids {
-        reminders.push(reminder_in(transaction, id).await?.ok_or_else(|| {
-            Error::Decode(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "reminder disappeared inside snapshot",
-            )))
-        })?);
+    let mut reminders = Vec::with_capacity(headers.len());
+    for header in headers {
+        reminders.push(reminder_from_header(transaction, &header).await?);
     }
     Ok(reminders)
 }

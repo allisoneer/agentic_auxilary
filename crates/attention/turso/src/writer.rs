@@ -121,6 +121,8 @@ impl Writer {
                 Err(error)
             }
             Ok(TransactionDecision::Commit(value)) => {
+                // No await separates these stores, so BeforeCommit is transient here. It is a
+                // stable cooperative-task observation point only where an explicit barrier pauses.
                 self.set_phase(CommitPhase::BeforeCommit);
                 self.set_phase(CommitPhase::CommitInvoked);
                 if transaction.commit().await.is_err() {

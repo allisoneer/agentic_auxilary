@@ -49,6 +49,8 @@ pub enum Error {
     },
     #[error("migration integrity check failed: {0}")]
     MigrationIntegrity(&'static str),
+    #[error("runtime invariant violated: {0}")]
+    InvariantViolation(&'static str),
     #[error("backup or restore failed: {0}")]
     Backup(&'static str),
     #[error("backup or restore I/O failed")]

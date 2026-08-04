@@ -83,7 +83,7 @@ fn next_cursor(head: CommitCursor) -> Result<CommitCursor, PortError<Error>> {
     CommitCursor::try_from(
         head.value()
             .checked_add(1)
-            .ok_or_else(|| PortError::Adapter(Error::MigrationIntegrity("cursor overflow")))?,
+            .ok_or_else(|| PortError::Adapter(Error::InvariantViolation("cursor overflow")))?,
     )
     .map_err(|error| PortError::Adapter(Error::Decode(Box::new(error))))
 }
@@ -127,7 +127,7 @@ async fn begin(
         .map_err(Error::from)
         .map_err(PortError::Adapter)?
         .ok_or_else(|| {
-            PortError::Adapter(Error::MigrationIntegrity("outcome conflict vanished"))
+            PortError::Adapter(Error::InvariantViolation("outcome conflict vanished"))
         })?;
     let operation = mapping::parse_operation(decode::integer(&row, 0).map_err(PortError::Adapter)?)
         .map_err(PortError::Adapter)?;
@@ -771,7 +771,7 @@ pub async fn ingest_source(
                 };
                 if &actual != bundle.authority_guard().observed() {
                     let key = bundle.authority_guard().key().cloned().ok_or_else(|| {
-                        PortError::Adapter(Error::MigrationIntegrity("absent authority conflict"))
+                        PortError::Adapter(Error::InvariantViolation("absent authority conflict"))
                     })?;
                     return semantic(SemanticError::ObservedSourceVersionConflict {
                         entity: key,
@@ -835,7 +835,7 @@ async fn persist_fires(
 ) -> Result<(), PortError<Error>> {
     for (ordinal, fire) in reminder.fires().iter().enumerate() {
         let ordinal = i64::try_from(ordinal).map_err(|_| {
-            PortError::Adapter(Error::MigrationIntegrity("reminder fire ordinal overflow"))
+            PortError::Adapter(Error::InvariantViolation("reminder fire ordinal overflow"))
         })?;
         transaction
             .execute(
@@ -885,7 +885,7 @@ async fn create_reminder_root(
     }
     persist_fires(transaction, reminder).await?;
     let fire = current_fire(reminder).ok_or_else(|| {
-        PortError::Adapter(Error::MigrationIntegrity(
+        PortError::Adapter(Error::InvariantViolation(
             "created reminder has no current fire",
         ))
     })?;

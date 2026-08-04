@@ -85,8 +85,10 @@ impl ReaderPool {
             .await
             .map_err(|_| Error::Shutdown)?;
         let mut connection = self.take_or_connect(engine).await?;
-        let mut final_result = None;
-        for delay_ms in [0, 10, 50] {
+        let [first_delay_ms, remaining_delays_ms @ ..] = [0_u64, 10, 50];
+        let mut delay_ms = first_delay_ms;
+        let mut remaining_delays_ms = remaining_delays_ms.into_iter();
+        let final_result = loop {
             if delay_ms != 0 {
                 tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
             }
@@ -97,40 +99,39 @@ impl ReaderPool {
                 Ok(transaction) => transaction,
                 Err(error) => {
                     let error = Error::from(error);
-                    if matches!(error, Error::BusySnapshot(_)) {
-                        final_result = Some(Err(error));
+                    let retry = matches!(error, Error::BusySnapshot(_));
+                    if retry && let Some(next_delay_ms) = remaining_delays_ms.next() {
+                        delay_ms = next_delay_ms;
                         continue;
                     }
-                    final_result = Some(Err(error));
-                    break;
+                    break Err(error);
                 }
             };
             let result = operation(&transaction).await;
             let rollback = transaction.rollback().await.map_err(Error::from);
             if let Err(error) = rollback {
-                final_result = Some(Err(error));
-                break;
+                break Err(error);
             }
             match result {
                 Ok(value) => {
-                    final_result = Some(Ok(value));
-                    break;
+                    break Ok(value);
                 }
                 Err(error @ Error::BusySnapshot(_)) => {
-                    final_result = Some(Err(error));
+                    if let Some(next_delay_ms) = remaining_delays_ms.next() {
+                        delay_ms = next_delay_ms;
+                        continue;
+                    }
+                    break Err(error);
                 }
                 Err(error) => {
-                    final_result = Some(Err(error));
-                    break;
+                    break Err(error);
                 }
             }
-        }
+        };
         if sanitize(&connection).await.is_ok() {
             self.connections.lock().await.push(connection);
         }
-        final_result.ok_or(Error::BusySnapshot(Box::new(std::io::Error::other(
-            "snapshot attempts exhausted",
-        ))))?
+        final_result
     }
 
     async fn read_probe_with_connection(
