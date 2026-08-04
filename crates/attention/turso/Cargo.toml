@@ -11,7 +11,9 @@ autotests = false
 
 [dependencies]
 attention-kernel = { version = "0.1.0", path = "../kernel" }
+chrono = { workspace = true }
 fs2 = "0.4"
+futures = "0.3"
 rustix = { version = "1", features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -55,6 +57,38 @@ path = "tests/wal.rs"
 [[test]]
 name = "backup"
 path = "tests/backup.rs"
+
+[[test]]
+name = "exact_pin_gate"
+path = "tests/exact_pin_gate.rs"
+
+[[test]]
+name = "codec_fixtures"
+path = "tests/codec_fixtures.rs"
+
+[[test]]
+name = "reader_ports"
+path = "tests/reader_ports.rs"
+
+[[test]]
+name = "commit_conformance"
+path = "tests/commit_conformance.rs"
+
+[[test]]
+name = "restart_and_replay"
+path = "tests/restart_and_replay.rs"
+
+[[test]]
+name = "snapshot_change_race"
+path = "tests/snapshot_change_race.rs"
+
+[[test]]
+name = "semantic_crash"
+path = "tests/semantic_crash.rs"
+
+[[test]]
+name = "security_and_diagnostics"
+path = "tests/security_and_diagnostics.rs"
 
 [lints]
 workspace = true

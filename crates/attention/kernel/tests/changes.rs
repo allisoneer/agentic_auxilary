@@ -70,6 +70,18 @@ fn source_command(
 fn snapshots_pages_and_gaps_preserve_cursor_contracts() {
     let adapter = MemoryAdapter::new();
     let initial = block_on(adapter.snapshot()).expect("initial snapshot");
+    let empty = block_on(adapter.changes_after(ChangesAfterQuery::new(
+        initial.cursor(),
+        QueryLimit::try_from(2).expect("limit"),
+    )))
+    .expect("empty changes");
+    let ChangesResult::Page(empty) = empty else {
+        panic!("expected empty genesis page");
+    };
+    assert!(empty.events().is_empty());
+    assert_eq!(empty.resume_after(), initial.cursor());
+    assert!(!empty.has_more());
+
     for _ in 0..3 {
         let command = CreateWorkItem::new(
             WorkItemId::new(),
@@ -96,16 +108,69 @@ fn snapshots_pages_and_gaps_preserve_cursor_contracts() {
     assert_eq!(page.events().len(), 2);
     assert!(page.has_more());
     assert!(page.events()[0].cursor() < page.events()[1].cursor());
+    let first_resume = page.resume_after();
 
-    adapter.set_retention_floor(page.resume_after());
-    assert!(matches!(
+    let continuation = block_on(adapter.changes_after(ChangesAfterQuery::new(
+        first_resume,
+        QueryLimit::try_from(2).expect("limit"),
+    )))
+    .expect("continuation");
+    let ChangesResult::Page(continuation) = continuation else {
+        panic!("expected continuation page");
+    };
+    assert_eq!(continuation.events().len(), 1);
+    assert!(!continuation.has_more());
+    assert!(continuation.events()[0].cursor() > first_resume);
+    let head = continuation.resume_after();
+
+    let at_head = block_on(adapter.changes_after(ChangesAfterQuery::new(
+        head,
+        QueryLimit::try_from(2).expect("limit"),
+    )))
+    .expect("head changes");
+    let ChangesResult::Page(at_head) = at_head else {
+        panic!("expected page at head");
+    };
+    assert!(at_head.events().is_empty());
+    assert_eq!(at_head.resume_after(), head);
+
+    let future = CommitCursor::try_from(head.value() + 1).expect("future cursor");
+    assert_eq!(
+        block_on(adapter.changes_after(ChangesAfterQuery::new(
+            future,
+            QueryLimit::try_from(2).expect("limit"),
+        )))
+        .expect("future gap"),
+        ChangesResult::Gap(ChangeGap::Future {
+            requested_after: future,
+            latest_available: head,
+        })
+    );
+
+    adapter.set_retention_floor(first_resume);
+    assert_eq!(
         block_on(adapter.changes_after(ChangesAfterQuery::new(
             initial.cursor(),
             QueryLimit::try_from(2).expect("limit"),
         )))
         .expect("gap result"),
-        ChangesResult::Gap(_)
-    ));
+        ChangesResult::Gap(ChangeGap::Expired {
+            requested_after: initial.cursor(),
+            earliest_available: first_resume,
+            latest_available: head,
+        })
+    );
+
+    let at_floor = block_on(adapter.changes_after(ChangesAfterQuery::new(
+        first_resume,
+        QueryLimit::try_from(2).expect("limit"),
+    )))
+    .expect("floor page");
+    let ChangesResult::Page(at_floor) = at_floor else {
+        panic!("expected page at floor");
+    };
+    assert_eq!(at_floor.events(), continuation.events());
+    assert_eq!(at_floor.resume_after(), head);
 }
 
 #[test]

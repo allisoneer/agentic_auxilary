@@ -8,9 +8,46 @@ use crate::migration;
 use crate::migration::MigrationReport;
 use crate::path::DirectoryOwnership;
 use crate::reader::ReaderPool;
+use crate::semantic_reader;
+use crate::semantic_writer;
+use crate::sql;
 use crate::writer::CommitPhase;
 use crate::writer::ProbeWriteOutcome;
 use crate::writer::Writer;
+use attention_kernel::AcknowledgeAttentionSignalBundle;
+use attention_kernel::AcknowledgeAttentionSignalResult;
+use attention_kernel::AcknowledgeReminderFireBundle;
+use attention_kernel::AcknowledgeReminderFireResult;
+use attention_kernel::AttentionSignal;
+use attention_kernel::AttentionSignalId;
+use attention_kernel::AttentionSnapshot;
+use attention_kernel::CancelWorkItemBundle;
+use attention_kernel::CancelWorkItemResult;
+use attention_kernel::ChangesAfterQuery;
+use attention_kernel::ChangesResult;
+use attention_kernel::CompleteWorkItemBundle;
+use attention_kernel::CompleteWorkItemResult;
+use attention_kernel::CreateReminderBundle;
+use attention_kernel::CreateReminderResult;
+use attention_kernel::CreateWorkItemBundle;
+use attention_kernel::CreateWorkItemResult;
+use attention_kernel::FireReminderBundle;
+use attention_kernel::FireReminderResult;
+use attention_kernel::IngestSourceOccurrenceBundle;
+use attention_kernel::IngestSourceOccurrenceResult;
+use attention_kernel::MutationIdempotencyKey;
+use attention_kernel::PortError;
+use attention_kernel::PriorMutationOutcome;
+use attention_kernel::Reminder;
+use attention_kernel::ReminderId;
+use attention_kernel::SnoozeReminderFireBundle;
+use attention_kernel::SnoozeReminderFireResult;
+use attention_kernel::SourceAuthorityQuery;
+use attention_kernel::SourceEntity;
+use attention_kernel::SourceReceipt;
+use attention_kernel::SourceReceiptId;
+use attention_kernel::WorkItem;
+use attention_kernel::WorkItemId;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use turso_db::Builder;
@@ -39,6 +76,205 @@ struct Inner {
 }
 
 impl AttentionDatabase {
+    async fn semantic_readers(&self) -> Result<Arc<ReaderPool>, Error> {
+        self.inner
+            .readers
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)
+    }
+
+    pub(crate) async fn semantic_work_item(
+        &self,
+        id: WorkItemId,
+    ) -> Result<Option<WorkItem>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::work_item(&readers, &self.inner.engine, id).await
+    }
+
+    pub(crate) async fn semantic_signal(
+        &self,
+        id: AttentionSignalId,
+    ) -> Result<Option<AttentionSignal>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::signal(&readers, &self.inner.engine, id).await
+    }
+
+    pub(crate) async fn semantic_reminder(
+        &self,
+        id: ReminderId,
+    ) -> Result<Option<Reminder>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::reminder(&readers, &self.inner.engine, id).await
+    }
+
+    pub(crate) async fn semantic_entity(
+        &self,
+        query: &SourceAuthorityQuery,
+    ) -> Result<Option<SourceEntity>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::entity(&readers, &self.inner.engine, query).await
+    }
+
+    pub(crate) async fn semantic_receipt(
+        &self,
+        id: SourceReceiptId,
+    ) -> Result<Option<SourceReceipt>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::receipt(&readers, &self.inner.engine, id).await
+    }
+
+    pub(crate) async fn semantic_outcome(
+        &self,
+        key: MutationIdempotencyKey,
+    ) -> Result<Option<PriorMutationOutcome>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::outcome(&readers, &self.inner.engine, key).await
+    }
+
+    pub(crate) async fn semantic_snapshot(&self) -> Result<AttentionSnapshot, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::snapshot(&readers, &self.inner.engine).await
+    }
+
+    pub(crate) async fn semantic_changes(
+        &self,
+        query: ChangesAfterQuery,
+    ) -> Result<ChangesResult, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::changes(&readers, &self.inner.engine, query).await
+    }
+
+    async fn semantic_writer_parts(&self) -> Result<(Arc<Writer>, Arc<ReaderPool>), Error> {
+        let writer = self
+            .inner
+            .writer
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)?;
+        Ok((writer, self.semantic_readers().await?))
+    }
+
+    pub(crate) async fn semantic_create_work_item(
+        &self,
+        bundle: CreateWorkItemBundle,
+    ) -> Result<CreateWorkItemResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::create_work_item(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_complete_work_item(
+        &self,
+        bundle: CompleteWorkItemBundle,
+    ) -> Result<CompleteWorkItemResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::complete_work_item(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_cancel_work_item(
+        &self,
+        bundle: CancelWorkItemBundle,
+    ) -> Result<CancelWorkItemResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::cancel_work_item(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_acknowledge_signal(
+        &self,
+        bundle: AcknowledgeAttentionSignalBundle,
+    ) -> Result<AcknowledgeAttentionSignalResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::acknowledge_signal(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_ingest_source(
+        &self,
+        bundle: IngestSourceOccurrenceBundle,
+    ) -> Result<IngestSourceOccurrenceResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::ingest_source(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_create_reminder(
+        &self,
+        bundle: CreateReminderBundle,
+    ) -> Result<CreateReminderResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::create_reminder(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_fire_reminder(
+        &self,
+        bundle: FireReminderBundle,
+    ) -> Result<FireReminderResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::fire_reminder(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_acknowledge_reminder(
+        &self,
+        bundle: AcknowledgeReminderFireBundle,
+    ) -> Result<AcknowledgeReminderFireResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::acknowledge_reminder(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
+    pub(crate) async fn semantic_snooze_reminder(
+        &self,
+        bundle: SnoozeReminderFireBundle,
+    ) -> Result<SnoozeReminderFireResult, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        semantic_writer::snooze_reminder(&writer, &readers, &self.inner.engine, bundle).await
+    }
+
     pub async fn open(config: Config) -> Result<Self, Error> {
         let ownership = config
             .database_directory()
@@ -225,17 +461,13 @@ async fn open_engine(config: &Config) -> Result<(Database, Arc<Writer>, Arc<Read
         .await
         .map_err(Error::from_open)?;
     let writer_connection = engine.connect().map_err(Error::from_connect)?;
-    writer_connection
-        .busy_timeout(config.busy_timeout().duration())
-        .map_err(Error::from)?;
+    sql::configure_connection(&writer_connection, config.busy_timeout()).await?;
     migration::preflight(&writer_connection).await?;
     let writer = Writer::new(writer_connection, config.busy_timeout());
     let mut reader_connections = Vec::with_capacity(config.reader_count());
     for _ in 0..config.reader_count() {
         let connection = engine.connect().map_err(Error::from_connect)?;
-        connection
-            .busy_timeout(config.busy_timeout().duration())
-            .map_err(Error::from)?;
+        sql::configure_connection(&connection, config.busy_timeout()).await?;
         reader_connections.push(connection);
     }
     let readers = ReaderPool::new(reader_connections, config.busy_timeout());
@@ -245,6 +477,18 @@ async fn open_engine(config: &Config) -> Result<(Database, Arc<Writer>, Arc<Read
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::writer::SemanticFailpoint;
+    use attention_kernel::AttentionCommitPort;
+    use attention_kernel::AttentionReadPort;
+    use attention_kernel::ChangeEventId;
+    use attention_kernel::CommitCursor;
+    use attention_kernel::CreateWorkItem;
+    use attention_kernel::EvaluationContext;
+    use attention_kernel::MutationIdempotencyKey;
+    use attention_kernel::PriorOutcomeQuery;
+    use attention_kernel::evaluate_create_work_item;
+    use chrono::Utc;
+    use futures::FutureExt;
     use std::time::Duration;
     use tokio::sync::Notify;
     use turso_db::params;
@@ -346,6 +590,277 @@ mod tests {
             ProbeWriteOutcome::Applied
         );
 
+        database.close().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn foreign_keys_are_enabled_on_initial_and_recreated_connections() -> Result<(), Error> {
+        let (_root, database) = database(2).await?;
+        let writer = database
+            .inner
+            .writer
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)?;
+        let readers = database
+            .inner
+            .readers
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)?;
+        assert!(
+            writer
+                .foreign_keys_enabled(&database.inner.engine, false)
+                .await?
+        );
+        assert!(
+            writer
+                .foreign_keys_enabled(&database.inner.engine, true)
+                .await?
+        );
+        assert!(
+            readers
+                .foreign_keys_enabled(&database.inner.engine, false)
+                .await?
+        );
+        assert!(
+            readers
+                .foreign_keys_enabled(&database.inner.engine, true)
+                .await?
+        );
+        database.close().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn semantic_failpoints_roll_back_outcome_root_event_and_head() -> Result<(), Error> {
+        for failpoint in [
+            SemanticFailpoint::AfterOutcome,
+            SemanticFailpoint::AfterRoot,
+            SemanticFailpoint::AfterFinish,
+        ] {
+            let (_root, database) = database(1).await?;
+            let command = CreateWorkItem::new(
+                WorkItemId::new(),
+                None,
+                None,
+                None,
+                None,
+                MutationIdempotencyKey::new(),
+            );
+            let bundle = evaluate_create_work_item(
+                &command,
+                EvaluationContext::new(ChangeEventId::new(), None, Utc::now()),
+            );
+            let writer = database
+                .inner
+                .writer
+                .lock()
+                .await
+                .as_ref()
+                .cloned()
+                .ok_or(Error::Shutdown)?;
+            writer.set_semantic_failpoint(failpoint);
+            assert!(
+                database
+                    .commit_create_work_item(bundle.clone())
+                    .await
+                    .is_err()
+            );
+            writer.set_semantic_failpoint(SemanticFailpoint::Disabled);
+            assert!(
+                database
+                    .work_item(command.id())
+                    .await
+                    .is_ok_and(|row| row.is_none())
+            );
+            assert!(
+                database
+                    .prior_outcome(PriorOutcomeQuery::new(command.idempotency_key()))
+                    .await
+                    .is_ok_and(|row| row.is_none())
+            );
+            assert_eq!(
+                database
+                    .snapshot()
+                    .await
+                    .map_err(|error| match error {
+                        PortError::Adapter(error) => error,
+                        PortError::Semantic(_) => Error::MigrationIntegrity(
+                            "snapshot unexpectedly returned a semantic error",
+                        ),
+                    })?
+                    .cursor(),
+                CommitCursor::try_from(1).map_err(|error| Error::Decode(Box::new(error)))?
+            );
+            database
+                .commit_create_work_item(bundle)
+                .await
+                .map_err(|error| match error {
+                    PortError::Adapter(error) => error,
+                    PortError::Semantic(_) => {
+                        Error::MigrationIntegrity("retry unexpectedly returned a semantic error")
+                    }
+                })?;
+            database.close().await?;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn post_commit_ambiguity_resolves_original_identity_from_fresh_reader()
+    -> Result<(), Error> {
+        let (_root, database) = database(1).await?;
+        let command = CreateWorkItem::new(
+            WorkItemId::new(),
+            None,
+            None,
+            None,
+            None,
+            MutationIdempotencyKey::new(),
+        );
+        let bundle = evaluate_create_work_item(
+            &command,
+            EvaluationContext::new(ChangeEventId::new(), None, Utc::now()),
+        );
+        let writer = database
+            .inner
+            .writer
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)?;
+        writer.set_semantic_failpoint(SemanticFailpoint::AfterCommit);
+        let resolved = database
+            .commit_create_work_item(bundle.clone())
+            .await
+            .map_err(|error| match error {
+                PortError::Adapter(error) => error,
+                PortError::Semantic(_) => Error::MigrationIntegrity(
+                    "ambiguous commit unexpectedly returned a semantic error",
+                ),
+            })?;
+        writer.set_semantic_failpoint(SemanticFailpoint::Disabled);
+        assert_eq!(resolved, resolved.replayed());
+        assert_eq!(
+            database
+                .commit_create_work_item(bundle)
+                .await
+                .map_err(|error| match error {
+                    PortError::Adapter(error) => error,
+                    PortError::Semantic(_) =>
+                        Error::MigrationIntegrity("replay unexpectedly returned a semantic error",),
+                })?,
+            resolved
+        );
+        assert!(
+            database
+                .work_item(command.id())
+                .await
+                .is_ok_and(|row| row.is_some())
+        );
+        database.close().await?;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn held_semantic_snapshot_excludes_concurrent_commit_on_another_connection()
+    -> Result<(), Error> {
+        let (_root, database) = database(2).await?;
+        let readers = database
+            .inner
+            .readers
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)?;
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let held_database = database.clone();
+        let held_entered = Arc::clone(&entered);
+        let held_release = Arc::clone(&release);
+        let held = tokio::spawn(async move {
+            readers
+                .with_snapshot(&held_database.inner.engine, move |transaction| {
+                    let entered = Arc::clone(&held_entered);
+                    let release = Arc::clone(&held_release);
+                    async move {
+                        let mut rows = transaction
+                            .query("SELECT count(*) FROM work_items", ())
+                            .await?;
+                        let before = rows
+                            .next()
+                            .await?
+                            .ok_or(Error::MigrationIntegrity("snapshot count is missing"))?
+                            .get::<i64>(0)
+                            .map_err(Error::from)?;
+                        drop(rows);
+                        entered.notify_one();
+                        release.notified().await;
+                        let mut rows = transaction
+                            .query("SELECT count(*) FROM work_items", ())
+                            .await?;
+                        let after = rows
+                            .next()
+                            .await?
+                            .ok_or(Error::MigrationIntegrity("snapshot count is missing"))?
+                            .get::<i64>(0)
+                            .map_err(Error::from)?;
+                        drop(rows);
+                        Ok((before, after))
+                    }
+                    .boxed()
+                })
+                .await
+        });
+        entered.notified().await;
+        let command = CreateWorkItem::new(
+            WorkItemId::new(),
+            None,
+            None,
+            None,
+            None,
+            MutationIdempotencyKey::new(),
+        );
+        database
+            .commit_create_work_item(evaluate_create_work_item(
+                &command,
+                EvaluationContext::new(ChangeEventId::new(), None, Utc::now()),
+            ))
+            .await
+            .map_err(|error| match error {
+                PortError::Adapter(error) => error,
+                PortError::Semantic(_) => {
+                    Error::MigrationIntegrity("concurrent create returned semantic error")
+                }
+            })?;
+        release.notify_one();
+        assert_eq!(
+            held.await
+                .map_err(|error| Error::Engine(Box::new(error)))??,
+            (0, 0)
+        );
+        assert_eq!(
+            database
+                .snapshot()
+                .await
+                .map_err(|error| match error {
+                    PortError::Adapter(error) => error,
+                    PortError::Semantic(_) => {
+                        Error::MigrationIntegrity("snapshot returned semantic error")
+                    }
+                })?
+                .work_items()
+                .len(),
+            1
+        );
         database.close().await?;
         Ok(())
     }

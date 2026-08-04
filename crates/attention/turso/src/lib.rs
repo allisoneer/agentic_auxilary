@@ -1,7 +1,7 @@
-//! Native local Turso qualification and storage ownership foundation.
+//! Native local Turso storage adapter for Attention.
 //!
-//! Turso engine types and SQL remain private to this crate. Production Attention
-//! domain persistence is intentionally outside this foundation package.
+//! Turso engine types and SQL remain private to this crate. The adapter implements
+//! the kernel read and commit ports while preserving the T06/T08/T09 boundaries.
 
 #[cfg(not(unix))]
 compile_error!(
@@ -9,15 +9,21 @@ compile_error!(
 );
 
 mod backup;
+mod codec;
 mod config;
 mod database;
 mod decode;
+mod domain_sql;
 mod error;
 mod lifecycle;
+mod mapping;
 mod migration;
 mod path;
 mod reader;
+mod semantic_reader;
+mod semantic_writer;
 mod sql;
+mod store;
 mod writer;
 
 pub use backup::BackupEntry;

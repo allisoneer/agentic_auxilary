@@ -7,7 +7,7 @@ use turso_db::Connection;
 use turso_db::params;
 use turso_db::transaction::TransactionBehavior;
 
-pub const MIGRATION_HEAD: u64 = 1;
+pub const MIGRATION_HEAD: u64 = 2;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Migration {
@@ -34,11 +34,18 @@ impl Migration {
     }
 }
 
-pub const MIGRATIONS: &[Migration] = &[Migration::new(
-    1,
-    "foundation",
-    include_bytes!("../migrations/0001_foundation.sql"),
-)];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration::new(
+        1,
+        "foundation",
+        include_bytes!("../migrations/0001_foundation.sql"),
+    ),
+    Migration::new(
+        2,
+        "attention_core",
+        include_bytes!("../migrations/0002_attention_core.sql"),
+    ),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MigrationReport {
@@ -162,8 +169,55 @@ mod tests {
             let expected = usize::from(failpoint == Failpoint::AfterCommit);
             assert_eq!(applied.len(), expected);
             let report = run(&mut connection).await?;
-            assert_eq!(report.applied(), 1 - expected);
-            assert_eq!(preflight(&connection).await?.len(), 1);
+            assert_eq!(report.applied(), MIGRATIONS.len() - expected);
+            assert_eq!(preflight(&connection).await?.len(), MIGRATIONS.len());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn injected_failures_preserve_head_one_to_head_two_atomicity() -> Result<(), Error> {
+        for failpoint in [
+            Failpoint::AfterBody,
+            Failpoint::AfterLedger,
+            Failpoint::BeforeCommit,
+            Failpoint::AfterCommit,
+        ] {
+            let root = tempfile::tempdir().map_err(Error::Io)?;
+            let path = root.path().join("migration.db");
+            let path = path
+                .to_str()
+                .ok_or(Error::MigrationIntegrity("test path is not UTF-8"))?;
+            let database = Builder::new_local(path).build().await?;
+            let mut connection = database.connect()?;
+            connection
+                .execute_batch(
+                    std::str::from_utf8(MIGRATIONS[0].sql)
+                        .map_err(|_| Error::MigrationIntegrity("migration SQL is not UTF-8"))?,
+                )
+                .await?;
+            connection
+                .execute(
+                    "INSERT INTO __attention_migrations (version, name, checksum) VALUES (?1, ?2, ?3)",
+                    params![
+                        1_i64,
+                        MIGRATIONS[0].name,
+                        MIGRATIONS[0].checksum().to_vec()
+                    ],
+                )
+                .await?;
+
+            assert!(
+                run_with_failpoint(&mut connection, failpoint)
+                    .await
+                    .is_err()
+            );
+            let applied = preflight(&connection).await?;
+            let expected = 1 + usize::from(failpoint == Failpoint::AfterCommit);
+            assert_eq!(applied.len(), expected);
+            let report = run(&mut connection).await?;
+            assert_eq!(report.applied(), MIGRATIONS.len() - expected);
+            assert_eq!(preflight(&connection).await?.len(), MIGRATIONS.len());
         }
         Ok(())
     }
@@ -182,6 +236,19 @@ mod tests {
             "DeliveryState",
         ] {
             assert!(!sql.contains(excluded));
+        }
+        let core = std::str::from_utf8(MIGRATIONS[1].sql).expect("migration SQL is UTF-8");
+        assert!(core.contains("CREATE TABLE attention_stream_state"));
+        assert!(core.contains("CREATE TABLE mutation_outcomes"));
+        assert!(core.contains("CREATE TABLE change_events"));
+        assert!(core.contains("CREATE TABLE outbox_intents"));
+        for excluded in [
+            "delivery_state",
+            "lease",
+            "checkpoint",
+            "create table inbox",
+        ] {
+            assert!(!core.to_ascii_lowercase().contains(excluded));
         }
     }
 }

@@ -3,12 +3,14 @@ use crate::Error;
 use crate::decode;
 use crate::sql;
 use crate::writer::sanitize;
+use futures::future::BoxFuture;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 use turso_db::Connection;
 use turso_db::Database;
 use turso_db::params;
+use turso_db::transaction::Transaction;
 use turso_db::transaction::TransactionBehavior;
 
 #[derive(Debug)]
@@ -68,6 +70,70 @@ impl ReaderPool {
         result
     }
 
+    pub(crate) async fn with_snapshot<T, F>(
+        &self,
+        engine: &Mutex<Option<Database>>,
+        operation: F,
+    ) -> Result<T, Error>
+    where
+        F: for<'transaction, 'connection> Fn(
+            &'transaction Transaction<'connection>,
+        ) -> BoxFuture<'transaction, Result<T, Error>>,
+    {
+        let _permit = Arc::clone(&self.permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| Error::Shutdown)?;
+        let mut connection = self.take_or_connect(engine).await?;
+        let [first_delay_ms, remaining_delays_ms @ ..] = [0_u64, 10, 50];
+        let mut delay_ms = first_delay_ms;
+        let mut remaining_delays_ms = remaining_delays_ms.into_iter();
+        let final_result = loop {
+            if delay_ms != 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            }
+            let transaction = match connection
+                .transaction_with_behavior(TransactionBehavior::Deferred)
+                .await
+            {
+                Ok(transaction) => transaction,
+                Err(error) => {
+                    let error = Error::from(error);
+                    let retry = matches!(error, Error::BusySnapshot(_));
+                    if retry && let Some(next_delay_ms) = remaining_delays_ms.next() {
+                        delay_ms = next_delay_ms;
+                        continue;
+                    }
+                    break Err(error);
+                }
+            };
+            let result = operation(&transaction).await;
+            let rollback = transaction.rollback().await.map_err(Error::from);
+            if let Err(error) = rollback {
+                break Err(error);
+            }
+            match result {
+                Ok(value) => {
+                    break Ok(value);
+                }
+                Err(error @ Error::BusySnapshot(_)) => {
+                    if let Some(next_delay_ms) = remaining_delays_ms.next() {
+                        delay_ms = next_delay_ms;
+                        continue;
+                    }
+                    break Err(error);
+                }
+                Err(error) => {
+                    break Err(error);
+                }
+            }
+        };
+        if sanitize(&connection).await.is_ok() {
+            self.connections.lock().await.push(connection);
+        }
+        final_result
+    }
+
     async fn read_probe_with_connection(
         &self,
         connection: &mut Connection,
@@ -102,14 +168,33 @@ impl ReaderPool {
         let guard = engine.lock().await;
         let database = guard.as_ref().ok_or(Error::Shutdown)?;
         let connection = database.connect().map_err(Error::from_connect)?;
-        connection
-            .busy_timeout(self.busy_timeout.duration())
-            .map_err(Error::from)?;
+        sql::configure_connection(&connection, self.busy_timeout).await?;
         Ok(connection)
     }
 
     pub(crate) async fn close(&self) {
         self.permits.close();
         self.connections.lock().await.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn foreign_keys_enabled(
+        &self,
+        engine: &Mutex<Option<Database>>,
+        recreate: bool,
+    ) -> Result<bool, Error> {
+        let _permit = Arc::clone(&self.permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| Error::Shutdown)?;
+        if recreate {
+            self.connections.lock().await.clear();
+        }
+        let connection = self.take_or_connect(engine).await?;
+        let enabled = sql::foreign_keys_enforced(&connection).await?;
+        if sanitize(&connection).await.is_ok() {
+            self.connections.lock().await.push(connection);
+        }
+        Ok(enabled)
     }
 }
