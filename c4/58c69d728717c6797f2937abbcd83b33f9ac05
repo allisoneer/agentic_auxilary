@@ -1,0 +1,27 @@
+crates/attention/turso/tests/semantic_crash.rs
+  s_404c3f49ec9d7e::t_a38f4bed43eb4c 21
+crates/attention/turso/tests/reader_ports.rs
+  s_404c3f49ec9d7e::t_5fd0e5cda17e2f 13,37-39,56-61,79-80,86-90,101-103,109-111,128-135,140-141,151-182,191-193,221-226,245-272
+  s_404c3f49ec9d7e::t_4e6c442a6f58d0 273-275
+crates/attention/turso/tests/commit_conformance.rs
+  s_404c3f49ec9d7e::t_a38f4bed43eb4c 12,29-32,40-41,48-49,54-59,76-81,108-111,141,171,210-213,224,257-260,271,351-354,428-432,435,439,513-516,614-617
+crates/attention/turso/tests/backup.rs
+  s_404c3f49ec9d7e::t_1631970a77195c 100
+  s_404c3f49ec9d7e::t_9f393496c9cb65 101-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "c458c69d728717c6797f2937abbcd83b33f9ac05",
+  "prompts": {},
+  "sessions": {
+    "s_404c3f49ec9d7e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0321c4852ffewZf7HdgS2Jz6lQ",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
