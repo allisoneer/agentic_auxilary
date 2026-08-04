@@ -1,0 +1,19 @@
+Cargo.lock
+  s_90b867279fd7dc::t_ff3c371c6ca8ca 2058,2060,6051,6053,6070,6072
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "02c43fe4902ef8b66523d4ad9b1e4cdba207f511",
+  "prompts": {},
+  "sessions": {
+    "s_90b867279fd7dc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03194d79dffeZRZuz0COA43y9l",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
