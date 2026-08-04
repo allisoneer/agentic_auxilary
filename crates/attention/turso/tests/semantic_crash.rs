@@ -1,5 +1,3 @@
-#![expect(clippy::expect_used, reason = "fixed child-process fixtures")]
-
 mod support;
 
 use attention_kernel::*;
@@ -20,7 +18,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
 fn time() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-08-03T12:00:00Z")
-        .expect("time")
+        .unwrap_or_else(|error| panic!("fixed time must parse: {error}"))
         .with_timezone(&Utc)
 }
 

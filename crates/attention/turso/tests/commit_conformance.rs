@@ -1,5 +1,3 @@
-#![expect(clippy::expect_used, reason = "fixed validated conformance fixtures")]
-
 use attention_kernel::*;
 use attention_turso::AttentionDatabase;
 use attention_turso::Config;
@@ -11,7 +9,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
 fn at(hour: u32) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(&format!("2026-08-03T{hour:02}:00:00Z"))
-        .expect("fixed time")
+        .unwrap_or_else(|error| panic!("fixed time must parse: {error}"))
         .with_timezone(&Utc)
 }
 
@@ -28,8 +26,10 @@ async fn database() -> TestResult<(tempfile::TempDir, AttentionDatabase)> {
 }
 
 fn source_command() -> IngestSourceOccurrence {
-    let kind = SourceKind::new("linear").expect("kind");
-    let instance = SourceInstance::new("workspace").expect("instance");
+    let kind = SourceKind::new("linear")
+        .unwrap_or_else(|error| panic!("fixed source kind must be valid: {error}"));
+    let instance = SourceInstance::new("workspace")
+        .unwrap_or_else(|error| panic!("fixed source instance must be valid: {error}"));
     IngestSourceOccurrence::new(
         SourceReceiptId::new(),
         Some(SourceEntityIdentity::new(
@@ -37,20 +37,26 @@ fn source_command() -> IngestSourceOccurrence {
             SourceEntityKey::new(
                 kind.clone(),
                 instance.clone(),
-                ExternalEntityId::new("ENG-1120").expect("external"),
+                ExternalEntityId::new("ENG-1120")
+                    .unwrap_or_else(|error| panic!("fixed external id must be valid: {error}")),
             ),
         )),
         AttentionSignalId::new(),
         OccurrenceKey::new(
             kind,
             instance,
-            OccurrenceId::new("occurrence-1").expect("occurrence"),
+            OccurrenceId::new("occurrence-1")
+                .unwrap_or_else(|error| panic!("fixed occurrence id must be valid: {error}")),
         ),
         at(11),
         at(12),
         SourceOrderMode::Ordered {
-            domain: SourceComparatorDomain::new("sequence").expect("domain"),
-            value: Some(NormalizedSourceOrder::new([1]).expect("order")),
+            domain: SourceComparatorDomain::new("sequence")
+                .unwrap_or_else(|error| panic!("fixed comparator domain must be valid: {error}")),
+            value: Some(
+                NormalizedSourceOrder::new([1])
+                    .unwrap_or_else(|error| panic!("fixed source order must be valid: {error}")),
+            ),
         },
         SignalSourceLifecycle::Active,
         false,
@@ -67,8 +73,12 @@ fn retry_source(command: &IngestSourceOccurrence, order: u8) -> IngestSourceOccu
         *command.occurred_at(),
         *command.ingested_at(),
         SourceOrderMode::Ordered {
-            domain: SourceComparatorDomain::new("sequence").expect("domain"),
-            value: Some(NormalizedSourceOrder::new([order]).expect("order")),
+            domain: SourceComparatorDomain::new("sequence")
+                .unwrap_or_else(|error| panic!("fixed comparator domain must be valid: {error}")),
+            value: Some(
+                NormalizedSourceOrder::new([order])
+                    .unwrap_or_else(|error| panic!("fixed source order must be valid: {error}")),
+            ),
         },
         command.source_lifecycle(),
         command.fresh_attention(),
@@ -95,7 +105,10 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
     assert_eq!(applied.disposition(), CommandDisposition::Applied);
     let replay = database.commit_create_work_item(create_bundle).await?;
     assert_eq!(replay, applied.replayed());
-    let current = database.work_item(create.id()).await?.expect("work item");
+    let current = database
+        .work_item(create.id())
+        .await?
+        .unwrap_or_else(|| panic!("created work item must exist"));
     let complete = evaluate_complete_work_item(
         &CompleteWorkItem::new(
             current.id(),
@@ -125,7 +138,7 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
     let current = database
         .work_item(cancel_create.id())
         .await?
-        .expect("cancel work item");
+        .unwrap_or_else(|| panic!("cancelled work item must exist"));
     let cancel = evaluate_cancel_work_item(
         &CancelWorkItem::new(
             current.id(),
@@ -155,7 +168,7 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
     let signal = database
         .attention_signal(source.signal_id())
         .await?
-        .expect("signal");
+        .unwrap_or_else(|| panic!("created signal must exist"));
     let acknowledge = evaluate_acknowledge_attention_signal(
         &AcknowledgeAttentionSignal::new(
             signal.id(),
@@ -194,7 +207,10 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
         database.commit_create_reminder(create_reminder).await?,
         reminder_created.replayed()
     );
-    let reminder = database.reminder(reminder_id).await?.expect("reminder");
+    let reminder = database
+        .reminder(reminder_id)
+        .await?
+        .unwrap_or_else(|| panic!("created reminder must exist"));
     let fire = evaluate_fire_reminder(
         &FireReminder::new(reminder_id, fire_id, MutationIdempotencyKey::new()),
         &reminder,
@@ -205,7 +221,7 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
     let reminder = database
         .reminder(reminder_id)
         .await?
-        .expect("fired reminder");
+        .unwrap_or_else(|| panic!("fired reminder must exist"));
     let snooze = evaluate_snooze_reminder_fire(
         &SnoozeReminderFire::new(
             reminder_id,
@@ -238,7 +254,10 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
             context(),
         ))
         .await?;
-    let reminder = database.reminder(reminder_id).await?.expect("reminder");
+    let reminder = database
+        .reminder(reminder_id)
+        .await?
+        .unwrap_or_else(|| panic!("created reminder must exist"));
     database
         .commit_fire_reminder(evaluate_fire_reminder(
             &FireReminder::new(reminder_id, fire_id, MutationIdempotencyKey::new()),
@@ -249,7 +268,7 @@ async fn all_nine_commits_apply_replay_and_preserve_history() -> TestResult {
     let reminder = database
         .reminder(reminder_id)
         .await?
-        .expect("fired reminder");
+        .unwrap_or_else(|| panic!("fired reminder must exist"));
     let acknowledge = evaluate_acknowledge_reminder_fire(
         &AcknowledgeReminderFire::new(
             reminder_id,
@@ -329,7 +348,10 @@ async fn mismatches_and_failed_guards_write_nothing() -> TestResult {
         Err(PortError::Semantic(SemanticError::IdempotencyMismatch(key))) if key == mutation
     ));
 
-    let current = database.work_item(first.id()).await?.expect("work item");
+    let current = database
+        .work_item(first.id())
+        .await?
+        .unwrap_or_else(|| panic!("created work item must exist"));
     let first_completion = evaluate_complete_work_item(
         &CompleteWorkItem::new(
             current.id(),
@@ -403,14 +425,18 @@ async fn duplicate_occurrence_uses_original_outcome_without_storing_new_key() ->
     let applied = database.commit_ingest_source_occurrence(bundle).await?;
     let entity = database
         .source_entity(SourceAuthorityQuery::new(
-            command.entity().expect("entity").key().clone(),
+            command
+                .entity()
+                .unwrap_or_else(|| panic!("source command must contain an entity"))
+                .key()
+                .clone(),
         ))
         .await?
-        .expect("entity");
+        .unwrap_or_else(|| panic!("created entity must exist"));
     let signal = database
         .attention_signal(command.signal_id())
         .await?
-        .expect("signal");
+        .unwrap_or_else(|| panic!("created signal must exist"));
 
     let duplicate = retry_source(&command, 1);
     let duplicate_key = duplicate.idempotency_key();
@@ -484,7 +510,10 @@ async fn concurrent_occurrence_revision_target_and_current_fire_have_one_winner(
     database
         .commit_create_work_item(evaluate_create_work_item(&create, context()))
         .await?;
-    let current = database.work_item(create.id()).await?.expect("work item");
+    let current = database
+        .work_item(create.id())
+        .await?
+        .unwrap_or_else(|| panic!("created work item must exist"));
     let complete = evaluate_complete_work_item(
         &CompleteWorkItem::new(
             current.id(),
@@ -582,7 +611,10 @@ async fn concurrent_occurrence_revision_target_and_current_fire_have_one_winner(
             context(),
         ))
         .await?;
-    let reminder = database.reminder(reminder_id).await?.expect("reminder");
+    let reminder = database
+        .reminder(reminder_id)
+        .await?
+        .unwrap_or_else(|| panic!("created reminder must exist"));
     let first_fire = evaluate_fire_reminder(
         &FireReminder::new(reminder_id, fire_id, MutationIdempotencyKey::new()),
         &reminder,

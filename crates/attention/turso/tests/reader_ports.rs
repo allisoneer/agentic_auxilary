@@ -10,6 +10,7 @@ use attention_kernel::PortError;
 use attention_kernel::PriorOutcomeQuery;
 use attention_kernel::QueryLimit;
 use attention_kernel::ReminderFireId;
+use attention_kernel::ReminderFireState;
 use attention_kernel::ReminderId;
 use attention_kernel::SourceAuthorityQuery;
 use attention_kernel::SourceEntityId;
@@ -33,6 +34,9 @@ struct Fixture {
     work_item: WorkItemId,
     signal: AttentionSignalId,
     reminder: ReminderId,
+    fire: ReminderFireId,
+    second_reminder: ReminderId,
+    second_fires: [ReminderFireId; 3],
     receipt: SourceReceiptId,
     entity_key: SourceEntityKey,
     mutation: MutationIdempotencyKey,
@@ -49,6 +53,12 @@ async fn fixture() -> TestResult<Fixture> {
     let signal = AttentionSignalId::new();
     let reminder = ReminderId::new();
     let fire = ReminderFireId::new();
+    let second_reminder = ReminderId::new();
+    let second_fires = [
+        ReminderFireId::new(),
+        ReminderFireId::new(),
+        ReminderFireId::new(),
+    ];
     let receipt = SourceReceiptId::new();
     let entity = SourceEntityId::new();
     let mutation = MutationIdempotencyKey::new();
@@ -66,14 +76,18 @@ async fn fixture() -> TestResult<Fixture> {
     let time = "2026-08-03T12:34:56.123456789Z";
     connection
         .execute(
-            "INSERT INTO mutation_outcomes VALUES (?1, 0, ?2, 99, ?3)",
+            "INSERT INTO mutation_outcomes (mutation_key, operation, fingerprint, \
+             outcome_version, outcome_bytes) VALUES (?1, 0, ?2, 99, ?3)",
             params![mutation.to_string(), vec![7_u8; 32], b"sensitive".to_vec()],
         )
         .await?;
     connection
         .execute(
-            "INSERT INTO source_receipts VALUES (?1, 'linear', 'workspace', 'occurrence-1', \
-             'linear', 'workspace', 'ENG-1120', ?2, 0, NULL, NULL, ?3, ?3, ?4)",
+            "INSERT INTO source_receipts (id, source_kind, source_instance, occurrence_id, \
+             entity_source_kind, entity_source_instance, external_entity_id, fingerprint, \
+             order_mode, order_domain, order_value, occurred_at, ingested_at, \
+             accepted_mutation_key) VALUES (?1, 'linear', 'workspace', 'occurrence-1', 'linear', \
+             'workspace', 'ENG-1120', ?2, 0, NULL, NULL, ?3, ?3, ?4)",
             params![
                 receipt.to_string(),
                 vec![7_u8; 32],
@@ -84,14 +98,17 @@ async fn fixture() -> TestResult<Fixture> {
         .await?;
     connection
         .execute(
-            "INSERT INTO source_entities VALUES (?1, 'linear', 'workspace', 'ENG-1120', ?2, ?3, \
-             0, NULL, NULL)",
+            "INSERT INTO source_entities (id, source_kind, source_instance, external_entity_id, \
+             state_version, latest_receipt_id, order_mode, order_domain, order_value) VALUES \
+             (?1, 'linear', 'workspace', 'ENG-1120', ?2, ?3, 0, NULL, NULL)",
             params![entity.to_string(), one.clone(), receipt.to_string()],
         )
         .await?;
     connection
         .execute(
-            "INSERT INTO work_items VALUES (?1, ?2, 0, ?3, NULL, NULL, NULL, NULL, NULL)",
+            "INSERT INTO work_items (id, revision, lifecycle, due_at, scheduled_at, defer_until, \
+             source_kind, source_instance, external_entity_id) VALUES \
+             (?1, ?2, 0, ?3, NULL, NULL, NULL, NULL, NULL)",
             params![work_item.to_string(), one.clone(), time],
         )
         .await?;
@@ -108,13 +125,20 @@ async fn fixture() -> TestResult<Fixture> {
         .await?;
     connection
         .execute(
-            "INSERT INTO reminders VALUES (?1, ?2, 0, ?3, ?4, NULL)",
-            params![reminder.to_string(), one, work_item.to_string(), time],
+            "INSERT INTO reminders (id, revision, target_kind, target_id, trigger_at, \
+             current_fire_id) VALUES (?1, ?2, 0, ?3, ?4, NULL)",
+            params![
+                reminder.to_string(),
+                one.clone(),
+                work_item.to_string(),
+                time
+            ],
         )
         .await?;
     connection
         .execute(
-            "INSERT INTO reminder_fires VALUES (?1, ?2, 0, ?3, 0)",
+            "INSERT INTO reminder_fires (id, reminder_id, ordinal, trigger_at, state) \
+             VALUES (?1, ?2, 0, ?3, 0)",
             params![fire.to_string(), reminder.to_string(), time],
         )
         .await?;
@@ -122,6 +146,38 @@ async fn fixture() -> TestResult<Fixture> {
         .execute(
             "UPDATE reminders SET current_fire_id = ?1 WHERE id = ?2",
             params![fire.to_string(), reminder.to_string()],
+        )
+        .await?;
+    connection
+        .execute(
+            "INSERT INTO reminders (id, revision, target_kind, target_id, trigger_at, \
+             current_fire_id) VALUES (?1, ?2, 1, ?3, ?4, NULL)",
+            params![second_reminder.to_string(), one, signal.to_string(), time],
+        )
+        .await?;
+    for (ordinal, fire, state) in [
+        (0, second_fires[0], 2),
+        (1, second_fires[1], 3),
+        (2, second_fires[2], 0),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO reminder_fires (id, reminder_id, ordinal, trigger_at, state) \
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    fire.to_string(),
+                    second_reminder.to_string(),
+                    ordinal,
+                    time,
+                    state
+                ],
+            )
+            .await?;
+    }
+    connection
+        .execute(
+            "UPDATE reminders SET current_fire_id = ?1 WHERE id = ?2",
+            params![second_fires[2].to_string(), second_reminder.to_string()],
         )
         .await?;
     drop(connection);
@@ -132,6 +188,9 @@ async fn fixture() -> TestResult<Fixture> {
         work_item,
         signal,
         reminder,
+        fire,
+        second_reminder,
+        second_fires,
         receipt,
         entity_key,
         mutation,
@@ -159,15 +218,12 @@ async fn all_point_reads_and_snapshot_reconstruct_validated_roots() -> TestResul
             .id(),
         fixture.signal
     );
-    assert_eq!(
-        database
-            .reminder(fixture.reminder)
-            .await?
-            .expect("reminder")
-            .fires()
-            .len(),
-        1
-    );
+    let reminder = database
+        .reminder(fixture.reminder)
+        .await?
+        .expect("reminder");
+    assert_eq!(reminder.id(), fixture.reminder);
+    assert_eq!(reminder.fires()[0].id(), fixture.fire);
     assert_eq!(
         database
             .source_receipt(fixture.receipt)
@@ -186,7 +242,39 @@ async fn all_point_reads_and_snapshot_reconstruct_validated_roots() -> TestResul
     assert_eq!(snapshot.cursor(), CommitCursor::try_from(1)?);
     assert_eq!(snapshot.work_items().len(), 1);
     assert_eq!(snapshot.signals().len(), 1);
-    assert_eq!(snapshot.reminders()[0].fires().len(), 1);
+    assert_eq!(snapshot.reminders().len(), 2);
+    let first = snapshot
+        .reminders()
+        .iter()
+        .find(|reminder| reminder.id() == fixture.reminder)
+        .expect("first reminder");
+    assert_eq!(first.fires()[0].id(), fixture.fire);
+    let second = snapshot
+        .reminders()
+        .iter()
+        .find(|reminder| reminder.id() == fixture.second_reminder)
+        .expect("second reminder");
+    assert_eq!(
+        second
+            .fires()
+            .iter()
+            .map(attention_kernel::ReminderFire::id)
+            .collect::<Vec<_>>(),
+        fixture.second_fires
+    );
+    assert_eq!(
+        second
+            .fires()
+            .iter()
+            .find(|fire| {
+                matches!(
+                    fire.state(),
+                    ReminderFireState::Scheduled | ReminderFireState::Fired
+                )
+            })
+            .map(attention_kernel::ReminderFire::id),
+        Some(fixture.second_fires[2])
+    );
 
     let error = database
         .prior_outcome(PriorOutcomeQuery::new(fixture.mutation))

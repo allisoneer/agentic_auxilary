@@ -1,5 +1,3 @@
-use sha2::Digest;
-use sha2::Sha256;
 use std::error::Error;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -29,8 +27,6 @@ fn checked_in_codec_fixtures_are_canonical_json_with_measured_sizes() -> TestRes
             value
         );
         assert!(line.len() < 512, "fixture {index} grew unexpectedly");
-        let digest = Sha256::digest(line.as_bytes());
-        assert_eq!(digest.len(), 32);
     }
     Ok(())
 }

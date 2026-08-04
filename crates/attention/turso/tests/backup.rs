@@ -97,6 +97,10 @@ async fn migration_head_and_checksum_manifest_drift_are_rejected() -> TestResult
         copy_directory(&complete, &changed)?;
         let manifest_path = changed.join("manifest.json");
         let mut manifest: serde_json::Value = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+        assert!(
+            manifest.get(field).is_some(),
+            "manifest field {field} is missing"
+        );
         manifest[field] = value;
         fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
         assert_restore_rejected(&source, name).await?;
