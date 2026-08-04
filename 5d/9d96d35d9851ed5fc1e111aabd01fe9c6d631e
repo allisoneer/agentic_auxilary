@@ -1,0 +1,19 @@
+tools/mcp-validate.sh
+  s_404c3f49ec9d7e::t_1631970a77195c 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "5d9d96d35d9851ed5fc1e111aabd01fe9c6d631e",
+  "prompts": {},
+  "sessions": {
+    "s_404c3f49ec9d7e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0321c4852ffewZf7HdgS2Jz6lQ",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
