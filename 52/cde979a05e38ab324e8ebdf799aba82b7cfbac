@@ -1,0 +1,27 @@
+crates/attention/turso/src/semantic_writer.rs
+  s_404c3f49ec9d7e::t_1631970a77195c 86,130,774,838,888
+crates/attention/turso/src/error.rs
+  s_404c3f49ec9d7e::t_1631970a77195c 52-53
+crates/attention/turso/src/writer.rs
+  s_404c3f49ec9d7e::t_1631970a77195c 124-125
+crates/attention/turso/src/reader.rs
+  s_404c3f49ec9d7e::t_1631970a77195c 88-91,102-104,107,113,117,120-124,127,130,134
+crates/attention/turso/src/semantic_reader.rs
+  s_404c3f49ec9d7e::t_1631970a77195c 102-108,110-113,120,330,332,335-337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "52cde979a05e38ab324e8ebdf799aba82b7cfbac",
+  "prompts": {},
+  "sessions": {
+    "s_404c3f49ec9d7e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0321c4852ffewZf7HdgS2Jz6lQ",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
