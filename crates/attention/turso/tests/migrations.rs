@@ -1,5 +1,10 @@
 mod support;
 
+use attention_kernel::AttentionReadPort;
+use attention_kernel::ReminderFireId;
+use attention_kernel::ReminderFireState;
+use attention_kernel::ReminderId;
+use attention_kernel::WorkItemId;
 use attention_turso::AttentionDatabase;
 use attention_turso::Config;
 use attention_turso::Error;
@@ -22,6 +27,26 @@ type TestResult<T = ()> = Result<T, Box<dyn StdError + Send + Sync>>;
 const MIGRATION_SQL: &str = include_str!("../migrations/0001_foundation.sql");
 const CORE_MIGRATION_SQL: &str = include_str!("../migrations/0002_attention_core.sql");
 const DELIVERY_MIGRATION_SQL: &str = include_str!("../migrations/0003_durable_delivery.sql");
+const DUPLICATE_CURRENT_FIRE_REPAIR_SETUP_SQL: &str =
+    include_str!("../maintenance/repair_duplicate_current_reminder_fires_setup.sql");
+const DUPLICATE_CURRENT_FIRE_REPAIR_APPLY_SQL: &str =
+    include_str!("../maintenance/repair_duplicate_current_reminder_fires_apply.sql");
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ReminderFixtureSnapshot {
+    revision: Vec<u8>,
+    current_fire_id: Option<String>,
+    fires: Vec<FireFixtureSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FireFixtureSnapshot {
+    id: String,
+    reminder_id: String,
+    ordinal: i64,
+    trigger_at: String,
+    state: i64,
+}
 
 fn config(root: &Path) -> Result<Config, attention_turso::PathError> {
     Config::new(root.join("database"), root.join("backups"))
@@ -53,6 +78,48 @@ async fn install_head_two(connection: &turso_db::Connection) -> TestResult {
         )
         .await?;
     Ok(())
+}
+
+async fn reminder_fixture_snapshot(
+    connection: &turso_db::Connection,
+    reminder_id: &str,
+) -> TestResult<ReminderFixtureSnapshot> {
+    let mut reminder_rows = connection
+        .query(
+            "SELECT revision, current_fire_id FROM reminders WHERE id = ?1",
+            params![reminder_id],
+        )
+        .await?;
+    let reminder = reminder_rows
+        .next()
+        .await?
+        .ok_or("reminder fixture is missing")?;
+    let revision = reminder.get::<Vec<u8>>(0)?;
+    let current_fire_id = reminder.get::<Option<String>>(1)?;
+    drop(reminder_rows);
+
+    let mut fire_rows = connection
+        .query(
+            "SELECT id, reminder_id, ordinal, trigger_at, state
+             FROM reminder_fires WHERE reminder_id = ?1 ORDER BY ordinal, id",
+            params![reminder_id],
+        )
+        .await?;
+    let mut fires = Vec::new();
+    while let Some(row) = fire_rows.next().await? {
+        fires.push(FireFixtureSnapshot {
+            id: row.get(0)?,
+            reminder_id: row.get(1)?,
+            ordinal: row.get(2)?,
+            trigger_at: row.get(3)?,
+            state: row.get(4)?,
+        });
+    }
+    Ok(ReminderFixtureSnapshot {
+        revision,
+        current_fire_id,
+        fires,
+    })
 }
 
 #[tokio::test]
@@ -300,7 +367,9 @@ async fn invalid_head_two_current_fire_state_rolls_back_delivery_migration() -> 
     drop(raw);
 
     let database = AttentionDatabase::open(config).await?;
-    assert!(database.run_startup_migrations().await.is_err());
+    for _ in 0..2 {
+        assert!(database.run_startup_migrations().await.is_err());
+    }
     database.close().await?;
 
     let raw = Builder::new_local(path).build().await?;
@@ -331,6 +400,267 @@ async fn invalid_head_two_current_fire_state_rolls_back_delivery_migration() -> 
             .get::<i64>(0)?,
         0
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn duplicate_current_reminder_fire_repair_is_atomic_and_unblocks_migration_0003() -> TestResult
+{
+    let root = tempfile::tempdir()?;
+    let config = config(root.path())?;
+    let database_path = config.database_directory().database_file();
+    let path = database_path.to_str().ok_or("database path is not UTF-8")?;
+    let raw = Builder::new_local(path).build().await?;
+    let mut connection = raw.connect()?;
+    install_head_two(&connection).await?;
+
+    let reminder_id = ReminderId::new();
+    let reminder_id_text = reminder_id.to_string();
+    let target_id = WorkItemId::new().to_string();
+    let historical_fire_id = ReminderFireId::new();
+    let historical_fire_id_text = historical_fire_id.to_string();
+    let authoritative_fire_id = ReminderFireId::new();
+    let authoritative_fire_id_text = authoritative_fire_id.to_string();
+    let retired_fire_id = ReminderFireId::new();
+    let retired_fire_id_text = retired_fire_id.to_string();
+    let acknowledged_retired_fire_id = ReminderFireId::new();
+    let acknowledged_retired_fire_id_text = acknowledged_retired_fire_id.to_string();
+    let revision = 7_u64;
+
+    connection
+        .execute(
+            "INSERT INTO reminders
+             (id, revision, target_kind, target_id, trigger_at, current_fire_id)
+             VALUES (?1, ?2, 0, ?3, ?4, NULL)",
+            params![
+                reminder_id_text.as_str(),
+                revision.to_be_bytes().to_vec(),
+                target_id.as_str(),
+                "2026-08-04T00:00:00Z"
+            ],
+        )
+        .await?;
+    for (id, ordinal, trigger_at, state) in [
+        (
+            historical_fire_id_text.as_str(),
+            0_i64,
+            "2026-08-03T00:00:00Z",
+            2_i64,
+        ),
+        (
+            authoritative_fire_id_text.as_str(),
+            1_i64,
+            "2026-08-04T00:00:00Z",
+            1_i64,
+        ),
+        (
+            retired_fire_id_text.as_str(),
+            2_i64,
+            "2026-08-05T00:00:00Z",
+            0_i64,
+        ),
+        (
+            acknowledged_retired_fire_id_text.as_str(),
+            3_i64,
+            "2026-08-06T00:00:00Z",
+            1_i64,
+        ),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO reminder_fires
+                 (id, reminder_id, ordinal, trigger_at, state)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![id, reminder_id_text.as_str(), ordinal, trigger_at, state],
+            )
+            .await?;
+    }
+    connection
+        .execute(
+            "UPDATE reminders SET current_fire_id = ?1 WHERE id = ?2",
+            params![
+                authoritative_fire_id_text.as_str(),
+                reminder_id_text.as_str()
+            ],
+        )
+        .await?;
+    let before = reminder_fixture_snapshot(&connection, &reminder_id_text).await?;
+
+    let invalid_repair = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .await?;
+    invalid_repair
+        .execute_batch(DUPLICATE_CURRENT_FIRE_REPAIR_SETUP_SQL)
+        .await?;
+    let mut inspection = invalid_repair
+        .query(
+            "SELECT
+                 (SELECT count(*) FROM temp.__attention_repair_duplicate_reminders),
+                 (SELECT count(*) FROM temp.__attention_repair_affected_fire_history)",
+            (),
+        )
+        .await?;
+    let inspection_row = inspection
+        .next()
+        .await?
+        .ok_or("repair inspection counts are missing")?;
+    assert_eq!(inspection_row.get::<i64>(0)?, 1);
+    assert_eq!(inspection_row.get::<i64>(1)?, 4);
+    drop(inspection);
+    invalid_repair
+        .execute(
+            "INSERT INTO temp.__attention_repair_authoritative
+             (reminder_id, authoritative_fire_id) VALUES (?1, ?2)",
+            params![
+                reminder_id_text.as_str(),
+                authoritative_fire_id_text.as_str()
+            ],
+        )
+        .await?;
+    let apply_error = invalid_repair
+        .execute_batch(DUPLICATE_CURRENT_FIRE_REPAIR_APPLY_SQL)
+        .await
+        .expect_err("incomplete retirement decisions must fail");
+    let diagnostic = apply_error.to_string();
+    for stored_id in [
+        &reminder_id_text,
+        &historical_fire_id_text,
+        &authoritative_fire_id_text,
+        &retired_fire_id_text,
+        &acknowledged_retired_fire_id_text,
+    ] {
+        assert!(!diagnostic.contains(stored_id));
+    }
+    invalid_repair.rollback().await?;
+    assert_eq!(
+        reminder_fixture_snapshot(&connection, &reminder_id_text).await?,
+        before
+    );
+    drop(connection);
+    drop(raw);
+
+    let database = AttentionDatabase::open(config.clone()).await?;
+    assert!(database.run_startup_migrations().await.is_err());
+    database.close().await?;
+
+    let raw = Builder::new_local(path).build().await?;
+    let mut connection = raw.connect()?;
+    let mut migration_state = connection
+        .query(
+            "SELECT
+                 (SELECT count(*) FROM sqlite_schema
+                  WHERE type = 'table' AND name = 'delivery_states'),
+                 (SELECT count(*) FROM __attention_migrations WHERE version = 3)",
+            (),
+        )
+        .await?;
+    let migration_state_row = migration_state
+        .next()
+        .await?
+        .ok_or("migration rollback state is missing")?;
+    assert_eq!(migration_state_row.get::<i64>(0)?, 0);
+    assert_eq!(migration_state_row.get::<i64>(1)?, 0);
+    drop(migration_state);
+
+    let valid_repair = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .await?;
+    valid_repair
+        .execute_batch(DUPLICATE_CURRENT_FIRE_REPAIR_SETUP_SQL)
+        .await?;
+    valid_repair
+        .execute(
+            "INSERT INTO temp.__attention_repair_authoritative
+             (reminder_id, authoritative_fire_id) VALUES (?1, ?2)",
+            params![
+                reminder_id_text.as_str(),
+                authoritative_fire_id_text.as_str()
+            ],
+        )
+        .await?;
+    valid_repair
+        .execute(
+            "INSERT INTO temp.__attention_repair_retire
+             (reminder_id, retired_fire_id, terminal_state) VALUES (?1, ?2, ?3)",
+            params![
+                reminder_id_text.as_str(),
+                acknowledged_retired_fire_id_text.as_str(),
+                2_i64
+            ],
+        )
+        .await?;
+    valid_repair
+        .execute(
+            "INSERT INTO temp.__attention_repair_retire
+             (reminder_id, retired_fire_id, terminal_state) VALUES (?1, ?2, ?3)",
+            params![
+                reminder_id_text.as_str(),
+                retired_fire_id_text.as_str(),
+                3_i64
+            ],
+        )
+        .await?;
+    valid_repair
+        .execute_batch(DUPLICATE_CURRENT_FIRE_REPAIR_APPLY_SQL)
+        .await?;
+    valid_repair.commit().await?;
+
+    let after = reminder_fixture_snapshot(&connection, &reminder_id_text).await?;
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(
+        after.current_fire_id,
+        Some(authoritative_fire_id_text.clone())
+    );
+    assert_eq!(after.fires.len(), before.fires.len());
+    for (before_fire, after_fire) in before.fires.iter().zip(&after.fires) {
+        assert_eq!(after_fire.id, before_fire.id);
+        assert_eq!(after_fire.reminder_id, before_fire.reminder_id);
+        assert_eq!(after_fire.ordinal, before_fire.ordinal);
+        assert_eq!(after_fire.trigger_at, before_fire.trigger_at);
+    }
+    assert_eq!(after.fires[0].state, 2);
+    assert_eq!(after.fires[1].state, 1);
+    assert_eq!(after.fires[2].state, 3);
+    assert_eq!(after.fires[3].state, 2);
+    assert_eq!(
+        after
+            .fires
+            .iter()
+            .filter(|fire| matches!(fire.state, 0 | 1))
+            .count(),
+        1
+    );
+    drop(connection);
+    drop(raw);
+
+    let database = AttentionDatabase::open(config).await?;
+    let report = database.run_startup_migrations().await?;
+    assert_eq!(report.applied(), 1);
+    assert_eq!(report.head(), 3);
+    assert_eq!(database.run_startup_migrations().await?.applied(), 0);
+    let reminder = database
+        .reminder(reminder_id)
+        .await?
+        .ok_or("repaired reminder is missing")?;
+    assert_eq!(reminder.revision().value(), revision);
+    assert_eq!(reminder.fires().len(), 4);
+    for (fire_id, expected_state) in [
+        (historical_fire_id, ReminderFireState::Acknowledged),
+        (authoritative_fire_id, ReminderFireState::Fired),
+        (retired_fire_id, ReminderFireState::Snoozed),
+        (
+            acknowledged_retired_fire_id,
+            ReminderFireState::Acknowledged,
+        ),
+    ] {
+        let fire = reminder
+            .fires()
+            .iter()
+            .find(|fire| fire.id() == fire_id)
+            .ok_or("retained repaired fire is missing")?;
+        assert_eq!(fire.state(), expected_state);
+    }
+    database.close().await?;
     Ok(())
 }
 

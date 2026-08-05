@@ -25,6 +25,8 @@ The operational threshold is 64 MiB for any regular database file under this wor
 
 Backup is accepted only from `Closed`. It reacquires directory ownership, copies the complete regular-file set without following links into an owner-only staging directory, syncs files/directories on Unix, writes a checksummed compatibility manifest, and atomically publishes the completed backup directory. Restore validates the exact adapter/Turso versions, migration head/checksum, sorted relative inventory, sizes, and SHA-256 checksums, then copies only into an empty validated directory and reopens through the adapter.
 
+For duplicate current reminder fires that block migration 0003, follow the [backup-first stopped-database repair runbook](maintenance/repair_duplicate_current_reminder_fires.md). No repair CLI or SQL shell ships.
+
 ## Exact-version limitations
 
 The pinned local API exposes no high-level close, engine cancellation/interrupt, migration, backup, or local checkpoint primitive. Dropping a transaction defers rollback until later connection use, so this crate promises adapter-visible quarantine and sanitation rather than synchronous engine cancellation. `cacheflush` writes dirty pages to WAL and is not a checkpoint or backup boundary. Online backup is unsupported. Full/quota and filesystem permission fixtures are platform-dependent; typed policies are retained without parsing upstream error messages, while destructive process-kill, corruption, symlink, and Unix permission tests run on the current Linux qualification platform.
