@@ -1,0 +1,41 @@
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires_apply.sql
+  s_50938b3255dc1f::t_1715de7323acb6 1-26,39-40,42-48,54-93,101,109-139,141-145,152,165-247,255,263,271,279-303,305-307,309-316
+  s_50938b3255dc1f::t_5dd53e07893c74 27-38,41,49-53,94-100,102-108,140,146-151,153-164,248-254,256-262,264-270,272-278
+  s_50938b3255dc1f::t_f268755f25739a 304,308
+crates/attention/turso/tests/migrations.rs
+  s_50938b3255dc1f::t_98dcd4e4bf762b 370-372
+  s_50938b3255dc1f::t_d25c94298eeb6a 456-461
+  s_50938b3255dc1f::t_53fb3225449d86 407-408,412,436,438,445,451,474,481-484,514-517,575-577,589,596-600,610-613
+  s_50938b3255dc1f::t_54fe2b4f161da9 3-7,30-49,83-122
+  s_50938b3255dc1f::t_cf1605dd6f9bc2 426-427,462-467,508,530,578-588,624,646,651-654
+  s_50938b3255dc1f::t_5fd954a07eb6cb 123,406,409-411,413-425,428-435,437,439-444,446-450,452-455,468-473,475-480,485-507,509-513,518-529,531-574,590-595,601-609,614-623,625-645,647-650,655-666
+  s_50938b3255dc1f::t_abf8d23e092738 124
+crates/attention/turso/README.md
+  s_50938b3255dc1f::t_e995fb003c315b 28-29
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires_setup.sql
+  s_50938b3255dc1f::t_deadb173cc5e7d 1-2,69-78,91-100,102
+  s_50938b3255dc1f::t_d25c94298eeb6a 86-87,111-112
+  s_50938b3255dc1f::t_20dd57faaa6e29 4-20,23-24,27-68,79-85,88-90,101,103-110,113-125
+  s_50938b3255dc1f::t_3099048a103598 3
+  s_50938b3255dc1f::t_f268755f25739a 21-22,25-26
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires.md
+  s_50938b3255dc1f::t_d7181926227ab5 45
+  s_50938b3255dc1f::t_48e448632f97d4 46-49
+  s_50938b3255dc1f::t_32e7aa2998d5b2 1-44,50-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "4e52781c996cdd76cc17a9ecbe3c196f7e2666b7",
+  "prompts": {},
+  "sessions": {
+    "s_50938b3255dc1f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_02cf03840ffeNX6pGlll9kYeUS",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
