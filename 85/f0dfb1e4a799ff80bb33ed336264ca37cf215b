@@ -1,0 +1,108 @@
+crates/attention/turso/tests/exact_pin_gate.rs
+  s_673bb25a9a28b1::t_15ec320b0abcc0 10-12,133-315
+crates/attention/turso/src/database.rs
+  s_673bb25a9a28b1::t_bc1849f70efeac 177-182
+  s_673bb25a9a28b1::t_1a209df27c0207 671,1054-1072,1076,1078-1079
+  s_673bb25a9a28b1::t_f4be9e1430ab9a 681,683,687-691,693,695,921-951,953-955,957-967,969-998,1000-1002,1075
+  s_673bb25a9a28b1::t_7caee07484333c 6-7,26,31-33,40-47,53,56,59,68,183-270,272-294,296-319,342,344-345
+  s_673bb25a9a28b1::t_0dba072b4f2410 271,295
+  s_673bb25a9a28b1::t_73cc37dcbd8b6a 673-675,677,679,685,952,956,968,1003-1053,1073-1074
+  s_673bb25a9a28b1::t_0a97359547eed1 320-341
+  s_673bb25a9a28b1::t_073e5b58a8c98f 69
+  s_673bb25a9a28b1::t_841ea4ae9f70ed 343
+  s_673bb25a9a28b1::t_d504aee0d8010c 680
+  s_673bb25a9a28b1::t_db2a2553c3e276 692
+  s_673bb25a9a28b1::t_e6bc6b2f3da087 999
+  s_673bb25a9a28b1::t_fafdb3419c85a5 1077
+crates/attention/turso/src/store.rs
+  s_673bb25a9a28b1::t_7caee07484333c 11,16-18,25-30,202-286
+  s_673bb25a9a28b1::t_0a97359547eed1 288-309,312-313
+  s_673bb25a9a28b1::t_bc1849f70efeac 192-201,287
+  s_673bb25a9a28b1::t_1dc4449ff2512b 31-33
+  s_673bb25a9a28b1::t_cf64138a41afd5 310-311
+crates/attention/turso/src/migration.rs
+  s_673bb25a9a28b1::t_b542c613f4f2c0 184,230-280,309-310
+  s_673bb25a9a28b1::t_bae1151f78cbf8 10,48-51
+  s_673bb25a9a28b1::t_e05f6893b9241f 52
+  s_673bb25a9a28b1::t_089bf93ec5f47d 311
+crates/attention/turso/src/delivery_writer.rs
+  s_673bb25a9a28b1::t_b9f520ddf4ab1f 178-179
+  s_673bb25a9a28b1::t_0aaba3c735873b 156-163
+  s_673bb25a9a28b1::t_0dba072b4f2410 338,340,397,399
+  s_673bb25a9a28b1::t_5694606d26cfd0 10-11,13,90-119,518-609
+  s_673bb25a9a28b1::t_66c23025a47f42 1-9,12,14-89,120-155,164-177,180-337,339,341-396,398,400-517
+crates/attention/turso/tests/security_and_diagnostics.rs
+  s_673bb25a9a28b1::t_a52adb02cafdc3 11-43,123-185,187-264
+  s_673bb25a9a28b1::t_9565d3593dc05e 7,48,101-122
+  s_673bb25a9a28b1::t_d6376458f35614 186
+crates/attention/turso/tests/reminder_schedule_port.rs
+  s_673bb25a9a28b1::t_96f9b07eacaa7b 1-98
+crates/attention/turso/tests/restart_and_replay.rs
+  s_673bb25a9a28b1::t_a88c4315148597 6,171,176,198-244,270-295
+  s_673bb25a9a28b1::t_1e0f4b9fcf6caf 10-42,296-491
+  s_673bb25a9a28b1::t_ce06e630d35b2e 114
+crates/attention/turso/tests/commit_conformance.rs
+  s_673bb25a9a28b1::t_ba7ab23725ad1f 30-33,67,485
+  s_673bb25a9a28b1::t_4de5b0b2686e0b 7,482-484,486-531
+  s_673bb25a9a28b1::t_0f0816d5ec7103 532-533,535-596
+  s_673bb25a9a28b1::t_51d583f0f1df38 534
+crates/attention/turso/src/mapping.rs
+  s_673bb25a9a28b1::t_890dc7b74fddea 5,7-14,21-24,101-145,147-152,289-298,500-533,536-539,541-545,547-550,554-558,561-563,568-584,586-590,592-625
+  s_673bb25a9a28b1::t_e608b85b6d1a83 146
+  s_673bb25a9a28b1::t_d8319baaa5f0cf 654-682
+  s_673bb25a9a28b1::t_f8e2aaf1c1cb97 534-535
+  s_673bb25a9a28b1::t_406c987c010eab 540
+  s_673bb25a9a28b1::t_d21e95ffc9f6a1 546
+  s_673bb25a9a28b1::t_ee11e5bfe8e90a 551-553
+  s_673bb25a9a28b1::t_4bd75a56fdc75d 559-560
+  s_673bb25a9a28b1::t_650770842a548b 564-567
+  s_673bb25a9a28b1::t_1b404b2486e34f 585
+  s_673bb25a9a28b1::t_4980095a94b58f 591
+  s_673bb25a9a28b1::t_b982c32a230ba3 626
+crates/attention/turso/src/domain_sql.rs
+  s_673bb25a9a28b1::t_3331b3da9e346f 70-72,85-96,100-128
+  s_673bb25a9a28b1::t_477476d9d273a7 97-99
+crates/attention/turso/src/lib.rs
+  s_673bb25a9a28b1::t_933402a0103075 16-17,53-55
+crates/attention/turso/src/semantic_writer.rs
+  s_673bb25a9a28b1::t_b8939476e3c914 211-218
+crates/attention/turso/src/delivery_reader.rs
+  s_673bb25a9a28b1::t_477476d9d273a7 1-4,9-63,116-120
+  s_673bb25a9a28b1::t_dccc8decf05ce5 5-8,64-77,79-102,104-115
+  s_673bb25a9a28b1::t_05bdc6aa0a0443 78,103
+crates/attention/turso/tests/delivery_port.rs
+  s_673bb25a9a28b1::t_20d2f365c6b489 1-306
+  s_673bb25a9a28b1::t_ba637ad031aef4 307
+crates/attention/turso/tests/delivery_checkpoint_port.rs
+  s_673bb25a9a28b1::t_ca1c6091b04def 1-203
+crates/attention/turso/src/semantic_reader.rs
+  s_673bb25a9a28b1::t_bc1849f70efeac 16-17,137-172
+crates/attention/turso/migrations/0003_durable_delivery.sql
+  s_673bb25a9a28b1::t_f52cf953f48226 1-15,52-73
+  s_673bb25a9a28b1::t_4063dc7b30643c 16-51
+crates/attention/turso/tests/migrations.rs
+  s_673bb25a9a28b1::t_349e658ad185ba 203-219
+  s_673bb25a9a28b1::t_51cae1faa6f4af 24,34-57,64-65,95,104,135,168,187-202,220-242,244,247-323
+  s_673bb25a9a28b1::t_506e661b04a038 324-326
+crates/attention/turso/Cargo.toml
+  s_673bb25a9a28b1::t_96f9b07eacaa7b 75-78
+  s_673bb25a9a28b1::t_20d2f365c6b489 74,79-82
+  s_673bb25a9a28b1::t_933402a0103075 17
+  s_673bb25a9a28b1::t_ca1c6091b04def 83-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "85f0dfb1e4a799ff80bb33ed336264ca37cf215b",
+  "prompts": {},
+  "sessions": {
+    "s_673bb25a9a28b1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03070c70dffe0zsPi9y0aj3xZH",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
