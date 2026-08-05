@@ -13,6 +13,8 @@ mod codec;
 mod config;
 mod database;
 mod decode;
+mod delivery_reader;
+mod delivery_writer;
 mod domain_sql;
 mod error;
 mod lifecycle;
@@ -48,3 +50,6 @@ pub const PINNED_TURSO_VERSION: &str = "0.8.0-pre.1";
 
 /// Operational WAL/file-set threshold selected from retained qualification workloads.
 pub const WAL_OPERATIONAL_LIMIT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Adapter-enforced UTF-8 byte ceiling for persisted delivery diagnostics and identities.
+pub const DELIVERY_TEXT_LIMIT_BYTES: usize = 64 * 1024;

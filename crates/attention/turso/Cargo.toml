@@ -14,6 +14,7 @@ attention-kernel = { version = "0.1.0", path = "../kernel" }
 chrono = { workspace = true }
 fs2 = "0.4"
 futures = "0.3"
+getrandom = "0.3"
 rustix = { version = "1", features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -69,6 +70,18 @@ path = "tests/codec_fixtures.rs"
 [[test]]
 name = "reader_ports"
 path = "tests/reader_ports.rs"
+
+[[test]]
+name = "reminder_schedule_port"
+path = "tests/reminder_schedule_port.rs"
+
+[[test]]
+name = "delivery_port"
+path = "tests/delivery_port.rs"
+
+[[test]]
+name = "delivery_checkpoint_port"
+path = "tests/delivery_checkpoint_port.rs"
 
 [[test]]
 name = "commit_conformance"

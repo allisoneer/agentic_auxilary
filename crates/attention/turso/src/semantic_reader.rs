@@ -13,6 +13,8 @@ use attention_kernel::ChangePage;
 use attention_kernel::ChangesAfterQuery;
 use attention_kernel::ChangesResult;
 use attention_kernel::CommitCursor;
+use attention_kernel::DueReminderFire;
+use attention_kernel::DueReminderFiresQuery;
 use attention_kernel::MutationIdempotencyKey;
 use attention_kernel::MutationOperation;
 use attention_kernel::OccurrenceKey;
@@ -128,6 +130,42 @@ pub async fn reminder(
     readers
         .with_snapshot(engine, move |transaction| {
             reminder_in(transaction, id).boxed()
+        })
+        .await
+}
+
+pub async fn due_reminder_fires(
+    readers: &ReaderPool,
+    engine: &Mutex<Option<Database>>,
+    query: DueReminderFiresQuery,
+) -> Result<Vec<DueReminderFire>, Error> {
+    readers
+        .with_snapshot(engine, move |transaction| {
+            async move {
+                let mut rows = transaction
+                    .query(domain_sql::SELECT_DUE_REMINDER_FIRE_CANDIDATES, ())
+                    .await?;
+                let mut due = Vec::new();
+                while let Some(row) = rows.next().await? {
+                    let trigger_at = mapping::parse_timestamp(&decode::text(&row, 3)?)?;
+                    if trigger_at <= *query.due_at_or_before() {
+                        due.push(DueReminderFire::new(
+                            mapping::parse_id(&decode::text(&row, 1)?)?,
+                            mapping::parse_id(&decode::text(&row, 0)?)?,
+                            attention_kernel::Revision::try_from(mapping::parse_counter(
+                                &decode::blob(&row, 2)?,
+                            )?)
+                            .map_err(|error| Error::Decode(Box::new(error)))?,
+                            trigger_at,
+                        ));
+                    }
+                }
+                drop(rows);
+                due.sort_by_key(|fire| (*fire.trigger_at(), fire.fire_id(), fire.reminder_id()));
+                due.truncate(query.limit().value());
+                Ok(due)
+            }
+            .boxed()
         })
         .await
 }

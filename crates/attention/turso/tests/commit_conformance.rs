@@ -4,6 +4,7 @@ use attention_turso::Config;
 use chrono::DateTime;
 use chrono::Utc;
 use std::error::Error;
+use turso_db::Builder;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -26,6 +27,10 @@ async fn database() -> TestResult<(tempfile::TempDir, AttentionDatabase)> {
 }
 
 fn source_command() -> IngestSourceOccurrence {
+    source_command_with_fresh_attention(false)
+}
+
+fn source_command_with_fresh_attention(fresh_attention: bool) -> IngestSourceOccurrence {
     let kind = SourceKind::new("linear")
         .unwrap_or_else(|error| panic!("fixed source kind must be valid: {error}"));
     let instance = SourceInstance::new("workspace")
@@ -59,7 +64,7 @@ fn source_command() -> IngestSourceOccurrence {
             ),
         },
         SignalSourceLifecycle::Active,
-        false,
+        fresh_attention,
         MutationIdempotencyKey::new(),
     )
 }
@@ -471,6 +476,121 @@ async fn duplicate_occurrence_uses_original_outcome_without_storing_new_key() ->
         ))
     ));
     database.close().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn semantic_replay_does_not_duplicate_event_intent_or_pending_authority() -> TestResult {
+    let (root, database) = database().await?;
+    let command = source_command_with_fresh_attention(true);
+    let event_id = ChangeEventId::new();
+    let intent_id = OutboxIntentId::new();
+    let bundle = evaluate_ingest_source_occurrence(
+        &command,
+        None,
+        None,
+        EvaluationContext::new(event_id, Some(intent_id), at(12)),
+    )?;
+    let applied = database
+        .commit_ingest_source_occurrence(bundle.clone())
+        .await?;
+    assert_eq!(applied.outbox_intent_id(), Some(intent_id));
+    assert_eq!(
+        database.commit_ingest_source_occurrence(bundle).await?,
+        applied.replayed()
+    );
+    database.close().await?;
+
+    let config = Config::new(root.path().join("database"), root.path().join("backups"))?;
+    let raw = Builder::new_local(
+        config
+            .database_directory()
+            .database_file()
+            .to_str()
+            .ok_or("database path is not UTF-8")?,
+    )
+    .build()
+    .await?;
+    let connection = raw.connect()?;
+    for (table, expected) in [
+        ("change_events", 1_i64),
+        ("outbox_intents", 1),
+        ("delivery_states", 1),
+    ] {
+        let mut rows = connection
+            .query(&format!("SELECT count(*) FROM {table}"), ())
+            .await?;
+        assert_eq!(
+            rows.next()
+                .await?
+                .ok_or("table count missing")?
+                .get::<i64>(0)?,
+            expected,
+            "table {table}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn reminder_fired_some_and_none_outbox_paths_create_authority_conditionally() -> TestResult {
+    let (root, database) = database().await?;
+    for with_outbox in [true, false] {
+        let reminder_id = ReminderId::new();
+        let fire_id = ReminderFireId::new();
+        database
+            .commit_create_reminder(evaluate_create_reminder(
+                &CreateReminder::new(
+                    reminder_id,
+                    fire_id,
+                    ReminderTarget::WorkItem(WorkItemId::new()),
+                    at(14),
+                    MutationIdempotencyKey::new(),
+                ),
+                context(),
+            ))
+            .await?;
+        let reminder = database
+            .reminder(reminder_id)
+            .await?
+            .ok_or("created reminder missing")?;
+        let expected_intent = with_outbox.then(OutboxIntentId::new);
+        let outcome = database
+            .commit_fire_reminder(evaluate_fire_reminder(
+                &FireReminder::new(reminder_id, fire_id, MutationIdempotencyKey::new()),
+                &reminder,
+                EvaluationContext::new(ChangeEventId::new(), expected_intent, at(14)),
+            )?)
+            .await?;
+        assert_eq!(outcome.outbox_intent_id(), expected_intent);
+    }
+    database.close().await?;
+
+    let config = Config::new(root.path().join("database"), root.path().join("backups"))?;
+    let raw = Builder::new_local(
+        config
+            .database_directory()
+            .database_file()
+            .to_str()
+            .ok_or("database path is not UTF-8")?,
+    )
+    .build()
+    .await?;
+    let connection = raw.connect()?;
+    let mut rows = connection
+        .query(
+            "SELECT
+                 (SELECT count(*) FROM outbox_intents),
+                 (SELECT count(*) FROM delivery_states),
+                 (SELECT count(*) FROM outbox_intents AS o LEFT JOIN delivery_states AS d
+                    ON d.intent_id = o.id WHERE d.intent_id IS NULL)",
+            (),
+        )
+        .await?;
+    let row = rows.next().await?.ok_or("inventory count missing")?;
+    assert_eq!(row.get::<i64>(0)?, 1);
+    assert_eq!(row.get::<i64>(1)?, 1);
+    assert_eq!(row.get::<i64>(2)?, 0);
     Ok(())
 }
 

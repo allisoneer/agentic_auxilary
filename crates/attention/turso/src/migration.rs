@@ -7,7 +7,7 @@ use turso_db::Connection;
 use turso_db::params;
 use turso_db::transaction::TransactionBehavior;
 
-pub const MIGRATION_HEAD: u64 = 2;
+pub const MIGRATION_HEAD: u64 = 3;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Migration {
@@ -44,6 +44,11 @@ pub const MIGRATIONS: &[Migration] = &[
         2,
         "attention_core",
         include_bytes!("../migrations/0002_attention_core.sql"),
+    ),
+    Migration::new(
+        3,
+        "durable_delivery",
+        include_bytes!("../migrations/0003_durable_delivery.sql"),
     ),
 ];
 
@@ -176,7 +181,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn injected_failures_preserve_head_one_to_head_two_atomicity() -> Result<(), Error> {
+    async fn injected_failures_preserve_head_one_upgrade_atomicity() -> Result<(), Error> {
         for failpoint in [
             Failpoint::AfterBody,
             Failpoint::AfterLedger,
@@ -222,6 +227,57 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn injected_failures_preserve_head_two_to_head_three_atomicity() -> Result<(), Error> {
+        for failpoint in [
+            Failpoint::AfterBody,
+            Failpoint::AfterLedger,
+            Failpoint::BeforeCommit,
+            Failpoint::AfterCommit,
+        ] {
+            let root = tempfile::tempdir().map_err(Error::Io)?;
+            let path = root.path().join("migration.db");
+            let path = path
+                .to_str()
+                .ok_or(Error::MigrationIntegrity("test path is not UTF-8"))?;
+            let database = Builder::new_local(path).build().await?;
+            let mut connection = database.connect()?;
+            for migration in &MIGRATIONS[..2] {
+                connection
+                    .execute_batch(
+                        std::str::from_utf8(migration.sql)
+                            .map_err(|_| Error::MigrationIntegrity("migration SQL is not UTF-8"))?,
+                    )
+                    .await?;
+                connection
+                    .execute(
+                        "INSERT INTO __attention_migrations (version, name, checksum) VALUES (?1, ?2, ?3)",
+                        params![
+                            i64::try_from(migration.version).map_err(|_| {
+                                Error::MigrationIntegrity("migration version exceeds SQLite integer")
+                            })?,
+                            migration.name,
+                            migration.checksum().to_vec()
+                        ],
+                    )
+                    .await?;
+            }
+
+            assert!(
+                run_with_failpoint(&mut connection, failpoint)
+                    .await
+                    .is_err()
+            );
+            let applied = preflight(&connection).await?;
+            let expected = 2 + usize::from(failpoint == Failpoint::AfterCommit);
+            assert_eq!(applied.len(), expected);
+            let report = run(&mut connection).await?;
+            assert_eq!(report.applied(), MIGRATIONS.len() - expected);
+            assert_eq!(preflight(&connection).await?.len(), MIGRATIONS.len());
+        }
+        Ok(())
+    }
+
     #[test]
     fn migration_sql_remains_foundation_only() {
         let sql = std::str::from_utf8(MIGRATIONS[0].sql).expect("migration SQL is UTF-8");
@@ -250,6 +306,9 @@ mod tests {
         ] {
             assert!(!core.to_ascii_lowercase().contains(excluded));
         }
+        let delivery = std::str::from_utf8(MIGRATIONS[2].sql).expect("migration SQL is UTF-8");
+        assert!(delivery.contains("CREATE TABLE delivery_states"));
+        assert!(delivery.contains("CREATE TABLE delivery_checkpoints"));
     }
 }
 

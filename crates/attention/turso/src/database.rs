@@ -3,6 +3,8 @@ use crate::Error;
 use crate::LifecycleState;
 use crate::backup;
 use crate::backup::BackupManifest;
+use crate::delivery_reader;
+use crate::delivery_writer;
 use crate::lifecycle::Lifecycle;
 use crate::migration;
 use crate::migration::MigrationReport;
@@ -21,25 +23,40 @@ use attention_kernel::AcknowledgeReminderFireResult;
 use attention_kernel::AttentionSignal;
 use attention_kernel::AttentionSignalId;
 use attention_kernel::AttentionSnapshot;
+use attention_kernel::BoundedDeliveryText;
 use attention_kernel::CancelWorkItemBundle;
 use attention_kernel::CancelWorkItemResult;
 use attention_kernel::ChangesAfterQuery;
 use attention_kernel::ChangesResult;
+use attention_kernel::CheckpointAdvance;
+use attention_kernel::CheckpointAdvanceOutcome;
+use attention_kernel::CheckpointQuery;
 use attention_kernel::CompleteWorkItemBundle;
 use attention_kernel::CompleteWorkItemResult;
 use attention_kernel::CreateReminderBundle;
 use attention_kernel::CreateReminderResult;
 use attention_kernel::CreateWorkItemBundle;
 use attention_kernel::CreateWorkItemResult;
+use attention_kernel::DeliveryAuthority;
+use attention_kernel::DeliveryCheckpoint;
+use attention_kernel::DeliveryClaim;
+use attention_kernel::DeliveryClaimQuery;
+use attention_kernel::DeliveryCompletionOutcome;
+use attention_kernel::DeliveryLeaseToken;
+use attention_kernel::DueReminderFire;
+use attention_kernel::DueReminderFiresQuery;
 use attention_kernel::FireReminderBundle;
 use attention_kernel::FireReminderResult;
 use attention_kernel::IngestSourceOccurrenceBundle;
 use attention_kernel::IngestSourceOccurrenceResult;
 use attention_kernel::MutationIdempotencyKey;
+use attention_kernel::OutboxIntentId;
 use attention_kernel::PortError;
 use attention_kernel::PriorMutationOutcome;
+use attention_kernel::ProviderMessageId;
 use attention_kernel::Reminder;
 use attention_kernel::ReminderId;
+use attention_kernel::RenewOutcome;
 use attention_kernel::SnoozeReminderFireBundle;
 use attention_kernel::SnoozeReminderFireResult;
 use attention_kernel::SourceAuthorityQuery;
@@ -48,6 +65,8 @@ use attention_kernel::SourceReceipt;
 use attention_kernel::SourceReceiptId;
 use attention_kernel::WorkItem;
 use attention_kernel::WorkItemId;
+use chrono::DateTime;
+use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use turso_db::Builder;
@@ -153,6 +172,175 @@ impl AttentionDatabase {
         let _lifecycle = self.inner.lifecycle.acquire()?;
         let readers = self.semantic_readers().await?;
         semantic_reader::changes(&readers, &self.inner.engine, query).await
+    }
+
+    pub(crate) async fn semantic_due_reminder_fires(
+        &self,
+        query: DueReminderFiresQuery,
+    ) -> Result<Vec<DueReminderFire>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::due_reminder_fires(&readers, &self.inner.engine, query).await
+    }
+
+    pub(crate) async fn delivery_inspect(
+        &self,
+        intent_id: OutboxIntentId,
+    ) -> Result<Option<DeliveryAuthority>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        delivery_reader::inspect(&readers, &self.inner.engine, intent_id).await
+    }
+
+    pub(crate) async fn delivery_claim(
+        &self,
+        query: DeliveryClaimQuery,
+    ) -> Result<Vec<DeliveryClaim>, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, _readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::claim(&writer, &self.inner.engine, query).await
+    }
+
+    pub(crate) async fn delivery_renew(
+        &self,
+        intent_id: OutboxIntentId,
+        token: DeliveryLeaseToken,
+        expires_at: DateTime<Utc>,
+    ) -> Result<RenewOutcome, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::renew(
+            &writer,
+            &readers,
+            &self.inner.engine,
+            intent_id,
+            token,
+            expires_at,
+        )
+        .await
+    }
+
+    pub(crate) async fn delivery_succeed(
+        &self,
+        intent_id: OutboxIntentId,
+        token: DeliveryLeaseToken,
+        provider_message_id: ProviderMessageId,
+        succeeded_at: DateTime<Utc>,
+    ) -> Result<DeliveryCompletionOutcome, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::succeed(
+            &writer,
+            &readers,
+            &self.inner.engine,
+            intent_id,
+            token,
+            provider_message_id,
+            succeeded_at,
+        )
+        .await
+    }
+
+    pub(crate) async fn delivery_fail_retryable(
+        &self,
+        intent_id: OutboxIntentId,
+        token: DeliveryLeaseToken,
+        attempt: u32,
+        error: BoundedDeliveryText,
+        next_retry_at: DateTime<Utc>,
+    ) -> Result<DeliveryCompletionOutcome, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::fail_retryable(
+            &writer,
+            &readers,
+            &self.inner.engine,
+            intent_id,
+            token,
+            (attempt, error, next_retry_at),
+        )
+        .await
+    }
+
+    pub(crate) async fn delivery_fail_terminal(
+        &self,
+        intent_id: OutboxIntentId,
+        token: DeliveryLeaseToken,
+        attempt: u32,
+        error: BoundedDeliveryText,
+        failed_at: DateTime<Utc>,
+    ) -> Result<DeliveryCompletionOutcome, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::fail_terminal(
+            &writer,
+            &readers,
+            &self.inner.engine,
+            intent_id,
+            token,
+            (attempt, error, failed_at),
+        )
+        .await
+    }
+
+    pub(crate) async fn delivery_skip(
+        &self,
+        intent_id: OutboxIntentId,
+        token: DeliveryLeaseToken,
+        reason: BoundedDeliveryText,
+        skipped_at: DateTime<Utc>,
+    ) -> Result<DeliveryCompletionOutcome, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::skip(
+            &writer,
+            &readers,
+            &self.inner.engine,
+            intent_id,
+            token,
+            reason,
+            skipped_at,
+        )
+        .await
+    }
+
+    pub(crate) async fn delivery_checkpoint(
+        &self,
+        query: CheckpointQuery,
+    ) -> Result<Option<DeliveryCheckpoint>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        delivery_reader::checkpoint(&readers, &self.inner.engine, query).await
+    }
+
+    pub(crate) async fn delivery_advance_checkpoint(
+        &self,
+        advance: CheckpointAdvance,
+    ) -> Result<CheckpointAdvanceOutcome, PortError<Error>> {
+        let _lifecycle = self.inner.lifecycle.acquire().map_err(PortError::Adapter)?;
+        let (writer, readers) = self
+            .semantic_writer_parts()
+            .await
+            .map_err(PortError::Adapter)?;
+        delivery_writer::advance_checkpoint(&writer, &readers, &self.inner.engine, advance).await
     }
 
     async fn semantic_writer_parts(&self) -> Result<(Arc<Writer>, Arc<ReaderPool>), Error> {
@@ -480,13 +668,31 @@ mod tests {
     use crate::writer::SemanticFailpoint;
     use attention_kernel::AttentionCommitPort;
     use attention_kernel::AttentionReadPort;
+    use attention_kernel::BoundedDeliveryText;
     use attention_kernel::ChangeEventId;
+    use attention_kernel::CheckpointAdvance;
+    use attention_kernel::CheckpointAdvanceOutcome;
+    use attention_kernel::ClaimLimit;
     use attention_kernel::CommitCursor;
+    use attention_kernel::CreateReminder;
     use attention_kernel::CreateWorkItem;
+    use attention_kernel::DeliveryClaimQuery;
+    use attention_kernel::DeliveryCompletionOutcome;
+    use attention_kernel::DeliveryStatus;
     use attention_kernel::EvaluationContext;
+    use attention_kernel::FireReminder;
     use attention_kernel::MutationIdempotencyKey;
+    use attention_kernel::OutboxIntentId;
     use attention_kernel::PriorOutcomeQuery;
+    use attention_kernel::ProviderMessageId;
+    use attention_kernel::ReminderFireId;
+    use attention_kernel::ReminderFireState;
+    use attention_kernel::ReminderId;
+    use attention_kernel::ReminderTarget;
+    use attention_kernel::WorkItemId;
+    use attention_kernel::evaluate_create_reminder;
     use attention_kernel::evaluate_create_work_item;
+    use attention_kernel::evaluate_fire_reminder;
     use chrono::Utc;
     use futures::FutureExt;
     use std::time::Duration;
@@ -709,6 +915,165 @@ mod tests {
                 })?;
             database.close().await?;
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn post_finish_failpoint_rolls_back_outbox_and_pending_authority() -> Result<(), Error> {
+        let (_root, database) = database(1).await?;
+        let reminder_id = ReminderId::new();
+        let fire_id = ReminderFireId::new();
+        database
+            .commit_create_reminder(evaluate_create_reminder(
+                &CreateReminder::new(
+                    reminder_id,
+                    fire_id,
+                    ReminderTarget::WorkItem(WorkItemId::new()),
+                    Utc::now(),
+                    MutationIdempotencyKey::new(),
+                ),
+                EvaluationContext::new(ChangeEventId::new(), None, Utc::now()),
+            ))
+            .await
+            .map_err(|error| match error {
+                PortError::Adapter(error) => error,
+                PortError::Semantic(_) => {
+                    Error::MigrationIntegrity("reminder setup returned semantic error")
+                }
+            })?;
+        let reminder = database
+            .reminder(reminder_id)
+            .await
+            .map_err(|error| match error {
+                PortError::Adapter(error) => error,
+                PortError::Semantic(_) => {
+                    Error::MigrationIntegrity("reminder read returned semantic error")
+                }
+            })?
+            .ok_or(Error::MigrationIntegrity("reminder setup is missing"))?;
+        let intent_id = OutboxIntentId::new();
+        let bundle = evaluate_fire_reminder(
+            &FireReminder::new(reminder_id, fire_id, MutationIdempotencyKey::new()),
+            &reminder,
+            EvaluationContext::new(ChangeEventId::new(), Some(intent_id), Utc::now()),
+        )
+        .map_err(|error| Error::Decode(Box::new(error)))?;
+        let writer = database
+            .inner
+            .writer
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or(Error::Shutdown)?;
+        writer.set_semantic_failpoint(SemanticFailpoint::AfterFinish);
+        assert!(database.commit_fire_reminder(bundle.clone()).await.is_err());
+        writer.set_semantic_failpoint(SemanticFailpoint::Disabled);
+
+        let reminder = database
+            .reminder(reminder_id)
+            .await
+            .map_err(|error| match error {
+                PortError::Adapter(error) => error,
+                PortError::Semantic(_) => {
+                    Error::MigrationIntegrity("reminder read returned semantic error")
+                }
+            })?
+            .ok_or(Error::MigrationIntegrity("reminder disappeared"))?;
+        assert_eq!(reminder.fires()[0].state(), ReminderFireState::Scheduled);
+        let connection = database
+            .inner
+            .engine
+            .lock()
+            .await
+            .as_ref()
+            .ok_or(Error::Shutdown)?
+            .connect()
+            .map_err(Error::from_connect)?;
+        let mut rows = connection
+            .query(
+                "SELECT (SELECT count(*) FROM outbox_intents),
+                        (SELECT count(*) FROM delivery_states)",
+                (),
+            )
+            .await?;
+        let row = rows.next().await?.ok_or(Error::MigrationIntegrity(
+            "delivery inventory count missing",
+        ))?;
+        assert_eq!(row.get::<i64>(0).map_err(Error::from)?, 0);
+        assert_eq!(row.get::<i64>(1).map_err(Error::from)?, 0);
+        drop(rows);
+        drop(connection);
+
+        database
+            .commit_fire_reminder(bundle)
+            .await
+            .map_err(|error| match error {
+                PortError::Adapter(error) => error,
+                PortError::Semantic(_) => {
+                    Error::MigrationIntegrity("fire retry returned semantic error")
+                }
+            })?;
+        writer.set_semantic_failpoint(SemanticFailpoint::AfterCommit);
+        let now = Utc::now();
+        assert!(matches!(
+            database
+                .delivery_claim(DeliveryClaimQuery::new(
+                    now,
+                    now + chrono::Duration::minutes(1),
+                    ClaimLimit::try_from(1).map_err(|error| Error::Decode(Box::new(error)))?,
+                ))
+                .await,
+            Err(PortError::Adapter(Error::CommitOutcomeUnknown))
+        ));
+        let authority = database
+            .delivery_inspect(intent_id)
+            .await?
+            .ok_or(Error::MigrationIntegrity("ambiguous claim did not commit"))?;
+        let DeliveryStatus::Leased { token, .. } = authority.state().status() else {
+            return Err(Error::MigrationIntegrity(
+                "ambiguous claim did not leave a lease",
+            ));
+        };
+        let token = *token;
+        assert_eq!(
+            database
+                .delivery_succeed(
+                    intent_id,
+                    token,
+                    ProviderMessageId::new("ambiguous-provider", 128)
+                        .map_err(|error| Error::Decode(Box::new(error)))?,
+                    now,
+                )
+                .await
+                .map_err(|error| match error {
+                    PortError::Adapter(error) => error,
+                    PortError::Semantic(_) => {
+                        Error::MigrationIntegrity("delivery success returned semantic error")
+                    }
+                })?,
+            DeliveryCompletionOutcome::Applied
+        );
+        assert_eq!(
+            database
+                .delivery_advance_checkpoint(CheckpointAdvance::new(
+                    BoundedDeliveryText::new("ambiguous-worker", 128)
+                        .map_err(|error| Error::Decode(Box::new(error)))?,
+                    None,
+                    CommitCursor::try_from(2).map_err(|error| Error::Decode(Box::new(error)))?,
+                    intent_id,
+                ))
+                .await
+                .map_err(|error| match error {
+                    PortError::Adapter(error) => error,
+                    PortError::Semantic(_) => {
+                        Error::MigrationIntegrity("checkpoint advance returned semantic error")
+                    }
+                })?,
+            CheckpointAdvanceOutcome::Advanced
+        );
+        writer.set_semantic_failpoint(SemanticFailpoint::Disabled);
+        database.close().await?;
         Ok(())
     }
 
