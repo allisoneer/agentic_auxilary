@@ -1,0 +1,19 @@
+agentic.toml
+  s_49f306bb25f911::t_42124c6ac10da2 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "a2b213cc6ececf5f2d09fda12730d39342f744c0",
+  "prompts": {},
+  "sessions": {
+    "s_49f306bb25f911": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_027defa8effeVa5OEE2s8HE4IC",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
