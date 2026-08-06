@@ -41,8 +41,10 @@ commits, or rolls back one.
 1. Connect to the stopped database through exact-pinned local
    `turso_db::Builder::new_local` and begin one
    `TransactionBehavior::Immediate` transaction.
-2. Execute the complete setup artifact. It creates only TEMP inspection,
-   snapshot, and decision objects; it does not modify persistent data.
+2. Within that transaction, execute the complete setup artifact with
+   `transaction.execute_batch(setup_sql).await?`. It creates only TEMP
+   inspection, snapshot, and decision objects; it does not modify persistent
+   data.
 3. Inspect `temp.__attention_repair_duplicate_reminders` and the complete
    `temp.__attention_repair_affected_fire_history`, reading the history in
    `reminder_id`, `ordinal`, then `fire_id` order. Review every row for every
@@ -59,11 +61,12 @@ commits, or rolls back one.
    authoritative fire ID, and `temp.__attention_repair_retire` with each
    reminder ID, retired fire ID, and chosen terminal state. Never interpolate
    an identifier or stored value into SQL text.
-6. Execute the complete apply artifact. It validates the live rows against the
-   setup snapshots, requires exact decision sets, updates only selected fire
-   states and reminder pointers, and checks history and consistency
-   postconditions. Its assertion failures are static and do not include stored
-   IDs.
+6. Within the same transaction, execute the complete apply artifact with
+   `transaction.execute_batch(apply_sql).await?`. It validates the live rows
+   against the setup snapshots, requires exact decision sets, updates only
+   selected fire states and reminder pointers, and checks history and
+   consistency postconditions. Its assertion failures are static and do not
+   include stored IDs.
 7. Commit only if setup, all bound decision inserts, apply, and all operator
    checks succeed. On any error or uncertainty, explicitly roll back the
    transaction, stop, and restore the verified backup or escalate. Do not edit

@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS temp.__attention_repair_assertions;
+DROP TABLE IF EXISTS temp.__attention_repair_postconditions;
 
 CREATE TEMP TABLE __attention_repair_assertions (
     affected_set_drift INTEGER NOT NULL,
@@ -21,7 +22,17 @@ CREATE TEMP TABLE __attention_repair_assertions (
     CONSTRAINT repair_terminal_states_valid CHECK(terminal_state_invalid = 0)
 );
 
-INSERT INTO temp.__attention_repair_assertions
+INSERT INTO temp.__attention_repair_assertions (
+    affected_set_drift,
+    reminder_snapshot_drift,
+    fire_snapshot_drift,
+    authoritative_set_invalid,
+    authoritative_fire_invalid,
+    retirement_fire_invalid,
+    authoritative_fire_retired,
+    retirement_set_invalid,
+    terminal_state_invalid
+)
 SELECT
     EXISTS (
         SELECT 1
@@ -211,7 +222,14 @@ CREATE TEMP TABLE __attention_repair_postconditions (
     CONSTRAINT repair_unselected_fire_states_preserved CHECK(unselected_fire_state_changed = 0)
 );
 
-INSERT INTO temp.__attention_repair_postconditions
+INSERT INTO temp.__attention_repair_postconditions (
+    current_fire_invalid,
+    retirement_state_invalid,
+    row_identity_changed,
+    fire_shape_changed,
+    reminder_revision_changed,
+    unselected_fire_state_changed
+)
 SELECT
     EXISTS (
         SELECT 1

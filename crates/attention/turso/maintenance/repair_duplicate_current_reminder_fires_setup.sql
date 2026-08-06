@@ -75,7 +75,14 @@ CREATE TEMP TABLE __attention_repair_duplicate_reminders (
     current_fire_count INTEGER NOT NULL
 );
 
-INSERT INTO temp.__attention_repair_duplicate_reminders
+INSERT INTO temp.__attention_repair_duplicate_reminders (
+    reminder_id,
+    revision,
+    current_fire_id,
+    scheduled_fire_count,
+    fired_fire_count,
+    current_fire_count
+)
 SELECT
     b.reminder_id,
     b.revision,
@@ -99,7 +106,15 @@ CREATE TEMP TABLE __attention_repair_affected_fire_history (
     state INTEGER NOT NULL
 );
 
-INSERT INTO temp.__attention_repair_affected_fire_history
+INSERT INTO temp.__attention_repair_affected_fire_history (
+    reminder_id,
+    revision,
+    current_fire_id,
+    fire_id,
+    ordinal,
+    trigger_at,
+    state
+)
 SELECT
     b.reminder_id,
     b.revision,
