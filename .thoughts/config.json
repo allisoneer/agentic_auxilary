@@ -451,6 +451,21 @@
       "remote": "https://github.com/bytecodealliance/rustix",
       "description": "Exact rustix 1.1.4 source for descriptor-relative filesystem API and Linux/macOS portability evidence",
       "ref": "refs/tags/v1.1.4"
+    },
+    {
+      "remote": "https://github.com/Stebalien/tempfile",
+      "description": "Pinned tempfile 3.27.0 source for tempdir base-path behavior",
+      "ref": "refs/tags/v3.27.0"
+    },
+    {
+      "remote": "https://github.com/rust-lang/rust",
+      "description": "Pinned Rust 1.96.1 standard-library source for macOS temp_dir behavior",
+      "ref": "refs/tags/1.96.1"
+    },
+    {
+      "remote": "https://github.com/rust-lang/libc",
+      "description": "Pinned libc 0.2.186 source matching Cargo.lock for Apple mode and constants",
+      "ref": "refs/tags/0.2.186"
     }
   ]
 }
