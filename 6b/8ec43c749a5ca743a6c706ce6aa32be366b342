@@ -1,0 +1,23 @@
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires_setup.sql
+  s_1460a4f2449a2d::t_55aeb6e90295a1 78-85,109-117
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires_apply.sql
+  s_1460a4f2449a2d::t_55aeb6e90295a1 2,25-35,225-232
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires.md
+  s_1460a4f2449a2d::t_55aeb6e90295a1 44-47,64-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "6b8ec43c749a5ca743a6c706ce6aa32be366b342",
+  "prompts": {},
+  "sessions": {
+    "s_1460a4f2449a2d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_02ba3c55dffe0eJLod3Jj9BCWb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
