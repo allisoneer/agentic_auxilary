@@ -67,6 +67,9 @@ pub const UPSERT_FIRE: &str = "INSERT INTO reminder_fires (id, reminder_id, ordi
     state) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET \
     ordinal = excluded.ordinal, trigger_at = excluded.trigger_at, state = excluded.state \
     WHERE reminder_fires.reminder_id = excluded.reminder_id";
+pub const SELECT_DUE_REMINDER_FIRE_CANDIDATES: &str = "SELECT f.id, f.reminder_id, r.revision, \
+    f.trigger_at FROM reminder_fires AS f JOIN reminders AS r ON r.id = f.reminder_id \
+    WHERE f.state = 0";
 
 pub const INSERT_OUTCOME: &str = "INSERT INTO mutation_outcomes (mutation_key, operation, \
     fingerprint, outcome_version, outcome_bytes) VALUES (?1, ?2, ?3, ?4, ?5) \
@@ -79,3 +82,47 @@ pub const SELECT_CHANGES: &str = "SELECT cursor, event_id, occurred_at, kind, pa
     payload_bytes FROM change_events WHERE cursor > ?1 AND cursor <= ?2 ORDER BY cursor LIMIT ?3";
 pub const INSERT_OUTBOX: &str = "INSERT INTO outbox_intents (id, deduplication_key, subject_kind, \
     subject_id, originating_event_id, created_at, purpose) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+pub const INSERT_DELIVERY_PENDING: &str =
+    "INSERT INTO delivery_states (intent_id, status) VALUES (?1, 0)";
+
+pub const SELECT_DELIVERY_AUTHORITY: &str = "SELECT o.id, o.deduplication_key, o.subject_kind, \
+    o.subject_id, o.originating_event_id, o.created_at, o.purpose, d.status, d.lease_token, \
+    d.lease_expires_at, d.attempt, d.error, d.next_retry_at, d.provider_message_id, d.succeeded_at, \
+    d.reason, d.skipped_at, d.failed_at FROM outbox_intents AS o JOIN delivery_states AS d \
+    ON d.intent_id = o.id WHERE o.id = ?1";
+pub const SELECT_DELIVERY_CANDIDATES: &str = "SELECT o.id, o.created_at, d.status, d.lease_token, \
+    d.lease_expires_at, d.attempt, d.error, d.next_retry_at, d.provider_message_id, d.succeeded_at, \
+    d.reason, d.skipped_at, d.failed_at FROM outbox_intents AS o JOIN delivery_states AS d \
+    ON d.intent_id = o.id WHERE d.status IN (0, 1, 2)";
+pub const SELECT_DELIVERY_STATE: &str = "SELECT status, lease_token, lease_expires_at, attempt, \
+    error, next_retry_at, provider_message_id, succeeded_at, reason, skipped_at, failed_at \
+    FROM delivery_states WHERE intent_id = ?1";
+pub const UPDATE_DELIVERY_LEASED: &str = "UPDATE delivery_states SET status = 1, lease_token = ?2, \
+    lease_expires_at = ?3, attempt = NULL, error = NULL, next_retry_at = NULL, \
+    provider_message_id = NULL, succeeded_at = NULL, reason = NULL, skipped_at = NULL, \
+    failed_at = NULL WHERE intent_id = ?1 AND status IN (0, 1, 2)";
+pub const UPDATE_DELIVERY_RENEWED: &str = "UPDATE delivery_states SET lease_expires_at = ?3 \
+    WHERE intent_id = ?1 AND status = 1 AND lease_token = ?2";
+pub const UPDATE_DELIVERY_SUCCEEDED: &str = "UPDATE delivery_states SET status = 3, \
+    lease_token = NULL, lease_expires_at = NULL, attempt = NULL, error = NULL, \
+    next_retry_at = NULL, provider_message_id = ?3, succeeded_at = ?4, reason = NULL, \
+    skipped_at = NULL, failed_at = NULL WHERE intent_id = ?1 AND status = 1 AND lease_token = ?2";
+pub const UPDATE_DELIVERY_RETRYABLE: &str = "UPDATE delivery_states SET status = 2, \
+    lease_token = NULL, lease_expires_at = NULL, attempt = ?3, error = ?4, next_retry_at = ?5, \
+    provider_message_id = NULL, succeeded_at = NULL, reason = NULL, skipped_at = NULL, \
+    failed_at = NULL WHERE intent_id = ?1 AND status = 1 AND lease_token = ?2";
+pub const UPDATE_DELIVERY_TERMINAL_FAILURE: &str = "UPDATE delivery_states SET status = 5, \
+    lease_token = NULL, lease_expires_at = NULL, attempt = ?3, error = ?4, next_retry_at = NULL, \
+    provider_message_id = NULL, succeeded_at = NULL, reason = NULL, skipped_at = NULL, \
+    failed_at = ?5 WHERE intent_id = ?1 AND status = 1 AND lease_token = ?2";
+pub const UPDATE_DELIVERY_SKIPPED: &str = "UPDATE delivery_states SET status = 4, \
+    lease_token = NULL, lease_expires_at = NULL, attempt = NULL, error = NULL, \
+    next_retry_at = NULL, provider_message_id = NULL, succeeded_at = NULL, reason = ?3, \
+    skipped_at = ?4, failed_at = NULL WHERE intent_id = ?1 AND status = 1 AND lease_token = ?2";
+
+pub const SELECT_DELIVERY_CHECKPOINT: &str =
+    "SELECT worker, cursor FROM delivery_checkpoints WHERE worker = ?1";
+pub const INSERT_DELIVERY_CHECKPOINT: &str = "INSERT INTO delivery_checkpoints (worker, cursor) \
+    VALUES (?1, ?2) ON CONFLICT(worker) DO NOTHING";
+pub const UPDATE_DELIVERY_CHECKPOINT: &str = "UPDATE delivery_checkpoints SET cursor = ?3 \
+    WHERE worker = ?1 AND cursor = ?2";

@@ -208,6 +208,14 @@ async fn finish(
             .await
             .map_err(Error::from)
             .map_err(PortError::Adapter)?;
+        transaction
+            .execute(
+                domain_sql::INSERT_DELIVERY_PENDING,
+                params![mapping::id(intent.id())],
+            )
+            .await
+            .map_err(Error::from)
+            .map_err(PortError::Adapter)?;
     }
     let affected = transaction
         .execute(

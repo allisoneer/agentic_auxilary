@@ -1,13 +1,27 @@
 use crate::Error;
 use attention_kernel::AttentionSignal;
+use attention_kernel::BoundedDeliveryText;
 use attention_kernel::CanonicalFingerprint;
+use attention_kernel::ChangeEventId;
 use attention_kernel::ChangeKind;
+use attention_kernel::CommitCursor;
+use attention_kernel::DeliveryAuthority;
+use attention_kernel::DeliveryCheckpoint;
+use attention_kernel::DeliveryLeaseToken;
+use attention_kernel::DeliveryPurpose;
+use attention_kernel::DeliveryState;
+use attention_kernel::DeliveryStatus;
+use attention_kernel::DeliverySubject;
 use attention_kernel::ExternalEntityId;
 use attention_kernel::InvariantError;
 use attention_kernel::MutationOperation;
 use attention_kernel::NormalizedSourceOrder;
 use attention_kernel::OccurrenceId;
 use attention_kernel::OccurrenceKey;
+use attention_kernel::OutboxDeduplicationKey;
+use attention_kernel::OutboxIntent;
+use attention_kernel::OutboxIntentId;
+use attention_kernel::ProviderMessageId;
 use attention_kernel::Reminder;
 use attention_kernel::ReminderFire;
 use attention_kernel::ReminderFireId;
@@ -82,6 +96,58 @@ pub fn parse_timestamp(value: &str) -> Result<DateTime<Utc>, Error> {
         return Err(invalid("timestamp is noncanonical"));
     }
     Ok(parsed)
+}
+
+pub fn delivery_text(value: &BoundedDeliveryText) -> Result<&str, Error> {
+    bounded_write_text(value.as_str())
+}
+
+pub fn provider_message_id(value: &ProviderMessageId) -> Result<&str, Error> {
+    bounded_write_text(value.as_str())
+}
+
+fn bounded_write_text(value: &str) -> Result<&str, Error> {
+    if value.len() > crate::DELIVERY_TEXT_LIMIT_BYTES {
+        return Err(Error::InvariantViolation(
+            "delivery text exceeds adapter byte limit",
+        ));
+    }
+    Ok(value)
+}
+
+fn parse_delivery_text(value: String) -> Result<BoundedDeliveryText, Error> {
+    if value.len() > crate::DELIVERY_TEXT_LIMIT_BYTES {
+        return Err(invalid("delivery text exceeds adapter byte limit"));
+    }
+    BoundedDeliveryText::new(value, crate::DELIVERY_TEXT_LIMIT_BYTES)
+        .map_err(|error| Error::Decode(Box::new(error)))
+}
+
+fn parse_provider_message_id(value: String) -> Result<ProviderMessageId, Error> {
+    if value.len() > crate::DELIVERY_TEXT_LIMIT_BYTES {
+        return Err(invalid("provider message ID exceeds adapter byte limit"));
+    }
+    ProviderMessageId::new(value, crate::DELIVERY_TEXT_LIMIT_BYTES)
+        .map_err(|error| Error::Decode(Box::new(error)))
+}
+
+pub fn lease_token(value: DeliveryLeaseToken) -> Vec<u8> {
+    value.as_bytes().to_vec()
+}
+
+pub fn parse_lease_token(value: &[u8]) -> Result<DeliveryLeaseToken, Error> {
+    let bytes = value
+        .try_into()
+        .map_err(|_| invalid("delivery lease token width is not thirty-two"))?;
+    Ok(DeliveryLeaseToken::from_bytes(bytes))
+}
+
+pub fn checkpoint_cursor(value: CommitCursor) -> Vec<u8> {
+    counter(value.value())
+}
+
+pub fn parse_checkpoint_cursor(value: &[u8]) -> Result<CommitCursor, Error> {
+    CommitCursor::try_from(parse_counter(value)?).map_err(|error| Error::Decode(Box::new(error)))
 }
 
 pub fn fingerprint(value: CanonicalFingerprint) -> Vec<u8> {
@@ -216,6 +282,16 @@ pub fn parse_source_order(
 }
 
 fn optional_text(row: &Row, index: usize) -> Result<Option<String>, Error> {
+    row.get(index)
+        .map_err(|error| Error::Decode(Box::new(error)))
+}
+
+fn optional_blob(row: &Row, index: usize) -> Result<Option<Vec<u8>>, Error> {
+    row.get(index)
+        .map_err(|error| Error::Decode(Box::new(error)))
+}
+
+fn optional_integer(row: &Row, index: usize) -> Result<Option<i64>, Error> {
     row.get(index)
         .map_err(|error| Error::Decode(Box::new(error)))
 }
@@ -421,6 +497,133 @@ pub fn reminder(header: &ReminderHeader, fires: Vec<ReminderFire>) -> Result<Rem
     .map_err(|error| Error::Decode(Box::new(error)))
 }
 
+pub fn delivery_status(row: &Row, index: usize) -> Result<DeliveryStatus, Error> {
+    let status = integer(row, index)?;
+    let token = optional_blob(row, index + 1)?;
+    let lease_expires_at = optional_text(row, index + 2)?;
+    let attempt = optional_integer(row, index + 3)?;
+    let error = optional_text(row, index + 4)?;
+    let next_retry_at = optional_text(row, index + 5)?;
+    let provider_id = optional_text(row, index + 6)?;
+    let succeeded_at = optional_text(row, index + 7)?;
+    let reason = optional_text(row, index + 8)?;
+    let skipped_at = optional_text(row, index + 9)?;
+    let failed_at = optional_text(row, index + 10)?;
+    match (
+        status,
+        token,
+        lease_expires_at,
+        attempt,
+        error,
+        next_retry_at,
+        provider_id,
+        succeeded_at,
+        reason,
+        skipped_at,
+        failed_at,
+    ) {
+        (0, None, None, None, None, None, None, None, None, None, None) => {
+            Ok(DeliveryStatus::Pending)
+        }
+        (1, Some(token), Some(expires_at), None, None, None, None, None, None, None, None) => {
+            Ok(DeliveryStatus::Leased {
+                token: parse_lease_token(&token)?,
+                expires_at: parse_timestamp(&expires_at)?,
+            })
+        }
+        (
+            2,
+            None,
+            None,
+            Some(attempt),
+            Some(error),
+            Some(next_retry_at),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ) => Ok(DeliveryStatus::Retryable {
+            attempt: u32::try_from(attempt)
+                .map_err(|_| invalid("delivery attempt is outside the u32 range"))?,
+            error: parse_delivery_text(error)?,
+            next_retry_at: parse_timestamp(&next_retry_at)?,
+        }),
+        (
+            3,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(provider_id),
+            Some(succeeded_at),
+            None,
+            None,
+            None,
+        ) => Ok(DeliveryStatus::Succeeded {
+            provider_message_id: parse_provider_message_id(provider_id)?,
+            succeeded_at: parse_timestamp(&succeeded_at)?,
+        }),
+        (4, None, None, None, None, None, None, None, Some(reason), Some(skipped_at), None) => {
+            Ok(DeliveryStatus::Skipped {
+                reason: parse_delivery_text(reason)?,
+                skipped_at: parse_timestamp(&skipped_at)?,
+            })
+        }
+        (
+            5,
+            None,
+            None,
+            Some(attempt),
+            Some(error),
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(failed_at),
+        ) => Ok(DeliveryStatus::TerminalFailure {
+            attempt: u32::try_from(attempt)
+                .map_err(|_| invalid("delivery attempt is outside the u32 range"))?,
+            error: parse_delivery_text(error)?,
+            failed_at: parse_timestamp(&failed_at)?,
+        }),
+        _ => Err(invalid("delivery state columns are inconsistent")),
+    }
+}
+
+pub fn delivery_authority(row: &Row) -> Result<DeliveryAuthority, Error> {
+    let intent_id: OutboxIntentId = parse_id(&text(row, 0)?)?;
+    let subject = match integer(row, 2)? {
+        0 => DeliverySubject::AttentionSignal(parse_id(&text(row, 3)?)?),
+        1 => DeliverySubject::ReminderFire(parse_id(&text(row, 3)?)?),
+        _ => return Err(invalid("delivery subject kind is unknown")),
+    };
+    let purpose = match integer(row, 6)? {
+        0 => DeliveryPurpose::FreshAttention,
+        1 => DeliveryPurpose::ReminderFired,
+        _ => return Err(invalid("delivery purpose is unknown")),
+    };
+    let intent = OutboxIntent::new(
+        intent_id,
+        OutboxDeduplicationKey::new(text(row, 1)?, crate::DELIVERY_TEXT_LIMIT_BYTES)
+            .map_err(|error| Error::Decode(Box::new(error)))?,
+        subject,
+        parse_id::<ChangeEventId>(&text(row, 4)?)?,
+        parse_timestamp(&text(row, 5)?)?,
+        purpose,
+    );
+    let state = DeliveryState::reconstruct(intent_id, delivery_status(row, 7)?);
+    Ok(DeliveryAuthority::new(intent, state))
+}
+
+pub fn delivery_checkpoint(row: &Row) -> Result<DeliveryCheckpoint, Error> {
+    let worker = parse_delivery_text(text(row, 0)?)?;
+    let cursor = parse_checkpoint_cursor(&blob(row, 1)?)?;
+    Ok(DeliveryCheckpoint::new(worker, cursor))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,5 +650,34 @@ mod tests {
         assert!(parse_source_order(0, Some("sequence".to_string()), None).is_err());
         assert!(parse_source_order(1, None, None).is_err());
         assert!(parse_source_order(1, Some("sequence".to_string()), Some(Vec::new())).is_err());
+    }
+
+    #[test]
+    fn delivery_token_cursor_and_text_bounds_are_strict_and_non_leaking() {
+        let token = DeliveryLeaseToken::from_bytes([0xA5; 32]);
+        assert_eq!(
+            parse_lease_token(&lease_token(token)).expect("token"),
+            token
+        );
+        let token_error = parse_lease_token(&[0xA5; 31]).expect_err("short token must fail");
+        assert!(!token_error.to_string().contains("A5"));
+
+        let cursor = CommitCursor::try_from(u64::MAX).expect("nonzero cursor");
+        assert_eq!(
+            parse_checkpoint_cursor(&checkpoint_cursor(cursor)).expect("cursor"),
+            cursor
+        );
+        assert!(parse_checkpoint_cursor(&[0; 7]).is_err());
+
+        let oversized_value = "secret".repeat(crate::DELIVERY_TEXT_LIMIT_BYTES / 6 + 1);
+        let oversized = BoundedDeliveryText::new(
+            oversized_value.clone(),
+            crate::DELIVERY_TEXT_LIMIT_BYTES * 2,
+        )
+        .expect("kernel bound permits fixture");
+        let error = delivery_text(&oversized).expect_err("adapter bound must reject fixture");
+        let diagnostic = error.to_string();
+        assert!(!diagnostic.contains(&oversized_value));
+        assert!(!diagnostic.contains("secret"));
     }
 }
