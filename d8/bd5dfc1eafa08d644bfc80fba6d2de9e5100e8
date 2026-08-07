@@ -1,0 +1,500 @@
+.github/workflows/ci.yml
+  h_9f073efcf2206c 36,39,71,76,85-86,108,197,224,229,238-239
+.github/workflows/published-versions-sync.yml
+  h_9f073efcf2206c 49
+.opencode/sysprompt_gpt54.md
+  h_9f073efcf2206c 51
+.thoughts/config.json
+  h_9f073efcf2206c 377-468
+CLAUDE.md
+  h_9f073efcf2206c 19-24
+Cargo.lock
+  h_9f073efcf2206c 11-30,42-55,58,309-314,400-415,431-450,476-481,692-731,865-900,943-954,992-1000,1068-1087,1170,1172,1180-1188,1201-1206,1242-1252,1324,1507-1515,1525-1533,1566,1601-1609,2021-2040,2059,2061,2110-2115,2138-2148,2253-2262,2269-2274,2382-2411,2478-2487,3380,3476-3484,3689-3713,3728-3742,3751,3757-3762,3774-3776,3814-3815,3925-3933,3953-3963,3976-3993,4201-4206,4237-4242,4326-4345,4412-4424,4530-4551,4916-4921,5064-5078,5309-5320,5351-5352,5447-5456,5576-5598,5702-5707,5793-5801,5811-5819,6052,6054,6071,6073,6151-6160,6216-6225,6421-6426,6672-6677,6722-6741,6811-6819,6869-6874,6930-6951,6958-6963,6986-6996,7050-7055,7198,7262,7492-7504,7562-7752,7811-7819,7849-7857,7903-7912,8006-8011,8075,8312-8323,8776-8781,8788-8796,8983,8992
+Cargo.toml
+  h_9f073efcf2206c 15-19,73
+README.md
+  h_9f073efcf2206c 124-129
+agentic.toml
+  h_9f073efcf2206c 1-21
+apps/agentic/CHANGELOG.md
+  h_9f073efcf2206c 7
+apps/agentic/Cargo.toml
+  h_9f073efcf2206c 3
+apps/agentic/src/commands/install_manifest_generated.rs
+  h_9f073efcf2206c 177,4167,4173,4185
+crates/attention/kernel/CHANGELOG.md
+  h_9f073efcf2206c 1-11
+crates/attention/kernel/CLAUDE.md
+  h_9f073efcf2206c 1-32
+crates/attention/kernel/Cargo.toml
+  h_9f073efcf2206c 1-73
+crates/attention/kernel/src/change.rs
+  h_9f073efcf2206c 1-239
+crates/attention/kernel/src/command.rs
+  h_9f073efcf2206c 1-602
+crates/attention/kernel/src/commit.rs
+  h_9f073efcf2206c 1-404
+crates/attention/kernel/src/delivery.rs
+  h_9f073efcf2206c 1-342
+crates/attention/kernel/src/error.rs
+  h_9f073efcf2206c 1-54
+crates/attention/kernel/src/evaluate.rs
+  h_9f073efcf2206c 1-707
+crates/attention/kernel/src/id.rs
+  h_9f073efcf2206c 1-69
+crates/attention/kernel/src/idempotency.rs
+  h_9f073efcf2206c 1-166
+crates/attention/kernel/src/inbox.rs
+  h_9f073efcf2206c 1-60
+crates/attention/kernel/src/lib.rs
+  h_9f073efcf2206c 1-98
+crates/attention/kernel/src/outbox.rs
+  h_9f073efcf2206c 1-154
+crates/attention/kernel/src/port.rs
+  h_9f073efcf2206c 1-263
+crates/attention/kernel/src/query.rs
+  h_9f073efcf2206c 1-287
+crates/attention/kernel/src/reminder.rs
+  h_9f073efcf2206c 1-245
+crates/attention/kernel/src/result.rs
+  h_9f073efcf2206c 1-187
+crates/attention/kernel/src/revision.rs
+  h_9f073efcf2206c 1-34
+crates/attention/kernel/src/semantic_error.rs
+  h_9f073efcf2206c 1-66
+crates/attention/kernel/src/signal.rs
+  h_9f073efcf2206c 1-160
+crates/attention/kernel/src/source.rs
+  h_9f073efcf2206c 1-233
+crates/attention/kernel/src/source_order.rs
+  h_9f073efcf2206c 1-254
+crates/attention/kernel/src/work_item.rs
+  h_9f073efcf2206c 1-129
+crates/attention/kernel/tests/changes.rs
+  h_9f073efcf2206c 1-397
+crates/attention/kernel/tests/commands.rs
+  h_9f073efcf2206c 1-161
+crates/attention/kernel/tests/commits.rs
+  h_9f073efcf2206c 1-53
+crates/attention/kernel/tests/delivery.rs
+  h_9f073efcf2206c 1-213
+crates/attention/kernel/tests/idempotency.rs
+  h_9f073efcf2206c 1-42
+crates/attention/kernel/tests/ids.rs
+  h_9f073efcf2206c 1-89
+crates/attention/kernel/tests/inbox.rs
+  h_9f073efcf2206c 1-94
+crates/attention/kernel/tests/invariants.rs
+  h_9f073efcf2206c 1-240
+crates/attention/kernel/tests/reminder_commands.rs
+  h_9f073efcf2206c 1-240
+crates/attention/kernel/tests/scenarios.rs
+  h_9f073efcf2206c 1-232
+crates/attention/kernel/tests/source_ingress.rs
+  h_9f073efcf2206c 1-363
+crates/attention/kernel/tests/support/mod.rs
+  h_9f073efcf2206c 1-973
+crates/attention/protocol/CHANGELOG.md
+  h_9f073efcf2206c 1-11
+crates/attention/protocol/CLAUDE.md
+  h_9f073efcf2206c 1-32
+crates/attention/protocol/Cargo.toml
+  h_9f073efcf2206c 1-80
+crates/attention/protocol/src/envelope.rs
+  h_9f073efcf2206c 1-655
+crates/attention/protocol/src/error.rs
+  h_9f073efcf2206c 1-359
+crates/attention/protocol/src/event.rs
+  h_9f073efcf2206c 1-81
+crates/attention/protocol/src/hello.rs
+  h_9f073efcf2206c 1-214
+crates/attention/protocol/src/id.rs
+  h_9f073efcf2206c 1-183
+crates/attention/protocol/src/lib.rs
+  h_9f073efcf2206c 1-199
+crates/attention/protocol/src/method.rs
+  h_9f073efcf2206c 1-204
+crates/attention/protocol/src/mutation.rs
+  h_9f073efcf2206c 1-193
+crates/attention/protocol/src/resource.rs
+  h_9f073efcf2206c 1-249
+crates/attention/protocol/src/sync.rs
+  h_9f073efcf2206c 1-91
+crates/attention/protocol/src/time.rs
+  h_9f073efcf2206c 1-116
+crates/attention/protocol/src/value.rs
+  h_9f073efcf2206c 1-249
+crates/attention/protocol/src/version.rs
+  h_9f073efcf2206c 1-12
+crates/attention/protocol/src/worker.rs
+  h_9f073efcf2206c 1-195
+crates/attention/protocol/tests/compatibility.rs
+  h_9f073efcf2206c 1-94
+crates/attention/protocol/tests/envelopes.rs
+  h_9f073efcf2206c 1-100
+crates/attention/protocol/tests/errors.rs
+  h_9f073efcf2206c 1-119
+crates/attention/protocol/tests/events.rs
+  h_9f073efcf2206c 1-32
+crates/attention/protocol/tests/fixture_helpers.rs
+  h_9f073efcf2206c 1-45
+crates/attention/protocol/tests/fixtures/v1/compatibility/resource_additive_and_null.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/compatibility/resource_duplicate_required.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/coverage_manifest.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_missing_jsonrpc.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_notification_error_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_notification_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_notification_result_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_null_jsonrpc.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_duplicate_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_error_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_numeric_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_params_array.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_params_null.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_params_scalar.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_request_result_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_both.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_duplicate_jsonrpc.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_duplicate_result.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_method_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_missing_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_neither.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_null_success_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_numeric_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_response_params_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/invalid_wrong_jsonrpc.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/notification.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/request_additive_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/request_with_params.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/request_without_params.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_additive_field.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_correlated_error.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_invalid_request_null_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_parse_error_null_id.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/envelopes/response_success.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/data_absent.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/data_present.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/invalid_known_data.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/invalid_string_code.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/named_codes.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/resource_refs.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/unknown_code.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/unsupported_version.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/errors/v1_known.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/events/all_kinds.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/events/invalid_unknown_kind.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/events/source_receipt_only.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_request_duplicate_mode.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_request_duplicate_protocol_version.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_request_unknown_mode.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_result_duplicate_limits.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/invalid_result_unknown_mode.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/request_none.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/request_resume.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/request_snapshot.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/result_none.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/result_resume.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/result_snapshot.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/hello/unsupported_version_error.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/distinct_ids.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_base64_padding.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_base64_trailing_bits.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_lease_length.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_request_numeric.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_response_numeric.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_revision_leading_zero.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/invalid_revision_zero.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/ids/v1_values.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/change_notification.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/invalid_array_params.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/mutations/requests.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/mutations/results.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/queries/requests.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/source_ingress/decisions.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/source_ingress/invalid_decision.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/source_ingress/params.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/methods/source_ingress/request.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/inbox/all_entries.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/inbox/invalid_unknown_kind.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/reminders/retained_fires.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/signals/all_states.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/source/entities.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/source/receipts.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/resources/work_items/all_lifecycles.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/changes_empty_page.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/changes_multi_page.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/gap_expired.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/gap_future.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/gap_invalid.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/hello_snapshot.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/invalid_snapshot_not_required.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/sync/snapshot.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/canonical.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_lowercase_z.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_milliseconds.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_missing_z.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_nanoseconds.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_no_fraction.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/invalid_offset.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/time/submicro_constructor.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/authority_leased.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/authority_reminder_skipped.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/claim_result.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/completion_outcomes.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/invalid_unknown_status.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/renewal_outcomes.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/requests.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/fixtures/v1/workers/states.json
+  h_9f073efcf2206c 1
+crates/attention/protocol/tests/hello.rs
+  h_9f073efcf2206c 1-79
+crates/attention/protocol/tests/ids.rs
+  h_9f073efcf2206c 1-41
+crates/attention/protocol/tests/methods.rs
+  h_9f073efcf2206c 1-185
+crates/attention/protocol/tests/mutations.rs
+  h_9f073efcf2206c 1-28
+crates/attention/protocol/tests/resources.rs
+  h_9f073efcf2206c 1-37
+crates/attention/protocol/tests/sync.rs
+  h_9f073efcf2206c 1-32
+crates/attention/protocol/tests/time.rs
+  h_9f073efcf2206c 1-44
+crates/attention/protocol/tests/values.rs
+  h_9f073efcf2206c 1-72
+crates/attention/protocol/tests/workers.rs
+  h_9f073efcf2206c 1-112
+crates/attention/turso/CLAUDE.md
+  h_9f073efcf2206c 1-32
+crates/attention/turso/Cargo.toml
+  h_9f073efcf2206c 1-116
+crates/attention/turso/README.md
+  h_9f073efcf2206c 1-34
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires.md
+  h_9f073efcf2206c 1-87
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires_apply.sql
+  h_9f073efcf2206c 1-334
+crates/attention/turso/maintenance/repair_duplicate_current_reminder_fires_setup.sql
+  h_9f073efcf2206c 1-140
+crates/attention/turso/migrations/0001_foundation.sql
+  h_9f073efcf2206c 1-11
+crates/attention/turso/migrations/0002_attention_core.sql
+  h_9f073efcf2206c 1-148
+crates/attention/turso/migrations/0003_durable_delivery.sql
+  h_9f073efcf2206c 1-73
+crates/attention/turso/src/backup.rs
+  h_9f073efcf2206c 1-759
+crates/attention/turso/src/codec.rs
+  h_9f073efcf2206c 1-1173
+crates/attention/turso/src/config.rs
+  h_9f073efcf2206c 1-92
+crates/attention/turso/src/database.rs
+  h_9f073efcf2206c 1-1357
+crates/attention/turso/src/decode.rs
+  h_9f073efcf2206c 1-17
+crates/attention/turso/src/delivery_reader.rs
+  h_9f073efcf2206c 1-120
+crates/attention/turso/src/delivery_writer.rs
+  h_9f073efcf2206c 1-609
+crates/attention/turso/src/domain_sql.rs
+  h_9f073efcf2206c 1-128
+crates/attention/turso/src/error.rs
+  h_9f073efcf2206c 1-91
+crates/attention/turso/src/lib.rs
+  h_9f073efcf2206c 1-55
+crates/attention/turso/src/lifecycle.rs
+  h_9f073efcf2206c 1-113
+crates/attention/turso/src/mapping.rs
+  h_9f073efcf2206c 1-683
+crates/attention/turso/src/migration.rs
+  h_9f073efcf2206c 1-481
+crates/attention/turso/src/path.rs
+  h_9f073efcf2206c 1-416
+crates/attention/turso/src/reader.rs
+  h_9f073efcf2206c 1-200
+crates/attention/turso/src/semantic_reader.rs
+  h_9f073efcf2206c 1-487
+crates/attention/turso/src/semantic_writer.rs
+  h_9f073efcf2206c 1-1024
+crates/attention/turso/src/sql.rs
+  h_9f073efcf2206c 1-45
+crates/attention/turso/src/store.rs
+  h_9f073efcf2206c 1-313
+crates/attention/turso/src/writer.rs
+  h_9f073efcf2206c 1-345
+crates/attention/turso/tests/backup.rs
+  h_9f073efcf2206c 1-214
+crates/attention/turso/tests/codec_fixtures.rs
+  h_9f073efcf2206c 1-32
+crates/attention/turso/tests/commit_conformance.rs
+  h_9f073efcf2206c 1-766
+crates/attention/turso/tests/conformance.rs
+  h_9f073efcf2206c 1-312
+crates/attention/turso/tests/crash.rs
+  h_9f073efcf2206c 1-140
+crates/attention/turso/tests/delivery_checkpoint_port.rs
+  h_9f073efcf2206c 1-203
+crates/attention/turso/tests/delivery_port.rs
+  h_9f073efcf2206c 1-307
+crates/attention/turso/tests/errors.rs
+  h_9f073efcf2206c 1-103
+crates/attention/turso/tests/exact_pin_gate.rs
+  h_9f073efcf2206c 1-418
+crates/attention/turso/tests/fixtures/codec/event_v1.json
+  h_9f073efcf2206c 1
+crates/attention/turso/tests/fixtures/codec/outcomes_v1.jsonl
+  h_9f073efcf2206c 1-9
+crates/attention/turso/tests/migrations.rs
+  h_9f073efcf2206c 1-749
+crates/attention/turso/tests/ownership.rs
+  h_9f073efcf2206c 1-114
+crates/attention/turso/tests/path_security.rs
+  h_9f073efcf2206c 1-111
+crates/attention/turso/tests/reader_ports.rs
+  h_9f073efcf2206c 1-413
+crates/attention/turso/tests/reminder_schedule_port.rs
+  h_9f073efcf2206c 1-98
+crates/attention/turso/tests/restart_and_replay.rs
+  h_9f073efcf2206c 1-493
+crates/attention/turso/tests/security_and_diagnostics.rs
+  h_9f073efcf2206c 1-266
+crates/attention/turso/tests/semantic_crash.rs
+  h_9f073efcf2206c 1-114
+crates/attention/turso/tests/snapshot_change_race.rs
+  h_9f073efcf2206c 1-46
+crates/attention/turso/tests/support/mod.rs
+  h_9f073efcf2206c 1-80
+crates/attention/turso/tests/wal.rs
+  h_9f073efcf2206c 1-89
+crates/meta/xtask/src/mise.rs
+  h_9f073efcf2206c 14
+mise.lock
+  h_9f073efcf2206c 491,495,498,501,504,507,510,513,516,519
+mise.toml
+  h_9f073efcf2206c 32
+opencode.json
+  h_9f073efcf2206c 29
+release-plz.toml
+  h_9f073efcf2206c 272-295
+tools/mcp-validate.sh
+  h_9f073efcf2206c 44
+tools/policy.toml
+  h_9f073efcf2206c 9,30,48,75-76,81-82,183-200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "d8bd5dfc1eafa08d644bfc80fba6d2de9e5100e8",
+  "prompts": {},
+  "humans": {
+    "h_9f073efcf2206c": {
+      "author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
