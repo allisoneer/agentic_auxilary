@@ -1,0 +1,19 @@
+.thoughts/config.json
+  s_f9840769535415::t_e777c7782dcd5b 236,256,471
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "eae32cd5352a3e9f1b6fa543cc6c001f28bfe8e1",
+  "prompts": {},
+  "sessions": {
+    "s_f9840769535415": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd252a91-54f8-4dc1-ad53-da0af555be5c",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
