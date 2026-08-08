@@ -1,0 +1,29 @@
+.thoughts/config.json
+  s_c4d61e21877a77::t_bcc0b84fdfdad3 255,470
+justfile
+  s_c4d61e21877a77::t_aa649c61e12ffb 27,74,81,85,141
+.vscode/settings.json
+  s_c4d61e21877a77::t_fc09873686e417 2
+TODO.md
+  s_c4d61e21877a77::t_ead451f36bce81 5
+.github/workflows/ci.yml
+  s_c4d61e21877a77::t_76f2037cbf4d5e 175
+Cargo.toml
+  s_c4d61e21877a77::t_04d24658340211 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "7d88750a377cbbb07d62e0a2a8cf5f2403b65bbd",
+  "prompts": {},
+  "sessions": {
+    "s_c4d61e21877a77": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0216ce194ffeAiHZtVrN40gXtA",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
