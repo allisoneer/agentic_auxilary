@@ -1,8 +1,17 @@
 [orchestrator.commands]
 # Exact, case-sensitive command names that remain visible/executable.
 # Empty allowlist means "do not restrict by allowlist".
-allow = ["capture_pr_comments_openai", "commit", "create_plan_final", "create_plan_init", "implement_plan",
-"describe_pr", "research", "review", "review_pr_comments"]
+allow = [
+  "capture_pr_comments_openai",
+  "commit",
+  "create_plan_final",
+  "create_plan_init",
+  "implement_plan",
+  "describe_pr",
+  "research",
+  "review",
+  "review_pr_comments",
+]
 # Exact, case-sensitive command names that are always blocked.
 # Entries are trimmed before comparison, and deny wins over allow.
 deny = []
@@ -18,4 +27,3 @@ allow = ["Normal", "Review", "Bash", "Linear", "Discord"]
 # Exact, case-sensitive agent names that are always blocked.
 # Entries are trimmed before comparison, and deny wins over allow.
 deny = []
-
