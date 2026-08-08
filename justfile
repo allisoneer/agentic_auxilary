@@ -24,17 +24,11 @@ help:
     @echo "  just test             # local: mcp-test + nextest (requires Node/npx)"
     @echo "  just test-ci          # CI-safe: nextest only (no Node/npx)"
     @echo "  just build            # build entire workspace"
-    @echo "  just clean            # clean workspace + vendored Codex artifacts"
+    @echo "  just clean            # clean workspace"
     @echo "  just fmt              # format entire workspace"
     @echo "  just fmt-check        # check formatting for entire workspace"
     @echo "  just test-integration # local: include #[ignore] integration tests"
     @echo "  just test-thoughts-ignored-ci # CI-safe: ignored-only thoughts tests"
-    @echo ""
-    @echo "Vendored Codex commands:"
-    @echo "  just codex-check      # check vendored Codex workspace"
-    @echo "  just codex-build      # build vendored Codex CLI"
-    @echo "  just codex-test       # run vendored Codex tests (best-effort)"
-    @echo "  just codex-run -- ... # run vendored Codex binary"
     @echo ""
     @echo "Per-crate commands:"
     @echo "  just crate-check <c>  # check a single crate by name"
@@ -77,39 +71,18 @@ test-thoughts-ignored-ci:
 build:
     AGENTIC_TASK_NAME=build {{ wrap }} cargo build --workspace
 
-clean: clean-workspace clean-codex
+clean: clean-workspace
 
 clean-workspace:
     AGENTIC_TASK_NAME=clean-workspace {{ wrap }} cargo clean --workspace
 
-clean-codex:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    MANIFEST="vendor/codex/codex-rs/Cargo.toml"
-    if [ -f "$MANIFEST" ]; then
-      cargo clean --manifest-path "$MANIFEST"
-    fi
-
-codex-check:
-    cd vendor/codex/codex-rs && cargo check -p codex-cli --all-targets
-
-codex-build:
-    cd vendor/codex/codex-rs && cargo build -p codex-cli
-
-codex-test:
-    cd vendor/codex/codex-rs && RUST_MIN_STACK=8388608 cargo nextest run --no-fail-fast
-
-codex-run *args:
-    cd vendor/codex/codex-rs && cargo run --bin codex -- {{ args }}
-
 fmt:
     AGENTIC_TASK_NAME=fmt-rust {{ wrap }} cargo +nightly fmt --all
-    AGENTIC_TASK_NAME=fmt-toml {{ wrap }} taplo fmt $(git ls-files '*.toml' ':!:vendor/**')
+    AGENTIC_TASK_NAME=fmt-toml {{ wrap }} taplo fmt $(git ls-files '*.toml')
 
 fmt-check:
     AGENTIC_TASK_NAME=fmt-check-rust {{ wrap }} cargo +nightly fmt --all -- --check
-    AGENTIC_TASK_NAME=fmt-check-toml {{ wrap }} taplo fmt --check $(git ls-files '*.toml' ':!:vendor/**')
+    AGENTIC_TASK_NAME=fmt-check-toml {{ wrap }} taplo fmt --check $(git ls-files '*.toml')
 
 # Security audit with cargo-deny
 deny:
@@ -165,7 +138,7 @@ thoughts_sync:
 shellcheck:
     #!/usr/bin/env bash
     set -euo pipefail
-    mapfile -t scripts < <(git ls-files '*.sh' ':!:vendor/**')
+    mapfile -t scripts < <(git ls-files '*.sh')
     if [ ${#scripts[@]} -gt 0 ]; then
       shellcheck "${scripts[@]}"
     else
