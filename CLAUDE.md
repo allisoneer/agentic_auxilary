@@ -136,17 +136,6 @@ just endpoint-coverage-json  # JSON output for tooling
 just schema-generate    # Regenerate agentic.schema.json from Rust types
 ```
 
-### Vendored Codex
-
-`vendor/codex/` is a foreign vendored subtree excluded from the root workspace. Do not edit it as a first-class workspace member.
-
-```bash
-just codex-check          # Check vendored Codex workspace
-just codex-build          # Build vendored Codex CLI
-just codex-test           # Run vendored Codex tests (best-effort)
-just codex-run -- <args>  # Run the vendored codex binary
-```
-
 ## Toolchain and Formatter Quirks
 
 - Stable toolchain pinned to `1.96.1` (`rust-toolchain.toml`).

@@ -112,7 +112,6 @@ ignore_paths = [
   "apps/agentic/src/commands/install_manifest_generated.rs", # Generated: embeds
   # .opencode/** + opencode.json
   ".opencode/", # Editor command/config docs
-  "vendor/",    # Foreign vendored source tree
 ]
 
 # Filename suffixes to exclude (matches any path ending with the suffix).

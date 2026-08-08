@@ -1,6 +1,3 @@
 {
-  "rust-analyzer.linkedProjects": [
-    "./Cargo.toml",
-    "./vendor/codex/codex-rs/Cargo.toml"
-  ]
+  "rust-analyzer.linkedProjects": ["./Cargo.toml"]
 }
