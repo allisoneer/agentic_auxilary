@@ -164,8 +164,8 @@ impl OwnerRuntime {
                 reject_reply(&mut stream, error.to_string()).await;
                 continue;
             }
-            write_reply_bounded(&mut stream, true, None).await?;
             self.clear_pending()?;
+            write_reply_bounded(&mut stream, true, None).await?;
             return Ok(request.response);
         }
     }
@@ -610,6 +610,50 @@ mod tests {
             .await
             .is_err()
         );
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "test intentionally serializes process-wide environment mutation"
+    )]
+    async fn cleanup_failure_does_not_emit_an_accepted_reply() {
+        let _guard = process_state_lock().lock().unwrap();
+        let runtime = TempDir::new().unwrap();
+        std::fs::set_permissions(runtime.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        let _runtime_dir = EnvVarGuard::set("XDG_RUNTIME_DIR", runtime.path());
+        let worktree = TempDir::new().unwrap();
+        let owner = OwnerRuntime::acquire(worktree.path()).unwrap();
+        let correlation = permission_correlation();
+        owner.publish_pending(&correlation).unwrap();
+
+        let request = IpcRequest {
+            protocol_version: PROTOCOL_VERSION,
+            worktree_hash: owner.worktree_hash.clone(),
+            owner_token: owner.owner_token.clone(),
+            correlation: correlation.clone(),
+            response: InterruptionResponse::Permission { allow: true },
+        };
+        let mut stream = UnixStream::connect(&owner.paths.socket).await.unwrap();
+        write_frame(&mut stream, &request).await.unwrap();
+
+        std::fs::remove_file(&owner.paths.manifest).unwrap();
+        std::fs::create_dir_all(&owner.paths.manifest).unwrap();
+
+        let error = owner
+            .await_response(&correlation)
+            .await
+            .expect_err("manifest cleanup failure must remain fatal");
+        assert!(
+            error
+                .to_string()
+                .contains("refusing to remove unexpected runtime artifact")
+        );
+
+        tokio::time::timeout(IPC_TIMEOUT, read_frame::<IpcReply, _>(&mut stream))
+            .await
+            .expect("owner should close the connection without timing out")
+            .expect_err("cleanup failure must not emit an accepted reply");
     }
 
     #[tokio::test]
