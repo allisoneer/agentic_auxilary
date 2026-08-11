@@ -36,10 +36,94 @@ use support::messages_fixture;
 use support::permission_fixture;
 use support::session_fixture;
 use support::short_timeout_test_orchestrator_server;
+use support::sse_body;
 use support::status_v2_busy;
 use support::status_v2_idle;
 use support::status_v2_retry;
 use support::test_orchestrator_server;
+
+#[tokio::test]
+async fn sse_deltas_are_returned_in_permission_partial_response() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "permission-sse-preview";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/prompt_async")))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock)
+        .await;
+
+    let events = [
+        serde_json::json!({
+            "type": "message.part.delta",
+            "properties": {
+                "sessionID": sid,
+                "messageID": "assistant-preview",
+                "delta": "permission preview"
+            }
+        }),
+        serde_json::json!({
+            "type": "permission.asked",
+            "properties": permission_fixture("permission-preview", sid, "bash", &["*"])
+        }),
+    ];
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(sse_body(&events), "text/event-stream"),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(10),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: None,
+                agent: None,
+                message: Some("Do the work".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("run should not hang")
+    .expect("run should succeed");
+
+    assert!(matches!(result.status, RunStatus::PermissionRequired));
+    assert_eq!(
+        result.partial_response.as_deref(),
+        Some("permission preview")
+    );
+    assert_eq!(
+        result.permission_request_id.as_deref(),
+        Some("permission-preview")
+    );
+}
 
 /// IT-BUG1: Completion should retry message extraction when first attempt returns no assistant text.
 ///

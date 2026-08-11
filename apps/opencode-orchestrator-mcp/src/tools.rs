@@ -59,12 +59,17 @@ use opencode_rs::types::session::CreateSessionRequest;
 use opencode_rs::types::session::SessionStatusInfo;
 use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
 const SERVER_NAME: &str = "opencode-orchestrator-mcp";
+const PRECORRELATION_TOTAL_BYTES: usize = 64 * 1024;
+const PRECORRELATION_MESSAGE_BYTES: usize = 16 * 1024;
+const PRECORRELATION_MESSAGE_IDS: usize = 32;
 
 #[derive(Debug, Clone, Default)]
 struct ToolLogMeta {
@@ -86,6 +91,97 @@ enum PermissionPreflightMode {
 #[derive(Debug, Clone)]
 struct CommandTranscriptWindow {
     command_message_id: String,
+}
+
+#[derive(Debug)]
+struct BufferedDelta {
+    message_id: String,
+    text: String,
+}
+
+#[derive(Debug, Default)]
+struct PreCorrelationDeltaBuffer {
+    deltas: VecDeque<BufferedDelta>,
+    bytes_by_message: HashMap<String, usize>,
+    total_bytes: usize,
+}
+
+impl PreCorrelationDeltaBuffer {
+    fn push(&mut self, message_id: &str, delta: &str) {
+        if message_id.is_empty() || delta.is_empty() {
+            return;
+        }
+
+        let delta_bytes = delta.len();
+        if delta_bytes > PRECORRELATION_MESSAGE_BYTES || delta_bytes > PRECORRELATION_TOTAL_BYTES {
+            return;
+        }
+
+        if !self.bytes_by_message.contains_key(message_id)
+            && self.bytes_by_message.len() >= PRECORRELATION_MESSAGE_IDS
+        {
+            self.evict_oldest_message();
+        }
+
+        let message_bytes = self
+            .bytes_by_message
+            .get(message_id)
+            .copied()
+            .unwrap_or_default();
+        if message_bytes.saturating_add(delta_bytes) > PRECORRELATION_MESSAGE_BYTES {
+            return;
+        }
+
+        while self.total_bytes.saturating_add(delta_bytes) > PRECORRELATION_TOTAL_BYTES {
+            let Some(oldest_message_id) = self.deltas.front().map(|delta| delta.message_id.clone())
+            else {
+                return;
+            };
+            if oldest_message_id == message_id {
+                return;
+            }
+            self.evict_message(&oldest_message_id);
+        }
+
+        self.deltas.push_back(BufferedDelta {
+            message_id: message_id.to_string(),
+            text: delta.to_string(),
+        });
+        self.bytes_by_message
+            .insert(message_id.to_string(), message_bytes + delta_bytes);
+        self.total_bytes += delta_bytes;
+    }
+
+    fn take(&mut self, message_id: &str) -> String {
+        let Some(removed_bytes) = self.bytes_by_message.remove(message_id) else {
+            return String::new();
+        };
+
+        let mut text = String::with_capacity(removed_bytes);
+        self.deltas.retain(|delta| {
+            if delta.message_id == message_id {
+                text.push_str(&delta.text);
+                false
+            } else {
+                true
+            }
+        });
+        self.total_bytes -= removed_bytes;
+        text
+    }
+
+    fn evict_oldest_message(&mut self) {
+        if let Some(message_id) = self.deltas.front().map(|delta| delta.message_id.clone()) {
+            self.evict_message(&message_id);
+        }
+    }
+
+    fn evict_message(&mut self, message_id: &str) {
+        if let Some(removed_bytes) = self.bytes_by_message.remove(message_id) {
+            self.deltas.retain(|delta| delta.message_id != message_id);
+            self.total_bytes -= removed_bytes;
+        }
+    }
 }
 
 fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
@@ -702,6 +798,9 @@ impl OrchestratorRunTool {
         // session before our new work has started processing.
         let mut observed_busy = false;
         let mut correlated_assistant_ids = HashSet::new();
+        let mut precorrelation_deltas = command_transcript_window
+            .as_ref()
+            .map(|_| PreCorrelationDeltaBuffer::default());
 
         // Track whether SSE is still active. If the stream closes, we fall back
         // to polling-only mode rather than returning an error.
@@ -822,6 +921,12 @@ impl OrchestratorRunTool {
                             // Collect streaming text from field-level delta events.
                             if correlated && let Some(delta) = &properties.delta {
                                 partial_response.push_str(delta);
+                            } else if let (Some(buffer), Some(message_id), Some(delta)) = (
+                                precorrelation_deltas.as_mut(),
+                                properties.message_id.as_deref().filter(|id| !id.is_empty()),
+                                properties.delta.as_deref(),
+                            ) {
+                                buffer.push(message_id, delta);
                             }
                         }
 
@@ -831,11 +936,17 @@ impl OrchestratorRunTool {
                                 &properties.info.role,
                                 properties.info.parent_id.as_deref(),
                             );
+                            let message_id = properties.info.id;
                             if correlated {
-                                correlated_assistant_ids.insert(properties.info.id.clone());
+                                correlated_assistant_ids.insert(message_id.clone());
+                                if let Some(buffer) = precorrelation_deltas.as_mut() {
+                                    partial_response.push_str(&buffer.take(&message_id));
+                                }
                                 last_activity_time = tokio::time::Instant::now();
                                 observed_busy = true;
                                 awaiting_idle_grace_check = false;
+                            } else if let Some(buffer) = precorrelation_deltas.as_mut() {
+                                buffer.evict_message(&message_id);
                             }
                         }
 
@@ -2215,5 +2326,75 @@ mod tests {
             &correlated
         ));
         assert!(part_event_matches_command(None, None, &correlated));
+    }
+
+    #[test]
+    fn precorrelation_deltas_flush_only_after_matching_assistant_lineage() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        let mut buffer = PreCorrelationDeltaBuffer::default();
+        buffer.push("msg-assistant", "first ");
+        buffer.push("msg-other", "unrelated");
+        buffer.push("msg-assistant", "second");
+
+        assert!(assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-command")
+        ));
+        assert_eq!(buffer.take("msg-assistant"), "first second");
+        assert_eq!(buffer.take("msg-other"), "unrelated");
+    }
+
+    #[test]
+    fn precorrelation_deltas_do_not_flush_for_other_lineage() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        let mut buffer = PreCorrelationDeltaBuffer::default();
+        buffer.push("msg-assistant", "must remain unconfirmed");
+
+        assert!(!assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-other")
+        ));
+        buffer.evict_message("msg-assistant");
+        assert!(!buffer.bytes_by_message.contains_key("msg-assistant"));
+        assert_eq!(buffer.total_bytes, 0);
+    }
+
+    #[test]
+    fn precorrelation_delta_buffer_enforces_byte_and_message_caps() {
+        let mut buffer = PreCorrelationDeltaBuffer::default();
+        let per_message = "x".repeat(PRECORRELATION_MESSAGE_BYTES);
+        buffer.push("full", &per_message);
+        buffer.push("full", "overflow");
+        assert_eq!(buffer.take("full"), per_message);
+
+        for index in 0..PRECORRELATION_MESSAGE_IDS {
+            buffer.push(&format!("id-{index}"), "x");
+        }
+        buffer.push("newest", "y");
+        assert!(!buffer.bytes_by_message.contains_key("id-0"));
+        assert_eq!(buffer.bytes_by_message.len(), PRECORRELATION_MESSAGE_IDS);
+        assert_eq!(buffer.take("newest"), "y");
+
+        let mut total_capped = PreCorrelationDeltaBuffer::default();
+        for index in 0..(PRECORRELATION_TOTAL_BYTES / PRECORRELATION_MESSAGE_BYTES) {
+            total_capped.push(&format!("chunk-{index}"), &per_message);
+        }
+        assert_eq!(total_capped.total_bytes, PRECORRELATION_TOTAL_BYTES);
+        total_capped.push("replacement", "z");
+        assert!(!total_capped.bytes_by_message.contains_key("chunk-0"));
+        assert_eq!(
+            total_capped.total_bytes,
+            PRECORRELATION_TOTAL_BYTES - PRECORRELATION_MESSAGE_BYTES + 1
+        );
+
+        let oversized = "x".repeat(PRECORRELATION_MESSAGE_BYTES + 1);
+        total_capped.push("oversized", &oversized);
+        assert!(!total_capped.bytes_by_message.contains_key("oversized"));
     }
 }

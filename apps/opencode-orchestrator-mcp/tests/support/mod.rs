@@ -335,6 +335,17 @@ pub fn question_fixture(
     })
 }
 
+/// Encode typed event JSON values as an SSE response body.
+pub fn sse_body(events: &[Value]) -> String {
+    let mut body = String::new();
+    for event in events {
+        body.push_str("data: ");
+        body.push_str(&event.to_string());
+        body.push_str("\n\n");
+    }
+    body
+}
+
 /// Create a messages fixture with optional assistant text.
 ///
 /// If `assistant_text` is `Some`, includes an assistant message with that text.
