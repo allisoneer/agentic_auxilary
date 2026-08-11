@@ -44,6 +44,8 @@ use agentic_tools_core::fmt::TextOptions;
 use futures::future::BoxFuture;
 use opencode_rs::OpencodeError;
 use opencode_rs::types::event::Event;
+use opencode_rs::types::event::MessagePartEventProps;
+use opencode_rs::types::event::MessageUpdatedProps;
 use opencode_rs::types::message::CommandRequest;
 use opencode_rs::types::message::Message;
 use opencode_rs::types::message::Part;
@@ -265,6 +267,54 @@ fn part_event_matches_command(
 ) -> bool {
     transcript_window.is_none()
         || message_id.is_some_and(|message_id| correlated_assistant_ids.contains(message_id))
+}
+
+fn record_message_part_delta(
+    properties: &MessagePartEventProps,
+    transcript_window: Option<&CommandTranscriptWindow>,
+    correlated_assistant_ids: &HashSet<String>,
+    precorrelation_deltas: &mut Option<PreCorrelationDeltaBuffer>,
+    partial_response: &mut String,
+) -> bool {
+    let correlated = part_event_matches_command(
+        transcript_window,
+        properties.message_id.as_deref(),
+        correlated_assistant_ids,
+    );
+    if correlated && let Some(delta) = &properties.delta {
+        partial_response.push_str(delta);
+    } else if let (Some(buffer), Some(message_id), Some(delta)) = (
+        precorrelation_deltas.as_mut(),
+        properties.message_id.as_deref().filter(|id| !id.is_empty()),
+        properties.delta.as_deref(),
+    ) {
+        buffer.push(message_id, delta);
+    }
+    correlated
+}
+
+fn record_message_updated(
+    properties: &MessageUpdatedProps,
+    transcript_window: Option<&CommandTranscriptWindow>,
+    correlated_assistant_ids: &mut HashSet<String>,
+    precorrelation_deltas: &mut Option<PreCorrelationDeltaBuffer>,
+    partial_response: &mut String,
+) -> bool {
+    let correlated = assistant_update_matches_command(
+        transcript_window,
+        &properties.info.role,
+        properties.info.parent_id.as_deref(),
+    );
+    let message_id = &properties.info.id;
+    if correlated {
+        correlated_assistant_ids.insert(message_id.clone());
+        if let Some(buffer) = precorrelation_deltas.as_mut() {
+            partial_response.push_str(&buffer.take(message_id));
+        }
+    } else if let Some(buffer) = precorrelation_deltas.as_mut() {
+        buffer.evict_message(message_id);
+    }
+    correlated
 }
 
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
@@ -908,45 +958,32 @@ impl OrchestratorRunTool {
                         }
 
                         Event::MessagePartDelta { properties } => {
-                            let correlated = part_event_matches_command(
+                            let correlated = record_message_part_delta(
+                                &properties,
                                 command_transcript_window.as_ref(),
-                                properties.message_id.as_deref(),
                                 &correlated_assistant_ids,
+                                &mut precorrelation_deltas,
+                                &mut partial_response,
                             );
                             if correlated {
                                 last_activity_time = tokio::time::Instant::now();
                                 observed_busy = true;
                                 awaiting_idle_grace_check = false;
-                            }
-                            // Collect streaming text from field-level delta events.
-                            if correlated && let Some(delta) = &properties.delta {
-                                partial_response.push_str(delta);
-                            } else if let (Some(buffer), Some(message_id), Some(delta)) = (
-                                precorrelation_deltas.as_mut(),
-                                properties.message_id.as_deref().filter(|id| !id.is_empty()),
-                                properties.delta.as_deref(),
-                            ) {
-                                buffer.push(message_id, delta);
                             }
                         }
 
                         Event::MessageUpdated { properties } => {
-                            let correlated = assistant_update_matches_command(
+                            let correlated = record_message_updated(
+                                &properties,
                                 command_transcript_window.as_ref(),
-                                &properties.info.role,
-                                properties.info.parent_id.as_deref(),
+                                &mut correlated_assistant_ids,
+                                &mut precorrelation_deltas,
+                                &mut partial_response,
                             );
-                            let message_id = properties.info.id;
                             if correlated {
-                                correlated_assistant_ids.insert(message_id.clone());
-                                if let Some(buffer) = precorrelation_deltas.as_mut() {
-                                    partial_response.push_str(&buffer.take(&message_id));
-                                }
                                 last_activity_time = tokio::time::Instant::now();
                                 observed_busy = true;
                                 awaiting_idle_grace_check = false;
-                            } else if let Some(buffer) = precorrelation_deltas.as_mut() {
-                                buffer.evict_message(&message_id);
                             }
                         }
 
@@ -2333,18 +2370,55 @@ mod tests {
         let window = CommandTranscriptWindow {
             command_message_id: "msg-command".to_string(),
         };
-        let mut buffer = PreCorrelationDeltaBuffer::default();
-        buffer.push("msg-assistant", "first ");
-        buffer.push("msg-other", "unrelated");
-        buffer.push("msg-assistant", "second");
+        let mut correlated_assistant_ids = HashSet::new();
+        let mut buffer = Some(PreCorrelationDeltaBuffer::default());
+        let mut partial_response = String::new();
+        let delta: Event = serde_json::from_value(serde_json::json!({
+            "type": "message.part.delta",
+            "properties": {
+                "sessionID": "session-1",
+                "messageID": "msg-assistant",
+                "delta": "buffered prefix"
+            }
+        }))
+        .unwrap();
+        let update: Event = serde_json::from_value(serde_json::json!({
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg-assistant",
+                    "sessionID": "session-1",
+                    "role": "assistant",
+                    "parentID": "msg-command",
+                    "time": { "created": 1 }
+                }
+            }
+        }))
+        .unwrap();
 
-        assert!(assistant_update_matches_command(
+        let Event::MessagePartDelta { properties } = delta else {
+            panic!("expected message delta event");
+        };
+        assert!(!record_message_part_delta(
+            &properties,
             Some(&window),
-            "assistant",
-            Some("msg-command")
+            &correlated_assistant_ids,
+            &mut buffer,
+            &mut partial_response,
         ));
-        assert_eq!(buffer.take("msg-assistant"), "first second");
-        assert_eq!(buffer.take("msg-other"), "unrelated");
+        assert!(partial_response.is_empty());
+
+        let Event::MessageUpdated { properties } = update else {
+            panic!("expected message update event");
+        };
+        assert!(record_message_updated(
+            &properties,
+            Some(&window),
+            &mut correlated_assistant_ids,
+            &mut buffer,
+            &mut partial_response,
+        ));
+        assert_eq!(partial_response, "buffered prefix");
     }
 
     #[test]

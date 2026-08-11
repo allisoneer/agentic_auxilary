@@ -12,8 +12,11 @@ use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
 use opencode_orchestrator_mcp::server::RecoveryMode;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::Request;
@@ -195,6 +198,112 @@ impl Respond for SequenceResponder {
             .get(idx)
             .cloned()
             .unwrap_or_else(|| self.responders.last().cloned().expect("non-empty"))
+    }
+}
+
+#[derive(Clone)]
+pub struct CommandCorrelationFixture {
+    command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
+}
+
+impl CommandCorrelationFixture {
+    pub fn new() -> Self {
+        Self {
+            command_message_id: Arc::new((Mutex::new(None), Condvar::new())),
+        }
+    }
+
+    pub fn command_responder(&self) -> CommandMessageIdResponder {
+        CommandMessageIdResponder {
+            command_message_id: Arc::clone(&self.command_message_id),
+        }
+    }
+
+    pub fn sse_responder(
+        &self,
+        session_id: &str,
+        assistant_message_id: &str,
+        delta: &str,
+        interruption: Value,
+    ) -> CommandCorrelatedSseResponder {
+        CommandCorrelatedSseResponder {
+            command_message_id: Arc::clone(&self.command_message_id),
+            session_id: session_id.to_string(),
+            assistant_message_id: assistant_message_id.to_string(),
+            delta: delta.to_string(),
+            interruption,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CommandMessageIdResponder {
+    command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
+}
+
+impl Respond for CommandMessageIdResponder {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let body: Value = serde_json::from_slice(&request.body).unwrap();
+        let message_id = body
+            .get("messageID")
+            .and_then(Value::as_str)
+            .unwrap()
+            .to_string();
+        let (lock, ready) = &*self.command_message_id;
+        *lock.lock().unwrap() = Some(message_id);
+        ready.notify_all();
+
+        ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok"}))
+    }
+}
+
+#[derive(Clone)]
+pub struct CommandCorrelatedSseResponder {
+    command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
+    session_id: String,
+    assistant_message_id: String,
+    delta: String,
+    interruption: Value,
+}
+
+impl Respond for CommandCorrelatedSseResponder {
+    fn respond(&self, _request: &Request) -> ResponseTemplate {
+        let (lock, ready) = &*self.command_message_id;
+        let mut message_id = lock.lock().unwrap();
+        while message_id.is_none() {
+            let (guard, wait) = ready
+                .wait_timeout(message_id, Duration::from_secs(5))
+                .unwrap();
+            message_id = guard;
+            assert!(!wait.timed_out(), "command POST did not publish messageID");
+        }
+        let command_message_id = message_id.clone().unwrap();
+        drop(message_id);
+
+        let events = [
+            serde_json::json!({
+                "type": "message.part.delta",
+                "properties": {
+                    "sessionID": self.session_id,
+                    "messageID": self.assistant_message_id,
+                    "delta": self.delta,
+                }
+            }),
+            serde_json::json!({
+                "type": "message.updated",
+                "properties": {
+                    "info": {
+                        "id": self.assistant_message_id,
+                        "sessionID": self.session_id,
+                        "role": "assistant",
+                        "parentID": command_message_id,
+                        "time": { "created": 1 },
+                    }
+                }
+            }),
+            self.interruption.clone(),
+        ];
+        ResponseTemplate::new(200).set_body_raw(sse_body(&events), "text/event-stream")
     }
 }
 

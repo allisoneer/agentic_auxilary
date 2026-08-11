@@ -30,20 +30,20 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::matchers::path_regex;
 
+use support::CommandCorrelationFixture;
 use support::SequenceResponder;
 use support::SwitchAfterCallsResponder;
 use support::messages_fixture;
 use support::permission_fixture;
 use support::session_fixture;
 use support::short_timeout_test_orchestrator_server;
-use support::sse_body;
 use support::status_v2_busy;
 use support::status_v2_idle;
 use support::status_v2_retry;
 use support::test_orchestrator_server;
 
 #[tokio::test]
-async fn sse_deltas_are_returned_in_permission_partial_response() {
+async fn command_precorrelation_deltas_are_returned_in_permission_partial_response() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
@@ -69,31 +69,25 @@ async fn sse_deltas_are_returned_in_permission_partial_response() {
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
+    let correlation = CommandCorrelationFixture::new();
     Mock::given(method("POST"))
-        .and(path(format!("/session/{sid}/prompt_async")))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(correlation.command_responder())
         .mount(&mock)
         .await;
 
-    let events = [
-        serde_json::json!({
-            "type": "message.part.delta",
-            "properties": {
-                "sessionID": sid,
-                "messageID": "assistant-preview",
-                "delta": "permission preview"
-            }
-        }),
-        serde_json::json!({
-            "type": "permission.asked",
-            "properties": permission_fixture("permission-preview", sid, "bash", &["*"])
-        }),
-    ];
+    let interruption = serde_json::json!({
+        "type": "permission.asked",
+        "properties": permission_fixture("permission-preview", sid, "bash", &["*"])
+    });
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(sse_body(&events), "text/event-stream"),
-        )
+        .respond_with(correlation.sse_responder(
+            sid,
+            "assistant-preview",
+            "permission preview",
+            interruption,
+        ))
         .mount(&mock)
         .await;
 
@@ -102,7 +96,7 @@ async fn sse_deltas_are_returned_in_permission_partial_response() {
         tool.call(
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
-                command: None,
+                command: Some("implement_plan".into()),
                 agent: None,
                 message: Some("Do the work".into()),
                 wait_for_activity: None,

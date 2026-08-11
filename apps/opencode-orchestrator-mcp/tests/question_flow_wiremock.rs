@@ -22,12 +22,12 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::matchers::path_regex;
 
+use support::CommandCorrelationFixture;
 use support::SequenceResponder;
 use support::messages_fixture;
 use support::permission_fixture;
 use support::question_fixture;
 use support::session_fixture;
-use support::sse_body;
 use support::status_v2_busy;
 use support::status_v2_idle;
 use support::test_orchestrator_server;
@@ -46,7 +46,7 @@ fn question_payload(question: &str) -> serde_json::Value {
 }
 
 #[tokio::test]
-async fn sse_deltas_are_returned_in_question_partial_response() {
+async fn command_precorrelation_deltas_are_returned_in_question_partial_response() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
@@ -72,35 +72,29 @@ async fn sse_deltas_are_returned_in_question_partial_response() {
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
         .mount(&mock)
         .await;
+    let correlation = CommandCorrelationFixture::new();
     Mock::given(method("POST"))
-        .and(path(format!("/session/{sid}/prompt_async")))
-        .respond_with(ResponseTemplate::new(204))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(correlation.command_responder())
         .mount(&mock)
         .await;
 
-    let events = [
-        serde_json::json!({
-            "type": "message.part.delta",
-            "properties": {
-                "sessionID": sid,
-                "messageID": "assistant-preview",
-                "delta": "question preview"
-            }
-        }),
-        serde_json::json!({
-            "type": "question.asked",
-            "properties": question_fixture(
-                "question-preview",
-                sid,
-                &[question_payload("Continue?")]
-            )
-        }),
-    ];
+    let interruption = serde_json::json!({
+        "type": "question.asked",
+        "properties": question_fixture(
+            "question-preview",
+            sid,
+            &[question_payload("Continue?")]
+        )
+    });
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(sse_body(&events), "text/event-stream"),
-        )
+        .respond_with(correlation.sse_responder(
+            sid,
+            "assistant-preview",
+            "question preview",
+            interruption,
+        ))
         .mount(&mock)
         .await;
 
@@ -109,7 +103,7 @@ async fn sse_deltas_are_returned_in_question_partial_response() {
         tool.call(
             OrchestratorRunInput {
                 session_id: Some(sid.into()),
-                command: None,
+                command: Some("implement_plan".into()),
                 agent: None,
                 message: Some("Do the work".into()),
                 wait_for_activity: None,
