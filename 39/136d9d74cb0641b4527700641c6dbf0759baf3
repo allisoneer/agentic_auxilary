@@ -1,0 +1,21 @@
+apps/agentic-outer-dag/src/owner.rs
+  s_a9499ee0b8342c::t_a1e7dcd4daff81 168,615-640,642-656
+  s_a9499ee0b8342c::t_3ca3574a266cf1 641
+  s_a9499ee0b8342c::t_f5f56fd7a09b9c 657-658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "39136d9d74cb0641b4527700641c6dbf0759baf3",
+  "prompts": {},
+  "sessions": {
+    "s_a9499ee0b8342c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_00cf33bb4ffeEdt60ox1b1VpxP",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
