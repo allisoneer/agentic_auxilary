@@ -1,0 +1,48 @@
+apps/agentic-outer-dag/src/dag/engine.rs
+  s_2d31d6f1476ccd::t_de274057b2aaf4 1570,1689-1698,1925,1954,1991-2064
+  s_2d31d6f1476ccd::t_5966766a7c71be 2065
+apps/agentic-outer-dag/src/main.rs
+  s_2d31d6f1476ccd::t_0b318eeb122666 106-122,393,532,961-988
+  s_2d31d6f1476ccd::t_a3da22bd257582 509,522
+  s_2d31d6f1476ccd::t_c25c45809e0659 989
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_2d31d6f1476ccd::t_eb8d8d8f0cd107 487,578-584,611,633-639,661,787-790,817,834-837,859
+  s_2d31d6f1476ccd::t_3437c91242f4ff 35,1799-1801
+  s_2d31d6f1476ccd::t_5c1014658a8399 783-786,830-833,868-873
+  s_2d31d6f1476ccd::t_0769d1b1d9457e 1802,2709-2710,2714-2727,2735-2737,2745,2762,2873-2877,2894-2895,2915-2957,2962-2974
+  s_2d31d6f1476ccd::t_4ba163b5dd7069 1803
+  s_2d31d6f1476ccd::t_6a74ffac0c42e2 2975
+apps/agentic-outer-dag/Cargo.toml
+  s_2d31d6f1476ccd::t_d8bb491d5dae33 60
+apps/agentic-outer-dag/src/owner.rs
+  s_2d31d6f1476ccd::t_37d9ab3999ac1c 678,682-690
+  s_2d31d6f1476ccd::t_ba473fc095f4ca 772,781
+  s_2d31d6f1476ccd::t_11d1ec9e9a1d21 561-562
+  s_2d31d6f1476ccd::t_8641058a208707 20,22,155,158,164,167,211,278-297,301-304,316-326
+  s_2d31d6f1476ccd::t_a3da22bd257582 44-47,202-209,563-578
+  s_2d31d6f1476ccd::t_d8bb491d5dae33 833-846
+  s_2d31d6f1476ccd::t_cec1a47ecf202e 112,121,226,335,380-381,471,493,497
+  s_2d31d6f1476ccd::t_4c67221db188e1 210,541-551,579,615-677,679-681,691-706,847-848
+  s_2d31d6f1476ccd::t_0eed458a10dc46 212
+  s_2d31d6f1476ccd::t_2cf17f6ad916fb 580
+  s_2d31d6f1476ccd::t_72ee31008a6fe8 707
+  s_2d31d6f1476ccd::t_8de6de3877ae23 849
+apps/agentic-outer-dag/src/state/mod.rs
+  s_2d31d6f1476ccd::t_eb8d8d8f0cd107 259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1c6bd8fd29a66e998f524b4634e8f3550c31c1ad",
+  "prompts": {},
+  "sessions": {
+    "s_2d31d6f1476ccd": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_00d796d26ffe0cc6gtWBxIHbbh",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
