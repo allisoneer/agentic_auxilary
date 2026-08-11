@@ -59,6 +59,7 @@ use opencode_rs::types::session::CreateSessionRequest;
 use opencode_rs::types::session::SessionStatusInfo;
 use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -149,6 +150,25 @@ fn transcript_indicates_command_dispatch(
     messages
         .iter()
         .any(|message| message.id() == transcript_window.command_message_id)
+}
+
+fn assistant_update_matches_command(
+    transcript_window: Option<&CommandTranscriptWindow>,
+    role: &str,
+    parent_id: Option<&str>,
+) -> bool {
+    transcript_window.map_or(role == "assistant", |window| {
+        role == "assistant" && parent_id == Some(window.command_message_id.as_str())
+    })
+}
+
+fn part_event_matches_command(
+    transcript_window: Option<&CommandTranscriptWindow>,
+    message_id: Option<&str>,
+    correlated_assistant_ids: &HashSet<String>,
+) -> bool {
+    transcript_window.is_none()
+        || message_id.is_some_and(|message_id| correlated_assistant_ids.contains(message_id))
 }
 
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
@@ -681,6 +701,7 @@ impl OrchestratorRunTool {
         // This prevents completing immediately if we call run_impl on an already-idle
         // session before our new work has started processing.
         let mut observed_busy = false;
+        let mut correlated_assistant_ids = HashSet::new();
 
         // Track whether SSE is still active. If the stream closes, we fall back
         // to polling-only mode rather than returning an error.
@@ -788,20 +809,47 @@ impl OrchestratorRunTool {
                         }
 
                         Event::MessagePartDelta { properties } => {
-                            last_activity_time = tokio::time::Instant::now();
-                            // Message streaming means session is actively processing
-                            observed_busy = true;
-                            awaiting_idle_grace_check = false;
+                            let correlated = part_event_matches_command(
+                                command_transcript_window.as_ref(),
+                                properties.message_id.as_deref(),
+                                &correlated_assistant_ids,
+                            );
+                            if correlated {
+                                last_activity_time = tokio::time::Instant::now();
+                                observed_busy = true;
+                                awaiting_idle_grace_check = false;
+                            }
                             // Collect streaming text from field-level delta events.
-                            if let Some(delta) = &properties.delta {
+                            if correlated && let Some(delta) = &properties.delta {
                                 partial_response.push_str(delta);
                             }
                         }
 
-                        Event::MessagePartUpdated { .. } | Event::MessageUpdated { .. } => {
-                            last_activity_time = tokio::time::Instant::now();
-                            observed_busy = true;
-                            awaiting_idle_grace_check = false;
+                        Event::MessageUpdated { properties } => {
+                            let correlated = assistant_update_matches_command(
+                                command_transcript_window.as_ref(),
+                                &properties.info.role,
+                                properties.info.parent_id.as_deref(),
+                            );
+                            if correlated {
+                                correlated_assistant_ids.insert(properties.info.id.clone());
+                                last_activity_time = tokio::time::Instant::now();
+                                observed_busy = true;
+                                awaiting_idle_grace_check = false;
+                            }
+                        }
+
+                        Event::MessagePartUpdated { properties } => {
+                            let correlated = part_event_matches_command(
+                                command_transcript_window.as_ref(),
+                                properties.message_id.as_deref(),
+                                &correlated_assistant_ids,
+                            );
+                            if correlated {
+                                last_activity_time = tokio::time::Instant::now();
+                                observed_busy = true;
+                                awaiting_idle_grace_check = false;
+                            }
                         }
 
                         Event::SessionError { properties } => {
@@ -818,8 +866,18 @@ impl OrchestratorRunTool {
 
                         Event::SessionIdle { .. } => {
                             tracing::debug!(session_id = %session_id, "received SessionIdle event");
-                            let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
-                            return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                            if !dispatched_new_work || observed_busy {
+                                let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                                return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                            }
+                            match idle_grace_deadline {
+                                Some(deadline) if tokio::time::Instant::now() >= deadline => {
+                                    let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                                    return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                                }
+                                Some(_) => awaiting_idle_grace_check = true,
+                                None => {}
+                            }
                         }
 
                         _ => {
@@ -2116,5 +2174,46 @@ mod tests {
     #[test]
     fn last_activity_falls_back_to_session_timestamp_when_messages_are_empty() {
         assert_eq!(get_last_activity_time(&[], Some(1_234)), Some(1_234));
+    }
+
+    #[test]
+    fn command_activity_requires_current_assistant_lineage() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        assert!(!assistant_update_matches_command(
+            Some(&window),
+            "user",
+            Some("msg-command")
+        ));
+        assert!(!assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-other")
+        ));
+        assert!(assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-command")
+        ));
+    }
+
+    #[test]
+    fn command_part_activity_requires_correlated_assistant_id() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        let correlated = HashSet::from(["msg-assistant".to_string()]);
+        assert!(!part_event_matches_command(
+            Some(&window),
+            Some("msg-command"),
+            &correlated
+        ));
+        assert!(part_event_matches_command(
+            Some(&window),
+            Some("msg-assistant"),
+            &correlated
+        ));
+        assert!(part_event_matches_command(None, None, &correlated));
     }
 }
