@@ -124,6 +124,7 @@ dependencies = [
  "linear-tools",
  "opencode_rs",
  "pr_comments",
+ "rustix 1.1.4",
  "rustls",
  "serde",
  "serde_json",

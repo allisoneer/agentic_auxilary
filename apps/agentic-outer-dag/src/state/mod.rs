@@ -256,7 +256,7 @@ pub struct PendingInterruptionIdentity {
     pub request_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum InterruptionKind {
     Permission,

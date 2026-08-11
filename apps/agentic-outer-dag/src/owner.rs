@@ -17,7 +17,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use thoughts_tool::utils::locks::FileLock;
+use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
@@ -37,6 +39,10 @@ pub struct OwnerRuntime {
     paths: RuntimePaths,
     owner_token: String,
     worktree_hash: String,
+}
+
+pub struct OwnerMutationLease {
+    _lock: FileLock,
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +109,7 @@ impl OwnerRuntime {
             anyhow::anyhow!("another agentic-outer-dag owner is active for this worktree")
         })?;
         std::fs::set_permissions(&paths.lock, std::fs::Permissions::from_mode(0o600))?;
-        validate_private_regular_file(&paths.lock, current_uid()?)?;
+        validate_private_regular_file(&paths.lock, current_uid())?;
 
         remove_stale_runtime_file(&paths.socket)?;
         remove_stale_runtime_file(&paths.manifest)?;
@@ -112,7 +118,7 @@ impl OwnerRuntime {
         let listener = UnixListener::bind(&paths.socket)
             .with_context(|| format!("failed to bind owner socket {}", paths.socket.display()))?;
         std::fs::set_permissions(&paths.socket, std::fs::Permissions::from_mode(0o600))?;
-        validate_private_socket(&paths.socket, current_uid()?)?;
+        validate_private_socket(&paths.socket, current_uid())?;
         let owner_token = generate_owner_token()?;
         write_private_file(&paths.secret, owner_token.as_bytes(), true)?;
 
@@ -123,16 +129,6 @@ impl OwnerRuntime {
             owner_token,
             worktree_hash,
         })
-    }
-
-    pub fn ensure_unlocked(worktree: &Path) -> Result<()> {
-        let canonical = worktree.canonicalize()?;
-        let paths = runtime_paths(&worktree_hash(&canonical))?;
-        let lock = FileLock::try_lock_exclusive(&paths.lock)?.ok_or_else(|| {
-            anyhow::anyhow!("another agentic-outer-dag owner is active for this worktree")
-        })?;
-        drop(lock);
-        Ok(())
     }
 
     pub fn publish_pending(&self, correlation: &InterruptionCorrelation) -> Result<()> {
@@ -156,19 +152,19 @@ impl OwnerRuntime {
     ) -> Result<InterruptionResponse> {
         loop {
             let (mut stream, _) = self.listener.accept().await?;
-            let request: IpcRequest = match read_frame(&mut stream).await {
+            let request: IpcRequest = match read_frame_bounded(&mut stream).await {
                 Ok(request) => request,
                 Err(error) => {
-                    let _ = write_reply(&mut stream, false, Some(error.to_string())).await;
+                    reject_reply(&mut stream, error.to_string()).await;
                     continue;
                 }
             };
             let validation = self.validate_request(&request, expected);
             if let Err(error) = validation {
-                write_reply(&mut stream, false, Some(error.to_string())).await?;
+                reject_reply(&mut stream, error.to_string()).await;
                 continue;
             }
-            write_reply(&mut stream, true, None).await?;
+            write_reply_bounded(&mut stream, true, None).await?;
             self.clear_pending()?;
             return Ok(request.response);
         }
@@ -203,6 +199,17 @@ impl OwnerRuntime {
     }
 }
 
+impl OwnerMutationLease {
+    pub fn acquire(worktree: &Path) -> Result<Self> {
+        let canonical = worktree.canonicalize()?;
+        let paths = runtime_paths(&worktree_hash(&canonical))?;
+        let lock = FileLock::try_lock_exclusive(&paths.lock)?.ok_or_else(|| {
+            anyhow::anyhow!("another agentic-outer-dag owner is active for this worktree")
+        })?;
+        Ok(Self { _lock: lock })
+    }
+}
+
 impl Drop for OwnerRuntime {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.paths.socket);
@@ -216,7 +223,7 @@ pub async fn send_response(worktree: &Path, response: InterruptionResponse) -> R
     let canonical = worktree.canonicalize()?;
     let hash = worktree_hash(&canonical);
     let paths = runtime_paths(&hash)?;
-    let uid = current_uid()?;
+    let uid = current_uid();
     validate_private_regular_file(&paths.manifest, uid).with_context(|| {
         "no live foreground owner is awaiting this response; keep persisted pending state and recover conservatively"
     })?;
@@ -268,11 +275,33 @@ fn response_kind(response: &InterruptionResponse) -> InterruptionKind {
     }
 }
 
-async fn write_reply(stream: &mut UnixStream, accepted: bool, error: Option<String>) -> Result<()> {
+async fn reject_reply<W: AsyncWrite + Unpin>(stream: &mut W, error: String) {
+    let _ = write_reply_bounded(stream, false, Some(error)).await;
+}
+
+async fn write_reply_bounded<W: AsyncWrite + Unpin>(
+    stream: &mut W,
+    accepted: bool,
+    error: Option<String>,
+) -> Result<()> {
+    tokio::time::timeout(IPC_TIMEOUT, write_reply(stream, accepted, error))
+        .await
+        .context("timed out writing owner IPC reply")??;
+    Ok(())
+}
+
+async fn write_reply<W: AsyncWrite + Unpin>(
+    stream: &mut W,
+    accepted: bool,
+    error: Option<String>,
+) -> Result<()> {
     write_frame(stream, &IpcReply { accepted, error }).await
 }
 
-async fn write_frame<T: Serialize + Sync>(stream: &mut UnixStream, value: &T) -> Result<()> {
+async fn write_frame<T: Serialize + Sync, W: AsyncWrite + Unpin>(
+    stream: &mut W,
+    value: &T,
+) -> Result<()> {
     let bytes = serde_json::to_vec(value)?;
     anyhow::ensure!(
         bytes.len() <= MAX_FRAME_BYTES,
@@ -284,7 +313,17 @@ async fn write_frame<T: Serialize + Sync>(stream: &mut UnixStream, value: &T) ->
     Ok(())
 }
 
-async fn read_frame<T: for<'de> Deserialize<'de>>(stream: &mut UnixStream) -> Result<T> {
+async fn read_frame_bounded<T: for<'de> Deserialize<'de>, R: AsyncRead + Unpin>(
+    stream: &mut R,
+) -> Result<T> {
+    tokio::time::timeout(IPC_TIMEOUT, read_frame(stream))
+        .await
+        .context("timed out reading accepted owner IPC connection")?
+}
+
+async fn read_frame<T: for<'de> Deserialize<'de>, R: AsyncRead + Unpin>(
+    stream: &mut R,
+) -> Result<T> {
     let length = stream.read_u32().await? as usize;
     anyhow::ensure!(length <= MAX_FRAME_BYTES, "IPC frame exceeds maximum size");
     let mut bytes = vec![0; length];
@@ -293,7 +332,7 @@ async fn read_frame<T: for<'de> Deserialize<'de>>(stream: &mut UnixStream) -> Re
 }
 
 fn runtime_paths(worktree_hash: &str) -> Result<RuntimePaths> {
-    let uid = current_uid()?;
+    let uid = current_uid();
     let preferred_base = match std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) {
         Some(path) if validate_private_directory(&path, uid).is_ok() => path,
         _ => short_runtime_fallback(uid),
@@ -338,11 +377,8 @@ fn short_runtime_fallback(uid: u32) -> PathBuf {
     std::env::temp_dir().join(format!("agentic-outer-dag-{uid}"))
 }
 
-fn current_uid() -> Result<u32> {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow::anyhow!("HOME is required to determine runtime ownership"))?;
-    Ok(std::fs::metadata(home)?.uid())
+fn current_uid() -> u32 {
+    rustix::process::geteuid().as_raw()
 }
 
 fn create_private_directory(path: &Path, uid: u32) -> Result<()> {
@@ -432,7 +468,7 @@ fn write_private_file(path: &Path, bytes: &[u8], create_new: bool) -> Result<()>
         bytes.len() as u64 <= MAX_RUNTIME_FILE_BYTES,
         "runtime artifact exceeds maximum size"
     );
-    let uid = current_uid()?;
+    let uid = current_uid();
     match std::fs::symlink_metadata(path) {
         Ok(_) => validate_private_regular_file(path, uid)?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -454,11 +490,11 @@ fn write_private_file(path: &Path, bytes: &[u8], create_new: bool) -> Result<()>
 fn write_private_file_atomic(temp: &Path, destination: &Path, bytes: &[u8]) -> Result<()> {
     remove_stale_runtime_file(temp)?;
     if destination.exists() {
-        validate_private_regular_file(destination, current_uid()?)?;
+        validate_private_regular_file(destination, current_uid())?;
     }
     write_private_file(temp, bytes, true)?;
     std::fs::rename(temp, destination)?;
-    validate_private_regular_file(destination, current_uid()?)
+    validate_private_regular_file(destination, current_uid())
 }
 
 fn generate_owner_token() -> Result<String> {
@@ -502,6 +538,17 @@ mod tests {
     use crate::test_support::process_state_lock;
     use tempfile::TempDir;
 
+    fn permission_correlation() -> InterruptionCorrelation {
+        InterruptionCorrelation {
+            run_id: "run-1".to_string(),
+            invocation_id: "inv-1".to_string(),
+            session_id: "session-1".to_string(),
+            command_message_id: "msg-1".to_string(),
+            kind: InterruptionKind::Permission,
+            request_id: "permission-1".to_string(),
+        }
+    }
+
     #[tokio::test]
     async fn owner_lock_is_exclusive_and_releases_on_drop() {
         let worktree = TempDir::new().unwrap();
@@ -509,6 +556,26 @@ mod tests {
         assert!(OwnerRuntime::acquire(worktree.path()).is_err());
         drop(owner);
         assert!(OwnerRuntime::acquire(worktree.path()).is_ok());
+    }
+
+    #[tokio::test]
+    async fn mutation_lease_blocks_owner_until_released() {
+        let worktree = TempDir::new().unwrap();
+        let lease = OwnerMutationLease::acquire(worktree.path()).unwrap();
+
+        assert!(OwnerRuntime::acquire(worktree.path()).is_err());
+        drop(lease);
+        assert!(OwnerRuntime::acquire(worktree.path()).is_ok());
+    }
+
+    #[tokio::test]
+    async fn active_owner_blocks_mutation_lease_until_released() {
+        let worktree = TempDir::new().unwrap();
+        let owner = OwnerRuntime::acquire(worktree.path()).unwrap();
+
+        assert!(OwnerMutationLease::acquire(worktree.path()).is_err());
+        drop(owner);
+        assert!(OwnerMutationLease::acquire(worktree.path()).is_ok());
     }
 
     #[tokio::test]
@@ -542,6 +609,99 @@ mod tests {
             )
             .await
             .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn stalled_length_prefix_times_out_then_valid_responder_succeeds() {
+        let worktree = TempDir::new().unwrap();
+        let owner = OwnerRuntime::acquire(worktree.path()).unwrap();
+        let correlation = permission_correlation();
+        owner.publish_pending(&correlation).unwrap();
+
+        let receive = owner.await_response(&correlation);
+        let send_after_stall = async {
+            let _stalled = UnixStream::connect(&owner.paths.socket).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            send_response(
+                worktree.path(),
+                InterruptionResponse::Permission { allow: true },
+            )
+            .await
+        };
+        let (received, sent) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            tokio::join!(receive, send_after_stall)
+        })
+        .await
+        .unwrap();
+
+        sent.unwrap();
+        assert_eq!(
+            received.unwrap(),
+            InterruptionResponse::Permission { allow: true }
+        );
+    }
+
+    #[tokio::test]
+    async fn partial_frame_body_times_out_then_valid_responder_succeeds() {
+        let worktree = TempDir::new().unwrap();
+        let owner = OwnerRuntime::acquire(worktree.path()).unwrap();
+        let correlation = permission_correlation();
+        owner.publish_pending(&correlation).unwrap();
+
+        let receive = owner.await_response(&correlation);
+        let send_after_partial_frame = async {
+            let mut stalled = UnixStream::connect(&owner.paths.socket).await.unwrap();
+            stalled.write_u32(32).await.unwrap();
+            stalled.write_all(b"{").await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            send_response(
+                worktree.path(),
+                InterruptionResponse::Permission { allow: false },
+            )
+            .await
+        };
+        let (received, sent) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            tokio::join!(receive, send_after_partial_frame)
+        })
+        .await
+        .unwrap();
+
+        sent.unwrap();
+        assert_eq!(
+            received.unwrap(),
+            InterruptionResponse::Permission { allow: false }
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_rejection_reply_write_failure_is_nonfatal() {
+        let (mut writer, reader) = tokio::io::duplex(1);
+        drop(reader);
+
+        reject_reply(&mut writer, "malformed request".to_string()).await;
+    }
+
+    #[tokio::test]
+    async fn validation_rejection_reply_write_failure_is_nonfatal() {
+        let (mut writer, reader) = tokio::io::duplex(1);
+        drop(reader);
+
+        reject_reply(&mut writer, "owner authentication failed".to_string()).await;
+    }
+
+    #[tokio::test]
+    async fn valid_acceptance_reply_write_timeout_is_fatal() {
+        let (mut writer, _reader) = tokio::io::duplex(1);
+
+        let error = write_reply_bounded(&mut writer, true, None)
+            .await
+            .expect_err("valid acceptance acknowledgement timeout must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("timed out writing owner IPC reply")
         );
     }
 
@@ -609,7 +769,7 @@ mod tests {
             .write_u32((MAX_FRAME_BYTES + 1).try_into().unwrap())
             .await
             .unwrap();
-        let result = read_frame::<IpcReply>(&mut reader).await;
+        let result = read_frame::<IpcReply, _>(&mut reader).await;
         assert!(result.is_err());
     }
 
@@ -618,7 +778,7 @@ mod tests {
         let (mut writer, mut reader) = UnixStream::pair().unwrap();
         writer.write_u32(1).await.unwrap();
         writer.write_all(b"{").await.unwrap();
-        let result = read_frame::<IpcReply>(&mut reader).await;
+        let result = read_frame::<IpcReply, _>(&mut reader).await;
         assert!(result.is_err());
     }
 
@@ -667,6 +827,23 @@ mod tests {
                 .mode()
                 & 0o077,
             0
+        );
+    }
+
+    #[tokio::test]
+    async fn owner_acquisition_is_independent_of_home() {
+        let _guard = process_state_lock().lock().unwrap();
+        let runtime = TempDir::new().unwrap();
+        std::fs::set_permissions(runtime.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        let _home = EnvVarGuard::remove("HOME");
+        let _runtime_dir = EnvVarGuard::set("XDG_RUNTIME_DIR", runtime.path());
+        let worktree = TempDir::new().unwrap();
+
+        let owner = OwnerRuntime::acquire(worktree.path()).unwrap();
+
+        assert_eq!(
+            std::fs::metadata(&owner.paths.socket).unwrap().uid(),
+            rustix::process::geteuid().as_raw()
         );
     }
 

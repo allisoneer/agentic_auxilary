@@ -103,6 +103,23 @@ fn has_recovered_nonterminal_invocation(state: &state::RunState) -> bool {
         })
 }
 
+fn apply_recovered_nonterminal_handoff(state: &mut state::RunState) {
+    let recovered_resolve = state
+        .opencode
+        .current_invocation
+        .as_ref()
+        .is_some_and(|invocation| invocation.command == "resolve_pr_comments");
+    state.stage.kind = state::StageKind::StoppedManualHandoff;
+    state.stage.details = Some(
+        "recovered a nonterminal OpenCode invocation; automatic redispatch is disabled because prior execution disposition is uncertain"
+            .to_string(),
+    );
+    if recovered_resolve {
+        state.opencode.last_resolve_workflow_outcome =
+            Some(state::ResolveWorkflowOutcome::ManualHandoff);
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Install the rustls CryptoProvider before any HTTP clients are created.
@@ -373,13 +390,7 @@ async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found; run start first"))?;
     if has_recovered_nonterminal_invocation(&state) {
-        state.stage.kind = state::StageKind::StoppedManualHandoff;
-        state.stage.details = Some(
-            "recovered a nonterminal OpenCode invocation; automatic redispatch is disabled because prior execution disposition is uncertain"
-                .to_string(),
-        );
-        state.opencode.last_resolve_workflow_outcome =
-            Some(state::ResolveWorkflowOutcome::ManualHandoff);
+        apply_recovered_nonterminal_handoff(&mut state);
         state::store::ThoughtsStateStore::save(&state)?;
         return print_status(&state, false);
     }
@@ -495,7 +506,7 @@ async fn handle_respond_question(answer: &str) -> Result<()> {
 }
 
 async fn handle_handoff(message: Option<&str>) -> Result<()> {
-    owner::OwnerRuntime::ensure_unlocked(Path::new("."))?;
+    let _mutation_lease = owner::OwnerMutationLease::acquire(Path::new("."))?;
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
     let body = message.unwrap_or("manual handoff requested from agentic-outer-dag");
@@ -508,7 +519,7 @@ async fn handle_handoff(message: Option<&str>) -> Result<()> {
 
 fn handle_reset(yes: bool) -> Result<()> {
     anyhow::ensure!(yes, "reset requires --yes");
-    owner::OwnerRuntime::ensure_unlocked(Path::new("."))?;
+    let _mutation_lease = owner::OwnerMutationLease::acquire(Path::new("."))?;
     state::store::ThoughtsStateStore::delete()?;
     println!("state reset");
     Ok(())
@@ -518,6 +529,7 @@ fn handle_reset(yes: bool) -> Result<()> {
 mod tests {
     use super::SettingsOverrides;
     use super::StartOptions;
+    use super::apply_recovered_nonterminal_handoff;
     use super::apply_settings_overrides;
     use super::compact_status_payload;
     use super::ensure_supported_dry_run_usage;
@@ -944,6 +956,35 @@ mod tests {
         state.opencode.current_invocation.as_mut().unwrap().phase =
             state::OpenCodeInvocationPhase::Terminal;
         assert!(!has_recovered_nonterminal_invocation(&state));
+    }
+
+    #[test]
+    fn recovered_resolve_invocation_records_resolve_manual_handoff() {
+        let mut state = sample_state();
+        state.opencode.current_invocation.as_mut().unwrap().phase =
+            state::OpenCodeInvocationPhase::PausedPermission;
+
+        apply_recovered_nonterminal_handoff(&mut state);
+
+        assert_eq!(state.stage.kind, state::StageKind::StoppedManualHandoff);
+        assert_eq!(
+            state.opencode.last_resolve_workflow_outcome,
+            Some(state::ResolveWorkflowOutcome::ManualHandoff)
+        );
+    }
+
+    #[test]
+    fn recovered_non_resolve_invocation_preserves_prior_resolve_outcome() {
+        let mut state = sample_state();
+        let invocation = state.opencode.current_invocation.as_mut().unwrap();
+        invocation.command = "linear_ticket_2_pr".to_string();
+        invocation.phase = state::OpenCodeInvocationPhase::PostAttempted;
+        let prior = state.opencode.last_resolve_workflow_outcome.clone();
+
+        apply_recovered_nonterminal_handoff(&mut state);
+
+        assert_eq!(state.stage.kind, state::StageKind::StoppedManualHandoff);
+        assert_eq!(state.opencode.last_resolve_workflow_outcome, prior);
     }
 
     #[tokio::test]

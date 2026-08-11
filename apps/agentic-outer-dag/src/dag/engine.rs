@@ -1567,7 +1567,7 @@ impl DagEngine {
         {
             PreparedCommandOutcome::Prepared(prepared) => prepared,
             PreparedCommandOutcome::Interrupted(outcome) => {
-                apply_supervised_outcome(state, resume_stage, command_name, outcome);
+                apply_preflight_interruption(state, resume_stage, command_name, outcome);
                 return ThoughtsStateStore::save(state);
             }
         };
@@ -1684,6 +1684,16 @@ impl DagEngine {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("supervisor should be initialized before use"))
     }
+}
+
+fn apply_preflight_interruption(
+    state: &mut RunState,
+    resume_stage: StageKind,
+    command_name: &str,
+    outcome: SupervisedOutcome,
+) {
+    state.opencode.current_invocation = None;
+    apply_supervised_outcome(state, resume_stage, command_name, outcome);
 }
 
 fn apply_supervised_outcome(
@@ -1912,6 +1922,7 @@ mod tests {
     use super::ResolveInvocationClass;
     use super::ResolvePreDispatchAction;
     use super::UnresolvedReviewThreadsSnapshot;
+    use super::apply_preflight_interruption;
     use super::baseline_last_described_head_sha_after_pr_create;
     use super::coderabbit_waiting_details;
     use super::decide_resolve_attempt;
@@ -1940,6 +1951,7 @@ mod tests {
     use crate::github::ci::GhCheck;
     use crate::github::pr::DetectedPrLookup;
     use crate::opencode::supervisor::SessionSelection;
+    use crate::opencode::supervisor::SupervisedOutcome;
     use crate::state::RunState;
     use crate::state::StageKind;
     use crate::test_support::process_state_lock;
@@ -1974,6 +1986,81 @@ mod tests {
             false,
         )
         .expect("sample state builds")
+    }
+
+    fn set_previous_terminal_invocation(state: &mut RunState) {
+        state.opencode.current_invocation = Some(crate::state::OpenCodeInvocationState {
+            invocation_id: "previous-invocation".to_string(),
+            command: "previous_command".to_string(),
+            session_id: "previous-session".to_string(),
+            command_message_id: "previous-message".to_string(),
+            phase: crate::state::OpenCodeInvocationPhase::Terminal,
+            literal_post_attempts: 1,
+            lifecycle_result: Some(crate::state::InvocationLifecycleResult::Completed),
+            task_disposition: Some(crate::state::TaskDisposition {
+                server_abort: crate::state::ServerAbortDisposition::NotRequired,
+                local_task: crate::state::LocalTaskDisposition::Completed,
+            }),
+            pending_interruption: None,
+        });
+    }
+
+    #[test]
+    fn permission_preflight_does_not_mutate_previous_invocation() {
+        let mut state = sample_state();
+        set_previous_terminal_invocation(&mut state);
+
+        apply_preflight_interruption(
+            &mut state,
+            StageKind::DispatchingTicketToPr,
+            "linear_ticket_2_pr",
+            SupervisedOutcome::PermissionRequired {
+                session_id: "next-session".to_string(),
+                request_id: "permission-1".to_string(),
+                permission_type: "file.write".to_string(),
+                literal_post_attempts: 0,
+            },
+        );
+
+        assert!(state.opencode.current_invocation.is_none());
+        assert_eq!(
+            state
+                .opencode
+                .pending_permission
+                .as_ref()
+                .map(|pending| pending.request_id.as_str()),
+            Some("permission-1")
+        );
+        assert_eq!(state.stage.kind, StageKind::StoppedPermissionRequired);
+    }
+
+    #[test]
+    fn question_preflight_does_not_mutate_previous_invocation() {
+        let mut state = sample_state();
+        set_previous_terminal_invocation(&mut state);
+
+        apply_preflight_interruption(
+            &mut state,
+            StageKind::DispatchingResolvePrComments,
+            "resolve_pr_comments",
+            SupervisedOutcome::QuestionRequired {
+                session_id: "next-session".to_string(),
+                request_id: "question-1".to_string(),
+                prompt: "Continue?".to_string(),
+                literal_post_attempts: 0,
+            },
+        );
+
+        assert!(state.opencode.current_invocation.is_none());
+        assert_eq!(
+            state
+                .opencode
+                .pending_question
+                .as_ref()
+                .map(|pending| pending.request_id.as_str()),
+            Some("question-1")
+        );
+        assert_eq!(state.stage.kind, StageKind::StoppedQuestionRequired);
     }
 
     fn check_suites_422_error(head_sha: &str) -> anyhow::Error {

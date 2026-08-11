@@ -32,7 +32,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-const IDLE_GRACE: Duration = Duration::from_secs(1);
+const IDLE_GRACE: Duration = Duration::from_secs(2);
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const TRANSCRIPT_SETTLING_RETRY_BACKOFFS: [Duration; 4] = [
     Duration::from_millis(50),
@@ -484,6 +484,7 @@ impl OpenCodeSupervisor {
         let mut observed_busy = false;
         let mut assistant_started = false;
         let mut correlated_assistant_ids = HashSet::new();
+        let mut handled_interruptions = HashSet::new();
         let mut idle_grace_deadline: Option<tokio::time::Instant> = None;
         let mut awaiting_idle_grace = false;
         let mut sse_active = true;
@@ -574,6 +575,13 @@ impl OpenCodeSupervisor {
                             }
                             if let (Some(owner), Some(owner_context)) = (owner, owner_context) {
                                 let request_id = properties.request.id;
+                                let interruption_key = (
+                                    crate::state::InterruptionKind::Permission,
+                                    request_id.clone(),
+                                );
+                                if handled_interruptions.contains(&interruption_key) {
+                                    continue;
+                                }
                                 let correlation = crate::owner::InterruptionCorrelation {
                                     run_id: owner_context.run_id.clone(),
                                     invocation_id: owner_context.invocation_id.clone(),
@@ -600,6 +608,7 @@ impl OpenCodeSupervisor {
                                         terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
                                     }
                                 };
+                                handled_interruptions.insert(interruption_key);
                                 suspend_supervision_clocks(
                                     &mut deadline,
                                     &mut last_activity,
@@ -621,6 +630,13 @@ impl OpenCodeSupervisor {
                             }
                             if let (Some(owner), Some(owner_context)) = (owner, owner_context) {
                                 let request_id = properties.request.id;
+                                let interruption_key = (
+                                    crate::state::InterruptionKind::Question,
+                                    request_id.clone(),
+                                );
+                                if handled_interruptions.contains(&interruption_key) {
+                                    continue;
+                                }
                                 let correlation = crate::owner::InterruptionCorrelation {
                                     run_id: owner_context.run_id.clone(),
                                     invocation_id: owner_context.invocation_id.clone(),
@@ -642,6 +658,7 @@ impl OpenCodeSupervisor {
                                         terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
                                     }
                                 };
+                                handled_interruptions.insert(interruption_key);
                                 suspend_supervision_clocks(
                                     &mut deadline,
                                     &mut last_activity,
@@ -763,7 +780,14 @@ impl OpenCodeSupervisor {
                                 Some(owner),
                                 Some(owner_context),
                                 SupervisedOutcome::PermissionRequired { request_id, .. },
-                            ) => {
+                            ) if !handled_interruptions.contains(&(
+                                crate::state::InterruptionKind::Permission,
+                                request_id.clone(),
+                            )) => {
+                                let interruption_key = (
+                                    crate::state::InterruptionKind::Permission,
+                                    request_id.clone(),
+                                );
                                 let correlation = crate::owner::InterruptionCorrelation {
                                     run_id: owner_context.run_id.clone(),
                                     invocation_id: owner_context.invocation_id.clone(),
@@ -790,6 +814,7 @@ impl OpenCodeSupervisor {
                                         terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
                                     }
                                 };
+                                handled_interruptions.insert(interruption_key);
                                 suspend_supervision_clocks(
                                     &mut deadline,
                                     &mut last_activity,
@@ -802,7 +827,14 @@ impl OpenCodeSupervisor {
                                 Some(owner),
                                 Some(owner_context),
                                 SupervisedOutcome::QuestionRequired { request_id, .. },
-                            ) => {
+                            ) if !handled_interruptions.contains(&(
+                                crate::state::InterruptionKind::Question,
+                                request_id.clone(),
+                            )) => {
+                                let interruption_key = (
+                                    crate::state::InterruptionKind::Question,
+                                    request_id.clone(),
+                                );
                                 let correlation = crate::owner::InterruptionCorrelation {
                                     run_id: owner_context.run_id.clone(),
                                     invocation_id: owner_context.invocation_id.clone(),
@@ -824,6 +856,7 @@ impl OpenCodeSupervisor {
                                         terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
                                     }
                                 };
+                                handled_interruptions.insert(interruption_key);
                                 suspend_supervision_clocks(
                                     &mut deadline,
                                     &mut last_activity,
@@ -832,6 +865,12 @@ impl OpenCodeSupervisor {
                                 emit_event!(SupervisionEvent::Resumed { assistant_started });
                                 continue;
                             }
+                            (
+                                Some(_),
+                                Some(_),
+                                SupervisedOutcome::PermissionRequired { .. }
+                                | SupervisedOutcome::QuestionRequired { .. },
+                            ) => {}
                             (_, _, outcome) => return Ok(outcome),
                         }
                     }
@@ -1758,6 +1797,11 @@ mod tests {
     }
 
     #[test]
+    fn idle_grace_is_strictly_longer_than_poll_interval() {
+        assert!(IDLE_GRACE > POLL_INTERVAL);
+    }
+
+    #[test]
     fn status_observation_preserves_absence_and_all_present_variants() {
         let mut statuses = HashMap::new();
         assert_eq!(
@@ -2662,10 +2706,25 @@ mod tests {
         interruption_event: serde_json::Value,
         reply_path: &str,
         response: crate::owner::InterruptionResponse,
+        pending_repetitions: usize,
+        interleave_sse_after_poll: bool,
     ) {
         let mock = MockServer::start().await;
         mount_existing_session(&mock).await;
-        mount_stalled_event_stream(&mock).await;
+        if interleave_sse_after_poll {
+            Mock::given(method("GET"))
+                .and(path("/event"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .insert_header("content-type", "text/event-stream")
+                        .set_delay(Duration::from_millis(300))
+                        .set_body_string(format!("data: {interruption_event}\n\n")),
+                )
+                .mount(&mock)
+                .await;
+        } else {
+            mount_stalled_event_stream(&mock).await;
+        }
         let properties = interruption_event
             .get("properties")
             .cloned()
@@ -2673,6 +2732,9 @@ mod tests {
         let empty = ResponseTemplate::new(200).set_body_json(serde_json::json!([]));
         let pending =
             ResponseTemplate::new(200).set_body_json(serde_json::Value::Array(vec![properties]));
+        let mut pending_sequence = vec![empty.clone()];
+        pending_sequence.extend(std::iter::repeat_n(pending, pending_repetitions));
+        pending_sequence.push(empty.clone());
         match interruption_event
             .get("type")
             .and_then(serde_json::Value::as_str)
@@ -2680,11 +2742,7 @@ mod tests {
             Some("permission.asked") => {
                 Mock::given(method("GET"))
                     .and(path("/permission"))
-                    .respond_with(SequenceResponder::new(vec![
-                        empty.clone(),
-                        pending,
-                        empty.clone(),
-                    ]))
+                    .respond_with(SequenceResponder::new(pending_sequence))
                     .mount(&mock)
                     .await;
                 Mock::given(method("GET"))
@@ -2701,11 +2759,7 @@ mod tests {
                     .await;
                 Mock::given(method("GET"))
                     .and(path("/question"))
-                    .respond_with(SequenceResponder::new(vec![
-                        empty.clone(),
-                        pending,
-                        empty.clone(),
-                    ]))
+                    .respond_with(SequenceResponder::new(pending_sequence))
                     .mount(&mock)
                     .await;
             }
@@ -2816,8 +2870,11 @@ mod tests {
         assert!(matches!(outcome, SupervisedOutcome::Completed { .. }));
         let events = observed_events.lock().unwrap();
         assert!(events.contains(&"post"));
-        assert!(events.contains(&"paused"));
-        assert!(events.contains(&"resumed"));
+        assert_eq!(events.iter().filter(|event| **event == "paused").count(), 1);
+        assert_eq!(
+            events.iter().filter(|event| **event == "resumed").count(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -2834,6 +2891,8 @@ mod tests {
             }),
             "/permission/permission-1/reply",
             crate::owner::InterruptionResponse::Permission { allow: true },
+            1,
+            false,
         )
         .await;
     }
@@ -2853,8 +2912,65 @@ mod tests {
             crate::owner::InterruptionResponse::Question {
                 answers: vec![vec!["Yes".to_string()]],
             },
+            1,
+            false,
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn duplicate_polled_permission_is_handled_once() {
+        run_owner_pause_continuation_case(
+            serde_json::json!({
+                "type": "permission.asked",
+                "properties": {
+                    "id": "permission-1",
+                    "sessionID": "session-1",
+                    "permission": "file.write",
+                    "patterns": ["**/*.rs"]
+                }
+            }),
+            "/permission/permission-1/reply",
+            crate::owner::InterruptionResponse::Permission { allow: true },
+            2,
+            false,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn polled_question_then_duplicate_sse_event_is_handled_once() {
+        run_owner_pause_continuation_case(
+            serde_json::json!({
+                "type": "question.asked",
+                "properties": {
+                    "id": "question-1",
+                    "sessionID": "session-1",
+                    "questions": [{"question": "Continue?"}]
+                }
+            }),
+            "/question/question-1/reply",
+            crate::owner::InterruptionResponse::Question {
+                answers: vec![vec!["Yes".to_string()]],
+            },
+            1,
+            true,
+        )
+        .await;
+    }
+
+    #[test]
+    fn interruption_deduplication_distinguishes_kinds_for_same_request_id() {
+        let mut handled = HashSet::new();
+        handled.insert((
+            crate::state::InterruptionKind::Permission,
+            "request-1".to_string(),
+        ));
+
+        assert!(!handled.contains(&(
+            crate::state::InterruptionKind::Question,
+            "request-1".to_string(),
+        )));
     }
 
     #[tokio::test]
