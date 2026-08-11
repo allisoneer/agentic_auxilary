@@ -1,0 +1,29 @@
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_d6e696c585ebfc::t_7ad82ec3a433dc 170-171,2217
+  s_d6e696c585ebfc::t_17912d8e31de14 155-169,172-173,812-816,829-832,843-847,2178-2216,2218
+  s_2aabfc98ee4c47::t_8a4460fdb4cde0 704,817-821,823,828,833-842,848-852,869-880
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "10c0a4ebfe5e61ef14730f2aed95b2431ec266a9",
+  "prompts": {},
+  "sessions": {
+    "s_2aabfc98ee4c47": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_011ce234fffedOHeh4LMnzhdU4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_d6e696c585ebfc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_011607b13ffesuUJJBR0tKD8Tn",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
