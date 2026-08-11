@@ -39,6 +39,14 @@ Add any human-authored notes below. Content outside autogen blocks is preserved 
 - OpenCode v1.17.x `POST /session/{id}/command` is completion-coupled rather than enqueue-and-return. Treat that HTTP call as
   dispatch initiation only: once session start is confirmed via SSE, `/session/status`, or bounded transcript evidence, outer-DAG
   must keep supervising via SSE + `/session/status` and treat later `/command` transport failures as non-terminal warnings.
+- Non-dry-run `start` and `resume` are foreground owners. They hold one private per-worktree execution lock through terminal state
+  persistence and through permission/question waits; a concurrent owner or other state-mutating command is rejected.
+- `respond-permission` and `respond-question` are thin clients of the live foreground owner. They send one authenticated,
+  correlation-checked response over a private Unix socket and never start OpenCode, mutate persisted state, or issue `/command`.
+- If the foreground owner exits with an invocation in `prepared`, `post_attempted`, `running_assistant_started`,
+  `paused_permission`, or `paused_question`, `resume` records a conservative manual handoff and never automatically redispatches.
+- During an authorized responder wait, both the inactivity timeout and absolute session deadline are suspended. The original
+  process, server, SSE subscription, session, and completion-coupled command task remain live and resume after the response.
 
 ## Phase 1 live-test ladder (conservative)
 

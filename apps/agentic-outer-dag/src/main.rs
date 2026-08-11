@@ -18,6 +18,7 @@ mod dag;
 mod github;
 mod linear;
 mod opencode;
+mod owner;
 mod preview;
 mod progress;
 mod state;
@@ -76,6 +77,7 @@ fn ensure_supported_dry_run_usage(dry_run: bool, command: &cli::Commands) -> Res
     }
 }
 
+#[cfg(test)]
 fn require_actionable_resume_stage(state: &state::RunState) -> Result<state::StageKind> {
     let resume_stage = state.opencode.resume_stage.clone().ok_or_else(|| {
         anyhow::anyhow!(
@@ -89,6 +91,16 @@ fn require_actionable_resume_stage(state: &state::RunState) -> Result<state::Sta
     );
 
     Ok(resume_stage)
+}
+
+fn has_recovered_nonterminal_invocation(state: &state::RunState) -> bool {
+    state
+        .opencode
+        .current_invocation
+        .as_ref()
+        .is_some_and(|invocation| {
+            !matches!(invocation.phase, state::OpenCodeInvocationPhase::Terminal)
+        })
 }
 
 #[tokio::main]
@@ -192,11 +204,9 @@ async fn main() -> Result<()> {
         }
         cli::Commands::Status { json } => handle_status(json),
         cli::Commands::RespondPermission { allow, deny } => {
-            handle_respond_permission(allow, deny, final_only).await
+            handle_respond_permission(allow, deny).await
         }
-        cli::Commands::RespondQuestion { answer } => {
-            handle_respond_question(&answer, final_only).await
-        }
+        cli::Commands::RespondQuestion { answer } => handle_respond_question(&answer).await,
         cli::Commands::Handoff { message } => handle_handoff(message.as_deref()).await,
         cli::Commands::Reset { yes } => handle_reset(yes),
     }
@@ -324,6 +334,7 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
 
     let target = worktree::resolve(effective_branch.as_deref(), options.worktree_path, true)?;
     worktree::chdir_to(&target)?;
+    let owner = Arc::new(owner::OwnerRuntime::acquire(Path::new("."))?);
 
     if state::store::ThoughtsStateStore::load()?.is_some() && !options.force {
         anyhow::bail!(
@@ -346,7 +357,7 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
     )?;
     state::store::ThoughtsStateStore::save(&state)?;
 
-    let mut engine = dag::engine::DagEngine::for_current_dir()?;
+    let mut engine = dag::engine::DagEngine::for_current_dir_with_owner(Arc::clone(&owner))?;
     run_engine_until_stop_with_progress(&mut engine, options.stop_after, options.final_only)
         .await?;
     let state = state::store::ThoughtsStateStore::load()?
@@ -357,9 +368,21 @@ async fn handle_start(ticket: &str, options: StartOptions<'_>) -> Result<()> {
 async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
     let target = worktree::resolve(options.branch, options.worktree_path, false)?;
     worktree::chdir_to(&target)?;
+    let owner = Arc::new(owner::OwnerRuntime::acquire(Path::new("."))?);
 
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found; run start first"))?;
+    if has_recovered_nonterminal_invocation(&state) {
+        state.stage.kind = state::StageKind::StoppedManualHandoff;
+        state.stage.details = Some(
+            "recovered a nonterminal OpenCode invocation; automatic redispatch is disabled because prior execution disposition is uncertain"
+                .to_string(),
+        );
+        state.opencode.last_resolve_workflow_outcome =
+            Some(state::ResolveWorkflowOutcome::ManualHandoff);
+        state::store::ThoughtsStateStore::save(&state)?;
+        return print_status(&state, false);
+    }
     let settings_changed = apply_settings_overrides(
         &mut state.settings,
         SettingsOverrides {
@@ -374,7 +397,7 @@ async fn handle_resume(options: ResumeOptions<'_>) -> Result<()> {
     if settings_changed {
         state::store::ThoughtsStateStore::save(&state)?;
     }
-    let mut engine = dag::engine::DagEngine::for_current_dir()?;
+    let mut engine = dag::engine::DagEngine::for_current_dir_with_owner(Arc::clone(&owner))?;
     run_engine_until_stop_with_progress(&mut engine, options.stop_after, options.final_only)
         .await?;
     let state = state::store::ThoughtsStateStore::load()?
@@ -403,6 +426,7 @@ fn print_status(state: &state::RunState, as_json: bool) -> Result<()> {
 
 fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
     let worktree_exists = Path::new(&state.worktree.path).exists();
+    let invocation = state.opencode.current_invocation.as_ref();
 
     json!({
         "ticket": state.ticket.linear_key,
@@ -420,6 +444,17 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
         "opencode_session_id": state.opencode.active_session_id,
         "opencode_last_command": state.opencode.last_command,
         "opencode_last_diagnostics": state.opencode.last_diagnostics,
+        "opencode_invocation_phase": invocation.map(|invocation| &invocation.phase),
+        "opencode_invocation_command": invocation.map(|invocation| &invocation.command),
+        "opencode_invocation_id": invocation.map(|invocation| &invocation.invocation_id),
+        "opencode_invocation_session_id": invocation.map(|invocation| &invocation.session_id),
+        "opencode_invocation_message_id": invocation.map(|invocation| &invocation.command_message_id),
+        "opencode_invocation_lifecycle_result": invocation.and_then(|invocation| invocation.lifecycle_result.as_ref()),
+        "opencode_invocation_task_disposition": invocation.and_then(|invocation| invocation.task_disposition.as_ref()),
+        "opencode_invocation_post_attempts": invocation.map(|invocation| invocation.literal_post_attempts),
+        "opencode_resolve_start_retries": state.opencode.resolve_start_retries,
+        "opencode_last_lifecycle_anomaly": state.opencode.last_lifecycle_anomaly,
+        "opencode_last_resolve_workflow_outcome": state.opencode.last_resolve_workflow_outcome,
         "ticket_to_pr_runs": state.counters.ticket_to_pr,
         "resolve_comments_runs": state.counters.resolve_comments,
         "resolve_ci_runs": state.counters.resolve_ci,
@@ -436,91 +471,31 @@ fn compact_status_payload(state: &state::RunState) -> serde_json::Value {
     })
 }
 
-async fn handle_respond_permission(allow: bool, deny: bool, final_only: bool) -> Result<()> {
+async fn handle_respond_permission(allow: bool, deny: bool) -> Result<()> {
     anyhow::ensure!(allow ^ deny, "exactly one of --allow or --deny is required");
-    let mut state = state::store::ThoughtsStateStore::load()?
-        .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
-    anyhow::ensure!(
-        matches!(
-            state.stage.kind,
-            state::StageKind::StoppedPermissionRequired
-        ),
-        "current state is not waiting on a permission response"
-    );
-    let pending = state
-        .opencode
-        .pending_permission
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("no pending permission payload found in state"))?;
-    let session_id = state
-        .opencode
-        .active_session_id
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("no active OpenCode session found in state"))?;
-
-    let supervisor = opencode::supervisor::OpenCodeSupervisor::start(
-        std::path::Path::new("."),
-        opencode::supervisor::OpenCodeSupervisorTimeouts::from_settings(&state.settings),
+    owner::send_response(
+        Path::new("."),
+        owner::InterruptionResponse::Permission { allow },
     )
     .await?;
-    supervisor
-        .respond_permission(&session_id, &pending.request_id, allow)
-        .await?;
-    drop(supervisor);
-
-    state.opencode.pending_permission = None;
-    state.stage.kind = require_actionable_resume_stage(&state)?;
-    state.stage.details = None;
-    state::store::ThoughtsStateStore::save(&state)?;
-
-    let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    run_engine_until_stop_with_progress(&mut engine, None, final_only).await?;
-    let state = state::store::ThoughtsStateStore::load()?
-        .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after responding"))?;
-    print_status(&state, false)
+    println!("permission response accepted by foreground owner");
+    Ok(())
 }
 
-async fn handle_respond_question(answer: &str, final_only: bool) -> Result<()> {
-    let mut state = state::store::ThoughtsStateStore::load()?
-        .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
-    anyhow::ensure!(
-        matches!(state.stage.kind, state::StageKind::StoppedQuestionRequired),
-        "current state is not waiting on a question response"
-    );
-    let pending = state
-        .opencode
-        .pending_question
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("no pending question payload found in state"))?;
-    let session_id = state
-        .opencode
-        .active_session_id
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("no active OpenCode session found in state"))?;
-
-    let supervisor = opencode::supervisor::OpenCodeSupervisor::start(
-        std::path::Path::new("."),
-        opencode::supervisor::OpenCodeSupervisorTimeouts::from_settings(&state.settings),
+async fn handle_respond_question(answer: &str) -> Result<()> {
+    owner::send_response(
+        Path::new("."),
+        owner::InterruptionResponse::Question {
+            answers: vec![vec![answer.to_string()]],
+        },
     )
     .await?;
-    supervisor
-        .respond_question(&session_id, &pending.request_id, answer)
-        .await?;
-    drop(supervisor);
-
-    state.opencode.pending_question = None;
-    state.stage.kind = require_actionable_resume_stage(&state)?;
-    state.stage.details = None;
-    state::store::ThoughtsStateStore::save(&state)?;
-
-    let mut engine = dag::engine::DagEngine::for_current_dir()?;
-    run_engine_until_stop_with_progress(&mut engine, None, final_only).await?;
-    let state = state::store::ThoughtsStateStore::load()?
-        .ok_or_else(|| anyhow::anyhow!("persisted state disappeared after responding"))?;
-    print_status(&state, false)
+    println!("question response accepted by foreground owner");
+    Ok(())
 }
 
 async fn handle_handoff(message: Option<&str>) -> Result<()> {
+    owner::OwnerRuntime::ensure_unlocked(Path::new("."))?;
     let mut state = state::store::ThoughtsStateStore::load()?
         .ok_or_else(|| anyhow::anyhow!("no persisted state found in the current worktree"))?;
     let body = message.unwrap_or("manual handoff requested from agentic-outer-dag");
@@ -533,6 +508,7 @@ async fn handle_handoff(message: Option<&str>) -> Result<()> {
 
 fn handle_reset(yes: bool) -> Result<()> {
     anyhow::ensure!(yes, "reset requires --yes");
+    owner::OwnerRuntime::ensure_unlocked(Path::new("."))?;
     state::store::ThoughtsStateStore::delete()?;
     println!("state reset");
     Ok(())
@@ -546,6 +522,7 @@ mod tests {
     use super::compact_status_payload;
     use super::ensure_supported_dry_run_usage;
     use super::handle_start;
+    use super::has_recovered_nonterminal_invocation;
     use super::require_actionable_resume_stage;
     use super::resolve_start_effective_branch;
     use super::state;
@@ -589,6 +566,7 @@ mod tests {
         state.opencode.last_command = Some("linear_ticket_2_pr".to_string());
         state.opencode.last_diagnostics = Some(state::OpenCodeDiagnostics {
             checked_at: "2026-01-01T00:00:00Z".to_string(),
+            literal_post_attempts: 1,
             command_message_id: Some("msg-outer-dag-1".to_string()),
             final_assistant_message_id: Some("msg-assistant-1".to_string()),
             final_finish_reason: Some("stop".to_string()),
@@ -599,6 +577,31 @@ mod tests {
             }),
             command_transport_error: None,
         });
+        state.opencode.current_invocation = Some(state::OpenCodeInvocationState {
+            invocation_id: "invocation-1".to_string(),
+            command: "resolve_pr_comments".to_string(),
+            session_id: "session-123".to_string(),
+            command_message_id: "msg-outer-dag-1".to_string(),
+            phase: state::OpenCodeInvocationPhase::Terminal,
+            literal_post_attempts: 2,
+            lifecycle_result: Some(state::InvocationLifecycleResult::AcceptedButNotStarted),
+            task_disposition: Some(state::TaskDisposition {
+                server_abort: state::ServerAbortDisposition::Succeeded { aborted: true },
+                local_task: state::LocalTaskDisposition::AbortedAndJoined,
+            }),
+            pending_interruption: Some(state::PendingInterruptionIdentity {
+                kind: state::InterruptionKind::Permission,
+                request_id: "secret-runtime-request".to_string(),
+            }),
+        });
+        state.opencode.resolve_start_retries = 2;
+        state.opencode.last_lifecycle_anomaly = Some(state::InvocationLifecycleAnomaly {
+            invocation_id: "invocation-1".to_string(),
+            observed_at: "2026-01-01T00:00:00Z".to_string(),
+            kind: state::InvocationLifecycleAnomalyKind::AcceptedButNotStarted,
+        });
+        state.opencode.last_resolve_workflow_outcome =
+            Some(state::ResolveWorkflowOutcome::RetriesExhausted);
         state.counters.ticket_to_pr = 1;
         state.counters.resolve_comments = 0;
         state.counters.resolve_ci = 2;
@@ -649,6 +652,17 @@ mod tests {
             "opencode_session_id",
             "opencode_last_command",
             "opencode_last_diagnostics",
+            "opencode_invocation_phase",
+            "opencode_invocation_command",
+            "opencode_invocation_id",
+            "opencode_invocation_session_id",
+            "opencode_invocation_message_id",
+            "opencode_invocation_lifecycle_result",
+            "opencode_invocation_task_disposition",
+            "opencode_invocation_post_attempts",
+            "opencode_resolve_start_retries",
+            "opencode_last_lifecycle_anomaly",
+            "opencode_last_resolve_workflow_outcome",
             "ticket_to_pr_runs",
             "resolve_comments_runs",
             "resolve_ci_runs",
@@ -730,6 +744,20 @@ mod tests {
                 .and_then(|diagnostics| diagnostics.get("guard_detected")),
             Some(&Value::Bool(true))
         );
+        assert_eq!(
+            payload.get("opencode_invocation_phase"),
+            Some(&Value::String("terminal".to_string()))
+        );
+        assert_eq!(
+            payload.get("opencode_invocation_post_attempts"),
+            Some(&Value::Number(2_u64.into()))
+        );
+        assert_eq!(
+            payload.get("opencode_resolve_start_retries"),
+            Some(&Value::Number(2_u64.into()))
+        );
+        assert!(payload.get("opencode_current_invocation").is_none());
+        assert!(!payload.to_string().contains("secret-runtime-request"));
     }
 
     #[test]
@@ -886,6 +914,36 @@ mod tests {
             require_actionable_resume_stage(&state).unwrap(),
             state::StageKind::DispatchingResolvePrComments
         );
+    }
+
+    #[test]
+    fn every_nonterminal_invocation_phase_requires_conservative_recovery() {
+        for phase in [
+            state::OpenCodeInvocationPhase::Prepared,
+            state::OpenCodeInvocationPhase::PostAttempted,
+            state::OpenCodeInvocationPhase::RunningAssistantStarted,
+            state::OpenCodeInvocationPhase::PausedPermission,
+            state::OpenCodeInvocationPhase::PausedQuestion,
+        ] {
+            let mut state = sample_state();
+            state.opencode.current_invocation = Some(state::OpenCodeInvocationState {
+                invocation_id: "inv-1".to_string(),
+                command: "resolve_pr_comments".to_string(),
+                session_id: "session-1".to_string(),
+                command_message_id: "msg-1".to_string(),
+                phase,
+                literal_post_attempts: 1,
+                lifecycle_result: None,
+                task_disposition: None,
+                pending_interruption: None,
+            });
+            assert!(has_recovered_nonterminal_invocation(&state));
+        }
+
+        let mut state = sample_state();
+        state.opencode.current_invocation.as_mut().unwrap().phase =
+            state::OpenCodeInvocationPhase::Terminal;
+        assert!(!has_recovered_nonterminal_invocation(&state));
     }
 
     #[tokio::test]

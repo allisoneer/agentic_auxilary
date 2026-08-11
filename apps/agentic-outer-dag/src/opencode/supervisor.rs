@@ -1,5 +1,10 @@
+use crate::state::CleanupFailure;
+use crate::state::InvocationFailure;
+use crate::state::LocalTaskDisposition;
 use crate::state::OpenCodeDiagnostics;
 use crate::state::OpenCodeToolErrorDiagnostics;
+use crate::state::ServerAbortDisposition;
+use crate::state::TaskDisposition;
 use anyhow::Context;
 use anyhow::Result;
 use opencode_rs::Client;
@@ -17,8 +22,12 @@ use opencode_rs::types::question::QuestionReply;
 use opencode_rs::types::session::CreateSessionRequest;
 use opencode_rs::types::session::SessionStatusInfo;
 use opencode_rs::version;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -63,22 +72,91 @@ pub enum SupervisedOutcome {
     Completed {
         session_id: String,
         diagnostics: OpenCodeDiagnostics,
+        literal_post_attempts: u32,
+        task_disposition: TaskDisposition,
+    },
+    AcceptedButNotStarted {
+        session_id: String,
+        diagnostics: OpenCodeDiagnostics,
+        literal_post_attempts: u32,
+        task_disposition: TaskDisposition,
     },
     PermissionRequired {
         session_id: String,
         request_id: String,
         permission_type: String,
+        literal_post_attempts: u32,
     },
     QuestionRequired {
         session_id: String,
         request_id: String,
         prompt: String,
+        literal_post_attempts: u32,
     },
     Failed {
         session_id: Option<String>,
         error: String,
         diagnostics: Option<OpenCodeDiagnostics>,
+        literal_post_attempts: u32,
+        failure: InvocationFailure,
+        task_disposition: TaskDisposition,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionSelection {
+    Reuse(String),
+    Fresh,
+}
+
+pub enum PreparedCommandOutcome {
+    Prepared(PreparedCommandInvocation),
+    Interrupted(SupervisedOutcome),
+}
+
+pub struct PreparedCommandInvocation {
+    session_id: String,
+    command_name: String,
+    message: String,
+    transcript_window: TranscriptWindow,
+    subscription: opencode_rs::sse::SseSubscription<Event>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SupervisionEvent {
+    LiteralPostAttempt {
+        total: u32,
+    },
+    AssistantStarted {
+        message_id: String,
+    },
+    Paused {
+        kind: crate::state::InterruptionKind,
+        request_id: String,
+    },
+    Resumed {
+        assistant_started: bool,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct InvocationOwnerContext {
+    pub run_id: String,
+    pub invocation_id: String,
+}
+
+impl PreparedCommandInvocation {
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    pub fn command_name(&self) -> &str {
+        &self.command_name
+    }
+
+    pub fn command_message_id(&self) -> &str {
+        &self.transcript_window.command_message_id
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -104,10 +182,39 @@ enum IdleGateDecision {
     IgnoreUntilDispatchConfirmed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionStatusObservation {
+    Absent,
+    Idle,
+    BusyLike,
+}
+
+fn observe_session_status(
+    statuses: &HashMap<String, SessionStatusInfo>,
+    session_id: &str,
+) -> SessionStatusObservation {
+    match statuses.get(session_id) {
+        None => SessionStatusObservation::Absent,
+        Some(SessionStatusInfo::Idle) => SessionStatusObservation::Idle,
+        Some(
+            SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. } | SessionStatusInfo::Unknown,
+        ) => SessionStatusObservation::BusyLike,
+    }
+}
+
+fn event_session_matches(event_session_id: Option<&str>, session_id: &str) -> bool {
+    event_session_id.is_none_or(|event_session_id| event_session_id == session_id)
+}
+
 impl TranscriptAnalysis {
-    fn diagnostics(&self, command_message_id: &str) -> OpenCodeDiagnostics {
+    fn diagnostics(
+        &self,
+        command_message_id: &str,
+        literal_post_attempts: u32,
+    ) -> OpenCodeDiagnostics {
         OpenCodeDiagnostics {
             checked_at: chrono::Utc::now().to_rfc3339(),
+            literal_post_attempts,
             command_message_id: Some(command_message_id.to_string()),
             final_assistant_message_id: self.final_assistant_message_id.clone(),
             final_finish_reason: self.final_finish_reason.clone(),
@@ -134,6 +241,15 @@ fn idle_gate_decision(
     }
 }
 
+fn suspend_supervision_clocks(
+    deadline: &mut tokio::time::Instant,
+    last_activity: &mut tokio::time::Instant,
+    waited: Duration,
+) {
+    *deadline += waited;
+    *last_activity += waited;
+}
+
 fn transcript_indicates_dispatch(
     messages: &[Message],
     transcript_window: &TranscriptWindow,
@@ -158,10 +274,20 @@ fn transcript_indicates_dispatch(
 #[derive(Debug)]
 enum CompletionValidation {
     Passed(OpenCodeDiagnostics),
+    AcceptedButNotStarted(OpenCodeDiagnostics),
     Failed {
         error: String,
         diagnostics: Option<OpenCodeDiagnostics>,
     },
+}
+
+type CommandTask = tokio::task::JoinHandle<Result<(), OpencodeError>>;
+
+struct TerminalFailure {
+    error: String,
+    diagnostics: Option<OpenCodeDiagnostics>,
+    literal_post_attempts: u32,
+    failure: InvocationFailure,
 }
 
 impl OpenCodeSupervisor {
@@ -238,33 +364,36 @@ impl OpenCodeSupervisor {
         Ok(())
     }
 
-    pub async fn run_command_supervised(
+    pub async fn prepare_command(
         &self,
-        existing_session_id: Option<&str>,
+        session_selection: SessionSelection,
         command_name: &str,
         message: Option<&str>,
-    ) -> Result<SupervisedOutcome> {
-        let session_id = if let Some(session_id) = existing_session_id {
-            self.client
-                .sessions()
-                .get(session_id)
-                .await
-                .with_context(|| format!("failed to load session {session_id}"))?;
-            session_id.to_string()
-        } else {
-            self.client
-                .sessions()
-                .create(&CreateSessionRequest::default())
-                .await
-                .context("failed to create OpenCode session")?
-                .id
+    ) -> Result<PreparedCommandOutcome> {
+        let session_id = match session_selection {
+            SessionSelection::Reuse(session_id) => {
+                self.client
+                    .sessions()
+                    .get(&session_id)
+                    .await
+                    .with_context(|| format!("failed to load session {session_id}"))?;
+                session_id
+            }
+            SessionSelection::Fresh => {
+                self.client
+                    .sessions()
+                    .create(&CreateSessionRequest::default())
+                    .await
+                    .context("failed to create OpenCode session")?
+                    .id
+            }
         };
 
-        if let Some(outcome) = self.preflight_pending_interruptions(&session_id).await? {
-            return Ok(outcome);
+        if let Some(outcome) = self.preflight_pending_interruptions(&session_id, 0).await? {
+            return Ok(PreparedCommandOutcome::Interrupted(outcome));
         }
 
-        let mut subscription = self
+        let subscription = self
             .client
             .subscribe_session(&session_id)
             .context("failed to subscribe to session events")?;
@@ -273,11 +402,64 @@ impl OpenCodeSupervisor {
             baseline_tail_message_id: self.fetch_transcript_tail_id(&session_id).await?,
         };
 
+        Ok(PreparedCommandOutcome::Prepared(
+            PreparedCommandInvocation {
+                session_id,
+                command_name: command_name.to_string(),
+                message: message.unwrap_or_default().to_string(),
+                transcript_window,
+                subscription,
+            },
+        ))
+    }
+
+    #[cfg(test)]
+    async fn run_command_supervised(
+        &self,
+        existing_session_id: Option<&str>,
+        command_name: &str,
+        message: Option<&str>,
+    ) -> Result<SupervisedOutcome> {
+        let selection = existing_session_id.map_or(SessionSelection::Fresh, |session_id| {
+            SessionSelection::Reuse(session_id.to_string())
+        });
+        match self
+            .prepare_command(selection, command_name, message)
+            .await?
+        {
+            PreparedCommandOutcome::Prepared(prepared) => {
+                self.run_prepared_command(prepared, None, None, |_| Ok(()))
+                    .await
+            }
+            PreparedCommandOutcome::Interrupted(outcome) => Ok(outcome),
+        }
+    }
+
+    pub async fn run_prepared_command<F>(
+        &self,
+        prepared: PreparedCommandInvocation,
+        owner: Option<&crate::owner::OwnerRuntime>,
+        owner_context: Option<&InvocationOwnerContext>,
+        mut on_event: F,
+    ) -> Result<SupervisedOutcome>
+    where
+        F: FnMut(SupervisionEvent) -> Result<()>,
+    {
+        let PreparedCommandInvocation {
+            session_id,
+            command_name,
+            message: dispatch_message,
+            transcript_window,
+            mut subscription,
+        } = prepared;
+
         let cmd_client = self.client.clone();
         let dispatch_session_id = session_id.clone();
-        let dispatch_command = command_name.to_string();
-        let dispatch_message = message.unwrap_or_default().to_string();
+        let dispatch_command = command_name.clone();
         let dispatch_message_id = transcript_window.command_message_id.clone();
+        let literal_post_attempts = Arc::new(AtomicU32::new(0));
+        let task_literal_post_attempts = Arc::clone(&literal_post_attempts);
+        let (attempt_tx, mut attempt_rx) = tokio::sync::mpsc::unbounded_channel();
         let mut command_task = Some(tokio::spawn(async move {
             let request = CommandRequest {
                 command: dispatch_command,
@@ -286,45 +468,99 @@ impl OpenCodeSupervisor {
             };
             cmd_client
                 .messages()
-                .command(&dispatch_session_id, &request)
+                .command_with_attempt_observer(&dispatch_session_id, &request, move |_| {
+                    let total = task_literal_post_attempts.fetch_add(1, Ordering::Relaxed) + 1;
+                    let _ = attempt_tx.send(total);
+                })
                 .await
                 .map(|_| ())
         }));
+        let mut observed_local = LocalTaskDisposition::Spawned;
 
-        let deadline = tokio::time::Instant::now() + self.timeouts.session_deadline;
+        let mut deadline = tokio::time::Instant::now() + self.timeouts.session_deadline;
         let mut last_activity = tokio::time::Instant::now();
         let mut poll_interval = tokio::time::interval(POLL_INTERVAL);
         poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut observed_busy = false;
+        let mut assistant_started = false;
+        let mut correlated_assistant_ids = HashSet::new();
         let mut idle_grace_deadline: Option<tokio::time::Instant> = None;
         let mut awaiting_idle_grace = false;
         let mut sse_active = true;
         let mut command_transport_error: Option<String> = None;
 
+        macro_rules! terminal_runtime_error {
+            ($failure:expr, $error:expr) => {{
+                let error = $error;
+                return Ok(self
+                    .terminal_failure(
+                        session_id.clone(),
+                        TerminalFailure {
+                            error: error.to_string(),
+                            diagnostics: None,
+                            literal_post_attempts: literal_post_attempts.load(Ordering::Relaxed),
+                            failure: $failure,
+                        },
+                        &mut command_task,
+                        observed_local,
+                    )
+                    .await);
+            }};
+        }
+
+        macro_rules! emit_event {
+            ($event:expr) => {
+                if let Err(error) = on_event($event) {
+                    terminal_runtime_error!(InvocationFailure::Persistence, error);
+                }
+            };
+        }
+
         loop {
             let now = tokio::time::Instant::now();
             if now.duration_since(last_activity) >= self.timeouts.inactivity_timeout {
-                return Ok(SupervisedOutcome::Failed {
-                    session_id: Some(session_id.clone()),
-                    error: format!(
-                        "session idle timeout after {}",
-                        describe_duration(self.timeouts.inactivity_timeout)
-                    ),
-                    diagnostics: None,
-                });
+                let error = format!(
+                    "session idle timeout after {}",
+                    describe_duration(self.timeouts.inactivity_timeout)
+                );
+                return Ok(self
+                    .terminal_failure(
+                        session_id,
+                        TerminalFailure {
+                            error,
+                            diagnostics: None,
+                            literal_post_attempts: literal_post_attempts.load(Ordering::Relaxed),
+                            failure: InvocationFailure::InactivityTimeout,
+                        },
+                        &mut command_task,
+                        observed_local,
+                    )
+                    .await);
             }
             if now >= deadline {
-                return Ok(SupervisedOutcome::Failed {
-                    session_id: Some(session_id.clone()),
-                    error: format!(
-                        "session execution timed out after {}",
-                        describe_duration(self.timeouts.session_deadline)
-                    ),
-                    diagnostics: None,
-                });
+                let error = format!(
+                    "session execution timed out after {}",
+                    describe_duration(self.timeouts.session_deadline)
+                );
+                return Ok(self
+                    .terminal_failure(
+                        session_id,
+                        TerminalFailure {
+                            error,
+                            diagnostics: None,
+                            literal_post_attempts: literal_post_attempts.load(Ordering::Relaxed),
+                            failure: InvocationFailure::SessionDeadline,
+                        },
+                        &mut command_task,
+                        observed_local,
+                    )
+                    .await);
             }
 
             tokio::select! {
+                Some(total) = attempt_rx.recv() => {
+                    emit_event!(SupervisionEvent::LiteralPostAttempt { total });
+                }
                 maybe_event = subscription.recv(), if sse_active => {
                     let Some(event) = maybe_event else {
                         sse_active = false;
@@ -333,13 +569,87 @@ impl OpenCodeSupervisor {
 
                     match event {
                         Event::PermissionAsked { properties } => {
+                            if properties.request.session_id != session_id {
+                                continue;
+                            }
+                            if let (Some(owner), Some(owner_context)) = (owner, owner_context) {
+                                let request_id = properties.request.id;
+                                let correlation = crate::owner::InterruptionCorrelation {
+                                    run_id: owner_context.run_id.clone(),
+                                    invocation_id: owner_context.invocation_id.clone(),
+                                    session_id: session_id.clone(),
+                                    command_message_id: transcript_window.command_message_id.clone(),
+                                    kind: crate::state::InterruptionKind::Permission,
+                                    request_id: request_id.clone(),
+                                };
+                                emit_event!(SupervisionEvent::Paused {
+                                    kind: crate::state::InterruptionKind::Permission,
+                                    request_id: request_id.clone(),
+                                });
+                                let waited = match self
+                                    .continue_permission_with_owner(
+                                        owner,
+                                        &correlation,
+                                        &session_id,
+                                        &request_id,
+                                    )
+                                    .await
+                                {
+                                    Ok(waited) => waited,
+                                    Err(error) => {
+                                        terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
+                                    }
+                                };
+                                suspend_supervision_clocks(
+                                    &mut deadline,
+                                    &mut last_activity,
+                                    waited,
+                                );
+                                emit_event!(SupervisionEvent::Resumed { assistant_started });
+                                continue;
+                            }
                             return Ok(SupervisedOutcome::PermissionRequired {
                                 session_id,
                                 request_id: properties.request.id,
                                 permission_type: properties.request.permission,
+                                literal_post_attempts: literal_post_attempts.load(Ordering::Relaxed),
                             });
                         }
                         Event::QuestionAsked { properties } => {
+                            if properties.request.session_id != session_id {
+                                continue;
+                            }
+                            if let (Some(owner), Some(owner_context)) = (owner, owner_context) {
+                                let request_id = properties.request.id;
+                                let correlation = crate::owner::InterruptionCorrelation {
+                                    run_id: owner_context.run_id.clone(),
+                                    invocation_id: owner_context.invocation_id.clone(),
+                                    session_id: session_id.clone(),
+                                    command_message_id: transcript_window.command_message_id.clone(),
+                                    kind: crate::state::InterruptionKind::Question,
+                                    request_id: request_id.clone(),
+                                };
+                                emit_event!(SupervisionEvent::Paused {
+                                    kind: crate::state::InterruptionKind::Question,
+                                    request_id: request_id.clone(),
+                                });
+                                let waited = match self
+                                    .continue_question_with_owner(owner, &correlation, &request_id)
+                                    .await
+                                {
+                                    Ok(waited) => waited,
+                                    Err(error) => {
+                                        terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
+                                    }
+                                };
+                                suspend_supervision_clocks(
+                                    &mut deadline,
+                                    &mut last_activity,
+                                    waited,
+                                );
+                                emit_event!(SupervisionEvent::Resumed { assistant_started });
+                                continue;
+                            }
                             let prompt = properties
                                 .request
                                 .questions
@@ -350,18 +660,44 @@ impl OpenCodeSupervisor {
                                 session_id,
                                 request_id: properties.request.id,
                                 prompt,
+                                literal_post_attempts: literal_post_attempts.load(Ordering::Relaxed),
                             });
                         }
-                        Event::MessagePartDelta { .. }
-                        | Event::MessagePartUpdated { .. }
-                        | Event::MessageUpdated { .. } => {
-                            last_activity = tokio::time::Instant::now();
-                            observed_busy = true;
-                            awaiting_idle_grace = false;
+                        Event::MessageUpdated { properties } => {
+                            let info = &properties.info;
+                            if event_session_matches(info.session_id.as_deref(), &session_id)
+                                && info.role == "assistant"
+                                && info.parent_id.as_deref()
+                                    == Some(transcript_window.command_message_id.as_str())
+                            {
+                                if !assistant_started {
+                                    emit_event!(SupervisionEvent::AssistantStarted {
+                                        message_id: info.id.clone(),
+                                    });
+                                }
+                                correlated_assistant_ids.insert(info.id.clone());
+                                assistant_started = true;
+                                observed_busy = true;
+                                last_activity = tokio::time::Instant::now();
+                                awaiting_idle_grace = false;
+                            }
                         }
-                        Event::SessionIdle { .. } => {
+                        Event::MessagePartDelta { properties }
+                        | Event::MessagePartUpdated { properties } => {
+                            if event_session_matches(properties.session_id.as_deref(), &session_id)
+                                && properties.message_id.as_ref().is_some_and(|message_id| {
+                                correlated_assistant_ids.contains(message_id)
+                            }) {
+                                last_activity = tokio::time::Instant::now();
+                                awaiting_idle_grace = false;
+                            }
+                        }
+                        Event::SessionIdle { properties } => {
+                            if properties.session_id != session_id {
+                                continue;
+                            }
                             match idle_gate_decision(
-                                observed_busy,
+                                assistant_started,
                                 idle_grace_deadline,
                                 tokio::time::Instant::now(),
                             ) {
@@ -371,6 +707,9 @@ impl OpenCodeSupervisor {
                                             session_id,
                                             &transcript_window,
                                             command_transport_error.as_ref(),
+                                            literal_post_attempts.load(Ordering::Relaxed),
+                                            &mut command_task,
+                                            observed_local,
                                         )
                                         .await);
                                 }
@@ -381,29 +720,139 @@ impl OpenCodeSupervisor {
                             }
                         }
                         Event::SessionError { properties } => {
-                            return Ok(SupervisedOutcome::Failed {
-                                session_id: properties.session_id.or(Some(session_id)),
-                                error: format!("session error: {:?}", properties.error),
-                                diagnostics: None,
-                            });
+                            if !event_session_matches(properties.session_id.as_deref(), &session_id) {
+                                continue;
+                            }
+                            let outcome_session_id =
+                                properties.session_id.unwrap_or_else(|| session_id.clone());
+                            return Ok(self
+                                .terminal_failure(
+                                    outcome_session_id,
+                                    TerminalFailure {
+                                        error: format!("session error: {:?}", properties.error),
+                                        diagnostics: None,
+                                        literal_post_attempts: literal_post_attempts
+                                            .load(Ordering::Relaxed),
+                                        failure: InvocationFailure::SessionError,
+                                    },
+                                    &mut command_task,
+                                    observed_local,
+                                )
+                                .await);
                         }
                         _ => {}
                     }
                 }
                 _ = poll_interval.tick() => {
-                    if let Some(outcome) = self.preflight_pending_interruptions(&session_id).await? {
-                        return Ok(outcome);
+                    let pending_interruption = match self
+                        .preflight_pending_interruptions(
+                            &session_id,
+                            literal_post_attempts.load(Ordering::Relaxed),
+                        )
+                        .await
+                    {
+                        Ok(outcome) => outcome,
+                        Err(error) => {
+                            tracing::warn!(error = %error, "failed to poll pending interruptions");
+                            None
+                        }
+                    };
+                    if let Some(outcome) = pending_interruption {
+                        match (owner, owner_context, outcome) {
+                            (
+                                Some(owner),
+                                Some(owner_context),
+                                SupervisedOutcome::PermissionRequired { request_id, .. },
+                            ) => {
+                                let correlation = crate::owner::InterruptionCorrelation {
+                                    run_id: owner_context.run_id.clone(),
+                                    invocation_id: owner_context.invocation_id.clone(),
+                                    session_id: session_id.clone(),
+                                    command_message_id: transcript_window.command_message_id.clone(),
+                                    kind: crate::state::InterruptionKind::Permission,
+                                    request_id: request_id.clone(),
+                                };
+                                emit_event!(SupervisionEvent::Paused {
+                                    kind: crate::state::InterruptionKind::Permission,
+                                    request_id: request_id.clone(),
+                                });
+                                let waited = match self
+                                    .continue_permission_with_owner(
+                                        owner,
+                                        &correlation,
+                                        &session_id,
+                                        &request_id,
+                                    )
+                                    .await
+                                {
+                                    Ok(waited) => waited,
+                                    Err(error) => {
+                                        terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
+                                    }
+                                };
+                                suspend_supervision_clocks(
+                                    &mut deadline,
+                                    &mut last_activity,
+                                    waited,
+                                );
+                                emit_event!(SupervisionEvent::Resumed { assistant_started });
+                                continue;
+                            }
+                            (
+                                Some(owner),
+                                Some(owner_context),
+                                SupervisedOutcome::QuestionRequired { request_id, .. },
+                            ) => {
+                                let correlation = crate::owner::InterruptionCorrelation {
+                                    run_id: owner_context.run_id.clone(),
+                                    invocation_id: owner_context.invocation_id.clone(),
+                                    session_id: session_id.clone(),
+                                    command_message_id: transcript_window.command_message_id.clone(),
+                                    kind: crate::state::InterruptionKind::Question,
+                                    request_id: request_id.clone(),
+                                };
+                                emit_event!(SupervisionEvent::Paused {
+                                    kind: crate::state::InterruptionKind::Question,
+                                    request_id: request_id.clone(),
+                                });
+                                let waited = match self
+                                    .continue_question_with_owner(owner, &correlation, &request_id)
+                                    .await
+                                {
+                                    Ok(waited) => waited,
+                                    Err(error) => {
+                                        terminal_runtime_error!(InvocationFailure::OwnerIpc, error);
+                                    }
+                                };
+                                suspend_supervision_clocks(
+                                    &mut deadline,
+                                    &mut last_activity,
+                                    waited,
+                                );
+                                emit_event!(SupervisionEvent::Resumed { assistant_started });
+                                continue;
+                            }
+                            (_, _, outcome) => return Ok(outcome),
+                        }
                     }
 
-                    match self.client.sessions().status_for(&session_id).await {
-                        Ok(SessionStatusInfo::Busy | SessionStatusInfo::Retry { .. } | SessionStatusInfo::Unknown) => {
+                    match self.client.sessions().status_map().await {
+                        Ok(statuses)
+                            if matches!(
+                                observe_session_status(&statuses, &session_id),
+                                SessionStatusObservation::BusyLike
+                            ) => {
                             last_activity = tokio::time::Instant::now();
                             observed_busy = true;
                             awaiting_idle_grace = false;
                         }
-                        Ok(SessionStatusInfo::Idle) => {
+                        Ok(statuses)
+                            if matches!(
+                                observe_session_status(&statuses, &session_id),
+                                SessionStatusObservation::Absent | SessionStatusObservation::Idle
+                            ) => {
                             match idle_gate_decision(
-                                observed_busy,
+                                assistant_started,
                                 idle_grace_deadline,
                                 tokio::time::Instant::now(),
                             ) {
@@ -413,6 +862,9 @@ impl OpenCodeSupervisor {
                                             session_id,
                                             &transcript_window,
                                             command_transport_error.as_ref(),
+                                            literal_post_attempts.load(Ordering::Relaxed),
+                                            &mut command_task,
+                                            observed_local,
                                         )
                                         .await);
                                 }
@@ -422,6 +874,7 @@ impl OpenCodeSupervisor {
                                 IdleGateDecision::IgnoreUntilDispatchConfirmed => {}
                             }
                         }
+                        Ok(_) => {}
                         Err(error) => {
                             tracing::warn!(error = %error, "failed to poll session status");
                         }
@@ -436,27 +889,41 @@ impl OpenCodeSupervisor {
                     match result {
                         Some(Ok(Ok(()))) => {
                             idle_grace_deadline = Some(tokio::time::Instant::now() + IDLE_GRACE);
+                            awaiting_idle_grace = true;
                             command_task = None;
+                            observed_local = LocalTaskDisposition::Completed;
                         }
                         Some(Ok(Err(error))) => {
+                            command_task = None;
+                            observed_local = LocalTaskDisposition::ReturnedError;
                             if !matches!(error, OpencodeError::Transport(_)) {
-                                return Ok(SupervisedOutcome::Failed {
-                                    session_id: Some(session_id),
-                                    error: error.to_string(),
-                                    diagnostics: None,
-                                });
+                                return Ok(self
+                                    .terminal_failure(
+                                        session_id,
+                                        TerminalFailure {
+                                            error: error.to_string(),
+                                            diagnostics: None,
+                                            literal_post_attempts: literal_post_attempts
+                                                .load(Ordering::Relaxed),
+                                            failure: InvocationFailure::CommandTransport,
+                                        },
+                                        &mut command_task,
+                                        observed_local,
+                                    )
+                                    .await);
                             }
 
                             let mut start_evidence = observed_busy;
 
                             if !start_evidence
-                                && let Ok(status) = self.client.sessions().status_for(&session_id).await
-                                && status.is_busy_like()
+                                && let Ok(statuses) = self.client.sessions().status_map().await
+                                && statuses
+                                    .get(&session_id)
+                                    .is_some_and(SessionStatusInfo::is_busy_like)
                             {
                                 start_evidence = true;
                                 observed_busy = true;
                                 last_activity = tokio::time::Instant::now();
-                                awaiting_idle_grace = false;
                             }
 
                             if !start_evidence {
@@ -475,38 +942,66 @@ impl OpenCodeSupervisor {
                             }
 
                             if start_evidence {
+                                idle_grace_deadline
+                                    .get_or_insert_with(|| tokio::time::Instant::now() + IDLE_GRACE);
+                                awaiting_idle_grace = true;
                                 tracing::warn!(
                                     session_id = %session_id,
                                     error = %error,
                                     "POST /session/{session_id}/command transport error after start evidence; continuing supervision via SSE/status"
                                 );
                                 command_transport_error.get_or_insert_with(|| error.to_string());
-                                command_task = None;
                                 continue;
                             }
 
-                            return Ok(SupervisedOutcome::Failed {
-                                session_id: Some(session_id),
-                                error: format!(
-                                    "transport error dispatching OpenCode command '{command_name}' (no session start evidence observed): {error}"
-                                ),
-                                diagnostics: Some(OpenCodeDiagnostics {
-                                    checked_at: chrono::Utc::now().to_rfc3339(),
-                                    command_message_id: Some(transcript_window.command_message_id.clone()),
-                                    final_assistant_message_id: None,
-                                    final_finish_reason: None,
-                                    guard_detected: false,
-                                    final_tool_error: None,
-                                    command_transport_error: Some(error.to_string()),
-                                }),
-                            });
+                            let diagnostics = OpenCodeDiagnostics {
+                                checked_at: chrono::Utc::now().to_rfc3339(),
+                                literal_post_attempts: literal_post_attempts.load(Ordering::Relaxed),
+                                command_message_id: Some(transcript_window.command_message_id.clone()),
+                                final_assistant_message_id: None,
+                                final_finish_reason: None,
+                                guard_detected: false,
+                                final_tool_error: None,
+                                command_transport_error: Some(error.to_string()),
+                            };
+                            return Ok(self
+                                .terminal_failure(
+                                    session_id,
+                                    TerminalFailure {
+                                        error: format!(
+                                            "transport error dispatching OpenCode command '{command_name}' (no session start evidence observed): {error}"
+                                        ),
+                                        diagnostics: Some(diagnostics),
+                                        literal_post_attempts: literal_post_attempts
+                                            .load(Ordering::Relaxed),
+                                        failure: InvocationFailure::CommandTransport,
+                                    },
+                                    &mut command_task,
+                                    observed_local,
+                                )
+                                .await);
                         }
                         Some(Err(error)) => {
-                            return Ok(SupervisedOutcome::Failed {
-                                session_id: Some(session_id),
-                                error: format!("command task failed: {error}"),
-                                diagnostics: None,
-                            });
+                            command_task = None;
+                            observed_local = if error.is_cancelled() {
+                                LocalTaskDisposition::JoinCancelled
+                            } else {
+                                LocalTaskDisposition::JoinPanicked
+                            };
+                            return Ok(self
+                                .terminal_failure(
+                                    session_id,
+                                    TerminalFailure {
+                                        error: format!("command task failed: {error}"),
+                                        diagnostics: None,
+                                        literal_post_attempts: literal_post_attempts
+                                            .load(Ordering::Relaxed),
+                                        failure: InvocationFailure::LocalTask,
+                                    },
+                                    &mut command_task,
+                                    observed_local,
+                                )
+                                .await);
                         }
                         None => unreachable!("command task guard should prevent None"),
                     }
@@ -517,21 +1012,53 @@ impl OpenCodeSupervisor {
                         None => std::future::pending::<()>().await,
                     }
                 }, if awaiting_idle_grace => {
-                    awaiting_idle_grace = false;
-                    if matches!(self.client.sessions().status_for(&session_id).await, Ok(SessionStatusInfo::Idle)) {
-                        return Ok(self
-                            .completion_outcome(
-                                session_id,
-                                &transcript_window,
-                                command_transport_error.as_ref(),
-                            )
-                            .await);
-                    }
-                    observed_busy = true;
-                    last_activity = tokio::time::Instant::now();
+                    return Ok(self
+                        .completion_outcome(
+                            session_id,
+                            &transcript_window,
+                            command_transport_error.as_ref(),
+                            literal_post_attempts.load(Ordering::Relaxed),
+                            &mut command_task,
+                            observed_local,
+                        )
+                        .await);
                 }
             }
         }
+    }
+
+    async fn continue_permission_with_owner(
+        &self,
+        owner: &crate::owner::OwnerRuntime,
+        correlation: &crate::owner::InterruptionCorrelation,
+        session_id: &str,
+        request_id: &str,
+    ) -> Result<Duration> {
+        owner.publish_pending(correlation)?;
+        let wait_started = tokio::time::Instant::now();
+        let response = owner.await_response(correlation).await?;
+        let crate::owner::InterruptionResponse::Permission { allow } = response else {
+            anyhow::bail!("owner returned mismatched permission response");
+        };
+        self.respond_permission(session_id, request_id, allow)
+            .await?;
+        Ok(tokio::time::Instant::now().duration_since(wait_started))
+    }
+
+    async fn continue_question_with_owner(
+        &self,
+        owner: &crate::owner::OwnerRuntime,
+        correlation: &crate::owner::InterruptionCorrelation,
+        request_id: &str,
+    ) -> Result<Duration> {
+        owner.publish_pending(correlation)?;
+        let wait_started = tokio::time::Instant::now();
+        let response = owner.await_response(correlation).await?;
+        let crate::owner::InterruptionResponse::Question { answers } = response else {
+            anyhow::bail!("owner returned mismatched question response");
+        };
+        self.respond_question_answers(request_id, answers).await?;
+        Ok(tokio::time::Instant::now().duration_since(wait_started))
     }
 
     pub async fn respond_permission(
@@ -560,20 +1087,80 @@ impl OpenCodeSupervisor {
         Ok(())
     }
 
-    pub async fn respond_question(
+    async fn terminalize_command_task(
         &self,
-        _session_id: &str,
+        session_id: &str,
+        command_task: &mut Option<CommandTask>,
+        observed_local: LocalTaskDisposition,
+        abort_server: bool,
+    ) -> TaskDisposition {
+        let server_abort = if abort_server {
+            match self.client.sessions().abort(session_id).await {
+                Ok(aborted) => ServerAbortDisposition::Succeeded { aborted },
+                Err(OpencodeError::Transport(_)) => ServerAbortDisposition::Failed {
+                    failure: CleanupFailure::Transport,
+                },
+                Err(_) => ServerAbortDisposition::Failed {
+                    failure: CleanupFailure::Server,
+                },
+            }
+        } else {
+            ServerAbortDisposition::NotRequired
+        };
+
+        let local_task = match command_task.take() {
+            None => observed_local,
+            Some(task) if task.is_finished() => match task.await {
+                Ok(Ok(())) => LocalTaskDisposition::Completed,
+                Ok(Err(_)) => LocalTaskDisposition::ReturnedError,
+                Err(error) if error.is_cancelled() => LocalTaskDisposition::JoinCancelled,
+                Err(_) => LocalTaskDisposition::JoinPanicked,
+            },
+            Some(task) => {
+                task.abort();
+                match task.await {
+                    Err(error) if error.is_cancelled() => LocalTaskDisposition::AbortedAndJoined,
+                    Err(_) => LocalTaskDisposition::JoinPanicked,
+                    Ok(Ok(())) => LocalTaskDisposition::Completed,
+                    Ok(Err(_)) => LocalTaskDisposition::ReturnedError,
+                }
+            }
+        };
+
+        TaskDisposition {
+            server_abort,
+            local_task,
+        }
+    }
+
+    async fn terminal_failure(
+        &self,
+        session_id: String,
+        terminal: TerminalFailure,
+        command_task: &mut Option<CommandTask>,
+        observed_local: LocalTaskDisposition,
+    ) -> SupervisedOutcome {
+        let task_disposition = self
+            .terminalize_command_task(&session_id, command_task, observed_local, true)
+            .await;
+        SupervisedOutcome::Failed {
+            session_id: Some(session_id),
+            error: terminal.error,
+            diagnostics: terminal.diagnostics,
+            literal_post_attempts: terminal.literal_post_attempts,
+            failure: terminal.failure,
+            task_disposition,
+        }
+    }
+
+    async fn respond_question_answers(
+        &self,
         request_id: &str,
-        answer: &str,
+        answers: Vec<Vec<String>>,
     ) -> Result<()> {
         self.client
             .question()
-            .reply(
-                request_id,
-                &QuestionReply {
-                    answers: vec![vec![answer.to_string()]],
-                },
-            )
+            .reply(request_id, &QuestionReply { answers })
             .await
             .with_context(|| format!("failed to respond to question request {request_id}"))?;
         Ok(())
@@ -582,6 +1169,7 @@ impl OpenCodeSupervisor {
     async fn preflight_pending_interruptions(
         &self,
         session_id: &str,
+        literal_post_attempts: u32,
     ) -> Result<Option<SupervisedOutcome>> {
         let permissions = self
             .client
@@ -597,6 +1185,7 @@ impl OpenCodeSupervisor {
                 session_id: session_id.to_string(),
                 request_id: permission.id,
                 permission_type: permission.permission,
+                literal_post_attempts,
             }));
         }
 
@@ -618,6 +1207,7 @@ impl OpenCodeSupervisor {
                     .first()
                     .map(|entry| entry.question.clone())
                     .unwrap_or_default(),
+                literal_post_attempts,
             }));
         }
 
@@ -629,19 +1219,39 @@ impl OpenCodeSupervisor {
         session_id: String,
         transcript_window: &TranscriptWindow,
         command_transport_error: Option<&String>,
+        literal_post_attempts: u32,
+        command_task: &mut Option<CommandTask>,
+        observed_local: LocalTaskDisposition,
     ) -> SupervisedOutcome {
-        let outcome = match self
-            .validate_completion_with_retries(&session_id, transcript_window)
-            .await
-        {
+        let validation = self
+            .validate_completion_with_retries(&session_id, transcript_window, literal_post_attempts)
+            .await;
+        let abort_server = !matches!(validation, CompletionValidation::Passed(_));
+        let task_disposition = self
+            .terminalize_command_task(&session_id, command_task, observed_local, abort_server)
+            .await;
+        let outcome = match validation {
             CompletionValidation::Passed(diagnostics) => SupervisedOutcome::Completed {
                 session_id,
                 diagnostics,
+                literal_post_attempts,
+                task_disposition,
             },
+            CompletionValidation::AcceptedButNotStarted(diagnostics) => {
+                SupervisedOutcome::AcceptedButNotStarted {
+                    session_id,
+                    diagnostics,
+                    literal_post_attempts,
+                    task_disposition,
+                }
+            }
             CompletionValidation::Failed { error, diagnostics } => SupervisedOutcome::Failed {
                 session_id: Some(session_id),
                 error,
                 diagnostics,
+                literal_post_attempts,
+                failure: InvocationFailure::CompletionValidation,
+                task_disposition,
             },
         };
 
@@ -665,6 +1275,7 @@ impl OpenCodeSupervisor {
         &self,
         session_id: &str,
         transcript_window: &TranscriptWindow,
+        literal_post_attempts: u32,
     ) -> CompletionValidation {
         for attempt in 0..=TRANSCRIPT_SETTLING_RETRY_BACKOFFS.len() {
             if attempt > 0 {
@@ -684,7 +1295,8 @@ impl OpenCodeSupervisor {
             };
 
             let analysis = analyze_transcript_window(&messages, transcript_window);
-            let diagnostics = analysis.diagnostics(&transcript_window.command_message_id);
+            let diagnostics =
+                analysis.diagnostics(&transcript_window.command_message_id, literal_post_attempts);
             if analysis.guard_detected {
                 return CompletionValidation::Failed {
                     error:
@@ -715,7 +1327,7 @@ impl OpenCodeSupervisor {
                 return CompletionValidation::Passed(diagnostics);
             }
             if attempt == TRANSCRIPT_SETTLING_RETRY_BACKOFFS.len() {
-                return CompletionValidation::Passed(diagnostics);
+                return CompletionValidation::AcceptedButNotStarted(diagnostics);
             }
         }
 
@@ -760,13 +1372,19 @@ fn analyze_transcript_window(
                 .as_ref()
                 .and_then(|baseline| messages.iter().position(|message| message.id() == baseline))
                 .map(|index| index + 1)
-        })
-        .unwrap_or(0);
-    let window = &messages[start_index.min(messages.len())..];
-    let final_assistant = window
-        .iter()
-        .rev()
-        .find(|message| message.role() == "assistant");
+        });
+    let window = start_index.map_or(&[][..], |index| &messages[index.min(messages.len())..]);
+    let lineage_assistant = window.iter().rev().find(|message| {
+        message.role() == "assistant"
+            && message.info.parent_id.as_deref()
+                == Some(transcript_window.command_message_id.as_str())
+    });
+    let final_assistant = lineage_assistant.or_else(|| {
+        window
+            .iter()
+            .rev()
+            .find(|message| message.role() == "assistant" && message.info.parent_id.is_none())
+    });
     let mut guard_detected = false;
     let mut unresolved_tool_calls = 0;
 
@@ -844,23 +1462,47 @@ fn attach_transport_warning(
         SupervisedOutcome::Completed {
             session_id,
             mut diagnostics,
+            literal_post_attempts,
+            task_disposition,
         } => {
             diagnostics.command_transport_error.get_or_insert(warning);
             SupervisedOutcome::Completed {
                 session_id,
                 diagnostics,
+                literal_post_attempts,
+                task_disposition,
+            }
+        }
+        SupervisedOutcome::AcceptedButNotStarted {
+            session_id,
+            mut diagnostics,
+            literal_post_attempts,
+            task_disposition,
+        } => {
+            diagnostics.command_transport_error.get_or_insert(warning);
+            SupervisedOutcome::AcceptedButNotStarted {
+                session_id,
+                diagnostics,
+                literal_post_attempts,
+                task_disposition,
             }
         }
         SupervisedOutcome::Failed {
             session_id,
             error,
             diagnostics: Some(mut diagnostics),
+            literal_post_attempts,
+            failure,
+            task_disposition,
         } => {
             diagnostics.command_transport_error.get_or_insert(warning);
             SupervisedOutcome::Failed {
                 session_id,
                 error,
                 diagnostics: Some(diagnostics),
+                literal_post_attempts,
+                failure,
+                task_disposition,
             }
         }
         other => other,
@@ -1020,6 +1662,89 @@ mod tests {
         })
     }
 
+    fn transcript_message_with_parent(
+        role: &str,
+        id: &str,
+        parent_id: Option<&str>,
+    ) -> serde_json::Value {
+        let mut message = transcript_message(role, id, &serde_json::json!([]));
+        if let Some(parent_id) = parent_id {
+            message["info"]["parentID"] = serde_json::json!(parent_id);
+        }
+        message
+    }
+
+    #[test]
+    fn transcript_requires_parent_correlation_when_lineage_is_present() {
+        let messages: Vec<Message> = serde_json::from_value(serde_json::json!([
+            transcript_message("user", "msg-command", &serde_json::json!([])),
+            transcript_message_with_parent("assistant", "msg-wrong", Some("msg-other")),
+            transcript_message_with_parent("assistant", "msg-current", Some("msg-command"))
+        ]))
+        .unwrap();
+
+        let analysis = analyze_transcript_window(
+            &messages,
+            &TranscriptWindow {
+                command_message_id: "msg-command".to_string(),
+                baseline_tail_message_id: None,
+            },
+        );
+
+        assert!(analysis.has_assistant_message);
+        assert_eq!(
+            analysis.final_assistant_message_id.as_deref(),
+            Some("msg-current")
+        );
+    }
+
+    #[test]
+    fn transcript_fallback_accepts_only_lineage_absent_assistant_in_anchored_window() {
+        let messages: Vec<Message> = serde_json::from_value(serde_json::json!([
+            transcript_message_with_parent("assistant", "msg-before", None),
+            transcript_message("user", "msg-baseline", &serde_json::json!([])),
+            transcript_message("user", "msg-command", &serde_json::json!([])),
+            transcript_message_with_parent("assistant", "msg-wrong", Some("msg-other")),
+            transcript_message_with_parent("assistant", "msg-fallback", None)
+        ]))
+        .unwrap();
+
+        let analysis = analyze_transcript_window(
+            &messages,
+            &TranscriptWindow {
+                command_message_id: "msg-command".to_string(),
+                baseline_tail_message_id: Some("msg-baseline".to_string()),
+            },
+        );
+
+        assert_eq!(
+            analysis.final_assistant_message_id.as_deref(),
+            Some("msg-fallback")
+        );
+    }
+
+    #[test]
+    fn transcript_without_current_anchor_excludes_unrelated_assistant() {
+        let messages: Vec<Message> =
+            serde_json::from_value(serde_json::json!([transcript_message_with_parent(
+                "assistant",
+                "msg-unrelated",
+                None
+            )]))
+            .unwrap();
+
+        let analysis = analyze_transcript_window(
+            &messages,
+            &TranscriptWindow {
+                command_message_id: "msg-missing".to_string(),
+                baseline_tail_message_id: Some("baseline-missing".to_string()),
+            },
+        );
+
+        assert!(!analysis.has_assistant_message);
+        assert_eq!(analysis.final_assistant_message_id, None);
+    }
+
     fn parse_messages(value: serde_json::Value) -> Vec<Message> {
         serde_json::from_value(value).unwrap()
     }
@@ -1030,6 +1755,57 @@ mod tests {
             idle_gate_decision(false, None, tokio::time::Instant::now()),
             IdleGateDecision::IgnoreUntilDispatchConfirmed
         );
+    }
+
+    #[test]
+    fn status_observation_preserves_absence_and_all_present_variants() {
+        let mut statuses = HashMap::new();
+        assert_eq!(
+            observe_session_status(&statuses, "session-1"),
+            SessionStatusObservation::Absent
+        );
+
+        statuses.insert("session-1".to_string(), SessionStatusInfo::Idle);
+        assert_eq!(
+            observe_session_status(&statuses, "session-1"),
+            SessionStatusObservation::Idle
+        );
+
+        for status in [
+            SessionStatusInfo::Busy,
+            SessionStatusInfo::Retry {
+                attempt: 1,
+                message: "retrying".to_string(),
+                next: 42,
+            },
+            SessionStatusInfo::Unknown,
+        ] {
+            statuses.insert("session-1".to_string(), status);
+            assert_eq!(
+                observe_session_status(&statuses, "session-1"),
+                SessionStatusObservation::BusyLike
+            );
+        }
+    }
+
+    #[test]
+    fn event_session_correlation_rejects_explicit_wrong_session() {
+        assert!(event_session_matches(None, "session-1"));
+        assert!(event_session_matches(Some("session-1"), "session-1"));
+        assert!(!event_session_matches(Some("session-2"), "session-1"));
+    }
+
+    #[test]
+    fn authorized_wait_suspends_both_supervision_clocks() {
+        let original_deadline = tokio::time::Instant::now() + Duration::from_mins(1);
+        let original_activity = tokio::time::Instant::now();
+        let mut deadline = original_deadline;
+        let mut last_activity = original_activity;
+
+        suspend_supervision_clocks(&mut deadline, &mut last_activity, Duration::from_secs(45));
+
+        assert_eq!(deadline, original_deadline + Duration::from_secs(45));
+        assert_eq!(last_activity, original_activity + Duration::from_secs(45));
     }
 
     #[test]
@@ -1082,7 +1858,7 @@ mod tests {
 
         let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
         let outcome = supervisor
-            .preflight_pending_interruptions("session-1")
+            .preflight_pending_interruptions("session-1", 0)
             .await
             .unwrap();
 
@@ -1114,7 +1890,7 @@ mod tests {
 
         let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
         let outcome = supervisor
-            .preflight_pending_interruptions("session-2")
+            .preflight_pending_interruptions("session-2", 0)
             .await
             .unwrap();
 
@@ -1170,21 +1946,24 @@ mod tests {
 
     #[test]
     fn detects_guard_text_as_failure() {
-        let messages = parse_messages(serde_json::json!([transcript_message(
-            "assistant",
-            "msg-assistant",
-            &serde_json::json!([
-                {
-                    "type": "text",
-                    "text": "nested launch blocked by OPENCODE_ORCHESTRATOR_MANAGED"
-                }
-            ])
-        )]));
+        let messages = parse_messages(serde_json::json!([
+            transcript_message("user", "msg-command", &serde_json::json!([])),
+            transcript_message(
+                "assistant",
+                "msg-assistant",
+                &serde_json::json!([
+                    {
+                        "type": "text",
+                        "text": "nested launch blocked by OPENCODE_ORCHESTRATOR_MANAGED"
+                    }
+                ])
+            )
+        ]));
 
         let analysis = analyze_transcript_window(
             &messages,
             &TranscriptWindow {
-                command_message_id: "msg-missing".to_string(),
+                command_message_id: "msg-command".to_string(),
                 baseline_tail_message_id: None,
             },
         );
@@ -1319,6 +2098,7 @@ mod tests {
                     command_message_id: "msg-dispatch".to_string(),
                     baseline_tail_message_id: None,
                 },
+                1,
             )
             .await;
 
@@ -1333,7 +2113,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_assistant_after_settling_still_passes() {
+    async fn missing_assistant_after_settling_is_accepted_but_not_started() {
         let mock = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/session/session-1/message"))
@@ -1351,11 +2131,12 @@ mod tests {
                     command_message_id: "msg-dispatch".to_string(),
                     baseline_tail_message_id: None,
                 },
+                1,
             )
             .await;
 
-        let CompletionValidation::Passed(diagnostics) = validation else {
-            panic!("expected transcript validation success without assistant");
+        let CompletionValidation::AcceptedButNotStarted(diagnostics) = validation else {
+            panic!("expected accepted-but-not-started classification without assistant");
         };
         assert_eq!(diagnostics.final_assistant_message_id, None);
     }
@@ -1396,6 +2177,7 @@ mod tests {
                     command_message_id: "msg-dispatch".to_string(),
                     baseline_tail_message_id: None,
                 },
+                1,
             )
             .await;
 
@@ -1472,6 +2254,7 @@ mod tests {
                     command_message_id: "msg-dispatch".to_string(),
                     baseline_tail_message_id: None,
                 },
+                1,
             )
             .await;
 
@@ -1510,6 +2293,7 @@ mod tests {
                     command_message_id: "msg-dispatch".to_string(),
                     baseline_tail_message_id: None,
                 },
+                1,
             )
             .await;
 
@@ -1572,15 +2356,22 @@ mod tests {
             .await;
 
         let transcript_seq = SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([transcript_message(
-                "assistant",
-                "msg-assistant",
-                &serde_json::json!([
-                    { "type": "text", "text": "done" },
-                    { "type": "step-finish", "reason": "stop", "cost": 0.0 }
-                ]),
+                "user",
+                "msg-baseline",
+                &serde_json::json!([])
             )])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-baseline", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        { "type": "text", "text": "done" },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ]),
+                )
+            ])),
         ]);
         let transcript_seq_for_assert = transcript_seq.clone();
         Mock::given(method("GET"))
@@ -1610,7 +2401,16 @@ mod tests {
             .expect("join should succeed")
             .expect("run should succeed");
 
-        assert!(matches!(outcome, SupervisedOutcome::Completed { .. }));
+        let SupervisedOutcome::Completed {
+            diagnostics,
+            literal_post_attempts,
+            ..
+        } = outcome
+        else {
+            panic!("expected completed outcome");
+        };
+        assert_eq!(literal_post_attempts, 1);
+        assert_eq!(diagnostics.literal_post_attempts, 1);
         assert!(
             transcript_seq_for_assert.call_count() >= 2,
             "expected baseline and completion transcript fetches"
@@ -1657,15 +2457,22 @@ mod tests {
             .await;
 
         let transcript_seq = SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([transcript_message(
-                "assistant",
-                "msg-assistant",
-                &serde_json::json!([
-                    { "type": "text", "text": "done" },
-                    { "type": "step-finish", "reason": "stop", "cost": 0.0 }
-                ]),
+                "user",
+                "msg-baseline",
+                &serde_json::json!([])
             )])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-baseline", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        { "type": "text", "text": "done" },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ]),
+                )
+            ])),
         ]);
         Mock::given(method("GET"))
             .and(path("/session/session-1/message"))
@@ -1693,12 +2500,18 @@ mod tests {
                 session_id: "session-1".to_string(),
                 diagnostics: OpenCodeDiagnostics {
                     checked_at: "2026-01-01T00:00:00Z".to_string(),
+                    literal_post_attempts: 1,
                     command_message_id: Some("msg-dispatch".to_string()),
                     final_assistant_message_id: Some("msg-assistant".to_string()),
                     final_finish_reason: Some("stop".to_string()),
                     guard_detected: false,
                     final_tool_error: None,
                     command_transport_error: None,
+                },
+                literal_post_attempts: 1,
+                task_disposition: TaskDisposition {
+                    server_abort: ServerAbortDisposition::NotRequired,
+                    local_task: LocalTaskDisposition::Completed,
                 },
             },
             warning.as_ref(),
@@ -1711,6 +2524,337 @@ mod tests {
             diagnostics.command_transport_error.as_deref(),
             Some("Transport error: timeout")
         );
+    }
+
+    #[tokio::test]
+    async fn uncertain_terminalization_aborts_server_then_joins_local_task() {
+        let mock = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/abort"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
+            .expect(1)
+            .mount(&mock)
+            .await;
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let mut task = Some(tokio::spawn(async {
+            std::future::pending::<()>().await;
+            Ok::<(), OpencodeError>(())
+        }));
+
+        let disposition = supervisor
+            .terminalize_command_task("session-1", &mut task, LocalTaskDisposition::Spawned, true)
+            .await;
+
+        assert_eq!(
+            disposition.server_abort,
+            ServerAbortDisposition::Succeeded { aborted: true }
+        );
+        assert_eq!(
+            disposition.local_task,
+            LocalTaskDisposition::AbortedAndJoined
+        );
+        assert!(task.is_none());
+    }
+
+    #[tokio::test]
+    async fn normal_terminalization_never_aborts_server() {
+        let mock = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/abort"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
+            .expect(0)
+            .mount(&mock)
+            .await;
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let mut task = Some(tokio::spawn(async {
+            std::future::pending::<()>().await;
+            Ok::<(), OpencodeError>(())
+        }));
+
+        let disposition = supervisor
+            .terminalize_command_task("session-1", &mut task, LocalTaskDisposition::Spawned, false)
+            .await;
+
+        assert_eq!(
+            disposition.server_abort,
+            ServerAbortDisposition::NotRequired
+        );
+        assert_eq!(
+            disposition.local_task,
+            LocalTaskDisposition::AbortedAndJoined
+        );
+    }
+
+    #[tokio::test]
+    async fn persistence_callback_failure_aborts_server_and_joins_command_task() {
+        let mock = MockServer::start().await;
+        mount_existing_session(&mock).await;
+        mount_empty_interruptions(&mock).await;
+        mount_stalled_event_stream(&mock).await;
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/command"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(30))
+                    .set_body_json(serde_json::json!({})),
+            )
+            .mount(&mock)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/abort"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let supervisor = test_supervisor(&mock, TempDir::new().unwrap().path());
+        let PreparedCommandOutcome::Prepared(prepared) = supervisor
+            .prepare_command(
+                SessionSelection::Reuse("session-1".to_string()),
+                "implement_plan",
+                Some("do it"),
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected prepared command");
+        };
+        let outcome = supervisor
+            .run_prepared_command(prepared, None, None, |event| match event {
+                SupervisionEvent::LiteralPostAttempt { .. } => {
+                    anyhow::bail!("state persistence failed")
+                }
+                _ => Ok(()),
+            })
+            .await
+            .unwrap();
+
+        let SupervisedOutcome::Failed {
+            failure,
+            task_disposition,
+            ..
+        } = outcome
+        else {
+            panic!("expected terminal failure");
+        };
+        assert_eq!(failure, InvocationFailure::Persistence);
+        assert_eq!(
+            task_disposition.server_abort,
+            ServerAbortDisposition::Succeeded { aborted: true }
+        );
+        assert_eq!(
+            task_disposition.local_task,
+            LocalTaskDisposition::AbortedAndJoined
+        );
+    }
+
+    async fn run_owner_pause_continuation_case(
+        interruption_event: serde_json::Value,
+        reply_path: &str,
+        response: crate::owner::InterruptionResponse,
+    ) {
+        let mock = MockServer::start().await;
+        mount_existing_session(&mock).await;
+        mount_stalled_event_stream(&mock).await;
+        let properties = interruption_event
+            .get("properties")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let empty = ResponseTemplate::new(200).set_body_json(serde_json::json!([]));
+        let pending =
+            ResponseTemplate::new(200).set_body_json(serde_json::Value::Array(vec![properties]));
+        match interruption_event
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+        {
+            Some("permission.asked") => {
+                Mock::given(method("GET"))
+                    .and(path("/permission"))
+                    .respond_with(SequenceResponder::new(vec![
+                        empty.clone(),
+                        pending,
+                        empty.clone(),
+                    ]))
+                    .mount(&mock)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/question"))
+                    .respond_with(empty.clone())
+                    .mount(&mock)
+                    .await;
+            }
+            Some("question.asked") => {
+                Mock::given(method("GET"))
+                    .and(path("/permission"))
+                    .respond_with(empty.clone())
+                    .mount(&mock)
+                    .await;
+                Mock::given(method("GET"))
+                    .and(path("/question"))
+                    .respond_with(SequenceResponder::new(vec![
+                        empty.clone(),
+                        pending,
+                        empty.clone(),
+                    ]))
+                    .mount(&mock)
+                    .await;
+            }
+            other => panic!("unsupported interruption event type: {other:?}"),
+        }
+        Mock::given(method("GET"))
+            .and(path("/session/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/command"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(100))
+                    .set_body_json(serde_json::json!({})),
+            )
+            .expect(1)
+            .mount(&mock)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(reply_path))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
+            .expect(1)
+            .mount(&mock)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/session/session-1/abort"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(true))
+            .expect(0)
+            .mount(&mock)
+            .await;
+        let transcript_seq = SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([transcript_message(
+                "user",
+                "msg-baseline",
+                &serde_json::json!([])
+            )])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                transcript_message("user", "msg-baseline", &serde_json::json!([])),
+                transcript_message(
+                    "assistant",
+                    "msg-assistant",
+                    &serde_json::json!([
+                        { "type": "text", "text": "done" },
+                        { "type": "step-finish", "reason": "stop", "cost": 0.0 }
+                    ])
+                )
+            ])),
+        ]);
+        Mock::given(method("GET"))
+            .and(path("/session/session-1/message"))
+            .respond_with(transcript_seq)
+            .mount(&mock)
+            .await;
+
+        let worktree = TempDir::new().unwrap();
+        let owner = crate::owner::OwnerRuntime::acquire(worktree.path()).unwrap();
+        let supervisor = test_supervisor(&mock, worktree.path());
+        let PreparedCommandOutcome::Prepared(prepared) = supervisor
+            .prepare_command(
+                SessionSelection::Reuse("session-1".to_string()),
+                "implement_plan",
+                Some("do it"),
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected prepared command");
+        };
+        let owner_context = InvocationOwnerContext {
+            run_id: "run-1".to_string(),
+            invocation_id: "inv-1".to_string(),
+        };
+        let observed_events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let callback_events = Arc::clone(&observed_events);
+        let run = tokio::spawn(async move {
+            supervisor
+                .run_prepared_command(prepared, Some(&owner), Some(&owner_context), move |event| {
+                    callback_events.lock().unwrap().push(match event {
+                        SupervisionEvent::Paused { .. } => "paused",
+                        SupervisionEvent::Resumed { .. } => "resumed",
+                        SupervisionEvent::LiteralPostAttempt { .. } => "post",
+                        SupervisionEvent::AssistantStarted { .. } => "assistant",
+                    });
+                    Ok(())
+                })
+                .await
+        });
+
+        let mut sent = false;
+        for _ in 0..100 {
+            if crate::owner::send_response(worktree.path(), response.clone())
+                .await
+                .is_ok()
+            {
+                sent = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(sent, "responder should reach the live foreground owner");
+        let outcome = timeout(Duration::from_secs(5), run)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(outcome, SupervisedOutcome::Completed { .. }));
+        let events = observed_events.lock().unwrap();
+        assert!(events.contains(&"post"));
+        assert!(events.contains(&"paused"));
+        assert!(events.contains(&"resumed"));
+    }
+
+    #[tokio::test]
+    async fn permission_pause_continues_same_one_post_invocation() {
+        run_owner_pause_continuation_case(
+            serde_json::json!({
+                "type": "permission.asked",
+                "properties": {
+                    "id": "permission-1",
+                    "sessionID": "session-1",
+                    "permission": "file.write",
+                    "patterns": ["**/*.rs"]
+                }
+            }),
+            "/permission/permission-1/reply",
+            crate::owner::InterruptionResponse::Permission { allow: true },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn question_pause_continues_same_one_post_invocation() {
+        run_owner_pause_continuation_case(
+            serde_json::json!({
+                "type": "question.asked",
+                "properties": {
+                    "id": "question-1",
+                    "sessionID": "session-1",
+                    "questions": [{"question": "Continue?"}]
+                }
+            }),
+            "/question/question-1/reply",
+            crate::owner::InterruptionResponse::Question {
+                answers: vec![vec!["Yes".to_string()]],
+            },
+        )
+        .await;
     }
 
     #[tokio::test]

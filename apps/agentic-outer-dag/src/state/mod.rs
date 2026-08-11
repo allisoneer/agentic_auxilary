@@ -124,11 +124,170 @@ pub struct OpenCodeState {
     pub pending_question: Option<PendingQuestion>,
     #[serde(default)]
     pub last_diagnostics: Option<OpenCodeDiagnostics>,
+    #[serde(default)]
+    pub current_invocation: Option<OpenCodeInvocationState>,
+    #[serde(default)]
+    pub resolve_start_retries: u32,
+    #[serde(default)]
+    pub last_lifecycle_anomaly: Option<InvocationLifecycleAnomaly>,
+    #[serde(default)]
+    pub last_resolve_workflow_outcome: Option<ResolveWorkflowOutcome>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenCodeInvocationPhase {
+    Prepared,
+    PostAttempted,
+    RunningAssistantStarted,
+    PausedPermission,
+    PausedQuestion,
+    Terminal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum InvocationLifecycleResult {
+    Completed,
+    AcceptedButNotStarted,
+    Failed {
+        failure: InvocationFailure,
+    },
+    Cancelled {
+        cancellation: InvocationCancellation,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvocationFailure {
+    CommandTransport,
+    SessionError,
+    CompletionValidation,
+    ToolError,
+    InactivityTimeout,
+    SessionDeadline,
+    LocalTask,
+    Persistence,
+    OwnerIpc,
+    CleanupUncertain,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvocationCancellation {
+    Caller,
+    ServerAbort,
+    ManagedServerShutdown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TaskDisposition {
+    #[serde(default)]
+    pub server_abort: ServerAbortDisposition,
+    #[serde(default)]
+    pub local_task: LocalTaskDisposition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ServerAbortDisposition {
+    #[default]
+    NotRequired,
+    Succeeded {
+        aborted: bool,
+    },
+    Failed {
+        failure: CleanupFailure,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanupFailure {
+    Transport,
+    Server,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalTaskDisposition {
+    #[default]
+    NotStarted,
+    Spawned,
+    Completed,
+    ReturnedError,
+    AbortedAndJoined,
+    JoinCancelled,
+    JoinPanicked,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolveWorkflowOutcome {
+    Skipped,
+    ExternalProgress,
+    RetryScheduled,
+    RetriesExhausted,
+    ExecutedNoProgress,
+    ManualHandoff,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OpenCodeInvocationState {
+    pub invocation_id: String,
+    pub command: String,
+    pub session_id: String,
+    pub command_message_id: String,
+    pub phase: OpenCodeInvocationPhase,
+    #[serde(default)]
+    pub literal_post_attempts: u32,
+    #[serde(default)]
+    pub lifecycle_result: Option<InvocationLifecycleResult>,
+    #[serde(default)]
+    pub task_disposition: Option<TaskDisposition>,
+    #[serde(default)]
+    pub pending_interruption: Option<PendingInterruptionIdentity>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PendingInterruptionIdentity {
+    pub kind: InterruptionKind,
+    pub request_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InterruptionKind {
+    Permission,
+    Question,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InvocationLifecycleAnomaly {
+    pub invocation_id: String,
+    pub observed_at: String,
+    pub kind: InvocationLifecycleAnomalyKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum InvocationLifecycleAnomalyKind {
+    AcceptedButNotStarted,
+    Failed {
+        failure: InvocationFailure,
+    },
+    Cancelled {
+        cancellation: InvocationCancellation,
+    },
+    CleanupUncertain,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OpenCodeDiagnostics {
     pub checked_at: String,
+    #[serde(default)]
+    pub literal_post_attempts: u32,
     #[serde(default)]
     pub command_message_id: Option<String>,
     #[serde(default)]
@@ -380,6 +539,7 @@ mod tests {
         });
         state.opencode.last_diagnostics = Some(OpenCodeDiagnostics {
             checked_at: "2026-01-01T00:00:00Z".to_string(),
+            literal_post_attempts: 1,
             command_message_id: Some("msg-outer-dag-1".to_string()),
             final_assistant_message_id: Some("msg-assistant-1".to_string()),
             final_finish_reason: Some("stop".to_string()),
@@ -390,6 +550,27 @@ mod tests {
             }),
             command_transport_error: None,
         });
+        state.opencode.current_invocation = Some(OpenCodeInvocationState {
+            invocation_id: "invocation-1".to_string(),
+            command: "resolve_pr_comments".to_string(),
+            session_id: "session-1".to_string(),
+            command_message_id: "msg-outer-dag-1".to_string(),
+            phase: OpenCodeInvocationPhase::PausedQuestion,
+            literal_post_attempts: 1,
+            lifecycle_result: None,
+            task_disposition: None,
+            pending_interruption: Some(PendingInterruptionIdentity {
+                kind: InterruptionKind::Question,
+                request_id: "question-1".to_string(),
+            }),
+        });
+        state.opencode.resolve_start_retries = 1;
+        state.opencode.last_lifecycle_anomaly = Some(InvocationLifecycleAnomaly {
+            invocation_id: "invocation-0".to_string(),
+            observed_at: "2026-01-01T00:00:00Z".to_string(),
+            kind: InvocationLifecycleAnomalyKind::AcceptedButNotStarted,
+        });
+        state.opencode.last_resolve_workflow_outcome = Some(ResolveWorkflowOutcome::RetryScheduled);
         state.stage.kind = StageKind::StoppedQuestionRequired;
 
         let json = serde_json::to_string_pretty(&state).unwrap();
@@ -421,6 +602,19 @@ mod tests {
         assert!(roundtrip.settings.linear_handoff_enabled);
         assert!(roundtrip.settings.opencode_dispatch_enabled);
         assert_eq!(roundtrip.pr.ready_for_review.attempts, 0);
+        assert_eq!(roundtrip.opencode.resolve_start_retries, 1);
+        assert_eq!(
+            roundtrip
+                .opencode
+                .current_invocation
+                .as_ref()
+                .map(|invocation| &invocation.phase),
+            Some(&OpenCodeInvocationPhase::PausedQuestion)
+        );
+        assert_eq!(
+            roundtrip.opencode.last_resolve_workflow_outcome.as_ref(),
+            Some(&ResolveWorkflowOutcome::RetryScheduled)
+        );
         assert!(
             !roundtrip
                 .pr
@@ -509,6 +703,10 @@ mod tests {
             DEFAULT_OPENCODE_INACTIVITY_TIMEOUT_SECONDS
         );
         assert!(roundtrip.opencode.last_diagnostics.is_none());
+        assert!(roundtrip.opencode.current_invocation.is_none());
+        assert_eq!(roundtrip.opencode.resolve_start_retries, 0);
+        assert!(roundtrip.opencode.last_lifecycle_anomaly.is_none());
+        assert!(roundtrip.opencode.last_resolve_workflow_outcome.is_none());
         assert_eq!(roundtrip.pr.last_described_head_sha, None);
         assert_eq!(roundtrip.pr.is_draft, None);
         assert_eq!(roundtrip.pr.ready_for_review.attempts, 0);
@@ -537,6 +735,134 @@ mod tests {
         .unwrap();
 
         assert!(opencode.last_diagnostics.is_none());
+        assert!(opencode.current_invocation.is_none());
+        assert_eq!(opencode.resolve_start_retries, 0);
+        assert!(opencode.last_lifecycle_anomaly.is_none());
+        assert!(opencode.last_resolve_workflow_outcome.is_none());
+    }
+
+    #[test]
+    fn invocation_phases_roundtrip_through_serde() {
+        for phase in [
+            OpenCodeInvocationPhase::Prepared,
+            OpenCodeInvocationPhase::PostAttempted,
+            OpenCodeInvocationPhase::RunningAssistantStarted,
+            OpenCodeInvocationPhase::PausedPermission,
+            OpenCodeInvocationPhase::PausedQuestion,
+            OpenCodeInvocationPhase::Terminal,
+        ] {
+            let json = serde_json::to_string(&phase).unwrap();
+            let roundtrip: OpenCodeInvocationPhase = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, phase);
+        }
+    }
+
+    #[test]
+    fn typed_invocation_facts_roundtrip_through_serde() {
+        let lifecycle_results = [
+            InvocationLifecycleResult::Completed,
+            InvocationLifecycleResult::AcceptedButNotStarted,
+            InvocationLifecycleResult::Failed {
+                failure: InvocationFailure::CompletionValidation,
+            },
+            InvocationLifecycleResult::Cancelled {
+                cancellation: InvocationCancellation::Caller,
+            },
+        ];
+        for result in lifecycle_results {
+            let json = serde_json::to_string(&result).unwrap();
+            let roundtrip: InvocationLifecycleResult = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, result);
+        }
+
+        for failure in [
+            InvocationFailure::CommandTransport,
+            InvocationFailure::SessionError,
+            InvocationFailure::CompletionValidation,
+            InvocationFailure::ToolError,
+            InvocationFailure::InactivityTimeout,
+            InvocationFailure::SessionDeadline,
+            InvocationFailure::LocalTask,
+            InvocationFailure::Persistence,
+            InvocationFailure::OwnerIpc,
+            InvocationFailure::CleanupUncertain,
+        ] {
+            let json = serde_json::to_string(&failure).unwrap();
+            let roundtrip: InvocationFailure = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, failure);
+        }
+
+        for cancellation in [
+            InvocationCancellation::Caller,
+            InvocationCancellation::ServerAbort,
+            InvocationCancellation::ManagedServerShutdown,
+        ] {
+            let json = serde_json::to_string(&cancellation).unwrap();
+            let roundtrip: InvocationCancellation = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, cancellation);
+        }
+
+        let dispositions = [
+            TaskDisposition::default(),
+            TaskDisposition {
+                server_abort: ServerAbortDisposition::Succeeded { aborted: true },
+                local_task: LocalTaskDisposition::AbortedAndJoined,
+            },
+            TaskDisposition {
+                server_abort: ServerAbortDisposition::Failed {
+                    failure: CleanupFailure::Transport,
+                },
+                local_task: LocalTaskDisposition::JoinPanicked,
+            },
+        ];
+        for disposition in dispositions {
+            let json = serde_json::to_string(&disposition).unwrap();
+            let roundtrip: TaskDisposition = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, disposition);
+        }
+
+        for local_task in [
+            LocalTaskDisposition::NotStarted,
+            LocalTaskDisposition::Spawned,
+            LocalTaskDisposition::Completed,
+            LocalTaskDisposition::ReturnedError,
+            LocalTaskDisposition::AbortedAndJoined,
+            LocalTaskDisposition::JoinCancelled,
+            LocalTaskDisposition::JoinPanicked,
+        ] {
+            let json = serde_json::to_string(&local_task).unwrap();
+            let roundtrip: LocalTaskDisposition = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, local_task);
+        }
+
+        for server_abort in [
+            ServerAbortDisposition::NotRequired,
+            ServerAbortDisposition::Succeeded { aborted: true },
+            ServerAbortDisposition::Succeeded { aborted: false },
+            ServerAbortDisposition::Failed {
+                failure: CleanupFailure::Transport,
+            },
+            ServerAbortDisposition::Failed {
+                failure: CleanupFailure::Server,
+            },
+        ] {
+            let json = serde_json::to_string(&server_abort).unwrap();
+            let roundtrip: ServerAbortDisposition = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, server_abort);
+        }
+
+        for outcome in [
+            ResolveWorkflowOutcome::Skipped,
+            ResolveWorkflowOutcome::ExternalProgress,
+            ResolveWorkflowOutcome::RetryScheduled,
+            ResolveWorkflowOutcome::RetriesExhausted,
+            ResolveWorkflowOutcome::ExecutedNoProgress,
+            ResolveWorkflowOutcome::ManualHandoff,
+        ] {
+            let json = serde_json::to_string(&outcome).unwrap();
+            let roundtrip: ResolveWorkflowOutcome = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtrip, outcome);
+        }
     }
 
     #[test]
