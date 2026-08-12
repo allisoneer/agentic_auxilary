@@ -8,8 +8,12 @@ use crate::github::coderabbit::skip_reason_indicates_draft;
 use crate::github::pr::DetectedPrLookup;
 use crate::github::pr::GitHubPrClient;
 use crate::linear;
+use crate::opencode::supervisor::InvocationOwnerContext;
 use crate::opencode::supervisor::OpenCodeSupervisor;
+use crate::opencode::supervisor::PreparedCommandOutcome;
+use crate::opencode::supervisor::SessionSelection;
 use crate::opencode::supervisor::SupervisedOutcome;
+use crate::opencode::supervisor::SupervisionEvent;
 use crate::state;
 use crate::state::RunState;
 use crate::state::StageKind;
@@ -19,6 +23,7 @@ use anyhow::Result;
 use pr_comments::github::GitHubRestError;
 use std::fmt::Write as _;
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 
 const DETECTING_PR_BACKOFFS: [Duration; 4] = [
@@ -32,6 +37,7 @@ const SYNC_WITH_MAIN_COMMAND: &str = "sync_with_main_and_resolve_conflicts";
 const RESOLVE_PR_CI_COMMAND: &str = "resolve_pr_ci_failures";
 const REPRESENTATIVE_BOT_THREAD_LIMIT: usize = 5;
 const CI_FAILURE_GRACE_POLLS: u32 = 3;
+const MAX_RESOLVE_START_RETRIES: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReviewThreadRef {
@@ -49,39 +55,6 @@ struct UnresolvedReviewThreadsSnapshot {
 impl UnresolvedReviewThreadsSnapshot {
     fn human_unresolved_threads(&self) -> usize {
         self.total_unresolved.saturating_sub(self.bot_unresolved)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResolveProgressEvidence {
-    None,
-    AssistantEvidence,
-    UnresolvedThreadsImproved,
-    AssistantAndImproved,
-}
-
-impl ResolveProgressEvidence {
-    fn is_progress(self) -> bool {
-        !matches!(self, Self::None)
-    }
-}
-
-fn classify_resolve_progress(
-    before: &UnresolvedReviewThreadsSnapshot,
-    after: &UnresolvedReviewThreadsSnapshot,
-    diagnostics: Option<&crate::state::OpenCodeDiagnostics>,
-) -> ResolveProgressEvidence {
-    let assistant_evidence = diagnostics
-        .and_then(|diagnostics| diagnostics.final_assistant_message_id.as_deref())
-        .is_some();
-
-    let improved = after.bot_unresolved < before.bot_unresolved || after.bot_unresolved == 0;
-
-    match (assistant_evidence, improved) {
-        (true, true) => ResolveProgressEvidence::AssistantAndImproved,
-        (true, false) => ResolveProgressEvidence::AssistantEvidence,
-        (false, true) => ResolveProgressEvidence::UnresolvedThreadsImproved,
-        (false, false) => ResolveProgressEvidence::None,
     }
 }
 
@@ -133,11 +106,94 @@ fn decide_resolve_pre_dispatch(
     ResolvePreDispatchAction::DispatchResolve
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum ResolvePostDispatchAction {
-    ManualHandoff { details: String },
-    ReadyForHumanReview { details: String },
-    LoopAgain { details: String },
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResolveInvocationClass {
+    Completed,
+    AcceptedButNotStarted,
+    FailedOrCancelled,
+    CleanupUncertain,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResolveAttemptAction {
+    AdvanceExternalComplete,
+    LoopExternalProgress,
+    RetryStart,
+    ExhaustedStartRetries,
+    ExecutedNoProgress,
+    ManualHandoff,
+}
+
+fn decide_resolve_attempt(
+    before: &UnresolvedReviewThreadsSnapshot,
+    after: &UnresolvedReviewThreadsSnapshot,
+    lifecycle: ResolveInvocationClass,
+    start_retries: u32,
+) -> ResolveAttemptAction {
+    if after.bot_unresolved == 0 {
+        return ResolveAttemptAction::AdvanceExternalComplete;
+    }
+    if after.bot_unresolved < before.bot_unresolved {
+        return ResolveAttemptAction::LoopExternalProgress;
+    }
+
+    match lifecycle {
+        ResolveInvocationClass::AcceptedButNotStarted
+            if start_retries < MAX_RESOLVE_START_RETRIES =>
+        {
+            ResolveAttemptAction::RetryStart
+        }
+        ResolveInvocationClass::AcceptedButNotStarted => {
+            ResolveAttemptAction::ExhaustedStartRetries
+        }
+        ResolveInvocationClass::Completed => ResolveAttemptAction::ExecutedNoProgress,
+        ResolveInvocationClass::FailedOrCancelled | ResolveInvocationClass::CleanupUncertain => {
+            ResolveAttemptAction::ManualHandoff
+        }
+    }
+}
+
+fn current_resolve_invocation_class(state: &RunState) -> ResolveInvocationClass {
+    let Some(invocation) = state.opencode.current_invocation.as_ref() else {
+        return ResolveInvocationClass::CleanupUncertain;
+    };
+    let cleanup_uncertain = invocation
+        .task_disposition
+        .as_ref()
+        .is_none_or(|disposition| !task_disposition_is_certain(disposition));
+    if cleanup_uncertain {
+        return ResolveInvocationClass::CleanupUncertain;
+    }
+
+    match invocation.lifecycle_result.as_ref() {
+        Some(state::InvocationLifecycleResult::Completed) => ResolveInvocationClass::Completed,
+        Some(state::InvocationLifecycleResult::AcceptedButNotStarted) => {
+            ResolveInvocationClass::AcceptedButNotStarted
+        }
+        Some(
+            state::InvocationLifecycleResult::Failed { .. }
+            | state::InvocationLifecycleResult::Cancelled { .. },
+        ) => ResolveInvocationClass::FailedOrCancelled,
+        None => ResolveInvocationClass::CleanupUncertain,
+    }
+}
+
+fn session_selection(active_session_id: Option<&str>) -> SessionSelection {
+    active_session_id.map_or(SessionSelection::Fresh, |session_id| {
+        SessionSelection::Reuse(session_id.to_string())
+    })
+}
+
+fn schedule_resolve_start_retry(state: &mut RunState) {
+    state.opencode.resolve_start_retries = state.opencode.resolve_start_retries.saturating_add(1);
+    state.opencode.active_session_id = None;
+    state.opencode.last_resolve_workflow_outcome =
+        Some(state::ResolveWorkflowOutcome::RetryScheduled);
+    state.stage.kind = StageKind::DispatchingResolvePrComments;
+    state.stage.details = Some(format!(
+        "resolve_pr_comments was accepted but not started; scheduling fresh-session start retry {} of {}",
+        state.opencode.resolve_start_retries, MAX_RESOLVE_START_RETRIES
+    ));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,59 +201,6 @@ enum CiFailureFlow {
     ContinueWaiting,
     DispatchResolve,
     StopManualHandoff,
-}
-
-fn decide_resolve_post_dispatch(
-    before: &UnresolvedReviewThreadsSnapshot,
-    after: &UnresolvedReviewThreadsSnapshot,
-    progress: ResolveProgressEvidence,
-    resolve_comments_runs: u32,
-    max_cycles: u32,
-) -> ResolvePostDispatchAction {
-    if !progress.is_progress() {
-        return ResolvePostDispatchAction::ManualHandoff {
-            details: format!(
-                "resolve_pr_comments completed without progress evidence (no assistant evidence and no unresolved-thread improvement). bot unresolved {}→{}, total unresolved {}→{}, human unresolved {}→{}. Representative bot thread parents: {}",
-                before.bot_unresolved,
-                after.bot_unresolved,
-                before.total_unresolved,
-                after.total_unresolved,
-                before.human_unresolved_threads(),
-                after.human_unresolved_threads(),
-                format_review_thread_refs(&after.representative_bot_refs),
-            ),
-        };
-    }
-
-    if after.bot_unresolved == 0 {
-        return ResolvePostDispatchAction::ReadyForHumanReview {
-            details: format!(
-                "resolved all bot threads after {resolve_comments_runs} evidence-backed resolve cycle(s); remaining unresolved threads total={}; remaining unresolved human threads={}",
-                after.total_unresolved,
-                after.human_unresolved_threads(),
-            ),
-        };
-    }
-
-    if resolve_comments_runs >= max_cycles {
-        return ResolvePostDispatchAction::ManualHandoff {
-            details: format!(
-                "max_review_cycles exhausted: resolve_comments_runs={resolve_comments_runs}/{max_cycles}; unresolved bot threads remaining={}; unresolved human threads remaining={}; representative bot thread parents: {}",
-                after.bot_unresolved,
-                after.human_unresolved_threads(),
-                format_review_thread_refs(&after.representative_bot_refs),
-            ),
-        };
-    }
-
-    ResolvePostDispatchAction::LoopAgain {
-        details: format!(
-            "unresolved bot threads remain ({}); looping resolve_pr_comments cycle {}/{}",
-            after.bot_unresolved,
-            resolve_comments_runs + 1,
-            max_cycles,
-        ),
-    }
 }
 
 async fn fetch_unresolved_review_threads_snapshot(
@@ -248,15 +251,9 @@ async fn fetch_unresolved_review_threads_snapshot(
     })
 }
 
-const _: fn(
-    &UnresolvedReviewThreadsSnapshot,
-    &UnresolvedReviewThreadsSnapshot,
-    Option<&crate::state::OpenCodeDiagnostics>,
-) -> ResolveProgressEvidence = classify_resolve_progress;
-const _: fn(ResolveProgressEvidence) -> bool = ResolveProgressEvidence::is_progress;
-
 pub struct DagEngine {
     supervisor: Option<OpenCodeSupervisor>,
+    owner: Option<Arc<crate::owner::OwnerRuntime>>,
     github: GitHubPrClient,
     coderabbit: CodeRabbitClient,
     ci: RequiredCiClient,
@@ -831,10 +828,17 @@ impl DagEngine {
     pub fn for_current_dir() -> Result<Self> {
         Ok(Self {
             supervisor: None,
+            owner: None,
             github: GitHubPrClient::new()?,
             coderabbit: CodeRabbitClient::new()?,
             ci: RequiredCiClient::new(),
         })
+    }
+
+    pub fn for_current_dir_with_owner(owner: Arc<crate::owner::OwnerRuntime>) -> Result<Self> {
+        let mut engine = Self::for_current_dir()?;
+        engine.owner = Some(owner);
+        Ok(engine)
     }
 
     pub async fn run_until_stop(&mut self, stop_after: Option<StageKind>) -> Result<()> {
@@ -1111,12 +1115,18 @@ impl DagEngine {
                             max_cycles,
                         ) {
                             ResolvePreDispatchAction::ReadyForHumanReview { details } => {
+                                state.opencode.resolve_start_retries = 0;
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::Skipped);
                                 state.stage.kind = StageKind::DispatchingDescribePr;
                                 state.stage.details = Some(details);
                                 ThoughtsStateStore::save(&state)?;
                                 break;
                             }
                             ResolvePreDispatchAction::ManualHandoff { details } => {
+                                state.opencode.resolve_start_retries = 0;
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::ManualHandoff);
                                 state.stage.kind = StageKind::StoppedManualHandoff;
                                 state.stage.details = Some(details);
                                 ThoughtsStateStore::save(&state)?;
@@ -1155,39 +1165,79 @@ impl DagEngine {
                             }
                         };
 
-                        let progress = classify_resolve_progress(
+                        let lifecycle = current_resolve_invocation_class(&state);
+                        match decide_resolve_attempt(
                             &before,
                             &after,
-                            state.opencode.last_diagnostics.as_ref(),
-                        );
-
-                        if progress.is_progress() {
-                            state.counters.resolve_comments += 1;
-                        }
-
-                        match decide_resolve_post_dispatch(
-                            &before,
-                            &after,
-                            progress,
-                            state.counters.resolve_comments,
-                            max_cycles,
+                            lifecycle,
+                            state.opencode.resolve_start_retries,
                         ) {
-                            ResolvePostDispatchAction::ManualHandoff { details } => {
-                                state.stage.kind = StageKind::StoppedManualHandoff;
-                                state.stage.details = Some(details);
-                                ThoughtsStateStore::save(&state)?;
-                                return Ok(());
-                            }
-                            ResolvePostDispatchAction::ReadyForHumanReview { details } => {
+                            ResolveAttemptAction::AdvanceExternalComplete => {
+                                state.opencode.resolve_start_retries = 0;
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::ExternalProgress);
                                 state.stage.kind = StageKind::DispatchingDescribePr;
-                                state.stage.details = Some(details);
+                                state.stage.details = Some(format!(
+                                    "CodeRabbit postcondition reached zero unresolved bot threads after resolve_pr_comments (before: {}, after: {}; lifecycle: {lifecycle:?})",
+                                    before.bot_unresolved, after.bot_unresolved
+                                ));
                                 ThoughtsStateStore::save(&state)?;
                                 break;
                             }
-                            ResolvePostDispatchAction::LoopAgain { details } => {
+                            ResolveAttemptAction::LoopExternalProgress => {
+                                state.counters.resolve_comments += 1;
+                                state.opencode.resolve_start_retries = 0;
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::ExternalProgress);
                                 state.stage.kind = StageKind::DispatchingResolvePrComments;
-                                state.stage.details = Some(details);
+                                state.stage.details = Some(format!(
+                                    "CodeRabbit unresolved bot threads decreased (before: {}, after: {}; lifecycle: {lifecycle:?}); continuing resolve cycle {} of {}",
+                                    before.bot_unresolved,
+                                    after.bot_unresolved,
+                                    state.counters.resolve_comments,
+                                    max_cycles
+                                ));
                                 ThoughtsStateStore::save(&state)?;
+                            }
+                            ResolveAttemptAction::RetryStart => {
+                                schedule_resolve_start_retry(&mut state);
+                                ThoughtsStateStore::save(&state)?;
+                            }
+                            ResolveAttemptAction::ExhaustedStartRetries => {
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::RetriesExhausted);
+                                state.opencode.resolve_start_retries = 0;
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(format!(
+                                    "resolve_pr_comments exhausted {} fresh-session start retries after the initial attempt; unresolved bot threads unchanged at {}",
+                                    MAX_RESOLVE_START_RETRIES, after.bot_unresolved
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                            ResolveAttemptAction::ExecutedNoProgress => {
+                                state.opencode.resolve_start_retries = 0;
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::ExecutedNoProgress);
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(format!(
+                                    "resolve_pr_comments executed with current-command assistant evidence but unresolved bot threads did not decrease (before: {}, after: {})",
+                                    before.bot_unresolved, after.bot_unresolved
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
+                            }
+                            ResolveAttemptAction::ManualHandoff => {
+                                state.opencode.resolve_start_retries = 0;
+                                state.opencode.last_resolve_workflow_outcome =
+                                    Some(state::ResolveWorkflowOutcome::ManualHandoff);
+                                state.stage.kind = StageKind::StoppedManualHandoff;
+                                state.stage.details = Some(format!(
+                                    "resolve_pr_comments lifecycle failed or cleanup was uncertain; unresolved bot threads unchanged at {}",
+                                    after.bot_unresolved
+                                ));
+                                ThoughtsStateStore::save(&state)?;
+                                return Ok(());
                             }
                         }
                     }
@@ -1507,65 +1557,113 @@ impl DagEngine {
             ])
             .await?;
         state.opencode.resume_stage = Some(resume_stage.clone());
-        state.opencode.dispatch_attempt += 1;
         state.opencode.last_command = Some(command_name.to_string());
-        ThoughtsStateStore::save(state)?;
-
-        let outcome = self
+        let session_selection = session_selection(state.opencode.active_session_id.as_deref());
+        let prepared = match self
             .supervisor(&state.settings)
             .await?
-            .run_command_supervised(
-                state.opencode.active_session_id.as_deref(),
-                command_name,
-                message,
+            .prepare_command(session_selection, command_name, message)
+            .await?
+        {
+            PreparedCommandOutcome::Prepared(prepared) => prepared,
+            PreparedCommandOutcome::Interrupted(outcome) => {
+                apply_preflight_interruption(state, resume_stage, command_name, outcome);
+                return ThoughtsStateStore::save(state);
+            }
+        };
+
+        state.opencode.active_session_id = Some(prepared.session_id().to_string());
+        state.opencode.current_invocation = Some(state::OpenCodeInvocationState {
+            invocation_id: format!("invocation-{}", prepared.command_message_id()),
+            command: prepared.command_name().to_string(),
+            session_id: prepared.session_id().to_string(),
+            command_message_id: prepared.command_message_id().to_string(),
+            phase: state::OpenCodeInvocationPhase::Prepared,
+            literal_post_attempts: 0,
+            lifecycle_result: None,
+            task_disposition: None,
+            pending_interruption: None,
+        });
+        ThoughtsStateStore::save(state)?;
+        if let Some(invocation) = state.opencode.current_invocation.as_mut() {
+            invocation.phase = state::OpenCodeInvocationPhase::PostAttempted;
+        }
+        ThoughtsStateStore::save(state)?;
+
+        let settings = state.settings.clone();
+        let owner = self.owner.clone();
+        let owner_context = state
+            .opencode
+            .current_invocation
+            .as_ref()
+            .map(|invocation| InvocationOwnerContext {
+                run_id: state.run_id.clone(),
+                invocation_id: invocation.invocation_id.clone(),
+            });
+        let event_resume_stage = resume_stage.clone();
+        let outcome = self
+            .supervisor(&settings)
+            .await?
+            .run_prepared_command(
+                prepared,
+                owner.as_deref(),
+                owner_context.as_ref(),
+                |event| {
+                let invocation = state.opencode.current_invocation.as_mut().ok_or_else(|| {
+                    anyhow::anyhow!("current invocation disappeared during supervision")
+                })?;
+                match event {
+                    SupervisionEvent::LiteralPostAttempt { total } => {
+                        let new_attempts = total.saturating_sub(invocation.literal_post_attempts);
+                        state.opencode.dispatch_attempt =
+                            state.opencode.dispatch_attempt.saturating_add(new_attempts);
+                        invocation.literal_post_attempts = total;
+                    }
+                    SupervisionEvent::AssistantStarted { .. } => {
+                        invocation.phase = state::OpenCodeInvocationPhase::RunningAssistantStarted;
+                    }
+                    SupervisionEvent::Paused { kind, request_id } => {
+                        state.opencode.pending_permission = None;
+                        state.opencode.pending_question = None;
+                        invocation.phase = match kind {
+                            state::InterruptionKind::Permission => {
+                                state.stage.kind = StageKind::StoppedPermissionRequired;
+                                state.stage.details = Some(
+                                    "foreground OpenCode invocation is awaiting an authenticated permission response"
+                                        .to_string(),
+                                );
+                                state::OpenCodeInvocationPhase::PausedPermission
+                            }
+                            state::InterruptionKind::Question => {
+                                state.stage.kind = StageKind::StoppedQuestionRequired;
+                                state.stage.details = Some(
+                                    "foreground OpenCode invocation is awaiting an authenticated question response"
+                                        .to_string(),
+                                );
+                                state::OpenCodeInvocationPhase::PausedQuestion
+                            }
+                        };
+                        invocation.pending_interruption =
+                            Some(state::PendingInterruptionIdentity { kind, request_id });
+                    }
+                    SupervisionEvent::Resumed { assistant_started } => {
+                        state.stage.kind = event_resume_stage.clone();
+                        state.stage.details = None;
+                        state.opencode.pending_permission = None;
+                        state.opencode.pending_question = None;
+                        invocation.phase = if assistant_started {
+                            state::OpenCodeInvocationPhase::RunningAssistantStarted
+                        } else {
+                            state::OpenCodeInvocationPhase::PostAttempted
+                        };
+                        invocation.pending_interruption = None;
+                    }
+                }
+                ThoughtsStateStore::save(state)
+            },
             )
             .await?;
-        match outcome {
-            SupervisedOutcome::Completed {
-                session_id,
-                diagnostics,
-            } => {
-                state.opencode.active_session_id = Some(session_id);
-                state.opencode.last_diagnostics = Some(diagnostics);
-                state.opencode.pending_permission = None;
-                state.opencode.pending_question = None;
-                state.stage.kind = resume_stage;
-                state.stage.details = None;
-            }
-            SupervisedOutcome::PermissionRequired {
-                session_id,
-                request_id,
-                permission_type,
-            } => {
-                state.opencode.active_session_id = Some(session_id);
-                state.opencode.pending_permission = Some(state::PendingPermission {
-                    request_id,
-                    permission_type,
-                });
-                state.stage.kind = StageKind::StoppedPermissionRequired;
-                state.stage.details = Some("OpenCode permission response required".to_string());
-            }
-            SupervisedOutcome::QuestionRequired {
-                session_id,
-                request_id,
-                prompt,
-            } => {
-                state.opencode.active_session_id = Some(session_id);
-                state.opencode.pending_question =
-                    Some(state::PendingQuestion { request_id, prompt });
-                state.stage.kind = StageKind::StoppedQuestionRequired;
-                state.stage.details = Some("OpenCode question response required".to_string());
-            }
-            SupervisedOutcome::Failed {
-                session_id,
-                error,
-                diagnostics,
-            } => {
-                state.opencode.active_session_id = session_id;
-                state.opencode.last_diagnostics = diagnostics;
-                transition_to_stopped_failed(state, error);
-            }
-        }
+        apply_supervised_outcome(state, resume_stage, command_name, outcome);
         ThoughtsStateStore::save(state)
     }
 
@@ -1586,6 +1684,199 @@ impl DagEngine {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("supervisor should be initialized before use"))
     }
+}
+
+fn apply_preflight_interruption(
+    state: &mut RunState,
+    resume_stage: StageKind,
+    command_name: &str,
+    outcome: SupervisedOutcome,
+) {
+    state.opencode.current_invocation = None;
+    apply_supervised_outcome(state, resume_stage, command_name, outcome);
+}
+
+fn apply_supervised_outcome(
+    state: &mut RunState,
+    resume_stage: StageKind,
+    command_name: &str,
+    outcome: SupervisedOutcome,
+) {
+    match outcome {
+        SupervisedOutcome::Completed {
+            session_id,
+            diagnostics,
+            literal_post_attempts,
+            task_disposition,
+        } => {
+            state.opencode.active_session_id = Some(session_id);
+            state.opencode.last_diagnostics = Some(diagnostics);
+            terminalize_persisted_invocation(
+                state,
+                literal_post_attempts,
+                state::InvocationLifecycleResult::Completed,
+                task_disposition,
+            );
+            state.opencode.pending_permission = None;
+            state.opencode.pending_question = None;
+            state.stage.kind = resume_stage;
+            state.stage.details = None;
+        }
+        SupervisedOutcome::AcceptedButNotStarted {
+            session_id: _,
+            diagnostics,
+            literal_post_attempts,
+            task_disposition,
+        } => {
+            let invocation_id = state
+                .opencode
+                .current_invocation
+                .as_ref()
+                .map(|invocation| invocation.invocation_id.clone())
+                .unwrap_or_default();
+            state.opencode.active_session_id = None;
+            state.opencode.last_diagnostics = Some(diagnostics);
+            terminalize_persisted_invocation(
+                state,
+                literal_post_attempts,
+                state::InvocationLifecycleResult::AcceptedButNotStarted,
+                task_disposition,
+            );
+            state.opencode.last_lifecycle_anomaly = Some(state::InvocationLifecycleAnomaly {
+                invocation_id,
+                observed_at: chrono::Utc::now().to_rfc3339(),
+                kind: state::InvocationLifecycleAnomalyKind::AcceptedButNotStarted,
+            });
+            if command_name == "resolve_pr_comments" {
+                state.stage.kind = resume_stage;
+                state.stage.details = Some(
+                        "OpenCode accepted resolve_pr_comments but no current-command assistant execution started"
+                            .to_string(),
+                    );
+            } else {
+                transition_to_stopped_failed(
+                    state,
+                    format!(
+                        "OpenCode accepted command '{command_name}' but no current-command assistant execution started"
+                    ),
+                );
+            }
+        }
+        SupervisedOutcome::PermissionRequired {
+            session_id,
+            request_id,
+            permission_type,
+            literal_post_attempts,
+        } => {
+            state.opencode.active_session_id = Some(session_id);
+            if let Some(invocation) = state.opencode.current_invocation.as_mut() {
+                invocation.phase = state::OpenCodeInvocationPhase::PausedPermission;
+                invocation.literal_post_attempts = literal_post_attempts;
+                invocation.pending_interruption = Some(state::PendingInterruptionIdentity {
+                    kind: state::InterruptionKind::Permission,
+                    request_id: request_id.clone(),
+                });
+            }
+            state.opencode.pending_permission = Some(state::PendingPermission {
+                request_id,
+                permission_type,
+            });
+            state.stage.kind = StageKind::StoppedPermissionRequired;
+            state.stage.details = Some("OpenCode permission response required".to_string());
+        }
+        SupervisedOutcome::QuestionRequired {
+            session_id,
+            request_id,
+            prompt,
+            literal_post_attempts,
+        } => {
+            state.opencode.active_session_id = Some(session_id);
+            if let Some(invocation) = state.opencode.current_invocation.as_mut() {
+                invocation.phase = state::OpenCodeInvocationPhase::PausedQuestion;
+                invocation.literal_post_attempts = literal_post_attempts;
+                invocation.pending_interruption = Some(state::PendingInterruptionIdentity {
+                    kind: state::InterruptionKind::Question,
+                    request_id: request_id.clone(),
+                });
+            }
+            state.opencode.pending_question = Some(state::PendingQuestion { request_id, prompt });
+            state.stage.kind = StageKind::StoppedQuestionRequired;
+            state.stage.details = Some("OpenCode question response required".to_string());
+        }
+        SupervisedOutcome::Failed {
+            session_id,
+            error,
+            diagnostics,
+            literal_post_attempts,
+            failure,
+            task_disposition,
+        } => {
+            let cleanup_proven = task_disposition_is_certain(&task_disposition);
+            let invocation_id = state
+                .opencode
+                .current_invocation
+                .as_ref()
+                .map(|invocation| invocation.invocation_id.clone())
+                .unwrap_or_default();
+            state.opencode.active_session_id = session_id;
+            state.opencode.last_diagnostics = diagnostics;
+            terminalize_persisted_invocation(
+                state,
+                literal_post_attempts,
+                state::InvocationLifecycleResult::Failed {
+                    failure: failure.clone(),
+                },
+                task_disposition,
+            );
+            state.opencode.last_lifecycle_anomaly = Some(state::InvocationLifecycleAnomaly {
+                invocation_id,
+                observed_at: chrono::Utc::now().to_rfc3339(),
+                kind: state::InvocationLifecycleAnomalyKind::Failed { failure },
+            });
+            if command_name == "resolve_pr_comments" && cleanup_proven {
+                state.stage.kind = resume_stage;
+                state.stage.details = Some(format!(
+                    "resolve_pr_comments failed after explicit terminal cleanup; checking CodeRabbit postconditions: {error}"
+                ));
+            } else {
+                transition_to_stopped_failed(state, error);
+            }
+        }
+    }
+}
+
+fn terminalize_persisted_invocation(
+    state: &mut RunState,
+    literal_post_attempts: u32,
+    lifecycle_result: state::InvocationLifecycleResult,
+    task_disposition: state::TaskDisposition,
+) {
+    let persisted_attempts = state
+        .opencode
+        .current_invocation
+        .as_ref()
+        .map_or(0, |invocation| invocation.literal_post_attempts);
+    state.opencode.dispatch_attempt = state
+        .opencode
+        .dispatch_attempt
+        .saturating_add(literal_post_attempts.saturating_sub(persisted_attempts));
+    if let Some(invocation) = state.opencode.current_invocation.as_mut() {
+        invocation.phase = state::OpenCodeInvocationPhase::Terminal;
+        invocation.literal_post_attempts = literal_post_attempts;
+        invocation.lifecycle_result = Some(lifecycle_result);
+        invocation.task_disposition = Some(task_disposition);
+        invocation.pending_interruption = None;
+    }
+}
+
+fn task_disposition_is_certain(disposition: &state::TaskDisposition) -> bool {
+    !matches!(
+        disposition.server_abort,
+        state::ServerAbortDisposition::Failed { .. }
+    ) && !matches!(
+        disposition.local_task,
+        state::LocalTaskDisposition::NotStarted | state::LocalTaskDisposition::Spawned
+    )
 }
 
 async fn detect_pr_with_retry<Lookup, LookupFut, OnRetry, Sleep, SleepFut>(
@@ -1626,14 +1917,15 @@ mod tests {
     use super::DagEngine;
     use super::DescribePrRefreshDecision;
     use super::DraftSkipRecovery;
-    use super::ResolvePostDispatchAction;
+    use super::MAX_RESOLVE_START_RETRIES;
+    use super::ResolveAttemptAction;
+    use super::ResolveInvocationClass;
     use super::ResolvePreDispatchAction;
-    use super::ResolveProgressEvidence;
     use super::UnresolvedReviewThreadsSnapshot;
+    use super::apply_preflight_interruption;
     use super::baseline_last_described_head_sha_after_pr_create;
-    use super::classify_resolve_progress;
     use super::coderabbit_waiting_details;
-    use super::decide_resolve_post_dispatch;
+    use super::decide_resolve_attempt;
     use super::decide_resolve_pre_dispatch;
     use super::detecting_pr_retry_attempt_number;
     use super::ensure_pr_ready_for_review;
@@ -1648,14 +1940,18 @@ mod tests {
     use super::recover_from_check_suite_no_commit_found_422;
     use super::recover_from_draft_review_skip;
     use super::route_after_ci_remediation;
+    use super::schedule_resolve_start_retry;
+    use super::session_selection;
     use super::should_reset_coderabbit_timeout_baseline;
     use super::stage_kind_label;
+    use super::terminalize_persisted_invocation;
     use super::transition_to_dispatch_disabled;
     use super::transition_to_stopped_failed;
     use super::transition_to_ticket_to_pr_no_pr_handoff;
     use crate::github::ci::GhCheck;
     use crate::github::pr::DetectedPrLookup;
-    use crate::state::OpenCodeDiagnostics;
+    use crate::opencode::supervisor::SessionSelection;
+    use crate::opencode::supervisor::SupervisedOutcome;
     use crate::state::RunState;
     use crate::state::StageKind;
     use crate::test_support::process_state_lock;
@@ -1692,6 +1988,81 @@ mod tests {
         .expect("sample state builds")
     }
 
+    fn set_previous_terminal_invocation(state: &mut RunState) {
+        state.opencode.current_invocation = Some(crate::state::OpenCodeInvocationState {
+            invocation_id: "previous-invocation".to_string(),
+            command: "previous_command".to_string(),
+            session_id: "previous-session".to_string(),
+            command_message_id: "previous-message".to_string(),
+            phase: crate::state::OpenCodeInvocationPhase::Terminal,
+            literal_post_attempts: 1,
+            lifecycle_result: Some(crate::state::InvocationLifecycleResult::Completed),
+            task_disposition: Some(crate::state::TaskDisposition {
+                server_abort: crate::state::ServerAbortDisposition::NotRequired,
+                local_task: crate::state::LocalTaskDisposition::Completed,
+            }),
+            pending_interruption: None,
+        });
+    }
+
+    #[test]
+    fn permission_preflight_does_not_mutate_previous_invocation() {
+        let mut state = sample_state();
+        set_previous_terminal_invocation(&mut state);
+
+        apply_preflight_interruption(
+            &mut state,
+            StageKind::DispatchingTicketToPr,
+            "linear_ticket_2_pr",
+            SupervisedOutcome::PermissionRequired {
+                session_id: "next-session".to_string(),
+                request_id: "permission-1".to_string(),
+                permission_type: "file.write".to_string(),
+                literal_post_attempts: 0,
+            },
+        );
+
+        assert!(state.opencode.current_invocation.is_none());
+        assert_eq!(
+            state
+                .opencode
+                .pending_permission
+                .as_ref()
+                .map(|pending| pending.request_id.as_str()),
+            Some("permission-1")
+        );
+        assert_eq!(state.stage.kind, StageKind::StoppedPermissionRequired);
+    }
+
+    #[test]
+    fn question_preflight_does_not_mutate_previous_invocation() {
+        let mut state = sample_state();
+        set_previous_terminal_invocation(&mut state);
+
+        apply_preflight_interruption(
+            &mut state,
+            StageKind::DispatchingResolvePrComments,
+            "resolve_pr_comments",
+            SupervisedOutcome::QuestionRequired {
+                session_id: "next-session".to_string(),
+                request_id: "question-1".to_string(),
+                prompt: "Continue?".to_string(),
+                literal_post_attempts: 0,
+            },
+        );
+
+        assert!(state.opencode.current_invocation.is_none());
+        assert_eq!(
+            state
+                .opencode
+                .pending_question
+                .as_ref()
+                .map(|pending| pending.request_id.as_str()),
+            Some("question-1")
+        );
+        assert_eq!(state.stage.kind, StageKind::StoppedQuestionRequired);
+    }
+
     fn check_suites_422_error(head_sha: &str) -> anyhow::Error {
         GitHubRestError {
             status: 422,
@@ -1714,25 +2085,6 @@ mod tests {
         }
     }
 
-    fn sample_review_thread_ref(comment_id: u64) -> super::ReviewThreadRef {
-        super::ReviewThreadRef {
-            comment_id,
-            url: format!("https://example.invalid/comments/{comment_id}"),
-        }
-    }
-
-    fn sample_diagnostics(final_assistant_message_id: Option<&str>) -> OpenCodeDiagnostics {
-        OpenCodeDiagnostics {
-            checked_at: "2026-01-01T00:00:00Z".to_string(),
-            command_message_id: Some("msg-command".to_string()),
-            final_assistant_message_id: final_assistant_message_id.map(str::to_string),
-            final_finish_reason: None,
-            guard_detected: false,
-            final_tool_error: None,
-            command_transport_error: None,
-        }
-    }
-
     fn sample_ci_check(name: &str, state: &str) -> GhCheck {
         GhCheck {
             name: name.to_string(),
@@ -1750,47 +2102,170 @@ mod tests {
     }
 
     #[test]
-    fn classify_resolve_progress_requires_assistant_or_improvement() {
-        let before = sample_unresolved_snapshot(7, 5);
-        let after = sample_unresolved_snapshot(7, 5);
+    fn resolve_attempt_routes_external_zero_before_lifecycle_anomaly() {
+        let before = sample_unresolved_snapshot(5, 3);
+        let after = sample_unresolved_snapshot(2, 0);
 
         assert_eq!(
-            classify_resolve_progress(&before, &after, None),
-            ResolveProgressEvidence::None
+            decide_resolve_attempt(
+                &before,
+                &after,
+                ResolveInvocationClass::AcceptedButNotStarted,
+                MAX_RESOLVE_START_RETRIES,
+            ),
+            ResolveAttemptAction::AdvanceExternalComplete
         );
     }
 
     #[test]
-    fn classify_resolve_progress_accepts_assistant_evidence() {
-        let before = sample_unresolved_snapshot(7, 5);
-        let after = sample_unresolved_snapshot(7, 5);
-        let diagnostics = sample_diagnostics(Some("msg-assistant"));
+    fn resolve_attempt_routes_external_decrease_before_failed_lifecycle() {
+        let before = sample_unresolved_snapshot(5, 4);
+        let after = sample_unresolved_snapshot(4, 3);
 
         assert_eq!(
-            classify_resolve_progress(&before, &after, Some(&diagnostics)),
-            ResolveProgressEvidence::AssistantEvidence
+            decide_resolve_attempt(
+                &before,
+                &after,
+                ResolveInvocationClass::FailedOrCancelled,
+                1,
+            ),
+            ResolveAttemptAction::LoopExternalProgress
         );
     }
 
     #[test]
-    fn classify_resolve_progress_accepts_thread_improvement_without_assistant() {
-        let before = sample_unresolved_snapshot(5, 5);
-        let after = sample_unresolved_snapshot(5, 3);
+    fn resolve_attempt_allows_exactly_two_start_retries_then_exhausts() {
+        let before = sample_unresolved_snapshot(4, 3);
+        let after = sample_unresolved_snapshot(4, 3);
 
         assert_eq!(
-            classify_resolve_progress(&before, &after, None),
-            ResolveProgressEvidence::UnresolvedThreadsImproved
+            decide_resolve_attempt(
+                &before,
+                &after,
+                ResolveInvocationClass::AcceptedButNotStarted,
+                0,
+            ),
+            ResolveAttemptAction::RetryStart
+        );
+        assert_eq!(
+            decide_resolve_attempt(
+                &before,
+                &after,
+                ResolveInvocationClass::AcceptedButNotStarted,
+                1,
+            ),
+            ResolveAttemptAction::RetryStart
+        );
+        assert_eq!(
+            decide_resolve_attempt(
+                &before,
+                &after,
+                ResolveInvocationClass::AcceptedButNotStarted,
+                2,
+            ),
+            ResolveAttemptAction::ExhaustedStartRetries
         );
     }
 
     #[test]
-    fn classify_resolve_progress_ignores_human_only_total_unresolved_drop() {
-        let before = sample_unresolved_snapshot(7, 5);
-        let after = sample_unresolved_snapshot(5, 5);
+    fn resolve_attempt_executed_without_external_progress_hands_off() {
+        let before = sample_unresolved_snapshot(4, 3);
+        let after = sample_unresolved_snapshot(4, 3);
 
         assert_eq!(
-            classify_resolve_progress(&before, &after, None),
-            ResolveProgressEvidence::None
+            decide_resolve_attempt(&before, &after, ResolveInvocationClass::Completed, 0),
+            ResolveAttemptAction::ExecutedNoProgress
+        );
+    }
+
+    #[test]
+    fn resolve_attempt_uncertain_cleanup_never_retries() {
+        let before = sample_unresolved_snapshot(4, 3);
+        let after = sample_unresolved_snapshot(4, 3);
+
+        assert_eq!(
+            decide_resolve_attempt(&before, &after, ResolveInvocationClass::CleanupUncertain, 0,),
+            ResolveAttemptAction::ManualHandoff
+        );
+    }
+
+    #[test]
+    fn terminal_persistence_reconciles_unobserved_literal_post_attempts_once() {
+        let mut state = sample_state();
+        state.opencode.dispatch_attempt = 7;
+        state.opencode.current_invocation = Some(crate::state::OpenCodeInvocationState {
+            invocation_id: "inv-1".to_string(),
+            command: "resolve_pr_comments".to_string(),
+            session_id: "session-1".to_string(),
+            command_message_id: "msg-1".to_string(),
+            phase: crate::state::OpenCodeInvocationPhase::PostAttempted,
+            literal_post_attempts: 1,
+            lifecycle_result: None,
+            task_disposition: None,
+            pending_interruption: None,
+        });
+        let disposition = crate::state::TaskDisposition {
+            server_abort: crate::state::ServerAbortDisposition::NotRequired,
+            local_task: crate::state::LocalTaskDisposition::Completed,
+        };
+
+        terminalize_persisted_invocation(
+            &mut state,
+            2,
+            crate::state::InvocationLifecycleResult::Completed,
+            disposition.clone(),
+        );
+        assert_eq!(state.opencode.dispatch_attempt, 8);
+        assert_eq!(
+            state
+                .opencode
+                .current_invocation
+                .as_ref()
+                .map(|invocation| invocation.literal_post_attempts),
+            Some(2)
+        );
+
+        terminalize_persisted_invocation(
+            &mut state,
+            2,
+            crate::state::InvocationLifecycleResult::Completed,
+            disposition,
+        );
+        assert_eq!(state.opencode.dispatch_attempt, 8);
+    }
+
+    #[test]
+    fn resolve_start_retry_forces_fresh_session_without_charging_cycle_counters() {
+        let mut state = sample_state();
+        state.opencode.active_session_id = Some("old-session".to_string());
+        state.opencode.resolve_start_retries = 1;
+        state.opencode.dispatch_attempt = 9;
+        state.counters.resolve_comments = 3;
+        state.opencode.last_lifecycle_anomaly = Some(crate::state::InvocationLifecycleAnomaly {
+            invocation_id: "inv-1".to_string(),
+            observed_at: "2026-01-01T00:00:00Z".to_string(),
+            kind: crate::state::InvocationLifecycleAnomalyKind::AcceptedButNotStarted,
+        });
+
+        schedule_resolve_start_retry(&mut state);
+
+        assert_eq!(state.opencode.resolve_start_retries, 2);
+        assert_eq!(state.opencode.active_session_id, None);
+        assert_eq!(state.opencode.dispatch_attempt, 9);
+        assert_eq!(state.counters.resolve_comments, 3);
+        assert!(state.opencode.last_lifecycle_anomaly.is_some());
+        assert_eq!(
+            session_selection(state.opencode.active_session_id.as_deref()),
+            SessionSelection::Fresh
+        );
+    }
+
+    #[test]
+    fn normal_session_selection_reuses_only_explicit_active_session() {
+        assert_eq!(session_selection(None), SessionSelection::Fresh);
+        assert_eq!(
+            session_selection(Some("session-1")),
+            SessionSelection::Reuse("session-1".to_string())
         );
     }
 
@@ -1814,34 +2289,11 @@ mod tests {
     }
 
     #[test]
-    fn resolve_loop_stops_manual_handoff_on_no_assistant_and_no_improvement() {
-        let before = UnresolvedReviewThreadsSnapshot {
-            total_unresolved: 4,
-            bot_unresolved: 3,
-            representative_bot_refs: vec![sample_review_thread_ref(101)],
-        };
-        let after = UnresolvedReviewThreadsSnapshot {
-            total_unresolved: 4,
-            bot_unresolved: 3,
-            representative_bot_refs: vec![sample_review_thread_ref(101)],
-        };
-        let progress = classify_resolve_progress(&before, &after, None);
-
-        let action = decide_resolve_post_dispatch(&before, &after, progress, 2, 5);
-
-        let ResolvePostDispatchAction::ManualHandoff { details } = action else {
-            panic!("expected manual handoff");
-        };
-        assert!(details.contains("bot unresolved 3→3"));
-        assert!(details.contains("https://example.invalid/comments/101"));
-    }
-
-    #[test]
     fn resolve_loop_enforces_max_review_cycles_exhaustion() {
         let before = UnresolvedReviewThreadsSnapshot {
             total_unresolved: 4,
             bot_unresolved: 3,
-            representative_bot_refs: vec![sample_review_thread_ref(202)],
+            representative_bot_refs: Vec::new(),
         };
 
         let action = decide_resolve_pre_dispatch(&before, 5, 5);
@@ -1850,25 +2302,6 @@ mod tests {
             panic!("expected manual handoff");
         };
         assert!(details.contains("max_review_cycles exhausted"));
-    }
-
-    #[test]
-    fn resolve_loop_continues_when_progress_and_unresolved_remain_and_cycles_left() {
-        let before = sample_unresolved_snapshot(5, 4);
-        let after = sample_unresolved_snapshot(4, 3);
-
-        let action = decide_resolve_post_dispatch(
-            &before,
-            &after,
-            ResolveProgressEvidence::UnresolvedThreadsImproved,
-            2,
-            5,
-        );
-
-        assert!(matches!(
-            action,
-            ResolvePostDispatchAction::LoopAgain { .. }
-        ));
     }
 
     #[test]

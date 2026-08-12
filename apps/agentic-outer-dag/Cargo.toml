@@ -31,13 +31,21 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 git2 = { workspace = true, features = ["vendored-openssl", "ssh", "https"] }
+getrandom = "0.3"
 gwt-worktree = { workspace = true }
 linear-tools = { workspace = true }
 opencode_rs = { workspace = true, features = ["server"] }
 pr_comments = { workspace = true }
 sha2 = "0.10"
 thoughts-tool = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -49,6 +57,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 rustls = { version = "0.23", default-features = false, features = [
   "aws_lc_rs",
 ] }
+rustix = { version = "1", features = ["process"] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -22,6 +22,13 @@ pub struct MessagesApi {
     http: HttpClient,
 }
 
+/// A literal `POST /session/{id}/command` attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandPostAttempt {
+    /// One-based attempt number within this logical command call.
+    pub ordinal: usize,
+}
+
 impl MessagesApi {
     /// Create a new Messages API client.
     pub fn new(http: HttpClient) -> Self {
@@ -98,6 +105,27 @@ impl MessagesApi {
     ///
     /// Returns an error if the request fails.
     pub async fn command(&self, session_id: &str, req: &CommandRequest) -> Result<CommandResponse> {
+        self.command_with_attempt_observer(session_id, req, |_| {})
+            .await
+    }
+
+    /// Execute a command and observe every literal wire POST attempt.
+    ///
+    /// The observer receives only an ordinal and never receives request content,
+    /// headers, session identifiers, or other secrets.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn command_with_attempt_observer<F>(
+        &self,
+        session_id: &str,
+        req: &CommandRequest,
+        observer: F,
+    ) -> Result<CommandResponse>
+    where
+        F: Fn(CommandPostAttempt) + Send + Sync,
+    {
         const MAX_ATTEMPTS: usize = 2;
         const BACKOFF_MS: u64 = 50;
 
@@ -106,6 +134,7 @@ impl MessagesApi {
         let path = format!("/session/{sid}/command");
 
         for attempt in 1..=MAX_ATTEMPTS {
+            observer(CommandPostAttempt { ordinal: attempt });
             match self
                 .http
                 .request_json(Method::POST, &path, Some(body.clone()))
@@ -166,6 +195,9 @@ mod tests {
     use crate::types::message::CommandRequest;
     use crate::types::message::PromptPart;
     use crate::types::message::ShellRequest;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
     use wiremock::Mock;
     use wiremock::MockServer;
@@ -335,6 +367,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn command_attempt_observer_reports_immediate_success_once() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/session/s1/command"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "status": "executed"
+            })))
+            .mount(&mock_server)
+            .await;
+        let http = HttpClient::new(HttpConfig {
+            base_url: mock_server.uri(),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_secs(30),
+        })
+        .unwrap();
+        let messages = MessagesApi::new(http);
+        let observed = Arc::new(AtomicUsize::new(0));
+        let observer_count = Arc::clone(&observed);
+
+        messages
+            .command_with_attempt_observer(
+                "s1",
+                &CommandRequest {
+                    command: "test_command".to_string(),
+                    arguments: String::new(),
+                    message_id: None,
+                },
+                move |attempt| {
+                    assert_eq!(attempt.ordinal, 1);
+                    observer_count.fetch_add(1, Ordering::Relaxed);
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(observed.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn command_attempt_observer_reports_both_connect_attempts() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+        let http = HttpClient::new(HttpConfig {
+            base_url: format!("http://{address}"),
+            directory: None,
+            workspace: None,
+            timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+        let messages = MessagesApi::new(http);
+        let observed = Arc::new(AtomicUsize::new(0));
+        let observer_count = Arc::clone(&observed);
+
+        let result = messages
+            .command_with_attempt_observer(
+                "s1",
+                &CommandRequest {
+                    command: "test_command".to_string(),
+                    arguments: String::new(),
+                    message_id: None,
+                },
+                move |attempt| {
+                    assert!(attempt.ordinal == 1 || attempt.ordinal == 2);
+                    observer_count.fetch_add(1, Ordering::Relaxed);
+                },
+            )
+            .await;
+
+        assert!(matches!(result, Err(OpencodeError::Transport(_))));
+        assert_eq!(observed.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
     async fn test_command_does_not_retry_on_timeout() {
         let mock_server = MockServer::start().await;
 
@@ -357,13 +464,18 @@ mod tests {
         .unwrap();
 
         let messages = MessagesApi::new(http);
+        let observed = Arc::new(AtomicUsize::new(0));
+        let observer_count = Arc::clone(&observed);
         let result = messages
-            .command(
+            .command_with_attempt_observer(
                 "s1",
                 &CommandRequest {
                     command: "test_command".to_string(),
                     arguments: String::new(),
                     message_id: None,
+                },
+                move |_| {
+                    observer_count.fetch_add(1, Ordering::Relaxed);
                 },
             )
             .await;
@@ -378,6 +490,7 @@ mod tests {
             })
             .count();
         assert_eq!(command_requests, 1);
+        assert_eq!(observed.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]

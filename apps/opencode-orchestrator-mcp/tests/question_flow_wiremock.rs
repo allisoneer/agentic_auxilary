@@ -22,6 +22,7 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 use wiremock::matchers::path_regex;
 
+use support::CommandCorrelationFixture;
 use support::SequenceResponder;
 use support::messages_fixture;
 use support::permission_fixture;
@@ -42,6 +43,84 @@ fn question_payload(question: &str) -> serde_json::Value {
         "multiple": false,
         "custom": false
     })
+}
+
+#[tokio::test]
+async fn command_precorrelation_deltas_are_returned_in_question_partial_response() {
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "question-sse-preview";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+    let correlation = CommandCorrelationFixture::new();
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/command")))
+        .respond_with(correlation.command_responder())
+        .mount(&mock)
+        .await;
+
+    let interruption = serde_json::json!({
+        "type": "question.asked",
+        "properties": question_fixture(
+            "question-preview",
+            sid,
+            &[question_payload("Continue?")]
+        )
+    });
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(correlation.sse_responder(
+            sid,
+            "assistant-preview",
+            "question preview",
+            interruption,
+        ))
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(10),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: Some("implement_plan".into()),
+                agent: None,
+                message: Some("Do the work".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("run should not hang")
+    .expect("run should succeed");
+
+    assert!(matches!(result.status, RunStatus::QuestionRequired));
+    assert_eq!(result.partial_response.as_deref(), Some("question preview"));
+    assert_eq!(
+        result.question_request_id.as_deref(),
+        Some("question-preview")
+    );
 }
 
 #[tokio::test]

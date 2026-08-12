@@ -44,6 +44,8 @@ use agentic_tools_core::fmt::TextOptions;
 use futures::future::BoxFuture;
 use opencode_rs::OpencodeError;
 use opencode_rs::types::event::Event;
+use opencode_rs::types::event::MessagePartEventProps;
+use opencode_rs::types::event::MessageUpdatedProps;
 use opencode_rs::types::message::CommandRequest;
 use opencode_rs::types::message::Message;
 use opencode_rs::types::message::Part;
@@ -59,11 +61,17 @@ use opencode_rs::types::session::CreateSessionRequest;
 use opencode_rs::types::session::SessionStatusInfo;
 use opencode_rs::types::session::SummarizeRequest;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
 const SERVER_NAME: &str = "opencode-orchestrator-mcp";
+const PRECORRELATION_TOTAL_BYTES: usize = 64 * 1024;
+const PRECORRELATION_MESSAGE_BYTES: usize = 16 * 1024;
+const PRECORRELATION_MESSAGE_IDS: usize = 32;
 
 #[derive(Debug, Clone, Default)]
 struct ToolLogMeta {
@@ -85,6 +93,97 @@ enum PermissionPreflightMode {
 #[derive(Debug, Clone)]
 struct CommandTranscriptWindow {
     command_message_id: String,
+}
+
+#[derive(Debug)]
+struct BufferedDelta {
+    message_id: String,
+    text: String,
+}
+
+#[derive(Debug, Default)]
+struct PreCorrelationDeltaBuffer {
+    deltas: VecDeque<BufferedDelta>,
+    bytes_by_message: HashMap<String, usize>,
+    total_bytes: usize,
+}
+
+impl PreCorrelationDeltaBuffer {
+    fn push(&mut self, message_id: &str, delta: &str) {
+        if message_id.is_empty() || delta.is_empty() {
+            return;
+        }
+
+        let delta_bytes = delta.len();
+        if delta_bytes > PRECORRELATION_MESSAGE_BYTES || delta_bytes > PRECORRELATION_TOTAL_BYTES {
+            return;
+        }
+
+        if !self.bytes_by_message.contains_key(message_id)
+            && self.bytes_by_message.len() >= PRECORRELATION_MESSAGE_IDS
+        {
+            self.evict_oldest_message();
+        }
+
+        let message_bytes = self
+            .bytes_by_message
+            .get(message_id)
+            .copied()
+            .unwrap_or_default();
+        if message_bytes.saturating_add(delta_bytes) > PRECORRELATION_MESSAGE_BYTES {
+            return;
+        }
+
+        while self.total_bytes.saturating_add(delta_bytes) > PRECORRELATION_TOTAL_BYTES {
+            let Some(oldest_message_id) = self.deltas.front().map(|delta| delta.message_id.clone())
+            else {
+                return;
+            };
+            if oldest_message_id == message_id {
+                return;
+            }
+            self.evict_message(&oldest_message_id);
+        }
+
+        self.deltas.push_back(BufferedDelta {
+            message_id: message_id.to_string(),
+            text: delta.to_string(),
+        });
+        self.bytes_by_message
+            .insert(message_id.to_string(), message_bytes + delta_bytes);
+        self.total_bytes += delta_bytes;
+    }
+
+    fn take(&mut self, message_id: &str) -> String {
+        let Some(removed_bytes) = self.bytes_by_message.remove(message_id) else {
+            return String::new();
+        };
+
+        let mut text = String::with_capacity(removed_bytes);
+        self.deltas.retain(|delta| {
+            if delta.message_id == message_id {
+                text.push_str(&delta.text);
+                false
+            } else {
+                true
+            }
+        });
+        self.total_bytes -= removed_bytes;
+        text
+    }
+
+    fn evict_oldest_message(&mut self) {
+        if let Some(message_id) = self.deltas.front().map(|delta| delta.message_id.clone()) {
+            self.evict_message(&message_id);
+        }
+    }
+
+    fn evict_message(&mut self, message_id: &str) {
+        if let Some(removed_bytes) = self.bytes_by_message.remove(message_id) {
+            self.deltas.retain(|delta| delta.message_id != message_id);
+            self.total_bytes -= removed_bytes;
+        }
+    }
 }
 
 fn blocked_command_error(command: &str, decision: CommandPolicyDecision) -> ToolError {
@@ -149,6 +248,73 @@ fn transcript_indicates_command_dispatch(
     messages
         .iter()
         .any(|message| message.id() == transcript_window.command_message_id)
+}
+
+fn assistant_update_matches_command(
+    transcript_window: Option<&CommandTranscriptWindow>,
+    role: &str,
+    parent_id: Option<&str>,
+) -> bool {
+    transcript_window.map_or(role == "assistant", |window| {
+        role == "assistant" && parent_id == Some(window.command_message_id.as_str())
+    })
+}
+
+fn part_event_matches_command(
+    transcript_window: Option<&CommandTranscriptWindow>,
+    message_id: Option<&str>,
+    correlated_assistant_ids: &HashSet<String>,
+) -> bool {
+    transcript_window.is_none()
+        || message_id.is_some_and(|message_id| correlated_assistant_ids.contains(message_id))
+}
+
+fn record_message_part_delta(
+    properties: &MessagePartEventProps,
+    transcript_window: Option<&CommandTranscriptWindow>,
+    correlated_assistant_ids: &HashSet<String>,
+    precorrelation_deltas: &mut Option<PreCorrelationDeltaBuffer>,
+    partial_response: &mut String,
+) -> bool {
+    let correlated = part_event_matches_command(
+        transcript_window,
+        properties.message_id.as_deref(),
+        correlated_assistant_ids,
+    );
+    if correlated && let Some(delta) = &properties.delta {
+        partial_response.push_str(delta);
+    } else if let (Some(buffer), Some(message_id), Some(delta)) = (
+        precorrelation_deltas.as_mut(),
+        properties.message_id.as_deref().filter(|id| !id.is_empty()),
+        properties.delta.as_deref(),
+    ) {
+        buffer.push(message_id, delta);
+    }
+    correlated
+}
+
+fn record_message_updated(
+    properties: &MessageUpdatedProps,
+    transcript_window: Option<&CommandTranscriptWindow>,
+    correlated_assistant_ids: &mut HashSet<String>,
+    precorrelation_deltas: &mut Option<PreCorrelationDeltaBuffer>,
+    partial_response: &mut String,
+) -> bool {
+    let correlated = assistant_update_matches_command(
+        transcript_window,
+        &properties.info.role,
+        properties.info.parent_id.as_deref(),
+    );
+    let message_id = &properties.info.id;
+    if correlated {
+        correlated_assistant_ids.insert(message_id.clone());
+        if let Some(buffer) = precorrelation_deltas.as_mut() {
+            partial_response.push_str(&buffer.take(message_id));
+        }
+    } else if let Some(buffer) = precorrelation_deltas.as_mut() {
+        buffer.evict_message(message_id);
+    }
+    correlated
 }
 
 fn request_json<T: Serialize>(request: &T) -> serde_json::Value {
@@ -681,6 +847,10 @@ impl OrchestratorRunTool {
         // This prevents completing immediately if we call run_impl on an already-idle
         // session before our new work has started processing.
         let mut observed_busy = false;
+        let mut correlated_assistant_ids = HashSet::new();
+        let mut precorrelation_deltas = command_transcript_window
+            .as_ref()
+            .map(|_| PreCorrelationDeltaBuffer::default());
 
         // Track whether SSE is still active. If the stream closes, we fall back
         // to polling-only mode rather than returning an error.
@@ -788,20 +958,46 @@ impl OrchestratorRunTool {
                         }
 
                         Event::MessagePartDelta { properties } => {
-                            last_activity_time = tokio::time::Instant::now();
-                            // Message streaming means session is actively processing
-                            observed_busy = true;
-                            awaiting_idle_grace_check = false;
-                            // Collect streaming text from field-level delta events.
-                            if let Some(delta) = &properties.delta {
-                                partial_response.push_str(delta);
+                            let correlated = record_message_part_delta(
+                                &properties,
+                                command_transcript_window.as_ref(),
+                                &correlated_assistant_ids,
+                                &mut precorrelation_deltas,
+                                &mut partial_response,
+                            );
+                            if correlated {
+                                last_activity_time = tokio::time::Instant::now();
+                                observed_busy = true;
+                                awaiting_idle_grace_check = false;
                             }
                         }
 
-                        Event::MessagePartUpdated { .. } | Event::MessageUpdated { .. } => {
-                            last_activity_time = tokio::time::Instant::now();
-                            observed_busy = true;
-                            awaiting_idle_grace_check = false;
+                        Event::MessageUpdated { properties } => {
+                            let correlated = record_message_updated(
+                                &properties,
+                                command_transcript_window.as_ref(),
+                                &mut correlated_assistant_ids,
+                                &mut precorrelation_deltas,
+                                &mut partial_response,
+                            );
+                            if correlated {
+                                last_activity_time = tokio::time::Instant::now();
+                                observed_busy = true;
+                                awaiting_idle_grace_check = false;
+                            }
+                        }
+
+                        Event::MessagePartUpdated { properties } => {
+                            let correlated = part_event_matches_command(
+                                command_transcript_window.as_ref(),
+                                properties.message_id.as_deref(),
+                                &correlated_assistant_ids,
+                            );
+                            if correlated {
+                                last_activity_time = tokio::time::Instant::now();
+                                observed_busy = true;
+                                awaiting_idle_grace_check = false;
+                            }
                         }
 
                         Event::SessionError { properties } => {
@@ -818,8 +1014,18 @@ impl OrchestratorRunTool {
 
                         Event::SessionIdle { .. } => {
                             tracing::debug!(session_id = %session_id, "received SessionIdle event");
-                            let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
-                            return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                            if !dispatched_new_work || observed_busy {
+                                let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                                return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                            }
+                            match idle_grace_deadline {
+                                Some(deadline) if tokio::time::Instant::now() >= deadline => {
+                                    let output = Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
+                                    return Ok(RunOutcome::with_tracker(output, &token_tracker));
+                                }
+                                Some(_) => awaiting_idle_grace_check = true,
+                                None => {}
+                            }
                         }
 
                         _ => {
@@ -2116,5 +2322,153 @@ mod tests {
     #[test]
     fn last_activity_falls_back_to_session_timestamp_when_messages_are_empty() {
         assert_eq!(get_last_activity_time(&[], Some(1_234)), Some(1_234));
+    }
+
+    #[test]
+    fn command_activity_requires_current_assistant_lineage() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        assert!(!assistant_update_matches_command(
+            Some(&window),
+            "user",
+            Some("msg-command")
+        ));
+        assert!(!assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-other")
+        ));
+        assert!(assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-command")
+        ));
+    }
+
+    #[test]
+    fn command_part_activity_requires_correlated_assistant_id() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        let correlated = HashSet::from(["msg-assistant".to_string()]);
+        assert!(!part_event_matches_command(
+            Some(&window),
+            Some("msg-command"),
+            &correlated
+        ));
+        assert!(part_event_matches_command(
+            Some(&window),
+            Some("msg-assistant"),
+            &correlated
+        ));
+        assert!(part_event_matches_command(None, None, &correlated));
+    }
+
+    #[test]
+    fn precorrelation_deltas_flush_only_after_matching_assistant_lineage() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        let mut correlated_assistant_ids = HashSet::new();
+        let mut buffer = Some(PreCorrelationDeltaBuffer::default());
+        let mut partial_response = String::new();
+        let delta: Event = serde_json::from_value(serde_json::json!({
+            "type": "message.part.delta",
+            "properties": {
+                "sessionID": "session-1",
+                "messageID": "msg-assistant",
+                "delta": "buffered prefix"
+            }
+        }))
+        .unwrap();
+        let update: Event = serde_json::from_value(serde_json::json!({
+            "type": "message.updated",
+            "properties": {
+                "info": {
+                    "id": "msg-assistant",
+                    "sessionID": "session-1",
+                    "role": "assistant",
+                    "parentID": "msg-command",
+                    "time": { "created": 1 }
+                }
+            }
+        }))
+        .unwrap();
+
+        let Event::MessagePartDelta { properties } = delta else {
+            panic!("expected message delta event");
+        };
+        assert!(!record_message_part_delta(
+            &properties,
+            Some(&window),
+            &correlated_assistant_ids,
+            &mut buffer,
+            &mut partial_response,
+        ));
+        assert!(partial_response.is_empty());
+
+        let Event::MessageUpdated { properties } = update else {
+            panic!("expected message update event");
+        };
+        assert!(record_message_updated(
+            &properties,
+            Some(&window),
+            &mut correlated_assistant_ids,
+            &mut buffer,
+            &mut partial_response,
+        ));
+        assert_eq!(partial_response, "buffered prefix");
+    }
+
+    #[test]
+    fn precorrelation_deltas_do_not_flush_for_other_lineage() {
+        let window = CommandTranscriptWindow {
+            command_message_id: "msg-command".to_string(),
+        };
+        let mut buffer = PreCorrelationDeltaBuffer::default();
+        buffer.push("msg-assistant", "must remain unconfirmed");
+
+        assert!(!assistant_update_matches_command(
+            Some(&window),
+            "assistant",
+            Some("msg-other")
+        ));
+        buffer.evict_message("msg-assistant");
+        assert!(!buffer.bytes_by_message.contains_key("msg-assistant"));
+        assert_eq!(buffer.total_bytes, 0);
+    }
+
+    #[test]
+    fn precorrelation_delta_buffer_enforces_byte_and_message_caps() {
+        let mut buffer = PreCorrelationDeltaBuffer::default();
+        let per_message = "x".repeat(PRECORRELATION_MESSAGE_BYTES);
+        buffer.push("full", &per_message);
+        buffer.push("full", "overflow");
+        assert_eq!(buffer.take("full"), per_message);
+
+        for index in 0..PRECORRELATION_MESSAGE_IDS {
+            buffer.push(&format!("id-{index}"), "x");
+        }
+        buffer.push("newest", "y");
+        assert!(!buffer.bytes_by_message.contains_key("id-0"));
+        assert_eq!(buffer.bytes_by_message.len(), PRECORRELATION_MESSAGE_IDS);
+        assert_eq!(buffer.take("newest"), "y");
+
+        let mut total_capped = PreCorrelationDeltaBuffer::default();
+        for index in 0..(PRECORRELATION_TOTAL_BYTES / PRECORRELATION_MESSAGE_BYTES) {
+            total_capped.push(&format!("chunk-{index}"), &per_message);
+        }
+        assert_eq!(total_capped.total_bytes, PRECORRELATION_TOTAL_BYTES);
+        total_capped.push("replacement", "z");
+        assert!(!total_capped.bytes_by_message.contains_key("chunk-0"));
+        assert_eq!(
+            total_capped.total_bytes,
+            PRECORRELATION_TOTAL_BYTES - PRECORRELATION_MESSAGE_BYTES + 1
+        );
+
+        let oversized = "x".repeat(PRECORRELATION_MESSAGE_BYTES + 1);
+        total_capped.push("oversized", &oversized);
+        assert!(!total_capped.bytes_by_message.contains_key("oversized"));
     }
 }
