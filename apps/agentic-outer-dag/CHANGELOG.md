@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.13] - 2026-08-12
+
+### 🐛 Bug Fixes
+- *(outer-dag)* Make OpenCode command execution reliable
+- *(outer-dag)* Harden interruption and owner recovery
+- *(outer-dag)* Clear pending response before acknowledgement
 ## [0.1.12] - 2026-07-13
 
 ### ⛰️  Features
