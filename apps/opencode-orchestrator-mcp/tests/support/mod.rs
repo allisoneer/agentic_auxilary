@@ -201,16 +201,14 @@ impl Respond for SequenceResponder {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CommandCorrelationFixture {
     command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
 }
 
 impl CommandCorrelationFixture {
     pub fn new() -> Self {
-        Self {
-            command_message_id: Arc::new((Mutex::new(None), Condvar::new())),
-        }
+        Self::default()
     }
 
     pub fn command_responder(&self) -> CommandMessageIdResponder {
@@ -269,14 +267,11 @@ pub struct CommandCorrelatedSseResponder {
 impl Respond for CommandCorrelatedSseResponder {
     fn respond(&self, _request: &Request) -> ResponseTemplate {
         let (lock, ready) = &*self.command_message_id;
-        let mut message_id = lock.lock().unwrap();
-        while message_id.is_none() {
-            let (guard, wait) = ready
-                .wait_timeout(message_id, Duration::from_secs(5))
-                .unwrap();
-            message_id = guard;
-            assert!(!wait.timed_out(), "command POST did not publish messageID");
-        }
+        let message_id = lock.lock().unwrap();
+        let (message_id, wait) = ready
+            .wait_timeout_while(message_id, Duration::from_secs(5), |id| id.is_none())
+            .unwrap();
+        assert!(!wait.timed_out(), "command POST did not publish messageID");
         let command_message_id = message_id.clone().unwrap();
         drop(message_id);
 
