@@ -1,0 +1,14 @@
+README.md
+  h_9f073efcf2206c 73,89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5a20a2b270256226ab008f41f7fe95d2253e2251",
+  "prompts": {},
+  "humans": {
+    "h_9f073efcf2206c": {
+      "author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
