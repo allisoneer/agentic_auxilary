@@ -1308,7 +1308,7 @@ url = "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-windows-x
 url_api = "https://api.github.com/repos/tamasfe/taplo/releases/assets/257323062"
 
 [[tools.thoughts-bin]]
-version = "0.1.24"
+version = "0.1.25"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.thoughts-bin.options]
@@ -1316,63 +1316,17 @@ asset_pattern = "thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin."platforms.linux-arm64"]
-checksum = "sha256:28f139a5dcf06fada36ae6fb53b9e86b6c753d7c502025c7c28df9d6ffbdad2e"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616242"
+checksum = "sha256:671d1e8457b140f9f0cff2f1e295b7063f4e495fee54c8da0cb35e998fd65d4f"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122646"
 
 [tools.thoughts-bin."platforms.linux-arm64-musl"]
-checksum = "sha256:28f139a5dcf06fada36ae6fb53b9e86b6c753d7c502025c7c28df9d6ffbdad2e"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616242"
+checksum = "sha256:671d1e8457b140f9f0cff2f1e295b7063f4e495fee54c8da0cb35e998fd65d4f"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122646"
 
 [[tools.thoughts-bin]]
-version = "0.1.24"
-backend = "github:allisoneer/agentic_auxilary"
-
-[tools.thoughts-bin.options]
-asset_pattern = "thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-version_prefix = "thoughts-bin-v"
-
-[tools.thoughts-bin."platforms.linux-x64"]
-checksum = "sha256:404a0fc40b270877445edd9205642205d56f41ae28e4c807b806c036e9981f7f"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616259"
-
-[tools.thoughts-bin."platforms.linux-x64-baseline"]
-checksum = "sha256:404a0fc40b270877445edd9205642205d56f41ae28e4c807b806c036e9981f7f"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616259"
-
-[tools.thoughts-bin."platforms.linux-x64-musl"]
-checksum = "sha256:404a0fc40b270877445edd9205642205d56f41ae28e4c807b806c036e9981f7f"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616259"
-
-[tools.thoughts-bin."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:404a0fc40b270877445edd9205642205d56f41ae28e4c807b806c036e9981f7f"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616259"
-
-[[tools.thoughts-bin]]
-version = "0.1.24"
-backend = "github:allisoneer/agentic_auxilary"
-
-[tools.thoughts-bin.options]
-asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz"
-version_prefix = "thoughts-bin-v"
-
-[tools.thoughts-bin."platforms.macos-x64"]
-checksum = "sha256:41ea58d040c137ea4dec24856d123ea68f1bf5a489df481e04baae695f91d58e"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616250"
-
-[tools.thoughts-bin."platforms.macos-x64-baseline"]
-checksum = "sha256:41ea58d040c137ea4dec24856d123ea68f1bf5a489df481e04baae695f91d58e"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616250"
-
-[[tools.thoughts-bin]]
-version = "0.1.24"
+version = "0.1.25"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.thoughts-bin.options]
@@ -1380,26 +1334,72 @@ asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz"
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin."platforms.macos-arm64"]
-checksum = "sha256:7f784e584909700be24ec76629e4e78f7bd09dd036602014f5c19e886e16e96c"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/thoughts-bin-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616223"
+checksum = "sha256:57ef1356c167289be32e561e80015fcbf70ff0ad20b92d6a9816ed04b27ef650"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122638"
 
 [[tools.thoughts-bin]]
-version = "0.1.24"
+version = "0.1.25"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.thoughts-bin.options]
+asset_pattern = "thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+version_prefix = "thoughts-bin-v"
+
+[tools.thoughts-bin."platforms.linux-x64"]
+checksum = "sha256:96afc9913c544c58c747f5830c9ac068881c7b34b87c9555074403304e58a81f"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122653"
+
+[tools.thoughts-bin."platforms.linux-x64-baseline"]
+checksum = "sha256:96afc9913c544c58c747f5830c9ac068881c7b34b87c9555074403304e58a81f"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122653"
+
+[tools.thoughts-bin."platforms.linux-x64-musl"]
+checksum = "sha256:96afc9913c544c58c747f5830c9ac068881c7b34b87c9555074403304e58a81f"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122653"
+
+[tools.thoughts-bin."platforms.linux-x64-musl-baseline"]
+checksum = "sha256:96afc9913c544c58c747f5830c9ac068881c7b34b87c9555074403304e58a81f"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122653"
+
+[[tools.thoughts-bin]]
+version = "0.1.25"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.thoughts-bin.options]
+asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz"
+version_prefix = "thoughts-bin-v"
+
+[tools.thoughts-bin."platforms.macos-x64"]
+checksum = "sha256:c74c18a65a9bdb5b6fa2a67aa725753a7708198e464ee13ce2f308fd03e1cb35"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122650"
+
+[tools.thoughts-bin."platforms.macos-x64-baseline"]
+checksum = "sha256:c74c18a65a9bdb5b6fa2a67aa725753a7708198e464ee13ce2f308fd03e1cb35"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/thoughts-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122650"
+
+[[tools.thoughts-bin]]
+version = "0.1.25"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.thoughts-bin.options]
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin."platforms.windows-x64"]
-checksum = "sha256:2ec8a476b4104a8a00c3e3a5c8e58c2ea259856ee4af02d96d9976d9f0a4fd66"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616220"
+checksum = "sha256:7b21f65af121e9135cb31193c701259a5a8d8126a5a39096dc5a095b7c078488"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122640"
 
 [tools.thoughts-bin."platforms.windows-x64-baseline"]
-checksum = "sha256:2ec8a476b4104a8a00c3e3a5c8e58c2ea259856ee4af02d96d9976d9f0a4fd66"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.24/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/470616220"
+checksum = "sha256:7b21f65af121e9135cb31193c701259a5a8d8126a5a39096dc5a095b7c078488"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/thoughts-bin-v0.1.25/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/512122640"
 
 [[tools.trivy]]
 version = "0.69.3"
