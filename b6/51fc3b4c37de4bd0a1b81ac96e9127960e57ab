@@ -1,0 +1,19 @@
+.github/workflows/published-versions-sync.yml
+  s_d84ffe56b9988c::t_c04780145c39cd 53,137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b651fc3b4c37de4bd0a1b81ac96e9127960e57ab",
+  "prompts": {},
+  "sessions": {
+    "s_d84ffe56b9988c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_004260609ffekPlf3eeiPyMQ6r",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
