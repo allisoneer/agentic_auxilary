@@ -63,7 +63,7 @@ opentofu = "latest"
 # Keep nested per-platform tables at the end so later flat tool entries remain in top-level [tools].
 # BEGIN:xtask:autogen mise:agentic-binaries
 [tools.thoughts-bin]
-version = "0.1.24"
+version = "0.1.25"
 version_prefix = "thoughts-bin-v"
 
 [tools.thoughts-bin.platforms]
