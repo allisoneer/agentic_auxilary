@@ -2,7 +2,7 @@ schema_version = 1
 
 [binaries]
 agentic-bin = "0.1.20"
-agentic-mcp = "0.2.43"
+agentic-mcp = "0.2.44"
 agentic-outer-dag-bin = "0.1.12"
 opencode-orchestrator-mcp = "0.7.9"
 thoughts-bin = "0.1.24"
