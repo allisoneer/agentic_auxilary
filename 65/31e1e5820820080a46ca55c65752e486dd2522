@@ -1,0 +1,34 @@
+apps/attention-desktop/src/test/bridge.test.tsx
+  s_19e7a429157cb1::t_8313680dcea12a 183-198
+apps/attention-desktop/src-tauri/src/supervisor.rs
+  s_19e7a429157cb1::t_8313680dcea12a 700,741
+apps/attention-desktop/src-tauri/src/lib.rs
+  s_19e7a429157cb1::t_8313680dcea12a 541,552,559,561,565-574
+  s_19e7a429157cb1::t_cd156d9179dd75 575
+apps/attention-desktop/src/App.tsx
+  s_19e7a429157cb1::t_8313680dcea12a 126,129-133
+justfile
+  s_19e7a429157cb1::t_d383bb42100d2b 7
+  s_19e7a429157cb1::t_8313680dcea12a 69,72,75,78,81
+.github/workflows/ci.yml
+  s_19e7a429157cb1::t_8313680dcea12a 263-268
+apps/attention-desktop/src-tauri/src/live_tests.rs
+  s_19e7a429157cb1::t_8313680dcea12a 783,801-827,832-840
+  s_19e7a429157cb1::t_26dff549415dcf 828-831
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6531e1e5820820080a46ca55c65752e486dd2522",
+  "prompts": {},
+  "sessions": {
+    "s_19e7a429157cb1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffe1e3a17ffe7Tf9BtqIapwuFe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
