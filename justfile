@@ -4,7 +4,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 ci := env("CI", "false")
-wrap := "tools/agent-wrap.sh"
+wrap := justfile_directory() + "/tools/agent-wrap.sh"
 nextest_profile := if ci == "true" { "ci" } else if ci == "1" { "ci" } else { env("NEXTEST_PROFILE", "minimal") }
 nextest_verbose := env("NEXTEST_VERBOSE", "0")
 nextest_args := if nextest_verbose == "1" { "--status-level all --verbose" } else if nextest_verbose == "true" { "--status-level all --verbose" } else { "" }
@@ -66,19 +66,19 @@ test-ci: desktop-test
     AGENTIC_TASK_NAME=test-ci {{ wrap }} cargo nextest run --workspace --profile ci {{ nextest_args }}
 
 desktop-install:
-    cd apps/attention-desktop && bun install --frozen-lockfile
+    cd apps/attention-desktop && AGENTIC_TASK_NAME=desktop-install {{ wrap }} bun install --frozen-lockfile
 
 desktop-check:
-    cd apps/attention-desktop && bun run check
+    cd apps/attention-desktop && AGENTIC_TASK_NAME=desktop-check {{ wrap }} bun run check
 
 desktop-test:
-    cd apps/attention-desktop && bun run test
+    cd apps/attention-desktop && AGENTIC_TASK_NAME=desktop-test {{ wrap }} bun run test
 
 desktop-build:
-    cd apps/attention-desktop && bun run build
+    cd apps/attention-desktop && AGENTIC_TASK_NAME=desktop-build {{ wrap }} bun run build
 
 desktop-audit:
-    cd apps/attention-desktop && bun audit
+    cd apps/attention-desktop && AGENTIC_TASK_NAME=desktop-audit {{ wrap }} bun audit
 
 # Run integration tests (includes ignored tests that require git setup)
 test-integration: mcp-test

@@ -123,9 +123,14 @@ export function App({ api = bridge }: { api?: DesktopBridge }) {
         .catch(() => undefined);
     };
     void (async () => {
-      unlisten = await api.subscribe((message) =>
+      const stop = await api.subscribe((message) =>
         ready ? enqueue(message) : buffered.push(message),
       );
+      if (!active) {
+        stop();
+        return;
+      }
+      unlisten = stop;
       const current = await api.state();
       if (!active) return;
       await commitBootstrap(current);

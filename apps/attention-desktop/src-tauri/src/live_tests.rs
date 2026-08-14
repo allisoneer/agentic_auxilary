@@ -780,13 +780,7 @@ async fn live_supervisor_future_expired_and_stream_change_reset_to_fresh_snapsho
     .await;
     let initial_generation = initial.generation;
     let original_identity = original.identity().clone();
-    let initial_cursor = initial
-        .snapshot_after_cursor
-        .clone()
-        .ok_or("initial cursor")?;
-    stream_supervisor
-        .acknowledge_snapshot(initial_generation, initial_cursor)
-        .await?;
+    assert!(initial.snapshot_after_cursor.is_some());
     original.shutdown().await?;
     stream_supervisor
         .expect_identity_for_test(original_identity.server_id, original_identity.stream_id)
@@ -804,13 +798,46 @@ async fn live_supervisor_future_expired_and_stream_change_reset_to_fresh_snapsho
         state.generation > initial_generation && state.snapshot_after_cursor.is_some()
     })
     .await;
-    assert!(stream_state.replay.iter().any(|message| matches!(
-        message,
-        DesktopMessageDto::Reset {
-            reason: ResetReason::StreamChanged,
-            ..
-        }
-    )));
+    let reset_index = stream_state
+        .replay
+        .iter()
+        .position(|message| {
+            matches!(
+                message,
+                DesktopMessageDto::Reset {
+                    reason: ResetReason::StreamChanged,
+                    ..
+                }
+            )
+        })
+        .ok_or("stream-change reset")?;
+    let (replacement_sequence, replacement_generation, replacement_cursor) = stream_state
+        .replay
+        .iter()
+        .skip(reset_index + 1)
+        .find_map(|message| match message {
+            DesktopMessageDto::Snapshot {
+                sequence,
+                generation,
+                after_cursor,
+                ..
+            } => Some((*sequence, *generation, after_cursor.clone())),
+            _ => None,
+        })
+        .ok_or("replacement snapshot after stream-change reset")?;
+    let reset_sequence = match &stream_state.replay[reset_index] {
+        DesktopMessageDto::Reset { sequence, .. } => *sequence,
+        _ => return Err("stream-change reset index changed".into()),
+    };
+    assert!(reset_sequence < replacement_sequence);
+    assert_eq!(replacement_generation, stream_state.generation);
+    assert_eq!(
+        stream_state.snapshot_after_cursor.as_deref(),
+        Some(replacement_cursor.as_str())
+    );
+    stream_supervisor
+        .acknowledge_snapshot(replacement_generation, replacement_cursor)
+        .await?;
     stream_supervisor.close().await?;
     changed.shutdown().await?;
     Ok(())

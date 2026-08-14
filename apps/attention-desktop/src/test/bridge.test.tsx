@@ -180,4 +180,20 @@ describe("desktop shell", () => {
     view.unmount();
     expect(mock.unlisten).toHaveBeenCalledOnce();
   });
+
+  it("unlistens exactly once when subscribe resolves after unmount", async () => {
+    const mock = mockBridge();
+    let resolveSubscribe: ((stop: () => void) => void) | undefined;
+    vi.mocked(mock.api.subscribe).mockImplementation(
+      () => new Promise((resolve) => (resolveSubscribe = resolve)),
+    );
+    const view = render(<App api={mock.api} />);
+    await waitFor(() => expect(mock.api.subscribe).toHaveBeenCalledOnce());
+
+    view.unmount();
+    expect(mock.unlisten).not.toHaveBeenCalled();
+    await act(async () => resolveSubscribe?.(mock.unlisten));
+
+    expect(mock.unlisten).toHaveBeenCalledOnce();
+  });
 });

@@ -697,7 +697,7 @@ async fn emit_or_reset(
     let needs_snapshot = matches!(
         message,
         DesktopMessageDto::Reset {
-            reason: ResetReason::Overflow,
+            reason: ResetReason::Overflow | ResetReason::StreamChanged,
             ..
         }
     );
@@ -738,26 +738,7 @@ async fn update_status(shared: &RwLock<Shared>, current: ConnectionStatus) -> De
     }
     state.status = current.clone();
     if let Some(reason) = reset_reason {
-        if matches!(reason, ResetReason::StreamChanged) {
-            let fresh = state.snapshot.clone().zip(state.pending_snapshot.clone());
-            let reset_message = reset(&mut state, reason);
-            if let Some((snapshot, after_cursor)) = fresh {
-                state.snapshot = Some(snapshot.clone());
-                state.pending_snapshot = Some(after_cursor.clone());
-                state.gap_active = false;
-                return next_message(&mut state, |sequence, generation| {
-                    DesktopMessageDto::Snapshot {
-                        sequence,
-                        generation,
-                        state: snapshot,
-                        after_cursor,
-                    }
-                });
-            }
-            reset_message
-        } else {
-            reset(&mut state, reason)
-        }
+        reset(&mut state, reason)
     } else {
         next_message(&mut state, |sequence, generation| {
             DesktopMessageDto::Status {

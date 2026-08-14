@@ -538,7 +538,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stream_change_snapshot_restoration_allows_a_later_gap_reset() {
+    async fn stream_change_resets_and_discards_the_pending_snapshot() {
         let (supervisor, _) =
             DesktopSupervisor::for_test(1, Some("snapshot"), &[], VecDeque::new());
         supervisor.set_snapshot_for_test(ordered_snapshot()).await;
@@ -549,23 +549,29 @@ mod tests {
             )
             .await;
 
-        let restored = supervisor
+        let reset = supervisor
             .update_status_for_test(ConnectionStatus::Connected {
                 server_id: protocol::ServerId("new-server".into()),
                 stream_id: protocol::StreamId("new-stream".into()),
             })
             .await;
-        assert!(matches!(restored, DesktopMessageDto::Snapshot { .. }));
-
-        let gap = supervisor
-            .update_status_for_test(ConnectionStatus::Gap)
-            .await;
         assert!(matches!(
-            gap,
+            reset,
             DesktopMessageDto::Reset {
-                reason: ResetReason::Gap,
+                reason: ResetReason::StreamChanged,
                 ..
             }
+        ));
+        let state = supervisor.state().await;
+        assert_eq!(state.generation, 2);
+        assert!(state.snapshot.is_none());
+        assert!(state.snapshot_after_cursor.is_none());
+        assert!(matches!(
+            state.replay.as_slice(),
+            [DesktopMessageDto::Reset {
+                reason: ResetReason::StreamChanged,
+                ..
+            }]
         ));
     }
 
