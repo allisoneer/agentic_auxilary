@@ -115,7 +115,7 @@ async fn connection_cap_rejects_and_recovers() {
         other => panic!("unexpected error: {other}"),
     }
     drop(first);
-    let recovered = tokio::time::timeout(WAIT, async {
+    let Ok(recovered) = tokio::time::timeout(WAIT, async {
         loop {
             if let Ok(connection) = tokio_tungstenite::connect_async(server.url()).await {
                 break connection;
@@ -124,7 +124,9 @@ async fn connection_cap_rejects_and_recovers() {
         }
     })
     .await
-    .expect("connection slot release timeout");
+    else {
+        panic!("connection slot release timeout");
+    };
     drop(recovered);
     server.shutdown().await;
 }
