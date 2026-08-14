@@ -79,15 +79,21 @@ mod live_tests;
 
 #[cfg(test)]
 mod tests {
+    use crate::dto::AffectedViewDto;
+    use crate::dto::ChangeEventDto;
     use crate::dto::ConnectionStatusDto;
     use crate::dto::DesktopMessageDto;
+    use crate::dto::InboxEffectsDto;
+    use crate::dto::InboxEntryDto;
     use crate::dto::ResetReason;
+    use crate::dto::SnapshotDto;
     use crate::dto::WorkItemDto;
     use crate::error::DesktopErrorDto;
     use crate::supervisor::DesktopSupervisor;
     use crate::supervisor::TestMutationCall;
     use crate::supervisor::TestMutationResult;
     use attention_client::ClientError;
+    use attention_client::ConnectionStatus;
     use attention_protocol as protocol;
     use attention_protocol::Revision;
     use attention_protocol::WorkItemId;
@@ -173,6 +179,55 @@ mod tests {
 
     fn is_v7(value: &str) -> bool {
         uuid::Uuid::parse_str(value).is_ok_and(|id| id.get_version_num() == 7)
+    }
+
+    fn ordered_snapshot() -> SnapshotDto {
+        let item = |id: &str, revision: &str| WorkItemDto {
+            id: id.into(),
+            revision: revision.into(),
+            lifecycle: WorkItemLifecycle::Open,
+            due_at: None,
+            scheduled_at: None,
+            defer_until: None,
+        };
+        SnapshotDto {
+            work_items: vec![item("first", "1"), item("second", "1")],
+            attention_signals: vec![],
+            reminders: vec![],
+            inbox: vec![
+                InboxEntryDto::WorkItem {
+                    work_item: item("first", "1"),
+                },
+                InboxEntryDto::WorkItem {
+                    work_item: item("second", "1"),
+                },
+            ],
+        }
+    }
+
+    fn updating_change(cursor: &str) -> ChangeEventDto {
+        let updated = WorkItemDto {
+            id: "first".into(),
+            revision: "2".into(),
+            lifecycle: WorkItemLifecycle::Completed,
+            due_at: None,
+            scheduled_at: None,
+            defer_until: None,
+        };
+        ChangeEventDto {
+            id: "change".into(),
+            cursor: cursor.into(),
+            occurred_at: protocol::WireTimestamp::parse("2026-08-14T00:00:00.000000Z")
+                .expect("timestamp"),
+            kind: protocol::ChangeKind::WorkItemCompleted,
+            affected: vec![AffectedViewDto::WorkItem {
+                work_item: updated.clone(),
+            }],
+            inbox: InboxEffectsDto {
+                upserts: vec![InboxEntryDto::WorkItem { work_item: updated }],
+                removals: vec![],
+            },
+        }
     }
 
     #[test]
@@ -439,6 +494,79 @@ mod tests {
                 (false, "change-2".into())
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn change_is_applied_before_failed_ack_and_redelivery_remains_idempotent() {
+        let event = updating_change("change-1");
+        let replay = VecDeque::from([DesktopMessageDto::Change {
+            sequence: 1,
+            generation: 3,
+            event: event.clone(),
+        }]);
+        let (supervisor, transport) = DesktopSupervisor::for_test(3, None, &["change-1"], replay);
+        supervisor.set_snapshot_for_test(ordered_snapshot()).await;
+        transport.script_acknowledgements([
+            Err(ClientError::Transport("injected ack failure".into())),
+            Ok(()),
+        ]);
+
+        let error = supervisor
+            .acknowledge_change(3, "change-1".into())
+            .await
+            .expect_err("first acknowledgement must fail");
+        assert_eq!(error.category, "transport");
+        let applied = supervisor.state().await;
+        let snapshot = applied.snapshot.expect("materialized snapshot");
+        assert_eq!(snapshot.work_items[0].revision, "2");
+        assert_eq!(snapshot.work_items[1].id, "second");
+        assert!(applied.replay.is_empty());
+
+        supervisor.redeliver_change_for_test(event).await;
+        supervisor
+            .acknowledge_change(3, "change-1".into())
+            .await
+            .expect("redelivered acknowledgement");
+        let redelivered = supervisor.state().await.snapshot.expect("snapshot");
+        assert_eq!(redelivered.work_items.len(), 2);
+        assert_eq!(redelivered.work_items[0].revision, "2");
+        assert_eq!(redelivered.work_items[1].id, "second");
+        assert_eq!(
+            *transport.acknowledgements.lock().expect("ack log"),
+            vec![(false, "change-1".into()), (false, "change-1".into())]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_change_snapshot_restoration_allows_a_later_gap_reset() {
+        let (supervisor, _) =
+            DesktopSupervisor::for_test(1, Some("snapshot"), &[], VecDeque::new());
+        supervisor.set_snapshot_for_test(ordered_snapshot()).await;
+        supervisor
+            .expect_identity_for_test(
+                protocol::ServerId("old-server".into()),
+                protocol::StreamId("old-stream".into()),
+            )
+            .await;
+
+        let restored = supervisor
+            .update_status_for_test(ConnectionStatus::Connected {
+                server_id: protocol::ServerId("new-server".into()),
+                stream_id: protocol::StreamId("new-stream".into()),
+            })
+            .await;
+        assert!(matches!(restored, DesktopMessageDto::Snapshot { .. }));
+
+        let gap = supervisor
+            .update_status_for_test(ConnectionStatus::Gap)
+            .await;
+        assert!(matches!(
+            gap,
+            DesktopMessageDto::Reset {
+                reason: ResetReason::Gap,
+                ..
+            }
+        ));
     }
 
     #[test]

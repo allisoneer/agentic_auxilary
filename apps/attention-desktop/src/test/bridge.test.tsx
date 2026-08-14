@@ -107,6 +107,7 @@ describe("desktop shell", () => {
       mock.emit({ type: "snapshot", sequence: 4, generation: 1, state: empty, afterCursor: "old" }),
     );
     await act(async () =>
+      // Sequence 3 deliberately duplicates the reset sequence to verify stale suppression.
       mock.emit({ type: "status", sequence: 3, generation: 2, status: { kind: "closed" } }),
     );
     expect(mock.api.acknowledgeSnapshot).not.toHaveBeenCalledWith(1, "old");
@@ -143,6 +144,33 @@ describe("desktop shell", () => {
     expect(mock.api.acknowledgeSnapshot).toHaveBeenCalledWith(1, "10");
     expect(mock.api.acknowledgeChange).toHaveBeenCalledTimes(1);
     expect(mock.calls.slice(-2)).toEqual(["snapshot-ack", "change-ack"]);
+  });
+
+  it("handles rejected state recovery during startup", async () => {
+    const mock = mockBridge();
+    vi.mocked(mock.api.state).mockRejectedValue(new Error("state unavailable"));
+    render(<App api={mock.api} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/recovering from a fresh state/);
+    await waitFor(() => expect(mock.api.state).toHaveBeenCalledTimes(2));
+  });
+
+  it("handles rejected state recovery after a serial acknowledgement failure", async () => {
+    const mock = mockBridge();
+    vi.mocked(mock.api.acknowledgeChange).mockRejectedValue(new Error("ack failed"));
+    vi.mocked(mock.api.state)
+      .mockResolvedValueOnce({
+        sequence: 1,
+        generation: 1,
+        status: { kind: "connected" },
+        snapshot: empty,
+        replay: [],
+      })
+      .mockRejectedValueOnce(new Error("state unavailable"));
+    render(<App api={mock.api} />);
+    await waitFor(() => expect(mock.api.state).toHaveBeenCalledOnce());
+    act(() => mock.emit(workChange));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/recovering from a fresh state/);
+    await waitFor(() => expect(mock.api.state).toHaveBeenCalledTimes(2));
   });
 
   it("unlistens on unmount", async () => {

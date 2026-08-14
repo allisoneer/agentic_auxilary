@@ -119,7 +119,8 @@ describe("Inbox mutation UI", () => {
   });
 
   it("canonicalizes valid local values to UTC RFC3339 microseconds and rejects invalid values", () => {
-    const expected = new Date(2026, 4, 6, 7, 8, 9, 120).toISOString().replace(".120Z", ".120000Z");
+    const [wholeSeconds] = new Date(2026, 4, 6, 7, 8, 9, 120).toISOString().split(".");
+    const expected = `${wholeSeconds}.120000Z`;
     expect(canonicalizeLocalDateTime("2026-05-06T07:08:09.12")).toBe(expected);
     expect(() => canonicalizeLocalDateTime("2026-02-30T10:00")).toThrow(/valid local/);
     expect(() => canonicalizeLocalDateTime("not-a-date")).toThrow(/valid local/);

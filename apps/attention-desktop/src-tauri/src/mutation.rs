@@ -72,7 +72,11 @@ pub enum MutationDispositionDto {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum MutationResourceDto {
     WorkItem {
         id: String,
@@ -277,7 +281,7 @@ mod tests {
         assert_eq!(revision("01").unwrap_err().category, "validation");
     }
     #[test]
-    fn receipt_drops_outbox() {
+    fn receipt_uses_camel_case_resource_fields_and_drops_outbox() {
         let receipt = reminder_receipt(p::MutationResult {
             disposition: p::MutationDisposition::Applied,
             value: p::ReminderMutationValue {
@@ -288,7 +292,11 @@ mod tests {
             change_event_id: p::ChangeEventId("e".into()),
             outbox_intent_id: Some(p::OutboxIntentId("private-outbox".into())),
         });
-        let json = serde_json::to_string(&receipt).unwrap();
-        assert!(!json.contains("outbox"));
+        let json = serde_json::to_value(&receipt).unwrap();
+        assert_eq!(json["resource"]["reminderId"], "r");
+        assert_eq!(json["resource"]["fireId"], "f");
+        assert!(json["resource"].get("reminder_id").is_none());
+        assert!(json["resource"].get("fire_id").is_none());
+        assert!(!json.to_string().contains("outbox"));
     }
 }

@@ -56,7 +56,8 @@ fn resource(resource: ResourceRef) -> Option<(&'static str, String)> {
         ResourceRef::AttentionSignal { id } => Some(("attention_signal", id.0)),
         ResourceRef::Reminder { id } => Some(("reminder", id.0)),
         ResourceRef::ReminderFire { id } => Some(("reminder_fire", id.0)),
-        _ => None,
+        ResourceRef::SourceReceipt { id } => Some(("source_receipt", id.0)),
+        ResourceRef::SourceEntity { .. } | ResourceRef::SourceOccurrence { .. } => None,
     }
 }
 
@@ -108,5 +109,41 @@ impl From<ClientError> for DesktopErrorDto {
             ClientError::InvalidCursorAcknowledgement(_) => Self::invalid_ack(),
             ClientError::Closed => Self::closed(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use attention_protocol as protocol;
+
+    #[test]
+    fn resource_maps_named_source_receipts_and_falls_back_for_structured_keys() {
+        assert_eq!(
+            resource(ResourceRef::SourceReceipt {
+                id: protocol::SourceReceiptId("receipt".into()),
+            }),
+            Some(("source_receipt", "receipt".into()))
+        );
+        assert_eq!(
+            resource(ResourceRef::SourceEntity {
+                key: protocol::SourceEntityKey {
+                    source_kind: protocol::SourceKind("kind".into()),
+                    source_instance: protocol::SourceInstance("instance".into()),
+                    external_entity_id: protocol::ExternalEntityId("entity".into()),
+                },
+            }),
+            None
+        );
+        assert_eq!(
+            resource(ResourceRef::SourceOccurrence {
+                key: protocol::OccurrenceKey {
+                    source_kind: protocol::SourceKind("kind".into()),
+                    source_instance: protocol::SourceInstance("instance".into()),
+                    occurrence_id: protocol::OccurrenceId("occurrence".into()),
+                },
+            }),
+            None
+        );
     }
 }

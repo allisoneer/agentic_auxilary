@@ -60,6 +60,8 @@ impl Fixture {
     }
 
     async fn set_floor(&self, floor: u64) -> TestResult {
+        // Deliberate fault injection against attention_stream_state.floor_cursor
+        // and singleton, as defined by 0002_attention_core.sql.
         let config = self.turso()?;
         let path = config.database_directory().database_file();
         let database = Builder::new_local(path.to_str().ok_or("database path encoding")?)
@@ -76,6 +78,8 @@ impl Fixture {
     }
 
     async fn change_stream(&self) -> TestResult {
+        // Deliberate fault injection against attention_server_identity.stream_id
+        // and singleton, as defined by 0004_server_identity.sql.
         let config = self.turso()?;
         let path = config.database_directory().database_file();
         let database = Builder::new_local(path.to_str().ok_or("database path encoding")?)
@@ -417,9 +421,13 @@ async fn live_bridge_scheduler_acknowledge_and_snooze_replacement_are_event_auth
             .is_some_and(|snapshot| snapshot.reminders.is_empty())
     );
     wait_and_ack_change(&supervisor, generation, &created.cursor).await?;
-    while time.sleep_calls() == 0 {
-        tokio::task::yield_now().await;
-    }
+    tokio::time::timeout(WAIT, async {
+        while time.sleep_calls() == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("scheduler sleep registration timeout");
     time.advance("2030-01-01T00:01:00Z");
     let (pending_fire, fired_cursor) = wait_fire_event(&supervisor, &fire_id).await;
     assert!(!inbox_has_fire(&pending_fire, &fire_id));
@@ -437,8 +445,15 @@ async fn live_bridge_scheduler_acknowledge_and_snooze_replacement_are_event_auth
     assert!(inbox_has_fire(&supervisor.state().await, &fire_id));
     wait_and_ack_change(&supervisor, generation, &acknowledged.cursor).await?;
     assert!(!inbox_has_fire(&supervisor.state().await, &fire_id));
+    let pass_before = time.sleep_calls();
     time.advance("2030-01-01T00:10:00Z");
-    tokio::task::yield_now().await;
+    tokio::time::timeout(WAIT, async {
+        while time.sleep_calls() == pass_before {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("scheduler pass timeout");
     assert!(!inbox_has_fire(&supervisor.state().await, &fire_id));
 
     let snooze_created = supervisor
@@ -696,6 +711,7 @@ async fn live_supervisor_bootstrap_event_ack_restart_resume_and_clean_close() ->
     disconnected_writer.close().await?;
 
     supervisor.close().await?;
+    // A second close deliberately verifies the supervisor's idempotency contract.
     supervisor.close().await?;
     restarted.shutdown().await?;
     Ok(())

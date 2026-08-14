@@ -3,6 +3,17 @@ import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
+export function desktopBuildOptions(debugValue: string | undefined): {
+  minify: false | "esbuild";
+  sourcemap: boolean;
+} {
+  const debug = debugValue === "true";
+  return {
+    minify: debug ? false : "esbuild",
+    sourcemap: debug,
+  };
+}
+
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
@@ -16,7 +27,6 @@ export default defineConfig({
   },
   build: {
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
-    minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
-    sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
+    ...desktopBuildOptions(process.env.TAURI_ENV_DEBUG),
   },
 });

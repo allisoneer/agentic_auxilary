@@ -117,7 +117,10 @@ export function App({ api = bridge }: { api?: DesktopBridge }) {
       if (active && current.sequence >= stateRef.current.sequence) await commitBootstrap(current);
     };
     const enqueue = (message: DesktopMessage) => {
-      serial = serial.then(() => apply(message)).catch(() => recover());
+      serial = serial
+        .then(() => apply(message))
+        .catch(() => recover())
+        .catch(() => undefined);
     };
     void (async () => {
       unlisten = await api.subscribe((message) =>
@@ -131,7 +134,7 @@ export function App({ api = bridge }: { api?: DesktopBridge }) {
       buffered = [];
     })().catch(() => {
       ready = true;
-      void recover();
+      void recover().catch(() => undefined);
     });
     return () => {
       active = false;

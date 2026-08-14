@@ -31,6 +31,7 @@ describe("desktop static security boundary", () => {
     };
 
     expect(config.app.windows.map(({ label }) => label)).toEqual(["main"]);
+    expect(config.build.devUrl).toMatch(/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/?$/);
     expect(config.app.security.capabilities).toEqual(["default"]);
     expect(config.app.security.csp).toEqual({
       "default-src": "'self'",

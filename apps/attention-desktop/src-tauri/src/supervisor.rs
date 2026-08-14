@@ -89,6 +89,7 @@ pub enum TestMutationResult {
 #[derive(Default)]
 pub struct TestTransport {
     pub acknowledgements: std::sync::Mutex<Vec<(bool, String)>>,
+    pub acknowledgement_results: std::sync::Mutex<VecDeque<Result<(), ClientError>>>,
     pub mutation_calls: std::sync::Mutex<Vec<TestMutationCall>>,
     pub mutation_results: std::sync::Mutex<VecDeque<TestMutationResult>>,
     pub closed: AtomicBool,
@@ -96,6 +97,28 @@ pub struct TestTransport {
 
 #[cfg(test)]
 impl TestTransport {
+    pub fn script_acknowledgements(
+        &self,
+        results: impl IntoIterator<Item = Result<(), ClientError>>,
+    ) {
+        self.acknowledgement_results
+            .lock()
+            .expect("test acknowledgement result lock")
+            .extend(results);
+    }
+
+    fn acknowledge(&self, snapshot: bool, cursor: String) -> Result<(), ClientError> {
+        self.acknowledgements
+            .lock()
+            .expect("test acknowledgement lock")
+            .push((snapshot, cursor));
+        self.acknowledgement_results
+            .lock()
+            .expect("test acknowledgement result lock")
+            .pop_front()
+            .unwrap_or(Ok(()))
+    }
+
     pub fn script(&self, results: impl IntoIterator<Item = TestMutationResult>) {
         self.mutation_results
             .lock()
@@ -262,10 +285,8 @@ impl DesktopSupervisor {
                 .map_err(DesktopErrorDto::from)?,
             #[cfg(test)]
             Transport::Test(transport) => transport
-                .acknowledgements
-                .lock()
-                .expect("test acknowledgement lock")
-                .push((true, cursor.clone())),
+                .acknowledge(true, cursor.clone())
+                .map_err(DesktopErrorDto::from)?,
         }
         let mut state = self.shared.write().await;
         if state.generation != generation || state.pending_snapshot.as_deref() != Some(&cursor) {
@@ -292,29 +313,11 @@ impl DesktopSupervisor {
         cursor: String,
     ) -> Result<(), DesktopErrorDto> {
         let _serial = self.acknowledgements.lock().await;
-        {
-            let state = self.shared.read().await;
-            if state.generation != generation
-                || state.pending_snapshot.is_some()
-                || state.pending_changes.front() != Some(&cursor)
-            {
-                return Err(DesktopErrorDto::invalid_ack());
-            }
-        }
-        match &self.transport {
-            Transport::Live(client) => client
-                .acknowledge_cursor(Cursor(cursor.clone()))
-                .await
-                .map_err(DesktopErrorDto::from)?,
-            #[cfg(test)]
-            Transport::Test(transport) => transport
-                .acknowledgements
-                .lock()
-                .expect("test acknowledgement lock")
-                .push((false, cursor.clone())),
-        }
         let mut state = self.shared.write().await;
-        if state.generation != generation || state.pending_changes.front() != Some(&cursor) {
+        if state.generation != generation
+            || state.pending_snapshot.is_some()
+            || state.pending_changes.front() != Some(&cursor)
+        {
             return Err(DesktopErrorDto::invalid_ack());
         }
         let applied = state.replay.iter().find_map(|message| match message {
@@ -329,6 +332,17 @@ impl DesktopSupervisor {
                 snapshot.apply(&event);
             }
             compact_replay(&mut state, sequence);
+        }
+        drop(state);
+        match &self.transport {
+            Transport::Live(client) => client
+                .acknowledge_cursor(Cursor(cursor.clone()))
+                .await
+                .map_err(DesktopErrorDto::from)?,
+            #[cfg(test)]
+            Transport::Test(transport) => transport
+                .acknowledge(false, cursor)
+                .map_err(DesktopErrorDto::from)?,
         }
         Ok(())
     }
@@ -530,6 +544,32 @@ impl DesktopSupervisor {
             }
         });
     }
+
+    #[cfg(test)]
+    pub(crate) async fn set_snapshot_for_test(&self, snapshot: SnapshotDto) {
+        self.shared.write().await.snapshot = Some(snapshot);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn redeliver_change_for_test(&self, event: ChangeEventDto) {
+        let mut state = self.shared.write().await;
+        state.pending_changes.push_back(event.cursor.clone());
+        next_message(&mut state, |sequence, generation| {
+            DesktopMessageDto::Change {
+                sequence,
+                generation,
+                event,
+            }
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn update_status_for_test(
+        &self,
+        current: ConnectionStatus,
+    ) -> DesktopMessageDto {
+        update_status(&self.shared, current).await
+    }
 }
 
 async fn forward(
@@ -704,6 +744,7 @@ async fn update_status(shared: &RwLock<Shared>, current: ConnectionStatus) -> De
             if let Some((snapshot, after_cursor)) = fresh {
                 state.snapshot = Some(snapshot.clone());
                 state.pending_snapshot = Some(after_cursor.clone());
+                state.gap_active = false;
                 return next_message(&mut state, |sequence, generation| {
                     DesktopMessageDto::Snapshot {
                         sequence,

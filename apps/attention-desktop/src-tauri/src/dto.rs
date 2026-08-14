@@ -68,17 +68,37 @@ impl SnapshotDto {
         for affected in &event.affected {
             match affected {
                 AffectedViewDto::WorkItem { work_item } => {
-                    self.work_items.retain(|item| item.id != work_item.id);
-                    self.work_items.push(work_item.clone());
+                    if let Some(index) = self
+                        .work_items
+                        .iter()
+                        .position(|item| item.id == work_item.id)
+                    {
+                        self.work_items[index] = work_item.clone();
+                    } else {
+                        self.work_items.push(work_item.clone());
+                    }
                 }
                 AffectedViewDto::AttentionSignal { attention_signal } => {
-                    self.attention_signals
-                        .retain(|item| item.id != attention_signal.id);
-                    self.attention_signals.push(attention_signal.clone());
+                    if let Some(index) = self
+                        .attention_signals
+                        .iter()
+                        .position(|item| item.id == attention_signal.id)
+                    {
+                        self.attention_signals[index] = attention_signal.clone();
+                    } else {
+                        self.attention_signals.push(attention_signal.clone());
+                    }
                 }
                 AffectedViewDto::Reminder { reminder } => {
-                    self.reminders.retain(|item| item.id != reminder.id);
-                    self.reminders.push(reminder.clone());
+                    if let Some(index) = self
+                        .reminders
+                        .iter()
+                        .position(|item| item.id == reminder.id)
+                    {
+                        self.reminders[index] = reminder.clone();
+                    } else {
+                        self.reminders.push(reminder.clone());
+                    }
                 }
             }
         }
@@ -90,8 +110,15 @@ impl SnapshotDto {
                 .any(|key| entry.matches_key(key))
         });
         for upsert in &event.inbox.upserts {
-            self.inbox.retain(|entry| !entry.same_identity(upsert));
-            self.inbox.push(upsert.clone());
+            if let Some(index) = self
+                .inbox
+                .iter()
+                .position(|entry| entry.same_identity(upsert))
+            {
+                self.inbox[index] = upsert.clone();
+            } else {
+                self.inbox.push(upsert.clone());
+            }
         }
     }
 }
@@ -642,7 +669,6 @@ mod sanitization_tests {
             "refreshToken",
             "rawError",
             "raw_error",
-            "data",
         ];
         match value {
             Value::Object(object) => {
@@ -655,6 +681,22 @@ mod sanitization_tests {
                 }
             }
             Value::Array(values) => values.iter().for_each(assert_no_forbidden_keys),
+            _ => {}
+        }
+    }
+
+    fn assert_client_error_data_is_dropped(value: &Value) {
+        match value {
+            Value::Object(object) => {
+                assert!(
+                    !object.contains_key("data"),
+                    "client error data crossed IPC"
+                );
+                object
+                    .values()
+                    .for_each(assert_client_error_data_is_dropped);
+            }
+            Value::Array(values) => values.iter().for_each(assert_client_error_data_is_dropped),
             _ => {}
         }
     }
@@ -690,6 +732,53 @@ mod sanitization_tests {
             event_json["inbox"]["removals"].as_array().map(Vec::len),
             Some(3)
         );
+    }
+
+    #[test]
+    fn snapshot_upserts_replace_existing_entries_without_reordering() {
+        let mut snapshot = SnapshotDto::from(snapshot());
+        let second_work = WorkItemDto {
+            id: "work-second".into(),
+            revision: "1".into(),
+            lifecycle: protocol::WorkItemLifecycle::Open,
+            due_at: None,
+            scheduled_at: None,
+            defer_until: None,
+        };
+        snapshot.work_items.push(second_work.clone());
+        let mut updated_work = snapshot.work_items[0].clone();
+        updated_work.revision = "10".into();
+
+        let second_inbox = InboxEntryDto::WorkItem {
+            work_item: second_work,
+        };
+        snapshot.inbox.push(second_inbox);
+        let mut updated_inbox = snapshot.inbox[0].clone();
+        let InboxEntryDto::WorkItem { work_item } = &mut updated_inbox else {
+            panic!("first inbox fixture must be a work item");
+        };
+        work_item.revision = "11".into();
+
+        let mut event = ChangeEventDto::from(change());
+        event.affected = vec![AffectedViewDto::WorkItem {
+            work_item: updated_work,
+        }];
+        event.inbox = InboxEffectsDto {
+            upserts: vec![updated_inbox],
+            removals: vec![],
+        };
+        snapshot.apply(&event);
+
+        assert_eq!(snapshot.work_items[0].revision, "10");
+        assert_eq!(snapshot.work_items[1].id, "work-second");
+        assert!(matches!(
+            &snapshot.inbox[0],
+            InboxEntryDto::WorkItem { work_item } if work_item.revision == "11"
+        ));
+        assert!(matches!(
+            &snapshot.inbox[4],
+            InboxEntryDto::WorkItem { work_item } if work_item.id == "work-second"
+        ));
     }
 
     #[test]
@@ -780,6 +869,7 @@ mod sanitization_tests {
             let mapped = crate::error::DesktopErrorDto::from(error);
             let error_value = serde_json::to_value(&mapped).expect("serialize command error DTO");
             assert_ipc_safe(&error_value);
+            assert_client_error_data_is_dropped(&error_value);
             assert_eq!(error_value["category"], category);
             let issue_value = serde_json::to_value(DesktopMessageDto::Issue {
                 sequence: 1,
