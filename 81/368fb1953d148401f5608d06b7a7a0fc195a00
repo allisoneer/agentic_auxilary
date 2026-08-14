@@ -1,0 +1,16 @@
+apps/attention-desktop/src-tauri/src/lib.rs
+  h_9f073efcf2206c 21-32,43-44,100,483-495
+apps/attention-desktop/src-tauri/src/supervisor.rs
+  h_9f073efcf2206c 165-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "81368fb1953d148401f5608d06b7a7a0fc195a00",
+  "prompts": {},
+  "humans": {
+    "h_9f073efcf2206c": {
+      "author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
