@@ -1,0 +1,96 @@
+apps/attention-server/src/scheduler.rs
+  s_99dc849bf694f9::t_a29a1926d4cc0f 3,26,46-50
+apps/attention-server/src/mapping.rs
+  s_fb5e6ff9d855d9::t_c0249f97a14cc5 199-206,216,224-231,816,907,913-914
+  s_99dc849bf694f9::t_b73b16f9ed6f98 809-815,817-843,856-858,863-883,893-898,900-901,904-906,908-912,915-916
+  s_99dc849bf694f9::t_b863df2fa5a3b1 859-862,884-892
+  s_99dc849bf694f9::t_0f56385d2dffbb 17-31,195-198,215,223,239,243,254,271-274,280-283,312,321,329,332
+  s_99dc849bf694f9::t_eed7e06bc46068 313,331,899,902-903
+apps/attention-server/README.md
+  s_99dc849bf694f9::t_c84c79e9dc489f 55-56,59-61,69
+  s_99dc849bf694f9::t_86237833e1e636 70
+apps/attention-server/src/time.rs
+  s_99dc849bf694f9::t_a29a1926d4cc0f 1-4,6-34
+  s_ff419ee25bd8f8::t_aea198d2f737db 5
+apps/attention-server/tests/raw.rs
+  s_99dc849bf694f9::t_34b615d9145ac5 133-173
+  s_99dc849bf694f9::t_e83da33622055a 132
+apps/attention-server/src/turso_service.rs
+  s_fb5e6ff9d855d9::t_c0249f97a14cc5 1
+  s_99dc849bf694f9::t_88afd7a1a43227 6,10,43,48-52,56,61-64,72-73,261,288,314,341,402,428,455
+  s_99dc849bf694f9::t_44e6def53ff4b7 117
+apps/attention-server/tests/turso.rs
+  s_99dc849bf694f9::t_c6539477a94e0f 13-14,2237-2247,2249-2251,2253-2254,2256-2277,2279-2283,2299-2303,2318,2359-2370,2377
+  s_99dc849bf694f9::t_48426a19da3641 877-968
+  s_99dc849bf694f9::t_b6d32f6aff1718 2248,2252,2255,2284-2298
+  s_fb5e6ff9d855d9::t_c0249f97a14cc5 2278
+  s_99dc849bf694f9::t_be1c036af83333 876
+  s_99dc849bf694f9::t_5adeb9341075b1 2236
+apps/attention-server/src/runtime.rs
+  s_99dc849bf694f9::t_af2d8f9e5bd641 96,114
+apps/attention-server/src/connection.rs
+  s_0442cc32e05a27::t_d867e88307767d 1223
+  s_99dc849bf694f9::t_447ac72a7192c7 10,14,23-28,30,43-50,56-63,72-74,79-84,91-93,98-103,109-116,125-132,137-144,150-152,157-162,166-173,177-183,198-203,210-218,236,310,317-323,604-607,612-662
+  s_97bf81252eab9a::t_a1f80eb28c7729 204-205
+  s_99dc849bf694f9::t_eed7e06bc46068 3,823-827
+  s_99dc849bf694f9::t_42449085913486 31-37
+  s_99dc849bf694f9::t_eaeed63a82fb78 689,691,694,733,799
+  s_99dc849bf694f9::t_a518d7e6041ab3 1082-1145,1163-1222,1224-1230
+  s_99dc849bf694f9::t_281266b159555a 29
+  s_99dc849bf694f9::t_3951b61be48311 1231
+apps/attention-server/src/config.rs
+  s_99dc849bf694f9::t_eaeed63a82fb78 74-80
+  s_99dc849bf694f9::t_a4591a766598f2 28-29,54-55,106-107,150-169
+apps/attention-server/src/lib.rs
+  s_99dc849bf694f9::t_a29a1926d4cc0f 10
+apps/attention-server/src/state.rs
+  s_99dc849bf694f9::t_88afd7a1a43227 1-2,36,48-56,72,83,92,103,114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f0763f57c46cee2a8814352856806bcbaa7bbb7a",
+  "prompts": {},
+  "sessions": {
+    "s_0442cc32e05a27": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0013805cfffeCCIfFKxUXzrAkY",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_97bf81252eab9a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_001395f5bffef4seEg9wxzL55p",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_99dc849bf694f9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0013e2333ffe4ZJt2kkHjXAh3X",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_fb5e6ff9d855d9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0012f839dffe7BHWHh8eJb9tIv",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_ff419ee25bd8f8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_00129fbd1ffe4mjZBNcR3Ud88Q",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
