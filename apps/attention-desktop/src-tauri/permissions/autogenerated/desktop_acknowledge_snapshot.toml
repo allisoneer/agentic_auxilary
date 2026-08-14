@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-acknowledge-snapshot"
+description = "Enables the desktop_acknowledge_snapshot command without any pre-configured scope."
+commands.allow = ["desktop_acknowledge_snapshot"]
+
+[[permission]]
+identifier = "deny-desktop-acknowledge-snapshot"
+description = "Denies the desktop_acknowledge_snapshot command without any pre-configured scope."
+commands.deny = ["desktop_acknowledge_snapshot"]

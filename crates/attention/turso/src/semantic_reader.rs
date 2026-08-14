@@ -8,6 +8,8 @@ use attention_kernel::AttentionSignal;
 use attention_kernel::AttentionSignalId;
 use attention_kernel::AttentionSnapshot;
 use attention_kernel::CanonicalFingerprint;
+use attention_kernel::ChangeEvent;
+use attention_kernel::ChangeEventId;
 use attention_kernel::ChangeGap;
 use attention_kernel::ChangePage;
 use attention_kernel::ChangesAfterQuery;
@@ -19,6 +21,7 @@ use attention_kernel::MutationIdempotencyKey;
 use attention_kernel::MutationOperation;
 use attention_kernel::OccurrenceKey;
 use attention_kernel::PriorMutationOutcome;
+use attention_kernel::PriorMutationRecord;
 use attention_kernel::Reminder;
 use attention_kernel::ReminderId;
 use attention_kernel::SourceAuthorityQuery;
@@ -235,6 +238,49 @@ pub async fn outcome(
                         let version = decode::integer(row, 2)?;
                         let bytes = decode::blob(row, 3)?;
                         codec::decode_outcome_for_operation(operation, version, &bytes)
+                    },
+                )
+                .await
+            }
+            .boxed()
+        })
+        .await
+}
+
+pub async fn prior_mutation(
+    readers: &ReaderPool,
+    engine: &Mutex<Option<Database>>,
+    key: MutationIdempotencyKey,
+) -> Result<Option<PriorMutationRecord>, Error> {
+    Ok(stored_outcome(readers, engine, key).await?.map(|stored| {
+        PriorMutationRecord::new(stored.operation, stored.fingerprint, stored.outcome)
+    }))
+}
+
+pub async fn change_event(
+    readers: &ReaderPool,
+    engine: &Mutex<Option<Database>>,
+    id: ChangeEventId,
+) -> Result<Option<ChangeEvent>, Error> {
+    readers
+        .with_snapshot(engine, move |transaction| {
+            async move {
+                one(
+                    transaction,
+                    domain_sql::SELECT_CHANGE_EVENT,
+                    params![mapping::id(id)],
+                    |row| {
+                        let cursor =
+                            CommitCursor::try_from(mapping::parse_counter(&decode::blob(row, 0)?)?)
+                                .map_err(|error| Error::Decode(Box::new(error)))?;
+                        codec::decode_event(
+                            cursor,
+                            mapping::parse_id(&decode::text(row, 1)?)?,
+                            mapping::parse_timestamp(&decode::text(row, 2)?)?,
+                            mapping::parse_change_kind(decode::integer(row, 3)?)?,
+                            decode::integer(row, 4)?,
+                            &decode::blob(row, 5)?,
+                        )
                     },
                 )
                 .await

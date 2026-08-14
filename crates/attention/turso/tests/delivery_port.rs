@@ -174,6 +174,12 @@ async fn completion_precedence_retry_eligibility_and_event_independence() -> Tes
         database
             .succeed(ids[0], stale, provider.clone(), succeeded_at)
             .await?,
+        DeliveryCompletionOutcome::Fenced
+    );
+    assert_eq!(
+        database
+            .succeed(ids[0], success.token(), provider.clone(), succeeded_at)
+            .await?,
         DeliveryCompletionOutcome::Repeated
     );
     assert_eq!(
@@ -181,6 +187,17 @@ async fn completion_precedence_retry_eligibility_and_event_independence() -> Tes
             .succeed(
                 ids[0],
                 stale,
+                ProviderMessageId::new("provider-2", 128)?,
+                succeeded_at
+            )
+            .await?,
+        DeliveryCompletionOutcome::Fenced
+    );
+    assert_eq!(
+        database
+            .succeed(
+                ids[0],
+                success.token(),
                 ProviderMessageId::new("provider-2", 128)?,
                 succeeded_at
             )
@@ -198,8 +215,27 @@ async fn completion_precedence_retry_eligibility_and_event_independence() -> Tes
         DeliveryCompletionOutcome::Applied
     );
     assert_eq!(
-        database.skip(ids[1], stale, reason, skipped_at).await?,
+        database
+            .skip(ids[1], stale, reason.clone(), skipped_at)
+            .await?,
+        DeliveryCompletionOutcome::Fenced
+    );
+    assert_eq!(
+        database
+            .skip(ids[1], skipped.token(), reason.clone(), skipped_at)
+            .await?,
         DeliveryCompletionOutcome::Repeated
+    );
+    assert_eq!(
+        database
+            .skip(
+                ids[1],
+                skipped.token(),
+                BoundedDeliveryText::new("changed", 128)?,
+                skipped_at
+            )
+            .await?,
+        DeliveryCompletionOutcome::Conflict
     );
 
     let terminal = claim(ids[2])?;
@@ -219,7 +255,19 @@ async fn completion_precedence_retry_eligibility_and_event_independence() -> Tes
     );
     assert_eq!(
         database
-            .fail_terminal(ids[2], stale, u32::MAX, terminal_error, failed_at)
+            .fail_terminal(ids[2], stale, u32::MAX, terminal_error.clone(), failed_at)
+            .await?,
+        DeliveryCompletionOutcome::Fenced
+    );
+    assert_eq!(
+        database
+            .fail_terminal(
+                ids[2],
+                terminal.token(),
+                u32::MAX,
+                terminal_error,
+                failed_at
+            )
             .await?,
         DeliveryCompletionOutcome::Repeated
     );
@@ -237,13 +285,25 @@ async fn completion_precedence_retry_eligibility_and_event_independence() -> Tes
         database
             .fail_retryable(
                 ids[3],
-                retry.token(),
+                stale,
                 2,
                 BoundedDeliveryText::new("retry", 128)?,
                 retry_at
             )
             .await?,
         DeliveryCompletionOutcome::Fenced
+    );
+    assert_eq!(
+        database
+            .fail_retryable(
+                ids[3],
+                retry.token(),
+                2,
+                BoundedDeliveryText::new("retry", 128)?,
+                retry_at
+            )
+            .await?,
+        DeliveryCompletionOutcome::Repeated
     );
     assert!(
         database

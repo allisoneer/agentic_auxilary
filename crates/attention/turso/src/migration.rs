@@ -7,7 +7,7 @@ use turso_db::Connection;
 use turso_db::params;
 use turso_db::transaction::TransactionBehavior;
 
-pub const MIGRATION_HEAD: u64 = 3;
+pub const MIGRATION_HEAD: u64 = 5;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Migration {
@@ -49,6 +49,16 @@ pub const MIGRATIONS: &[Migration] = &[
         3,
         "durable_delivery",
         include_bytes!("../migrations/0003_durable_delivery.sql"),
+    ),
+    Migration::new(
+        4,
+        "server_identity",
+        include_bytes!("../migrations/0004_server_identity.sql"),
+    ),
+    Migration::new(
+        5,
+        "delivery_completion_fencing",
+        include_bytes!("../migrations/0005_delivery_completion_fencing.sql"),
     ),
 ];
 
@@ -228,7 +238,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn injected_failures_preserve_head_two_to_head_three_atomicity() -> Result<(), Error> {
+    async fn injected_failures_preserve_head_two_upgrade_atomicity() -> Result<(), Error> {
         for failpoint in [
             Failpoint::AfterBody,
             Failpoint::AfterLedger,
@@ -298,6 +308,9 @@ mod tests {
         assert!(core.contains("CREATE TABLE mutation_outcomes"));
         assert!(core.contains("CREATE TABLE change_events"));
         assert!(core.contains("CREATE TABLE outbox_intents"));
+        let identity = std::str::from_utf8(MIGRATIONS[3].sql).expect("migration SQL is UTF-8");
+        assert!(identity.contains("CREATE TABLE attention_server_identity"));
+        assert!(identity.contains("CHECK (singleton = 1)"));
         for excluded in [
             "delivery_state",
             "lease",

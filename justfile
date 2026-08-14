@@ -22,7 +22,12 @@ help:
     @echo "  just check            # fmt-check + clippy for entire workspace"
     @echo "  just fix              # auto-fix clippy warnings for entire workspace"
     @echo "  just test             # local: mcp-test + nextest (requires Node/npx)"
-    @echo "  just test-ci          # CI-safe: nextest only (no Node/npx)"
+    @echo "  just test-ci          # CI-safe: frontend tests + nextest"
+    @echo "  just desktop-install   # frozen Bun dependency install (explicit network lane)"
+    @echo "  just desktop-check     # format, lint, and typecheck desktop frontend"
+    @echo "  just desktop-test      # test Attention desktop frontend"
+    @echo "  just desktop-build     # build Attention desktop frontend"
+    @echo "  just desktop-audit     # audit Attention desktop dependencies (network lane)"
     @echo "  just build            # build entire workspace"
     @echo "  just clean            # clean workspace"
     @echo "  just fmt              # format entire workspace"
@@ -48,7 +53,7 @@ help:
 
 # Workspace-wide commands
 
-check: fmt-check-just fmt-check
+check: fmt-check-just fmt-check desktop-check
     AGENTIC_TASK_NAME=check {{ wrap }} cargo clippy --workspace --all-targets -- -D warnings
 
 fix:
@@ -57,8 +62,23 @@ fix:
 test: mcp-test
     AGENTIC_TASK_NAME=test {{ wrap }} cargo nextest run --workspace --profile {{ nextest_profile }} {{ nextest_args }}
 
-test-ci:
+test-ci: desktop-test
     AGENTIC_TASK_NAME=test-ci {{ wrap }} cargo nextest run --workspace --profile ci {{ nextest_args }}
+
+desktop-install:
+    cd apps/attention-desktop && bun install --frozen-lockfile
+
+desktop-check:
+    cd apps/attention-desktop && bun run check
+
+desktop-test:
+    cd apps/attention-desktop && bun run test
+
+desktop-build:
+    cd apps/attention-desktop && bun run build
+
+desktop-audit:
+    cd apps/attention-desktop && bun audit
 
 # Run integration tests (includes ignored tests that require git setup)
 test-integration: mcp-test
@@ -68,7 +88,7 @@ test-integration: mcp-test
 test-thoughts-ignored-ci:
     THOUGHTS_INTEGRATION_TESTS=1 AGENTIC_TASK_NAME=test-thoughts-ignored-ci {{ wrap }} cargo nextest run -p thoughts-tool -p thoughts-bin --profile ci {{ nextest_args }} -- --ignored
 
-build:
+build: desktop-build
     AGENTIC_TASK_NAME=build {{ wrap }} cargo build --workspace
 
 clean: clean-workspace
@@ -79,10 +99,12 @@ clean-workspace:
 fmt:
     AGENTIC_TASK_NAME=fmt-rust {{ wrap }} cargo +nightly fmt --all
     AGENTIC_TASK_NAME=fmt-toml {{ wrap }} taplo fmt $(git ls-files '*.toml')
+    cd apps/attention-desktop && bun run format
 
 fmt-check:
     AGENTIC_TASK_NAME=fmt-check-rust {{ wrap }} cargo +nightly fmt --all -- --check
     AGENTIC_TASK_NAME=fmt-check-toml {{ wrap }} taplo fmt --check $(git ls-files '*.toml')
+    cd apps/attention-desktop && bun run format:check
 
 # Security audit with cargo-deny
 deny:

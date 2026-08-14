@@ -43,3 +43,13 @@ Thumbs.db
 /.claude/settings.local.json.malformed.*.bak
 
 doc_updates.md
+
+# Attention desktop frontend artifacts
+/apps/attention-desktop/node_modules/
+/apps/attention-desktop/dist/
+/apps/attention-desktop/coverage/
+/apps/attention-desktop/*.tsbuildinfo
+/apps/attention-desktop/vite.config.js
+/apps/attention-desktop/vite.config.d.ts
+/apps/attention-desktop/vitest.config.js
+/apps/attention-desktop/vitest.config.d.ts

@@ -2,6 +2,7 @@ use crate::Config;
 use crate::Error;
 use crate::MIGRATION_HEAD;
 use crate::PINNED_TURSO_VERSION;
+use crate::codec::VERSION as PAYLOAD_VERSION;
 use crate::migration::MIGRATIONS;
 use crate::path::validate_directory_metadata;
 use serde::Deserialize;
@@ -16,7 +17,7 @@ use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 const MANIFEST_FILE: &str = "manifest.json";
 const LOCK_FILE: &str = ".attention-turso.lock";
 const BACKUP_STAGING_CLEANUP_INCOMPLETE: &str =
@@ -79,12 +80,21 @@ pub struct BackupManifest {
     turso_version: String,
     migration_head: u64,
     migration_checksum: Vec<u8>,
+    payload_version: i64,
     files: Vec<BackupEntry>,
 }
 
 impl BackupManifest {
     pub const fn format_version(&self) -> u32 {
         self.format_version
+    }
+
+    pub const fn migration_head(&self) -> u64 {
+        self.migration_head
+    }
+
+    pub const fn payload_version(&self) -> i64 {
+        self.payload_version
     }
 
     pub fn files(&self) -> &[BackupEntry] {
@@ -239,6 +249,7 @@ fn create_staged(source: &Path, staging: &Path) -> Result<BackupManifest, Error>
         turso_version: PINNED_TURSO_VERSION.to_string(),
         migration_head: MIGRATION_HEAD,
         migration_checksum: migration_checksum(),
+        payload_version: PAYLOAD_VERSION,
         files,
     };
     let manifest_path = staging.join(MANIFEST_FILE);
@@ -282,6 +293,7 @@ fn validate_manifest(manifest: &BackupManifest) -> Result<(), Error> {
         || manifest.turso_version != PINNED_TURSO_VERSION
         || manifest.migration_head != MIGRATION_HEAD
         || manifest.migration_checksum != migration_checksum()
+        || manifest.payload_version != PAYLOAD_VERSION
     {
         return Err(Error::Backup("backup compatibility check failed"));
     }

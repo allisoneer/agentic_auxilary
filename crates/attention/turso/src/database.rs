@@ -5,6 +5,8 @@ use crate::backup;
 use crate::backup::BackupManifest;
 use crate::delivery_reader;
 use crate::delivery_writer;
+use crate::identity;
+use crate::identity::PersistentServerIdentity;
 use crate::lifecycle::Lifecycle;
 use crate::migration;
 use crate::migration::MigrationReport;
@@ -26,6 +28,8 @@ use attention_kernel::AttentionSnapshot;
 use attention_kernel::BoundedDeliveryText;
 use attention_kernel::CancelWorkItemBundle;
 use attention_kernel::CancelWorkItemResult;
+use attention_kernel::ChangeEvent;
+use attention_kernel::ChangeEventId;
 use attention_kernel::ChangesAfterQuery;
 use attention_kernel::ChangesResult;
 use attention_kernel::CheckpointAdvance;
@@ -53,6 +57,7 @@ use attention_kernel::MutationIdempotencyKey;
 use attention_kernel::OutboxIntentId;
 use attention_kernel::PortError;
 use attention_kernel::PriorMutationOutcome;
+use attention_kernel::PriorMutationRecord;
 use attention_kernel::ProviderMessageId;
 use attention_kernel::Reminder;
 use attention_kernel::ReminderId;
@@ -157,6 +162,24 @@ impl AttentionDatabase {
         let _lifecycle = self.inner.lifecycle.acquire()?;
         let readers = self.semantic_readers().await?;
         semantic_reader::outcome(&readers, &self.inner.engine, key).await
+    }
+
+    pub(crate) async fn semantic_prior_mutation(
+        &self,
+        key: MutationIdempotencyKey,
+    ) -> Result<Option<PriorMutationRecord>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::prior_mutation(&readers, &self.inner.engine, key).await
+    }
+
+    pub(crate) async fn semantic_change_event(
+        &self,
+        id: ChangeEventId,
+    ) -> Result<Option<ChangeEvent>, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let readers = self.semantic_readers().await?;
+        semantic_reader::change_event(&readers, &self.inner.engine, id).await
     }
 
     pub(crate) async fn semantic_snapshot(&self) -> Result<AttentionSnapshot, Error> {
@@ -549,6 +572,17 @@ impl AttentionDatabase {
             .cloned()
             .ok_or(Error::Shutdown)?;
         readers.read_probe(&self.inner.engine, operation_id).await
+    }
+
+    /// Atomically initializes the singleton persistent server and stream identity, or returns the
+    /// identity already stored by an earlier caller or process boot.
+    pub async fn load_or_create_server_identity(
+        &self,
+        candidate: PersistentServerIdentity,
+    ) -> Result<PersistentServerIdentity, Error> {
+        let _lifecycle = self.inner.lifecycle.acquire()?;
+        let (writer, _) = self.semantic_writer_parts().await?;
+        identity::load_or_create(&writer, &self.inner.engine, candidate).await
     }
 
     /// Apply bundled forward migrations from the sole startup composition point.
