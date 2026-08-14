@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_a1edbd1bc7d74f::t_47e8947047cbbe 44,87,248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bc2d4937780436e4a9d85d8a4c5fd16857fd5543",
+  "prompts": {},
+  "sessions": {
+    "s_a1edbd1bc7d74f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_00167b8e0ffe84W2vEeMTC8x52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
