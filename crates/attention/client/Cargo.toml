@@ -17,8 +17,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = "0.28"
 
-[dev-dependencies]
-
 [lints]
 workspace = true
 

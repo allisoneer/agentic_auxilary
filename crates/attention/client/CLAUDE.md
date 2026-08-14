@@ -10,7 +10,10 @@
 
 ## Overview
 
-Briefly describe the purpose of this crate and how to use it.
+Typed, bounded, reconnecting WebSocket SDK for the Attention protocol. Start a
+client with `Client::connect`, consume snapshot/change/issue subscriptions,
+observe connection status, acknowledge applied cursors, and call `Client::close`
+for an orderly shutdown.
 
 ## Quick Commands
 

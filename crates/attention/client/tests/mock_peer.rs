@@ -103,6 +103,34 @@ fn config(url: String) -> ClientConfig {
     config
 }
 
+fn assert_configuration_error(config: ClientConfig) {
+    assert!(matches!(
+        Client::connect(config),
+        Err(ClientError::Configuration(_))
+    ));
+}
+
+#[test]
+fn zero_request_timeout_is_rejected_before_spawn() {
+    let mut config = ClientConfig::new("ws://127.0.0.1:9");
+    config.request_timeout = Duration::ZERO;
+    assert_configuration_error(config);
+}
+
+#[test]
+fn zero_heartbeat_interval_is_rejected_before_spawn() {
+    let mut config = ClientConfig::new("ws://127.0.0.1:9");
+    config.heartbeat_interval = Duration::ZERO;
+    assert_configuration_error(config);
+}
+
+#[test]
+fn zero_heartbeat_timeout_is_rejected_before_spawn() {
+    let mut config = ClientConfig::new("ws://127.0.0.1:9");
+    config.heartbeat_timeout = Duration::ZERO;
+    assert_configuration_error(config);
+}
+
 async fn next_text(ws: &mut Peer) -> RpcRequest<Value> {
     loop {
         match ws.next().await.expect("frame").expect("read") {
@@ -288,6 +316,94 @@ async fn configured_resume_gap_falls_back_to_snapshot_and_reports_peer_issue() {
         sub.snapshots.recv().await.expect("snapshot").after_cursor,
         Cursor("fresh".into())
     );
+    peer.await.expect("peer");
+    client.close().await.expect("close");
+}
+
+#[tokio::test]
+async fn forced_snapshot_gap_uses_reconnect_backoff() {
+    let (listener, url) = listener().await;
+    let peer = tokio::spawn(async move {
+        let gap = || protocol::RpcError {
+            code: protocol::CURSOR_GAP,
+            message: "gap".into(),
+            data: None,
+        };
+        let (mut first, hello) = accept_hello(&listener).await;
+        reply(
+            &mut first,
+            hello.id,
+            RpcResponsePayload::<Value>::Error(gap()),
+        )
+        .await;
+
+        let (mut second, hello) =
+            tokio::time::timeout(Duration::from_millis(100), accept_hello(&listener))
+                .await
+                .expect("immediate snapshot fallback");
+        let params: protocol::HelloRequest =
+            serde_json::from_value(hello.params.clone().expect("params")).expect("params type");
+        assert_eq!(params.subscription, SubscriptionRequest::Snapshot);
+        let retry_started = tokio::time::Instant::now();
+        reply(
+            &mut second,
+            hello.id,
+            RpcResponsePayload::<Value>::Error(gap()),
+        )
+        .await;
+
+        let (mut third, hello) =
+            tokio::time::timeout(Duration::from_secs(1), accept_hello(&listener))
+                .await
+                .expect("backed-off retry");
+        assert!(retry_started.elapsed() >= Duration::from_millis(250));
+        let params: protocol::HelloRequest =
+            serde_json::from_value(hello.params.clone().expect("params")).expect("params type");
+        assert_eq!(params.subscription, SubscriptionRequest::Snapshot);
+        hello_ok(&mut third, hello, hello_result(snapshot("fresh"))).await;
+    });
+    let mut cfg = config(url);
+    cfg.subscription = SubscriptionRequest::Resume {
+        server_id: ServerId("old-server".into()),
+        stream_id: StreamId("old-stream".into()),
+        after_cursor: Cursor("old".into()),
+    };
+    cfg.reconnect_min = Duration::from_millis(300);
+    cfg.reconnect_max = Duration::from_millis(300);
+    let (client, mut sub) = Client::connect(cfg).expect("client");
+    assert_eq!(
+        sub.snapshots.recv().await.expect("snapshot").after_cursor,
+        Cursor("fresh".into())
+    );
+    peer.await.expect("peer");
+    client.close().await.expect("close");
+}
+
+#[tokio::test]
+async fn failed_hello_uses_reconnect_backoff() {
+    let (listener, url) = listener().await;
+    let peer = tokio::spawn(async move {
+        let (mut first, hello) = accept_hello(&listener).await;
+        let mut result = hello_result(SubscriptionResult::None);
+        result.protocol_version = protocol::ProtocolVersion(99);
+        let retry_started = tokio::time::Instant::now();
+        hello_ok(&mut first, hello, result).await;
+
+        let (mut second, hello) =
+            tokio::time::timeout(Duration::from_secs(1), accept_hello(&listener))
+                .await
+                .expect("backed-off retry");
+        assert!(retry_started.elapsed() >= Duration::from_millis(100));
+        hello_ok(&mut second, hello, hello_result(SubscriptionResult::None)).await;
+    });
+    let mut cfg = config(url);
+    cfg.reconnect_min = Duration::from_millis(150);
+    cfg.reconnect_max = Duration::from_millis(150);
+    let (client, mut sub) = Client::connect(cfg).expect("client");
+    assert!(matches!(
+        sub.issues.recv().await.expect("local issue").error,
+        ClientError::LocalProtocol(_)
+    ));
     peer.await.expect("peer");
     client.close().await.expect("close");
 }

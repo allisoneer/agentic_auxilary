@@ -72,6 +72,14 @@ impl ClientConfig {
                 "queue capacities must be non-zero",
             ));
         }
+        if self.request_timeout.is_zero()
+            || self.heartbeat_interval.is_zero()
+            || self.heartbeat_timeout.is_zero()
+        {
+            return Err(ClientError::Configuration(
+                "request and heartbeat durations must be non-zero",
+            ));
+        }
         if self.reconnect_min.is_zero() || self.reconnect_min > self.reconnect_max {
             return Err(ClientError::Configuration("invalid reconnect range"));
         }
@@ -534,7 +542,8 @@ async fn run(
                 continue;
             }
         };
-        let subscription = if force_snapshot {
+        let snapshot_was_forced = force_snapshot;
+        let subscription = if snapshot_was_forced {
             SubscriptionRequest::Snapshot
         } else {
             resume.as_ref().map_or_else(
@@ -555,12 +564,43 @@ async fn run(
                 resume = None;
                 force_snapshot = true;
                 let _ = ws.close(None).await;
+                if snapshot_was_forced {
+                    attempt = attempt.saturating_add(1);
+                    if wait_backoff(
+                        &config,
+                        attempt,
+                        &mut commands,
+                        &mut queued,
+                        &status,
+                        &mut cursors,
+                        &mut resume,
+                        last_identity.as_ref(),
+                    )
+                    .await
+                    {
+                        return;
+                    }
+                }
                 continue;
             }
             Err(error) => {
                 report(&issues, error);
                 attempt = attempt.saturating_add(1);
                 let _ = ws.close(None).await;
+                if wait_backoff(
+                    &config,
+                    attempt,
+                    &mut commands,
+                    &mut queued,
+                    &status,
+                    &mut cursors,
+                    &mut resume,
+                    last_identity.as_ref(),
+                )
+                .await
+                {
+                    return;
+                }
                 continue;
             }
         };
