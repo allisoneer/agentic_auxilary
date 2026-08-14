@@ -1,0 +1,19 @@
+apps/attention-server/tests/turso.rs
+  s_848fe8f132504f::t_da25d5c9d698d9 718,741,761,823
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bda45cbac1306c1eeed1754845b25ba56a827c2b",
+  "prompts": {},
+  "sessions": {
+    "s_848fe8f132504f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffdd125f7fferrmn3nBW1VaWMP",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
