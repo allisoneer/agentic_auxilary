@@ -1,0 +1,68 @@
+apps/attention-desktop/vite.config.ts
+  s_01edbe27f3fcbe::t_b675376c6d5a46 6-9,12
+  s_01edbe27f3fcbe::t_9ba459f610d5f8 10-11,13-16,30
+apps/attention-desktop/src/test/bridge.test.tsx
+  s_01edbe27f3fcbe::t_4801fe3e504bde 110,149-161,163-164,166-174
+  s_01edbe27f3fcbe::t_9ba459f610d5f8 162,165
+  s_01edbe27f3fcbe::t_ce916ab5a99ac6 175
+apps/attention-desktop/src/test/vite-config.test.ts
+  s_a1ee8b36f5b824::t_3ad232c0596926 1-2
+  s_01edbe27f3fcbe::t_9ba459f610d5f8 6,9
+  s_01edbe27f3fcbe::t_4801fe3e504bde 7-8,16-17
+  s_d09989f1bf7ea1::t_8c1b4701c04a9e 3-5,10-15
+apps/attention-desktop/src-tauri/src/live_tests.rs
+  s_01edbe27f3fcbe::t_4801fe3e504bde 424-430,448,450-456,714
+  s_01edbe27f3fcbe::t_17e42676e01d0d 63-64,81-82
+apps/attention-desktop/src-tauri/src/dto.rs
+  s_01edbe27f3fcbe::t_4801fe3e504bde 71-79,82-90,93-101,113-121,688-703,737-754,756-783,872
+  s_01edbe27f3fcbe::t_fb94d757be6fa4 755
+apps/attention-desktop/src-tauri/src/supervisor.rs
+  s_01edbe27f3fcbe::t_4801fe3e504bde 92,100-121,288-289,317-320,336-346,547-572,747
+apps/attention-desktop/src-tauri/src/lib.rs
+  s_01edbe27f3fcbe::t_ad74f11695ce0d 86-87,89,96,184-232,499-566
+  s_01edbe27f3fcbe::t_b43d5e5300e30e 567-569
+apps/attention-desktop/src/test/component.test.tsx
+  s_01edbe27f3fcbe::t_4801fe3e504bde 122-123
+apps/attention-desktop/src-tauri/src/error.rs
+  s_01edbe27f3fcbe::t_4801fe3e504bde 59-60
+  s_01edbe27f3fcbe::t_fb94d757be6fa4 114-147
+  s_01edbe27f3fcbe::t_e657019eb31e14 148-149
+apps/attention-desktop/src/App.tsx
+  s_01edbe27f3fcbe::t_4801fe3e504bde 120-123,137
+apps/attention-desktop/src-tauri/src/mutation.rs
+  s_01edbe27f3fcbe::t_4801fe3e504bde 75-79,284,295-300
+apps/attention-desktop/src/test/security.test.ts
+  s_01edbe27f3fcbe::t_4801fe3e504bde 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "19dd262e1e984b24a594ea781233f1a16d8d44b4",
+  "prompts": {},
+  "sessions": {
+    "s_01edbe27f3fcbe": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_001879a0effezZolZBzqETUQg3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_a1ee8b36f5b824": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_001761d45ffe0Vxhor5GtRzbOs",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_d09989f1bf7ea1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_001745ef7ffeQooPpJi2e3L4UR",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
