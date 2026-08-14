@@ -1,0 +1,21 @@
+deny.toml
+  s_5d68f0d243ccb1::t_79e9946f88c07b 65-96
+  s_5d68f0d243ccb1::t_7fafa89f163ef3 57-63
+  s_5d68f0d243ccb1::t_1bce0474600c57 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6bb0c0829f1c54fdd1295f8cd8d708415fd15f88",
+  "prompts": {},
+  "sessions": {
+    "s_5d68f0d243ccb1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffdff0531ffeOAfrFP1knIhVkI",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
