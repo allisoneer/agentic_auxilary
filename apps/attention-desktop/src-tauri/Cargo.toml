@@ -33,7 +33,10 @@ tauri-build = { version = "2.6.1", features = [] }
 attention-server = { path = "../../attention-server" }
 attention-turso = { path = "../../../crates/attention/turso" }
 serde_json = { workspace = true }
-tauri = { version = "2.11.5", default-features = false, features = ["wry", "test"] }
+tauri = { version = "2.11.5", default-features = false, features = [
+  "wry",
+  "test",
+] }
 tempfile = "3"
 turso-db = { workspace = true }
 
