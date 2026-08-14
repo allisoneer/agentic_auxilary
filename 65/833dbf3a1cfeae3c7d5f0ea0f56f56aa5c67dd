@@ -1,0 +1,28 @@
+apps/attention-server/tests/raw.rs
+  s_e24b9100e8d59e::t_ae9d752295125d 129
+  s_2f364a015fe54e::t_cf3a7905392ee8 118,127-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "65833dbf3a1cfeae3c7d5f0ea0f56f56aa5c67dd",
+  "prompts": {},
+  "sessions": {
+    "s_2f364a015fe54e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0011599f6ffeRtaHfbJYi99Oa5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_e24b9100e8d59e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_001188b30ffeQAUs5p9MkuCu0P",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
