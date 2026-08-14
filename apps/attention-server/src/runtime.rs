@@ -93,6 +93,7 @@ pub async fn start_with_time(
     let concrete = Arc::new(TursoAttentionService::new(
         database.clone(),
         publications.clone(),
+        Arc::clone(&clock),
     ));
     let read_concrete = Arc::clone(&concrete);
     let read_service: crate::SharedService = read_concrete;
@@ -110,6 +111,7 @@ pub async fn start_with_time(
         read_service,
         mutation_service,
         delivery_service,
+        Arc::clone(&clock),
         publications,
     )?;
     let listener = TcpListener::bind(config.bind).await?;

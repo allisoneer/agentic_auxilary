@@ -2,7 +2,6 @@ use attention_kernel as k;
 use attention_protocol as p;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chrono::Timelike;
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -14,6 +13,21 @@ pub enum MappingError {
     MissingAffectedView,
 }
 type Result<T> = std::result::Result<T, MappingError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceBounds {
+    component_bytes: usize,
+    order_bytes: usize,
+}
+
+impl SourceBounds {
+    pub const fn new(component_bytes: usize, order_bytes: usize) -> Self {
+        Self {
+            component_bytes,
+            order_bytes,
+        }
+    }
+}
 
 macro_rules! id_to_wire {
     ($fn:ident,$native:ty,$wire:ident) => {
@@ -178,12 +192,18 @@ pub fn source_key(v: &k::SourceEntityKey) -> p::SourceEntityKey {
         external_entity_id: p::ExternalEntityId(v.external_entity_id().as_str().into()),
     }
 }
-pub fn parse_source_key(v: &p::SourceEntityKey) -> Result<k::SourceEntityKey> {
-    validate_source_parts(&[
-        v.source_kind.as_str(),
-        v.source_instance.as_str(),
-        v.external_entity_id.as_str(),
-    ])?;
+pub fn parse_source_key(
+    v: &p::SourceEntityKey,
+    bounds: SourceBounds,
+) -> Result<k::SourceEntityKey> {
+    validate_source_parts(
+        &[
+            v.source_kind.as_str(),
+            v.source_instance.as_str(),
+            v.external_entity_id.as_str(),
+        ],
+        bounds,
+    )?;
     let map = |e: k::InvariantError| MappingError::Invalid(e.to_string());
     Ok(k::SourceEntityKey::new(
         k::SourceKind::new(v.source_kind.as_str()).map_err(map)?,
@@ -192,25 +212,23 @@ pub fn parse_source_key(v: &p::SourceEntityKey) -> Result<k::SourceEntityKey> {
     ))
 }
 
-const MAX_SOURCE_COMPONENT_BYTES: usize = 256;
-const MAX_SOURCE_ORDER_BYTES: usize = 4096;
-fn validate_source_parts(parts: &[&str]) -> Result<()> {
-    if parts
-        .iter()
-        .any(|part| part.len() > MAX_SOURCE_COMPONENT_BYTES)
-    {
+fn validate_source_parts(parts: &[&str], bounds: SourceBounds) -> Result<()> {
+    if parts.iter().any(|part| part.len() > bounds.component_bytes) {
         return Err(MappingError::Invalid(
             "source component exceeds bound".into(),
         ));
     }
     Ok(())
 }
-fn parse_occurrence(v: &p::OccurrenceKey) -> Result<k::OccurrenceKey> {
-    validate_source_parts(&[
-        v.source_kind.as_str(),
-        v.source_instance.as_str(),
-        v.occurrence_id.as_str(),
-    ])?;
+fn parse_occurrence(v: &p::OccurrenceKey, bounds: SourceBounds) -> Result<k::OccurrenceKey> {
+    validate_source_parts(
+        &[
+            v.source_kind.as_str(),
+            v.source_instance.as_str(),
+            v.occurrence_id.as_str(),
+        ],
+        bounds,
+    )?;
     let map = |e: k::InvariantError| MappingError::Invalid(e.to_string());
     Ok(k::OccurrenceKey::new(
         k::SourceKind::new(v.source_kind.as_str()).map_err(map)?,
@@ -218,11 +236,11 @@ fn parse_occurrence(v: &p::OccurrenceKey) -> Result<k::OccurrenceKey> {
         k::OccurrenceId::new(v.occurrence_id.as_str()).map_err(map)?,
     ))
 }
-fn parse_order(v: &p::SourceOrder) -> Result<k::SourceOrderMode> {
+fn parse_order(v: &p::SourceOrder, bounds: SourceBounds) -> Result<k::SourceOrderMode> {
     Ok(match v {
         p::SourceOrder::Unordered => k::SourceOrderMode::Unordered,
         p::SourceOrder::Ordered { domain, value } => {
-            validate_source_parts(&[domain.as_str()])?;
+            validate_source_parts(&[domain.as_str()], bounds)?;
             let bytes = value
                 .as_ref()
                 .map(|value| {
@@ -233,7 +251,7 @@ fn parse_order(v: &p::SourceOrder) -> Result<k::SourceOrderMode> {
                 .transpose()?;
             if bytes
                 .as_ref()
-                .is_some_and(|bytes| bytes.len() > MAX_SOURCE_ORDER_BYTES)
+                .is_some_and(|bytes| bytes.len() > bounds.order_bytes)
             {
                 return Err(MappingError::Invalid("source order exceeds bound".into()));
             }
@@ -250,13 +268,19 @@ fn parse_order(v: &p::SourceOrder) -> Result<k::SourceOrderMode> {
     })
 }
 
-pub fn create_work_item_command(v: &p::CreateWorkItemParams) -> Result<k::CreateWorkItem> {
+pub fn create_work_item_command(
+    v: &p::CreateWorkItemParams,
+    bounds: SourceBounds,
+) -> Result<k::CreateWorkItem> {
     Ok(k::CreateWorkItem::new(
         parse_work_item_id(&v.id)?,
         v.due_at.as_ref().map(parse_time),
         v.scheduled_at.as_ref().map(parse_time),
         v.defer_until.as_ref().map(parse_time),
-        v.source_link.as_ref().map(parse_source_key).transpose()?,
+        v.source_link
+            .as_ref()
+            .map(|key| parse_source_key(key, bounds))
+            .transpose()?,
         parse_idempotency(&v.idempotency_key)?,
     ))
 }
@@ -285,6 +309,8 @@ pub fn acknowledge_signal_command(
 }
 pub fn ingest_source_command(
     v: &p::IngestSourceOccurrenceParams,
+    bounds: SourceBounds,
+    ingested_at: chrono::DateTime<chrono::Utc>,
 ) -> Result<k::IngestSourceOccurrence> {
     let entity = v
         .entity
@@ -292,7 +318,7 @@ pub fn ingest_source_command(
         .map(|entity| {
             Ok(k::SourceEntityIdentity::new(
                 parse_entity_id(&entity.id)?,
-                parse_source_key(&entity.key)?,
+                parse_source_key(&entity.key, bounds)?,
             ))
         })
         .transpose()?;
@@ -300,14 +326,10 @@ pub fn ingest_source_command(
         parse_receipt_id(&v.receipt_id)?,
         entity,
         parse_signal_id(&v.signal_id)?,
-        parse_occurrence(&v.occurrence_key)?,
+        parse_occurrence(&v.occurrence_key, bounds)?,
         parse_time(&v.occurred_at),
-        {
-            let now = chrono::Utc::now();
-            now.with_nanosecond((now.timestamp_subsec_nanos() / 1_000) * 1_000)
-                .unwrap_or(now)
-        },
-        parse_order(&v.order)?,
+        ingested_at,
+        parse_order(&v.order, bounds)?,
         match v.source_lifecycle {
             p::SignalSourceLifecycle::Active => k::SignalSourceLifecycle::Active,
             p::SignalSourceLifecycle::Resolved => k::SignalSourceLifecycle::Resolved,
@@ -784,6 +806,41 @@ mod tests {
             value: value.map(|value| k::NormalizedSourceOrder::new(value).expect("order")),
         }
     }
+    fn wire_source_key(component: &str) -> p::SourceEntityKey {
+        p::SourceEntityKey {
+            source_kind: p::SourceKind(component.into()),
+            source_instance: p::SourceInstance(component.into()),
+            external_entity_id: p::ExternalEntityId(component.into()),
+        }
+    }
+    fn wire_ingest(component: &str, domain: &str, order: &[u8]) -> p::IngestSourceOccurrenceParams {
+        p::IngestSourceOccurrenceParams {
+            receipt_id: p::SourceReceiptId(k::SourceReceiptId::new().to_string()),
+            entity: Some(p::SourceEntityIdentity {
+                id: p::SourceEntityId(k::SourceEntityId::new().to_string()),
+                key: wire_source_key(component),
+            }),
+            signal_id: p::AttentionSignalId(k::AttentionSignalId::new().to_string()),
+            occurrence_key: p::OccurrenceKey {
+                source_kind: p::SourceKind(component.into()),
+                source_instance: p::SourceInstance(component.into()),
+                occurrence_id: p::OccurrenceId(component.into()),
+            },
+            occurred_at: p::WireTimestamp::try_from(at(10)).expect("wire time"),
+            order: p::SourceOrder::Ordered {
+                domain: p::SourceOrderDomain(domain.into()),
+                value: Some(
+                    p::NormalizedSourceOrder::parse(URL_SAFE_NO_PAD.encode(order))
+                        .expect("wire order"),
+                ),
+            },
+            source_lifecycle: p::SignalSourceLifecycle::Active,
+            fresh_attention: false,
+            idempotency_key: p::MutationIdempotencyKey(
+                k::MutationIdempotencyKey::new().to_string(),
+            ),
+        }
+    }
     fn receipt(order: k::SourceOrderMode) -> k::SourceReceipt {
         k::SourceReceipt::reconstruct(
             k::SourceReceiptId::new(),
@@ -795,6 +852,67 @@ mod tests {
             at(11),
         )
         .expect("receipt")
+    }
+
+    #[test]
+    fn source_key_and_work_item_link_use_supplied_component_bounds() {
+        assert!(
+            parse_source_key(&wire_source_key("x"), SourceBounds::new(2, 1)).is_ok(),
+            "components below the supplied bound must pass"
+        );
+        let exact = "x".repeat(257);
+        let key = wire_source_key(&exact);
+        assert!(parse_source_key(&key, SourceBounds::new(257, 1)).is_ok());
+        assert!(parse_source_key(&key, SourceBounds::new(256, 1)).is_err());
+
+        let params = p::CreateWorkItemParams {
+            id: p::WorkItemId(k::WorkItemId::new().to_string()),
+            due_at: None,
+            scheduled_at: None,
+            defer_until: None,
+            source_link: Some(key),
+            idempotency_key: p::MutationIdempotencyKey(
+                k::MutationIdempotencyKey::new().to_string(),
+            ),
+        };
+        assert!(create_work_item_command(&params, SourceBounds::new(257, 1)).is_ok());
+        assert!(create_work_item_command(&params, SourceBounds::new(256, 1)).is_err());
+    }
+
+    #[test]
+    fn occurrence_domain_and_decoded_order_use_supplied_bounds() {
+        assert!(
+            ingest_source_command(
+                &wire_ingest("x", "x", &[1]),
+                SourceBounds::new(2, 2),
+                at(11),
+            )
+            .is_ok(),
+            "components and decoded order below supplied bounds must pass"
+        );
+        let component = "c".repeat(257);
+        let domain = "d".repeat(257);
+        let decoded_order = vec![7; 4097];
+        let params = wire_ingest(&component, &domain, &decoded_order);
+
+        assert!(
+            ingest_source_command(&params, SourceBounds::new(257, 4097), at(11)).is_ok(),
+            "values above former defaults must be accepted when configured"
+        );
+        assert!(ingest_source_command(&params, SourceBounds::new(256, 4097), at(11)).is_err());
+        assert!(ingest_source_command(&params, SourceBounds::new(257, 4096), at(11)).is_err());
+
+        let encoded_len = match &params.order {
+            p::SourceOrder::Ordered {
+                value: Some(value), ..
+            } => value.as_str().len(),
+            _ => panic!("ordered fixture"),
+        };
+        assert!(encoded_len > decoded_order.len());
+        assert!(
+            ingest_source_command(&params, SourceBounds::new(257, decoded_order.len()), at(11),)
+                .is_ok()
+        );
     }
     fn entity(order: k::SourceOrderMode) -> k::SourceEntity {
         k::SourceEntity::reconstruct(

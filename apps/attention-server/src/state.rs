@@ -1,3 +1,5 @@
+use crate::Clock;
+use crate::SystemClock;
 use crate::config::ServerConfig;
 use crate::publication::PublicationHub;
 use crate::service::SharedDeliveryWorkerService;
@@ -31,6 +33,7 @@ pub struct AppState {
     pub service: SharedService,
     pub mutations: Option<SharedMutationService>,
     pub delivery_workers: Option<SharedDeliveryWorkerService>,
+    pub clock: Arc<dyn Clock>,
     pub publications: PublicationHub,
     pub connection_slots: Arc<Semaphore>,
     pub shutdown: CancellationToken,
@@ -42,7 +45,15 @@ impl AppState {
         service: SharedService,
     ) -> Result<Arc<Self>, crate::ConfigError> {
         let publications = PublicationHub::new(config.publication_capacity);
-        Self::build(config, identity, service, None, None, publications)
+        Self::build(
+            config,
+            identity,
+            service,
+            None,
+            None,
+            Arc::new(SystemClock),
+            publications,
+        )
     }
 
     pub fn with_delivery_workers(
@@ -58,6 +69,7 @@ impl AppState {
             service,
             None,
             Some(delivery_workers),
+            Arc::new(SystemClock),
             publications,
         )
     }
@@ -68,6 +80,7 @@ impl AppState {
         service: SharedService,
         mutations: SharedMutationService,
         delivery_workers: SharedDeliveryWorkerService,
+        clock: Arc<dyn Clock>,
         publications: PublicationHub,
     ) -> Result<Arc<Self>, crate::ConfigError> {
         Self::build(
@@ -76,6 +89,7 @@ impl AppState {
             service,
             Some(mutations),
             Some(delivery_workers),
+            clock,
             publications,
         )
     }
@@ -86,6 +100,7 @@ impl AppState {
         service: SharedService,
         mutations: Option<SharedMutationService>,
         delivery_workers: Option<SharedDeliveryWorkerService>,
+        clock: Arc<dyn Clock>,
         publications: PublicationHub,
     ) -> Result<Arc<Self>, crate::ConfigError> {
         config.validate()?;
@@ -96,6 +111,7 @@ impl AppState {
             service,
             mutations,
             delivery_workers,
+            clock,
             publications,
             connection_slots: Arc::new(Semaphore::new(max)),
             shutdown: CancellationToken::new(),

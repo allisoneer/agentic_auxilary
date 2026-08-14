@@ -1,12 +1,13 @@
+use crate::Clock;
 use crate::publication::PublicationHub;
 use crate::service::AttentionMutationService;
 use crate::service::AttentionService;
 use crate::service::ServiceError;
+use crate::time::truncate_to_microseconds;
 use attention_kernel as k;
 use attention_turso::AttentionDatabase;
-use chrono::Timelike;
-use chrono::Utc;
 use futures_util::future::BoxFuture;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[cfg(feature = "test-support")]
@@ -39,19 +40,28 @@ fn fail_after_commit(key: k::MutationIdempotencyKey) {
 pub struct TursoAttentionService {
     database: AttentionDatabase,
     publications: PublicationHub,
+    clock: Arc<dyn Clock>,
     mutation_gate: Mutex<()>,
 }
 
 impl TursoAttentionService {
-    pub fn new(database: AttentionDatabase, publications: PublicationHub) -> Self {
+    pub fn new(
+        database: AttentionDatabase,
+        publications: PublicationHub,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         Self {
             database,
             publications,
+            clock,
             mutation_gate: Mutex::new(()),
         }
     }
 
-    fn context_at(outbox: bool, evaluated_at: chrono::DateTime<Utc>) -> k::EvaluationContext {
+    fn context_at(
+        outbox: bool,
+        evaluated_at: chrono::DateTime<chrono::Utc>,
+    ) -> k::EvaluationContext {
         k::EvaluationContext::new(
             k::ChangeEventId::new(),
             outbox.then(k::OutboxIntentId::new),
@@ -59,14 +69,8 @@ impl TursoAttentionService {
         )
     }
 
-    fn now() -> chrono::DateTime<Utc> {
-        let now = Utc::now();
-        now.with_nanosecond((now.timestamp_subsec_nanos() / 1_000) * 1_000)
-            .unwrap_or(now)
-    }
-
-    fn context(outbox: bool) -> k::EvaluationContext {
-        Self::context_at(outbox, Self::now())
+    fn context(&self, outbox: bool) -> k::EvaluationContext {
+        Self::context_at(outbox, truncate_to_microseconds(self.clock.now()))
     }
 
     async fn prior<C: k::CanonicalCommand + Sync>(
@@ -110,7 +114,7 @@ impl TursoAttentionService {
     /// consequently ordered as one server-side critical section.
     pub(crate) async fn fire_due(
         &self,
-        now: chrono::DateTime<Utc>,
+        now: chrono::DateTime<chrono::Utc>,
         batch_size: usize,
         shutdown: &tokio_util::sync::CancellationToken,
     ) -> Result<(), ServiceError> {
@@ -254,7 +258,7 @@ impl AttentionMutationService for TursoAttentionService {
                 }
                 return Err(ServiceError::Adapter);
             }
-            let bundle = k::evaluate_create_work_item(&command, Self::context(false));
+            let bundle = k::evaluate_create_work_item(&command, self.context(false));
             let result = k::AttentionCommitPort::commit_create_work_item(&self.database, bundle)
                 .await
                 .map_err(map_port)?;
@@ -281,7 +285,7 @@ impl AttentionMutationService for TursoAttentionService {
                 .ok_or_else(|| {
                     k::SemanticError::NotFound(k::ResourceRef::WorkItem(command.id()))
                 })?;
-            let bundle = k::evaluate_complete_work_item(&command, &current, Self::context(false))
+            let bundle = k::evaluate_complete_work_item(&command, &current, self.context(false))
                 .map_err(map_evaluation)?;
             let result = k::AttentionCommitPort::commit_complete_work_item(&self.database, bundle)
                 .await
@@ -307,7 +311,7 @@ impl AttentionMutationService for TursoAttentionService {
                 .ok_or_else(|| {
                     k::SemanticError::NotFound(k::ResourceRef::WorkItem(command.id()))
                 })?;
-            let bundle = k::evaluate_cancel_work_item(&command, &current, Self::context(false))
+            let bundle = k::evaluate_cancel_work_item(&command, &current, self.context(false))
                 .map_err(map_evaluation)?;
             let result = k::AttentionCommitPort::commit_cancel_work_item(&self.database, bundle)
                 .await
@@ -334,7 +338,7 @@ impl AttentionMutationService for TursoAttentionService {
                     k::SemanticError::NotFound(k::ResourceRef::AttentionSignal(command.id()))
                 })?;
             let bundle =
-                k::evaluate_acknowledge_attention_signal(&command, &current, Self::context(false))
+                k::evaluate_acknowledge_attention_signal(&command, &current, self.context(false))
                     .map_err(map_evaluation)?;
             let result =
                 k::AttentionCommitPort::commit_acknowledge_attention_signal(&self.database, bundle)
@@ -395,7 +399,7 @@ impl AttentionMutationService for TursoAttentionService {
                 }
                 return Err(ServiceError::Adapter);
             }
-            let bundle = k::evaluate_create_reminder(&command, Self::context(false));
+            let bundle = k::evaluate_create_reminder(&command, self.context(false));
             let result = k::AttentionCommitPort::commit_create_reminder(&self.database, bundle)
                 .await
                 .map_err(map_port)?;
@@ -421,7 +425,7 @@ impl AttentionMutationService for TursoAttentionService {
                     k::SemanticError::NotFound(k::ResourceRef::Reminder(command.reminder_id()))
                 })?;
             let bundle =
-                k::evaluate_acknowledge_reminder_fire(&command, &current, Self::context(false))
+                k::evaluate_acknowledge_reminder_fire(&command, &current, self.context(false))
                     .map_err(map_evaluation)?;
             let result =
                 k::AttentionCommitPort::commit_acknowledge_reminder_fire(&self.database, bundle)
@@ -448,7 +452,7 @@ impl AttentionMutationService for TursoAttentionService {
                 .ok_or_else(|| {
                     k::SemanticError::NotFound(k::ResourceRef::Reminder(command.reminder_id()))
                 })?;
-            let bundle = k::evaluate_snooze_reminder_fire(&command, &current, Self::context(false))
+            let bundle = k::evaluate_snooze_reminder_fire(&command, &current, self.context(false))
                 .map_err(map_evaluation)?;
             let result =
                 k::AttentionCommitPort::commit_snooze_reminder_fire(&self.database, bundle)

@@ -10,6 +10,8 @@ use attention_server::ServerConfig;
 use attention_server::runtime;
 use attention_turso::AttentionDatabase;
 use attention_turso::Config as TursoConfig;
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::DateTime;
 use chrono::Utc;
 use futures_util::SinkExt;
@@ -868,6 +870,99 @@ async fn source_dedupe_order_receipts_and_reminders_survive_restart() -> TestRes
     );
     client.close().await?;
     restarted.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn injected_clock_controls_ingestion_and_ordinary_mutation_timestamps() -> TestResult {
+    let fixture = Fixture::new()?;
+    let time = Arc::new(ManualTime::new("2030-01-01T00:00:00.123456789Z"));
+    let handle = runtime::start_with_time(
+        ServerConfig {
+            scheduler_poll_interval: Duration::from_hours(1),
+            ..ServerConfig::default()
+        },
+        fixture.turso()?,
+        Arc::clone(&time) as Arc<dyn attention_server::Clock>,
+        Arc::clone(&time) as Arc<dyn attention_server::Sleeper>,
+    )
+    .await?;
+    let (client, _) = Client::connect(client_config(&handle, p::SubscriptionRequest::None))?;
+    let before = client.snapshot_get(p::EmptyParams {}).await?.after_cursor;
+    let entity = p::SourceEntityIdentity {
+        id: p::SourceEntityId(k::SourceEntityId::new().to_string()),
+        key: p::SourceEntityKey {
+            source_kind: p::SourceKind("github".into()),
+            source_instance: p::SourceInstance("clock-test".into()),
+            external_entity_id: p::ExternalEntityId("issue-1".into()),
+        },
+    };
+    let receipt_id = p::SourceReceiptId(k::SourceReceiptId::new().to_string());
+    let ingestion = client
+        .source_occurrence_ingest(ingest(
+            receipt_id.clone(),
+            p::AttentionSignalId(k::AttentionSignalId::new().to_string()),
+            entity,
+            "clock-event",
+            p::SourceOrder::Unordered,
+            key(),
+        ))
+        .await?;
+    let expected_first = timestamp("2030-01-01T00:00:00.123456Z");
+    assert_eq!(
+        client
+            .source_receipt_get(p::SourceReceiptGetParams { id: receipt_id })
+            .await?
+            .ingested_at,
+        expected_first
+    );
+    let p::ChangesResult::Page { events, .. } = client
+        .changes_get(p::ChangesGetParams {
+            after_cursor: before,
+            limit: 10,
+        })
+        .await?
+    else {
+        return Err("unexpected ingestion gap".into());
+    };
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].occurred_at, expected_first);
+
+    let first_work = client
+        .work_item_create(create_params(work_id(), key()))
+        .await?;
+    let p::ChangesResult::Page { events, .. } = client
+        .changes_get(p::ChangesGetParams {
+            after_cursor: ingestion.cursor,
+            limit: 10,
+        })
+        .await?
+    else {
+        return Err("unexpected mutation gap".into());
+    };
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].occurred_at, expected_first);
+
+    time.advance("2030-01-01T00:00:01.987654321Z");
+    client
+        .work_item_create(create_params(work_id(), key()))
+        .await?;
+    let p::ChangesResult::Page { events, .. } = client
+        .changes_get(p::ChangesGetParams {
+            after_cursor: first_work.cursor,
+            limit: 10,
+        })
+        .await?
+    else {
+        return Err("unexpected advanced-clock gap".into());
+    };
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].occurred_at,
+        timestamp("2030-01-01T00:00:01.987654Z")
+    );
+    client.close().await?;
+    handle.shutdown().await?;
     Ok(())
 }
 
@@ -2139,6 +2234,74 @@ async fn raw_call(ws: &mut Ws, id: &str, method: &str, params: Value) -> TestRes
 }
 
 #[tokio::test]
+async fn raised_source_bounds_persist_values_above_former_defaults() -> TestResult {
+    let fixture = Fixture::new()?;
+    let handle = fixture
+        .start_with(ServerConfig {
+            max_source_component_bytes: 257,
+            max_source_order_bytes: 4097,
+            ..ServerConfig::default()
+        })
+        .await?;
+    let (client, _) = Client::connect(client_config(&handle, p::SubscriptionRequest::None))?;
+    let component = "x".repeat(257);
+    let source_key = p::SourceEntityKey {
+        source_kind: p::SourceKind(component.clone()),
+        source_instance: p::SourceInstance(component.clone()),
+        external_entity_id: p::ExternalEntityId(component.clone()),
+    };
+    let entity = p::SourceEntityIdentity {
+        id: p::SourceEntityId(k::SourceEntityId::new().to_string()),
+        key: source_key.clone(),
+    };
+    let signal = p::AttentionSignalId(k::AttentionSignalId::new().to_string());
+    let receipt_id = p::SourceReceiptId(k::SourceReceiptId::new().to_string());
+    let order_bytes = vec![9; 4097];
+    let mut params = ingest(
+        receipt_id.clone(),
+        signal,
+        entity,
+        &component,
+        ordered(
+            "sequence",
+            Some(URL_SAFE_NO_PAD.encode(&order_bytes).as_str()),
+        ),
+        key(),
+    );
+    params.occurrence_key.source_kind = p::SourceKind(component.clone());
+    params.occurrence_key.source_instance = p::SourceInstance(component.clone());
+    client.source_occurrence_ingest(params).await?;
+    let receipt = client
+        .source_receipt_get(p::SourceReceiptGetParams { id: receipt_id })
+        .await?;
+    let p::SourceOrder::Ordered {
+        value: Some(value), ..
+    } = receipt.source_order
+    else {
+        return Err("persisted source order missing".into());
+    };
+    assert_eq!(URL_SAFE_NO_PAD.decode(value.as_str())?, order_bytes);
+
+    let work = work_id();
+    let mut create = create_params(work.clone(), key());
+    create.source_link = Some(source_key);
+    client.work_item_create(create).await?;
+    assert_eq!(
+        client
+            .work_item_get(p::WorkItemGetParams { id: work })
+            .await?
+            .source_link
+            .ok_or("source link")?
+            .external_entity_id
+            .as_str(),
+        component
+    );
+    client.close().await?;
+    handle.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn bounds_and_secret_rejection_have_zero_persistence() -> TestResult {
     let logs = LogCapture::default();
     let subscriber = tracing_subscriber::fmt()
@@ -2152,6 +2315,7 @@ async fn bounds_and_secret_rejection_have_zero_persistence() -> TestResult {
         max_json_depth: 8,
         max_json_nodes: 40,
         max_source_component_bytes: 8,
+        max_source_order_bytes: 1,
         max_delivery_claims: 2,
         max_delivery_text_bytes: 8,
         ..ServerConfig::default()
@@ -2192,13 +2356,25 @@ async fn bounds_and_secret_rejection_have_zero_persistence() -> TestResult {
                 "idempotency_key":k::MutationIdempotencyKey::new().to_string()
             }),
         ),
+        (
+            "occurrence-order",
+            json!({
+                "receipt_id": k::SourceReceiptId::new().to_string(),
+                "signal_id": k::AttentionSignalId::new().to_string(),
+                "occurrence_key":{"source_kind":"x","source_instance":"x","occurrence_id":"x"},
+                "occurred_at":"2026-08-13T10:00:00.000000Z",
+                "order":{"mode":"ordered","domain":"x","value":"AQI"},
+                "source_lifecycle":"active", "fresh_attention":false,
+                "idempotency_key":k::MutationIdempotencyKey::new().to_string()
+            }),
+        ),
         ("nodes", json!({"junk": (0..50).collect::<Vec<_>>() })),
         (
             "depth",
             json!({"a":{"b":{"c":{"d":{"e":{"f":{"g":{"h":{"i":1}}}}}}}}}),
         ),
     ] {
-        let method = if name == "occurrence" {
+        let method = if name.starts_with("occurrence") {
             "attention.source_occurrence.ingest"
         } else {
             "attention.work_item.create"

@@ -52,15 +52,21 @@ Default runtime limits are:
 - replay pages of 256;
 - at most 256 delivery claims and 65,536 delivery-text bytes per request;
 - scheduler batches of 256 every 250 ms, with error backoff capped at 5 seconds;
+- 5 seconds for each WebSocket write;
+- 5 seconds for arrival of the first hello frame;
 - 5-second connection/listener shutdown grace.
 
-All configured limits must be nonzero and fit protocol fields. Capacity exhaustion is explicit: connection admission can return service unavailable; slow/overflowed clients are disconnected and must resume from their last applied cursor or take a snapshot. These limits bound server memory/work; they are not provider payload or batch APIs.
+All configured limits must be nonzero and fit protocol fields. The hello-frame timeout covers only arrival of the first frame; it does not limit hello parsing, snapshot preparation, replay construction, replay writes, or the complete hello transaction. Every WebSocket write is bounded and shutdown-aware. A write timeout or transport failure drops the connection, and the client recovers through the existing reconnect and snapshot/resume behavior. Shutdown still attempts cooperative close frames, but delivery cannot be guaranteed to a stalled peer.
+
+Capacity exhaustion is explicit: connection admission can return service unavailable; slow/overflowed clients are disconnected and must resume from their last applied cursor or take a snapshot. Configured source component and decoded-order limits are authoritative both during early network prevalidation and inside public source-aware mapping APIs. These limits bound server memory/work; they are not provider payload or batch APIs.
 
 ## State, publication, and gaps
 
 Snapshots contain complete server views and a cursor from one storage snapshot. Resume returns events strictly after an acknowledged cursor. Invalid, expired, or future cursors and mismatched server/stream identity are explicit gaps requiring a fresh snapshot. `server_id` and `stream_id` survive ordinary restart; a restored older event tail may make a newer client cursor future.
 
 Mutation state, stable outcome, ChangeEvent/history, Inbox effects, and optional Outbox intent commit atomically in Turso. Live publication occurs only after commit. If a publication is missed because of disconnect or process failure, snapshot/resume—not a mutation receipt—is the recovery authority.
+
+Production composition shares one runtime clock across source ingestion, ordinary mutation evaluation, and reminder scheduling. Consumed clock values are normalized to microsecond precision; embedders using `start_with_time` control that shared time authority while scheduler delays remain controlled by the separately injected sleeper.
 
 The scheduler only evaluates explicit reminder schedules. Due dates do not create reminders. Firing creates a ReminderFire and may create an Outbox intent; it does not create an AttentionSignal or recurrence. Scheduler failures are logged and retried with bounded backoff.
 

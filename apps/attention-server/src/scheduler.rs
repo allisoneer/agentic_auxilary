@@ -1,7 +1,7 @@
 use crate::ServerConfig;
 use crate::TursoAttentionService;
+use crate::time::truncate_to_microseconds;
 use chrono::DateTime;
-use chrono::Timelike;
 use chrono::Utc;
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
@@ -23,9 +23,7 @@ pub struct SystemClock;
 
 impl Clock for SystemClock {
     fn now(&self) -> DateTime<Utc> {
-        let now = Utc::now();
-        now.with_nanosecond((now.timestamp_subsec_nanos() / 1_000) * 1_000)
-            .unwrap_or(now)
+        truncate_to_microseconds(Utc::now())
     }
 }
 
@@ -45,7 +43,11 @@ pub(crate) async fn run(
     let mut backoff = config.scheduler_poll_interval;
     loop {
         let result = service
-            .fire_due(clock.now(), config.scheduler_batch_size, &shutdown)
+            .fire_due(
+                truncate_to_microseconds(clock.now()),
+                config.scheduler_batch_size,
+                &shutdown,
+            )
             .await;
         if shutdown.is_cancelled() {
             return;

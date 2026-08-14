@@ -130,6 +130,48 @@ async fn connection_cap_rejects_and_recovers() {
 }
 
 #[tokio::test]
+async fn silent_peer_timeout_releases_connection_slot() {
+    let config = ServerConfig {
+        max_connections: 1,
+        hello_frame_timeout: std::time::Duration::from_millis(50),
+        ..ServerConfig::default()
+    };
+    let server = TestServer::start(config, Arc::new(ScriptedService::empty(1))).await;
+    let mut silent = connect(&server).await;
+
+    let rejected = tokio_tungstenite::connect_async(server.url())
+        .await
+        .expect_err("silent peer must hold the sole slot initially");
+    match rejected {
+        tokio_tungstenite::tungstenite::Error::Http(response) => {
+            assert_eq!(response.status(), 503);
+        }
+        other => panic!("unexpected error: {other}"),
+    }
+
+    let close = tokio::time::timeout(WAIT, silent.next())
+        .await
+        .expect("silent-peer close timeout")
+        .expect("silent-peer close frame")
+        .expect("silent-peer close");
+    assert!(matches!(close, Message::Close(Some(frame)) if u16::from(frame.code) == 1002));
+
+    let mut recovered = tokio::time::timeout(WAIT, async {
+        loop {
+            if let Ok((connection, _)) = tokio_tungstenite::connect_async(server.url()).await {
+                break connection;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("timed-out peer did not release connection slot");
+    hello_none(&mut recovered).await;
+    drop(recovered);
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn hello_and_envelope_error_matrix() {
     let server =
         TestServer::start(ServerConfig::default(), Arc::new(ScriptedService::empty(1))).await;

@@ -1,14 +1,17 @@
 use crate::AppState;
 use crate::mapping;
+use crate::time::truncate_to_microseconds;
 use attention_kernel as k;
 use attention_protocol as p;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use futures_util::SinkExt;
 use futures_util::StreamExt;
+use futures_util::sink::Sink;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
@@ -17,22 +20,47 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
     let (mut sink, mut source) = socket.split();
     let first = tokio::select! {
         () = state.shutdown.cancelled() => {
-            let _ = sink.send(close_message(1001, "server shutdown")).await;
+            let _ = send_message(
+                &mut sink,
+                close_message(1001, "server shutdown"),
+                state.config.write_timeout,
+                &state.shutdown,
+            ).await;
+            return;
+        },
+        () = tokio::time::sleep(state.config.hello_frame_timeout) => {
+            let _ = send_message(
+                &mut sink,
+                close_message(1002, "hello frame timeout"),
+                state.config.write_timeout,
+                &state.shutdown,
+            ).await;
             return;
         },
         frame = source.next() => frame,
     };
     let Some(Ok(Message::Text(text))) = first else {
-        let _ = sink.send(close_message(1002, "text hello required")).await;
+        let _ = reject_hello(
+            &mut sink,
+            None,
+            close_message(1002, "text hello required"),
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await;
         return;
     };
     let raw: Value = if let Ok(value) = serde_json::from_str(&text) {
         value
     } else {
-        let _ = sink
-            .send(error(Value::Null, p::PARSE_ERROR, "Parse error", None))
-            .await;
-        let _ = sink.send(close_message(1002, "invalid hello")).await;
+        let _ = reject_hello(
+            &mut sink,
+            Some(error(Value::Null, p::PARSE_ERROR, "Parse error", None)),
+            close_message(1002, "invalid hello"),
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await;
         return;
     };
     if !safe_json(
@@ -41,39 +69,51 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
         state.config.max_json_nodes,
         false,
     ) {
-        let _ = sink
-            .send(error(
+        let _ = reject_hello(
+            &mut sink,
+            Some(error(
                 Value::Null,
                 p::INVALID_REQUEST,
                 "Invalid request",
                 None,
-            ))
-            .await;
-        let _ = sink.send(close_message(1002, "invalid hello")).await;
+            )),
+            close_message(1002, "invalid hello"),
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await;
         return;
     }
     let recovered_id = recover_id(&raw);
     let request: p::RpcRequest<Value> = match serde_json::from_value::<p::RpcRequest<Value>>(raw) {
         Ok(request) if request.params.is_some() => request,
         _ => {
-            let _ = sink
-                .send(error(
+            let _ = reject_hello(
+                &mut sink,
+                Some(error(
                     recovered_id,
                     p::INVALID_REQUEST,
                     "Invalid request",
                     None,
-                ))
-                .await;
-            let _ = sink.send(close_message(1002, "invalid hello")).await;
+                )),
+                close_message(1002, "invalid hello"),
+                state.config.write_timeout,
+                &state.shutdown,
+            )
+            .await;
             return;
         }
     };
     let id = json!(request.id);
     if request.method != p::RPC_HELLO_METHOD {
-        let _ = sink
-            .send(error(id, p::HELLO_REQUIRED, "Hello required", None))
-            .await;
-        let _ = sink.send(close_message(1002, "hello required")).await;
+        let _ = reject_hello(
+            &mut sink,
+            Some(error(id, p::HELLO_REQUIRED, "Hello required", None)),
+            close_message(1002, "hello required"),
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await;
         return;
     }
     let hello: p::HelloRequest = if let Some(hello) = request
@@ -82,47 +122,65 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
     {
         hello
     } else {
-        let _ = sink
-            .send(error(id, p::INVALID_PARAMS, "Invalid params", None))
-            .await;
-        let _ = sink.send(close_message(1002, "invalid hello params")).await;
+        let _ = reject_hello(
+            &mut sink,
+            Some(error(id, p::INVALID_PARAMS, "Invalid params", None)),
+            close_message(1002, "invalid hello params"),
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await;
         return;
     };
     if hello.protocol_version != p::PROTOCOL_V1 {
         let e = p::RpcError::unsupported_protocol_version(&[p::PROTOCOL_V1]);
-        let _ = sink.send(error(id, e.code, &e.message, e.data)).await;
-        let _ = sink
-            .send(close_message(1002, "unsupported protocol version"))
-            .await;
+        let _ = reject_hello(
+            &mut sink,
+            Some(error(id, e.code, &e.message, e.data)),
+            close_message(1002, "unsupported protocol version"),
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await;
         return;
     }
     let mut subscription = match prepare_subscription(&state, &hello.subscription).await {
         Ok(value) => value,
         Err(PrepareError::Gap(gap)) => {
-            let _ = sink
-                .send(error(
+            let _ = reject_hello(
+                &mut sink,
+                Some(error(
                     id,
                     p::CURSOR_GAP,
                     "Cursor gap",
                     serde_json::to_value(gap).ok(),
-                ))
-                .await;
-            let _ = sink
-                .send(close_message(1008, "cursor gap; snapshot required"))
-                .await;
+                )),
+                close_message(1008, "cursor gap; snapshot required"),
+                state.config.write_timeout,
+                &state.shutdown,
+            )
+            .await;
             return;
         }
         Err(PrepareError::Internal) => {
-            let _ = sink
-                .send(error(id, p::INTERNAL_ERROR, "Internal error", None))
-                .await;
-            let _ = sink
-                .send(close_message(1011, "subscription preparation failed"))
-                .await;
+            let _ = reject_hello(
+                &mut sink,
+                Some(error(id, p::INTERNAL_ERROR, "Internal error", None)),
+                close_message(1011, "subscription preparation failed"),
+                state.config.write_timeout,
+                &state.shutdown,
+            )
+            .await;
             return;
         }
         Err(PrepareError::Shutdown) => {
-            let _ = sink.send(close_message(1001, "server shutdown")).await;
+            let _ = send_message(
+                &mut sink,
+                close_message(1001, "server shutdown"),
+                state.config.write_timeout,
+                &state.shutdown,
+            )
+            .await;
             return;
         }
     };
@@ -137,14 +195,27 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
             max_in_flight: state.config.max_in_flight as u32,
         },
     };
-    if send_json(&mut sink, &json!({"jsonrpc":"2.0","id":id,"result":result}))
-        .await
-        .is_err()
+    if send_json(
+        &mut sink,
+        &json!({"jsonrpc":"2.0","id":id,"result":result}),
+        state.config.write_timeout,
+        &state.shutdown,
+    )
+    .await
+    .is_err()
     {
         return;
     }
     for event in subscription.replay.drain(..) {
-        if send_event(&mut sink, &event).await.is_err() {
+        if send_event(
+            &mut sink,
+            &event,
+            state.config.write_timeout,
+            &state.shutdown,
+        )
+        .await
+        .is_err()
+        {
             return;
         }
     }
@@ -162,7 +233,7 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
         tokio::select! {
             () = state.shutdown.cancelled() => break close_message(1001, "server shutdown"),
             () = response_overflow.cancelled() => break close_message(1013, "outbound overflow; reconnect required"),
-            Some(value) = out_rx.recv() => if send_json(&mut sink, &value).await.is_err() { return; },
+            Some(value) = out_rx.recv() => if send_json(&mut sink, &value, state.config.write_timeout, &state.shutdown).await.is_err() { return; },
             overflow = async { match live_overflow { Some(signal) => signal.await.ok(), None => std::future::pending().await } } => {
                 let _ = overflow;
                 break close_message(1013, "publication overflow; resume required");
@@ -236,14 +307,20 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
                         if tx.try_send(response).is_err() { overflow.cancel(); }
                     });
                 },
-                Some(Ok(Message::Ping(data))) => if sink.send(Message::Pong(data)).await.is_err() { return; },
+                Some(Ok(Message::Ping(data))) => if send_message(&mut sink, Message::Pong(data), state.config.write_timeout, &state.shutdown).await.is_err() { return; },
                 Some(Ok(Message::Pong(_))) => {},
                 Some(Ok(Message::Binary(_))) => break close_message(1003, "binary messages unsupported"),
                 Some(Ok(Message::Close(_)) | Err(_)) | None => return,
             }
         }
     };
-    let _ = sink.send(close).await;
+    let _ = send_message(
+        &mut sink,
+        close,
+        state.config.write_timeout,
+        &state.shutdown,
+    )
+    .await;
     drop(out_tx);
     let drain = async { while requests.join_next().await.is_some() {} };
     if tokio::time::timeout(state.config.shutdown_grace, drain)
@@ -524,15 +601,65 @@ fn notification(event: p::ChangeEvent) -> Value {
 async fn send_event(
     sink: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     event: &p::ChangeEvent,
-) -> Result<(), ()> {
-    send_json(sink, &notification(event.clone())).await
+    write_timeout: Duration,
+    shutdown: &tokio_util::sync::CancellationToken,
+) -> Result<(), SendError> {
+    send_json(sink, &notification(event.clone()), write_timeout, shutdown).await
 }
 async fn send_json(
     sink: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     value: &Value,
-) -> Result<(), ()> {
-    let text = serde_json::to_string(value).map_err(|_| ())?;
-    sink.send(Message::Text(text)).await.map_err(|_| ())
+    write_timeout: Duration,
+    shutdown: &tokio_util::sync::CancellationToken,
+) -> Result<(), SendError> {
+    let text = serde_json::to_string(value).map_err(|_| SendError::Serialization)?;
+    send_message(sink, Message::Text(text), write_timeout, shutdown).await
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SendError {
+    Serialization,
+    Transport,
+    Timeout,
+    Cancelled,
+}
+
+async fn send_message<S>(
+    sink: &mut S,
+    message: Message,
+    write_timeout: Duration,
+    shutdown: &tokio_util::sync::CancellationToken,
+) -> Result<(), SendError>
+where
+    S: Sink<Message> + Unpin,
+{
+    let send = tokio::time::timeout(write_timeout, sink.send(message));
+    tokio::pin!(send);
+    tokio::select! {
+        biased;
+        result = &mut send => match result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(_)) => Err(SendError::Transport),
+            Err(_) => Err(SendError::Timeout),
+        },
+        () = shutdown.cancelled() => Err(SendError::Cancelled),
+    }
+}
+
+async fn reject_hello<S>(
+    sink: &mut S,
+    error: Option<Message>,
+    close: Message,
+    write_timeout: Duration,
+    shutdown: &tokio_util::sync::CancellationToken,
+) -> Result<(), SendError>
+where
+    S: Sink<Message> + Unpin,
+{
+    if let Some(error) = error {
+        send_message(sink, error, write_timeout, shutdown).await?;
+    }
+    send_message(sink, close, write_timeout, shutdown).await
 }
 #[expect(
     clippy::needless_pass_by_value,
@@ -559,11 +686,12 @@ async fn dispatch_request(state: &Arc<AppState>, request: p::RpcRequest<Value>) 
     ) {
         return error_value(id, p::INVALID_PARAMS, "Invalid params", None);
     }
+    let source_bounds = state.config.source_bounds();
     macro_rules! read {($params:ty,$parse:expr,$call:expr,$map:expr,$resource:expr)=>{{let Ok(v)=serde_json::from_value::<$params>(params)else{return error_value(id,p::INVALID_PARAMS,"Invalid params",None)};let Ok(native_id)=$parse(&v)else{return error_value(id,p::INVALID_PARAMS,"Invalid params",None)};match $call(native_id).await{Ok(Some(x))=>match $map(&x){Ok(x)=>json!({"jsonrpc":"2.0","id":id,"result":x}),Err(_)=>internal(id)},Ok(None)=>error_value(id,p::RESOURCE_NOT_FOUND,"Resource not found",Some(json!({"resource":$resource(v)}))),Err(error)=>service_error(id,&error)}}};}
-    macro_rules! mutate {($params:ty,$parse:path,$method:ident,$map:path)=>{{
+    macro_rules! mutate {($params:ty,$parse:expr,$method:ident,$map:path)=>{{
         let Some(service) = state.mutations.as_ref() else { return error_value(id,p::METHOD_NOT_FOUND,"Method not found",None) };
         let Ok(wire)=serde_json::from_value::<$params>(params) else { return error_value(id,p::INVALID_PARAMS,"Invalid params",None) };
-        let Ok(command)=$parse(&wire) else { return error_value(id,p::INVALID_PARAMS,"Invalid params",None) };
+        let Ok(command)=($parse)(&wire) else { return error_value(id,p::INVALID_PARAMS,"Invalid params",None) };
         match service.$method(command).await {
             Ok(result) => json!({"jsonrpc":"2.0","id":id,"result":$map(&result)}),
             Err(error) => service_error(id,&error),
@@ -602,7 +730,7 @@ async fn dispatch_request(state: &Arc<AppState>, request: p::RpcRequest<Value>) 
             let Ok(v) = serde_json::from_value::<p::SourceEntityGetParams>(params) else {
                 return error_value(id, p::INVALID_PARAMS, "Invalid params", None);
             };
-            let Ok(key) = mapping::parse_source_key(&v.key) else {
+            let Ok(key) = mapping::parse_source_key(&v.key, source_bounds) else {
                 return error_value(id, p::INVALID_PARAMS, "Invalid params", None);
             };
             match state
@@ -668,7 +796,7 @@ async fn dispatch_request(state: &Arc<AppState>, request: p::RpcRequest<Value>) 
         }
         <p::WorkItemCreate as p::RpcMethod>::NAME => mutate!(
             p::CreateWorkItemParams,
-            mapping::create_work_item_command,
+            |wire| mapping::create_work_item_command(wire, source_bounds),
             create_work_item,
             mapping::work_item_result
         ),
@@ -692,7 +820,11 @@ async fn dispatch_request(state: &Arc<AppState>, request: p::RpcRequest<Value>) 
         ),
         <p::SourceOccurrenceIngest as p::RpcMethod>::NAME => mutate!(
             p::IngestSourceOccurrenceParams,
-            mapping::ingest_source_command,
+            |wire| mapping::ingest_source_command(
+                wire,
+                source_bounds,
+                truncate_to_microseconds(state.clock.now()),
+            ),
             ingest_source_occurrence,
             mapping::source_result
         ),
@@ -947,6 +1079,70 @@ mod tests {
     use super::*;
     use chrono::DateTime;
     use chrono::Utc;
+    use std::pin::Pin;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::task::Context;
+    use std::task::Poll;
+
+    #[derive(Clone, Copy)]
+    enum SinkBehavior {
+        Ready,
+        Failed,
+        Pending,
+    }
+
+    struct MockSink {
+        behavior: SinkBehavior,
+        sent: Arc<AtomicUsize>,
+    }
+
+    impl MockSink {
+        fn new(behavior: SinkBehavior) -> (Self, Arc<AtomicUsize>) {
+            let sent = Arc::new(AtomicUsize::new(0));
+            (
+                Self {
+                    behavior,
+                    sent: Arc::clone(&sent),
+                },
+                sent,
+            )
+        }
+    }
+
+    impl Sink<Message> for MockSink {
+        type Error = &'static str;
+
+        fn poll_ready(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            match self.behavior {
+                SinkBehavior::Ready => Poll::Ready(Ok(())),
+                SinkBehavior::Failed => Poll::Ready(Err("send failed")),
+                SinkBehavior::Pending => Poll::Pending,
+            }
+        }
+
+        fn start_send(self: Pin<&mut Self>, _item: Message) -> Result<(), Self::Error> {
+            self.sent.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
 
     fn cursor(value: u64) -> k::CommitCursor {
         k::CommitCursor::try_from(value).expect("nonzero cursor")
@@ -962,6 +1158,75 @@ mod tests {
             k::InboxEffects::default(),
         )
         .commit(cursor(value))
+    }
+
+    #[tokio::test]
+    async fn bounded_send_prefers_immediately_ready_success() {
+        let (mut sink, sent) = MockSink::new(SinkBehavior::Ready);
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        shutdown.cancel();
+        assert_eq!(
+            send_message(
+                &mut sink,
+                Message::Text("ready".into()),
+                Duration::from_secs(1),
+                &shutdown,
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(sent.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn bounded_send_reports_transport_failure() {
+        let (mut sink, sent) = MockSink::new(SinkBehavior::Failed);
+        assert_eq!(
+            send_message(
+                &mut sink,
+                Message::Text("failed".into()),
+                Duration::from_secs(1),
+                &tokio_util::sync::CancellationToken::new(),
+            )
+            .await,
+            Err(SendError::Transport)
+        );
+        assert_eq!(sent.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn bounded_send_times_out_without_starting_another_write() {
+        let (mut sink, sent) = MockSink::new(SinkBehavior::Pending);
+        assert_eq!(
+            send_message(
+                &mut sink,
+                Message::Text("pending".into()),
+                Duration::from_millis(10),
+                &tokio_util::sync::CancellationToken::new(),
+            )
+            .await,
+            Err(SendError::Timeout)
+        );
+        assert_eq!(sent.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn bounded_send_cancels_pending_write_without_waiting_for_timeout() {
+        let (mut sink, sent) = MockSink::new(SinkBehavior::Pending);
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        shutdown.cancel();
+        let result = tokio::time::timeout(
+            Duration::from_millis(100),
+            send_message(
+                &mut sink,
+                Message::Text("pending".into()),
+                Duration::from_mins(1),
+                &shutdown,
+            ),
+        )
+        .await;
+        assert_eq!(result, Ok(Err(SendError::Cancelled)));
+        assert_eq!(sent.load(Ordering::SeqCst), 0);
     }
 
     #[test]

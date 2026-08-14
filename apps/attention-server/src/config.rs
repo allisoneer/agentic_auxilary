@@ -25,6 +25,8 @@ pub struct ServerConfig {
     pub scheduler_poll_interval: Duration,
     pub scheduler_batch_size: usize,
     pub scheduler_error_backoff_max: Duration,
+    pub write_timeout: Duration,
+    pub hello_frame_timeout: Duration,
     pub shutdown_grace: Duration,
 }
 
@@ -49,6 +51,8 @@ impl Default for ServerConfig {
             scheduler_poll_interval: Duration::from_millis(250),
             scheduler_batch_size: 256,
             scheduler_error_backoff_max: Duration::from_secs(5),
+            write_timeout: Duration::from_secs(5),
+            hello_frame_timeout: Duration::from_secs(5),
             shutdown_grace: Duration::from_secs(5),
         }
     }
@@ -67,6 +71,13 @@ pub enum ConfigError {
 }
 
 impl ServerConfig {
+    pub const fn source_bounds(&self) -> crate::mapping::SourceBounds {
+        crate::mapping::SourceBounds::new(
+            self.max_source_component_bytes,
+            self.max_source_order_bytes,
+        )
+    }
+
     pub fn validate(&self) -> Result<(), ConfigError> {
         if !self.bind.ip().is_loopback() && !self.allow_non_loopback {
             return Err(ConfigError::NonLoopback);
@@ -92,6 +103,8 @@ impl ServerConfig {
             || u32::try_from(self.max_in_flight).is_err()
             || self.scheduler_poll_interval.is_zero()
             || self.scheduler_error_backoff_max.is_zero()
+            || self.write_timeout.is_zero()
+            || self.hello_frame_timeout.is_zero()
             || self.shutdown_grace.is_zero()
         {
             return Err(ConfigError::InvalidLimit);
@@ -133,5 +146,25 @@ mod tests {
         for origin in ["http://localhost:8080", "https://example.com:443"] {
             assert!(valid_origin(origin), "origin {origin}");
         }
+    }
+
+    #[test]
+    fn websocket_timeout_defaults_are_five_seconds() {
+        let config = ServerConfig::default();
+        assert_eq!(config.write_timeout, Duration::from_secs(5));
+        assert_eq!(config.hello_frame_timeout, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn websocket_timeouts_are_independently_nonzero() {
+        let mut config = ServerConfig {
+            write_timeout: Duration::ZERO,
+            ..ServerConfig::default()
+        };
+        assert_eq!(config.validate(), Err(ConfigError::InvalidLimit));
+
+        config.write_timeout = Duration::from_secs(5);
+        config.hello_frame_timeout = Duration::ZERO;
+        assert_eq!(config.validate(), Err(ConfigError::InvalidLimit));
     }
 }
