@@ -633,6 +633,21 @@ async fn run(
                     Err(error) => {
                         report(&issues, error);
                         let _ = ws.close(None).await;
+                        attempt = attempt.saturating_add(1);
+                        if wait_backoff(
+                            &config,
+                            attempt,
+                            &mut commands,
+                            &mut queued,
+                            &status,
+                            &mut cursors,
+                            &mut resume,
+                            last_identity.as_ref(),
+                        )
+                        .await
+                        {
+                            return;
+                        }
                         continue;
                     }
                 };
@@ -646,6 +661,21 @@ async fn run(
                     cursors.rollback(sequence);
                     report(&issues, ClientError::Backpressure("snapshot queue"));
                     let _ = ws.close(None).await;
+                    attempt = attempt.saturating_add(1);
+                    if wait_backoff(
+                        &config,
+                        attempt,
+                        &mut commands,
+                        &mut queued,
+                        &status,
+                        &mut cursors,
+                        &mut resume,
+                        last_identity.as_ref(),
+                    )
+                    .await
+                    {
+                        return;
+                    }
                     continue;
                 }
             }

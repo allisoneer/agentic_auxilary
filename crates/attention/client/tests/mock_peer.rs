@@ -487,7 +487,42 @@ async fn missing_pong_uses_independent_deadline() {
 }
 
 #[tokio::test]
-async fn peer_local_transport_timeout_and_backpressure_are_distinct() {
+async fn snapshot_queue_backpressure_uses_reconnect_backoff() {
+    let (listener, url) = listener().await;
+    let peer = tokio::spawn(async move {
+        let (mut first, hello) = accept_hello(&listener).await;
+        hello_ok(&mut first, hello, hello_result(snapshot("cursor-1"))).await;
+        first.close(None).await.expect("close first");
+
+        let (mut second, hello) = accept_hello(&listener).await;
+        let retry_started = tokio::time::Instant::now();
+        hello_ok(&mut second, hello, hello_result(snapshot("cursor-2"))).await;
+
+        let (mut third, hello) =
+            tokio::time::timeout(Duration::from_secs(1), accept_hello(&listener))
+                .await
+                .expect("backed-off retry");
+        assert!(retry_started.elapsed() >= Duration::from_millis(250));
+        hello_ok(&mut third, hello, hello_result(SubscriptionResult::None)).await;
+    });
+    let mut cfg = config(url);
+    cfg.reconnect_min = Duration::from_millis(300);
+    cfg.reconnect_max = Duration::from_millis(300);
+    let (client, mut sub) = Client::connect(cfg).expect("client");
+    assert!(matches!(
+        sub.issues.recv().await.expect("disconnect").error,
+        ClientError::Transport(_)
+    ));
+    assert!(matches!(
+        sub.issues.recv().await.expect("backpressure").error,
+        ClientError::Backpressure("snapshot queue")
+    ));
+    peer.await.expect("peer");
+    client.close().await.expect("close");
+}
+
+#[tokio::test]
+async fn transport_and_writer_backpressure_are_distinct_while_reconnecting() {
     // Transport is observable even when the supervisor reconnects.
     let mut cfg = config("ws://127.0.0.1:9".into());
     cfg.command_capacity = 1;
@@ -516,8 +551,10 @@ async fn peer_local_transport_timeout_and_backpressure_are_distinct() {
     assert!(saw_backpressure);
     client.close().await.expect("close");
     assert!(first.await.expect("task").is_err());
+}
 
-    // Local negotiation errors remain distinguishable from peer RPC errors.
+#[tokio::test]
+async fn unsupported_protocol_version_is_local_protocol_error() {
     let (local_listener, url) = listener().await;
     let peer = tokio::spawn(async move {
         let (mut ws, hello) = accept_hello(&local_listener).await;
@@ -532,8 +569,10 @@ async fn peer_local_transport_timeout_and_backpressure_are_distinct() {
     ));
     peer.await.expect("peer");
     client.close().await.expect("close");
+}
 
-    // Correlated peer errors and request deadlines are delivered to the caller distinctly.
+#[tokio::test]
+async fn peer_rpc_error_is_returned_to_caller() {
     let (listener, url) = listener().await;
     let peer = tokio::spawn(async move {
         let (mut ws, hello) = accept_hello(&listener).await;
@@ -549,8 +588,6 @@ async fn peer_local_transport_timeout_and_backpressure_are_distinct() {
             }),
         )
         .await;
-        let _timed_out = next_text(&mut ws).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
     });
     let mut cfg = config(url);
     cfg.request_timeout = Duration::from_millis(30);
@@ -559,6 +596,22 @@ async fn peer_local_transport_timeout_and_backpressure_are_distinct() {
         client.snapshot_get(EmptyParams {}).await,
         Err(ClientError::Peer(_))
     ));
+    peer.await.expect("peer");
+    client.close().await.expect("close");
+}
+
+#[tokio::test]
+async fn request_timeout_is_returned_to_caller() {
+    let (listener, url) = listener().await;
+    let peer = tokio::spawn(async move {
+        let (mut ws, hello) = accept_hello(&listener).await;
+        hello_ok(&mut ws, hello, hello_result(SubscriptionResult::None)).await;
+        let _timed_out = next_text(&mut ws).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    });
+    let mut cfg = config(url);
+    cfg.request_timeout = Duration::from_millis(30);
+    let (client, _) = Client::connect(cfg).expect("client");
     assert!(matches!(
         client.snapshot_get(EmptyParams {}).await,
         Err(ClientError::Timeout)
