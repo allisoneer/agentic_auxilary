@@ -20,6 +20,7 @@ pub struct ServerConfig {
     pub outbound_capacity: usize,
     pub publication_capacity: usize,
     pub replay_page_size: usize,
+    pub max_replay_events: usize,
     pub max_delivery_claims: usize,
     pub max_delivery_text_bytes: usize,
     pub scheduler_poll_interval: Duration,
@@ -46,6 +47,7 @@ impl Default for ServerConfig {
             outbound_capacity: 128,
             publication_capacity: 256,
             replay_page_size: 256,
+            max_replay_events: 4_096,
             max_delivery_claims: 256,
             max_delivery_text_bytes: 65_536,
             scheduler_poll_interval: Duration::from_millis(250),
@@ -93,6 +95,7 @@ impl ServerConfig {
             self.outbound_capacity,
             self.publication_capacity,
             self.replay_page_size,
+            self.max_replay_events,
             self.max_delivery_claims,
             self.max_delivery_text_bytes,
             self.scheduler_batch_size,
@@ -153,6 +156,20 @@ mod tests {
         let config = ServerConfig::default();
         assert_eq!(config.write_timeout, Duration::from_secs(5));
         assert_eq!(config.hello_frame_timeout, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn replay_event_limit_defaults_to_4096() {
+        assert_eq!(ServerConfig::default().max_replay_events, 4_096);
+    }
+
+    #[test]
+    fn replay_event_limit_is_nonzero() {
+        let config = ServerConfig {
+            max_replay_events: 0,
+            ..ServerConfig::default()
+        };
+        assert_eq!(config.validate(), Err(ConfigError::InvalidLimit));
     }
 
     #[test]

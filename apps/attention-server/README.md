@@ -50,7 +50,7 @@ Default runtime limits are:
 - source identity component 256 bytes and source-order data 4,096 bytes;
 - 32 in-flight requests per connection;
 - outbound queue 128 and publication buffer 256;
-- replay pages of 256;
+- replay pages of 256 and at most 4,096 accumulated replay events by default;
 - at most 256 delivery claims and 65,536 delivery-text bytes per request;
 - scheduler batches of 256 every 250 ms, with error backoff capped at 5 seconds;
 - 5 seconds for each WebSocket write;
@@ -63,7 +63,7 @@ Capacity exhaustion is explicit: connection admission can return service unavail
 
 ## State, publication, and gaps
 
-Snapshots contain complete server views and a cursor from one storage snapshot. Resume returns events strictly after an acknowledged cursor. Invalid, expired, or future cursors and mismatched server/stream identity are explicit gaps requiring a fresh snapshot. `server_id` and `stream_id` survive ordinary restart; a restored older event tail may make a newer client cursor future.
+Snapshots contain complete server views and a cursor from one storage snapshot. Resume returns events strictly after an acknowledged cursor. The configured replay cap counts historical and buffered-live events together, and a total exactly equal to the cap may Resume. If another event would exceed the cap, the server discards the partial replay and successfully negotiates a fresh Snapshot; the Snapshot hello remains the first server frame, and normal live delivery continues from its cursor. Invalid, expired, or future cursors and mismatched server/stream identity remain explicit gaps requiring a fresh snapshot. `server_id` and `stream_id` survive ordinary restart; a restored older event tail may make a newer client cursor future.
 
 Mutation state, stable outcome, ChangeEvent/history, Inbox effects, and optional Outbox intent commit atomically in Turso. Live publication occurs only after commit. If a publication is missed because of disconnect or process failure, snapshot/resume—not a mutation receipt—is the recovery authority.
 

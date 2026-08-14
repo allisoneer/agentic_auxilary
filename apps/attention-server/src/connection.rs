@@ -455,6 +455,24 @@ enum PrepareError {
     Shutdown,
 }
 
+async fn prepare_snapshot(state: &Arc<AppState>) -> Result<Prepared, PrepareError> {
+    let live = state.publications.subscribe();
+    let snapshot = tokio::select! {
+        () = state.shutdown.cancelled() => return Err(PrepareError::Shutdown),
+        result = state.service.snapshot() => result.map_err(|_| PrepareError::Internal)?,
+    };
+    let state_wire = mapping::snapshot(&snapshot).map_err(|_| PrepareError::Internal)?;
+    Ok(Prepared {
+        result: p::SubscriptionResult::Snapshot {
+            state: state_wire,
+            after_cursor: mapping::cursor(snapshot.cursor()),
+        },
+        replay: vec![],
+        live: Some(live),
+        last_sent: Some(snapshot.cursor()),
+    })
+}
+
 async fn prepare_subscription(
     state: &Arc<AppState>,
     request: &p::SubscriptionRequest,
@@ -466,23 +484,7 @@ async fn prepare_subscription(
             live: None,
             last_sent: None,
         }),
-        p::SubscriptionRequest::Snapshot => {
-            let live = state.publications.subscribe();
-            let snap = tokio::select! {
-                () = state.shutdown.cancelled() => return Err(PrepareError::Shutdown),
-                result = state.service.snapshot() => result.map_err(|_| PrepareError::Internal)?,
-            };
-            let state_wire = mapping::snapshot(&snap).map_err(|_| PrepareError::Internal)?;
-            Ok(Prepared {
-                result: p::SubscriptionResult::Snapshot {
-                    state: state_wire,
-                    after_cursor: mapping::cursor(snap.cursor()),
-                },
-                replay: vec![],
-                live: Some(live),
-                last_sent: Some(snap.cursor()),
-            })
-        }
+        p::SubscriptionRequest::Snapshot => prepare_snapshot(state).await,
         p::SubscriptionRequest::Resume {
             server_id,
             stream_id,
@@ -507,6 +509,12 @@ async fn prepare_subscription(
                     k::ChangesResult::Gap(gap) => return Err(PrepareError::Gap(map_gap(gap))),
                     k::ChangesResult::Page(page) => {
                         let next = validate_replay_page(last, &page)?;
+                        let remaining = state.config.max_replay_events - replay.len();
+                        if page.events().len() > remaining {
+                            drop(replay);
+                            drop(live);
+                            return prepare_snapshot(state).await;
+                        }
                         for event in page.events() {
                             replay.push(mapping::event(event).map_err(|_| PrepareError::Internal)?);
                         }
@@ -523,6 +531,11 @@ async fn prepare_subscription(
                 }
                 if last.value().checked_add(1) != Some(event.cursor().value()) {
                     return Err(PrepareError::Internal);
+                }
+                if replay.len() == state.config.max_replay_events {
+                    drop(replay);
+                    drop(live);
+                    return prepare_snapshot(state).await;
                 }
                 replay.push(mapping::event(&event).map_err(|_| PrepareError::Internal)?);
                 last = event.cursor();

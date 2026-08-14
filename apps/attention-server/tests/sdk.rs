@@ -119,6 +119,84 @@ async fn replay_race_and_paged_resume_continue_into_live() {
 }
 
 #[tokio::test]
+async fn exact_replay_cap_combines_paged_history_and_buffered_live() {
+    let barrier = Arc::new(Barrier::default());
+    let events = Arc::new(Mutex::new(vec![event(2), event(3)]));
+    let mut service = ScriptedService::empty(1);
+    service.changes = ChangeScript::Events(events);
+    service.changes_barrier = Some(Arc::clone(&barrier));
+    let config = ServerConfig {
+        replay_page_size: 1,
+        max_replay_events: 3,
+        ..ServerConfig::default()
+    };
+    let server = TestServer::start(config, Arc::new(service)).await;
+    let mut config = client_config(&server);
+    config.subscription = p::SubscriptionRequest::Resume {
+        server_id: p::ServerId(SERVER_ID.into()),
+        stream_id: p::StreamId(STREAM_ID.into()),
+        after_cursor: p::Cursor("1".into()),
+    };
+    let (client, mut subscription) = Client::connect(config).expect("client");
+    barrier.wait_entered().await;
+    assert_eq!(server.state.publications.publish(&event(4)).delivered, 1);
+    barrier.release();
+
+    for expected in ["2", "3", "4"] {
+        let change = recv_change(&mut subscription, expected).await;
+        client
+            .acknowledge_cursor(change.cursor)
+            .await
+            .expect("change ack");
+    }
+    assert!(matches!(
+        subscription.snapshots.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
+    client.close().await.expect("client close");
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn replay_fallback_replaces_subscription_before_loading_snapshot() {
+    let snapshot_barrier = Arc::new(Barrier::default());
+    let mut service = ScriptedService::empty(4);
+    service.changes =
+        ChangeScript::Events(Arc::new(Mutex::new(vec![event(2), event(3), event(4)])));
+    service.snapshot_barrier = Some(Arc::clone(&snapshot_barrier));
+    let config = ServerConfig {
+        replay_page_size: 1,
+        max_replay_events: 2,
+        ..ServerConfig::default()
+    };
+    let server = TestServer::start(config, Arc::new(service)).await;
+    let mut config = client_config(&server);
+    config.subscription = p::SubscriptionRequest::Resume {
+        server_id: p::ServerId(SERVER_ID.into()),
+        stream_id: p::StreamId(STREAM_ID.into()),
+        after_cursor: p::Cursor("1".into()),
+    };
+    let (client, mut subscription) = Client::connect(config).expect("client");
+
+    snapshot_barrier.wait_entered().await;
+    assert_eq!(server.state.publications.publish(&event(5)).delivered, 1);
+    snapshot_barrier.release();
+
+    let snapshot = recv_snapshot(&mut subscription, "4").await;
+    client
+        .acknowledge_snapshot(snapshot.after_cursor)
+        .await
+        .expect("snapshot ack");
+    let change = recv_change(&mut subscription, "5").await;
+    client
+        .acknowledge_cursor(change.cursor)
+        .await
+        .expect("change ack");
+    client.close().await.expect("client close");
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn expired_and_future_gaps_fall_back_to_snapshot() {
     for gap in [
         k::ChangeGap::Expired {

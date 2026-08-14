@@ -11,10 +11,15 @@ use futures_util::StreamExt;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::sync::Mutex;
 use support::Barrier;
+use support::ChangeScript;
+use support::SERVER_ID;
+use support::STREAM_ID;
 use support::ScriptedService;
 use support::TestServer;
 use support::WAIT;
+use support::event;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
@@ -222,6 +227,49 @@ async fn hello_and_envelope_error_matrix() {
         assert_eq!(response["error"]["code"], json!(code), "body {body}");
         assert_eq!(response["id"], id, "body {body}");
     }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn replay_over_cap_negotiates_snapshot_before_replacement_live_delivery() {
+    let mut service = ScriptedService::empty(4);
+    service.changes =
+        ChangeScript::Events(Arc::new(Mutex::new(vec![event(2), event(3), event(4)])));
+    let config = ServerConfig {
+        replay_page_size: 1,
+        max_replay_events: 2,
+        ..ServerConfig::default()
+    };
+    let server = TestServer::start(config, Arc::new(service)).await;
+    let mut ws = connect(&server).await;
+    ws.send(hello(
+        "resume",
+        p::SubscriptionRequest::Resume {
+            server_id: p::ServerId(SERVER_ID.into()),
+            stream_id: p::StreamId(STREAM_ID.into()),
+            after_cursor: p::Cursor("1".into()),
+        },
+    ))
+    .await
+    .expect("send resume hello");
+
+    let response = text_json(&mut ws).await;
+    assert_eq!(response["id"], "resume");
+    assert_eq!(
+        response["result"]["subscription_result"]["mode"],
+        "snapshot"
+    );
+    assert_eq!(
+        response["result"]["subscription_result"]["after_cursor"],
+        "4"
+    );
+
+    assert_eq!(server.state.publications.publish(&event(5)).delivered, 1);
+    let notification = text_json(&mut ws).await;
+    assert_eq!(notification["method"], "attention.change");
+    assert_eq!(notification["params"]["event"]["cursor"], "5");
+
+    drop(ws);
     server.shutdown().await;
 }
 
