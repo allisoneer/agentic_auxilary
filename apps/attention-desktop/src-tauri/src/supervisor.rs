@@ -162,7 +162,10 @@ impl TestTransport {
 }
 
 impl DesktopSupervisor {
-    pub fn start(app: AppHandle, url: String) -> Result<Self, DesktopErrorDto> {
+    pub fn start<R: tauri::Runtime>(
+        app: AppHandle<R>,
+        url: String,
+    ) -> Result<Self, DesktopErrorDto> {
         let mut config = ClientConfig::new(url);
         config.subscription = SubscriptionRequest::Snapshot;
         let emitter: MessageEmitter =

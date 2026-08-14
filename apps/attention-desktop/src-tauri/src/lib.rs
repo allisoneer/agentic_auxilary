@@ -18,6 +18,18 @@ use supervisor::DesktopSupervisor;
 use tauri::Manager;
 use tauri::RunEvent;
 
+fn initialize_supervisor<R: tauri::Runtime>(
+    handle: &tauri::AppHandle<R>,
+    url: String,
+) -> Result<(), String> {
+    let app_handle = handle.clone();
+    let supervisor =
+        tauri::async_runtime::block_on(async move { DesktopSupervisor::start(app_handle, url) })
+            .map_err(|error| format!("{}: {}", error.category, error.message))?;
+    handle.manage(supervisor);
+    Ok(())
+}
+
 fn shutdown_supervisor<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) {
     if let Some(supervisor) = handle.try_state::<DesktopSupervisor>() {
         let _ = tauri::async_runtime::block_on(supervisor.close());
@@ -28,10 +40,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .setup(|app| {
             let url = std::env::var("ATTENTION_SERVER_URL")
-                .unwrap_or_else(|_| "ws://127.0.0.1:8787".to_string());
-            let supervisor = DesktopSupervisor::start(app.handle().clone(), url)
-                .map_err(|error| format!("{}: {}", error.category, error.message))?;
-            app.manage(supervisor);
+                .unwrap_or_else(|_| "ws://127.0.0.1:8787/v1/ws".to_string());
+            initialize_supervisor(app.handle(), url)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -87,6 +97,7 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
+    use tauri::Manager;
     use tauri::ipc::CallbackFn;
     use tauri::ipc::InvokeBody;
     use tauri::test::INVOKE_KEY;
@@ -467,6 +478,19 @@ mod tests {
         assert_eq!(state["replay"][0]["type"], "reset");
         assert_eq!(state["replay"][0]["reason"], "overflow");
         assert!(state.get("snapshotAfterCursor").is_none());
+    }
+
+    #[test]
+    fn production_initialization_enters_tauri_runtime_before_starting_client() {
+        let app = mock_builder()
+            .build(mock_context(tauri::test::noop_assets()))
+            .expect("mock Tauri app");
+
+        super::initialize_supervisor(app.handle(), "ws://127.0.0.1:9/v1/ws".to_string())
+            .expect("production supervisor initialization must not panic without a Tokio context");
+
+        assert!(app.handle().try_state::<DesktopSupervisor>().is_some());
+        super::shutdown_supervisor(app.handle());
     }
 
     #[test]
