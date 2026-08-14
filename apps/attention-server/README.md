@@ -14,6 +14,7 @@ The binary reads:
 | `ATTENTION_ALLOW_NON_LOOPBACK` | no | `1` or ASCII-insensitive `true` explicitly permits a non-loopback bind; empty and other values do not |
 | `ATTENTION_MAX_SOURCE_COMPONENT_BYTES` | no | override the source identity-component byte limit |
 | `ATTENTION_MAX_SOURCE_ORDER_BYTES` | no | override the source-order byte limit |
+| `RUST_LOG` | no | tracing filter; defaults to `warn` (for example, `attention_server=debug`) |
 
 Example development startup with a stable port:
 

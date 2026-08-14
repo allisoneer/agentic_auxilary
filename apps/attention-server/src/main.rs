@@ -3,6 +3,7 @@ use attention_server::runtime;
 use attention_turso::Config as TursoConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use tracing_subscriber::EnvFilter;
 
 fn required(name: &str) -> Result<String, Box<dyn std::error::Error>> {
     std::env::var(name)
@@ -15,6 +16,13 @@ fn allow_non_loopback(value: Option<&str>) -> bool {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(match EnvFilter::try_from_default_env() {
+            Ok(filter) => filter,
+            Err(_) => EnvFilter::new("warn"),
+        })
+        .init();
+
     let mut server = ServerConfig::default();
     if let Ok(bind) = std::env::var("ATTENTION_BIND") {
         server.bind = bind.parse::<SocketAddr>()?;

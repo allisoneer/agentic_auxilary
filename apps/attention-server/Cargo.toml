@@ -24,6 +24,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1", features = ["v7"] }
 
 [dev-dependencies]
@@ -32,7 +33,6 @@ attention-client = { path = "../../crates/attention/client" }
 tempfile = "3"
 tokio-tungstenite = "0.28"
 turso-db = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [lints]
 workspace = true
