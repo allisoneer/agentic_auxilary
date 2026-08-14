@@ -1,0 +1,23 @@
+apps/attention-server/Cargo.toml
+  s_4517bebed6241c::t_ff1df244e8dba6 27
+apps/attention-server/src/main.rs
+  s_4517bebed6241c::t_ff1df244e8dba6 6,19-25
+apps/attention-server/README.md
+  s_4517bebed6241c::t_ff1df244e8dba6 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d651c67718cff01ccfa015605094f490a8480cf8",
+  "prompts": {},
+  "sessions": {
+    "s_4517bebed6241c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffe084395ffeAZVHtvW8wqt6uH",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
