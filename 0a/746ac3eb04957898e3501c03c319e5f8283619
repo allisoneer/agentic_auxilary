@@ -1,0 +1,121 @@
+.gitignore
+  s_19518c0f5c3293::t_a2c3c24eecb94f 46-55
+CLAUDE.md
+  s_281f1d2a1e1d33::t_14fa0178c39290 21,25-26
+README.md
+  s_281f1d2a1e1d33::t_e117418ae877e0 96-99,130
+apps/attention-desktop/index.html
+  s_0d92f3781eb7ea::t_b60f46cac6f6a7 1-12
+apps/attention-desktop/src-tauri/src/main.rs
+  s_21ab9e12885852::t_2cc4b198df25d0 1-3
+apps/attention-desktop/src-tauri/tauri.conf.json
+  s_19518c0f5c3293::t_54515f594c3958 1-31
+apps/attention-desktop/src/test/setup.ts
+  s_4ca83db3120f83::t_f3b567704898b5 1-4
+apps/attention-desktop/vitest.config.ts
+  s_0d92f3781eb7ea::t_0cb92a1617a424 1-11
+apps/attention-server/src/service.rs
+  s_4ca83db3120f83::t_dd539ac2ad7982 1-411
+crates/attention/kernel/src/port.rs
+  s_99d71a02297ccb::t_a8888548c59b10 17-18,44,105-122,269,272,280-281,286
+crates/attention/kernel/src/query.rs
+  s_2eb19cae9cec30::t_9cb66b12700894 8,19,67-99
+crates/attention/turso/Cargo.toml
+  s_a992b80915bbda::t_d0e14393cac3db 22,103-106
+crates/attention/turso/migrations/0004_server_identity.sql
+  s_88be6cd2dad36f::t_0c42be66d9fc0a 1-5
+crates/attention/turso/src/database.rs
+  s_2eb19cae9cec30::t_60f3f3b9f6474e 8-9,31-32,60,167-184,577-587
+crates/attention/turso/src/identity.rs
+  s_2eb19cae9cec30::t_76358ce7f78c25 1-123
+crates/attention/turso/src/lib.rs
+  s_2eb19cae9cec30::t_45da0b59667fa7 20,40
+crates/attention/turso/src/semantic_reader.rs
+  s_2eb19cae9cec30::t_04edd8307c2e1d 11-12,24,250-292
+crates/attention/turso/src/store.rs
+  s_2eb19cae9cec30::t_9314b200c8f791 14-16,42,46,139-168
+crates/attention/turso/tests/t09_prerequisites.rs
+  s_2eb19cae9cec30::t_c3f6a363b09c16 1-134
+release-plz.toml
+  s_281f1d2a1e1d33::t_7f4b7eedd5b17d 265-267,296-319
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0a746ac3eb04957898e3501c03c319e5f8283619",
+  "prompts": {},
+  "sessions": {
+    "s_0d92f3781eb7ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3f43e6e-92ba-4d78-b627-66e5122922b2",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_19518c0f5c3293": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "44cfdc30-1dff-4c01-be9e-809d55c29fb1",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_21ab9e12885852": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6bdcb92e-2782-4632-9216-d4fc4e99f545",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_281f1d2a1e1d33": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f89b3c10-77a3-4727-b511-12d48c43079b",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_2eb19cae9cec30": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8989e597-a6ee-4257-91fe-4d8d2d6e7efb",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_4ca83db3120f83": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fca24bd-2f0a-49c8-b5a6-677f632ae578",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_88be6cd2dad36f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d10843d9-27e1-4af8-9dda-8e26a4a1e211",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_99d71a02297ccb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "233dbe2e-d725-45be-8df6-f995d78d9140",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_a992b80915bbda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c1d0e35-c7bd-4557-be5c-ac535829c3c4",
+        "model": "unknown"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
