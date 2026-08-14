@@ -1,0 +1,14 @@
+apps/attention-desktop/src-tauri/Cargo.toml
+  h_9f073efcf2206c 36-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2cc04a3f3f037f7fd0ee72d862ba1ffe9945bc21",
+  "prompts": {},
+  "humans": {
+    "h_9f073efcf2206c": {
+      "author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
