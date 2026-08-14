@@ -715,7 +715,7 @@ async fn source_dedupe_order_receipts_and_reminders_survive_restart() -> TestRes
             reminder_id: reminder.clone(),
             initial_fire_id: fire.clone(),
             target: p::ReminderTarget::WorkItem { work_item_id: work },
-            trigger_at: timestamp("2026-08-14T00:00:00.000000Z"),
+            trigger_at: timestamp("2099-08-14T00:00:00.000000Z"),
             idempotency_key: key(),
         })
         .await?;
@@ -738,7 +738,7 @@ async fn source_dedupe_order_receipts_and_reminders_survive_restart() -> TestRes
             reminder_id: reminder.clone(),
             fire_id: fire.clone(),
             replacement_fire_id: p::ReminderFireId(k::ReminderFireId::new().to_string()),
-            replacement_trigger_at: timestamp("2026-08-15T00:00:00.000000Z"),
+            replacement_trigger_at: timestamp("2099-08-15T00:00:00.000000Z"),
             expected_revision: revision("1"),
             idempotency_key: key(),
         })
@@ -758,7 +758,7 @@ async fn source_dedupe_order_receipts_and_reminders_survive_restart() -> TestRes
             target: p::ReminderTarget::WorkItem {
                 work_item_id: acknowledge_work,
             },
-            trigger_at: timestamp("2026-08-14T00:00:00.000000Z"),
+            trigger_at: timestamp("2099-08-14T00:00:00.000000Z"),
             idempotency_key: key(),
         })
         .await?;
@@ -820,7 +820,7 @@ async fn source_dedupe_order_receipts_and_reminders_survive_restart() -> TestRes
                 reminder_id: reminder.clone(),
                 fire_id: fire,
                 replacement_fire_id: p::ReminderFireId(k::ReminderFireId::new().to_string()),
-                replacement_trigger_at: timestamp("2026-08-15T00:00:00.000000Z"),
+                replacement_trigger_at: timestamp("2099-08-15T00:00:00.000000Z"),
                 expected_revision: revision("1"),
                 idempotency_key: key(),
             })
