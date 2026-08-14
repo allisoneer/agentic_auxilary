@@ -1,0 +1,16 @@
+mise.lock
+  h_9f073efcf2206c 452,456-457,460-461,464-465,468-469,472-473,476-477,480-481,484-485,488-489,492-493,496-497,528,531,534,537,540,543,546,549,552
+mise.toml
+  h_9f073efcf2206c 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "229da705a445194410264143fa9a6af872dcce7f",
+  "prompts": {},
+  "humans": {
+    "h_9f073efcf2206c": {
+      "author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
