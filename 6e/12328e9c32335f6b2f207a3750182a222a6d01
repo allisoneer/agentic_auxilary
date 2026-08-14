@@ -1,0 +1,47 @@
+apps/attention-server/src/config.rs
+  s_deb4dc69fbe7b0::t_197d7ab40bf1bd 23,50,98,161-173
+  s_deb4dc69fbe7b0::t_412cc6b49dfe04 174
+crates/attention/protocol/tests/hello.rs
+  s_deb4dc69fbe7b0::t_6915a95b9be41a 56-72
+  s_deb4dc69fbe7b0::t_5f0521bf8a425a 55
+apps/attention-server/tests/raw.rs
+  s_b581acc7b44923::t_0ba82899e52c4e 236-237
+  s_deb4dc69fbe7b0::t_5522d436e9274e 14,16-18,22,233-235,238-272
+  s_b581acc7b44923::t_9b0be26c593688 273-275
+apps/attention-server/src/connection.rs
+  s_deb4dc69fbe7b0::t_fccf110ee34543 458-475,487
+  s_deb4dc69fbe7b0::t_4d14b0012257bc 535-538
+  s_deb4dc69fbe7b0::t_a829d51871634c 512-517
+  s_deb4dc69fbe7b0::t_aa0cbad6ddf400 539
+apps/attention-server/README.md
+  s_deb4dc69fbe7b0::t_bca9d91892beb6 53,66
+apps/attention-server/tests/sdk.rs
+  s_b581acc7b44923::t_0ba82899e52c4e 164-165
+  s_deb4dc69fbe7b0::t_99ca581a183142 161-163,166-198
+  s_deb4dc69fbe7b0::t_e6d487c95f3436 121-151,156-160
+  s_deb4dc69fbe7b0::t_017d1ad4a7d165 152-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6e12328e9c32335f6b2f207a3750182a222a6d01",
+  "prompts": {},
+  "sessions": {
+    "s_b581acc7b44923": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffdd465f8ffev7RFugIuk5AFDD",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_deb4dc69fbe7b0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffddee120ffe1WDGe31L3BEJJx",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
