@@ -46,15 +46,53 @@ allow = [
   "Apache-2.0 WITH LLVM-exception", # Standard LLVM exception used by target-lexicon
   "BSD-3-Clause",
   "Unicode-3.0",                    # Required for Unicode support (ICU crates, unicode-ident)
-  "MPL-2.0",                        # Mozilla Public License (weak copyleft, used by colored and option-ext)
   "ISC",                            # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
   "CDLA-Permissive-2.0",            # Community Data License Agreement for webpki-roots certificate data (CCADB)
   "Unlicense",                      # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
   "Zlib",                           # zlib License (OSI-approved, FSF Free/Libre) - used by foldhash, zlib-rs via gix
-  "OpenSSL",                        # OpenSSL License (FSF Free/Libre) - used by aws-lc-sys via rustls
 ]
 # Confidence threshold for license detection (0.0-1.0)
 confidence-threshold = 0.93
+
+[[licenses.exceptions]]
+crate = "colored"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "option-ext"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cssparser"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cssparser-macros"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic-codegen"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic-parser"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic-proc-macros"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "dtoa-short"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "selectors"
+allow = ["MPL-2.0"]
 
 # cfg_block ships the complete Apache-2.0 text but uses license-file rather
 # than a machine-readable SPDX expression. Pin the clarification to both the
