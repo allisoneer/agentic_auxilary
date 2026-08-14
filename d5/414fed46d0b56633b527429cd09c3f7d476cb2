@@ -1,0 +1,34 @@
+apps/attention-server/src/config.rs
+  s_cfb6ee4fadd1b2::t_134ea86eee372b 118,123-136
+  s_cfb6ee4fadd1b2::t_cb67ff61277fbf 137
+apps/attention-server/src/main.rs
+  s_cfb6ee4fadd1b2::t_134ea86eee372b 12-15,22-23,36-45,54-57
+  s_cfb6ee4fadd1b2::t_465cad0863f72d 46-53
+apps/attention-server/README.md
+  s_cfb6ee4fadd1b2::t_134ea86eee372b 14,36
+apps/attention-server/src/connection.rs
+  s_cfb6ee4fadd1b2::t_134ea86eee372b 259-276,290-293,1030-1048
+  s_cfb6ee4fadd1b2::t_fabedcec34b7ae 1049-1050
+apps/attention-server/src/runtime.rs
+  s_cfb6ee4fadd1b2::t_e55662e3361338 132-135
+apps/attention-server/tests/turso.rs
+  s_cfb6ee4fadd1b2::t_659e4049248109 1787,1817,1822
+apps/attention-server/tests/raw.rs
+  s_cfb6ee4fadd1b2::t_659e4049248109 118-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d5414fed46d0b56633b527429cd09c3f7d476cb2",
+  "prompts": {},
+  "sessions": {
+    "s_cfb6ee4fadd1b2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_001558328ffe7RQxd543PQCM5L",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
