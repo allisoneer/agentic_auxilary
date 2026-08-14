@@ -129,8 +129,10 @@ pub async fn start_with_time(
         let result = serve(listener, Arc::clone(&state)).await;
         state.shutdown.cancel();
         let _ownership = state.wait_for_service_tasks().await;
-        scheduler.await?;
-        database.close().await?;
+        let scheduler_result = scheduler.await;
+        let close_result = database.close().await;
+        scheduler_result?;
+        close_result?;
         result.map_err(RuntimeError::from)
     });
     Ok(RuntimeHandle {

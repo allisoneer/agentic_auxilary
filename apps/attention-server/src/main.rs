@@ -9,13 +9,18 @@ fn required(name: &str) -> Result<String, Box<dyn std::error::Error>> {
         .map_err(|_| format!("required environment variable {name} is not set").into())
 }
 
+fn allow_non_loopback(value: Option<&str>) -> bool {
+    value.is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = ServerConfig::default();
     if let Ok(bind) = std::env::var("ATTENTION_BIND") {
         server.bind = bind.parse::<SocketAddr>()?;
     }
-    server.allow_non_loopback = std::env::var_os("ATTENTION_ALLOW_NON_LOOPBACK").is_some();
+    let allow_non_loopback_value = std::env::var("ATTENTION_ALLOW_NON_LOOPBACK").ok();
+    server.allow_non_loopback = allow_non_loopback(allow_non_loopback_value.as_deref());
     if let Ok(value) = std::env::var("ATTENTION_MAX_SOURCE_COMPONENT_BYTES") {
         server.max_source_component_bytes = value.parse()?;
     }
@@ -27,4 +32,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let turso = TursoConfig::new(database, backups)?;
     runtime::run(server, turso).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_loopback_exposure_requires_an_explicit_true_value() {
+        for value in [Some("1"), Some("true"), Some("TRUE"), Some("TrUe")] {
+            assert!(allow_non_loopback(value));
+        }
+        for value in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("false"),
+            Some("yes"),
+            Some(" true "),
+        ] {
+            assert!(!allow_non_loopback(value));
+        }
+    }
 }

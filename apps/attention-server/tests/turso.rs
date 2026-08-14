@@ -1759,7 +1759,6 @@ async fn generic_worker_restart_boundaries_prove_suppression_and_duplicate_windo
             ..ServerConfig::default()
         })
         .await?;
-    let address = handle.address();
     let (client, _) = Client::connect(client_config(&handle, p::SubscriptionRequest::None))?;
     seed_delivery(&client).await?;
     let sent = one_claim(
@@ -1768,7 +1767,6 @@ async fn generic_worker_restart_boundaries_prove_suppression_and_duplicate_windo
         "2030-01-01T00:01:00.000000Z",
     )
     .await?;
-    let external_send_count = 1;
     assert_eq!(
         client
             .delivery_succeed(p::DeliverySucceedParams {
@@ -1786,7 +1784,7 @@ async fn generic_worker_restart_boundaries_prove_suppression_and_duplicate_windo
     handle.shutdown().await?;
     let restarted = fixture
         .start_with(ServerConfig {
-            bind: address,
+            bind: "127.0.0.1:0".parse()?,
             scheduler_poll_interval: Duration::from_millis(10),
             ..ServerConfig::default()
         })
@@ -1809,11 +1807,6 @@ async fn generic_worker_restart_boundaries_prove_suppression_and_duplicate_windo
             .iter()
             .all(|claim| claim.intent_id != sent.intent_id)
     );
-    assert_eq!(
-        external_send_count, 1,
-        "durable success prevents checkpoint replay resend"
-    );
-
     seed_delivery(&worker).await?;
     let ambiguous = one_claim(
         &worker,
@@ -1821,12 +1814,12 @@ async fn generic_worker_restart_boundaries_prove_suppression_and_duplicate_windo
         "2050-01-01T00:01:00.000000Z",
     )
     .await?;
-    let mut sends_in_duplicate_window = 1; // provider accepted; success state was not committed
+    // The provider accepted this claim, but no durable success state was committed.
     worker.close().await?;
     restarted.shutdown().await?;
     let again = fixture
         .start_with(ServerConfig {
-            bind: address,
+            bind: "127.0.0.1:0".parse()?,
             scheduler_poll_interval: Duration::from_millis(10),
             ..ServerConfig::default()
         })
@@ -1840,11 +1833,6 @@ async fn generic_worker_restart_boundaries_prove_suppression_and_duplicate_windo
     .await?;
     assert_eq!(reclaimed.intent_id, ambiguous.intent_id);
     assert_ne!(reclaimed.lease_token, ambiguous.lease_token);
-    sends_in_duplicate_window += 1;
-    assert_eq!(
-        sends_in_duplicate_window, 2,
-        "provider success before durable commit can duplicate"
-    );
     replacement.close().await?;
     again.shutdown().await?;
     Ok(())

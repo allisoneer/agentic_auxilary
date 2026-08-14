@@ -11,7 +11,7 @@ The binary reads:
 | `ATTENTION_DATABASE_DIRECTORY` | yes | dedicated absolute owner-only local database directory |
 | `ATTENTION_BACKUP_DIRECTORY` | yes | distinct dedicated absolute owner-only backup root |
 | `ATTENTION_BIND` | no | socket address; default is an ephemeral IPv4 loopback port (`127.0.0.1:0`) |
-| `ATTENTION_ALLOW_NON_LOOPBACK` | no | presence explicitly permits a non-loopback bind |
+| `ATTENTION_ALLOW_NON_LOOPBACK` | no | `1` or ASCII-insensitive `true` explicitly permits a non-loopback bind; empty and other values do not |
 | `ATTENTION_MAX_SOURCE_COMPONENT_BYTES` | no | override the source identity-component byte limit |
 | `ATTENTION_MAX_SOURCE_ORDER_BYTES` | no | override the source-order byte limit |
 
@@ -33,7 +33,7 @@ The CLI currently exposes only the variables above. Other `ServerConfig` bounds 
 
 ## Network and security boundary
 
-The default is loopback-only. A non-loopback address is rejected unless `ATTENTION_ALLOW_NON_LOOPBACK` is present. That switch is an explicit exposure decision, **not** authentication, TLS, or public-internet hardening. This local MVP has no authentication or authorization; keep it on a trusted host/network boundary.
+The default is loopback-only. A non-loopback address is rejected unless `ATTENTION_ALLOW_NON_LOOPBACK` is explicitly set to `1` or an ASCII-insensitive form of `true`. Empty, `0`, `false`, and other values do not enable exposure. That switch is an explicit exposure decision, **not** authentication, TLS, or public-internet hardening. This local MVP has no authentication or authorization; keep it on a trusted host/network boundary.
 
 Native WebSocket clients normally omit `Origin` and are accepted. If an `Origin` header is present, the exact absolute `http://` or `https://` origin must be in `ServerConfig::allowed_origins`; the default allowlist is empty, so browser-origin upgrades are denied. Allowed origins cannot contain credentials, path, query, fragment, or whitespace.
 

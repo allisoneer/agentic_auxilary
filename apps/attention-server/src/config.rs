@@ -115,7 +115,23 @@ fn valid_origin(origin: &str) -> bool {
         return false;
     };
     !rest.is_empty()
+        && !rest.starts_with(':')
         && !rest.contains(['/', '?', '#', '@'])
         && !rest.chars().any(char::is_whitespace)
         && !origin.ends_with('.')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn origins_require_a_nonempty_host_before_any_port() {
+        for origin in ["http://:8080", "https://:443", "http://:"] {
+            assert!(!valid_origin(origin), "origin {origin}");
+        }
+        for origin in ["http://localhost:8080", "https://example.com:443"] {
+            assert!(valid_origin(origin), "origin {origin}");
+        }
+    }
 }

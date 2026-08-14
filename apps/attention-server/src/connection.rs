@@ -256,6 +256,24 @@ pub async fn run(socket: WebSocket, state: Arc<AppState>, _permit: OwnedSemaphor
 }
 
 fn safe_json(root: &Value, max_depth: usize, max_nodes: usize, allow_lease_token: bool) -> bool {
+    const FORBIDDEN_FIELDS: [&str; 7] = [
+        "password",
+        "secret",
+        "token",
+        "authorization",
+        "credential",
+        "api_key",
+        "apikey",
+    ];
+    const FORBIDDEN_SUFFIXES: [&str; 7] = [
+        "_password",
+        "_secret",
+        "_token",
+        "_authorization",
+        "_credential",
+        "_api_key",
+        "_apikey",
+    ];
     let mut stack = vec![(root, 1usize)];
     let mut nodes = 0usize;
     while let Some((value, depth)) = stack.pop() {
@@ -269,20 +287,10 @@ fn safe_json(root: &Value, max_depth: usize, max_nodes: usize, allow_lease_token
                 for (key, value) in values {
                     let normalized = key.to_ascii_lowercase().replace(['-', ' '], "_");
                     if !(allow_lease_token && normalized == "lease_token")
-                        && [
-                            "password",
-                            "secret",
-                            "token",
-                            "authorization",
-                            "credential",
-                            "api_key",
-                            "apikey",
-                        ]
-                        .iter()
-                        .any(|forbidden| {
-                            normalized == *forbidden
-                                || normalized.ends_with(&format!("_{forbidden}"))
-                        })
+                        && (FORBIDDEN_FIELDS.contains(&normalized.as_str())
+                            || FORBIDDEN_SUFFIXES
+                                .iter()
+                                .any(|suffix| normalized.ends_with(suffix)))
                     {
                         return false;
                     }
@@ -1017,6 +1025,27 @@ mod tests {
         assert!(matches!(
             validate_replay_page(max, &page),
             Err(PrepareError::Internal)
+        ));
+    }
+
+    #[test]
+    fn secret_scan_preserves_normalization_suffixes_and_lease_token_exception() {
+        for value in [
+            json!({"PASSWORD": "value"}),
+            json!({"provider-secret": "value"}),
+            json!({"access token": "value"}),
+            json!({"nested": {"service_api_key": "value"}}),
+        ] {
+            assert!(!safe_json(&value, 8, 16, true));
+        }
+        let lease = json!({"lease-token": "value"});
+        assert!(safe_json(&lease, 8, 16, true));
+        assert!(!safe_json(&lease, 8, 16, false));
+        assert!(safe_json(
+            &json!({"tokenized": "value", "key": "value"}),
+            8,
+            16,
+            false
         ));
     }
 }
