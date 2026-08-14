@@ -1,0 +1,23 @@
+crates/attention/client/src/lib.rs
+  s_eef4c2df29ec1c::t_91694325ad559d 636-650,664-678
+crates/attention/client/tests/mock_peer.rs
+  s_eef4c2df29ec1c::t_8f6aa693a37b63 513-516
+  s_eef4c2df29ec1c::t_d8d49c79a3d6a3 506
+  s_eef4c2df29ec1c::t_91694325ad559d 490-505,507-512,517-525,554,556-557,572,574-575,599-614
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "4899a0e291995542156f047debafd896a6c4fbd8",
+  "prompts": {},
+  "sessions": {
+    "s_eef4c2df29ec1c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffe12a3feffextVMc7oRzQu3US",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
