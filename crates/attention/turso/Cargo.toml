@@ -19,6 +19,7 @@ rustix = { version = "1", features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10"
+uuid = { version = "1", features = ["v7"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 turso-db = { workspace = true }
@@ -98,6 +99,10 @@ path = "tests/snapshot_change_race.rs"
 [[test]]
 name = "semantic_crash"
 path = "tests/semantic_crash.rs"
+
+[[test]]
+name = "t09_prerequisites"
+path = "tests/t09_prerequisites.rs"
 
 [[test]]
 name = "security_and_diagnostics"

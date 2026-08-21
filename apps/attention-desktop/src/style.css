@@ -1,0 +1,36 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #17211b;
+  background: #f3f5ef;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.status {
+  text-transform: capitalize;
+  color: #496052;
+}
+section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: white;
+  border: 1px solid #d9e0d9;
+  border-radius: 0.75rem;
+}
+.issue {
+  color: #8b2f2f;
+}
+ul {
+  padding-left: 1.25rem;
+}

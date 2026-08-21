@@ -1,0 +1,30 @@
+[package]
+name = "attention-client"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Bounded reconnecting WebSocket SDK for the Attention protocol"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+
+[dependencies]
+attention-protocol = { path = "../protocol" }
+futures-util = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = "0.28"
+
+[lints]
+workspace = true
+
+[package.metadata.repo]
+role = "lib"
+family = "attention"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

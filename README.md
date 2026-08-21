@@ -93,6 +93,10 @@ opencode_rs = "0.13.4"
 ## Additional Tools
 
 <!-- BEGIN:xtask:autogen readme-additional-tools -->
+### attention
+
+- [`attention-desktop`](apps/attention-desktop/src-tauri) - Secure desktop shell for Attention
+
 ### linear
 
 - [`linear-tools`](crates/linear/tools) - Linear issue tools via CLI + MCP
@@ -123,6 +127,7 @@ opencode_rs = "0.13.4"
 
 ### attention
 
+- [`attention-client`](crates/attention/client) - Bounded reconnecting WebSocket SDK for the Attention protocol
 - [`attention-kernel`](crates/attention/kernel) - Native Attention identities, roots, lifecycle invariants, reminders, and derived Inbox projections
 - [`attention-protocol`](crates/attention/protocol) - Strict Attention JSON-RPC wire types; use crate-root DTOs for envelopes, hello negotiation, IDs, versions, and canonical timestamps
 - [`attention-turso`](crates/attention/turso) - Native local Turso storage foundation for Attention

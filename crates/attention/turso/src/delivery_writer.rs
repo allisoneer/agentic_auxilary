@@ -66,7 +66,7 @@ fn fresh_token(
 async fn state_in(
     transaction: &Transaction<'_>,
     intent_id: OutboxIntentId,
-) -> Result<Option<DeliveryStatus>, PortError<Error>> {
+) -> Result<Option<DeliveryState>, PortError<Error>> {
     let mut rows = transaction
         .query(
             domain_sql::SELECT_DELIVERY_STATE,
@@ -80,7 +80,17 @@ async fn state_in(
         .await
         .map_err(Error::from)
         .map_err(PortError::Adapter)?
-        .map(|row| mapping::delivery_status(&row, 0))
+        .map(|row| {
+            let status = mapping::delivery_status(&row, 0)?;
+            let completion_token = mapping::optional_blob(&row, 11)?
+                .map(|token| mapping::parse_lease_token(&token))
+                .transpose()?;
+            Ok(DeliveryState::reconstruct_with_completion_token(
+                intent_id,
+                status,
+                completion_token,
+            ))
+        })
         .transpose()
         .map_err(PortError::Adapter)?;
     drop(rows);
@@ -219,15 +229,14 @@ pub async fn renew(
     let attempted = writer
         .with_immediate(engine, move |transaction| {
             async move {
-                let Some(status) = state_in(transaction, intent_id).await? else {
+                let Some(mut state) = state_in(transaction, intent_id).await? else {
                     return Ok(TransactionDecision::Rollback(RenewOutcome::NotLeased));
                 };
-                if matches!(status, DeliveryStatus::Leased { token: current, expires_at: current_at }
-                    if current == token && current_at == expires_at)
+                if matches!(state.status(), DeliveryStatus::Leased { token: current, expires_at: current_at }
+                    if *current == token && *current_at == expires_at)
                 {
                     return Ok(TransactionDecision::Rollback(RenewOutcome::Renewed));
                 }
-                let mut state = DeliveryState::reconstruct(intent_id, status);
                 let outcome = state.renew(token, expires_at);
                 if outcome != RenewOutcome::Renewed {
                     return Ok(TransactionDecision::Rollback(outcome));
@@ -286,12 +295,11 @@ pub async fn succeed(
     let attempted = writer
         .with_immediate(engine, move |transaction| {
             async move {
-                let Some(status) = state_in(transaction, intent_id).await? else {
+                let Some(mut state) = state_in(transaction, intent_id).await? else {
                     return Ok(TransactionDecision::Rollback(
                         DeliveryCompletionOutcome::Fenced,
                     ));
                 };
-                let mut state = DeliveryState::reconstruct(intent_id, status);
                 let outcome = state.succeed(token, provider_message_id, succeeded_at);
                 if outcome != DeliveryCompletionOutcome::Applied {
                     return Ok(TransactionDecision::Rollback(outcome));
@@ -344,12 +352,11 @@ pub async fn fail_retryable(
     let attempted = writer
         .with_immediate(engine, move |transaction| {
             async move {
-                let Some(status) = state_in(transaction, intent_id).await? else {
+                let Some(mut state) = state_in(transaction, intent_id).await? else {
                     return Ok(TransactionDecision::Rollback(
                         DeliveryCompletionOutcome::Fenced,
                     ));
                 };
-                let mut state = DeliveryState::reconstruct(intent_id, status);
                 let outcome = state.fail_retryable(token, attempt, error, next_retry_at);
                 if outcome != DeliveryCompletionOutcome::Applied {
                     return Ok(TransactionDecision::Rollback(outcome));
@@ -403,12 +410,11 @@ pub async fn fail_terminal(
     let attempted = writer
         .with_immediate(engine, move |transaction| {
             async move {
-                let Some(status) = state_in(transaction, intent_id).await? else {
+                let Some(mut state) = state_in(transaction, intent_id).await? else {
                     return Ok(TransactionDecision::Rollback(
                         DeliveryCompletionOutcome::Fenced,
                     ));
                 };
-                let mut state = DeliveryState::reconstruct(intent_id, status);
                 let outcome = state.fail_terminal(token, attempt, error, failed_at);
                 if outcome != DeliveryCompletionOutcome::Applied {
                     return Ok(TransactionDecision::Rollback(outcome));
@@ -461,12 +467,11 @@ pub async fn skip(
     let attempted = writer
         .with_immediate(engine, move |transaction| {
             async move {
-                let Some(status) = state_in(transaction, intent_id).await? else {
+                let Some(mut state) = state_in(transaction, intent_id).await? else {
                     return Ok(TransactionDecision::Rollback(
                         DeliveryCompletionOutcome::Fenced,
                     ));
                 };
-                let mut state = DeliveryState::reconstruct(intent_id, status);
                 let outcome = state.skip(token, reason, skipped_at);
                 if outcome != DeliveryCompletionOutcome::Applied {
                     return Ok(TransactionDecision::Rollback(outcome));
@@ -536,7 +541,7 @@ pub async fn advance_checkpoint(
             async move {
                 let terminal = state_in(transaction, terminal_intent_id)
                     .await?
-                    .is_some_and(|status| status.is_terminal());
+                    .is_some_and(|state| state.status().is_terminal());
                 if !terminal {
                     return Ok(TransactionDecision::Rollback(
                         CheckpointAdvanceOutcome::TerminalStateRequired,

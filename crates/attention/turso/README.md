@@ -1,34 +1,81 @@
 # attention-turso
 
-`attention-turso` is the exact-pinned native local Turso adapter for Attention. It owns local engine lifecycle, connection ownership, migrations, commit ambiguity, WAL/file behavior, stopped backup/restore, and the T05 production implementation of `AttentionReadPort` and `AttentionCommitPort`.
+`attention-turso` is Attention's native local Turso persistence adapter. It owns the database engine, exclusive directory ownership, migrations, transactional read/write ports, scheduler and delivery persistence, event cursors, stopped backup/restore, and storage failure classification.
 
-## Supported contract
+## Qualified dependency
 
-- Turso is pinned exactly to `0.8.0-pre.1` with default features disabled. Cloud/sync, PostgreSQL wire mode, default `mimalloc`/`fts`, mixed SQLite access, and experimental multiprocess/MVCC modes are unsupported.
-- One process exclusively owns one absolute, normalized, owner-only dedicated database directory. Database and backup path components are traversed and opened from an opened root descriptor with descriptor-relative, no-follow operations; ownership and owner-only mode validation apply to the final dedicated database or backup root descriptor. Ownership locks are opened and validated relative to the retained database-directory descriptor. Public path accessors remain normalized display and legacy-consumer paths, not evidence of current filesystem identity.
-- Lifecycle is `Opening -> Open -> Draining -> Closed`. Operations acquire lifecycle permission before writer/read permission. Draining rejects new work, waits for active work, drops all connections before the engine, then releases directory ownership.
-- One unexposed writer connection serializes immediate transactions. Four independently connected readers are the shipped bound and deferred transactions provide snapshots. No adapter code clones a Turso `Connection`.
-- The shipped busy timeout is 250 ms (`BusyTimeout::Standard`). Retained barriers prove a second writer remains queued for at least 25 ms, at most four readers enter, and a writer completes within one second while two long snapshots are held.
-- A dropped writer or reader future removes its connection from the reusable set. Later work independently reconnects. Sanitation drives exact-tag deferred rollback cleanup with a query and proves a new transaction can begin and roll back before reuse.
-- Bundled startup-only migrations are forward-only. The ledger records immutable version, name, and SHA-256 checksum. Open/reopen rejects duplicate, unknown, too-new, renamed, or drifted state; migration DDL and ledger insertion share one immediate transaction.
-- A failure after commit invocation without a definite result is `CommitOutcomeUnknown`. It is never replayed automatically. Reopen resolves the stable qualification identity as matching committed value, definitely absent, identity conflict, or a terminal read/integrity error. Only definitely absent permits a separately evaluated new attempt.
-- T05 persists authoritative WorkItems, signals, Reminders with complete fire history, SourceReceipts, SourceEntities, mutation outcomes, immutable versioned ChangeEvents, stream head/floor, Inbox effects, and optional base Outbox intents. Every semantic mutation uses one serialized immediate transaction; failed guards write nothing.
-- Point reads, snapshots, and changes-after use independent configured reader connections. Snapshot roots and cursor share one deferred transaction. Changes-after classifies Future, Expired, or valid pages from floor, head, and rows in one deferred transaction.
-- ChangeEvent and prior-outcome JSON bytes are adapter-owned and versioned. Unknown or malformed versions fail closed, historical views are decoded from original stored bytes, and diagnostics report only record kind, version, and byte length.
-- Delivery leases, delivery state/checkpoints, scheduler behavior, and workers remain T06 scope. Protocol DTOs, opaque cursor parsing, native-to-wire mapping, and server synchronization remain T08 scope. Startup composition and migration invocation remain T09 scope.
+The workspace pins the pre-release engine exactly:
 
-## WAL and stopped operations
+```toml
+turso-db = { package = "turso", version = "=0.8.0-pre.1", default-features = false }
+```
 
-The retained workload holds a deferred reader while committing 512 independent 4 KiB writes, flushes dirty pages, and reopens three times. The exact-tag regular-file inventory observed during the held snapshot is the nominal database plus `-wal` (`wal.db`, `wal.db-wal`). The production operation therefore copies every regular file in the dedicated directory except the adapter lock file; it never assumes the nominal file is sufficient.
+The lockfile is part of the qualification: do not change the version, checksum, feature set, or Rust 1.96.1 toolchain independently. A Turso upgrade requires reviewing upstream compatibility and rerunning the complete adapter conformance, migration, crash, WAL, backup/restore, semantic, server, and desktop suites. Treat a pre-release update as an engine migration, not a routine dependency refresh.
 
-The operational threshold is 64 MiB for any regular database file under this workload (`WAL_OPERATIONAL_LIMIT_BYTES`). Crossing it requires draining and investigating/restarting or taking a stopped backup; the adapter does not claim an unavailable online checkpoint primitive.
+Unsupported modes include cloud/sync, PostgreSQL wire mode, default `mimalloc`/FTS features, experimental multiprocess/MVCC, and opening the live directory with SQLite, libSQL, or any other engine/tool.
 
-Backup is accepted only from `Closed`. It reacquires directory ownership, copies the complete regular-file set without following links into an owner-only staging directory, syncs files/directories on Unix, writes a checksummed compatibility manifest, and atomically publishes the completed backup directory. Restore validates the exact adapter/Turso versions, migration head/checksum, sorted relative inventory, sizes, and SHA-256 checksums, then copies only into an empty validated directory and reopens through the adapter.
+## Paths, ownership, and permissions
 
-For duplicate current reminder fires that block migration 0003, follow the [backup-first stopped-database repair runbook](maintenance/repair_duplicate_current_reminder_fires.md). No repair CLI or SQL shell ships.
+`Config::new(database_directory, backup_root)` requires two distinct, non-overlapping, absolute normalized UTF-8 paths. Each is a dedicated directory, not a parent shared with unrelated files. On Unix, final directories must be owned by the current user and have no group/other permission bits (normally mode `0700`). Relative paths, traversal, symlink components, unsafe ownership/modes, and overlap are rejected.
 
-## Exact-version limitations
+Exactly one process may own a database directory. The advisory lock rejects a second cooperative owner; it is not multiprocess database support or protection against every same-UID namespace replacement attack. Local and network/distributed filesystems are not qualified. Keep both roots on trusted local storage and never cloud-sync the live directory.
 
-The pinned local API exposes no high-level close, engine cancellation/interrupt, migration, backup, or local checkpoint primitive. Dropping a transaction defers rollback until later connection use, so this crate promises adapter-visible quarantine and sanitation rather than synchronous engine cancellation. `cacheflush` writes dirty pages to WAL and is not a checkpoint or backup boundary. Online backup is unsupported. Full/quota and filesystem permission fixtures are platform-dependent; typed policies are retained without parsing upstream error messages, while destructive process-kill, corruption, symlink, and Unix permission tests run on the current Linux qualification platform.
+The database filename and WAL/sidecars are adapter details. Do not copy or manipulate an individual file while running.
 
-Descriptor retention hardens only adapter-owned directory creation/validation and ownership-lock opening. `database_file()` is still converted to a string for `Builder::new_local`, so Turso database, WAL, journal, and sidecar opens do not inherit retained-directory identity. Backup inventory, staging, copy, rename, restore, publication, removal, and directory synchronization also remain pathname-based. The advisory lock binds the opened lock-file inode; same-UID unlink or replacement of its name after acquisition is not namespace locking and remains outside this contract.
+## Startup, migrations, and shutdown
+
+Production startup is:
+
+1. validate paths and acquire exclusive ownership;
+2. open one local Turso engine, one serialized writer, and the bounded reader pool (four readers by default);
+3. run bundled forward-only migrations;
+4. validate or establish durable server/stream identity;
+5. only then allow the server to bind and start its scheduler.
+
+Migration ledger entries contain immutable version, name, and SHA-256 checksum. Unknown, too-new, duplicate, renamed, or checksum-drifted migrations fail startup. Migration DDL and its ledger insertion share an immediate transaction. A migration failure must leave the listener and scheduler stopped; there is no downgrade path.
+
+Shutdown changes `Open` to `Draining`, rejects new work, waits for admitted work, drops writer/read connections and engine handles, and finally releases ownership. Stop listeners, subscriptions, scheduler, workers, and outstanding transactions before stopped maintenance. There is no promise that dropping a future synchronously cancels an engine operation or an in-progress commit.
+
+## Transaction and cursor contract
+
+Semantic mutations serialize through immediate transactions. Accepted mutations atomically commit authoritative state, idempotency outcome, immutable versioned ChangeEvent/history, Inbox effects, and an optional Outbox intent. Failed guards commit none of them. Publication is a server action after this commit; ChangeEvent is not delivery authority.
+
+Snapshot roots and their cursor are read in one deferred transaction. Changes are read strictly after a cursor and classify invalid/expired/future positions explicitly. `server_id` and `stream_id` are durable database identity; a process boot is not a new stream. Restoring an older tail can make a formerly valid client cursor future, which must produce a gap and force a fresh snapshot.
+
+Source occurrence uniqueness and mutation identities are database-enforced. An unknown commit outcome is `CommitOutcomeUnknown`, never an invitation to blindly replay. Resolve it using the stable mutation/occurrence identity: matching content may be recognized as committed, changed canonical content is a conflict, definite absence may permit a separately considered retry.
+
+Outbox rows are the sole external-send authority. Delivery leases are fenced by token; success retains the provider message ID. Delivery is at-least-once: provider acceptance before durable success commit remains an unavoidable duplicate window.
+
+## WAL operations
+
+`cacheflush` writes dirty pages to WAL; it is neither a checkpoint nor a backup boundary. The pinned API exposes no supported high-level local checkpoint operation. Qualification observed both the nominal database and `-wal` file under load. The operational investigation threshold is 64 MiB for any regular database file: drain and inspect/restart or take a stopped backup rather than assuming online checkpointing.
+
+## Stopped backup and restore
+
+Backups are supported only after `AttentionDatabase::close()` reaches `Closed` and all server work has stopped. `backup(name)` reacquires ownership, copies every regular database-directory file except the adapter lock into an owner-only staging directory, syncs files/directories on Unix, writes a manifest, and atomically publishes the backup directory. Never back up only the nominal database file.
+
+The manifest binds adapter/application compatibility, exact Turso version, migration head/checksum, sorted relative inventory, sizes, and SHA-256 checksums. Preserve the complete backup directory unchanged.
+
+Restore procedure:
+
+1. stop the server and verify no owner remains;
+2. select a complete backup under the configured backup root;
+3. provide an empty, validated destination database directory;
+4. call `AttentionDatabase::restore(config, name)`;
+5. let restore validate compatibility, migration metadata, inventory, sizes, and hashes and then reopen normally;
+6. start the server and verify its restored `server_id`/`stream_id`; clients whose cursor is beyond the restored tail must snapshot after the explicit future-cursor gap.
+
+Restore refuses a nonempty destination. Backup/restore is not corruption repair, online backup, point-in-time recovery, or a power-loss guarantee. Preserve a failed database for investigation and restore a known-good stopped backup; do not edit it with an external SQL tool.
+
+For the specifically diagnosed duplicate-current-fire migration failure, first take a stopped backup and follow [the bounded repair runbook](maintenance/repair_duplicate_current_reminder_fires.md). No general repair CLI ships.
+
+## Failure boundaries
+
+- Native typed `Busy`, `BusySnapshot`, and constraint errors are classified without parsing messages. Only outcomes known not to have committed may be retried as whole transactions.
+- A commit invocation without a definite result is ambiguous. Stable identity resolution is required; automatic replay is forbidden.
+- Dropped read/write futures quarantine their connection. Later sanitation/reconnection is promised, not synchronous engine cancellation.
+- Read-only/full conditions are typed where upstream exposes them, but destructive quota and permission behavior remains platform-dependent.
+- `NotAdb`/`Corrupt` fail closed. No automatic recovery or corruption repair is claimed.
+- Path and backup defenses reject tested traversal, symlink, ownership, permission, malformed-manifest, unsafe-inventory, overlap, and nonempty-restore cases. They do not establish complete filesystem namespace safety against a hostile same-UID process.
+- Process-kill tests do not establish a power-loss durability guarantee.
+- Online backup, single-file backup, network filesystems, cloud sync, multiprocess access, mixed-engine access, and forced cancellation are unsupported.

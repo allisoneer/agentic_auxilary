@@ -262,9 +262,9 @@ git_tag_enable = true
 release = true
 
 [[package]]
-name = "agentic-tools-napi"
-changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
-git_tag_name = "agentic-tools-napi-v{{ version }}"
+name = "attention-server"
+changelog_path = "apps/attention-server/CHANGELOG.md"
+git_tag_name = "attention-server-v{{ version }}"
 git_tag_enable = false
 release = false
 publish = false
@@ -289,6 +289,30 @@ publish = false
 name = "attention-turso"
 changelog_path = "crates/attention/turso/CHANGELOG.md"
 git_tag_name = "attention-turso-v{{ version }}"
+git_tag_enable = false
+release = false
+publish = false
+
+[[package]]
+name = "attention-client"
+changelog_path = "crates/attention/client/CHANGELOG.md"
+git_tag_name = "attention-client-v{{ version }}"
+git_tag_enable = false
+release = false
+publish = false
+
+[[package]]
+name = "attention-desktop"
+changelog_path = "apps/attention-desktop/src-tauri/CHANGELOG.md"
+git_tag_name = "attention-desktop-v{{ version }}"
+git_tag_enable = false
+release = false
+publish = false
+
+[[package]]
+name = "agentic-tools-napi"
+changelog_path = "bindings/node/agentic-tools-napi/CHANGELOG.md"
+git_tag_name = "agentic-tools-napi-v{{ version }}"
 git_tag_enable = false
 release = false
 publish = false

@@ -14,6 +14,8 @@ use crate::AttentionSignalId;
 use crate::BoundedDeliveryText;
 use crate::CancelWorkItemBundle;
 use crate::CancelWorkItemResult;
+use crate::ChangeEvent;
+use crate::ChangeEventId;
 use crate::ChangesAfterQuery;
 use crate::ChangesAfterResult;
 use crate::CheckpointAdvance;
@@ -39,6 +41,7 @@ use crate::IngestSourceOccurrenceResult;
 use crate::OutboxIntentId;
 use crate::PortError;
 use crate::PriorMutationOutcome;
+use crate::PriorMutationRecord;
 use crate::PriorOutcomeQuery;
 use crate::ProviderMessageId;
 use crate::Reminder;
@@ -97,6 +100,24 @@ pub trait AttentionReadPort: Send + Sync {
         &self,
         query: ChangesAfterQuery,
     ) -> BoxFuture<'_, Result<ChangesAfterResult, PortError<Self::Error>>>;
+}
+
+pub trait MutationReplayPort: Send + Sync {
+    type Error: Error + Send + Sync + 'static;
+
+    fn prior_mutation(
+        &self,
+        query: PriorOutcomeQuery,
+    ) -> BoxFuture<'_, Result<Option<PriorMutationRecord>, PortError<Self::Error>>>;
+}
+
+pub trait ChangeEventReadPort: Send + Sync {
+    type Error: Error + Send + Sync + 'static;
+
+    fn change_event(
+        &self,
+        id: ChangeEventId,
+    ) -> BoxFuture<'_, Result<Option<ChangeEvent>, PortError<Self::Error>>>;
 }
 
 pub trait AttentionCommitPort: Send + Sync {
@@ -245,8 +266,10 @@ pub trait DeliveryCheckpointPort: Send + Sync {
 mod tests {
     use super::AttentionCommitPort;
     use super::AttentionReadPort;
+    use super::ChangeEventReadPort;
     use super::DeliveryCheckpointPort;
     use super::DeliveryPort;
+    use super::MutationReplayPort;
     use super::ReminderSchedulePort;
     use std::convert::Infallible;
 
@@ -254,10 +277,12 @@ mod tests {
     fn every_port_is_object_safe() {
         fn read(_: &dyn AttentionReadPort<Error = Infallible>) {}
         fn commit(_: &dyn AttentionCommitPort<Error = Infallible>) {}
+        fn replay(_: &dyn MutationReplayPort<Error = Infallible>) {}
+        fn event(_: &dyn ChangeEventReadPort<Error = Infallible>) {}
         fn schedule(_: &dyn ReminderSchedulePort<Error = Infallible>) {}
         fn delivery(_: &dyn DeliveryPort<Error = Infallible>) {}
         fn checkpoint(_: &dyn DeliveryCheckpointPort<Error = Infallible>) {}
 
-        let _ = (read, commit, schedule, delivery, checkpoint);
+        let _ = (read, commit, replay, event, schedule, delivery, checkpoint);
     }
 }
