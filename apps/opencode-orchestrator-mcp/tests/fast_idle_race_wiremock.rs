@@ -36,6 +36,7 @@ use support::permission_fixture;
 use support::permission_fixture_with_metadata;
 use support::permission_patch_file_array_bad_request_fixture;
 use support::session_fixture;
+use support::session_fixture_with_parent;
 use support::short_timeout_test_orchestrator_server;
 use support::status_v2_busy;
 use support::status_v2_idle;
@@ -308,6 +309,107 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
 }
 
 #[tokio::test]
+async fn idle_grace_deadline_rechecks_descendant_blocker_before_finalizing() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "50") };
+
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let root = "root-idle-grace-recheck";
+    let child = "child-idle-grace-recheck";
+    let request_id = "permission-idle-grace-recheck";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{root}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(root)))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{child}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_parent(child, Some(root))),
+        )
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ]))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+                request_id,
+                child,
+                "bash",
+                &["*"]
+            )])),
+        ]))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{root}/prompt_async")))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{root}/message")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(messages_fixture(root, Some("MUST_NOT_FINALIZE"))),
+        )
+        .mount(&mock)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(&mock)
+        .await;
+
+    let output = timeout(
+        Duration::from_secs(2),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(root.to_string()),
+                command: None,
+                agent: None,
+                message: Some("start work".to_string()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("idle-grace blocker recheck should not hang")
+    .expect("idle-grace blocker recheck should succeed");
+
+    assert!(matches!(output.status, RunStatus::PermissionRequired));
+    assert_eq!(output.session_id, root);
+    assert_eq!(output.permission_request_id.as_deref(), Some(request_id));
+    assert!(output.response.is_none());
+}
+
+#[tokio::test]
 async fn respond_permission_known_id_replies_even_when_permission_list_bad_requests() {
     let _guard = env_lock().await;
     let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
@@ -323,10 +425,11 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
     Mock::given(method("GET"))
         .and(path("/permission"))
         .and(query_param("directory", "/tmp"))
-        .respond_with(
+        .respond_with(SequenceResponder::new(vec![
             ResponseTemplate::new(400)
                 .set_body_json(permission_patch_file_array_bad_request_fixture()),
-        )
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ]))
         .mount(&mock)
         .await;
 
@@ -443,6 +546,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
             )
         ])),
         ResponseTemplate::new(400).set_body_json(permission_patch_file_array_bad_request_fixture()),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
         .and(path("/permission"))
@@ -567,10 +671,11 @@ async fn run_tolerates_initial_permission_list_bad_request_with_warning() {
     Mock::given(method("GET"))
         .and(path("/permission"))
         .and(query_param("directory", "/tmp"))
-        .respond_with(
+        .respond_with(SequenceResponder::new(vec![
             ResponseTemplate::new(400)
                 .set_body_json(permission_patch_file_array_bad_request_fixture()),
-        )
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ]))
         .mount(&mock)
         .await;
 

@@ -69,7 +69,15 @@ async fn command_precorrelation_deltas_are_returned_in_question_partial_response
         .await;
     Mock::given(method("GET"))
         .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([question_fixture(
+                "question-preview",
+                sid,
+                &[question_payload("Continue?")]
+            )])),
+        ]))
         .mount(&mock)
         .await;
     let correlation = CommandCorrelationFixture::new();
