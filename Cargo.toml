@@ -8,11 +8,14 @@ members = [
   "apps/agentic-mcp",
   "apps/message-optimizer",
   "apps/opencode-orchestrator-mcp",
+  "apps/attention-server",
+  "apps/attention-desktop/src-tauri",
 
   # Bindings
   "bindings/node/agentic-tools-napi",
 
   # Attention family
+  "crates/attention/client",
   "crates/attention/kernel",
   "crates/attention/protocol",
   "crates/attention/turso",

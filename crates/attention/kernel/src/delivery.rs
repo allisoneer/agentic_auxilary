@@ -102,6 +102,7 @@ impl DeliveryStatus {
 pub struct DeliveryState {
     intent_id: OutboxIntentId,
     status: DeliveryStatus,
+    completion_token: Option<DeliveryLeaseToken>,
 }
 
 impl DeliveryState {
@@ -109,11 +110,40 @@ impl DeliveryState {
         Self {
             intent_id,
             status: DeliveryStatus::Pending,
+            completion_token: None,
         }
     }
 
     pub const fn reconstruct(intent_id: OutboxIntentId, status: DeliveryStatus) -> Self {
-        Self { intent_id, status }
+        let completion_token = match status {
+            DeliveryStatus::Leased { token, .. } => Some(token),
+            _ => None,
+        };
+        Self {
+            intent_id,
+            status,
+            completion_token,
+        }
+    }
+
+    /// Reconstructs persisted authority with the token that authorized its current completion.
+    pub const fn reconstruct_with_completion_token(
+        intent_id: OutboxIntentId,
+        status: DeliveryStatus,
+        completion_token: Option<DeliveryLeaseToken>,
+    ) -> Self {
+        let completion_token = match completion_token {
+            Some(token) => Some(token),
+            None => match status {
+                DeliveryStatus::Leased { token, .. } => Some(token),
+                _ => None,
+            },
+        };
+        Self {
+            intent_id,
+            status,
+            completion_token,
+        }
     }
 
     pub const fn intent_id(&self) -> OutboxIntentId {
@@ -134,6 +164,7 @@ impl DeliveryState {
             return ClaimOutcome::Terminal;
         }
         self.status = DeliveryStatus::Leased { token, expires_at };
+        self.completion_token = Some(token);
         ClaimOutcome::Claimed(DeliveryClaim {
             intent_id: self.intent_id,
             token,
@@ -158,6 +189,9 @@ impl DeliveryState {
         provider_message_id: ProviderMessageId,
         succeeded_at: DateTime<Utc>,
     ) -> DeliveryCompletionOutcome {
+        if self.completion_token != Some(token) {
+            return DeliveryCompletionOutcome::Fenced;
+        }
         if let DeliveryStatus::Succeeded {
             provider_message_id: current,
             succeeded_at: current_at,
@@ -186,6 +220,24 @@ impl DeliveryState {
         error: BoundedDeliveryText,
         next_retry_at: DateTime<Utc>,
     ) -> DeliveryCompletionOutcome {
+        if self.completion_token != Some(token) {
+            return DeliveryCompletionOutcome::Fenced;
+        }
+        if let DeliveryStatus::Retryable {
+            attempt: current_attempt,
+            error: current_error,
+            next_retry_at: current_at,
+        } = &self.status
+        {
+            return if *current_attempt == attempt
+                && current_error == &error
+                && current_at == &next_retry_at
+            {
+                DeliveryCompletionOutcome::Repeated
+            } else {
+                DeliveryCompletionOutcome::Conflict
+            };
+        }
         if !self.matches_lease(token) {
             return DeliveryCompletionOutcome::Fenced;
         }
@@ -204,6 +256,9 @@ impl DeliveryState {
         error: BoundedDeliveryText,
         failed_at: DateTime<Utc>,
     ) -> DeliveryCompletionOutcome {
+        if self.completion_token != Some(token) {
+            return DeliveryCompletionOutcome::Fenced;
+        }
         if let DeliveryStatus::TerminalFailure {
             attempt: current_attempt,
             error: current_error,
@@ -236,6 +291,9 @@ impl DeliveryState {
         reason: BoundedDeliveryText,
         skipped_at: DateTime<Utc>,
     ) -> DeliveryCompletionOutcome {
+        if self.completion_token != Some(token) {
+            return DeliveryCompletionOutcome::Fenced;
+        }
         if let DeliveryStatus::Skipped {
             reason: current_reason,
             skipped_at: current_at,
@@ -326,7 +384,23 @@ impl DeliveryCheckpoint {
 
 #[cfg(test)]
 mod tests {
-    use super::DeliveryLeaseToken;
+    use super::*;
+
+    fn at(minute: u32) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(&format!("2026-08-03T12:{minute:02}:00Z"))
+            .expect("timestamp")
+            .with_timezone(&Utc)
+    }
+
+    fn leased(token: DeliveryLeaseToken) -> DeliveryState {
+        DeliveryState::reconstruct(
+            OutboxIntentId::new(),
+            DeliveryStatus::Leased {
+                token,
+                expires_at: at(2),
+            },
+        )
+    }
 
     #[test]
     fn lease_tokens_have_opaque_value_equality() {
@@ -337,6 +411,106 @@ mod tests {
         assert_ne!(
             DeliveryLeaseToken::from_bytes([7; 32]),
             DeliveryLeaseToken::from_bytes([8; 32])
+        );
+    }
+
+    #[test]
+    fn completion_token_precedes_idempotency_for_every_completion_state() {
+        let token = DeliveryLeaseToken::from_bytes([1; 32]);
+        let stale = DeliveryLeaseToken::from_bytes([2; 32]);
+
+        let mut success = leased(token);
+        let provider = ProviderMessageId::new("provider", 32).expect("provider");
+        assert_eq!(
+            success.succeed(token, provider.clone(), at(3)),
+            DeliveryCompletionOutcome::Applied
+        );
+        assert_eq!(
+            success.succeed(stale, provider.clone(), at(3)),
+            DeliveryCompletionOutcome::Fenced
+        );
+        assert_eq!(
+            success.succeed(token, provider, at(3)),
+            DeliveryCompletionOutcome::Repeated
+        );
+        assert_eq!(
+            success.succeed(
+                token,
+                ProviderMessageId::new("changed", 32).expect("provider"),
+                at(3)
+            ),
+            DeliveryCompletionOutcome::Conflict
+        );
+
+        let mut retryable = leased(token);
+        let retry_error = BoundedDeliveryText::new("retry", 32).expect("error");
+        assert_eq!(
+            retryable.fail_retryable(token, 1, retry_error.clone(), at(4)),
+            DeliveryCompletionOutcome::Applied
+        );
+        assert_eq!(
+            retryable.fail_retryable(stale, 1, retry_error.clone(), at(4)),
+            DeliveryCompletionOutcome::Fenced
+        );
+        assert_eq!(
+            retryable.fail_retryable(token, 1, retry_error, at(4)),
+            DeliveryCompletionOutcome::Repeated
+        );
+        assert_eq!(
+            retryable.fail_retryable(
+                token,
+                1,
+                BoundedDeliveryText::new("changed", 32).expect("error"),
+                at(4)
+            ),
+            DeliveryCompletionOutcome::Conflict
+        );
+
+        let mut terminal = leased(token);
+        let terminal_error = BoundedDeliveryText::new("terminal", 32).expect("error");
+        assert_eq!(
+            terminal.fail_terminal(token, 2, terminal_error.clone(), at(5)),
+            DeliveryCompletionOutcome::Applied
+        );
+        assert_eq!(
+            terminal.fail_terminal(stale, 2, terminal_error.clone(), at(5)),
+            DeliveryCompletionOutcome::Fenced
+        );
+        assert_eq!(
+            terminal.fail_terminal(token, 2, terminal_error, at(5)),
+            DeliveryCompletionOutcome::Repeated
+        );
+        assert_eq!(
+            terminal.fail_terminal(
+                token,
+                2,
+                BoundedDeliveryText::new("changed", 32).expect("error"),
+                at(5)
+            ),
+            DeliveryCompletionOutcome::Conflict
+        );
+
+        let mut skipped = leased(token);
+        let reason = BoundedDeliveryText::new("skip", 32).expect("reason");
+        assert_eq!(
+            skipped.skip(token, reason.clone(), at(6)),
+            DeliveryCompletionOutcome::Applied
+        );
+        assert_eq!(
+            skipped.skip(stale, reason.clone(), at(6)),
+            DeliveryCompletionOutcome::Fenced
+        );
+        assert_eq!(
+            skipped.skip(token, reason, at(6)),
+            DeliveryCompletionOutcome::Repeated
+        );
+        assert_eq!(
+            skipped.skip(
+                token,
+                BoundedDeliveryText::new("changed", 32).expect("reason"),
+                at(6)
+            ),
+            DeliveryCompletionOutcome::Conflict
         );
     }
 }

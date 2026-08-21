@@ -1,0 +1,36 @@
+{
+  "type": "change",
+  "sequence": 2,
+  "generation": 1,
+  "event": {
+    "id": "LIVE_EVENT_ID",
+    "cursor": "LIVE_CURSOR",
+    "occurredAt": "LIVE_OCCURRED_AT",
+    "kind": "source_occurrence_ingested",
+    "affected": [
+      {
+        "kind": "attention_signal",
+        "attentionSignal": {
+          "id": "01912345-6789-7abc-8def-0123456789ab",
+          "revision": "1",
+          "sourceLifecycle": "active",
+          "attentionState": "unread"
+        }
+      }
+    ],
+    "inbox": {
+      "upserts": [
+        {
+          "kind": "attention_signal",
+          "attentionSignal": {
+            "id": "01912345-6789-7abc-8def-0123456789ab",
+            "revision": "1",
+            "sourceLifecycle": "active",
+            "attentionState": "unread"
+          }
+        }
+      ],
+      "removals": []
+    }
+  }
+}

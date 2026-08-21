@@ -53,6 +53,24 @@ fn hello_wire_names_and_nested_fields_are_exact() {
 }
 
 #[test]
+fn resume_request_may_negotiate_snapshot_result() {
+    let request: HelloRequest = serde_json::from_str(&fixture_text("hello/request_resume.json"))
+        .expect("resume request fixture");
+    let result: HelloResult<Value> =
+        serde_json::from_str(&fixture_text("hello/result_snapshot.json"))
+            .expect("snapshot result fixture");
+
+    assert!(matches!(
+        request.subscription,
+        SubscriptionRequest::Resume { .. }
+    ));
+    assert!(matches!(
+        result.subscription_result,
+        SubscriptionResult::Snapshot { .. }
+    ));
+}
+
+#[test]
 fn unknown_modes_are_rejected_from_raw_text() {
     assert_raw_invalid::<HelloRequest>("hello/invalid_request_unknown_mode.json");
     assert_raw_invalid::<HelloResult<Value>>("hello/invalid_result_unknown_mode.json");

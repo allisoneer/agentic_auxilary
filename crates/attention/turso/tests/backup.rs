@@ -29,7 +29,9 @@ async fn source_database() -> TestResult<(tempfile::TempDir, Config, BackupManif
 #[tokio::test]
 async fn stopped_backup_restores_probe_and_exact_ledger_to_new_empty_root() -> TestResult {
     let (_root, source, manifest) = source_database().await?;
-    assert_eq!(manifest.format_version(), 1);
+    assert_eq!(manifest.format_version(), 2);
+    assert_eq!(manifest.migration_head(), 5);
+    assert_eq!(manifest.payload_version(), 1);
     assert!(!manifest.files().is_empty());
     let names: Vec<_> = manifest
         .files()
@@ -86,6 +88,11 @@ async fn migration_head_and_checksum_manifest_drift_are_rejected() -> TestResult
     let (_root, source, _manifest) = source_database().await?;
     let complete = source.backup_root().as_path().join("complete");
     for (name, field, value) in [
+        (
+            "wrong-payload-version",
+            "payload_version",
+            serde_json::json!(2),
+        ),
         ("wrong-head", "migration_head", serde_json::json!(1)),
         (
             "wrong-migration-checksum",

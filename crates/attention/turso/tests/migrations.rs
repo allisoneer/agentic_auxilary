@@ -128,8 +128,8 @@ async fn empty_to_head_rerun_reopen_and_checksum_drift_refusal() -> TestResult {
     let config = config(root.path())?;
     let database = AttentionDatabase::open(config.clone()).await?;
     let first = database.run_startup_migrations().await?;
-    assert_eq!(first.applied(), 3);
-    assert_eq!(first.head(), 3);
+    assert_eq!(first.applied(), 5);
+    assert_eq!(first.head(), 5);
     assert_eq!(database.run_startup_migrations().await?.applied(), 0);
     database
         .write_qualification_probe("migration", b"fingerprint", b"value")
@@ -232,7 +232,7 @@ async fn malformed_duplicate_unknown_and_too_new_ledgers_are_refused() -> TestRe
 }
 
 #[tokio::test]
-async fn released_head_one_fixture_upgrades_to_head_three() -> TestResult {
+async fn released_head_one_fixture_upgrades_to_head_five() -> TestResult {
     let root = tempfile::tempdir()?;
     let config = config(root.path())?;
     let path = config.database_directory().database_file();
@@ -251,8 +251,8 @@ async fn released_head_one_fixture_upgrades_to_head_three() -> TestResult {
 
     let database = AttentionDatabase::open(config).await?;
     let report = database.run_startup_migrations().await?;
-    assert_eq!(report.applied(), 2);
-    assert_eq!(report.head(), 3);
+    assert_eq!(report.applied(), 4);
+    assert_eq!(report.head(), 5);
     assert_eq!(database.run_startup_migrations().await?.applied(), 0);
     database.close().await?;
     Ok(())
@@ -307,8 +307,8 @@ async fn released_head_two_fixture_backfills_pending_exactly_once() -> TestResul
 
     let database = AttentionDatabase::open(config.clone()).await?;
     let report = database.run_startup_migrations().await?;
-    assert_eq!(report.applied(), 1);
-    assert_eq!(report.head(), 3);
+    assert_eq!(report.applied(), 3);
+    assert_eq!(report.head(), 5);
     assert_eq!(database.run_startup_migrations().await?.applied(), 0);
     database.close().await?;
 
@@ -635,8 +635,8 @@ async fn duplicate_current_reminder_fire_repair_is_atomic_and_unblocks_migration
 
     let database = AttentionDatabase::open(config).await?;
     let report = database.run_startup_migrations().await?;
-    assert_eq!(report.applied(), 1);
-    assert_eq!(report.head(), 3);
+    assert_eq!(report.applied(), 3);
+    assert_eq!(report.head(), 5);
     assert_eq!(database.run_startup_migrations().await?.applied(), 0);
     let reminder = database
         .reminder(reminder_id)
@@ -695,7 +695,7 @@ async fn child_process_interruption_never_splits_ddl_and_ledger() -> TestResult 
 
         let database = AttentionDatabase::open(config).await?;
         let report = database.run_startup_migrations().await?;
-        let expected = if boundary == "after-commit" { 2 } else { 3 };
+        let expected = if boundary == "after-commit" { 4 } else { 5 };
         assert_eq!(report.applied(), expected, "boundary {boundary}");
         assert_eq!(database.run_startup_migrations().await?.applied(), 0);
         database.close().await?;

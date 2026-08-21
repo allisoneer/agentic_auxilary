@@ -5,6 +5,7 @@ use crate::AcknowledgeReminderFireResult;
 use crate::AttentionSnapshot;
 use crate::BoundedDeliveryText;
 use crate::CancelWorkItemResult;
+use crate::CanonicalFingerprint;
 use crate::ChangesResult;
 use crate::ClaimLimit;
 use crate::CommitCursor;
@@ -15,6 +16,7 @@ use crate::DeliveryState;
 use crate::FireReminderResult;
 use crate::IngestSourceOccurrenceResult;
 use crate::MutationIdempotencyKey;
+use crate::MutationOperation;
 use crate::OutboxIntent;
 use crate::OutboxIntentId;
 use crate::QueryLimit;
@@ -59,6 +61,39 @@ impl PriorMutationOutcome {
             }
             Self::SnoozeReminderFire(outcome) => Self::SnoozeReminderFire(outcome.replayed()),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PriorMutationRecord {
+    operation: MutationOperation,
+    fingerprint: CanonicalFingerprint,
+    outcome: PriorMutationOutcome,
+}
+
+impl PriorMutationRecord {
+    pub const fn new(
+        operation: MutationOperation,
+        fingerprint: CanonicalFingerprint,
+        outcome: PriorMutationOutcome,
+    ) -> Self {
+        Self {
+            operation,
+            fingerprint,
+            outcome,
+        }
+    }
+
+    pub const fn operation(&self) -> MutationOperation {
+        self.operation
+    }
+
+    pub const fn fingerprint(&self) -> CanonicalFingerprint {
+        self.fingerprint
+    }
+
+    pub const fn outcome(&self) -> &PriorMutationOutcome {
+        &self.outcome
     }
 }
 

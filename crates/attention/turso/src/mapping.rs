@@ -286,7 +286,7 @@ fn optional_text(row: &Row, index: usize) -> Result<Option<String>, Error> {
         .map_err(|error| Error::Decode(Box::new(error)))
 }
 
-fn optional_blob(row: &Row, index: usize) -> Result<Option<Vec<u8>>, Error> {
+pub fn optional_blob(row: &Row, index: usize) -> Result<Option<Vec<u8>>, Error> {
     row.get(index)
         .map_err(|error| Error::Decode(Box::new(error)))
 }
@@ -614,7 +614,13 @@ pub fn delivery_authority(row: &Row) -> Result<DeliveryAuthority, Error> {
         parse_timestamp(&text(row, 5)?)?,
         purpose,
     );
-    let state = DeliveryState::reconstruct(intent_id, delivery_status(row, 7)?);
+    let state = DeliveryState::reconstruct_with_completion_token(
+        intent_id,
+        delivery_status(row, 7)?,
+        optional_blob(row, 18)?
+            .map(|token| parse_lease_token(&token))
+            .transpose()?,
+    );
     Ok(DeliveryAuthority::new(intent, state))
 }
 

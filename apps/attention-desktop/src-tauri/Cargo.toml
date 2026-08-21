@@ -1,0 +1,54 @@
+[package]
+name = "attention-desktop"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Secure desktop shell for Attention"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+
+[lib]
+name = "attention_desktop_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "attention-desktop"
+path = "src/main.rs"
+
+[dependencies]
+attention-client = { path = "../../../crates/attention/client" }
+attention-protocol = { path = "../../../crates/attention/protocol" }
+serde = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tauri = { version = "2.11.5", default-features = false, features = ["wry"] }
+uuid = { version = "1", features = ["v7"] }
+
+[build-dependencies]
+tauri-build = { version = "2.6.1", features = [] }
+
+[dev-dependencies]
+attention-server = { path = "../../attention-server" }
+attention-turso = { path = "../../../crates/attention/turso" }
+serde_json = { workspace = true }
+tauri = { version = "2.11.5", default-features = false, features = [
+  "wry",
+  "test",
+] }
+tempfile = "3"
+turso-db = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.repo]
+role = "app"
+family = "attention"
+readme_tier = "brief"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

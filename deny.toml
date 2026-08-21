@@ -8,6 +8,34 @@ ignore = [
   # Upstream issue: https://github.com/64bit/async-openai/issues/298
   "RUSTSEC-2025-0012", # backoff unmaintained
   "RUSTSEC-2024-0384", # instant unmaintained
+
+  # Tauri 2.11.5's released Linux Wry backend still requires the archived GTK3
+  # bindings. Remove each exception when a released Tauri/Wry backend migrates
+  # away from gtk-rs GTK3 (or when Linux desktop support is removed).
+  { id = "RUSTSEC-2024-0411", reason = "Unmaintained gdkwayland-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0412", reason = "Unmaintained gdk 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0413", reason = "Unmaintained atk 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0415", reason = "Unmaintained gtk 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0416", reason = "Unmaintained atk-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0418", reason = "Unmaintained gdk-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0419", reason = "Unmaintained gtk3-macros 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0420", reason = "Unmaintained gtk-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
+  { id = "RUSTSEC-2024-0370", reason = "Unmaintained proc-macro-error via released Tauri/Wry GTK3 stack; remove with that stack" },
+
+  # Unlike the maintenance advisories above, this is known unsoundness. The
+  # affected VariantStrIter API is not used by Attention, but glib 0.18 is fixed
+  # only in the incompatible 0.20 line. Remove on a released Tauri/Wry migration
+  # to glib >=0.20; do not broaden this exception to other glib advisories.
+  { id = "RUSTSEC-2024-0429", reason = "glib 0.18 VariantStrIter unsoundness via released Tauri/Wry GTK3; affected API unused; remove at glib >=0.20" },
+
+  # tauri-utils 2.9.3 pins urlpattern 0.3. Tauri PR #15660 moves to urlpattern
+  # 0.6, which removes these unmaintained unic crates. Remove all five when the
+  # first released Tauri containing that change is adopted.
+  { id = "RUSTSEC-2025-0075", reason = "Unmaintained unic via tauri-utils urlpattern 0.3; Tauri PR #15660 merged fix, remove after release upgrade" },
+  { id = "RUSTSEC-2025-0080", reason = "Unmaintained unic via tauri-utils urlpattern 0.3; Tauri PR #15660 merged fix, remove after release upgrade" },
+  { id = "RUSTSEC-2025-0081", reason = "Unmaintained unic via tauri-utils urlpattern 0.3; Tauri PR #15660 merged fix, remove after release upgrade" },
+  { id = "RUSTSEC-2025-0098", reason = "Unmaintained unic via tauri-utils urlpattern 0.3; Tauri PR #15660 merged fix, remove after release upgrade" },
+  { id = "RUSTSEC-2025-0100", reason = "Unmaintained unic via tauri-utils urlpattern 0.3; Tauri PR #15660 merged fix, remove after release upgrade" },
 ]
 
 [licenses]
@@ -15,17 +43,65 @@ ignore = [
 allow = [
   "MIT",
   "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception", # Standard LLVM exception used by target-lexicon
   "BSD-3-Clause",
-  "Unicode-3.0",         # Required for Unicode support (ICU crates, unicode-ident)
-  "MPL-2.0",             # Mozilla Public License (weak copyleft, used by colored and option-ext)
-  "ISC",                 # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
-  "CDLA-Permissive-2.0", # Community Data License Agreement for webpki-roots certificate data (CCADB)
-  "Unlicense",           # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
-  "Zlib",                # zlib License (OSI-approved, FSF Free/Libre) - used by foldhash, zlib-rs via gix
-  "OpenSSL",             # OpenSSL License (FSF Free/Libre) - used by aws-lc-sys via rustls
+  "Unicode-3.0",                    # Required for Unicode support (ICU crates, unicode-ident)
+  "ISC",                            # Required by ring, rustls-webpki, simple_asn1, untrusted (via octocrab dependencies)
+  "CDLA-Permissive-2.0",            # Community Data License Agreement for webpki-roots certificate data (CCADB)
+  "Unlicense",                      # Public domain dedication (OSI-approved, FSF Free/Libre) - used by portpicker
+  "Zlib",                           # zlib License (OSI-approved, FSF Free/Libre) - used by foldhash, zlib-rs via gix
 ]
 # Confidence threshold for license detection (0.0-1.0)
 confidence-threshold = 0.93
+
+[[licenses.exceptions]]
+crate = "colored"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "option-ext"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cssparser"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cssparser-macros"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic-codegen"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic-parser"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "cynic-proc-macros"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "dtoa-short"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+crate = "selectors"
+allow = ["MPL-2.0"]
+
+# cfg_block ships the complete Apache-2.0 text but uses license-file rather
+# than a machine-readable SPDX expression. Pin the clarification to both the
+# exact crate version and cargo-deny's content hash.
+[[licenses.clarify]]
+name = "cfg_block"
+version = "=0.1.1"
+expression = "Apache-2.0"
+license-files = [{ path = "LICENSE", hash = 0xc9663a1e }]
 
 [bans]
 # Warn when multiple versions of the same crate are detected

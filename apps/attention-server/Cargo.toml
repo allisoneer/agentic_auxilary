@@ -1,0 +1,47 @@
+[package]
+name = "attention-server"
+version = "0.1.0"
+edition = "2024"
+authors = ["Allison Durham"]
+description = "Bounded Axum WebSocket server for the Attention protocol"
+license = "MIT"
+repository = "https://github.com/allisoneer/agentic_auxilary"
+publish = false
+
+[features]
+test-support = []
+
+[dependencies]
+attention-kernel = { path = "../../crates/attention/kernel" }
+attention-protocol = { path = "../../crates/attention/protocol" }
+attention-turso = { path = "../../crates/attention/turso" }
+axum = { version = "0.7", features = ["ws"] }
+base64 = "0.22"
+chrono = { workspace = true }
+futures-util = "0.3"
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["v7"] }
+
+[dev-dependencies]
+attention-server = { path = ".", features = ["test-support"] }
+attention-client = { path = "../../crates/attention/client" }
+tempfile = "3"
+tokio-tungstenite = "0.28"
+turso-db = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.repo]
+role = "app"
+family = "attention"
+
+[package.metadata.repo.integrations]
+mcp = false
+logging = false
+napi = false

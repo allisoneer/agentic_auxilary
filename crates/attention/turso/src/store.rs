@@ -11,6 +11,9 @@ use attention_kernel::AttentionSignalId;
 use attention_kernel::BoundedDeliveryText;
 use attention_kernel::CancelWorkItemBundle;
 use attention_kernel::CancelWorkItemResult;
+use attention_kernel::ChangeEvent;
+use attention_kernel::ChangeEventId;
+use attention_kernel::ChangeEventReadPort;
 use attention_kernel::ChangesAfterQuery;
 use attention_kernel::ChangesAfterResult;
 use attention_kernel::CheckpointAdvance;
@@ -36,9 +39,11 @@ use attention_kernel::FireReminderBundle;
 use attention_kernel::FireReminderResult;
 use attention_kernel::IngestSourceOccurrenceBundle;
 use attention_kernel::IngestSourceOccurrenceResult;
+use attention_kernel::MutationReplayPort;
 use attention_kernel::OutboxIntentId;
 use attention_kernel::PortError;
 use attention_kernel::PriorMutationOutcome;
+use attention_kernel::PriorMutationRecord;
 use attention_kernel::PriorOutcomeQuery;
 use attention_kernel::ProviderMessageId;
 use attention_kernel::Reminder;
@@ -125,6 +130,36 @@ impl AttentionReadPort for AttentionDatabase {
     ) -> BoxFuture<'_, Result<ChangesAfterResult, PortError<Self::Error>>> {
         Box::pin(async move {
             self.semantic_changes(query)
+                .await
+                .map_err(PortError::Adapter)
+        })
+    }
+}
+
+impl MutationReplayPort for AttentionDatabase {
+    type Error = Error;
+
+    fn prior_mutation(
+        &self,
+        query: PriorOutcomeQuery,
+    ) -> BoxFuture<'_, Result<Option<PriorMutationRecord>, PortError<Self::Error>>> {
+        Box::pin(async move {
+            self.semantic_prior_mutation(query.key())
+                .await
+                .map_err(PortError::Adapter)
+        })
+    }
+}
+
+impl ChangeEventReadPort for AttentionDatabase {
+    type Error = Error;
+
+    fn change_event(
+        &self,
+        id: ChangeEventId,
+    ) -> BoxFuture<'_, Result<Option<ChangeEvent>, PortError<Self::Error>>> {
+        Box::pin(async move {
+            self.semantic_change_event(id)
                 .await
                 .map_err(PortError::Adapter)
         })
