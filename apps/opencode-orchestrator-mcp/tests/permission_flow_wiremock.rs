@@ -61,7 +61,16 @@ async fn command_precorrelation_deltas_are_returned_in_permission_partial_respon
         .await;
     Mock::given(method("GET"))
         .and(path("/permission"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+                "permission-preview",
+                sid,
+                "bash",
+                &["*"]
+            )])),
+        ]))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))

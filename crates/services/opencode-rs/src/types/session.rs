@@ -22,7 +22,7 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// Parent session ID (for forked sessions).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parentID")]
     pub parent_id: Option<String>,
     /// Session summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -407,6 +407,36 @@ mod tests {
         assert_eq!(session.path.as_deref(), Some("src/main.rs"));
         assert_eq!(session.parent_id, Some("s0".to_string()));
         assert!(session.share.is_some());
+    }
+
+    #[test]
+    fn session_parent_id_deserializes_uppercase_id_suffix() {
+        let json = r#"{
+            "id": "s1",
+            "slug": "s1",
+            "parentID": "s0"
+        }"#;
+        let session: Session = serde_json::from_str(json).unwrap();
+        assert_eq!(session.parent_id.as_deref(), Some("s0"));
+    }
+
+    #[test]
+    fn session_parent_id_serializes_with_canonical_camel_case() {
+        let session: Session = serde_json::from_str(
+            r#"{
+                "id": "s1",
+                "slug": "s1",
+                "parentID": "s0"
+            }"#,
+        )
+        .unwrap();
+        let value = serde_json::to_value(session).unwrap();
+
+        assert_eq!(
+            value.get("parentId").and_then(serde_json::Value::as_str),
+            Some("s0")
+        );
+        assert!(value.get("parentID").is_none());
     }
 
     #[test]

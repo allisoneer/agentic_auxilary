@@ -118,6 +118,13 @@ pub struct SequenceResponder {
     calls: Arc<AtomicUsize>,
 }
 
+/// Respond with templates in a repeating cycle.
+#[derive(Clone)]
+pub struct CyclicSequenceResponder {
+    responders: Vec<ResponseTemplate>,
+    calls: Arc<AtomicUsize>,
+}
+
 impl SequenceResponder {
     /// Create a new sequence responder with the given response templates.
     ///
@@ -138,6 +145,17 @@ impl SequenceResponder {
     pub fn call_counter(&self) -> CallCounter {
         CallCounter {
             inner: Arc::clone(&self.calls),
+        }
+    }
+}
+
+impl CyclicSequenceResponder {
+    /// Create a cyclic responder from a non-empty template sequence.
+    pub fn new(responders: Vec<ResponseTemplate>) -> Self {
+        assert!(!responders.is_empty(), "responders must not be empty");
+        Self {
+            responders,
+            calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -198,6 +216,13 @@ impl Respond for SequenceResponder {
             .get(idx)
             .cloned()
             .unwrap_or_else(|| self.responders.last().cloned().expect("non-empty"))
+    }
+}
+
+impl Respond for CyclicSequenceResponder {
+    fn respond(&self, _req: &Request) -> ResponseTemplate {
+        let idx = self.calls.fetch_add(1, Ordering::SeqCst) % self.responders.len();
+        self.responders[idx].clone()
     }
 }
 
@@ -323,6 +348,15 @@ pub fn session_fixture_with_path(session_id: &str, path: Option<&str>) -> serde_
         "version": "1.0",
         "time": { "created": 1_234_567_890, "updated": 1_234_567_890 }
     })
+}
+
+/// Create a session fixture with an optional parent using upstream `parentID` casing.
+pub fn session_fixture_with_parent(session_id: &str, parent_id: Option<&str>) -> serde_json::Value {
+    let mut session = session_fixture(session_id);
+    if let Some(parent_id) = parent_id {
+        session["parentID"] = serde_json::json!(parent_id);
+    }
+    session
 }
 
 /// Create a v2 session status fixture (idle map).
