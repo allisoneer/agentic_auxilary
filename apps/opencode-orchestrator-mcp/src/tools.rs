@@ -219,11 +219,11 @@ enum OwnerEligibility {
 #[derive(Debug, Default)]
 struct SessionLineageResolver {
     sessions_by_id: HashMap<String, opencode_rs::types::session::Session>,
-    eligible_depth_by_owner: HashMap<String, usize>,
+    depth_from_root_by_owner: HashMap<String, usize>,
 }
 
 impl SessionLineageResolver {
-    async fn eligible_owner_depth(
+    async fn owner_depth_from_root(
         &mut self,
         client: &opencode_rs::Client,
         root_session_id: &str,
@@ -233,7 +233,7 @@ impl SessionLineageResolver {
             return Ok(Some(0));
         }
 
-        if let Some(depth) = self.eligible_depth_by_owner.get(owner_session_id) {
+        if let Some(depth) = self.depth_from_root_by_owner.get(owner_session_id) {
             return Ok(Some(*depth));
         }
 
@@ -262,7 +262,7 @@ impl SessionLineageResolver {
             depth = depth.saturating_add(1);
 
             if parent_session_id == root_session_id {
-                self.eligible_depth_by_owner
+                self.depth_from_root_by_owner
                     .insert(owner_session_id.to_string(), depth);
                 return Ok(Some(depth));
             }
@@ -291,14 +291,14 @@ fn compare_caller_response_blockers(
         .then_with(|| left.request_id.cmp(&right.request_id))
 }
 
-async fn eligible_owner_depth_for_scan(
+async fn owner_depth_from_root_for_scan(
     lineage: &mut SessionLineageResolver,
     client: &opencode_rs::Client,
     root_session_id: &str,
     owner_session_id: &str,
 ) -> OwnerEligibility {
     match lineage
-        .eligible_owner_depth(client, root_session_id, owner_session_id)
+        .owner_depth_from_root(client, root_session_id, owner_session_id)
         .await
     {
         Ok(Some(depth)) => OwnerEligibility::Eligible(depth),
@@ -372,7 +372,7 @@ async fn scan_pending_caller_response_blocker(
 
     let mut blockers = Vec::new();
     for permission in permissions {
-        match eligible_owner_depth_for_scan(
+        match owner_depth_from_root_for_scan(
             lineage,
             client,
             root_session_id,
@@ -421,7 +421,7 @@ async fn scan_pending_caller_response_blocker(
 
     let mut blockers = Vec::new();
     for question in questions {
-        match eligible_owner_depth_for_scan(lineage, client, root_session_id, &question.session_id)
+        match owner_depth_from_root_for_scan(lineage, client, root_session_id, &question.session_id)
             .await
         {
             OwnerEligibility::Eligible(owner_depth) => {
@@ -1427,7 +1427,7 @@ impl OrchestratorRunTool {
                     };
                     if let Some((kind, owner_session_id, request_id)) = asked_request {
                         match lineage
-                            .eligible_owner_depth(client, &session_id, owner_session_id)
+                            .owner_depth_from_root(client, &session_id, owner_session_id)
                             .await
                         {
                             Ok(Some(_)) => {
@@ -2510,7 +2510,7 @@ Parameters:
 
                                 let perm = pending.remove(idx);
                                 let owner_depth = lineage
-                                    .eligible_owner_depth(
+                                    .owner_depth_from_root(
                                         client,
                                         &input.session_id,
                                         &perm.session_id,
@@ -2569,7 +2569,7 @@ Parameters:
                         let mut unresolved = Vec::new();
                         for permission in pending {
                             match lineage
-                                .eligible_owner_depth(
+                                .owner_depth_from_root(
                                     client,
                                     &input.session_id,
                                     &permission.session_id,
@@ -2826,7 +2826,7 @@ Parameters:
 
                 let question = pending.remove(idx);
                 let owner_depth = lineage
-                    .eligible_owner_depth(client, &input.session_id, &question.session_id)
+                    .owner_depth_from_root(client, &input.session_id, &question.session_id)
                     .await
                     .map_err(|error| {
                         ToolError::Internal(format!(
@@ -2846,7 +2846,7 @@ Parameters:
                 let mut unresolved = Vec::new();
                 for question in pending {
                     match lineage
-                        .eligible_owner_depth(client, &input.session_id, &question.session_id)
+                        .owner_depth_from_root(client, &input.session_id, &question.session_id)
                         .await
                     {
                         Ok(Some(owner_depth)) => questions.push((owner_depth, question)),
