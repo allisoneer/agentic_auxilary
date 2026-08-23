@@ -104,19 +104,48 @@ enum CallerResponseBlockerKind {
 }
 
 #[derive(Clone, Debug)]
-enum CallerResponseBlockerPayload {
-    Permission(PermissionRequest),
-    Question(QuestionRequest),
+enum CallerResponseBlocker {
+    Permission {
+        root_session_id: String,
+        owner_depth: usize,
+        request: PermissionRequest,
+    },
+    Question {
+        root_session_id: String,
+        owner_depth: usize,
+        request: QuestionRequest,
+    },
 }
 
-#[derive(Clone, Debug)]
-struct CallerResponseBlocker {
-    root_session_id: String,
-    owner_session_id: String,
-    owner_depth: usize,
-    request_id: String,
-    kind: CallerResponseBlockerKind,
-    payload: CallerResponseBlockerPayload,
+impl CallerResponseBlocker {
+    fn kind(&self) -> CallerResponseBlockerKind {
+        match self {
+            Self::Permission { .. } => CallerResponseBlockerKind::Permission,
+            Self::Question { .. } => CallerResponseBlockerKind::Question,
+        }
+    }
+
+    fn owner_session_id(&self) -> &str {
+        match self {
+            Self::Permission { request, .. } => &request.session_id,
+            Self::Question { request, .. } => &request.session_id,
+        }
+    }
+
+    fn owner_depth(&self) -> usize {
+        match self {
+            Self::Permission { owner_depth, .. } | Self::Question { owner_depth, .. } => {
+                *owner_depth
+            }
+        }
+    }
+
+    fn request_id(&self) -> &str {
+        match self {
+            Self::Permission { request, .. } => &request.id,
+            Self::Question { request, .. } => &request.id,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -284,11 +313,11 @@ fn compare_caller_response_blockers(
         CallerResponseBlockerKind::Question => 1_u8,
     };
 
-    kind_rank(left.kind)
-        .cmp(&kind_rank(right.kind))
-        .then_with(|| left.owner_depth.cmp(&right.owner_depth))
-        .then_with(|| left.owner_session_id.cmp(&right.owner_session_id))
-        .then_with(|| left.request_id.cmp(&right.request_id))
+    kind_rank(left.kind())
+        .cmp(&kind_rank(right.kind()))
+        .then_with(|| left.owner_depth().cmp(&right.owner_depth()))
+        .then_with(|| left.owner_session_id().cmp(right.owner_session_id()))
+        .then_with(|| left.request_id().cmp(right.request_id()))
 }
 
 async fn owner_depth_from_root_for_scan(
@@ -381,13 +410,10 @@ async fn scan_pending_caller_response_blocker(
         .await
         {
             OwnerEligibility::Eligible(owner_depth) => {
-                blockers.push(CallerResponseBlocker {
+                blockers.push(CallerResponseBlocker::Permission {
                     root_session_id: root_session_id.to_string(),
-                    owner_session_id: permission.session_id.clone(),
                     owner_depth,
-                    request_id: permission.id.clone(),
-                    kind: CallerResponseBlockerKind::Permission,
-                    payload: CallerResponseBlockerPayload::Permission(permission),
+                    request: permission,
                 });
             }
             OwnerEligibility::Ineligible => {}
@@ -425,13 +451,10 @@ async fn scan_pending_caller_response_blocker(
             .await
         {
             OwnerEligibility::Eligible(owner_depth) => {
-                blockers.push(CallerResponseBlocker {
+                blockers.push(CallerResponseBlocker::Question {
                     root_session_id: root_session_id.to_string(),
-                    owner_session_id: question.session_id.clone(),
                     owner_depth,
-                    request_id: question.id.clone(),
-                    kind: CallerResponseBlockerKind::Question,
-                    payload: CallerResponseBlockerPayload::Question(question),
+                    request: question,
                 });
             }
             OwnerEligibility::Ineligible => {}
@@ -971,9 +994,13 @@ impl OrchestratorRunTool {
         partial_response: Option<String>,
         warnings: Vec<String>,
     ) -> OrchestratorRunOutput {
-        match blocker.payload {
-            CallerResponseBlockerPayload::Permission(permission) => OrchestratorRunOutput {
-                session_id: blocker.root_session_id,
+        match blocker {
+            CallerResponseBlocker::Permission {
+                root_session_id,
+                request: permission,
+                ..
+            } => OrchestratorRunOutput {
+                session_id: root_session_id,
                 status: RunStatus::PermissionRequired,
                 response: None,
                 partial_response,
@@ -984,8 +1011,12 @@ impl OrchestratorRunTool {
                 questions: vec![],
                 warnings,
             },
-            CallerResponseBlockerPayload::Question(question) => Self::question_required_output(
-                blocker.root_session_id,
+            CallerResponseBlocker::Question {
+                root_session_id,
+                request: question,
+                ..
+            } => Self::question_required_output(
+                root_session_id,
                 partial_response,
                 &question,
                 warnings,
@@ -1162,9 +1193,9 @@ impl OrchestratorRunTool {
             BlockerScanResult::Found(blocker) => {
                 tracing::info!(
                     session_id = %session_id,
-                    owner_session_id = %blocker.owner_session_id,
-                    request_id = %blocker.request_id,
-                    blocker_kind = ?blocker.kind,
+                    owner_session_id = %blocker.owner_session_id(),
+                    request_id = %blocker.request_id(),
+                    blocker_kind = ?blocker.kind(),
                     "run: pending caller-response blocker found"
                 );
                 return Ok(RunOutcome::without_tokens(
@@ -1322,9 +1353,9 @@ impl OrchestratorRunTool {
                 IdleCompletionOutcome::Blocker(blocker) => {
                     tracing::debug!(
                         session_id = %session_id,
-                        owner_session_id = %blocker.owner_session_id,
-                        request_id = %blocker.request_id,
-                        blocker_kind = ?blocker.kind,
+                        owner_session_id = %blocker.owner_session_id(),
+                        request_id = %blocker.request_id(),
+                        blocker_kind = ?blocker.kind(),
                         "detected pending caller-response blocker before post-subscribe finalization"
                     );
                     return Ok(RunOutcome::with_tracker(
@@ -1466,9 +1497,9 @@ impl OrchestratorRunTool {
                         if let BlockerScanResult::Found(blocker) = blocker_scan {
                                 tracing::info!(
                                     session_id = %session_id,
-                                    owner_session_id = %blocker.owner_session_id,
-                                    request_id = %blocker.request_id,
-                                    blocker_kind = ?blocker.kind,
+                                    owner_session_id = %blocker.owner_session_id(),
+                                    request_id = %blocker.request_id(),
+                                    blocker_kind = ?blocker.kind(),
                                     "detected pending caller-response blocker after SSE event"
                                 );
                                 let partial_response =
@@ -1607,9 +1638,9 @@ impl OrchestratorRunTool {
                         BlockerScanResult::Found(blocker) => {
                             tracing::debug!(
                                 session_id = %session_id,
-                                owner_session_id = %blocker.owner_session_id,
-                                request_id = %blocker.request_id,
-                                blocker_kind = ?blocker.kind,
+                                owner_session_id = %blocker.owner_session_id(),
+                                request_id = %blocker.request_id(),
+                                blocker_kind = ?blocker.kind(),
                                 "detected pending caller-response blocker via polling fallback"
                             );
                             let partial_response = (!partial_response.is_empty()).then_some(partial_response);
@@ -1745,9 +1776,9 @@ impl OrchestratorRunTool {
                                 IdleCompletionOutcome::Blocker(blocker) => {
                                     tracing::debug!(
                                         session_id = %session_id,
-                                        owner_session_id = %blocker.owner_session_id,
-                                        request_id = %blocker.request_id,
-                                        blocker_kind = ?blocker.kind,
+                                        owner_session_id = %blocker.owner_session_id(),
+                                        request_id = %blocker.request_id(),
+                                        blocker_kind = ?blocker.kind(),
                                         "detected pending caller-response blocker before idle-grace finalization"
                                     );
                                     let partial_response =
@@ -3011,9 +3042,11 @@ mod tests {
         owner_depth: usize,
         request_id: &str,
     ) -> CallerResponseBlocker {
-        let payload = match kind {
-            CallerResponseBlockerKind::Permission => {
-                CallerResponseBlockerPayload::Permission(PermissionRequest {
+        match kind {
+            CallerResponseBlockerKind::Permission => CallerResponseBlocker::Permission {
+                root_session_id: "root".to_string(),
+                owner_depth,
+                request: PermissionRequest {
                     id: request_id.to_string(),
                     session_id: owner_session_id.to_string(),
                     permission: "file.read".to_string(),
@@ -3021,26 +3054,19 @@ mod tests {
                     metadata: None,
                     always: vec![],
                     tool: None,
-                })
-            }
-            CallerResponseBlockerKind::Question => {
-                CallerResponseBlockerPayload::Question(QuestionRequest {
+                },
+            },
+            CallerResponseBlockerKind::Question => CallerResponseBlocker::Question {
+                root_session_id: "root".to_string(),
+                owner_depth,
+                request: QuestionRequest {
                     id: request_id.to_string(),
                     session_id: owner_session_id.to_string(),
                     questions: vec![],
                     tool: None,
                     extra: serde_json::Value::Null,
-                })
-            }
-        };
-
-        CallerResponseBlocker {
-            root_session_id: "root".to_string(),
-            owner_session_id: owner_session_id.to_string(),
-            owner_depth,
-            request_id: request_id.to_string(),
-            kind,
-            payload,
+                },
+            },
         }
     }
 
@@ -3067,7 +3093,7 @@ mod tests {
         ];
 
         blockers.sort_by(compare_caller_response_blockers);
-        assert_eq!(blockers[0].kind, CallerResponseBlockerKind::Permission);
+        assert_eq!(blockers[0].kind(), CallerResponseBlockerKind::Permission);
     }
 
     #[test]
@@ -3088,7 +3114,7 @@ mod tests {
         ];
 
         blockers.sort_by(compare_caller_response_blockers);
-        assert_eq!(blockers[0].owner_session_id, "shallow");
+        assert_eq!(blockers[0].owner_session_id(), "shallow");
     }
 
     #[test]
@@ -3115,11 +3141,11 @@ mod tests {
         ];
 
         blockers.sort_by(compare_caller_response_blockers);
-        assert_eq!(blockers[0].owner_session_id, "owner-a");
-        assert_eq!(blockers[0].request_id, "request-a");
-        assert_eq!(blockers[1].owner_session_id, "owner-a");
-        assert_eq!(blockers[1].request_id, "request-z");
-        assert_eq!(blockers[2].owner_session_id, "owner-b");
+        assert_eq!(blockers[0].owner_session_id(), "owner-a");
+        assert_eq!(blockers[0].request_id(), "request-a");
+        assert_eq!(blockers[1].owner_session_id(), "owner-a");
+        assert_eq!(blockers[1].request_id(), "request-z");
+        assert_eq!(blockers[2].owner_session_id(), "owner-b");
     }
 
     #[test]
