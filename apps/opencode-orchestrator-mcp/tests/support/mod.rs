@@ -325,6 +325,15 @@ pub fn session_fixture_with_path(session_id: &str, path: Option<&str>) -> serde_
     })
 }
 
+/// Create a session fixture with an optional parent using upstream `parentID` casing.
+pub fn session_fixture_with_parent(session_id: &str, parent_id: Option<&str>) -> serde_json::Value {
+    let mut session = session_fixture(session_id);
+    if let Some(parent_id) = parent_id {
+        session["parentID"] = serde_json::json!(parent_id);
+    }
+    session
+}
+
 /// Create a v2 session status fixture (idle map).
 pub fn status_v2_idle() -> serde_json::Value {
     serde_json::json!({})

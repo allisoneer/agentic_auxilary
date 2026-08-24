@@ -61,7 +61,16 @@ async fn command_precorrelation_deltas_are_returned_in_permission_partial_respon
         .await;
     Mock::given(method("GET"))
         .and(path("/permission"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .respond_with(SequenceResponder::new(vec![
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+                "permission-preview",
+                sid,
+                "bash",
+                &["*"]
+            )])),
+        ]))
         .mount(&mock)
         .await;
     Mock::given(method("GET"))
@@ -137,12 +146,8 @@ async fn it_bug1_completion_retries_messages_until_visible() {
         .mount(&mock)
         .await;
 
-    // GET /session/status - busy initially (multiple times for initial check + polling), then idle
-    // First call: initial status check before SSE subscription
-    // Second call: poll interval check (observed_busy=true since our session is busy)
-    // Third+ calls: idle (triggers finalize_completed)
+    // GET /session/status - polling observes busy, then idle.
     let status_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // initial check
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // poll: sets observed_busy=true
         ResponseTemplate::new(200).set_body_json(status_v2_idle()), // poll: idle, triggers completion
     ]);
@@ -358,11 +363,10 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         .mount(&mock)
         .await;
 
-    // GET /session/status - starts idle (pre-fix early-exit #1), then busy, then idle.
+    // GET /session/status - polling observes post-reply activity, then completion.
     let status_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // initial check: idle
-        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)), // later: busy
-        ResponseTemplate::new(200).set_body_json(status_v2_idle()), // later: idle -> completion
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
     let status_calls = status_seq.call_counter();
     Mock::given(method("GET"))
@@ -497,13 +501,9 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         .await;
 
     // GET /session/status
-    // 1) busy  (avoid early-exit #1)
-    // 2) idle  (pre-fix early-exit #2)
-    // 3) retry (fixed path observes activity)
-    // 4) idle  (fixed path finalizes)
+    // 1) retry (polling observes activity)
+    // 2) idle  (polling finalizes)
     let status_seq = SequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
-        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
         ResponseTemplate::new(200).set_body_json(status_v2_retry(sid, 1)),
         ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
@@ -525,7 +525,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         .and(path("/session/s5/message"))
         .respond_with(SwitchAfterCallsResponder::new(
             status_calls.clone(),
-            3,
+            2,
             msg_pre,
             msg_post,
         ))

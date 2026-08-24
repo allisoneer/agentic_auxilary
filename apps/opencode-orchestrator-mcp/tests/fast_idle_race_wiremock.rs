@@ -323,10 +323,11 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
     Mock::given(method("GET"))
         .and(path("/permission"))
         .and(query_param("directory", "/tmp"))
-        .respond_with(
+        .respond_with(SequenceResponder::new(vec![
             ResponseTemplate::new(400)
                 .set_body_json(permission_patch_file_array_bad_request_fixture()),
-        )
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ]))
         .mount(&mock)
         .await;
 
@@ -377,7 +378,7 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
         .await;
 
     let result = timeout(
-        Duration::from_secs(2),
+        Duration::from_secs(3),
         tool.call(
             RespondPermissionInput {
                 session_id: sid.into(),
@@ -443,6 +444,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
             )
         ])),
         ResponseTemplate::new(400).set_body_json(permission_patch_file_array_bad_request_fixture()),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
         .and(path("/permission"))
@@ -498,7 +500,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         .await;
 
     let result = timeout(
-        Duration::from_secs(2),
+        Duration::from_secs(3),
         tool.call(
             RespondPermissionInput {
                 session_id: sid.into(),
@@ -567,10 +569,11 @@ async fn run_tolerates_initial_permission_list_bad_request_with_warning() {
     Mock::given(method("GET"))
         .and(path("/permission"))
         .and(query_param("directory", "/tmp"))
-        .respond_with(
+        .respond_with(SequenceResponder::new(vec![
             ResponseTemplate::new(400)
                 .set_body_json(permission_patch_file_array_bad_request_fixture()),
-        )
+            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+        ]))
         .mount(&mock)
         .await;
 
