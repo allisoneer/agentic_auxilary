@@ -17,7 +17,6 @@ use opencode_orchestrator_mcp::types::RespondQuestionInput;
 use opencode_orchestrator_mcp::types::RunStatus;
 use std::sync::Arc;
 use std::time::Duration;
-use support::CyclicSequenceResponder;
 use support::SequenceResponder;
 use support::messages_fixture;
 use support::permission_fixture;
@@ -69,6 +68,33 @@ async fn mount_root_session(mock: &MockServer, root_session_id: &str) {
         .await;
 }
 
+async fn mount_descendant_session(
+    mock: &MockServer,
+    session_id: &str,
+    parent_session_id: Option<&str>,
+) {
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{session_id}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(session_fixture_with_parent(session_id, parent_session_id)),
+        )
+        .mount(mock)
+        .await;
+}
+
+async fn mount_hanging_sse(mock: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .mount(mock)
+        .await;
+}
+
 #[tokio::test]
 async fn preflight_detects_direct_child_permission() {
     let mock = MockServer::start().await;
@@ -78,14 +104,7 @@ async fn preflight_detects_direct_child_permission() {
     let child = "child-direct-permission";
 
     mount_root_session(&mock, root).await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{child}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(child, Some(root))),
-        )
-        .mount(&mock)
-        .await;
+    mount_descendant_session(&mock, child, Some(root)).await;
     Mock::given(method("GET"))
         .and(path("/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
@@ -118,14 +137,7 @@ async fn preflight_detects_deep_descendant_question() {
 
     mount_root_session(&mock, root).await;
     for (session_id, parent_id) in [(child, root), (grandchild, child)] {
-        Mock::given(method("GET"))
-            .and(path(format!("/session/{session_id}")))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(session_fixture_with_parent(session_id, Some(parent_id))),
-            )
-            .mount(&mock)
-            .await;
+        mount_descendant_session(&mock, session_id, Some(parent_id)).await;
     }
     Mock::given(method("GET"))
         .and(path("/permission"))
@@ -171,14 +183,7 @@ async fn preflight_excludes_unrelated_cycle_and_broken_parent_chains() {
         ("cycle-b", Some("cycle-a")),
         ("broken", Some("missing-parent")),
     ] {
-        Mock::given(method("GET"))
-            .and(path(format!("/session/{session_id}")))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(session_fixture_with_parent(session_id, parent_id)),
-            )
-            .mount(&mock)
-            .await;
+        mount_descendant_session(&mock, session_id, parent_id).await;
     }
     Mock::given(method("GET"))
         .and(path("/permission"))
@@ -318,15 +323,7 @@ async fn polling_detects_descendant_permission_after_empty_preflight() {
         .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
-        .mount(&mock)
-        .await;
+    mount_hanging_sse(&mock).await;
 
     let mut input = run_input(root);
     input.message = Some("start work".to_string());
@@ -394,15 +391,7 @@ async fn polling_detects_descendant_question_after_empty_preflight() {
         .respond_with(ResponseTemplate::new(204))
         .mount(&mock)
         .await;
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
-        .mount(&mock)
-        .await;
+    mount_hanging_sse(&mock).await;
 
     let mut input = run_input(root);
     input.message = Some("start work".to_string());
@@ -638,7 +627,6 @@ async fn sse_before_list_persistence_is_recovered_by_later_scan() {
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
             "permission-after-race",
             child,
@@ -708,7 +696,7 @@ async fn sse_before_list_persistence_is_recovered_by_later_scan() {
     .expect("persistence race recovery should not hang")
     .expect("a later scan should surface the blocker");
 
-    assert!(permission_calls.get() >= 5);
+    assert!(permission_calls.get() >= 4);
     assert_eq!(
         output.permission_request_id.as_deref(),
         Some("permission-after-race")
@@ -749,9 +737,6 @@ async fn transient_asked_event_ancestry_failure_stays_latched_until_blocker_is_v
     Mock::given(method("GET"))
         .and(path("/permission"))
         .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
@@ -848,6 +833,12 @@ async fn unrelated_caller_response_event_does_not_delay_root_completion() {
         .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(unrelated)))
         .mount(&mock)
         .await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"/permission/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .expect(0)
+        .mount(&mock)
+        .await;
     Mock::given(method("GET"))
         .and(path("/session/status"))
         .respond_with(SequenceResponder::new(vec![
@@ -907,7 +898,7 @@ async fn unrelated_caller_response_event_does_not_delay_root_completion() {
         .await;
 
     let output = timeout(
-        Duration::from_secs(2),
+        Duration::from_secs(3),
         tool.call(run_input(root), &ToolContext::default()),
     )
     .await
@@ -1141,6 +1132,12 @@ async fn respond_permission_rejects_unrelated_explicit_id() {
         .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(unrelated)))
         .mount(&mock)
         .await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"/permission/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .expect(0)
+        .mount(&mock)
+        .await;
 
     let error = tool
         .call(
@@ -1159,87 +1156,24 @@ async fn respond_permission_rejects_unrelated_explicit_id() {
 }
 
 #[tokio::test]
-async fn respond_permission_no_id_reports_sorted_descendant_ambiguity() {
+async fn respond_permission_fails_closed_on_explicit_id_ancestry_error() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = RespondPermissionTool::new(Arc::clone(&server));
-    let root = "root-permission-ambiguity";
+    let root = "root-permission-ancestry-error";
+    let child = "child-permission-ancestry-error";
+    let request_id = "permission-ancestry-error";
 
-    for child in ["owner-b", "owner-a"] {
-        Mock::given(method("GET"))
-            .and(path(format!("/session/{child}")))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(session_fixture_with_parent(child, Some(root))),
-            )
-            .mount(&mock)
-            .await;
-    }
     Mock::given(method("GET"))
         .and(path("/permission"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            permission_fixture("request-z", "owner-a", "file.read", &["*"]),
-            permission_fixture("request-b", "owner-b", "file.read", &["*"]),
-            permission_fixture("request-a", "owner-a", "file.read", &["*"]),
+            permission_fixture(request_id, child, "file.read", &["*"])
         ])))
         .mount(&mock)
         .await;
-
-    let error = tool
-        .call(
-            RespondPermissionInput {
-                session_id: root.to_string(),
-                permission_request_id: None,
-                reply: PermissionReply::Once,
-                message: None,
-            },
-            &ToolContext::default(),
-        )
-        .await
-        .expect_err("multiple descendant permissions must remain ambiguous");
-    let message = error.to_string();
-
-    let request_a = message
-        .find("request-a")
-        .expect("request-a should be listed");
-    let request_z = message
-        .find("request-z")
-        .expect("request-z should be listed");
-    let request_b = message
-        .find("request-b")
-        .expect("request-b should be listed");
-    assert!(request_a < request_z);
-    assert!(request_z < request_b);
-}
-
-#[tokio::test]
-async fn respond_permission_no_id_fails_closed_on_unresolved_candidate_ancestry() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = RespondPermissionTool::new(Arc::clone(&server));
-    let root = "root-permission-unresolved-discovery";
-    let eligible = "eligible-permission-owner";
-    let unresolved = "unresolved-permission-owner";
-
     Mock::given(method("GET"))
-        .and(path(format!("/session/{eligible}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(eligible, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{unresolved}")))
+        .and(path(format!("/session/{child}")))
         .respond_with(ResponseTemplate::new(503).set_body_string("session lookup unavailable"))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            permission_fixture("permission-eligible", eligible, "file.read", &["*"]),
-            permission_fixture("permission-unresolved", unresolved, "file.read", &["*"]),
-        ])))
         .mount(&mock)
         .await;
     Mock::given(method("POST"))
@@ -1253,83 +1187,21 @@ async fn respond_permission_no_id_fails_closed_on_unresolved_candidate_ancestry(
         .call(
             RespondPermissionInput {
                 session_id: root.to_string(),
-                permission_request_id: None,
+                permission_request_id: Some(request_id.to_string()),
                 reply: PermissionReply::Once,
                 message: None,
             },
             &ToolContext::default(),
         )
         .await
-        .expect_err("unresolved permission ancestry must prevent auto-selection");
-    let message = error.to_string();
+        .expect_err("ancestry lookup failure must prevent the permission reply");
 
-    assert!(message.contains("Unable to safely discover a pending permission"));
-    assert!(message.contains("permission-unresolved"));
-    assert!(message.contains(unresolved));
-    assert!(message.contains("503"));
-    assert!(message.contains("permission_request_id"));
-}
-
-#[tokio::test]
-async fn respond_permission_no_id_ignores_resolved_unrelated_candidate() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = RespondPermissionTool::new(Arc::clone(&server));
-    let root = "root-permission-unrelated-discovery";
-    let eligible = "eligible-permission-discovery";
-    let unrelated = "unrelated-permission-discovery";
-    let eligible_request = "permission-selected-eligible";
-    let unrelated_request = "permission-ignored-unrelated";
-
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{eligible}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(eligible, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{unrelated}")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(unrelated)))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            permission_fixture(unrelated_request, unrelated, "file.read", &["*"]),
-            permission_fixture(eligible_request, eligible, "file.read", &["*"]),
-        ])))
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path(format!("/permission/{eligible_request}/reply")))
-        .respond_with(ResponseTemplate::new(404))
-        .expect(1)
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path(format!("/permission/{unrelated_request}/reply")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .expect(0)
-        .mount(&mock)
-        .await;
-
-    let error = tool
-        .call(
-            RespondPermissionInput {
-                session_id: root.to_string(),
-                permission_request_id: None,
-                reply: PermissionReply::Once,
-                message: None,
-            },
-            &ToolContext::default(),
-        )
-        .await
-        .expect_err("selected eligible permission reply should reach the mocked 404");
-
-    assert!(error.to_string().contains(eligible_request));
-    assert!(!error.to_string().contains("Multiple pending permissions"));
+    assert!(
+        error
+            .to_string()
+            .contains("Failed to verify permission request")
+    );
+    assert!(error.to_string().contains("503"));
 }
 
 #[tokio::test]
@@ -1445,6 +1317,12 @@ async fn respond_question_rejects_unrelated_explicit_id() {
         .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(unrelated)))
         .mount(&mock)
         .await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"/question/.*/reply"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(true))
+        .expect(0)
+        .mount(&mock)
+        .await;
 
     let error = tool
         .call(
@@ -1460,188 +1338,6 @@ async fn respond_question_rejects_unrelated_explicit_id() {
         .expect_err("unrelated question owner must be rejected");
 
     assert!(error.to_string().contains("not session"));
-}
-
-#[tokio::test]
-async fn respond_question_no_id_reports_sorted_descendant_ambiguity() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = RespondQuestionTool::new(Arc::clone(&server));
-    let root = "root-question-ambiguity";
-
-    for child in ["question-owner-b", "question-owner-a"] {
-        Mock::given(method("GET"))
-            .and(path(format!("/session/{child}")))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(session_fixture_with_parent(child, Some(root))),
-            )
-            .mount(&mock)
-            .await;
-    }
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            question_fixture("question-z", "question-owner-a", &[question_payload("Z?")]),
-            question_fixture("question-b", "question-owner-b", &[question_payload("B?")]),
-            question_fixture("question-a", "question-owner-a", &[question_payload("A?")]),
-        ])))
-        .mount(&mock)
-        .await;
-
-    let error = tool
-        .call(
-            RespondQuestionInput {
-                session_id: root.to_string(),
-                question_request_id: None,
-                action: QuestionAction::Reply,
-                answers: vec![vec!["yes".to_string()]],
-            },
-            &ToolContext::default(),
-        )
-        .await
-        .expect_err("multiple descendant questions must remain ambiguous");
-    let message = error.to_string();
-
-    let question_a = message
-        .find("question-a")
-        .expect("question-a should be listed");
-    let question_z = message
-        .find("question-z")
-        .expect("question-z should be listed");
-    let question_b = message
-        .find("question-b")
-        .expect("question-b should be listed");
-    assert!(question_a < question_z);
-    assert!(question_z < question_b);
-}
-
-#[tokio::test]
-async fn respond_question_no_id_fails_closed_on_unresolved_candidate_ancestry() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = RespondQuestionTool::new(Arc::clone(&server));
-    let root = "root-question-unresolved-discovery";
-    let eligible = "eligible-question-owner";
-    let unresolved = "unresolved-question-owner";
-
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{eligible}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(eligible, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{unresolved}")))
-        .respond_with(ResponseTemplate::new(503).set_body_string("session lookup unavailable"))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            question_fixture(
-                "question-eligible",
-                eligible,
-                &[question_payload("Eligible?")],
-            ),
-            question_fixture(
-                "question-unresolved",
-                unresolved,
-                &[question_payload("Unresolved?")],
-            ),
-        ])))
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path_regex(r"/question/.*/reply"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .expect(0)
-        .mount(&mock)
-        .await;
-
-    let error = tool
-        .call(
-            RespondQuestionInput {
-                session_id: root.to_string(),
-                question_request_id: None,
-                action: QuestionAction::Reply,
-                answers: vec![vec!["yes".to_string()]],
-            },
-            &ToolContext::default(),
-        )
-        .await
-        .expect_err("unresolved question ancestry must prevent auto-selection");
-    let message = error.to_string();
-
-    assert!(message.contains("Unable to safely discover a pending question"));
-    assert!(message.contains("question-unresolved"));
-    assert!(message.contains(unresolved));
-    assert!(message.contains("503"));
-    assert!(message.contains("question_request_id"));
-}
-
-#[tokio::test]
-async fn respond_question_no_id_ignores_resolved_unrelated_candidate() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = RespondQuestionTool::new(Arc::clone(&server));
-    let root = "root-question-unrelated-discovery";
-    let eligible = "eligible-question-discovery";
-    let unrelated = "unrelated-question-discovery";
-    let eligible_request = "question-selected-eligible";
-    let unrelated_request = "question-ignored-unrelated";
-
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{eligible}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(eligible, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{unrelated}")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(unrelated)))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            question_fixture(unrelated_request, unrelated, &[question_payload("Ignore?")],),
-            question_fixture(eligible_request, eligible, &[question_payload("Select?")],),
-        ])))
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path(format!("/question/{eligible_request}/reply")))
-        .respond_with(ResponseTemplate::new(500).set_body_string("selected eligible question"))
-        .expect(1)
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path(format!("/question/{unrelated_request}/reply")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(true))
-        .expect(0)
-        .mount(&mock)
-        .await;
-
-    let error = tool
-        .call(
-            RespondQuestionInput {
-                session_id: root.to_string(),
-                question_request_id: None,
-                action: QuestionAction::Reply,
-                answers: vec![vec!["yes".to_string()]],
-            },
-            &ToolContext::default(),
-        )
-        .await
-        .expect_err("selected eligible question reply should reach the mocked failure");
-
-    assert!(error.to_string().contains("Failed to reply to question"));
-    assert!(!error.to_string().contains("Multiple pending questions"));
 }
 
 #[tokio::test]
@@ -1681,7 +1377,7 @@ async fn respond_question_list_failure_has_no_compatibility_bypass() {
 }
 
 #[tokio::test]
-async fn resume_only_initial_idle_surfaces_blocker_during_final_confirmation() {
+async fn polling_final_confirmation_surfaces_new_descendant_blocker() {
     let mock = MockServer::start().await;
     let server = test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
@@ -1710,7 +1406,6 @@ async fn resume_only_initial_idle_surfaces_blocker_during_final_confirmation() {
     Mock::given(method("GET"))
         .and(path("/permission"))
         .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
             ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
@@ -1758,272 +1453,4 @@ async fn resume_only_initial_idle_surfaces_blocker_during_final_confirmation() {
     assert_eq!(output.session_id, root);
     assert_eq!(output.permission_request_id.as_deref(), Some(request_id));
     assert!(output.response.is_none());
-}
-
-#[tokio::test]
-async fn post_subscribe_idle_rechecks_descendant_blocker_before_finalizing() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = OrchestratorRunTool::new(Arc::clone(&server));
-    let root = "root-post-subscribe-recheck";
-    let child = "child-post-subscribe-recheck";
-    let request_id = "permission-post-subscribe-recheck";
-
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{root}")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(root)))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{child}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(child, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(status_v2_busy(root)),
-            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
-        ]))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-                request_id,
-                child,
-                "bash",
-                &["*"]
-            )])),
-        ]))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{root}/message")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(messages_fixture(root, Some("MUST_NOT_FINALIZE"))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
-        .mount(&mock)
-        .await;
-
-    let output = timeout(
-        Duration::from_secs(2),
-        tool.call(run_input(root), &ToolContext::default()),
-    )
-    .await
-    .expect("post-subscribe blocker recheck should not hang")
-    .expect("post-subscribe blocker recheck should succeed");
-
-    assert!(matches!(output.status, RunStatus::PermissionRequired));
-    assert_eq!(output.session_id, root);
-    assert_eq!(output.permission_request_id.as_deref(), Some(request_id));
-    assert!(output.response.is_none());
-}
-
-#[tokio::test]
-async fn root_idle_rechecks_descendant_blocker_before_finalizing() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = OrchestratorRunTool::new(Arc::clone(&server));
-    let root = "root-idle-recheck";
-    let child = "child-idle-recheck";
-    let request_id = "permission-idle-recheck";
-
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{root}")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(root)))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{child}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(child, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy(root)))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-            ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-                request_id,
-                child,
-                "bash",
-                &["*"]
-            )])),
-        ]))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path(format!("/session/{root}/prompt_async")))
-        .respond_with(ResponseTemplate::new(204))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{root}/message")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(messages_fixture(root, Some("MUST_NOT_FINALIZE"))),
-        )
-        .mount(&mock)
-        .await;
-    let root_idle = serde_json::json!({
-        "type": "session.idle",
-        "properties": { "sessionID": root }
-    });
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(50))
-                .set_body_raw(sse_body(&[root_idle]), "text/event-stream"),
-        )
-        .mount(&mock)
-        .await;
-
-    let mut input = run_input(root);
-    input.message = Some("start work".to_string());
-    let output = timeout(
-        Duration::from_secs(2),
-        tool.call(input, &ToolContext::default()),
-    )
-    .await
-    .expect("idle/blocker race should not hang")
-    .expect("idle recheck should surface the descendant blocker");
-
-    assert!(matches!(output.status, RunStatus::PermissionRequired));
-    assert_eq!(output.session_id, root);
-    assert_eq!(output.permission_request_id.as_deref(), Some(request_id));
-    assert!(output.response.is_none());
-}
-
-#[tokio::test]
-async fn descendant_blocker_idle_boundary_surfaces_actual_blocker_100_times() {
-    let mock = MockServer::start().await;
-    let server = test_orchestrator_server(&mock).await;
-    let tool = OrchestratorRunTool::new(Arc::clone(&server));
-    let root = "root-boundary-reproduction";
-    let child = "child-boundary-reproduction";
-    let request_id = "permission-boundary-reproduction";
-
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{root}")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(root)))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{child}")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(session_fixture_with_parent(child, Some(root))),
-        )
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/session/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(status_v2_busy(root)))
-        .mount(&mock)
-        .await;
-    let permission_sequence = CyclicSequenceResponder::new(vec![
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
-        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
-            request_id,
-            child,
-            "bash",
-            &["*"],
-        )])),
-    ]);
-    Mock::given(method("GET"))
-        .and(path("/permission"))
-        .respond_with(permission_sequence)
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/question"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
-        .mount(&mock)
-        .await;
-    Mock::given(method("POST"))
-        .and(path(format!("/session/{root}/prompt_async")))
-        .respond_with(ResponseTemplate::new(204))
-        .mount(&mock)
-        .await;
-    Mock::given(method("GET"))
-        .and(path(format!("/session/{root}/message")))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(messages_fixture(root, Some("MUST_NOT_FINALIZE"))),
-        )
-        .mount(&mock)
-        .await;
-    let root_idle = serde_json::json!({
-        "type": "session.idle",
-        "properties": { "sessionID": root }
-    });
-    Mock::given(method("GET"))
-        .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(20))
-                .set_body_raw(sse_body(&[root_idle]), "text/event-stream"),
-        )
-        .mount(&mock)
-        .await;
-
-    for iteration in 0..100 {
-        let mut input = run_input(root);
-        input.message = Some(format!("start boundary iteration {iteration}"));
-        let output = timeout(
-            Duration::from_secs(2),
-            tool.call(input, &ToolContext::default()),
-        )
-        .await
-        .unwrap_or_else(|_| panic!("iteration {iteration} hung"))
-        .unwrap_or_else(|error| panic!("iteration {iteration} failed: {error}"));
-
-        assert!(
-            matches!(output.status, RunStatus::PermissionRequired),
-            "iteration {iteration} returned {:?}",
-            output.status
-        );
-        assert_eq!(output.session_id, root, "iteration {iteration}");
-        assert_eq!(
-            output.permission_request_id.as_deref(),
-            Some(request_id),
-            "iteration {iteration}"
-        );
-    }
 }

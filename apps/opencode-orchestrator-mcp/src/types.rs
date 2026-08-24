@@ -154,9 +154,11 @@ impl TextFormat for OrchestratorRunOutput {
             }
             // NOTE: Keep the `orchestrator_*` prefix in user-facing instructions because OpenCode
             // displays tool names as `<server>_<tool>` (server name is "orchestrator").
-            out.push_str("\nTo respond: orchestrator_respond_permission(session_id, reply)\n");
+            out.push_str(
+                "\nTo respond: orchestrator_respond_permission(session_id, permission_request_id=<Request ID>, reply)\n",
+            );
             out.push_str("  reply options: once | always | reject\n");
-            out.push_str("  tip: include permission_request_id=<Request ID> when provided\n");
+            out.push_str("  omission is supported only for root-owned compatibility discovery\n");
         }
 
         if self.status == RunStatus::QuestionRequired {
@@ -180,10 +182,10 @@ impl TextFormat for OrchestratorRunOutput {
                 let _ = writeln!(out, "  custom: {}", question.custom);
             }
             out.push_str(
-                "\nTo respond: orchestrator_respond_question(session_id, action, answers)\n",
+                "\nTo respond: orchestrator_respond_question(session_id, question_request_id=<Request ID>, action, answers)\n",
             );
             out.push_str("  action options: reply | reject\n");
-            out.push_str("  tip: include question_request_id=<Request ID> when provided\n");
+            out.push_str("  omission is supported only for root-owned compatibility discovery\n");
         }
 
         // Response content
@@ -514,8 +516,8 @@ pub struct RespondPermissionInput {
     /// Monitored root session ID. The permission may belong to this session or an eligible descendant.
     pub session_id: String,
 
-    /// Permission request ID to respond to (returned by `run` when `status=permission_required`).
-    /// Recommended when present to avoid replying to the wrong request.
+    /// Permission request ID returned by `run` when `status=permission_required`.
+    /// Required for descendant-owned permissions. Omit only for root-owned compatibility discovery.
     #[serde(default)]
     pub permission_request_id: Option<String>,
 
@@ -553,7 +555,8 @@ pub enum QuestionAction {
 pub struct RespondQuestionInput {
     /// Monitored root session ID. The question may belong to this session or an eligible descendant.
     pub session_id: String,
-    /// Question request ID to respond to (returned by `run` when `status=question_required`).
+    /// Question request ID returned by `run` when `status=question_required`.
+    /// Required for descendant-owned questions. Omit only for root-owned compatibility discovery.
     #[serde(default)]
     pub question_request_id: Option<String>,
     pub action: QuestionAction,

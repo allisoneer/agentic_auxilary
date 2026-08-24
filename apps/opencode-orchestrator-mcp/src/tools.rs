@@ -105,45 +105,29 @@ enum CallerResponseBlockerKind {
 
 #[derive(Clone, Debug)]
 enum CallerResponseBlocker {
-    Permission {
-        root_session_id: String,
-        owner_depth: usize,
-        request: PermissionRequest,
-    },
-    Question {
-        root_session_id: String,
-        owner_depth: usize,
-        request: QuestionRequest,
-    },
+    Permission(PermissionRequest),
+    Question(QuestionRequest),
 }
 
 impl CallerResponseBlocker {
     fn kind(&self) -> CallerResponseBlockerKind {
         match self {
-            Self::Permission { .. } => CallerResponseBlockerKind::Permission,
-            Self::Question { .. } => CallerResponseBlockerKind::Question,
+            Self::Permission(_) => CallerResponseBlockerKind::Permission,
+            Self::Question(_) => CallerResponseBlockerKind::Question,
         }
     }
 
     fn owner_session_id(&self) -> &str {
         match self {
-            Self::Permission { request, .. } => &request.session_id,
-            Self::Question { request, .. } => &request.session_id,
-        }
-    }
-
-    fn owner_depth(&self) -> usize {
-        match self {
-            Self::Permission { owner_depth, .. } | Self::Question { owner_depth, .. } => {
-                *owner_depth
-            }
+            Self::Permission(request) => &request.session_id,
+            Self::Question(request) => &request.session_id,
         }
     }
 
     fn request_id(&self) -> &str {
         match self {
-            Self::Permission { request, .. } => &request.id,
-            Self::Question { request, .. } => &request.id,
+            Self::Permission(request) => &request.id,
+            Self::Question(request) => &request.id,
         }
     }
 }
@@ -304,22 +288,6 @@ impl SessionLineageResolver {
     }
 }
 
-fn compare_caller_response_blockers(
-    left: &CallerResponseBlocker,
-    right: &CallerResponseBlocker,
-) -> std::cmp::Ordering {
-    let kind_rank = |kind| match kind {
-        CallerResponseBlockerKind::Permission => 0_u8,
-        CallerResponseBlockerKind::Question => 1_u8,
-    };
-
-    kind_rank(left.kind())
-        .cmp(&kind_rank(right.kind()))
-        .then_with(|| left.owner_depth().cmp(&right.owner_depth()))
-        .then_with(|| left.owner_session_id().cmp(right.owner_session_id()))
-        .then_with(|| left.request_id().cmp(right.request_id()))
-}
-
 async fn owner_depth_from_root_for_scan(
     lineage: &mut SessionLineageResolver,
     client: &opencode_rs::Client,
@@ -399,7 +367,7 @@ async fn scan_pending_caller_response_blocker(
         },
     };
 
-    let mut blockers = Vec::new();
+    let mut permissions_with_depth = Vec::new();
     for permission in permissions {
         match owner_depth_from_root_for_scan(
             lineage,
@@ -410,19 +378,22 @@ async fn scan_pending_caller_response_blocker(
         .await
         {
             OwnerEligibility::Eligible(owner_depth) => {
-                blockers.push(CallerResponseBlocker::Permission {
-                    root_session_id: root_session_id.to_string(),
-                    owner_depth,
-                    request: permission,
-                });
+                permissions_with_depth.push((owner_depth, permission));
             }
             OwnerEligibility::Ineligible => {}
             OwnerEligibility::Inconclusive => inconclusive = true,
         }
     }
-    blockers.sort_by(compare_caller_response_blockers);
-    if let Some(blocker) = blockers.into_iter().next() {
-        return Ok(BlockerScanResult::Found(Box::new(blocker)));
+    permissions_with_depth.sort_by(|(left_depth, left), (right_depth, right)| {
+        left_depth
+            .cmp(right_depth)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    if let Some((_, permission)) = permissions_with_depth.into_iter().next() {
+        return Ok(BlockerScanResult::Found(Box::new(
+            CallerResponseBlocker::Permission(permission),
+        )));
     }
 
     let questions = match client.question().list().await {
@@ -445,25 +416,28 @@ async fn scan_pending_caller_response_blocker(
         },
     };
 
-    let mut blockers = Vec::new();
+    let mut questions_with_depth = Vec::new();
     for question in questions {
         match owner_depth_from_root_for_scan(lineage, client, root_session_id, &question.session_id)
             .await
         {
             OwnerEligibility::Eligible(owner_depth) => {
-                blockers.push(CallerResponseBlocker::Question {
-                    root_session_id: root_session_id.to_string(),
-                    owner_depth,
-                    request: question,
-                });
+                questions_with_depth.push((owner_depth, question));
             }
             OwnerEligibility::Ineligible => {}
             OwnerEligibility::Inconclusive => inconclusive = true,
         }
     }
-    blockers.sort_by(compare_caller_response_blockers);
-    if let Some(blocker) = blockers.into_iter().next() {
-        Ok(BlockerScanResult::Found(Box::new(blocker)))
+    questions_with_depth.sort_by(|(left_depth, left), (right_depth, right)| {
+        left_depth
+            .cmp(right_depth)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    if let Some((_, question)) = questions_with_depth.into_iter().next() {
+        Ok(BlockerScanResult::Found(Box::new(
+            CallerResponseBlocker::Question(question),
+        )))
     } else if inconclusive {
         Ok(BlockerScanResult::Inconclusive)
     } else {
@@ -483,13 +457,10 @@ struct IdleCompletionContext<'a> {
 async fn evaluate_idle_completion(
     monitor: &mut IdleCompletionMonitor,
     initial_scan: BlockerScanResult,
-    poll_driven: bool,
     may_complete: bool,
     context: IdleCompletionContext<'_>,
 ) -> Result<IdleCompletionOutcome, ToolError> {
-    if poll_driven {
-        context.latch.observe_poll_scan(&initial_scan);
-    }
+    context.latch.observe_poll_scan(&initial_scan);
 
     match initial_scan {
         BlockerScanResult::Found(blocker) => {
@@ -860,8 +831,7 @@ impl OrchestratorRunTool {
 
     /// Finalize a completed session by fetching messages and optionally triggering summarization.
     ///
-    /// This is called when we detect the session is idle, either via SSE `SessionIdle` event
-    /// or via polling `sessions().status()`.
+    /// This is called after polling confirms the session is eligible to complete.
     ///
     /// Uses bounded retry with backoff (0/50/100/200/400ms) if assistant text is not immediately
     /// available, handling the race condition where the session becomes idle before messages
@@ -990,17 +960,14 @@ impl OrchestratorRunTool {
     }
 
     fn caller_response_blocker_output(
+        root_session_id: &str,
         blocker: CallerResponseBlocker,
         partial_response: Option<String>,
         warnings: Vec<String>,
     ) -> OrchestratorRunOutput {
         match blocker {
-            CallerResponseBlocker::Permission {
-                root_session_id,
-                request: permission,
-                ..
-            } => OrchestratorRunOutput {
-                session_id: root_session_id,
+            CallerResponseBlocker::Permission(permission) => OrchestratorRunOutput {
+                session_id: root_session_id.to_string(),
                 status: RunStatus::PermissionRequired,
                 response: None,
                 partial_response,
@@ -1011,12 +978,8 @@ impl OrchestratorRunTool {
                 questions: vec![],
                 warnings,
             },
-            CallerResponseBlocker::Question {
-                root_session_id,
-                request: question,
-                ..
-            } => Self::question_required_output(
-                root_session_id,
+            CallerResponseBlocker::Question(question) => Self::question_required_output(
+                root_session_id.to_string(),
                 partial_response,
                 &question,
                 warnings,
@@ -1038,6 +1001,7 @@ impl OrchestratorRunTool {
                 let partial_response =
                     (!partial_response.is_empty()).then(|| partial_response.to_string());
                 let output = Self::caller_response_blocker_output(
+                    session_id,
                     *blocker,
                     partial_response,
                     std::mem::take(warnings),
@@ -1171,16 +1135,7 @@ impl OrchestratorRunTool {
         let mut warnings = Vec::new();
         let mut lineage = SessionLineageResolver::default();
 
-        // 2. Check if session is already idle (for resume-only case)
-        let status = client
-            .sessions()
-            .status_for(&session_id)
-            .await
-            .map_err(|e| ToolError::Internal(format!("Failed to get session status: {e}")))?;
-
-        let is_idle = matches!(status, SessionStatusInfo::Idle);
-
-        // 3. Check for pending caller-response blockers before doing anything else
+        // 2. Check for pending caller-response blockers before doing anything else
         match scan_pending_caller_response_blocker(
             client,
             &session_id,
@@ -1199,18 +1154,12 @@ impl OrchestratorRunTool {
                     "run: pending caller-response blocker found"
                 );
                 return Ok(RunOutcome::without_tokens(
-                    Self::caller_response_blocker_output(*blocker, None, warnings),
+                    Self::caller_response_blocker_output(&session_id, *blocker, None, warnings),
                 ));
             }
             BlockerScanResult::Clear | BlockerScanResult::Inconclusive => {}
         }
-        tracing::trace!(
-            session_id = %session_id,
-            initial_idle = is_idle,
-            "initial status observed; completion delegated to the idle completion monitor"
-        );
-
-        // 4. Subscribe to SSE BEFORE sending prompt/command
+        // 3. Subscribe to SSE BEFORE sending prompt/command
         let mut subscription = client
             .subscribe()
             .map_err(|e| ToolError::Internal(format!("Failed to subscribe to events: {e}")))?;
@@ -1219,14 +1168,11 @@ impl OrchestratorRunTool {
         // vs just resuming/monitoring an existing session.
         let dispatched_new_work = input.command.is_some() || message.is_some() || wait_for_activity;
         let idle_grace = config::idle_grace();
-        let mut idle_grace_deadline: Option<tokio::time::Instant> = None;
-        let mut awaiting_idle_grace_check = false;
+        let mut idle_grace_deadline =
+            (wait_for_activity && input.command.is_none() && message.is_none())
+                .then(|| tokio::time::Instant::now() + idle_grace);
 
-        if wait_for_activity && input.command.is_none() && message.is_none() {
-            idle_grace_deadline = Some(tokio::time::Instant::now() + idle_grace);
-        }
-
-        // 5. Kick off the work
+        // 4. Kick off the work
         let mut command_task: Option<JoinHandle<Result<(), OpencodeError>>> = None;
         let mut command_name_for_logging: Option<String> = None;
         let mut command_transcript_window: Option<CommandTranscriptWindow> = None;
@@ -1286,7 +1232,7 @@ impl OrchestratorRunTool {
             idle_grace_deadline = Some(tokio::time::Instant::now() + idle_grace);
         }
 
-        // 6. Event loop: wait for completion or permission
+        // 5. Event loop: wait for completion or permission
         // Overall timeout to prevent infinite hangs (configurable, default 1 hour)
         let deadline = tokio::time::Instant::now() + server.session_deadline();
         let inactivity_timeout = server.inactivity_timeout();
@@ -1313,66 +1259,6 @@ impl OrchestratorRunTool {
         let mut sse_active = true;
         let mut blocker_event_latch = CallerResponseEventLatch::default();
         let mut idle_completion_monitor = IdleCompletionMonitor::default();
-
-        // === Post-subscribe status re-check (latency optimization) ===
-        // If we're just monitoring (no new work dispatched), check if session is already idle.
-        // This handles the race where session completed between our initial status check
-        // and SSE subscription becoming ready.
-        if !dispatched_new_work
-            && let Ok(status) = client.sessions().status_for(&session_id).await
-            && matches!(status, SessionStatusInfo::Idle)
-        {
-            tracing::debug!(
-                session_id = %session_id,
-                "session already idle on post-subscribe check"
-            );
-            let blocker_scan = scan_pending_caller_response_blocker(
-                client,
-                &session_id,
-                &mut lineage,
-                BlockerDetectionSource::Fallback,
-                &mut warnings,
-            )
-            .await?;
-            match evaluate_idle_completion(
-                &mut idle_completion_monitor,
-                blocker_scan,
-                false,
-                false,
-                IdleCompletionContext {
-                    sse_active,
-                    latch: &mut blocker_event_latch,
-                    client,
-                    root_session_id: &session_id,
-                    lineage: &mut lineage,
-                    warnings: &mut warnings,
-                },
-            )
-            .await?
-            {
-                IdleCompletionOutcome::Blocker(blocker) => {
-                    tracing::debug!(
-                        session_id = %session_id,
-                        owner_session_id = %blocker.owner_session_id(),
-                        request_id = %blocker.request_id(),
-                        blocker_kind = ?blocker.kind(),
-                        "detected pending caller-response blocker before post-subscribe finalization"
-                    );
-                    return Ok(RunOutcome::with_tracker(
-                        Self::caller_response_blocker_output(*blocker, None, warnings),
-                        &token_tracker,
-                    ));
-                }
-                IdleCompletionOutcome::Continue => {}
-                IdleCompletionOutcome::Complete => {
-                    return Err(ToolError::Internal(
-                        "idle completion monitor unexpectedly completed during post-subscribe observation"
-                            .to_string(),
-                    ));
-                }
-            }
-        }
-        // If check fails or session is busy, continue to event loop
 
         loop {
             // Check timeout before processing
@@ -1506,6 +1392,7 @@ impl OrchestratorRunTool {
                                     (!partial_response.is_empty()).then_some(partial_response);
                                 return Ok(RunOutcome::with_tracker(
                                     Self::caller_response_blocker_output(
+                                        &session_id,
                                         *blocker,
                                         partial_response,
                                         warnings,
@@ -1537,7 +1424,6 @@ impl OrchestratorRunTool {
                             if correlated {
                                 last_activity_time = tokio::time::Instant::now();
                                 observed_busy = true;
-                                awaiting_idle_grace_check = false;
                                 idle_completion_monitor.reset_on_root_progress();
                             }
                         }
@@ -1553,7 +1439,6 @@ impl OrchestratorRunTool {
                             if correlated {
                                 last_activity_time = tokio::time::Instant::now();
                                 observed_busy = true;
-                                awaiting_idle_grace_check = false;
                                 idle_completion_monitor.reset_on_root_progress();
                             }
                         }
@@ -1567,7 +1452,6 @@ impl OrchestratorRunTool {
                             if correlated {
                                 last_activity_time = tokio::time::Instant::now();
                                 observed_busy = true;
-                                awaiting_idle_grace_check = false;
                                 idle_completion_monitor.reset_on_root_progress();
                             }
                         }
@@ -1582,41 +1466,6 @@ impl OrchestratorRunTool {
                                 "run: session error"
                             );
                             return Err(ToolError::Internal(format!("Session error: {error_msg}")));
-                        }
-
-                        Event::SessionIdle { .. } => {
-                            tracing::debug!(session_id = %session_id, "received SessionIdle event");
-                            let blocker_scan = scan_pending_caller_response_blocker(
-                                client,
-                                &session_id,
-                                &mut lineage,
-                                BlockerDetectionSource::Fallback,
-                                &mut warnings,
-                            ).await?;
-                            let completion_outcome = evaluate_idle_completion(
-                                &mut idle_completion_monitor,
-                                blocker_scan,
-                                false,
-                                false,
-                                IdleCompletionContext {
-                                    sse_active,
-                                    latch: &mut blocker_event_latch,
-                                    client,
-                                    root_session_id: &session_id,
-                                    lineage: &mut lineage,
-                                    warnings: &mut warnings,
-                                },
-                            ).await?;
-                            if let Some(outcome) = Self::apply_idle_completion_outcome(
-                                completion_outcome,
-                                client,
-                                &session_id,
-                                &partial_response,
-                                &mut warnings,
-                                &token_tracker,
-                            ).await? {
-                                return Ok(outcome);
-                            }
                         }
 
                         _ => {
@@ -1646,6 +1495,7 @@ impl OrchestratorRunTool {
                             let partial_response = (!partial_response.is_empty()).then_some(partial_response);
                             return Ok(RunOutcome::with_tracker(
                                 Self::caller_response_blocker_output(
+                                    &session_id,
                                     *blocker,
                                     partial_response,
                                     warnings,
@@ -1656,9 +1506,8 @@ impl OrchestratorRunTool {
                         blocker_scan => blocker_scan,
                     };
 
-                    // === 2. Session idle detection fallback (NEW) ===
-                    // This is the key fix for race conditions. If SSE missed SessionIdle,
-                    // we detect completion via polling sessions().status_for(session_id).
+                    // === 2. Poll-driven session idle detection ===
+                    // Polling is the sole completion coordinator.
                     match client.sessions().status_for(&session_id).await {
                         Ok(
                             SessionStatusInfo::Busy
@@ -1668,7 +1517,6 @@ impl OrchestratorRunTool {
                             blocker_event_latch.observe_poll_scan(&blocker_scan);
                             last_activity_time = tokio::time::Instant::now();
                             observed_busy = true;
-                            awaiting_idle_grace_check = false;
                             idle_completion_monitor.reset_on_root_progress();
                             tracing::trace!(
                                 session_id = %session_id,
@@ -1683,7 +1531,6 @@ impl OrchestratorRunTool {
                                 if now >= deadline {
                                     true
                                 } else {
-                                    awaiting_idle_grace_check = true;
                                     tracing::trace!(
                                         session_id = %session_id,
                                         remaining_ms = (deadline - now).as_millis(),
@@ -1703,7 +1550,6 @@ impl OrchestratorRunTool {
                             let completion_outcome = evaluate_idle_completion(
                                 &mut idle_completion_monitor,
                                 blocker_scan,
-                                true,
                                 may_complete,
                                 IdleCompletionContext {
                                     sse_active,
@@ -1734,88 +1580,6 @@ impl OrchestratorRunTool {
                             );
                             blocker_event_latch.observe_poll_scan(&blocker_scan);
                             idle_completion_monitor.reset_completion_candidate();
-                        }
-                    }
-                }
-
-                () = async {
-                    match idle_grace_deadline {
-                        Some(deadline) => tokio::time::sleep_until(deadline).await,
-                        None => std::future::pending::<()>().await,
-                    }
-                }, if awaiting_idle_grace_check => {
-                    awaiting_idle_grace_check = false;
-
-                    match client.sessions().status_for(&session_id).await {
-                        Ok(SessionStatusInfo::Idle) => {
-                            tracing::debug!(
-                                session_id = %session_id,
-                                "idle-grace deadline reached; rechecking blockers before polling completion"
-                            );
-                            let blocker_scan = scan_pending_caller_response_blocker(
-                                client,
-                                &session_id,
-                                &mut lineage,
-                                BlockerDetectionSource::Fallback,
-                                &mut warnings,
-                            ).await?;
-                            match evaluate_idle_completion(
-                                &mut idle_completion_monitor,
-                                blocker_scan,
-                                false,
-                                false,
-                                IdleCompletionContext {
-                                    sse_active,
-                                    latch: &mut blocker_event_latch,
-                                    client,
-                                    root_session_id: &session_id,
-                                    lineage: &mut lineage,
-                                    warnings: &mut warnings,
-                                },
-                            ).await? {
-                                IdleCompletionOutcome::Blocker(blocker) => {
-                                    tracing::debug!(
-                                        session_id = %session_id,
-                                        owner_session_id = %blocker.owner_session_id(),
-                                        request_id = %blocker.request_id(),
-                                        blocker_kind = ?blocker.kind(),
-                                        "detected pending caller-response blocker before idle-grace finalization"
-                                    );
-                                    let partial_response =
-                                        (!partial_response.is_empty()).then_some(partial_response);
-                                    return Ok(RunOutcome::with_tracker(
-                                        Self::caller_response_blocker_output(
-                                            *blocker,
-                                            partial_response,
-                                            warnings,
-                                        ),
-                                        &token_tracker,
-                                    ));
-                                }
-                                IdleCompletionOutcome::Continue => {}
-                                IdleCompletionOutcome::Complete => {
-                                    return Err(ToolError::Internal(
-                                        "idle completion monitor unexpectedly completed during idle-grace observation"
-                                            .to_string(),
-                                    ));
-                                }
-                            }
-                        }
-                        Ok(
-                            SessionStatusInfo::Busy
-                            | SessionStatusInfo::Retry { .. }
-                            | SessionStatusInfo::Unknown,
-                        ) => {
-                            last_activity_time = tokio::time::Instant::now();
-                            observed_busy = true;
-                            idle_completion_monitor.reset_on_root_progress();
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                session_id = %session_id,
-                                error = %e,
-                                "status check failed at idle-grace deadline"
-                            );
                         }
                     }
                 }
@@ -1877,7 +1641,6 @@ impl OrchestratorRunTool {
                                 start_evidence = true;
                                 observed_busy = true;
                                 last_activity_time = tokio::time::Instant::now();
-                                awaiting_idle_grace_check = false;
                             }
 
                             if !start_evidence
@@ -2504,6 +2267,7 @@ After responding, continues monitoring the session and returns when complete or 
 
 Parameters:
 - session_id: Monitored root session; the permission may belong to it or an eligible descendant
+- permission_request_id: Request ID returned by run. Required for descendant-owned permissions; omit only for root-owned compatibility discovery
 - reply: "once" (allow this request), "always" (allow for matching patterns), or "reject" (deny)
 - message: Optional message to include with reply"#;
 
@@ -2596,60 +2360,10 @@ Parameters:
                             }
                         };
 
-                        let mut perms = Vec::new();
-                        let mut unresolved = Vec::new();
-                        for permission in pending {
-                            match lineage
-                                .owner_depth_from_root(
-                                    client,
-                                    &input.session_id,
-                                    &permission.session_id,
-                                )
-                                .await
-                            {
-                                Ok(Some(owner_depth)) => perms.push((owner_depth, permission)),
-                                Ok(None) => {}
-                                Err(error) => {
-                                    tracing::warn!(
-                                        root_session_id = %input.session_id,
-                                        owner_session_id = %permission.session_id,
-                                        error = %error,
-                                        "failed to verify permission owner during discovery"
-                                    );
-                                    unresolved.push((
-                                        permission.session_id,
-                                        permission.id,
-                                        error.to_string(),
-                                    ));
-                                }
-                            }
-                        }
-                        unresolved.sort_by(|left, right| {
-                            left.0
-                                .cmp(&right.0)
-                                .then_with(|| left.1.cmp(&right.1))
-                        });
-                        if !unresolved.is_empty() {
-                            let details = unresolved
-                                .iter()
-                                .map(|(owner_session_id, request_id, error)| {
-                                    format!(
-                                        "request '{request_id}' owned by session '{owner_session_id}': {error}"
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join("; ");
-                            return Err(ToolError::Internal(format!(
-                                "Unable to safely discover a pending permission for root session '{}': request ancestry could not be verified ({details}). Retry after the OpenCode session endpoint recovers, or provide permission_request_id returned by run.",
-                                input.session_id
-                            )));
-                        }
-                        perms.sort_by(|(left_depth, left), (right_depth, right)| {
-                            left_depth
-                                .cmp(right_depth)
-                                .then_with(|| left.session_id.cmp(&right.session_id))
-                                .then_with(|| left.id.cmp(&right.id))
-                        });
+                        let mut perms = pending
+                            .into_iter()
+                            .filter(|permission| permission.session_id == input.session_id)
+                            .collect::<Vec<_>>();
 
                         match perms.as_slice() {
                             [] => {
@@ -2660,13 +2374,13 @@ Parameters:
                                 )));
                             }
                             [_single] => {
-                                let (_, perm) = perms.swap_remove(0);
+                                let perm = perms.swap_remove(0);
                                 (perm.id, perm.permission, perm.patterns)
                             }
                             multiple => {
                                 let ids = multiple
                                     .iter()
-                                    .map(|(_, permission)| permission.id.as_str())
+                                    .map(|permission| permission.id.as_str())
                                     .collect::<Vec<_>>()
                                     .join(", ");
                                 return Err(ToolError::InvalidInput(format!(
@@ -2817,6 +2531,7 @@ After replying, continues monitoring the session and returns when complete or wh
 
 Parameters:
 - session_id: Monitored root session; the question may belong to it or an eligible descendant
+- question_request_id: Request ID returned by run. Required for descendant-owned questions; omit only for root-owned compatibility discovery
 - action: "reply" or "reject"
 - answers: Required when action=reply; one list per question"#;
 
@@ -2873,56 +2588,10 @@ Parameters:
 
                 question
             } else {
-                let mut questions = Vec::new();
-                let mut unresolved = Vec::new();
-                for question in pending {
-                    match lineage
-                        .owner_depth_from_root(client, &input.session_id, &question.session_id)
-                        .await
-                    {
-                        Ok(Some(owner_depth)) => questions.push((owner_depth, question)),
-                        Ok(None) => {}
-                        Err(error) => {
-                            tracing::warn!(
-                                root_session_id = %input.session_id,
-                                owner_session_id = %question.session_id,
-                                error = %error,
-                                "failed to verify question owner during discovery"
-                            );
-                            unresolved.push((
-                                question.session_id,
-                                question.id,
-                                error.to_string(),
-                            ));
-                        }
-                    }
-                }
-                unresolved.sort_by(|left, right| {
-                    left.0
-                        .cmp(&right.0)
-                        .then_with(|| left.1.cmp(&right.1))
-                });
-                if !unresolved.is_empty() {
-                    let details = unresolved
-                        .iter()
-                        .map(|(owner_session_id, request_id, error)| {
-                            format!(
-                                "request '{request_id}' owned by session '{owner_session_id}': {error}"
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    return Err(ToolError::Internal(format!(
-                        "Unable to safely discover a pending question for root session '{}': request ancestry could not be verified ({details}). Retry after the OpenCode session endpoint recovers, or provide question_request_id returned by run.",
-                        input.session_id
-                    )));
-                }
-                questions.sort_by(|(left_depth, left), (right_depth, right)| {
-                    left_depth
-                        .cmp(right_depth)
-                        .then_with(|| left.session_id.cmp(&right.session_id))
-                        .then_with(|| left.id.cmp(&right.id))
-                });
+                let mut questions = pending
+                    .into_iter()
+                    .filter(|question| question.session_id == input.session_id)
+                    .collect::<Vec<_>>();
 
                 match questions.as_slice() {
                     [] => {
@@ -2931,11 +2600,11 @@ Parameters:
                             input.session_id
                         )));
                     }
-                    [_single] => questions.swap_remove(0).1,
+                    [_single] => questions.swap_remove(0),
                     multiple => {
                         let ids = multiple
                             .iter()
-                            .map(|(_, question)| question.id.as_str())
+                            .map(|question| question.id.as_str())
                             .collect::<Vec<_>>()
                             .join(", ");
                         return Err(ToolError::InvalidInput(format!(
@@ -3036,40 +2705,6 @@ mod tests {
     use super::*;
     use agentic_tools_core::Tool;
 
-    fn test_blocker(
-        kind: CallerResponseBlockerKind,
-        owner_session_id: &str,
-        owner_depth: usize,
-        request_id: &str,
-    ) -> CallerResponseBlocker {
-        match kind {
-            CallerResponseBlockerKind::Permission => CallerResponseBlocker::Permission {
-                root_session_id: "root".to_string(),
-                owner_depth,
-                request: PermissionRequest {
-                    id: request_id.to_string(),
-                    session_id: owner_session_id.to_string(),
-                    permission: "file.read".to_string(),
-                    patterns: vec![],
-                    metadata: None,
-                    always: vec![],
-                    tool: None,
-                },
-            },
-            CallerResponseBlockerKind::Question => CallerResponseBlocker::Question {
-                root_session_id: "root".to_string(),
-                owner_depth,
-                request: QuestionRequest {
-                    id: request_id.to_string(),
-                    session_id: owner_session_id.to_string(),
-                    questions: vec![],
-                    tool: None,
-                    extra: serde_json::Value::Null,
-                },
-            },
-        }
-    }
-
     #[test]
     fn tool_names_are_short() {
         assert_eq!(<OrchestratorRunTool as Tool>::NAME, "run");
@@ -3078,74 +2713,6 @@ mod tests {
         assert_eq!(<ListCommandsTool as Tool>::NAME, "list_commands");
         assert_eq!(<RespondPermissionTool as Tool>::NAME, "respond_permission");
         assert_eq!(<RespondQuestionTool as Tool>::NAME, "respond_question");
-    }
-
-    #[test]
-    fn caller_response_blocker_order_prefers_permission_before_question() {
-        let mut blockers = [
-            test_blocker(CallerResponseBlockerKind::Question, "root", 0, "question"),
-            test_blocker(
-                CallerResponseBlockerKind::Permission,
-                "deep-child",
-                3,
-                "permission",
-            ),
-        ];
-
-        blockers.sort_by(compare_caller_response_blockers);
-        assert_eq!(blockers[0].kind(), CallerResponseBlockerKind::Permission);
-    }
-
-    #[test]
-    fn caller_response_blocker_order_prefers_shallower_owner() {
-        let mut blockers = [
-            test_blocker(
-                CallerResponseBlockerKind::Permission,
-                "deep",
-                2,
-                "request-1",
-            ),
-            test_blocker(
-                CallerResponseBlockerKind::Permission,
-                "shallow",
-                1,
-                "request-2",
-            ),
-        ];
-
-        blockers.sort_by(compare_caller_response_blockers);
-        assert_eq!(blockers[0].owner_session_id(), "shallow");
-    }
-
-    #[test]
-    fn caller_response_blocker_order_uses_owner_then_request_id() {
-        let mut blockers = [
-            test_blocker(
-                CallerResponseBlockerKind::Question,
-                "owner-b",
-                1,
-                "request-a",
-            ),
-            test_blocker(
-                CallerResponseBlockerKind::Question,
-                "owner-a",
-                1,
-                "request-z",
-            ),
-            test_blocker(
-                CallerResponseBlockerKind::Question,
-                "owner-a",
-                1,
-                "request-a",
-            ),
-        ];
-
-        blockers.sort_by(compare_caller_response_blockers);
-        assert_eq!(blockers[0].owner_session_id(), "owner-a");
-        assert_eq!(blockers[0].request_id(), "request-a");
-        assert_eq!(blockers[1].owner_session_id(), "owner-a");
-        assert_eq!(blockers[1].request_id(), "request-z");
-        assert_eq!(blockers[2].owner_session_id(), "owner-b");
     }
 
     #[test]

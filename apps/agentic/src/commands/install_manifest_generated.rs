@@ -326,16 +326,19 @@ orchestrator_list_agents: List visible agents that can be selected directly. No 
 
 orchestrator_respond_permission: Respond to permission requests from sessions.
   Parameters:
-    session_id: The session requesting permission
+    session_id: The monitored root session returned by orchestrator_run
+    permission_request_id: Optional only for root-owned compatibility discovery; required for descendant-owned permissions and must be the ID returned by orchestrator_run
     reply: "once" (allow this request), "always" (allow pattern), or "reject"
 
 orchestrator_respond_question: Respond to question requests from sessions.
   Parameters:
-    session_id: The session requesting question answers
-    question_request_id: Optional specific pending question ID when more than one exists
+    session_id: The monitored root session returned by orchestrator_run
+    question_request_id: Optional only for root-owned compatibility discovery; required for descendant-owned questions and must be the ID returned by orchestrator_run
     action: "reply" or "reject"
     answers: Required when action=reply; one list per question
 </tool_definitions>
+
+When orchestrator_run returns a permission_request_id or question_request_id, pass that ID to the corresponding response tool. Omitting a request ID is a root-owned compatibility path and does not discover descendant-owned blockers.
 
 <available_commands>
 This static list is example/context only. You must call orchestrator_list_commands and orchestrator_list_agents at least once in the current context before choosing a route, session, command, or agent for your first call to orchestrator_run. Treat the policy-filtered runtime results and first-line descriptions as current truth; re-run discovery if previous results may be stale, if config/repo context may have changed, if an expected route is missing, or if routing is uncertain. Use command and agent descriptions as routing metadata.
