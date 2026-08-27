@@ -57,11 +57,7 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
         .await;
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
     Mock::given(method("POST"))
@@ -154,11 +150,7 @@ async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
         .await;
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 

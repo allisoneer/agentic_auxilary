@@ -2,6 +2,7 @@
 //!
 //! This module provides SSE subscription with reconnection and backoff.
 
+use crate::error::OpencodeError;
 use crate::error::Result;
 use crate::types::event::Event;
 use crate::types::event::GlobalEvent;
@@ -15,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 /// Options for SSE subscription.
@@ -43,6 +45,7 @@ impl Default for SseOptions {
 /// Dropping this handle will cancel the subscription.
 pub struct SseSubscription<T> {
     rx: mpsc::Receiver<T>,
+    initial_connection: watch::Receiver<bool>,
     cancel: CancellationToken,
     _task: tokio::task::JoinHandle<()>,
 }
@@ -53,6 +56,32 @@ impl<T> SseSubscription<T> {
     /// Returns `None` if the stream is closed.
     pub async fn recv(&mut self) -> Option<T> {
         self.rx.recv().await
+    }
+
+    /// Wait for the first validated SSE connection to open.
+    ///
+    /// This method has no internal timeout. Readiness is historical and sticky:
+    /// after the first successful connection it returns immediately, including
+    /// during later reconnects. Callers own timeout and cancellation policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OpencodeError::StreamClosed`] if the subscription worker exits
+    /// before the initial connection opens.
+    pub async fn wait_for_initial_connection(&mut self) -> Result<()> {
+        if *self.initial_connection.borrow() {
+            return Ok(());
+        }
+
+        loop {
+            self.initial_connection
+                .changed()
+                .await
+                .map_err(|_| OpencodeError::StreamClosed)?;
+            if *self.initial_connection.borrow() {
+                return Ok(());
+            }
+        }
     }
 
     /// Close the subscription explicitly.
@@ -159,6 +188,7 @@ impl SseSubscriber {
         F: Fn(&T) -> bool + Send + Sync + 'static,
     {
         let (tx, rx) = mpsc::channel(opts.capacity);
+        let (initial_connection_tx, initial_connection) = watch::channel(false);
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
 
@@ -216,17 +246,27 @@ impl SseSubscriber {
                     }
                 };
 
-                while let Some(event) = es.next().await {
-                    if cancel_clone.is_cancelled() {
-                        es.close();
-                        return;
-                    }
+                loop {
+                    let event = tokio::select! {
+                        biased;
+                        () = cancel_clone.cancelled() => {
+                            es.close();
+                            return;
+                        }
+                        event = es.next() => event,
+                    };
+                    let Some(event) = event else {
+                        break;
+                    };
 
                     match event {
                         Ok(EsEvent::Open) => {
                             // Reset backoff on successful connection
                             backoff = backoff_builder.build();
                             tracing::debug!("SSE connection opened");
+                            if !*initial_connection_tx.borrow() {
+                                initial_connection_tx.send_replace(true);
+                            }
                         }
                         Ok(EsEvent::Message(msg)) => {
                             // Track last event ID
@@ -269,6 +309,7 @@ impl SseSubscriber {
 
         Ok(SseSubscription {
             rx,
+            initial_connection,
             cancel,
             _task: task,
         })

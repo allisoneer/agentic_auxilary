@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+
+### 🐛 Bug Fixes
+- *(opencode-orchestrator)* Gate prompts, commands, and continuation replies on SSE readiness
+
+### 🧪 Testing
+- *(opencode-orchestrator)* Verify six action variants cannot dispatch before SSE Open
 ## [0.7.10] - 2026-08-12
 
 ### 🐛 Bug Fixes

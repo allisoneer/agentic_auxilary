@@ -842,6 +842,11 @@ impl OrchestratorServer {
         Duration::from_secs(self.config.inactivity_timeout_secs)
     }
 
+    /// Get the initial SSE connection readiness timeout.
+    pub fn sse_readiness_timeout(&self) -> Duration {
+        Duration::from_secs(self.config.sse_readiness_timeout_secs)
+    }
+
     /// Get the compaction threshold (0.0 - 1.0).
     pub fn compaction_threshold(&self) -> f64 {
         self.config.compaction_threshold
@@ -1148,6 +1153,19 @@ mod tests {
     async fn managed_server_with_exited_child(base_url: &str) -> OrchestratorServer {
         let managed = ManagedServer::from_child_for_testing(exited_child().await, base_url, 9);
         OrchestratorServer::from_managed_for_testing(managed, test_client(base_url), base_url)
+    }
+
+    #[test]
+    fn sse_readiness_timeout_uses_snapshot_config() {
+        let server = external_server_with_config(
+            "http://127.0.0.1:9",
+            OrchestratorConfig {
+                sse_readiness_timeout_secs: 17,
+                ..OrchestratorConfig::default()
+            },
+        );
+
+        assert_eq!(server.sse_readiness_timeout(), Duration::from_secs(17));
     }
 
     #[test]

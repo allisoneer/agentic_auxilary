@@ -53,7 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 4: Subscribe to events BEFORE sending prompt
     println!("\n4. Subscribing to session events...");
     let mut subscription = client.subscribe_session(&session.id)?;
-    println!("   Subscribed successfully");
+    subscription.wait_for_initial_connection().await?;
+    println!("   Subscribed and connected successfully");
 
     // Step 5: Send a prompt
     println!("\n5. Sending prompt...");

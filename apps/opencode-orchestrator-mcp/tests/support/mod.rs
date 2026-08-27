@@ -17,6 +17,7 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::Request;
@@ -201,6 +202,79 @@ impl Respond for SequenceResponder {
     }
 }
 
+const READINESS_BARRIER_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Clone)]
+pub struct SseReadinessBarrierResponder {
+    arrival: mpsc::Sender<()>,
+    release: Arc<(Mutex<bool>, Condvar)>,
+}
+
+pub struct SseReadinessBarrierControl {
+    arrival: mpsc::Receiver<()>,
+    release: Arc<(Mutex<bool>, Condvar)>,
+}
+
+pub fn sse_readiness_barrier() -> (SseReadinessBarrierResponder, SseReadinessBarrierControl) {
+    let (arrival_tx, arrival_rx) = mpsc::channel(1);
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    (
+        SseReadinessBarrierResponder {
+            arrival: arrival_tx,
+            release: Arc::clone(&release),
+        },
+        SseReadinessBarrierControl {
+            arrival: arrival_rx,
+            release,
+        },
+    )
+}
+
+impl Respond for SseReadinessBarrierResponder {
+    fn respond(&self, _request: &Request) -> ResponseTemplate {
+        if self.arrival.try_send(()).is_err() {
+            return ResponseTemplate::new(500)
+                .set_body_string("readiness arrival receiver unavailable");
+        }
+
+        let (lock, released) = &*self.release;
+        let guard = lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (guard, wait) = released
+            .wait_timeout_while(guard, READINESS_BARRIER_TIMEOUT, |released| !*released)
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if wait.timed_out() && !*guard {
+            return ResponseTemplate::new(504).set_body_string("readiness barrier timed out");
+        }
+
+        open_sse_response()
+    }
+}
+
+impl SseReadinessBarrierControl {
+    pub async fn wait_for_arrival(&mut self) {
+        tokio::time::timeout(READINESS_BARRIER_TIMEOUT, self.arrival.recv())
+            .await
+            .expect("SSE request did not reach readiness barrier")
+            .expect("readiness barrier responder dropped before arrival");
+    }
+
+    pub fn release(&self) {
+        let (lock, released) = &*self.release;
+        *lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+        released.notify_all();
+    }
+}
+
+impl Drop for SseReadinessBarrierControl {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct CommandCorrelationFixture {
     command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
@@ -266,14 +340,11 @@ pub struct CommandCorrelatedSseResponder {
 
 impl Respond for CommandCorrelatedSseResponder {
     fn respond(&self, _request: &Request) -> ResponseTemplate {
-        let (lock, ready) = &*self.command_message_id;
-        let message_id = lock.lock().unwrap();
-        let (message_id, wait) = ready
-            .wait_timeout_while(message_id, Duration::from_secs(5), |id| id.is_none())
-            .unwrap();
-        assert!(!wait.timed_out(), "command POST did not publish messageID");
-        let command_message_id = message_id.clone().unwrap();
-        drop(message_id);
+        let (lock, _) = &*self.command_message_id;
+        let command_message_id = lock.lock().unwrap().clone();
+        let Some(command_message_id) = command_message_id else {
+            return open_sse_response();
+        };
 
         let events = [
             serde_json::json!({
@@ -448,6 +519,11 @@ pub fn sse_body(events: &[Value]) -> String {
         body.push_str("\n\n");
     }
     body
+}
+
+/// Return a valid SSE response that opens immediately and then closes.
+pub fn open_sse_response() -> ResponseTemplate {
+    ResponseTemplate::new(200).set_body_raw(": open\n\n", "text/event-stream")
 }
 
 /// Create a messages fixture with optional assistant text.

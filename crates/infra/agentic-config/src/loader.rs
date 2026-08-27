@@ -301,6 +301,7 @@ mod tests {
             "https://api.anthropic.com"
         );
         assert_eq!(loaded.config.orchestrator.session_deadline_secs, 3600);
+        assert_eq!(loaded.config.orchestrator.sse_readiness_timeout_secs, 10);
         assert_eq!(loaded.config.subagents.runtime_timeout_secs, 3600);
         assert_eq!(loaded.config.cli_tools.just_execute_timeout_secs, 1800);
         assert_eq!(loaded.config.cli_tools.just_execute_page_lines, 200);
@@ -325,14 +326,17 @@ mod tests {
             r"
 [orchestrator]
 session_deadline_secs = 7200
+sse_readiness_timeout_secs = 17
 ",
         )
         .unwrap();
 
         let loaded = load_merged(temp.path()).unwrap();
         assert_eq!(loaded.config.orchestrator.session_deadline_secs, 7200);
+        assert_eq!(loaded.config.orchestrator.sse_readiness_timeout_secs, 17);
         // Other fields should be defaults
         assert_eq!(loaded.config.orchestrator.inactivity_timeout_secs, 300);
+        assert!((loaded.config.orchestrator.compaction_threshold - 0.80).abs() < f64::EPSILON);
     }
 
     #[test]
