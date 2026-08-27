@@ -70,6 +70,8 @@ These items have dependencies and should be done in order.
 
 ## To classify/investigate:
 
+- TODO(2): ENG-1263 follow-up — adopt `SseSubscription::wait_for_initial_connection` in
+  `apps/agentic-outer-dag/src/opencode/supervisor.rs` before command dispatch.
 - TODO(2): Extract shared OpenCode session monitoring/completion detection helper used by both
   `apps/opencode-orchestrator-mcp` and `apps/agentic-outer-dag` (dispatch-confirmed idle grace gating, bounded transcript settling,
   conservative unresolved tool-state handling) to reduce drift.

@@ -132,7 +132,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Subscribe to session events BEFORE sending prompt
     let mut subscription = client.subscribe_session(&session.id)?;
-    println!("Subscribed to events");
+    subscription.wait_for_initial_connection().await?;
+    println!("Subscribed and connected to events");
 
     // Send prompt
     client
@@ -193,6 +194,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+`wait_for_initial_connection` completes after the first validated SSE connection opens. Readiness
+is sticky after success and does not describe the current connection or later reconnects. The
+method has no built-in timeout; callers should apply their own timeout and cancellation policy.
 
 ## Features
 

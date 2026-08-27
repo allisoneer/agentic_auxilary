@@ -184,15 +184,10 @@ async fn it_bug1_completion_retries_messages_until_visible() {
         .mount(&mock)
         .await;
 
-    // GET /event - SSE endpoint: return empty response with delay to allow polling to complete
-    // The SSE subscription will fail/hang, but polling will detect idle status
+    // Open SSE readiness, then let polling detect completion after the stream closes.
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)), // Long delay to let polling win
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -296,6 +291,12 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
             ResponseTemplate::new(200)
                 .set_body_json(messages_fixture(sid, Some("I_WILL_CREATE_FILE"))),
         )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -416,6 +417,12 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(support::open_sse_response())
+        .mount(&mock)
+        .await;
+
     // Act
     let result = timeout(
         Duration::from_secs(10),
@@ -532,14 +539,10 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
         .mount(&mock)
         .await;
 
-    // GET /event - delay SSE so polling drives completion
+    // Open SSE readiness, then let polling drive completion after closure.
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -617,14 +620,10 @@ async fn it_bug4_command_dispatch_transport_error_does_not_retry_without_start_e
         .mount(&mock)
         .await;
 
-    // GET /event - SSE endpoint: return empty response with delay to allow polling to complete
+    // Open SSE readiness before exercising command transport failure behavior.
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)), // Long delay to let polling win
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 

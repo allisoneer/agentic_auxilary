@@ -48,7 +48,8 @@
         },
         "compaction_threshold": 0.8,
         "inactivity_timeout_secs": 300,
-        "session_deadline_secs": 3600
+        "session_deadline_secs": 3600,
+        "sse_readiness_timeout_secs": 10
       }
     },
     "reasoning": {
@@ -389,6 +390,13 @@
           "type": "integer",
           "format": "uint64",
           "default": 3600,
+          "minimum": 0
+        },
+        "sse_readiness_timeout_secs": {
+          "description": "Timeout for initial SSE connection readiness (default: 10 seconds).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 10,
           "minimum": 0
         }
       }

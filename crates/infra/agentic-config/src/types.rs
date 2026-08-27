@@ -169,6 +169,8 @@ pub struct OrchestratorConfig {
     pub session_deadline_secs: u64,
     /// Inactivity timeout in seconds before session ends (default: 300 = 5 minutes).
     pub inactivity_timeout_secs: u64,
+    /// Timeout for initial SSE connection readiness (default: 10 seconds).
+    pub sse_readiness_timeout_secs: u64,
     /// Context compaction threshold as fraction 0.0-1.0 (default: 0.80).
     pub compaction_threshold: f64,
     /// Command filtering policy for orchestrator-exposed `OpenCode` commands.
@@ -202,6 +204,7 @@ impl Default for OrchestratorConfig {
         Self {
             session_deadline_secs: 3600,
             inactivity_timeout_secs: 300,
+            sse_readiness_timeout_secs: 10,
             compaction_threshold: 0.80,
             commands: OrchestratorCommandsConfig::default(),
             agents: OrchestratorAgentsConfig::default(),
@@ -632,6 +635,23 @@ deny = ["Bash"]
     }
 
     #[test]
+    fn test_orchestrator_readiness_timeout_round_trip() {
+        let toml_str = r"
+[orchestrator]
+sse_readiness_timeout_secs = 17
+";
+
+        let config: AgenticConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.orchestrator.sse_readiness_timeout_secs, 17);
+        assert_eq!(config.orchestrator.session_deadline_secs, 3600);
+
+        let serialized = toml::to_string_pretty(&config).unwrap();
+        let round_tripped: AgenticConfig = toml::from_str(&serialized).unwrap();
+        assert_eq!(round_tripped.orchestrator.sse_readiness_timeout_secs, 17);
+        assert_eq!(round_tripped.orchestrator.inactivity_timeout_secs, 300);
+    }
+
+    #[test]
     fn test_schema_field_optional() {
         let toml_str = r#""$schema" = "file://./agentic.schema.json""#;
         let config: AgenticConfig = toml::from_str(toml_str).unwrap();
@@ -670,6 +690,7 @@ deny = ["Bash"]
         let cfg = OrchestratorConfig::default();
         assert_eq!(cfg.session_deadline_secs, 3600);
         assert_eq!(cfg.inactivity_timeout_secs, 300);
+        assert_eq!(cfg.sse_readiness_timeout_secs, 10);
         assert!((cfg.compaction_threshold - 0.80).abs() < f64::EPSILON);
         assert!(cfg.commands.allow.is_empty());
         assert!(cfg.commands.deny.is_empty());

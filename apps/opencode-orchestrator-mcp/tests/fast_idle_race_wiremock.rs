@@ -95,11 +95,7 @@ async fn assert_command_dispatch_invalid_input(status: u16, body: serde_json::Va
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -188,11 +184,7 @@ async fn fast_idle_prompt_completes_without_hanging() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -279,11 +271,7 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -368,11 +356,7 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -489,11 +473,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -680,6 +660,12 @@ async fn respond_permission_reply_404_is_actionable_invalid_input() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(support::open_sse_response())
+        .mount(&mock)
+        .await;
+
     let err = tool
         .call(
             RespondPermissionInput {
@@ -790,11 +776,7 @@ async fn command_transport_error_after_start_evidence_warns_and_completes() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -895,11 +877,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -1017,11 +995,7 @@ async fn command_dispatch_posts_server_valid_message_id() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 

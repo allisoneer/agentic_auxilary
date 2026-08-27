@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+
+### 🐛 Bug Fixes
+- *(opencode-rs)* Expose sticky initial SSE connection readiness and prompt cancellation
+
+### 🧪 Testing
+- *(opencode-rs)* Cover initial SSE readiness, reconnects, filtering, and cancellation
 ## [0.13.4] - 2026-08-12
 
 ### 🐛 Bug Fixes

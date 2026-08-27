@@ -225,11 +225,7 @@ async fn poll_detected_question_returns_question_required() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -318,11 +314,7 @@ async fn respond_question_reply_resumes_to_completed() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -395,6 +387,12 @@ async fn respond_question_reject_completes_cleanly() {
     Mock::given(method("GET"))
         .and(path(format!("/session/{sid}/message")))
         .respond_with(ResponseTemplate::new(200).set_body_json(messages_fixture(sid, None)))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
@@ -542,11 +540,7 @@ async fn respond_question_by_id_lookup() {
 
     Mock::given(method("GET"))
         .and(path("/event"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
-        )
+        .respond_with(support::open_sse_response())
         .mount(&mock)
         .await;
 
