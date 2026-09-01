@@ -93,7 +93,7 @@ macos-x64 = { asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-outer-dag-bin]
-version = "0.1.13"
+version = "0.1.14"
 version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.agentic-outer-dag-bin.platforms]
