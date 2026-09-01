@@ -73,7 +73,7 @@ macos-x64 = { asset_pattern = "thoughts-bin-x86_64-apple-darwin.tar.xz" }
 macos-arm64 = { asset_pattern = "thoughts-bin-aarch64-apple-darwin.tar.xz" }
 
 [tools.agentic-bin]
-version = "0.1.20"
+version = "0.1.21"
 version_prefix = "agentic-bin-v"
 
 [tools.agentic-bin.platforms]
