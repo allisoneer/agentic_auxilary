@@ -1,0 +1,57 @@
+apps/opencode-orchestrator-mcp/tests/fast_idle_race_wiremock.rs
+  s_ba6b0f26619382::t_63882de0e06e67 311,372,377,391,393-394,401,404,426-434,492,519
+  s_ba6b0f26619382::t_187618db43912f 99,190,285,680-684,799,902,1022
+  s_b02179f58f357d::t_e308c1ce9b35d9 230-235,685-687
+apps/opencode-orchestrator-mcp/tests/support/mod.rs
+  s_ba6b0f26619382::t_2075c62078695f 453
+  s_ba6b0f26619382::t_82e2e5d48037ad 9-10
+  s_ba6b0f26619382::t_413628845e66af 209,232,265,274-277
+apps/opencode-orchestrator-mcp/tests/sse_readiness.rs
+  s_ba6b0f26619382::t_599f481c3b5950 1-450
+apps/opencode-orchestrator-mcp/src/tools.rs
+  s_ba6b0f26619382::t_33aead6ab0fbfb 72,106-126,988-991
+  s_ba6b0f26619382::t_b145551ca13170 766
+  s_ba6b0f26619382::t_c126507510264e 2263-2278,2316-2328,2340,2486-2490,2492-2503,2514-2521,2523,2527-2534,2536,2538-2558
+  s_ba6b0f26619382::t_5f0c7722a2a30d 127-207
+  s_ba6b0f26619382::t_06d16d01122e29 751-756,758-764,845-859,862-889,909-930,942-966,969-974,983,995-998,1003-1006,1013,1086
+  s_ba6b0f26619382::t_c7b37630b2fc87 89-105,708,767-781,808-810,841-843,982,984-987,1617
+  s_ba6b0f26619382::t_e88bcf37437481 88
+  s_ba6b0f26619382::t_75dc7e6e6645a4 765
+apps/opencode-orchestrator-mcp/Cargo.toml
+  s_ba6b0f26619382::t_82e2e5d48037ad 68
+apps/opencode-orchestrator-mcp/tests/permission_flow_wiremock.rs
+  s_ba6b0f26619382::t_63882de0e06e67 263-266,268,388-393,498-501,503
+  s_ba6b0f26619382::t_187618db43912f 192,306-310,437-441,570,653
+  s_b02179f58f357d::t_233351019e9f41 267,311-313,442-444,502
+apps/opencode-orchestrator-mcp/tests/support/readiness_server.rs
+  s_ba6b0f26619382::t_82e2e5d48037ad 1-487
+  s_b02179f58f357d::t_35c435e64ef86f 488-496
+apps/opencode-orchestrator-mcp/tests/question_flow_wiremock.rs
+  s_ba6b0f26619382::t_5dfd1745b9bffb 501-508
+  s_ba6b0f26619382::t_187618db43912f 229,325,407-414,416,568
+  s_b02179f58f357d::t_22675ad3be07b6 265-269,359-363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e06a7ef223fc068e4db29baffed599adc66a5766",
+  "prompts": {},
+  "sessions": {
+    "s_b02179f58f357d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f97089a12ffexeqBQk99sknAV3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    },
+    "s_ba6b0f26619382": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f97028b30ffeERNSqHsEE8BhM1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
