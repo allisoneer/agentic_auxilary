@@ -397,9 +397,7 @@ async fn run_prompt_forwards_agent_in_prompt_request() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;

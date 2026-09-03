@@ -226,9 +226,7 @@ async fn poll_detected_question_returns_question_required() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -264,6 +262,11 @@ async fn respond_question_reply_resumes_to_completed() {
     let question_id = "question-3";
 
     let question_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([question_fixture(
+            question_id,
+            sid,
+            &[question_payload("Continue deployment?")]
+        )])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([question_fixture(
             question_id,
             sid,
@@ -319,9 +322,7 @@ async fn respond_question_reply_resumes_to_completed() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -355,6 +356,11 @@ async fn respond_question_reject_completes_cleanly() {
     let question_id = "question-4";
 
     let question_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([question_fixture(
+            question_id,
+            sid,
+            &[question_payload("Reject this?")]
+        )])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([question_fixture(
             question_id,
             sid,
@@ -398,8 +404,16 @@ async fn respond_question_reject_completes_cleanly() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
+        )
+        .mount(&mock)
+        .await;
+
     let result = timeout(
-        Duration::from_secs(2),
+        Duration::from_secs(4),
         tool.call(
             RespondQuestionInput {
                 session_id: sid.into(),
@@ -492,6 +506,14 @@ async fn respond_question_by_id_lookup() {
             ),
             question_fixture(question_id, sid, &[question_payload("Second question?")])
         ])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            question_fixture(
+                "question-other",
+                sid,
+                &[question_payload("First question?")]
+            ),
+            question_fixture(question_id, sid, &[question_payload("Second question?")])
+        ])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
@@ -543,9 +565,7 @@ async fn respond_question_by_id_lookup() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;

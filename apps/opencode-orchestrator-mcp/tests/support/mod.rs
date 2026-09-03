@@ -6,6 +6,8 @@
 #![allow(clippy::unwrap_used)]
 #![allow(dead_code)]
 
+pub mod readiness_server;
+
 use agentic_config::types::OrchestratorConfig;
 use opencode_orchestrator_mcp::server::OrchestratorServer;
 use opencode_orchestrator_mcp::server::OrchestratorServerHandle;
@@ -204,6 +206,7 @@ impl Respond for SequenceResponder {
 #[derive(Clone, Default)]
 pub struct CommandCorrelationFixture {
     command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
+    sse_calls: Arc<AtomicUsize>,
 }
 
 impl CommandCorrelationFixture {
@@ -226,6 +229,7 @@ impl CommandCorrelationFixture {
     ) -> CommandCorrelatedSseResponder {
         CommandCorrelatedSseResponder {
             command_message_id: Arc::clone(&self.command_message_id),
+            sse_calls: Arc::clone(&self.sse_calls),
             session_id: session_id.to_string(),
             assistant_message_id: assistant_message_id.to_string(),
             delta: delta.to_string(),
@@ -258,6 +262,7 @@ impl Respond for CommandMessageIdResponder {
 #[derive(Clone)]
 pub struct CommandCorrelatedSseResponder {
     command_message_id: Arc<(Mutex<Option<String>>, Condvar)>,
+    sse_calls: Arc<AtomicUsize>,
     session_id: String,
     assistant_message_id: String,
     delta: String,
@@ -266,6 +271,10 @@ pub struct CommandCorrelatedSseResponder {
 
 impl Respond for CommandCorrelatedSseResponder {
     fn respond(&self, _request: &Request) -> ResponseTemplate {
+        if self.sse_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return ResponseTemplate::new(200).set_body_raw(sse_body(&[]), "text/event-stream");
+        }
+
         let (lock, ready) = &*self.command_message_id;
         let message_id = lock.lock().unwrap();
         let (message_id, wait) = ready
@@ -441,7 +450,7 @@ pub fn question_fixture(
 
 /// Encode typed event JSON values as an SSE response body.
 pub fn sse_body(events: &[Value]) -> String {
-    let mut body = String::new();
+    let mut body = "data: {\"type\":\"server.connected\",\"properties\":{}}\n\n".to_string();
     for event in events {
         body.push_str("data: ");
         body.push_str(&event.to_string());

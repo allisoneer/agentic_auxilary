@@ -108,9 +108,7 @@ async fn it_times_out_after_5_min_inactivity() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_hours(1)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -188,9 +186,7 @@ async fn it_does_not_timeout_while_busy() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_hours(1)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;

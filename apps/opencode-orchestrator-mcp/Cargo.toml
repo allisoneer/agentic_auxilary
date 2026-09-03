@@ -65,7 +65,7 @@ pretty_assertions = "1.4"
 serial_test = "3.2"
 tempfile = "3"
 wiremock = "0.6"
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
 
 # Enable test-support feature for integration tests
 [dev-dependencies.opencode-orchestrator-mcp]
