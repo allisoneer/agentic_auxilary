@@ -28,6 +28,7 @@ use wiremock::matchers::path_regex;
 use wiremock::matchers::query_param;
 
 use support::SequenceResponder;
+use support::SwitchAfterCallsResponder;
 use support::message_fixture;
 use support::message_history_fixture;
 use support::messages_fixture;
@@ -211,6 +212,96 @@ async fn fast_idle_prompt_completes_without_hanging() {
 
     assert!(matches!(result.status, RunStatus::Completed));
     assert_eq!(result.response.as_deref(), Some("FAST_IDLE_DONE"));
+}
+
+#[tokio::test]
+async fn ordinary_prompt_ignores_stale_response_from_initial_busy_status() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "1500") };
+
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "ordinary-prompt-initial-busy";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    let status_sequence = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    let status_calls = status_sequence.call_counter();
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_sequence)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/prompt_async")))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(SwitchAfterCallsResponder::new(
+            status_calls.clone(),
+            3,
+            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("OLD_RESPONSE"))),
+            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("NEW_RESPONSE"))),
+        ))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(5),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: None,
+                agent: None,
+                message: Some("start new work".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("ordinary prompt stale-response regression should not hang")
+    .expect("ordinary prompt should complete");
+
+    assert!(matches!(result.status, RunStatus::Completed));
+    assert_eq!(result.response.as_deref(), Some("NEW_RESPONSE"));
+    assert!(status_calls.get() >= 4);
 }
 
 #[tokio::test]
@@ -849,7 +940,7 @@ async fn command_transport_error_after_start_evidence_warns_and_completes() {
 }
 
 #[tokio::test]
-async fn command_transport_error_before_start_evidence_fails_clearly() {
+async fn command_transport_error_after_initial_busy_without_start_evidence_fails_clearly() {
     let _guard = env_lock().await;
     let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
     // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
@@ -858,7 +949,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
     let mock = MockServer::start().await;
     let server = short_timeout_test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
-    let sid = "command-transport-pre-start";
+    let sid = "command-transport-initial-busy-pre-start";
 
     Mock::given(method("GET"))
         .and(path(format!("/session/{sid}")))
@@ -869,7 +960,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
     Mock::given(method("GET"))
         .and(path("/session/status"))
         .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+            ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
             ResponseTemplate::new(200).set_body_json(status_v2_idle()),
         ]))
         .mount(&mock)

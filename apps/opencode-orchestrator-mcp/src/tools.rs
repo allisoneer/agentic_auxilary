@@ -205,12 +205,6 @@ async fn revalidate_question_target(
     )))
 }
 
-#[derive(Clone, Copy, Debug)]
-enum PermissionPreflightMode {
-    Strict,
-    RespondPermissionContinuation,
-}
-
 #[derive(Debug, Clone)]
 struct CommandTranscriptWindow {
     command_message_id: String,
@@ -661,7 +655,6 @@ impl OrchestratorRunTool {
     async fn preflight_pending_permission(
         client: &opencode_rs::Client,
         session_id: &str,
-        mode: PermissionPreflightMode,
         warnings: &mut Vec<String>,
     ) -> Result<Option<opencode_rs::types::permission::PermissionRequest>, ToolError> {
         match client.permissions().list().await {
@@ -669,29 +662,15 @@ impl OrchestratorRunTool {
                 .into_iter()
                 .find(|permission| permission.session_id == session_id)),
             Err(error) if error.is_validation_error() => {
-                match mode {
-                    PermissionPreflightMode::RespondPermissionContinuation => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            error = %error,
-                            "failed to list permissions during respond_permission continuation; falling back to polling"
-                        );
-                        warnings.push(format!(
-                            "Permission refresh failed after reply ({error}); permission state could not be listed and may be stale or malformed. Continuing with polling fallback."
-                        ));
-                    }
-                    PermissionPreflightMode::Strict => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            error = %error,
-                            "failed to list permissions during run preflight; continuing without permission preflight"
-                        );
-                        warnings.push(
-                            "Permission state could not be listed during preflight (HTTP 400). Permission state may be stale or malformed; pending permissions may be stale or undiscoverable."
-                                .to_string(),
-                        );
-                    }
-                }
+                tracing::warn!(
+                    session_id = %session_id,
+                    error = %error,
+                    "failed to list permissions during run preflight; continuing without permission preflight"
+                );
+                warnings.push(
+                    "Permission state could not be listed during preflight (HTTP 400). Permission state may be stale or malformed; pending permissions may be stale or undiscoverable."
+                        .to_string(),
+                );
                 Ok(None)
             }
             Err(error) => Err(ToolError::Internal(format!(
@@ -704,7 +683,6 @@ impl OrchestratorRunTool {
         &self,
         input: OrchestratorRunInput,
         ctx: &ToolContext,
-        permission_preflight_mode: PermissionPreflightMode,
         prepared: Option<PreparedMonitoring>,
     ) -> Result<RunOutcome, ToolError> {
         // Input validation
@@ -877,13 +855,7 @@ impl OrchestratorRunTool {
                 }
             }
         } else {
-            Self::preflight_pending_permission(
-                client,
-                &session_id,
-                permission_preflight_mode,
-                &mut warnings,
-            )
-            .await?
+            Self::preflight_pending_permission(client, &session_id, &mut warnings).await?
         };
 
         if let Some(perm) = pending_permission {
@@ -960,9 +932,10 @@ impl OrchestratorRunTool {
         let is_idle = reconciled_status
             .as_ref()
             .is_some_and(|status| matches!(status, SessionStatusInfo::Idle));
-        let initial_observed_busy = reconciled_status
-            .as_ref()
-            .is_some_and(SessionStatusInfo::is_busy_like);
+        let initial_observed_busy = is_prepared_continuation
+            && reconciled_status
+                .as_ref()
+                .is_some_and(SessionStatusInfo::is_busy_like);
 
         // 4. If no message/command and session is idle, just return current state
         // Uses finalize_completed to get retry logic for message extraction
@@ -1613,10 +1586,7 @@ Examples:
         let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
-            match this
-                .run_impl_outcome(input.clone(), &ctx, PermissionPreflightMode::Strict, None)
-                .await
-            {
+            match this.run_impl_outcome(input.clone(), &ctx, None).await {
                 Ok(outcome) => {
                     log_tool_success(
                         &timer,
@@ -2336,7 +2306,6 @@ Parameters:
                             wait_for_activity,
                         },
                         &ctx,
-                        PermissionPreflightMode::RespondPermissionContinuation,
                         Some(prepared),
                     )
                     .await?;
@@ -2553,7 +2522,7 @@ Parameters:
                     agent: None,
                     message: None,
                     wait_for_activity,
-                }, &ctx, PermissionPreflightMode::Strict, Some(prepared))
+                }, &ctx, Some(prepared))
                 .await?;
             Ok((outcome.output, outcome.log_meta))
         }
