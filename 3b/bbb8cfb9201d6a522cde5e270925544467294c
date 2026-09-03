@@ -1,0 +1,21 @@
+apps/opencode-orchestrator-mcp/tests/support/readiness_server.rs
+  s_26ee0f427e8407::t_2ec4e9c646c2d2 279-284
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_26ee0f427e8407::t_2ec4e9c646c2d2 1766-1771,1785-1790
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3bbbb8cfb9201d6a522cde5e270925544467294c",
+  "prompts": {},
+  "sessions": {
+    "s_26ee0f427e8407": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f96cd7e45ffe8lJ5bIwzHdSVhB",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
