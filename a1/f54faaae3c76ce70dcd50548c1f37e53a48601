@@ -1,0 +1,27 @@
+apps/agentic-outer-dag/src/opencode/supervisor.rs
+  s_ba6b0f26619382::t_27ccc7d5cc1da8 1651,1655-1658,1660,1700-1880,1927
+  s_ba6b0f26619382::t_f647ba9ee66575 37,457-464
+  s_ba6b0f26619382::t_4de62f4fe38a4a 1882-1926
+  s_ba6b0f26619382::t_2b1833f61fa4b7 2625-2628,2717,2719,2963-2968,3345-3347
+  s_ba6b0f26619382::t_5ec4e53600597d 2718
+  s_ba6b0f26619382::t_05802595c17e8d 465
+  s_ba6b0f26619382::t_651b058ec99c6e 1881
+  s_ba6b0f26619382::t_5d89546b1be977 1928
+  s_ba6b0f26619382::t_f91e6709d37c6a 3348
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a1f54faaae3c76ce70dcd50548c1f37e53a48601",
+  "prompts": {},
+  "sessions": {
+    "s_ba6b0f26619382": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f97028b30ffeERNSqHsEE8BhM1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
