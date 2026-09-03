@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 /// Options for SSE subscription.
@@ -43,11 +44,34 @@ impl Default for SseOptions {
 /// Dropping this handle will cancel the subscription.
 pub struct SseSubscription<T> {
     rx: mpsc::Receiver<T>,
+    ready_rx: watch::Receiver<bool>,
     cancel: CancellationToken,
     _task: tokio::task::JoinHandle<()>,
 }
 
 impl<T> SseSubscription<T> {
+    /// Wait until the subscription parses its initial connection sentinel.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::OpencodeError::StreamClosed`] if the subscription
+    /// worker stops before observing the sentinel.
+    pub async fn wait_ready(&mut self) -> Result<()> {
+        if *self.ready_rx.borrow() {
+            return Ok(());
+        }
+
+        loop {
+            self.ready_rx
+                .changed()
+                .await
+                .map_err(|_| crate::error::OpencodeError::StreamClosed)?;
+            if *self.ready_rx.borrow_and_update() {
+                return Ok(());
+            }
+        }
+    }
+
     /// Receive the next event.
     ///
     /// Returns `None` if the stream is closed.
@@ -112,7 +136,7 @@ impl SseSubscriber {
     ) -> Result<SseSubscription<Event>> {
         let url = format!("{}/event", self.base_url);
         let session_id = session_id.to_string();
-        self.subscribe_filtered(url, opts, move |event: &Event| {
+        self.subscribe_filtered(url, opts, Event::is_connected, move |event: &Event| {
             event.session_id() == Some(session_id.as_str())
         })
     }
@@ -127,7 +151,7 @@ impl SseSubscriber {
     /// Returns an error if the subscription cannot be created.
     pub fn subscribe(&self, opts: SseOptions) -> Result<SseSubscription<Event>> {
         let url = format!("{}/event", self.base_url);
-        self.subscribe_filtered(url, opts, |_| true)
+        self.subscribe_filtered(url, opts, Event::is_connected, |_| true)
     }
 
     /// Subscribe to global events (all directories).
@@ -141,24 +165,27 @@ impl SseSubscriber {
     /// Returns an error if the subscription cannot be created.
     pub fn subscribe_global(&self, opts: SseOptions) -> Result<SseSubscription<GlobalEvent>> {
         let url = format!("{}/global/event", self.base_url);
-        self.subscribe_filtered(url, opts, |_| true)
+        self.subscribe_filtered(url, opts, GlobalEvent::is_connected, |_| true)
     }
 
     #[expect(
         clippy::unnecessary_wraps,
         reason = "API consistency with public methods"
     )]
-    fn subscribe_filtered<T, F>(
+    fn subscribe_filtered<T, R, F>(
         &self,
         url: String,
         opts: SseOptions,
+        is_ready: R,
         should_send: F,
     ) -> Result<SseSubscription<T>>
     where
         T: serde::de::DeserializeOwned + Send + 'static,
+        R: Fn(&T) -> bool + Send + Sync + 'static,
         F: Fn(&T) -> bool + Send + Sync + 'static,
     {
         let (tx, rx) = mpsc::channel(opts.capacity);
+        let (ready_tx, ready_rx) = watch::channel(false);
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
 
@@ -168,6 +195,7 @@ impl SseSubscriber {
         let lei = Arc::clone(&self.last_event_id);
         let initial = opts.initial_interval;
         let max = opts.max_interval;
+        let is_ready = Arc::new(is_ready);
         let should_send = Arc::new(should_send);
 
         let task = tokio::spawn(async move {
@@ -181,6 +209,7 @@ impl SseSubscriber {
                 .with_jitter();
 
             let mut backoff = backoff_builder.build();
+            let mut readiness_latched = false;
 
             loop {
                 if cancel_clone.is_cancelled() {
@@ -237,6 +266,10 @@ impl SseSubscriber {
                             // Parse event
                             match serde_json::from_str::<T>(&msg.data) {
                                 Ok(ev) => {
+                                    if !readiness_latched && is_ready.as_ref()(&ev) {
+                                        ready_tx.send_replace(true);
+                                        readiness_latched = true;
+                                    }
                                     if should_send.as_ref()(&ev) && tx.send(ev).await.is_err() {
                                         es.close();
                                         return;
@@ -269,6 +302,7 @@ impl SseSubscriber {
 
         Ok(SseSubscription {
             rx,
+            ready_rx,
             cancel,
             _task: task,
         })
