@@ -276,8 +276,12 @@ impl Drop for ReadinessServer {
 
 async fn wait_for_counter(counter: &AtomicUsize, notification: &Notify) {
     timeout(DEADLOCK_GUARD, async {
-        while counter.load(Ordering::SeqCst) == 0 {
-            notification.notified().await;
+        loop {
+            let notified = notification.notified();
+            if counter.load(Ordering::SeqCst) > 0 {
+                return;
+            }
+            notified.await;
         }
     })
     .await

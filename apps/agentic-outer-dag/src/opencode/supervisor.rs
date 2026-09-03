@@ -1763,8 +1763,12 @@ mod tests {
 
         async fn wait_stream_connected(&self) {
             timeout(Duration::from_secs(5), async {
-                while self.stream_connections.load(AtomicOrdering::SeqCst) == 0 {
-                    self.stream_connected.notified().await;
+                loop {
+                    let notified = self.stream_connected.notified();
+                    if self.stream_connections.load(AtomicOrdering::SeqCst) > 0 {
+                        return;
+                    }
+                    notified.await;
                 }
             })
             .await
@@ -1778,8 +1782,12 @@ mod tests {
 
         async fn wait_command_post(&self) {
             timeout(Duration::from_secs(5), async {
-                while self.command_posts.load(AtomicOrdering::SeqCst) == 0 {
-                    self.command_posted.notified().await;
+                loop {
+                    let notified = self.command_posted.notified();
+                    if self.command_posts.load(AtomicOrdering::SeqCst) > 0 {
+                        return;
+                    }
+                    notified.await;
                 }
             })
             .await
