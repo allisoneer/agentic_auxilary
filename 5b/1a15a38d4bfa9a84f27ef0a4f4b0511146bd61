@@ -1,0 +1,27 @@
+crates/services/opencode-rs/Cargo.toml
+  s_ba6b0f26619382::t_65cdd8e63c19ea 52
+crates/services/opencode-rs/tests/sse_readiness.rs
+  s_ba6b0f26619382::t_0b8ce6a01f622f 47
+  s_ba6b0f26619382::t_65cdd8e63c19ea 1-46,48-211
+crates/services/opencode-rs/src/sse.rs
+  s_ba6b0f26619382::t_d2862d87cad4b3 18,47,53-74,154,168,175,179,184,188,198,212,269-272,305
+  s_ba6b0f26619382::t_0b8ce6a01f622f 139
+crates/services/opencode-rs/src/types/event.rs
+  s_ba6b0f26619382::t_d2862d87cad4b3 44-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5b1a15a38d4bfa9a84f27ef0a4f4b0511146bd61",
+  "prompts": {},
+  "sessions": {
+    "s_ba6b0f26619382": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f97028b30ffeERNSqHsEE8BhM1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
