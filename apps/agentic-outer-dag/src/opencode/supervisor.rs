@@ -34,6 +34,7 @@ use std::time::Duration;
 
 const IDLE_GRACE: Duration = Duration::from_secs(2);
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
+const SSE_READINESS_TIMEOUT: Duration = Duration::from_secs(5);
 const TRANSCRIPT_SETTLING_RETRY_BACKOFFS: [Duration; 4] = [
     Duration::from_millis(50),
     Duration::from_millis(100),
@@ -452,6 +453,15 @@ impl OpenCodeSupervisor {
             transcript_window,
             mut subscription,
         } = prepared;
+
+        tokio::time::timeout(SSE_READINESS_TIMEOUT, subscription.wait_ready())
+            .await
+            .context(
+                "timed out waiting for SSE readiness before initial OpenCode command dispatch",
+            )?
+            .context(
+                "SSE subscription closed before initial OpenCode command dispatch readiness",
+            )?;
 
         let cmd_client = self.client.clone();
         let dispatch_session_id = session_id.clone();
@@ -1638,10 +1648,16 @@ mod tests {
     use crate::test_support::process_state_lock;
     use std::process::Stdio;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering as AtomicOrdering;
     use tempfile::TempDir;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
+    use tokio::net::TcpStream;
     use tokio::process::Command;
+    use tokio::sync::Notify;
     use tokio::time::timeout;
     use wiremock::Mock;
     use wiremock::MockServer;
@@ -1679,6 +1695,243 @@ mod tests {
                 .cloned()
                 .unwrap_or_else(|| self.responders.last().cloned().expect("non-empty"))
         }
+    }
+
+    struct RawDispatchBarrierServer {
+        base_url: String,
+        stream_connections: Arc<AtomicUsize>,
+        command_posts: Arc<AtomicUsize>,
+        stream_connected: Arc<Notify>,
+        command_posted: Arc<Notify>,
+        sentinel_released: Arc<AtomicBool>,
+        release_sentinel: Arc<Notify>,
+        task: tokio::task::JoinHandle<()>,
+    }
+
+    impl RawDispatchBarrierServer {
+        async fn start() -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let stream_connections = Arc::new(AtomicUsize::new(0));
+            let command_posts = Arc::new(AtomicUsize::new(0));
+            let stream_connected = Arc::new(Notify::new());
+            let command_posted = Arc::new(Notify::new());
+            let sentinel_released = Arc::new(AtomicBool::new(false));
+            let release_sentinel = Arc::new(Notify::new());
+            let task_stream_connections = Arc::clone(&stream_connections);
+            let task_command_posts = Arc::clone(&command_posts);
+            let task_stream_connected = Arc::clone(&stream_connected);
+            let task_command_posted = Arc::clone(&command_posted);
+            let task_sentinel_released = Arc::clone(&sentinel_released);
+            let task_release_sentinel = Arc::clone(&release_sentinel);
+
+            let task = tokio::spawn(async move {
+                loop {
+                    let (stream, _) = listener.accept().await.unwrap();
+                    let stream_connections = Arc::clone(&task_stream_connections);
+                    let command_posts = Arc::clone(&task_command_posts);
+                    let stream_connected = Arc::clone(&task_stream_connected);
+                    let command_posted = Arc::clone(&task_command_posted);
+                    let sentinel_released = Arc::clone(&task_sentinel_released);
+                    let release_sentinel = Arc::clone(&task_release_sentinel);
+                    tokio::spawn(async move {
+                        handle_raw_dispatch_request(
+                            stream,
+                            stream_connections,
+                            command_posts,
+                            stream_connected,
+                            command_posted,
+                            sentinel_released,
+                            release_sentinel,
+                        )
+                        .await;
+                    });
+                }
+            });
+
+            Self {
+                base_url: format!("http://{address}"),
+                stream_connections,
+                command_posts,
+                stream_connected,
+                command_posted,
+                sentinel_released,
+                release_sentinel,
+                task,
+            }
+        }
+
+        async fn wait_stream_connected(&self) {
+            timeout(Duration::from_secs(5), async {
+                loop {
+                    let notified = self.stream_connected.notified();
+                    if self.stream_connections.load(AtomicOrdering::SeqCst) > 0 {
+                        return;
+                    }
+                    notified.await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        fn release_readiness(&self) {
+            self.sentinel_released.store(true, AtomicOrdering::SeqCst);
+            self.release_sentinel.notify_waiters();
+        }
+
+        async fn wait_command_post(&self) {
+            timeout(Duration::from_secs(5), async {
+                loop {
+                    let notified = self.command_posted.notified();
+                    if self.command_posts.load(AtomicOrdering::SeqCst) > 0 {
+                        return;
+                    }
+                    notified.await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+    }
+
+    impl Drop for RawDispatchBarrierServer {
+        fn drop(&mut self) {
+            self.task.abort();
+        }
+    }
+
+    async fn handle_raw_dispatch_request(
+        mut stream: TcpStream,
+        stream_connections: Arc<AtomicUsize>,
+        command_posts: Arc<AtomicUsize>,
+        stream_connected: Arc<Notify>,
+        command_posted: Arc<Notify>,
+        sentinel_released: Arc<AtomicBool>,
+        release_sentinel: Arc<Notify>,
+    ) {
+        let mut request = Vec::new();
+        let mut chunk = [0_u8; 2048];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let read = stream.read(&mut chunk).await.unwrap();
+            if read == 0 {
+                return;
+            }
+            request.extend_from_slice(&chunk[..read]);
+        }
+        let request = String::from_utf8(request).unwrap();
+        let mut request_line = request.lines().next().unwrap().split_whitespace();
+        let method = request_line.next().unwrap();
+        let path = request_line.next().unwrap().split('?').next().unwrap();
+
+        if method == "GET" && path == "/event" {
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+            stream.flush().await.unwrap();
+            stream_connections.fetch_add(1, AtomicOrdering::SeqCst);
+            stream_connected.notify_waiters();
+            while !sentinel_released.load(AtomicOrdering::SeqCst) {
+                release_sentinel.notified().await;
+            }
+            stream
+                .write_all(b"data: {\"type\":\"server.connected\",\"properties\":{}}\n\n")
+                .await
+                .unwrap();
+            stream.flush().await.unwrap();
+            return;
+        }
+
+        let (status, body) = if method == "GET" && path == "/session/session-1" {
+            (
+                200,
+                serde_json::json!({
+                    "id": "session-1",
+                    "slug": "session-1",
+                    "projectId": "project-1",
+                    "directory": "/tmp",
+                    "title": "Barrier test",
+                    "version": "test",
+                    "time": {"created": 1, "updated": 1}
+                })
+                .to_string(),
+            )
+        } else if method == "GET"
+            && (path == "/permission"
+                || path == "/question"
+                || path == "/session/session-1/message")
+        {
+            (200, "[]".to_string())
+        } else if method == "GET" && path == "/session/status" {
+            (200, "{}".to_string())
+        } else if method == "POST" && path == "/session/session-1/command" {
+            command_posts.fetch_add(1, AtomicOrdering::SeqCst);
+            command_posted.notify_waiters();
+            (200, "{}".to_string())
+        } else {
+            (404, "{}".to_string())
+        };
+        let reason = if status == 200 { "OK" } else { "Not Found" };
+        stream
+            .write_all(
+                format!(
+                    "HTTP/1.1 {status} {reason}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn initial_command_dispatch_waits_for_parsed_sse_readiness() {
+        let server = RawDispatchBarrierServer::start().await;
+        let child = Command::new("sleep")
+            .arg("60")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let managed = ManagedServer::from_child_for_testing(child, server.base_url.clone(), 1234);
+        let client = Client::builder()
+            .base_url(&server.base_url)
+            .directory("/tmp")
+            .build()
+            .unwrap();
+        let supervisor = OpenCodeSupervisor {
+            _managed_server: managed,
+            client,
+            _directory: PathBuf::from("/tmp"),
+            timeouts: test_timeouts(),
+        };
+        let PreparedCommandOutcome::Prepared(prepared) = supervisor
+            .prepare_command(
+                SessionSelection::Reuse("session-1".to_string()),
+                "implement_plan",
+                Some("do it"),
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected prepared command");
+        };
+
+        let run = tokio::spawn(async move {
+            supervisor
+                .run_prepared_command(prepared, None, None, |_| Ok(()))
+                .await
+        });
+        server.wait_stream_connected().await;
+        assert_eq!(server.command_posts.load(AtomicOrdering::SeqCst), 0);
+        server.release_readiness();
+        server.wait_command_post().await;
+        assert_eq!(server.command_posts.load(AtomicOrdering::SeqCst), 1);
+        run.abort();
+        let _ = run.await;
     }
 
     fn test_timeouts() -> OpenCodeSupervisorTimeouts {
@@ -2377,11 +2630,10 @@ mod tests {
             .await;
         Mock::given(method("GET"))
             .and(path("/event"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-type", "text/event-stream")
-                    .set_delay(Duration::from_secs(30)),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                "data: {\"type\":\"server.connected\",\"properties\":{}}\n\n",
+                "text/event-stream",
+            ))
             .mount(&mock)
             .await;
         Mock::given(method("GET"))
@@ -2470,10 +2722,9 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/event"))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-type", "text/event-stream")
-                    .set_body_string(
-                        "data: {\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n",
+                ResponseTemplate::new(200).set_body_raw(
+                        "data: {\"type\":\"server.connected\",\"properties\":{}}\n\ndata: {\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n",
+                        "text/event-stream",
                     ),
             )
             .mount(&mock)
@@ -2716,9 +2967,13 @@ mod tests {
                 .and(path("/event"))
                 .respond_with(
                     ResponseTemplate::new(200)
-                        .insert_header("content-type", "text/event-stream")
                         .set_delay(Duration::from_millis(300))
-                        .set_body_string(format!("data: {interruption_event}\n\n")),
+                        .set_body_raw(
+                            format!(
+                                "data: {{\"type\":\"server.connected\",\"properties\":{{}}}}\n\ndata: {interruption_event}\n\n"
+                            ),
+                            "text/event-stream",
+                        ),
                 )
                 .mount(&mock)
                 .await;
@@ -3095,11 +3350,10 @@ mod tests {
     async fn mount_stalled_event_stream(mock: &MockServer) {
         Mock::given(method("GET"))
             .and(path("/event"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-type", "text/event-stream")
-                    .set_delay(Duration::from_secs(30)),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                "data: {\"type\":\"server.connected\",\"properties\":{}}\n\n",
+                "text/event-stream",
+            ))
             .mount(mock)
             .await;
     }

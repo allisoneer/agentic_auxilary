@@ -69,6 +69,7 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 
 const SERVER_NAME: &str = "opencode-orchestrator-mcp";
+const SSE_READINESS_TIMEOUT: Duration = Duration::from_secs(5);
 const PRECORRELATION_TOTAL_BYTES: usize = 64 * 1024;
 const PRECORRELATION_MESSAGE_BYTES: usize = 16 * 1024;
 const PRECORRELATION_MESSAGE_IDS: usize = 32;
@@ -85,9 +86,123 @@ struct RunOutcome {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum PermissionPreflightMode {
-    Strict,
-    RespondPermissionContinuation,
+enum PreparedContinuationMode {
+    PermissionReply,
+    PermissionReject,
+    QuestionReply,
+    QuestionReject,
+}
+
+struct PreparedMonitoring {
+    server: Arc<OrchestratorServer>,
+    session_id: String,
+    subscription: opencode_rs::sse::SseSubscription<Event>,
+    continuation_mode: PreparedContinuationMode,
+    warnings: Vec<String>,
+    response_baseline: Option<String>,
+    command_transcript_window: Option<CommandTranscriptWindow>,
+}
+
+async fn wait_for_sse_readiness(
+    subscription: &mut opencode_rs::sse::SseSubscription<Event>,
+    ctx: &ToolContext,
+    operation: &str,
+) -> Result<(), ToolError> {
+    tokio::select! {
+        () = ctx.cancelled() => Err(ToolError::cancelled(None)),
+        result = tokio::time::timeout(SSE_READINESS_TIMEOUT, subscription.wait_ready()) => {
+            match result {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(error)) => Err(ToolError::Internal(format!(
+                    "SSE monitoring closed before readiness for {operation}: {error}"
+                ))),
+                Err(_) => Err(ToolError::Internal(format!(
+                    "SSE monitoring was not ready within 5 seconds for {operation}"
+                ))),
+            }
+        }
+    }
+}
+
+async fn revalidate_permission_target(
+    client: &opencode_rs::Client,
+    session_id: &str,
+    request_id: &str,
+) -> Result<(), ToolError> {
+    let pending = client.permissions().list().await.map_err(|error| {
+        if error.is_validation_error() {
+            ToolError::InvalidInput(format!(
+                "Permission request '{request_id}' could not be authoritatively revalidated because permission state returned HTTP 400. Do not retry the reply blindly; rerun orchestrator_run(session_id='{session_id}') to obtain current blocker state."
+            ))
+        } else {
+            ToolError::Internal(format!(
+                "Failed to revalidate permission request '{request_id}': {error}"
+            ))
+        }
+    })?;
+
+    if let Some(permission) = pending
+        .iter()
+        .find(|permission| permission.id == request_id)
+    {
+        if permission.session_id == session_id {
+            return Ok(());
+        }
+        return Err(ToolError::InvalidInput(format!(
+            "Permission request '{request_id}' now belongs to session '{}', not '{session_id}'. Rerun orchestrator_run for the latest blocker and retry.",
+            permission.session_id
+        )));
+    }
+
+    let replacements = pending
+        .iter()
+        .filter(|permission| permission.session_id == session_id)
+        .map(|permission| permission.id.as_str())
+        .collect::<Vec<_>>();
+    let replacement_detail = if replacements.is_empty() {
+        "no replacement permission is currently pending".to_string()
+    } else {
+        format!("replacement permission id(s): {}", replacements.join(", "))
+    };
+    Err(ToolError::InvalidInput(format!(
+        "Permission request '{request_id}' is no longer pending for session '{session_id}' ({replacement_detail}). No reply was sent. Rerun orchestrator_run and retry with the returned permission_request_id."
+    )))
+}
+
+async fn revalidate_question_target(
+    client: &opencode_rs::Client,
+    session_id: &str,
+    request_id: &str,
+) -> Result<(), ToolError> {
+    let pending = client.question().list().await.map_err(|error| {
+        ToolError::Internal(format!(
+            "Failed to revalidate question request '{request_id}': {error}"
+        ))
+    })?;
+
+    if let Some(question) = pending.iter().find(|question| question.id == request_id) {
+        if question.session_id == session_id {
+            return Ok(());
+        }
+        return Err(ToolError::InvalidInput(format!(
+            "Question request '{request_id}' now belongs to session '{}', not '{session_id}'. Rerun orchestrator_run for the latest blocker and retry.",
+            question.session_id
+        )));
+    }
+
+    let replacements = pending
+        .iter()
+        .filter(|question| question.session_id == session_id)
+        .map(|question| question.id.as_str())
+        .collect::<Vec<_>>();
+    let replacement_detail = if replacements.is_empty() {
+        "no replacement question is currently pending".to_string()
+    } else {
+        format!("replacement question id(s): {}", replacements.join(", "))
+    };
+    Err(ToolError::InvalidInput(format!(
+        "Question request '{request_id}' is no longer pending for session '{session_id}' ({replacement_detail}). No response was sent. Rerun orchestrator_run and retry with the returned question_request_id."
+    )))
 }
 
 #[derive(Debug, Clone)]
@@ -540,7 +655,6 @@ impl OrchestratorRunTool {
     async fn preflight_pending_permission(
         client: &opencode_rs::Client,
         session_id: &str,
-        mode: PermissionPreflightMode,
         warnings: &mut Vec<String>,
     ) -> Result<Option<opencode_rs::types::permission::PermissionRequest>, ToolError> {
         match client.permissions().list().await {
@@ -548,29 +662,15 @@ impl OrchestratorRunTool {
                 .into_iter()
                 .find(|permission| permission.session_id == session_id)),
             Err(error) if error.is_validation_error() => {
-                match mode {
-                    PermissionPreflightMode::RespondPermissionContinuation => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            error = %error,
-                            "failed to list permissions during respond_permission continuation; falling back to polling"
-                        );
-                        warnings.push(format!(
-                            "Permission refresh failed after reply ({error}); permission state could not be listed and may be stale or malformed. Continuing with polling fallback."
-                        ));
-                    }
-                    PermissionPreflightMode::Strict => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            error = %error,
-                            "failed to list permissions during run preflight; continuing without permission preflight"
-                        );
-                        warnings.push(
-                            "Permission state could not be listed during preflight (HTTP 400). Permission state may be stale or malformed; pending permissions may be stale or undiscoverable."
-                                .to_string(),
-                        );
-                    }
-                }
+                tracing::warn!(
+                    session_id = %session_id,
+                    error = %error,
+                    "failed to list permissions during run preflight; continuing without permission preflight"
+                );
+                warnings.push(
+                    "Permission state could not be listed during preflight (HTTP 400). Permission state may be stale or malformed; pending permissions may be stale or undiscoverable."
+                        .to_string(),
+                );
                 Ok(None)
             }
             Err(error) => Err(ToolError::Internal(format!(
@@ -583,7 +683,7 @@ impl OrchestratorRunTool {
         &self,
         input: OrchestratorRunInput,
         ctx: &ToolContext,
-        permission_preflight_mode: PermissionPreflightMode,
+        prepared: Option<PreparedMonitoring>,
     ) -> Result<RunOutcome, ToolError> {
         // Input validation
         if input.session_id.is_none() && input.message.is_none() && input.command.is_none() {
@@ -626,13 +726,37 @@ impl OrchestratorRunTool {
         }
 
         let wait_for_activity = input.wait_for_activity.unwrap_or(false);
+        let is_prepared_continuation = prepared.is_some();
+        let prepared_continuation_mode =
+            prepared.as_ref().map(|prepared| prepared.continuation_mode);
+        let prepared_command_transcript_window = prepared
+            .as_ref()
+            .and_then(|prepared| prepared.command_transcript_window.clone());
 
-        // Lazy initialization: spawn server on first tool call
-        let server = self
-            .server
-            .acquire()
-            .await
-            .map_err(|e| ToolError::Internal(e.to_string()))?;
+        if let Some(prepared) = prepared.as_ref() {
+            tracing::trace!(
+                continuation_mode = ?prepared.continuation_mode,
+                has_response_baseline = prepared.response_baseline.is_some(),
+                "entering prepared response continuation"
+            );
+        }
+
+        if is_prepared_continuation && (input.command.is_some() || message.is_some()) {
+            return Err(ToolError::Internal(
+                "prepared monitoring cannot dispatch new work".into(),
+            ));
+        }
+
+        // Lazy initialization: spawn server on first tool call unless exact prepared resources
+        // were supplied by a response continuation.
+        let server = match prepared.as_ref() {
+            Some(prepared) => Arc::clone(&prepared.server),
+            None => self
+                .server
+                .acquire()
+                .await
+                .map_err(|e| ToolError::Internal(e.to_string()))?,
+        };
 
         if let Some(command) = input.command.as_deref() {
             let decision = server.command_policy_decision(command);
@@ -659,7 +783,9 @@ impl OrchestratorRunTool {
         );
 
         // 1. Resolve session: validate existing or create new
-        let session_id = if let Some(sid) = input.session_id {
+        let session_id = if let Some(prepared) = prepared.as_ref() {
+            prepared.session_id.clone()
+        } else if let Some(sid) = input.session_id {
             // Validate session exists
             client.sessions().get(&sid).await.map_err(|e| {
                 if e.is_not_found() {
@@ -690,26 +816,49 @@ impl OrchestratorRunTool {
 
         tracing::info!(session_id = %session_id, "run: session resolved");
 
-        let mut warnings = Vec::new();
+        let mut warnings = prepared
+            .as_ref()
+            .map_or_else(Vec::new, |prepared| prepared.warnings.clone());
 
-        // 2. Check if session is already idle (for resume-only case)
-        let status = client
-            .sessions()
-            .status_for(&session_id)
-            .await
-            .map_err(|e| ToolError::Internal(format!("Failed to get session status: {e}")))?;
-
-        let is_idle = matches!(status, SessionStatusInfo::Idle);
+        // Ordinary runs preserve their existing status-first preflight. Prepared response
+        // continuations defer status until after blocker reconciliation.
+        let initial_status = if is_prepared_continuation {
+            None
+        } else {
+            Some(
+                client
+                    .sessions()
+                    .status_for(&session_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::Internal(format!("Failed to get session status: {e}"))
+                    })?,
+            )
+        };
 
         // 3. Check for pending permissions before doing anything else
-        if let Some(perm) = Self::preflight_pending_permission(
-            client,
-            &session_id,
-            permission_preflight_mode,
-            &mut warnings,
-        )
-        .await?
-        {
+        let pending_permission = if is_prepared_continuation {
+            match client.permissions().list().await {
+                Ok(permissions) => permissions
+                    .into_iter()
+                    .find(|permission| permission.session_id == session_id),
+                Err(error) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        error = %error,
+                        "failed immediate permission reconciliation after response"
+                    );
+                    warnings.push(format!(
+                        "Permission refresh failed after response ({error}); continuing with ready SSE monitoring."
+                    ));
+                    None
+                }
+            }
+        } else {
+            Self::preflight_pending_permission(client, &session_id, &mut warnings).await?
+        };
+
+        if let Some(perm) = pending_permission {
             tracing::info!(
                 session_id = %session_id,
                 permission_type = %perm.permission,
@@ -729,11 +878,28 @@ impl OrchestratorRunTool {
             }));
         }
 
-        let pending_questions = client
-            .question()
-            .list()
-            .await
-            .map_err(|e| ToolError::Internal(format!("Failed to list questions: {e}")))?;
+        let pending_questions = if is_prepared_continuation {
+            match client.question().list().await {
+                Ok(questions) => questions,
+                Err(error) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        error = %error,
+                        "failed immediate question reconciliation after response"
+                    );
+                    warnings.push(format!(
+                        "Question refresh failed after response ({error}); continuing with ready SSE monitoring."
+                    ));
+                    Vec::new()
+                }
+            }
+        } else {
+            client
+                .question()
+                .list()
+                .await
+                .map_err(|e| ToolError::Internal(format!("Failed to list questions: {e}")))?
+        };
 
         if let Some(question) = pending_questions
             .into_iter()
@@ -745,9 +911,40 @@ impl OrchestratorRunTool {
             )));
         }
 
+        let reconciled_status = if is_prepared_continuation {
+            match client.sessions().status_for(&session_id).await {
+                Ok(status) => Some(status),
+                Err(error) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        error = %error,
+                        "failed immediate status reconciliation after response"
+                    );
+                    warnings.push(format!(
+                        "Session status refresh failed after response ({error}); continuing with ready SSE monitoring."
+                    ));
+                    None
+                }
+            }
+        } else {
+            initial_status
+        };
+        let is_idle = reconciled_status
+            .as_ref()
+            .is_some_and(|status| matches!(status, SessionStatusInfo::Idle));
+        let initial_observed_busy = is_prepared_continuation
+            && reconciled_status
+                .as_ref()
+                .is_some_and(SessionStatusInfo::is_busy_like);
+
         // 4. If no message/command and session is idle, just return current state
         // Uses finalize_completed to get retry logic for message extraction
-        if message.is_none() && input.command.is_none() && is_idle && !wait_for_activity {
+        if !is_prepared_continuation
+            && message.is_none()
+            && input.command.is_none()
+            && is_idle
+            && !wait_for_activity
+        {
             let token_tracker = TokenTracker::with_threshold(server.compaction_threshold());
             let output =
                 Self::finalize_completed(client, session_id, &token_tracker, warnings).await?;
@@ -755,25 +952,38 @@ impl OrchestratorRunTool {
         }
 
         // 5. Subscribe to SSE BEFORE sending prompt/command
-        let mut subscription = client
-            .subscribe_session(&session_id)
-            .map_err(|e| ToolError::Internal(format!("Failed to subscribe to session: {e}")))?;
+        let mut subscription = match prepared {
+            Some(prepared) => prepared.subscription,
+            None => client
+                .subscribe_session(&session_id)
+                .map_err(|e| ToolError::Internal(format!("Failed to subscribe to session: {e}")))?,
+        };
+
+        if input.command.is_some() || message.is_some() {
+            wait_for_sse_readiness(&mut subscription, ctx, "OpenCode dispatch").await?;
+        }
 
         // Track whether this call is dispatching new work (command or message)
         // vs just resuming/monitoring an existing session.
-        let dispatched_new_work = input.command.is_some() || message.is_some() || wait_for_activity;
+        let dispatched_new_work = input.command.is_some()
+            || message.is_some()
+            || wait_for_activity
+            || prepared_continuation_mode.is_some();
         let idle_grace = config::idle_grace();
         let mut idle_grace_deadline: Option<tokio::time::Instant> = None;
         let mut awaiting_idle_grace_check = false;
 
-        if wait_for_activity && input.command.is_none() && message.is_none() {
+        if (wait_for_activity || is_prepared_continuation)
+            && input.command.is_none()
+            && message.is_none()
+        {
             idle_grace_deadline = Some(tokio::time::Instant::now() + idle_grace);
         }
 
         // 6. Kick off the work
         let mut command_task: Option<JoinHandle<Result<(), OpencodeError>>> = None;
         let mut command_name_for_logging: Option<String> = None;
-        let mut command_transcript_window: Option<CommandTranscriptWindow> = None;
+        let mut command_transcript_window = prepared_command_transcript_window;
 
         if let Some(command) = &input.command {
             command_name_for_logging = Some(command.clone());
@@ -846,7 +1056,7 @@ impl OrchestratorRunTool {
         // Track whether we've observed the session as busy at least once.
         // This prevents completing immediately if we call run_impl on an already-idle
         // session before our new work has started processing.
-        let mut observed_busy = false;
+        let mut observed_busy = initial_observed_busy;
         let mut correlated_assistant_ids = HashSet::new();
         let mut precorrelation_deltas = command_transcript_window
             .as_ref()
@@ -1376,10 +1586,7 @@ Examples:
         let ctx = ctx.clone();
         Box::pin(async move {
             let timer = CallTimer::start();
-            match this
-                .run_impl_outcome(input.clone(), &ctx, PermissionPreflightMode::Strict)
-                .await
-            {
+            match this.run_impl_outcome(input.clone(), &ctx, None).await {
                 Ok(outcome) => {
                     log_tool_success(
                         &timer,
@@ -2023,6 +2230,22 @@ Parameters:
                     None
                 };
 
+                let mut subscription = client
+                    .subscribe_session(&input.session_id)
+                    .map_err(|error| {
+                        ToolError::Internal(format!(
+                            "Failed to subscribe before permission response: {error}"
+                        ))
+                    })?;
+                wait_for_sse_readiness(
+                    &mut subscription,
+                    &ctx,
+                    "permission response",
+                )
+                .await?;
+                revalidate_permission_target(client, &input.session_id, &permission_request_id)
+                    .await?;
+
                 // Convert our reply type to API type
                 let api_reply = match input.reply {
                     PermissionReply::Once => ApiPermissionReply::Once,
@@ -2060,6 +2283,19 @@ Parameters:
                 // Now continue monitoring the session using run logic
                 let run_tool = OrchestratorRunTool::new(Arc::clone(&server_handle));
                 let wait_for_activity = (!is_reject).then_some(true);
+                let prepared = PreparedMonitoring {
+                    server: Arc::clone(&server),
+                    session_id: input.session_id.clone(),
+                    subscription,
+                    continuation_mode: if is_reject {
+                        PreparedContinuationMode::PermissionReject
+                    } else {
+                        PreparedContinuationMode::PermissionReply
+                    },
+                    warnings: pre_warnings,
+                    response_baseline: baseline.clone(),
+                    command_transcript_window: None,
+                };
                 let outcome = run_tool
                     .run_impl_outcome(
                         OrchestratorRunInput {
@@ -2070,13 +2306,10 @@ Parameters:
                             wait_for_activity,
                         },
                         &ctx,
-                        PermissionPreflightMode::RespondPermissionContinuation,
+                        Some(prepared),
                     )
                     .await?;
                 let mut out = outcome.output;
-
-                // Merge pre-warnings
-                out.warnings.extend(pre_warnings);
 
                 // Apply rejection-aware output mutation
                 if is_reject && matches!(out.status, RunStatus::Completed) {
@@ -2219,14 +2452,24 @@ Parameters:
                 }
             };
 
-            match input.action {
-                QuestionAction::Reply => {
-                    if input.answers.is_empty() {
-                        return Err(ToolError::InvalidInput(
-                            "answers is required when action=reply".into(),
-                        ));
-                    }
+            if matches!(input.action, QuestionAction::Reply) && input.answers.is_empty() {
+                return Err(ToolError::InvalidInput(
+                    "answers is required when action=reply".into(),
+                ));
+            }
 
+            let mut subscription = client
+                .subscribe_session(&input.session_id)
+                .map_err(|error| {
+                    ToolError::Internal(format!(
+                        "Failed to subscribe before question response: {error}"
+                    ))
+                })?;
+            wait_for_sse_readiness(&mut subscription, &ctx, "question response").await?;
+            revalidate_question_target(client, &input.session_id, &question.id).await?;
+
+            let (continuation_mode, wait_for_activity) = match input.action {
+                QuestionAction::Reply => {
                     client
                         .question()
                         .reply(
@@ -2237,37 +2480,51 @@ Parameters:
                         )
                         .await
                         .map_err(|e| {
-                            ToolError::Internal(format!("Failed to reply to question: {e}"))
+                            if e.is_not_found() {
+                                ToolError::InvalidInput(format!(
+                                    "Question request '{}' was not found or is no longer pending (HTTP 404). Rerun orchestrator_run(session_id='{}') to get the latest question_request_id and retry.",
+                                    question.id, input.session_id
+                                ))
+                            } else {
+                                ToolError::Internal(format!("Failed to reply to question: {e}"))
+                            }
                         })?;
-
-                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_handle))
-                        .run_impl_outcome(OrchestratorRunInput {
-                            session_id: Some(input.session_id),
-                            command: None,
-                            agent: None,
-                            message: None,
-                            wait_for_activity: Some(true),
-                        }, &ctx, PermissionPreflightMode::Strict)
-                        .await?;
-                    Ok((outcome.output, outcome.log_meta))
+                    (PreparedContinuationMode::QuestionReply, Some(true))
                 }
                 QuestionAction::Reject => {
                     client.question().reject(&question.id).await.map_err(|e| {
-                        ToolError::Internal(format!("Failed to reject question: {e}"))
+                        if e.is_not_found() {
+                            ToolError::InvalidInput(format!(
+                                "Question request '{}' was not found or is no longer pending (HTTP 404). Rerun orchestrator_run(session_id='{}') to get the latest question_request_id and retry.",
+                                question.id, input.session_id
+                            ))
+                        } else {
+                            ToolError::Internal(format!("Failed to reject question: {e}"))
+                        }
                     })?;
-
-                    let outcome = OrchestratorRunTool::new(Arc::clone(&server_handle))
-                        .run_impl_outcome(OrchestratorRunInput {
-                            session_id: Some(input.session_id),
-                            command: None,
-                            agent: None,
-                            message: None,
-                            wait_for_activity: None,
-                        }, &ctx, PermissionPreflightMode::Strict)
-                        .await?;
-                    Ok((outcome.output, outcome.log_meta))
+                    (PreparedContinuationMode::QuestionReject, None)
                 }
-            }
+            };
+
+            let prepared = PreparedMonitoring {
+                server: Arc::clone(&server),
+                session_id: input.session_id.clone(),
+                subscription,
+                continuation_mode,
+                warnings: Vec::new(),
+                response_baseline: None,
+                command_transcript_window: None,
+            };
+            let outcome = OrchestratorRunTool::new(Arc::clone(&server_handle))
+                .run_impl_outcome(OrchestratorRunInput {
+                    session_id: Some(input.session_id),
+                    command: None,
+                    agent: None,
+                    message: None,
+                    wait_for_activity,
+                }, &ctx, Some(prepared))
+                .await?;
+            Ok((outcome.output, outcome.log_meta))
         }
         .await;
 

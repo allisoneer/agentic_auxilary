@@ -41,6 +41,15 @@ pub enum GlobalEventPayload {
     Event(Box<Event>),
 }
 
+impl GlobalEvent {
+    pub(crate) fn is_connected(&self) -> bool {
+        matches!(
+            &self.payload,
+            GlobalEventPayload::Event(event) if event.is_connected()
+        )
+    }
+}
+
 /// Wrapper for sync payloads emitted on `/global/event`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalSyncEventPayload {

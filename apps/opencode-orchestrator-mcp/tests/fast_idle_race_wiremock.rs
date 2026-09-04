@@ -28,6 +28,7 @@ use wiremock::matchers::path_regex;
 use wiremock::matchers::query_param;
 
 use support::SequenceResponder;
+use support::SwitchAfterCallsResponder;
 use support::message_fixture;
 use support::message_history_fixture;
 use support::messages_fixture;
@@ -96,9 +97,7 @@ async fn assert_command_dispatch_invalid_input(status: u16, body: serde_json::Va
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -189,9 +188,7 @@ async fn fast_idle_prompt_completes_without_hanging() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -218,6 +215,96 @@ async fn fast_idle_prompt_completes_without_hanging() {
 }
 
 #[tokio::test]
+async fn ordinary_prompt_ignores_stale_response_from_initial_busy_status() {
+    let _guard = env_lock().await;
+    let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
+    // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
+    unsafe { std::env::set_var(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS, "1500") };
+
+    let mock = MockServer::start().await;
+    let server = test_orchestrator_server(&mock).await;
+    let tool = OrchestratorRunTool::new(Arc::clone(&server));
+    let sid = "ordinary-prompt-initial-busy";
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(session_fixture(sid)))
+        .mount(&mock)
+        .await;
+
+    let status_sequence = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+        ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
+        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+    ]);
+    let status_calls = status_sequence.call_counter();
+    Mock::given(method("GET"))
+        .and(path("/session/status"))
+        .respond_with(status_sequence)
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/permission"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/question"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path(format!("/session/{sid}/prompt_async")))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(format!("/session/{sid}/message")))
+        .respond_with(SwitchAfterCallsResponder::new(
+            status_calls.clone(),
+            3,
+            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("OLD_RESPONSE"))),
+            ResponseTemplate::new(200).set_body_json(messages_fixture(sid, Some("NEW_RESPONSE"))),
+        ))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
+        )
+        .mount(&mock)
+        .await;
+
+    let result = timeout(
+        Duration::from_secs(5),
+        tool.call(
+            OrchestratorRunInput {
+                session_id: Some(sid.into()),
+                command: None,
+                agent: None,
+                message: Some("start new work".into()),
+                wait_for_activity: None,
+            },
+            &ToolContext::default(),
+        ),
+    )
+    .await
+    .expect("ordinary prompt stale-response regression should not hang")
+    .expect("ordinary prompt should complete");
+
+    assert!(matches!(result.status, RunStatus::Completed));
+    assert_eq!(result.response.as_deref(), Some("NEW_RESPONSE"));
+    assert!(status_calls.get() >= 4);
+}
+
+#[tokio::test]
 async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
     let _guard = env_lock().await;
     let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
@@ -231,6 +318,12 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
     let perm_id = "perm-fast-idle";
 
     let permission_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            &["/tmp/out.txt"],
+        )])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
             perm_id,
             sid,
@@ -280,9 +373,7 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -308,7 +399,7 @@ async fn fast_idle_resume_after_permission_reply_completes_without_hanging() {
 }
 
 #[tokio::test]
-async fn respond_permission_known_id_replies_even_when_permission_list_bad_requests() {
+async fn respond_permission_known_id_fails_closed_when_revalidation_bad_requests() {
     let _guard = env_lock().await;
     let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
     // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
@@ -369,14 +460,12 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
 
-    let result = timeout(
+    let error = timeout(
         Duration::from_secs(2),
         tool.call(
             RespondPermissionInput {
@@ -390,28 +479,20 @@ async fn respond_permission_known_id_replies_even_when_permission_list_bad_reque
     )
     .await
     .expect("known-id continuation should not hang")
-    .expect("respond_permission should succeed with provided request id");
+    .expect_err("authoritative permission revalidation should fail closed");
 
-    assert!(matches!(result.status, RunStatus::Completed));
-    assert_eq!(result.response.as_deref(), Some("PRE_REPLY_DONE"));
-    assert!(
-        result
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("Permission validation failed")),
-        "expected validation warning, got {:?}",
-        result.warnings
-    );
+    assert!(matches!(error, ToolError::InvalidInput(_)));
+    assert!(error.to_string().contains("authoritatively revalidated"));
 
     let requests = mock
         .received_requests()
         .await
         .expect("wiremock should capture requests");
     assert!(
-        requests
+        !requests
             .iter()
             .any(|request| request.url.path() == format!("/permission/{perm_id}/reply")),
-        "reply POST should be observed with a known request id: {:?}",
+        "reply POST must not be sent after failed revalidation: {:?}",
         requests
             .iter()
             .map(|request| request.url.path().to_string())
@@ -433,6 +514,15 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
     let perm_id = "perm-patch-post";
 
     let permission_seq = SequenceResponder::new(vec![
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            permission_fixture_with_metadata(
+                perm_id,
+                sid,
+                "edit",
+                &["src/lib.rs"],
+                &serde_json::json!({"files": [patch_file_metadata_fixture()]}),
+            )
+        ])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([
             permission_fixture_with_metadata(
                 perm_id,
@@ -490,9 +580,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -519,7 +607,7 @@ async fn respond_permission_continues_after_reply_when_follow_up_permission_list
         result
             .warnings
             .iter()
-            .any(|warning| warning.contains("Permission refresh failed after reply")),
+            .any(|warning| warning.contains("Permission refresh failed after response")),
         "expected continuation warning, got {:?}",
         result.warnings
     );
@@ -680,6 +768,14 @@ async fn respond_permission_reply_404_is_actionable_invalid_input() {
         .mount(&mock)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
+        )
+        .mount(&mock)
+        .await;
+
     let err = tool
         .call(
             RespondPermissionInput {
@@ -791,9 +887,7 @@ async fn command_transport_error_after_start_evidence_warns_and_completes() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -846,7 +940,7 @@ async fn command_transport_error_after_start_evidence_warns_and_completes() {
 }
 
 #[tokio::test]
-async fn command_transport_error_before_start_evidence_fails_clearly() {
+async fn command_transport_error_after_initial_busy_without_start_evidence_fails_clearly() {
     let _guard = env_lock().await;
     let _env = EnvVarGuard(OPENCODE_ORCHESTRATOR_IDLE_GRACE_MS);
     // SAFETY: ENV_LOCK serializes process-global environment access in these tests.
@@ -855,7 +949,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
     let mock = MockServer::start().await;
     let server = short_timeout_test_orchestrator_server(&mock).await;
     let tool = OrchestratorRunTool::new(Arc::clone(&server));
-    let sid = "command-transport-pre-start";
+    let sid = "command-transport-initial-busy-pre-start";
 
     Mock::given(method("GET"))
         .and(path(format!("/session/{sid}")))
@@ -866,7 +960,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
     Mock::given(method("GET"))
         .and(path("/session/status"))
         .respond_with(SequenceResponder::new(vec![
-            ResponseTemplate::new(200).set_body_json(status_v2_idle()),
+            ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
             ResponseTemplate::new(200).set_body_json(status_v2_idle()),
         ]))
         .mount(&mock)
@@ -896,9 +990,7 @@ async fn command_transport_error_before_start_evidence_fails_clearly() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -1018,9 +1110,7 @@ async fn command_dispatch_posts_server_valid_message_id() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;

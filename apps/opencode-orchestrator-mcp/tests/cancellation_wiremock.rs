@@ -58,9 +58,7 @@ async fn run_returns_cancelled_when_request_context_is_cancelled() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -125,6 +123,12 @@ async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
             "write",
             &["src/**"]
         ),])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            permission_id,
+            session_id,
+            "write",
+            &["src/**"]
+        ),])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
@@ -155,9 +159,7 @@ async fn respond_permission_returns_cancelled_during_post_reply_monitoring() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;

@@ -189,9 +189,7 @@ async fn it_bug1_completion_retries_messages_until_visible() {
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)), // Long delay to let polling win
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -268,6 +266,12 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
             "file.write",
             &["/tmp/test.txt"]
         )])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            &["/tmp/test.txt"]
+        )])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
@@ -295,6 +299,14 @@ async fn it_bug2_reject_returns_none_and_warning_not_stale_text() {
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(messages_fixture(sid, Some("I_WILL_CREATE_FILE"))),
+        )
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -379,6 +391,12 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
             "file.write",
             &["/tmp/out.txt"]
         )])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            &["/tmp/out.txt"]
+        )])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
@@ -413,6 +431,14 @@ async fn it_bug3_respond_permission_returns_response_without_resumption() {
             msg_before,
             msg_after,
         ))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/event"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
+        )
         .mount(&mock)
         .await;
 
@@ -475,6 +501,12 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
             "file.write",
             &["/tmp/out.txt"],
         )])),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!([permission_fixture(
+            perm_id,
+            sid,
+            "file.write",
+            &["/tmp/out.txt"],
+        )])),
         ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
     ]);
     Mock::given(method("GET"))
@@ -503,7 +535,6 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     // 4) idle  (fixed path finalizes)
     let status_seq = SequenceResponder::new(vec![
         ResponseTemplate::new(200).set_body_json(status_v2_busy(sid)),
-        ResponseTemplate::new(200).set_body_json(status_v2_idle()),
         ResponseTemplate::new(200).set_body_json(status_v2_retry(sid, 1)),
         ResponseTemplate::new(200).set_body_json(status_v2_idle()),
     ]);
@@ -536,9 +567,7 @@ async fn it_bug5_respond_permission_waits_and_does_not_return_stale_pre_permissi
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)),
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
@@ -621,9 +650,7 @@ async fn it_bug4_command_dispatch_transport_error_does_not_retry_without_start_e
     Mock::given(method("GET"))
         .and(path("/event"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_delay(Duration::from_secs(30)), // Long delay to let polling win
+            ResponseTemplate::new(200).set_body_raw(support::sse_body(&[]), "text/event-stream"),
         )
         .mount(&mock)
         .await;
