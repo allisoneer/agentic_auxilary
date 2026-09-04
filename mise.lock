@@ -248,7 +248,7 @@ url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375202"
 
 [[tools.agentic-outer-dag-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-outer-dag-bin.options]
@@ -256,17 +256,17 @@ asset_pattern = "agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz"
 version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.agentic-outer-dag-bin."platforms.linux-arm64"]
-checksum = "sha256:d44154f0c4ec4c1b0b223f24d92ed0a6a80c0304d0f0e1795d027979dcfa6459"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876646"
+checksum = "sha256:a4923659062dea98abfa6e380803a76a8179a13b11d7276883821d110e6754da"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384793"
 
 [tools.agentic-outer-dag-bin."platforms.linux-arm64-musl"]
-checksum = "sha256:d44154f0c4ec4c1b0b223f24d92ed0a6a80c0304d0f0e1795d027979dcfa6459"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876646"
+checksum = "sha256:a4923659062dea98abfa6e380803a76a8179a13b11d7276883821d110e6754da"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384793"
 
 [[tools.agentic-outer-dag-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-outer-dag-bin.options]
@@ -274,40 +274,27 @@ asset_pattern = "agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
 version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.agentic-outer-dag-bin."platforms.linux-x64"]
-checksum = "sha256:a2536b88f2de801457cdaff918c2a38d546402cfa07766bd9e02e575e27c5168"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876664"
+checksum = "sha256:998f71b3b54b8b9c0e062c52512222bdb0a360a1e4fe4e94a320433d4236745c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384806"
 
 [tools.agentic-outer-dag-bin."platforms.linux-x64-baseline"]
-checksum = "sha256:a2536b88f2de801457cdaff918c2a38d546402cfa07766bd9e02e575e27c5168"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876664"
+checksum = "sha256:998f71b3b54b8b9c0e062c52512222bdb0a360a1e4fe4e94a320433d4236745c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384806"
 
 [tools.agentic-outer-dag-bin."platforms.linux-x64-musl"]
-checksum = "sha256:a2536b88f2de801457cdaff918c2a38d546402cfa07766bd9e02e575e27c5168"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876664"
+checksum = "sha256:998f71b3b54b8b9c0e062c52512222bdb0a360a1e4fe4e94a320433d4236745c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384806"
 
 [tools.agentic-outer-dag-bin."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:a2536b88f2de801457cdaff918c2a38d546402cfa07766bd9e02e575e27c5168"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876664"
+checksum = "sha256:998f71b3b54b8b9c0e062c52512222bdb0a360a1e4fe4e94a320433d4236745c"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384806"
 
 [[tools.agentic-outer-dag-bin]]
-version = "0.1.14"
-backend = "github:allisoneer/agentic_auxilary"
-
-[tools.agentic-outer-dag-bin.options]
-asset_pattern = "agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz"
-version_prefix = "agentic-outer-dag-bin-v"
-
-[tools.agentic-outer-dag-bin."platforms.macos-arm64"]
-checksum = "sha256:9772ff6a32f99d78e298482d50282fb973d086f1eb64b2a78a20282ff71c13a9"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876650"
-
-[[tools.agentic-outer-dag-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-outer-dag-bin.options]
@@ -315,31 +302,44 @@ asset_pattern = "agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz"
 version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.agentic-outer-dag-bin."platforms.macos-x64"]
-checksum = "sha256:37ac7ae9badfbe8e6ffda63cb7ccefd8ee17d65ee2178d6e3efed39271de476f"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876660"
+checksum = "sha256:216817973cb131cc25aec926c16e97bc4d9d883753d084ebd152d72e744e4307"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384801"
 
 [tools.agentic-outer-dag-bin."platforms.macos-x64-baseline"]
-checksum = "sha256:37ac7ae9badfbe8e6ffda63cb7ccefd8ee17d65ee2178d6e3efed39271de476f"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876660"
+checksum = "sha256:216817973cb131cc25aec926c16e97bc4d9d883753d084ebd152d72e744e4307"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384801"
 
 [[tools.agentic-outer-dag-bin]]
-version = "0.1.14"
+version = "0.1.15"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-outer-dag-bin.options]
 version_prefix = "agentic-outer-dag-bin-v"
 
 [tools.agentic-outer-dag-bin."platforms.windows-x64"]
-checksum = "sha256:9e94e872f9c74782d6203e96561c1f15bc34d8b4549eaf65fde168721d14f60b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876722"
+checksum = "sha256:bd540c59dbceeb7107347e8e0c2505eec074d3f33534f288ce059694157e2445"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384829"
 
 [tools.agentic-outer-dag-bin."platforms.windows-x64-baseline"]
-checksum = "sha256:9e94e872f9c74782d6203e96561c1f15bc34d8b4549eaf65fde168721d14f60b"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.14/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539876722"
+checksum = "sha256:bd540c59dbceeb7107347e8e0c2505eec074d3f33534f288ce059694157e2445"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384829"
+
+[[tools.agentic-outer-dag-bin]]
+version = "0.1.15"
+backend = "github:allisoneer/agentic_auxilary"
+
+[tools.agentic-outer-dag-bin.options]
+asset_pattern = "agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz"
+version_prefix = "agentic-outer-dag-bin-v"
+
+[tools.agentic-outer-dag-bin."platforms.macos-arm64"]
+checksum = "sha256:16b56f4e9021fb0a1c381b1d4d66a664d97219e7dbbdc1fbca02adcf790a5246"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-outer-dag-bin-v0.1.15/agentic-outer-dag-bin-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544384790"
 
 [[tools."aqua:taiki-e/cargo-llvm-cov"]]
 version = "0.6.14"
