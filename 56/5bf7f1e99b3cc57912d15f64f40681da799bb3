@@ -1,0 +1,14 @@
+.thoughts/config.json
+  h_9f073efcf2206c 469-503
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "565bf7f1e99b3cc57912d15f64f40681da799bb3",
+  "prompts": {},
+  "humans": {
+    "h_9f073efcf2206c": {
+      "author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
