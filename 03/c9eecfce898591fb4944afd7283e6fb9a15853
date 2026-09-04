@@ -1,0 +1,19 @@
+.github/workflows/readme-sync.yml
+  s_38f2f9246b2db8::t_c7a749cb14b4a6 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "03c9eecfce898591fb4944afd7283e6fb9a15853",
+  "prompts": {},
+  "sessions": {
+    "s_38f2f9246b2db8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f92ca6dfbffe1DFNotwcOCAZbE",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Allison Durham <contact@allisoneer.com>"
+    }
+  }
+}
