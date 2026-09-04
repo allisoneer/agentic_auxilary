@@ -94,7 +94,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.45"
+version = "0.2.46"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-outer-dag-bin"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "anyhow",
  "chrono",
@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.5.9"
+version = "0.5.10"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -5972,7 +5972,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "opencode-orchestrator-mcp"
-version = "0.7.11"
+version = "0.7.12"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -5999,7 +5999,7 @@ dependencies = [
 
 [[package]]
 name = "opencode_rs"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "anyhow",
  "backon",
@@ -10035,7 +10035,7 @@ dependencies = [
 
 [[package]]
 name = "web-retrieval"
-version = "0.3.18"
+version = "0.3.19"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
