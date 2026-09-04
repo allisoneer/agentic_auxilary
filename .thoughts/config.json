@@ -466,6 +466,41 @@
       "remote": "https://github.com/rust-lang/libc",
       "description": "Pinned libc 0.2.186 source matching Cargo.lock for Apple mode and constants",
       "ref": "refs/tags/0.2.186"
+    },
+    {
+      "remote": "https://github.com/arcee-ai/nac",
+      "description": "Arcee AI's Rust-based agent harness for long-running work. Uses a thread-and-episode architecture where an orchestration-only planner dispatches fresh workers in dependency-aware batches, retaining structured episodes rather than worker contexts; includes MCP integration, skills, AGENTS.md loading, SQLite state, and optional Podman sandboxing.",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/deepseek-ai/deepseek-harness",
+      "description": "DeepSeek AI's developer-preview TypeScript agent harness (dsh). Built around an everything-is-a-plugin architecture powered by source-vendored Cordis, with CLI and local web UI, ACP integration, extensive plugin tooling, and a native Linux Landlock sandbox component.",
+      "ref": "refs/heads/master"
+    },
+    {
+      "remote": "https://github.com/cordiverse/cordis",
+      "description": "Independent TypeScript/Node.js meta-framework for spatiotemporally composable plugin systems, created by Shigma and used as DeepSeek Harness's vendored runtime foundation. Provides context/service dependency injection, reversible effects, typed events, declarative loading, configuration reconciliation, and hot reload; not itself a DeepSeek-owned repository.",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/anomalyco/opencode",
+      "description": "OpenCode 2.0 beta development branch: the dedicated v2 monorepo and docs source, with the opencode2 CLI, Effect-based architecture, new core/server/protocol packages, and npm @next distribution path.",
+      "ref": "refs/heads/v2"
+    },
+    {
+      "remote": "https://github.com/PrimeIntellect-ai/prime-agent",
+      "description": "Prime Intellect's TypeScript coding and research agent for long-running work. Combines a persistent IPython control plane and programmatic recursive subagents with a refinable continual-harness state ledger, implemented as a detachable multi-process daemon with per-session workers and durable JSONL sessions.",
+      "ref": "refs/heads/main"
+    },
+    {
+      "remote": "https://github.com/tauri-apps/wry",
+      "description": "Official Wry Linux dependency and CI setup evidence for PR #338 native package remediation.",
+      "ref": "refs/heads/dev"
+    },
+    {
+      "remote": "https://github.com/RustSec/advisory-db",
+      "description": "Authoritative RustSec advisory metadata for validating RUSTSEC-2024-0429 version bounds",
+      "ref": "refs/heads/main"
     }
   ]
 }
