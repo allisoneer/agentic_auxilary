@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.1.15] - 2026-09-04
+
+### 🐛 Bug Fixes
+- *(agentic-outer-dag)* Gate command dispatch on SSE readiness
+- *(opencode)* Prevent lost readiness wakeups
 ## [0.1.14] - 2026-08-21
 
 ### ⚙️  Miscellaneous

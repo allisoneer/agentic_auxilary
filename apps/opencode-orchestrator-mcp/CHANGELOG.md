@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.7.12] - 2026-09-04
+
+### 🐛 Bug Fixes
+- *(opencode-orchestrator)* Gate resume side effects on SSE readiness
+- *(opencode)* Prevent lost readiness wakeups
+- *(opencode-orchestrator)* Avoid stale run start evidence
 ## [0.7.11] - 2026-08-21
 
 ### ⚙️  Miscellaneous
