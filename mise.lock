@@ -154,7 +154,7 @@ url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-
 url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539858820"
 
 [[tools.agentic-mcp]]
-version = "0.2.45"
+version = "0.2.46"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-mcp.options]
@@ -162,17 +162,17 @@ asset_pattern = "agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp."platforms.linux-arm64"]
-checksum = "sha256:ed3baa3ef4347b08cbb73974694ee5aecedb3f1f7a4ef8e37c74a8018c982ad9"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887084"
+checksum = "sha256:559f6990f203fa7dc2cc94a6a2bd6f02d66f83ec48b7bb8858b365d16ed5e293"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375168"
 
 [tools.agentic-mcp."platforms.linux-arm64-musl"]
-checksum = "sha256:ed3baa3ef4347b08cbb73974694ee5aecedb3f1f7a4ef8e37c74a8018c982ad9"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887084"
+checksum = "sha256:559f6990f203fa7dc2cc94a6a2bd6f02d66f83ec48b7bb8858b365d16ed5e293"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-aarch64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375168"
 
 [[tools.agentic-mcp]]
-version = "0.2.45"
+version = "0.2.46"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-mcp.options]
@@ -180,27 +180,27 @@ asset_pattern = "agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp."platforms.linux-x64"]
-checksum = "sha256:9e3e1ad520795ec66aefc6dd80a620d2fc87fac9bd6dadee11e659b2c74f2522"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887094"
+checksum = "sha256:f42c98e9826d0a25bdc09ea700e9cfc695349e160af85c3118404c29acc77501"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375181"
 
 [tools.agentic-mcp."platforms.linux-x64-baseline"]
-checksum = "sha256:9e3e1ad520795ec66aefc6dd80a620d2fc87fac9bd6dadee11e659b2c74f2522"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887094"
+checksum = "sha256:f42c98e9826d0a25bdc09ea700e9cfc695349e160af85c3118404c29acc77501"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375181"
 
 [tools.agentic-mcp."platforms.linux-x64-musl"]
-checksum = "sha256:9e3e1ad520795ec66aefc6dd80a620d2fc87fac9bd6dadee11e659b2c74f2522"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887094"
+checksum = "sha256:f42c98e9826d0a25bdc09ea700e9cfc695349e160af85c3118404c29acc77501"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375181"
 
 [tools.agentic-mcp."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:9e3e1ad520795ec66aefc6dd80a620d2fc87fac9bd6dadee11e659b2c74f2522"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887094"
+checksum = "sha256:f42c98e9826d0a25bdc09ea700e9cfc695349e160af85c3118404c29acc77501"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-x86_64-unknown-linux-gnu.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375181"
 
 [[tools.agentic-mcp]]
-version = "0.2.45"
+version = "0.2.46"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-mcp.options]
@@ -208,12 +208,12 @@ asset_pattern = "agentic-mcp-aarch64-apple-darwin.tar.xz"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp."platforms.macos-arm64"]
-checksum = "sha256:e155912435d3066a8ceba185db5ed09110ec29e954895dd0fa9959c4d12576a3"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-aarch64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887082"
+checksum = "sha256:44038d6369f0b797af9e8068670ac5ff86f9478429907c635238f08a3dd3ee32"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375164"
 
 [[tools.agentic-mcp]]
-version = "0.2.45"
+version = "0.2.46"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-mcp.options]
@@ -221,31 +221,31 @@ asset_pattern = "agentic-mcp-x86_64-apple-darwin.tar.xz"
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp."platforms.macos-x64"]
-checksum = "sha256:077ccb9942c407eacef939a147d76feaaac3124163ca41124a5709c30c281a82"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887090"
+checksum = "sha256:2511c327bcd4fb3380b4dda59942ebeee0e4acfcd2e9468ae2baf234af1b40b9"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375177"
 
 [tools.agentic-mcp."platforms.macos-x64-baseline"]
-checksum = "sha256:077ccb9942c407eacef939a147d76feaaac3124163ca41124a5709c30c281a82"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/agentic-mcp-x86_64-apple-darwin.tar.xz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887090"
+checksum = "sha256:2511c327bcd4fb3380b4dda59942ebeee0e4acfcd2e9468ae2baf234af1b40b9"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/agentic-mcp-x86_64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375177"
 
 [[tools.agentic-mcp]]
-version = "0.2.45"
+version = "0.2.46"
 backend = "github:allisoneer/agentic_auxilary"
 
 [tools.agentic-mcp.options]
 version_prefix = "agentic-mcp-v"
 
 [tools.agentic-mcp."platforms.windows-x64"]
-checksum = "sha256:e9e6d31785f1f5acaeef4fc91c357ed7f6a3b4bbe5a950f07530049331119107"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887109"
+checksum = "sha256:fed8ed2b4933577a295ffc0c12a92a4bd43ab38ef861298ee9c9a6693c7949a7"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375202"
 
 [tools.agentic-mcp."platforms.windows-x64-baseline"]
-checksum = "sha256:e9e6d31785f1f5acaeef4fc91c357ed7f6a3b4bbe5a950f07530049331119107"
-url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.45/source.tar.gz"
-url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/539887109"
+checksum = "sha256:fed8ed2b4933577a295ffc0c12a92a4bd43ab38ef861298ee9c9a6693c7949a7"
+url = "https://github.com/allisoneer/agentic_auxilary/releases/download/agentic-mcp-v0.2.46/source.tar.gz"
+url_api = "https://api.github.com/repos/allisoneer/agentic_auxilary/releases/assets/544375202"
 
 [[tools.agentic-outer-dag-bin]]
 version = "0.1.14"
