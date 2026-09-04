@@ -4,5 +4,5 @@ schema_version = 1
 agentic-bin = "0.1.21"
 agentic-mcp = "0.2.45"
 agentic-outer-dag-bin = "0.1.14"
-opencode-orchestrator-mcp = "0.7.11"
+opencode-orchestrator-mcp = "0.7.12"
 thoughts-bin = "0.1.25"
