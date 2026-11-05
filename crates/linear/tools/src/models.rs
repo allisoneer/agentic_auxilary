@@ -452,6 +452,12 @@ pub struct MetadataItem {
     pub state_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_group: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -486,6 +492,14 @@ impl TextFormat for GetMetadataResult {
                         let _ = write!(line, " [team: {team_id}]");
                     }
                     None => line.push_str(" [workspace]"),
+                }
+                if item.is_group == Some(true) {
+                    line.push_str(" [group]");
+                } else if let Some(parent_id) = item.parent_id.as_deref() {
+                    let parent_name = item.parent_name.as_deref().unwrap_or("unknown");
+                    let _ = write!(line, " [parent: {parent_name} ({parent_id})]");
+                } else if item.is_group == Some(false) {
+                    line.push_str(" [flat]");
                 }
             }
             let _ = writeln!(out, "  {line}");

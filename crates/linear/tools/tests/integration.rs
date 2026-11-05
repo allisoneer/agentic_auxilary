@@ -977,9 +977,18 @@ async fn get_metadata_teams_success() {
 async fn get_metadata_labels_success() {
     let mut server = Server::new_async().await;
     let team = team_node("t1", "ENG", "Engineering");
+    let group = issue_label_node("g1", "auto-amb", None, Some(&team), true, None);
     let nodes = vec![
-        issue_label_node("l1", "Bug", Some("User-visible defect"), Some(&team)),
-        issue_label_node("l2", "Feature", None, None),
+        group.clone(),
+        issue_label_node(
+            "l1",
+            "A1",
+            Some("Low ambiguity"),
+            Some(&team),
+            false,
+            Some(&group),
+        ),
+        issue_label_node("l2", "Feature", None, None, false, None),
     ];
     let _m = server
         .mock("POST", "/")
@@ -1004,19 +1013,26 @@ async fn get_metadata_labels_success() {
         .await
         .unwrap();
 
-    assert_eq!(res.items.len(), 2);
-    assert_eq!(res.items[0].name, "Bug");
-    assert_eq!(
-        res.items[0].description.as_deref(),
-        Some("User-visible defect")
-    );
-    assert_eq!(res.items[0].team_id, Some("t1".to_string()));
-    assert_eq!(res.items[1].name, "Feature");
-    assert_eq!(res.items[1].description, None);
-    assert_eq!(res.items[1].team_id, None);
+    assert_eq!(res.items.len(), 3);
+    assert_eq!(res.items[0].name, "auto-amb");
+    assert_eq!(res.items[0].is_group, Some(true));
+    assert_eq!(res.items[1].name, "A1");
+    assert_eq!(res.items[1].description.as_deref(), Some("Low ambiguity"));
+    assert_eq!(res.items[1].team_id, Some("t1".to_string()));
+    assert_eq!(res.items[1].is_group, Some(false));
+    assert_eq!(res.items[1].parent_id.as_deref(), Some("g1"));
+    assert_eq!(res.items[1].parent_name.as_deref(), Some("auto-amb"));
+    assert_eq!(res.items[2].name, "Feature");
+    assert_eq!(res.items[2].description, None);
+    assert_eq!(res.items[2].team_id, None);
+    assert_eq!(res.items[2].is_group, Some(false));
+    assert_eq!(res.items[2].parent_id, None);
     let text = res.fmt_text(&TextOptions::default());
-    assert!(text.contains("Bug (l1) [team: t1]\n    Description: User-visible defect"));
-    assert!(text.contains("Feature (l2) [workspace]"));
+    assert!(text.contains("auto-amb (g1) [team: t1] [group]"));
+    assert!(
+        text.contains("A1 (l1) [team: t1] [parent: auto-amb (g1)]\n    Description: Low ambiguity")
+    );
+    assert!(text.contains("Feature (l2) [workspace] [flat]"));
 }
 
 #[tokio::test]

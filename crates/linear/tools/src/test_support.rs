@@ -320,8 +320,10 @@ pub fn issue_label_node(
     name: &str,
     description: Option<&str>,
     team: Option<&Value>,
+    is_group: bool,
+    parent: Option<&Value>,
 ) -> Value {
-    json!({ "id": id, "name": name, "description": description, "team": team })
+    json!({ "id": id, "name": name, "description": description, "team": team, "isGroup": is_group, "parent": parent })
 }
 
 // ============================================================================

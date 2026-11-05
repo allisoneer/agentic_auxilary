@@ -157,11 +157,21 @@ pub struct IssueSearchPayload {
 // ============================================================================
 
 #[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema = "linear", graphql_type = "IssueLabel")]
+pub struct IssueLabelParent {
+    pub id: cynic::Id,
+    pub name: String,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema = "linear")]
 pub struct IssueLabel {
     pub id: cynic::Id,
     pub name: String,
     pub description: Option<String>,
+    #[cynic(rename = "isGroup")]
+    pub is_group: bool,
+    pub parent: Option<IssueLabelParent>,
     pub team: Option<Team>,
 }
 
