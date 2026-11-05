@@ -68,6 +68,33 @@ async fn read_issue_by_identifier_success() {
 
 #[tokio::test]
 #[serial(env)]
+async fn read_issue_without_labels_formats_none() {
+    let mut server = Server::new_async().await;
+    let issue_id = "550e8400-e29b-41d4-a716-446655440000";
+    let node = issue_node(issue_id, "ENG-246", "Unlabeled Issue");
+
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_by_id_response(&node))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool.read_issue(issue_id.into()).await.unwrap();
+    assert!(res.issue.label_ids.is_empty());
+    assert!(
+        res.fmt_text(&TextOptions::default())
+            .contains("Label IDs: none")
+    );
+}
+
+#[tokio::test]
+#[serial(env)]
 async fn search_issues_success() {
     let mut server = Server::new_async().await;
 
@@ -109,11 +136,7 @@ async fn search_issues_success() {
     assert_eq!(res.issues[0].priority_label, "Urgent");
     assert_eq!(res.issues[1].identifier, "ENG-101");
     assert_eq!(res.issues[1].project.as_ref().unwrap().name, "Q1 Goals");
-    let _extras = EnvGuard::set("LINEAR_TOOLS_EXTRAS", "labels");
-    assert!(
-        res.fmt_text(&TextOptions::default())
-            .contains("Labels: label-1")
-    );
+    assert!(!res.fmt_text(&TextOptions::default()).contains("Labels:"));
     assert!(res.has_next_page);
     assert_eq!(res.end_cursor, Some("cursor123".to_string()));
 }

@@ -150,7 +150,6 @@ pub struct FormatOptions {
     pub show_state: bool,
     pub show_team: bool,
     pub show_priority: bool,
-    pub show_labels: bool,
 }
 
 impl Default for FormatOptions {
@@ -163,7 +162,6 @@ impl Default for FormatOptions {
             show_state: true,
             show_team: false,
             show_priority: true,
-            show_labels: false,
         }
     }
 }
@@ -188,7 +186,6 @@ impl FormatOptions {
                 "state" | "states" => o.show_state = true,
                 "team" | "teams" => o.show_team = true,
                 "priority" | "priorities" => o.show_priority = true,
-                "label" | "labels" => o.show_labels = true,
                 _ => {}
             }
         }
@@ -222,14 +219,6 @@ impl TextFormat for SearchResult {
             if o.show_team {
                 let _ = write!(line, " [{}]", i.team.key);
             }
-            if o.show_labels {
-                let labels = if i.label_ids.is_empty() {
-                    "none".to_string()
-                } else {
-                    i.label_ids.join(", ")
-                };
-                let _ = write!(line, " Labels: {labels}");
-            }
             if o.show_urls {
                 let _ = write!(line, " {}", i.url);
             }
@@ -251,6 +240,7 @@ impl TextFormat for SearchResult {
 }
 
 impl TextFormat for IssueDetails {
+    /// Include assigned label IDs so text-only MCP clients can see label state.
     fn fmt_text(&self, _opts: &TextOptions) -> String {
         let o = FormatOptions::from_env();
         let i = &self.issue;
@@ -532,15 +522,13 @@ mod tests {
         assert!(!opts.show_urls);
         assert!(!opts.show_dates);
         assert!(!opts.show_team);
-        assert!(!opts.show_labels);
     }
 
     #[test]
     fn format_options_csv_adds_to_defaults() {
-        let opts = FormatOptions::from_csv("id,url,labels");
+        let opts = FormatOptions::from_csv("id,url");
         assert!(opts.show_ids);
         assert!(opts.show_urls);
-        assert!(opts.show_labels);
         // defaults still true
         assert!(opts.show_state);
         assert!(opts.show_assignee);
