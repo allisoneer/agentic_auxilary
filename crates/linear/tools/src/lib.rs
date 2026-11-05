@@ -707,6 +707,7 @@ impl LinearTools {
                             key: None,
                             state_type: None,
                             team_id: None,
+                            description: None,
                         }
                     })
                     .collect();
@@ -743,6 +744,7 @@ impl LinearTools {
                         email: None,
                         state_type: None,
                         team_id: None,
+                        description: None,
                     })
                     .collect();
                 Ok(models::GetMetadataResult {
@@ -777,6 +779,7 @@ impl LinearTools {
                         email: None,
                         state_type: None,
                         team_id: None,
+                        description: None,
                     })
                     .collect();
                 Ok(models::GetMetadataResult {
@@ -835,6 +838,7 @@ impl LinearTools {
                         key: None,
                         email: None,
                         team_id: None,
+                        description: None,
                     })
                     .collect();
                 Ok(models::GetMetadataResult {
@@ -889,6 +893,7 @@ impl LinearTools {
                         id: l.id.inner().to_string(),
                         name: l.name,
                         team_id: l.team.map(|t| t.id.inner().to_string()),
+                        description: l.description,
                         key: None,
                         email: None,
                         state_type: None,

@@ -315,8 +315,13 @@ pub fn issue_labels_response(
     }))
 }
 
-pub fn issue_label_node(id: &str, name: &str, team: Option<&Value>) -> Value {
-    json!({ "id": id, "name": name, "team": team })
+pub fn issue_label_node(
+    id: &str,
+    name: &str,
+    description: Option<&str>,
+    team: Option<&Value>,
+) -> Value {
+    json!({ "id": id, "name": name, "description": description, "team": team })
 }
 
 // ============================================================================

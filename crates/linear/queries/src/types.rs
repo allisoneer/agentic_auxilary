@@ -161,6 +161,7 @@ pub struct IssueSearchPayload {
 pub struct IssueLabel {
     pub id: cynic::Id,
     pub name: String,
+    pub description: Option<String>,
     pub team: Option<Team>,
 }
 

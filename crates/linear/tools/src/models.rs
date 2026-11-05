@@ -443,6 +443,8 @@ pub struct MetadataItem {
     pub id: String,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
@@ -487,6 +489,14 @@ impl TextFormat for GetMetadataResult {
                 }
             }
             let _ = writeln!(out, "  {line}");
+            if let Some(description) = item.description.as_deref().filter(|d| !d.trim().is_empty())
+            {
+                let _ = writeln!(
+                    out,
+                    "    Description: {}",
+                    description.trim().replace('\n', "\n    ")
+                );
+            }
         }
         if self.has_next_page
             && let Some(ref cursor) = self.end_cursor

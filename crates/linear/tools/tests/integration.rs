@@ -978,8 +978,8 @@ async fn get_metadata_labels_success() {
     let mut server = Server::new_async().await;
     let team = team_node("t1", "ENG", "Engineering");
     let nodes = vec![
-        issue_label_node("l1", "Bug", Some(&team)),
-        issue_label_node("l2", "Feature", None),
+        issue_label_node("l1", "Bug", Some("User-visible defect"), Some(&team)),
+        issue_label_node("l2", "Feature", None, None),
     ];
     let _m = server
         .mock("POST", "/")
@@ -1006,11 +1006,16 @@ async fn get_metadata_labels_success() {
 
     assert_eq!(res.items.len(), 2);
     assert_eq!(res.items[0].name, "Bug");
+    assert_eq!(
+        res.items[0].description.as_deref(),
+        Some("User-visible defect")
+    );
     assert_eq!(res.items[0].team_id, Some("t1".to_string()));
     assert_eq!(res.items[1].name, "Feature");
+    assert_eq!(res.items[1].description, None);
     assert_eq!(res.items[1].team_id, None);
     let text = res.fmt_text(&TextOptions::default());
-    assert!(text.contains("Bug (l1) [team: t1]"));
+    assert!(text.contains("Bug (l1) [team: t1]\n    Description: User-visible defect"));
     assert!(text.contains("Feature (l2) [workspace]"));
 }
 
