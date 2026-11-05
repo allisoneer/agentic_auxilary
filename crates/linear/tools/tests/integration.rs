@@ -1,3 +1,5 @@
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 use linear_tools::test_support::*;
 use mockito::Server;
 use serial_test::serial;
@@ -33,6 +35,7 @@ async fn read_issue_by_identifier_success() {
     let mut node = issue_node("uuid-1", "ENG-245", "Test Issue");
     node["description"] = serde_json::json!("Description here");
     node["state"] = workflow_state_node("s1", "In Progress", "started");
+    node["labelIds"] = serde_json::json!(["label-1", "label-2"]);
 
     let _m = server
         .mock("POST", "/")
@@ -54,8 +57,13 @@ async fn read_issue_by_identifier_success() {
     assert_eq!(res.issue.team.key, "ENG");
     assert_eq!(res.issue.priority, 2);
     assert_eq!(res.issue.priority_label, "High");
+    assert_eq!(res.issue.label_ids, ["label-1", "label-2"]);
     assert!(res.issue.creator.is_some());
     assert_eq!(res.description, Some("Description here".to_string()));
+    assert!(
+        res.fmt_text(&TextOptions::default())
+            .contains("Label IDs: label-1, label-2")
+    );
 }
 
 #[tokio::test]
@@ -64,6 +72,7 @@ async fn search_issues_success() {
     let mut server = Server::new_async().await;
 
     let mut node1 = issue_node("uuid-1", "ENG-100", "First Issue");
+    node1["labelIds"] = serde_json::json!(["label-1"]);
     node1["priority"] = serde_json::json!(1.0);
     node1["priorityLabel"] = serde_json::json!("Urgent");
     node1["assignee"] = user_node("u1", "Alice", "Alice Smith", "alice@example.com");
@@ -100,6 +109,11 @@ async fn search_issues_success() {
     assert_eq!(res.issues[0].priority_label, "Urgent");
     assert_eq!(res.issues[1].identifier, "ENG-101");
     assert_eq!(res.issues[1].project.as_ref().unwrap().name, "Q1 Goals");
+    let _extras = EnvGuard::set("LINEAR_TOOLS_EXTRAS", "labels");
+    assert!(
+        res.fmt_text(&TextOptions::default())
+            .contains("Labels: label-1")
+    );
     assert!(res.has_next_page);
     assert_eq!(res.end_cursor, Some("cursor123".to_string()));
 }
