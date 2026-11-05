@@ -240,6 +240,7 @@ impl TextFormat for SearchResult {
 }
 
 impl TextFormat for IssueDetails {
+    /// Include assigned label IDs so text-only MCP clients can see label state.
     fn fmt_text(&self, _opts: &TextOptions) -> String {
         let o = FormatOptions::from_env();
         let i = &self.issue;
@@ -270,6 +271,13 @@ impl TextFormat for IssueDetails {
         if !meta.is_empty() {
             let _ = writeln!(out, "{}", meta.join(" | "));
         }
+
+        let labels = if i.label_ids.is_empty() {
+            "none".to_string()
+        } else {
+            i.label_ids.join(", ")
+        };
+        let _ = writeln!(out, "Label IDs: {labels}");
 
         if o.show_urls {
             let _ = writeln!(out, "URL: {}", i.url);
@@ -435,6 +443,8 @@ pub struct MetadataItem {
     pub id: String,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
@@ -442,6 +452,12 @@ pub struct MetadataItem {
     pub state_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_group: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -470,7 +486,31 @@ impl TextFormat for GetMetadataResult {
             if let Some(ref st) = item.state_type {
                 let _ = write!(line, " [{st}]");
             }
+            if matches!(&self.kind, MetadataKind::Labels) {
+                match item.team_id.as_deref() {
+                    Some(team_id) => {
+                        let _ = write!(line, " [team: {team_id}]");
+                    }
+                    None => line.push_str(" [workspace]"),
+                }
+                if item.is_group == Some(true) {
+                    line.push_str(" [group]");
+                } else if let Some(parent_id) = item.parent_id.as_deref() {
+                    let parent_name = item.parent_name.as_deref().unwrap_or("unknown");
+                    let _ = write!(line, " [parent: {parent_name} ({parent_id})]");
+                } else if item.is_group == Some(false) {
+                    line.push_str(" [flat]");
+                }
+            }
             let _ = writeln!(out, "  {line}");
+            if let Some(description) = item.description.as_deref().filter(|d| !d.trim().is_empty())
+            {
+                let _ = writeln!(
+                    out,
+                    "    Description: {}",
+                    description.trim().replace('\n', "\n    ")
+                );
+            }
         }
         if self.has_next_page
             && let Some(ref cursor) = self.end_cursor

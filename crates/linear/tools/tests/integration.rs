@@ -1,3 +1,5 @@
+use agentic_tools_core::fmt::TextFormat;
+use agentic_tools_core::fmt::TextOptions;
 use linear_tools::test_support::*;
 use mockito::Server;
 use serial_test::serial;
@@ -33,6 +35,7 @@ async fn read_issue_by_identifier_success() {
     let mut node = issue_node("uuid-1", "ENG-245", "Test Issue");
     node["description"] = serde_json::json!("Description here");
     node["state"] = workflow_state_node("s1", "In Progress", "started");
+    node["labelIds"] = serde_json::json!(["label-1", "label-2"]);
 
     let _m = server
         .mock("POST", "/")
@@ -54,8 +57,40 @@ async fn read_issue_by_identifier_success() {
     assert_eq!(res.issue.team.key, "ENG");
     assert_eq!(res.issue.priority, 2);
     assert_eq!(res.issue.priority_label, "High");
+    assert_eq!(res.issue.label_ids, ["label-1", "label-2"]);
     assert!(res.issue.creator.is_some());
     assert_eq!(res.description, Some("Description here".to_string()));
+    assert!(
+        res.fmt_text(&TextOptions::default())
+            .contains("Label IDs: label-1, label-2")
+    );
+}
+
+#[tokio::test]
+#[serial(env)]
+async fn read_issue_without_labels_formats_none() {
+    let mut server = Server::new_async().await;
+    let issue_id = "550e8400-e29b-41d4-a716-446655440000";
+    let node = issue_node(issue_id, "ENG-246", "Unlabeled Issue");
+
+    let _m = server
+        .mock("POST", "/")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(issue_by_id_response(&node))
+        .create_async()
+        .await;
+
+    let _url = EnvGuard::set("LINEAR_GRAPHQL_URL", &server.url());
+    let _key = EnvGuard::set("LINEAR_API_KEY", "good-key");
+
+    let tool = linear_tools::LinearTools::new();
+    let res = tool.read_issue(issue_id.into()).await.unwrap();
+    assert!(res.issue.label_ids.is_empty());
+    assert!(
+        res.fmt_text(&TextOptions::default())
+            .contains("Label IDs: none")
+    );
 }
 
 #[tokio::test]
@@ -64,6 +99,7 @@ async fn search_issues_success() {
     let mut server = Server::new_async().await;
 
     let mut node1 = issue_node("uuid-1", "ENG-100", "First Issue");
+    node1["labelIds"] = serde_json::json!(["label-1"]);
     node1["priority"] = serde_json::json!(1.0);
     node1["priorityLabel"] = serde_json::json!("Urgent");
     node1["assignee"] = user_node("u1", "Alice", "Alice Smith", "alice@example.com");
@@ -100,6 +136,7 @@ async fn search_issues_success() {
     assert_eq!(res.issues[0].priority_label, "Urgent");
     assert_eq!(res.issues[1].identifier, "ENG-101");
     assert_eq!(res.issues[1].project.as_ref().unwrap().name, "Q1 Goals");
+    assert!(!res.fmt_text(&TextOptions::default()).contains("Labels:"));
     assert!(res.has_next_page);
     assert_eq!(res.end_cursor, Some("cursor123".to_string()));
 }
@@ -940,9 +977,18 @@ async fn get_metadata_teams_success() {
 async fn get_metadata_labels_success() {
     let mut server = Server::new_async().await;
     let team = team_node("t1", "ENG", "Engineering");
+    let group = issue_label_node("g1", "auto-amb", None, Some(&team), true, None);
     let nodes = vec![
-        issue_label_node("l1", "Bug", Some(&team)),
-        issue_label_node("l2", "Feature", None),
+        group.clone(),
+        issue_label_node(
+            "l1",
+            "A1",
+            Some("Low ambiguity"),
+            Some(&team),
+            false,
+            Some(&group),
+        ),
+        issue_label_node("l2", "Feature", None, None, false, None),
     ];
     let _m = server
         .mock("POST", "/")
@@ -967,11 +1013,26 @@ async fn get_metadata_labels_success() {
         .await
         .unwrap();
 
-    assert_eq!(res.items.len(), 2);
-    assert_eq!(res.items[0].name, "Bug");
-    assert_eq!(res.items[0].team_id, Some("t1".to_string()));
-    assert_eq!(res.items[1].name, "Feature");
-    assert_eq!(res.items[1].team_id, None);
+    assert_eq!(res.items.len(), 3);
+    assert_eq!(res.items[0].name, "auto-amb");
+    assert_eq!(res.items[0].is_group, Some(true));
+    assert_eq!(res.items[1].name, "A1");
+    assert_eq!(res.items[1].description.as_deref(), Some("Low ambiguity"));
+    assert_eq!(res.items[1].team_id, Some("t1".to_string()));
+    assert_eq!(res.items[1].is_group, Some(false));
+    assert_eq!(res.items[1].parent_id.as_deref(), Some("g1"));
+    assert_eq!(res.items[1].parent_name.as_deref(), Some("auto-amb"));
+    assert_eq!(res.items[2].name, "Feature");
+    assert_eq!(res.items[2].description, None);
+    assert_eq!(res.items[2].team_id, None);
+    assert_eq!(res.items[2].is_group, Some(false));
+    assert_eq!(res.items[2].parent_id, None);
+    let text = res.fmt_text(&TextOptions::default());
+    assert!(text.contains("auto-amb (g1) [team: t1] [group]"));
+    assert!(
+        text.contains("A1 (l1) [team: t1] [parent: auto-amb (g1)]\n    Description: Low ambiguity")
+    );
+    assert!(text.contains("Feature (l2) [workspace] [flat]"));
 }
 
 #[tokio::test]
