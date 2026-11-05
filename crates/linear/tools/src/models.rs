@@ -478,6 +478,14 @@ impl TextFormat for GetMetadataResult {
             if let Some(ref st) = item.state_type {
                 let _ = write!(line, " [{st}]");
             }
+            if matches!(&self.kind, MetadataKind::Labels) {
+                match item.team_id.as_deref() {
+                    Some(team_id) => {
+                        let _ = write!(line, " [team: {team_id}]");
+                    }
+                    None => line.push_str(" [workspace]"),
+                }
+            }
             let _ = writeln!(out, "  {line}");
         }
         if self.has_next_page

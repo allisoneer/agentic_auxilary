@@ -1009,6 +1009,9 @@ async fn get_metadata_labels_success() {
     assert_eq!(res.items[0].team_id, Some("t1".to_string()));
     assert_eq!(res.items[1].name, "Feature");
     assert_eq!(res.items[1].team_id, None);
+    let text = res.fmt_text(&TextOptions::default());
+    assert!(text.contains("Bug (l1) [team: t1]"));
+    assert!(text.contains("Feature (l2) [workspace]"));
 }
 
 #[tokio::test]
