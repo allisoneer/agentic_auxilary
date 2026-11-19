@@ -707,6 +707,10 @@ impl LinearTools {
                             key: None,
                             state_type: None,
                             team_id: None,
+                            description: None,
+                            is_group: None,
+                            parent_id: None,
+                            parent_name: None,
                         }
                     })
                     .collect();
@@ -743,6 +747,10 @@ impl LinearTools {
                         email: None,
                         state_type: None,
                         team_id: None,
+                        description: None,
+                        is_group: None,
+                        parent_id: None,
+                        parent_name: None,
                     })
                     .collect();
                 Ok(models::GetMetadataResult {
@@ -777,6 +785,10 @@ impl LinearTools {
                         email: None,
                         state_type: None,
                         team_id: None,
+                        description: None,
+                        is_group: None,
+                        parent_id: None,
+                        parent_name: None,
                     })
                     .collect();
                 Ok(models::GetMetadataResult {
@@ -835,6 +847,10 @@ impl LinearTools {
                         key: None,
                         email: None,
                         team_id: None,
+                        description: None,
+                        is_group: None,
+                        parent_id: None,
+                        parent_name: None,
                     })
                     .collect();
                 Ok(models::GetMetadataResult {
@@ -889,6 +905,10 @@ impl LinearTools {
                         id: l.id.inner().to_string(),
                         name: l.name,
                         team_id: l.team.map(|t| t.id.inner().to_string()),
+                        description: l.description,
+                        is_group: Some(l.is_group),
+                        parent_id: l.parent.as_ref().map(|p| p.id.inner().to_string()),
+                        parent_name: l.parent.map(|p| p.name),
                         key: None,
                         email: None,
                         state_type: None,

@@ -16,7 +16,7 @@ cd linear_tools && just build    # Build the project
 
 - `LINEAR_API_KEY` (required): Linear API key for authentication
 - `LINEAR_GRAPHQL_URL` (optional): Override endpoint for testing
-- `LINEAR_TOOLS_EXTRAS` (optional): Extra fields for MCP output (id,url,dates,assignee,state,team,priority)
+- `LINEAR_TOOLS_EXTRAS` (optional): Extra fields for MCP output (id,url,dates,assignee,state,team,priority); issue reads always include assigned label IDs
 
 ## Architecture
 

@@ -146,7 +146,7 @@ impl Tool for ReadIssueTool {
     type Input = ReadIssueInput;
     type Output = IssueDetails;
     const NAME: &'static str = "linear_read_issue";
-    const DESCRIPTION: &'static str = "Read a Linear issue by ID, identifier (e.g., ENG-245), or URL. Returns issue details and description only; comments are separate. For a full ticket read, also call linear_get_issue_comments until has_more=false.";
+    const DESCRIPTION: &'static str = "Read a Linear issue by ID, identifier (e.g., ENG-245), or URL. Returns issue details, description, and assigned label IDs; comments are separate. For a full ticket read, also call linear_get_issue_comments until has_more=false.";
 
     fn call(
         &self,
