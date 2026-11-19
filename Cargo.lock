@@ -94,7 +94,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-mcp"
-version = "0.2.46"
+version = "0.2.47"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-outer-dag-bin"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "anyhow",
  "chrono",
@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "agentic-tools-registry"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
@@ -5067,7 +5067,7 @@ dependencies = [
 
 [[package]]
 name = "linear-queries"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "cynic",
@@ -5087,7 +5087,7 @@ dependencies = [
 
 [[package]]
 name = "linear-tools"
-version = "0.6.7"
+version = "0.7.0"
 dependencies = [
  "agentic-config",
  "agentic-tools-core",
