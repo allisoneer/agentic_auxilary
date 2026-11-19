@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+## [0.7.0] - 2026-11-19
+
+### ⛰️  Features
+- *(linear)* Expose label descriptions in metadata
+- *(linear)* Expose label group membership in metadata
+
+### 🐛 Bug Fixes
+- *(linear)* Show assigned label IDs in issue reads
+- *(linear)* Preserve formatter API in label output change
+- *(linear)* Show label scope in metadata output
 ## [0.6.7] - 2026-07-10
 
 ### ⛰️  Features
