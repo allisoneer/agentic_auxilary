@@ -12,14 +12,6 @@ ignore = [
   # Tauri 2.11.5's released Linux Wry backend still requires the archived GTK3
   # bindings. Remove each exception when a released Tauri/Wry backend migrates
   # away from gtk-rs GTK3 (or when Linux desktop support is removed).
-  { id = "RUSTSEC-2024-0411", reason = "Unmaintained gdkwayland-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0412", reason = "Unmaintained gdk 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0413", reason = "Unmaintained atk 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0415", reason = "Unmaintained gtk 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0416", reason = "Unmaintained atk-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0418", reason = "Unmaintained gdk-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0419", reason = "Unmaintained gtk3-macros 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
-  { id = "RUSTSEC-2024-0420", reason = "Unmaintained gtk-sys 0.18 via released Tauri/Wry Linux; remove after Tauri leaves gtk-rs GTK3" },
   { id = "RUSTSEC-2024-0370", reason = "Unmaintained proc-macro-error via released Tauri/Wry GTK3 stack; remove with that stack" },
 
   # Unlike the maintenance advisories above, this is known unsoundness. The
